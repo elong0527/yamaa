@@ -45,7 +45,6 @@ pub mod source_diagnostics;
 mod source_ordinal;
 pub mod specification_diagnostics;
 
-pub mod diagnostic_record;
 pub(crate) mod run_report;
 pub mod specification_check;
 pub mod specification_report;

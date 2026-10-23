@@ -6,10 +6,12 @@
 - ``python/src/yamaa/_native.pyi`` -- the stub declarations, and
 - the registration layer of ``rust/crates/yamaa-python/src/lib.rs`` -- the
   ``#[pymodule]`` body that registers exactly the declared exports,
-- ``python/src/yamaa/__init__.py`` -- the public module: ``__all__``, the
+- ``python/src/yamaa/__init__.py`` -- the public module: the interface
+  handshake, which runs right after ``_native`` is imported, ``__all__``, the
   error class and the delegating classes and functions,
 - ``rust/crates/yamaa-r/src/generated/*.rs`` -- the extendr registrations,
-- ``R/yamaa/R/native-bindings.R`` -- private native-call wrappers,
+- ``R/yamaa/R/native-bindings.R`` -- private native-call wrappers, and the
+  interface handshake with the ``.onLoad`` that runs it,
 - ``R/yamaa/R/public-bindings.R`` -- R's exported functions, the
   constructors of its result and lazy objects, and its S3 methods,
 - ``R/yamaa/NAMESPACE``, and
@@ -33,16 +35,19 @@ are duplicate exports and operation references to absent exports.
 ``tools/packaging/bindings_surface.py`` checks the ``values``, ``tables``,
 ``records`` and ``cli`` sections, and each vocabulary and table against the
 facade constant it names; ``tools/packaging/bindings_public.py`` checks
-``public`` and renders the public layers from it. The ``records`` import is
-role-based: each role must resolve to the actual public symbol delivered by
-its owner, ``yamaa_adapters::diagnostic_record`` (``BOUNDARY_VERSION``,
-``ResultRecord``, ``PlanRecord``), except the diagnostic record, which is core's
+``public`` and renders the public layers from it, and
+``tools/packaging/bindings_handshake.py`` checks ``handshake``, renders both
+hosts' handshake and checks that every registered native function reaches
+the gate. The imports are role-based: each role must resolve to the actual
+public symbol of its owner, the boundary's version to
+``yamaa_boundary::BOUNDARY_VERSION`` and the diagnostic record to core's
 ``yamaa_core::diagnostic::Diagnostic``; an unresolved role is a generation
-error, and neither output embeds a separately maintained boundary version. Generation also reconciles the definition against the
-handwritten PyO3 surface (``#[pyclass]`` names, ``#[pymethods]`` method sets,
-``#[pyfunction]`` functions and ``create_exception!`` exceptions in the
-binding crate): an omitted class method or private export is drift, not a
-silent deletion.
+error, and both hosts' requests carry the version read from the boundary
+crate, never a separately maintained copy. Generation also reconciles the
+definition against the handwritten PyO3 surface (``#[pyclass]`` names,
+``#[pymethods]`` method sets, ``#[pyfunction]`` functions and
+``create_exception!`` exceptions in the binding crate): an omitted class
+method or private export is drift, not a silent deletion.
 
 The one path translation is the version constant: the definition names
 ``yamaa_core::VERSION``, but ``yamaa-python`` depends only on the ``yamaa``
@@ -54,22 +59,17 @@ including argument order/types and return types.
 
 ``make check-repository``, which pull request CI runs, and the ``native-rust``
 job of the native qualification lane run the default comparison, so a
-generated file that drifts from the definition fails both (#2693). The
-definition's ``handshake`` section is the design contract, not generated code:
-neither host exports a handshake entry point, and the handshake runtime (#2870)
-and the ABI compatibility and lifetime tests that depend on it (#2692) are not
-implemented.
+generated file that drifts from the definition fails both (#2693).
 """
 
 import argparse
 import re
 
 import yaml
-from tools.packaging import bindings_public, bindings_surface
+from tools.packaging import bindings_handshake, bindings_public, bindings_surface
 from tools.paths import ROOT, WORKSPACE
 
 DEFINITION = WORKSPACE / "interface" / "bindings.yaml"
-ADAPTERS = WORKSPACE / "crates" / "yamaa-adapters" / "src"
 CORE = WORKSPACE / "crates" / "yamaa-core" / "src"
 PYI_TARGET = ROOT / "python" / "src" / "yamaa" / "_native.pyi"
 RUST_TARGET = WORKSPACE / "crates" / "yamaa-python" / "src" / "lib.rs"
@@ -116,12 +116,17 @@ _TOP_LEVEL_KEYS = {
     "operations",
     "host_only",
 }
-# Each record role and the source file and public symbol that deliver it.
-_RECORD_ROLES = {
-    "boundary_version": (ADAPTERS / "diagnostic_record.rs", "BOUNDARY_VERSION"),
-    "diagnostic": (CORE / "diagnostic" / "mod.rs", "Diagnostic"),
-    "result": (ADAPTERS / "diagnostic_record.rs", "ResultRecord"),
-    "plan": (ADAPTERS / "diagnostic_record.rs", "PlanRecord"),
+# Each role of each import: the crate that owns it, and the source file and
+# public symbol that deliver it.
+_IMPORT_ROLES = {
+    "boundary": (
+        "yamaa-boundary",
+        {"version": (bindings_handshake.BOUNDARY, "BOUNDARY_VERSION")},
+    ),
+    "records": (
+        "yamaa-core",
+        {"diagnostic": (CORE / "diagnostic" / "mod.rs", "Diagnostic")},
+    ),
 }
 _SCALAR_TYPES = {
     "text": "str",
@@ -136,6 +141,8 @@ _SCALAR_TYPES = {
     "arrow_stream_capsule": "object",
     "context_object": "dict[str, object]",
     "row": "dict[str, object]",
+    "handshake_record": "dict[str, object]",
+    "handle_census": "dict[str, int]",
 }
 _GENERIC_TYPES = {"optional", "list", "tuple"}
 _NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
@@ -250,7 +257,7 @@ def _load_definition():
         raise ValueError(f"unexpected boundary: {definition['boundary']!r}")
     if definition["contract"] != "README.md":
         raise ValueError(f"unexpected contract document: {definition['contract']!r}")
-    _resolve_records_import(definition)
+    _resolve_imports(definition)
     _validate_python(definition)
     _validate_r(definition)
     bindings_surface.validate_values(definition["values"])
@@ -260,33 +267,31 @@ def _load_definition():
         definition["cli"], definition["values"], definition["operations"]
     )
     _validate_operations(definition)
+    bindings_handshake.validate(definition)
     bindings_public.Public(definition)
     return definition
 
 
-def _resolve_records_import(definition):
-    records = definition["imports"].get("records")
-    if records is None:
-        raise ValueError("bindings.yaml is missing the records import")
-    if records.get("crate") != "yamaa-adapters":
-        raise ValueError("the records import must name the yamaa-adapters crate")
-    roles = records.get("roles")
-    if not isinstance(roles, list) or set(roles) != set(_RECORD_ROLES):
-        raise ValueError(f"records roles must be exactly {sorted(_RECORD_ROLES)}")
-    lib_rs = (ADAPTERS / "lib.rs").read_text(encoding="utf-8")
-    if "pub mod diagnostic_record;" not in lib_rs:
-        raise ValueError("yamaa-adapters does not declare diagnostic_record")
-    for role in roles:
-        path, symbol = _RECORD_ROLES[role]
-        source = path.read_text(encoding="utf-8")
-        pattern = rf"pub (?:const|struct) {symbol}\b"
-        if not re.search(pattern, source):
-            raise ValueError(
-                f"records role {role} does not resolve to {symbol} "
-                f"in {path.relative_to(WORKSPACE).as_posix()}"
-            )
-    if definition["handshake"].get("version") != "records.boundary_version":
-        raise ValueError("handshake version must be records.boundary_version")
+def _resolve_imports(definition):
+    for name, (crate, roles) in _IMPORT_ROLES.items():
+        entry = definition["imports"].get(name)
+        if not isinstance(entry, dict):
+            raise ValueError(f"bindings.yaml is missing the {name} import")
+        if entry.get("crate") != crate:
+            raise ValueError(f"the {name} import must name the {crate} crate")
+        if not isinstance(entry.get("roles"), list) or set(entry["roles"]) != set(
+            roles
+        ):
+            raise ValueError(f"{name} roles must be exactly {sorted(roles)}")
+        for role in entry["roles"]:
+            path, symbol = roles[role]
+            source = path.read_text(encoding="utf-8")
+            pattern = rf"pub (?:const|struct) {symbol}\b"
+            if not re.search(pattern, source):
+                raise ValueError(
+                    f"{name} role {role} does not resolve to {symbol} "
+                    f"in {path.relative_to(WORKSPACE).as_posix()}"
+                )
 
 
 def _validate_python(definition):
@@ -861,6 +866,7 @@ def _render_r_registration(group, root):
 
 
 def _render_r_wrappers(definition):
+    """The private native-call wrappers, then the interface handshake."""
     lines = [*_PYI_HEADER, ""]
     defaults = {"None": "NULL", "True": "TRUE", "False": "FALSE"}
     for group in definition["r"]["groups"]:
@@ -881,7 +887,8 @@ def _render_r_wrappers(definition):
                 "}",
                 "",
             ]
-    return "\n".join(lines)
+    lines += bindings_handshake.r_lines(definition)
+    return "\n".join([*lines, ""])
 
 
 # --- Rendering -------------------------------------------------------------------
@@ -1028,15 +1035,53 @@ def render_manifest(definition, public):
     return "\n".join([*_MANIFEST_HEADER, *lines, ""])
 
 
+def _check_gate(definition):
+    """Every registered native function of each binding reaches the gate,
+    apart from the handshake and the R core version, the R function of an
+    operation whose Python side is only the informational version constant."""
+    handshake = definition["handshake"]
+    constants = {
+        export["name"]
+        for export in definition["python"]["exports"]
+        if export["kind"] == "constant"
+    }
+    informational = {
+        name
+        for hosts in definition["operations"].values()
+        if hosts.get("python") and set(hosts["python"]) <= constants
+        for name in hosts.get("r", [])
+    }
+    python = [
+        export["rust"].rpartition("::")[2]
+        for export in definition["python"]["exports"]
+        if export["kind"] == "function"
+    ]
+    r = [
+        function["name"]
+        for group in definition["r"]["groups"]
+        for function in group["functions"]
+    ]
+    for host, registered, exempt, source in (
+        ("python", python, {handshake["python"]}, RUST_TARGET.parent),
+        ("r", r, {handshake["r"], *informational}, R_SOURCE),
+    ):
+        paths = sorted(source.glob("*.rs"))
+        functions = bindings_handshake.free_functions(paths, _strip_rust, _block)
+        bindings_handshake.check_gate(host, registered, exempt, functions)
+
+
 def render_all():
     definition = _load_definition()
     _reconcile(definition)
     _reconcile_r(definition)
+    _check_gate(definition)
     public = bindings_public.Public(definition)
     rendered = {
         PYI_TARGET: _render_pyi(definition),
         RUST_TARGET: _render_lib_rs(definition),
-        PUBLIC_PYTHON_TARGET: public.render_python(_PYI_HEADER),
+        PUBLIC_PYTHON_TARGET: public.render_python(
+            _PYI_HEADER, bindings_handshake.python_lines(definition)
+        ),
         R_WRAPPERS_TARGET: _render_r_wrappers(definition),
         PUBLIC_R_TARGET: public.render_r(_PYI_HEADER),
         NAMESPACE_TARGET: public.render_namespace(_PYI_HEADER),

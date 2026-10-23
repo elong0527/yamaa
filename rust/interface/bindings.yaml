@@ -5,6 +5,8 @@
 # the generated files with it.
 #
 # Sections (format 2):
+#   imports, handshake        the boundary version and the diagnostic record,
+#                             and the interface handshake of both hosts
 #   values, tables, records   closed vocabularies, table columns and records,
 #                             each checked against the facade constant it names
 #   public                    the user-facing surface of each host
@@ -19,33 +21,49 @@ format_version: 2
 boundary: rust_generated_host_glue
 contract: README.md
 
-# Roles are imports, not declarations of a second record schema. The generator
-# resolves each role to its public symbol in yamaa_adapters::diagnostic_record
-# (BOUNDARY_VERSION, ResultRecord, PlanRecord), and the diagnostic role to
-# core's yamaa_core::diagnostic::Diagnostic; an unresolved role is a generation
-# error.
+# Roles are imports, not declarations of a second schema. The generator
+# resolves each role to its public symbol: the boundary's version to
+# yamaa_boundary::BOUNDARY_VERSION, which it writes into both hosts' requests,
+# and the diagnostic record to core's yamaa_core::diagnostic::Diagnostic; an
+# unresolved role is a generation error.
 imports:
+  boundary:
+    crate: yamaa-boundary
+    roles: [version]
   records:
     owner: https://github.com/elong0527/yamaa/issues/2674
-    crate: yamaa-adapters
-    roles: [boundary_version, diagnostic, result, plan]
+    crate: yamaa-core
+    roles: [diagnostic]
   arrow_stream:
     rust: yamaa_adapters::arrow_bridge::FFI_ArrowArrayStream
 
+# The interface handshake (README.md, "Version and feature handshake"). The
+# generated Python module and R .onLoad send the request, with the boundary
+# version and these identifiers, before any other native call, and raise
+# python_error or signal r_error with the refusal envelope's fields and the
+# message of its reason. Every identifier is one of yamaa-boundary's, and each
+# optional one a format with the Cargo feature that compiles it. census names
+# each host's private accessor of the live native handles.
 handshake:
-  version: records.boundary_version
+  version: boundary.version
   python: _interface_handshake
   r: interface_handshake
   python_error: InterfaceError
   r_error: yamaa_interface_error
+  census: {python: _live_handles, r: live_handles}
   required_features: [structured_records, arrow_c_stream, plan_reuse]
   optional_features:
     format_yaml: yamaa-adapters/yaml
     format_parquet: yamaa-adapters/parquet
     format_readstat: yamaa-adapters/readstat
     format_odm: yamaa-adapters/odm
-  failure_record: records.diagnostic
-  result_record: records.result
+  # One template per reason, filled from the envelope: {requested_version},
+  # {supported_version} and {missing_features}, where the reason has them.
+  messages:
+    version_mismatch: "yamaa's native module has interface version {supported_version}, but its code needs version {requested_version}: reinstall yamaa"
+    malformed_request: "yamaa's native module refused its code's interface request as malformed: reinstall yamaa"
+    missing_feature: "yamaa's native module lacks the interface features {missing_features} that its code needs: reinstall yamaa"
+    missing_interface: "yamaa's native module has no interface handshake, but its code needs interface version {requested_version}: reinstall yamaa"
 
 # Closed value vocabularies of the public surface. Each names the facade
 # constant that owns it, and the generator refuses any difference from that
@@ -1026,6 +1044,17 @@ python:
       rust: api_entry::_selftest
       args: {}
       returns: _SelfTest
+    # The interface handshake and the census of live handles.
+    - kind: function
+      name: _interface_handshake
+      rust: interface::_interface_handshake
+      args: {request: host_object}
+      returns: handshake_record
+    - kind: function
+      name: _live_handles
+      rust: interface::_live_handles
+      args: {}
+      returns: handle_census
 
 r:
   module: yamaa
@@ -1094,6 +1123,11 @@ r:
         - {name: selftest_cases, args: {handle: robj}, returns: r_reply}
         - {name: selftest_info, args: {handle: robj}, returns: r_reply}
         - {name: selftest_summary, args: {handle: robj}, returns: r_reply}
+    - module: interface
+      source: rust/crates/yamaa-r/src/interface.rs
+      functions:
+        - {name: interface_handshake, args: {request: robj}, returns: r_reply}
+        - {name: live_handles, args: {}, returns: r_reply}
 
 # Every Python export and every R export names its counterpart here; the
 # generator refuses an export missing from both this table and host_only.
@@ -1145,6 +1179,8 @@ operations:
   selftest_cases: {python: [_SelfTest.cases], r: [selftest_cases]}
   selftest_info: {python: [_SelfTest.info], r: [selftest_info]}
   selftest_summary: {python: [_SelfTest.summary], r: [selftest_summary]}
+  interface_handshake: {python: [_interface_handshake], r: [interface_handshake]}
+  live_handles: {python: [_live_handles], r: [live_handles]}
 # Host transport: both hosts check interrupts inside their native calls.
 # yamaa.Table is Python's table type, and R converts every
 # table to a data frame instead, so each of its methods is Python-only.

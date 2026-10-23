@@ -11,12 +11,12 @@ host-function ports and interrupt probes remain handwritten. The generator
 also writes [manifest.txt](manifest.txt), the normalized inventory of the
 frozen sections. `make check-repository` and the `native-rust` job of the
 native qualification lane compare the generated files with this definition
-([#2693](https://github.com/elong0527/yamaa/issues/2693)). The runtime
-negotiation below is the design contract, not an implemented handshake; it and
-the boundary compatibility tests
-([#2692](https://github.com/elong0527/yamaa/issues/2692)) wait for an engine
-that loads separately from the host facade, which is future work
-([#2870](https://github.com/elong0527/yamaa/issues/2870)).
+([#2693](https://github.com/elong0527/yamaa/issues/2693)). Both hosts run
+the version and feature handshake below before any other native call, and the
+boundary compatibility and lifetime tests of
+[#2692](https://github.com/elong0527/yamaa/issues/2692) run in both installed
+suites. An engine that loads separately from the host packages, behind a C
+ABI, is later work of [#2870](https://github.com/elong0527/yamaa/issues/2870).
 
 ## Boundary choice and source ownership
 
@@ -39,17 +39,16 @@ duplicate semantic validation in Python or R.
 
 The record owner is [#2674](https://github.com/elong0527/yamaa/issues/2674), split
 from [#2591](https://github.com/elong0527/yamaa/issues/2591). Its approved decisions
-specify a boundary version starting at 1 in `yamaa-adapters`, severity
-`error`/`warning` (all current conditions are errors), and unchanged optional core
-span/route geometry. The `records` import names roles, not guessed Rust symbols
-or a second schema. The generator resolves each role to its public symbol in
-`yamaa_adapters::diagnostic_record` (`BOUNDARY_VERSION`, `ResultRecord` and
-`PlanRecord`), and the diagnostic role to core's
+specify severity `error`/`warning` (all current conditions are errors) and
+unchanged optional core span/route geometry. The imports name roles, not guessed
+Rust symbols or a second schema, and the generator resolves each to its public
+symbol: the `records` import's diagnostic role to core's
 `yamaa_core::diagnostic::Diagnostic`, the one record from the failure site to
-the edge; an unresolved role is a generation error.
-The imported version constant is the single
-runtime source for both hosts; neither generator embeds a separately maintained
-version number. `format_version` versions the IDL grammar only.
+the edge, and the `boundary` import's version role to
+`yamaa_boundary::BOUNDARY_VERSION`; an unresolved role is a generation error.
+The boundary version, which starts at 1, is the single source for both hosts:
+the generator writes it into each host's request, and neither keeps a
+separately maintained copy. `format_version` versions the IDL grammar only.
 
 ## Definition grammar and generation
 
@@ -211,7 +210,8 @@ declares as a property.
 
 The `python` and `r` sections inventory the complete current registration lists,
 including class methods, the private qualification accessor `observations`, the
-one native exception, version metadata and the ODM reader. The `python` section
+one native exception, version metadata, the ODM reader, the handshake and the
+private census of live handles. The `python` section
 holds only `module`, `registration` and `exports`, and the generator refuses any
 other key. There is no issue-record declaration: the Rust facade builds the
 twelve-column issues table of #3030 D28 once, and every issues view crosses the
@@ -219,6 +219,8 @@ boundary as a table like any output or report. Python returns it as the
 native `Table`, and the R binding converts it natively into a data.frame.
 `context_object` is the owned tree `spec_resolve` returns, a `dict[str, object]`
 of text, booleans, exact integers, floats, `None`, lists and nested objects.
+`handshake_record` is the handshake's accepted record or refusal envelope, and
+`handle_census` the live native handles by kind.
 `r_reply` describes the existing `{value, error}` list, whose error carries a
 message and the issues table. The definition does not treat a Rust `Result`,
 `Vec`, `String`, enum or trait as a C-layout type.
@@ -240,15 +242,17 @@ framework machinery, not additional engine operations.
 
 The generator at `tools/packaging/generate_bindings.py` supports a read-only
 default comparison and explicit `--write`, following
-`generate_shipped_schema.py`; `tools/packaging/bindings_surface.py` and
-`tools/packaging/bindings_public.py` hold its format 2 sections. Python output
-includes `_native.pyi`, the Rust registration layer and the public module; R
+`generate_shipped_schema.py`; `tools/packaging/bindings_surface.py`,
+`tools/packaging/bindings_public.py` and `tools/packaging/bindings_handshake.py`
+hold its format 2 sections. Python output includes `_native.pyi`, the Rust
+registration layer and the public module, which begins with the handshake; R
 output includes `yamaa-r/src/generated/*.rs` extendr registrations,
-`R/yamaa/R/native-bindings.R` private native-call wrappers,
-`R/yamaa/R/public-bindings.R` and `R/yamaa/NAMESPACE`. Each R implementation
-module includes its generated registration fragment, and the generated R
-layer calls the `.native_*` wrappers. Both hosts are rendered from one loaded
-definition and imported record source in each run. Outputs carry
+`R/yamaa/R/native-bindings.R` private native-call wrappers, which end with the
+handshake and its `.onLoad`, `R/yamaa/R/public-bindings.R` and
+`R/yamaa/NAMESPACE`. Each R implementation module includes its generated
+registration fragment, and the generated R layer calls the `.native_*`
+wrappers. Both hosts are rendered from one loaded definition and the imported
+sources in each run. Outputs carry
 `Generated by ... Do not edit` headers and deterministic UTF-8 bytes checked by
 direct comparison. Omitted or invented handwritten exports are drift; R
 argument order/types and return types must also match the definition, and
@@ -271,81 +275,142 @@ the read-only comparison like any other generated file.
 
 ## Version and feature handshake
 
-Generated facades negotiate once at initialization, before resolving source
-paths, reading files, activating project code, invoking resolvers, importing
-Arrow pointers or creating an execution handle. Every generated callable also
-requires an initialized successful negotiation; importing `_native` or invoking
-an R `.Call` wrapper directly must not bypass the gate. Release/finalizer paths
-and the handshake itself are exempt. `core_version()` and `_CORE_VERSION`
-remain informational engine package versions, not compatibility evidence.
+Each host package negotiates once, as it loads, before any other native call:
+before resolving a path, reading a file, activating project code or making a
+handle. The generated `yamaa/__init__.py` imports `_native` and calls
+`_native._interface_handshake(request)` before it imports anything else from
+the package, and the generated `.onLoad` of the R package calls the
+`interface_handshake` routine. Both send the request that the `handshake`
+section declares, with the version `yamaa_boundary::BOUNDARY_VERSION`, and the
+binding answers through `rust/crates/yamaa-boundary`. Negotiation reads
+nothing, calls nothing and publishes nothing.
 
-The request contains an unsigned boundary version and ordered lists of required
-and optional feature identifiers. The native side returns the imported result
-record containing the accepted version, supported features, enabled requested
-features and informational core version. The response representation is generated
-from the same imported record contract. The facade checks the returned version
-and required set before making any execution call. Negotiation has no IO,
-callbacks, activation or publication side effects.
-
-Use exact version equality. Reject zero, malformed, older, newer and unknown
-versions; never guess a compatible range or retry with a lower version. The
-native implementation checks equality before interpreting feature-dependent
-payloads. Every refused negotiation uses the frozen bootstrap envelope below;
-the facade constructs the typed refusal using its own imported schema. No peer
-decodes an unknown record layout. If a legacy native package has no handshake
-entry point, the facade refuses with `missing_interface` before any other call.
-
-The bootstrap envelope is a plain named host object with `accepted` (boolean),
-`requested_version` (integer or null for malformed input), `supported_version`
-(integer, or null when the native handshake is absent), `reason` (one of
-`version_mismatch`, `malformed_request`, `missing_feature`, `missing_interface`),
-and `missing_features` (ordered strings). `accepted` is always false here.
-It is used only
-when negotiation refuses and carries no diagnostic schema, execution payload,
-handle, pointer or exception text. Its field meanings are frozen across boundary
-versions. The bootstrap-to-record mapping is generated from the shared adapter
-classification, using core `application_issue::rejected("interface", reason)`
-as its source, into the facade's imported diagnostic and result types. The
-version/feature facts become owned structured context. The generated mapping
-does not call an incompatible native record decoder or infer registry fields
-in handwritten host code.
-This uses the registry's `ApplicationRejected` identity, null rule and
-absent span/route; it does not define another diagnostic code or record shape.
-Failure is raised as `InterfaceError` in Python or `yamaa_interface_error` in R,
-carrying that imported record. These are new generated-boundary errors, not
-current registrations. Direct native handshake callers receive the same
-bootstrap refusal and use the mapping for their own supported record version.
-
-| Request | Outcome |
+| | Contents |
 | --- | --- |
-| Supported exact version and all required features available | Accept and enable required features plus the supported optional intersection. |
-| Any unsupported version, including a newer facade with an older native library | Refuse before record decoding or execution; include both versions in bootstrap facts. |
-| Native library has no handshake entry point | Refuse as `missing_interface`; supported version is unavailable. |
-| Unknown or unavailable required feature | Refuse with missing features in request order. |
-| Unknown or unavailable optional feature | Leave disabled; report the supported/accepted sets explicitly. |
-| Duplicate identifiers within or across feature lists, invalid versions or invalid request field types | Refuse as `malformed_request`. |
+| Request | `version`, the boundary version, from 1; `required`: `structured_records`, `arrow_c_stream` and `plan_reuse`; `optional`: `format_yaml`, `format_parquet`, `format_readstat` and `format_odm` |
+| Accepted record | `accepted` (true); `version`; `enabled`, the required identifiers and then the supported optional ones, in request order; `supported`, every identifier the engine has; `core_version`, the engine's release; `language_versions`, as `info()` reports them |
+| Refusal envelope | `accepted` (false); `requested_version`, null when the version field itself is malformed; `supported_version`, null when the native side has no handshake; `reason`, one of `version_mismatch`, `malformed_request`, `missing_feature` and `missing_interface`; `missing_features`, in request order |
 
-`structured_records` and `arrow_c_stream` are mandatory for the generated
-boundary. Optional identifiers and their owners are listed in the IDL. Format
-features report the actual compiled adapter capabilities, not just declaration
-presence. A facade that needs an optional feature must require it in its
-negotiation or refuse the operation locally before calling native code. A
-successful handshake never proves source authority, lock conformance or a
-successful build. It cannot be reused across a replaced native module.
+Only the boundary version is negotiated, by exact equality: no ranges and no
+retry with a lower version. The release and language versions are
+informational, and a file the engine cannot read is refused by SCHEMA-2. The
+format identifiers name the compiled features that `info()` lists as
+`features`, and the hosts ask for them as optional: a missing format keeps the
+engine's own refusal, such as `parquet_reader_unavailable`.
 
-Breaking signature, ownership, field meaning, required-field, variant or
-diagnostic-interpretation changes require a new boundary version in the record
-owner. Additive optional operations can use a new feature identifier; imported
-record extension/ordering rules remain those of #2674. Never reuse a feature
-identifier with different semantics. A missing mandatory feature is a failed
-handshake even if both packages report the same release version.
+The check order holds in every boundary version, so that any two yamaa builds
+refuse each other cleanly:
+
+1. The request must be a mapping that holds one `version`, a positive integer
+   of at most 32 bits and never a boolean, or it is malformed.
+2. The version must equal the supported one, or it is a mismatch, and nothing
+   else in the request is read, so an older side never has to understand a
+   newer request.
+3. The request must hold exactly `version`, `required` and `optional`, each
+   list must hold identifiers (`[a-z][a-z0-9_]*`), and no identifier may
+   appear twice within or across them, or it is malformed.
+4. Every required identifier must be supported, or the missing ones are named
+   in request order.
+5. Otherwise the request is accepted.
+
+Each binding converts its host's request structurally, and no deeper than
+the request's own shape (the mapping, a field's list and that list's items),
+so deeper input reads as no field whatever its size. A Python `int` that is
+not a `bool`, an R integer and a whole R double are integers; an R atomic
+vector reads as its element where a value belongs and as a list where a list
+does; a key that is not text, or a name R cannot give as text, names no field,
+so the version is still read first and nothing else is read for another
+version; anything else, such as a float or a missing value, is no field of a
+request.
+
+| Request and native side | Outcome |
+| --- | --- |
+| The exact version, every required identifier supported | Accepted, enabling the required identifiers and the supported optional ones |
+| Another version: a newer layer over an older native side, or an older layer over a newer one | `version_mismatch`, with both versions |
+| No handshake on the native side: a native module without `_interface_handshake` or `interface_handshake` | `missing_interface`, with `supported_version` null |
+| A required identifier unknown or unavailable | `missing_feature`, naming each in request order |
+| An optional identifier unknown or unavailable | Accepted; it stays disabled, and the record lists the supported and enabled sets |
+| An identifier twice, a zero, negative or oversized version, or a field of the wrong type | `malformed_request` |
+
+A refusal is a fault of the installation, not a finding about the user's
+files, so it is an error, not an issue. `import yamaa` raises
+`yamaa.InterfaceError`, a subclass of `ImportError` that carries the
+envelope's five fields. In R, `.interface_negotiate()` signals a
+`yamaa_interface_error` condition with the same fields, but `loadNamespace()`
+runs `.onLoad` through a hook that catches the error and stops with a plain
+one, so `library(yamaa)` refuses the load with the message alone, and the
+typed condition reaches only direct callers of `.interface_negotiate()`. The
+message is the template of the reason, declared in the `handshake` section and
+filled from the envelope, so a mismatch names both versions in both hosts.
+Only a generated layer gives `missing_interface`, since no native side could.
+The messages are not frozen.
+
+The first accepted negotiation opens the binding's gate, which stays open for
+the life of the process; a replaced native module starts closed, and a later
+direct call of the handshake answers its request and leaves the negotiation as
+it was. Every other native call passes the gate first: a Python function calls
+`gate()` or the engine constructor that does, and every R routine replies
+through `reply()`, which passes it. A result handle only comes from a gated
+call, so its methods need no gate of their own. Before negotiation, which
+only loading `_native` or the R library by hand allows, a call gets the
+binding's ordinary boundary refusal: a `RuntimeError` in Python, as a busy
+handle gets, and a refusal with no issues in R. The handshake itself, the
+release paths, the informational `_CORE_VERSION` and `core_version()`, and
+extendr's own routines that describe each module and write its R wrappers,
+are exempt. The generator checks that every registered native function
+reaches the gate, so a new export cannot skip it.
+
+Each binding counts its live native handles by kind (`check`, `run`,
+`project_run`, `submission`, `selftest`, `plans` and `table`, which only
+Python hands out) in a census that the private accessors
+`_native._live_handles()` and `.native_live_handles()` read for the handle
+lifetime suites.
+
+The `handshake` section, its two errors and the census stay outside the frozen
+manifest. The boundary version and the identifiers are internal: any release
+may change them with a new boundary version, which a change that an older side
+would misread needs, while an additive operation can take a new optional
+identifier, and an identifier is never reused with another meaning. The
+request's fields, the envelope's five fields and four reasons and the check
+order stay the same across boundary versions. A successful handshake never
+proves source authority, lock conformance or a successful build.
 
 ## Imported records and errors
 
-Diagnostic, result and plan records come exclusively from the `records` import.
-The generator projects their named fields into both hosts. It must retain the
-owner's code/phase/rule/severity mapping, diagnostic and path ordering,
-structured context, and absent-versus-present span/route rules. No host sorts,
+The diagnostic record comes from the `records` import, and each issues view
+projects its named fields into both hosts, keeping the record's rules:
+
+- **Ordering.** Diagnostic order is authored order. A producer emits findings
+  in stage order, and every boundary collection keeps that order; records are
+  never sorted, grouped or deduplicated at the boundary. Within one record,
+  `spec_paths` keep their authored order, and `operand_route` the order the
+  core diagnostic recorded.
+- **Severity.** The vocabulary is closed: `error` and `warning`. Every
+  condition of the current registry is an `error`, which blocks the result it
+  belongs to; `warning` is reserved for later non-blocking findings, and
+  assigning one is a registry decision recorded with the condition, never a
+  host's choice.
+- **Geometry: absent is not zero.** `source_span` and `operand_route` are
+  optional because geometry is not always available, and absent means
+  unavailable, never a default. A present span with `start == end == 0` is a
+  real zero-width span at the first byte of the original expression, and a
+  present empty route is a recorded route with no steps; both differ from
+  absent, and no host collapses them.
+- **Context ownership.** A record owns its context outright: the core's owned
+  JSON tree, which a producer neither keeps nor changes after handing it
+  over. Its numbers keep their width end to end; nothing narrows them to
+  binary64 at the boundary.
+- **Extension.** Within one boundary version, a new registry condition, a
+  severity for such a new condition, or a new optional record field is
+  compatible, since a reader that ignores what it does not know is unaffected.
+  Renaming or removing a field, changing a field's type or meaning, reading
+  absent geometry as zero, reassigning an existing condition's severity,
+  changing the severity vocabulary or weakening the ordering above needs a new
+  boundary version.
+
+It must retain the owner's code/phase/rule/severity mapping, diagnostic and
+path ordering, structured context, and absent-versus-present span/route rules.
+No host sorts,
 deduplicates, caps or reconstructs findings from message strings. Context and
 record values own their text, arrays, objects and exact numbers. Integers wider
 than a host's ordinary numeric type retain their numeric identity through the
@@ -356,8 +421,8 @@ are presentation projections of the named diagnostic records, built from the
 same record in each host ([#2675](https://github.com/elong0527/yamaa/issues/2675),
 [#2676](https://github.com/elong0527/yamaa/issues/2676)).
 
-Semantic failures are imported diagnostic/result records, including failed
-builds with retained evidence. Invalid arguments, expired/wrong-kind handles,
+Semantic failures are diagnostic records, including failed builds with
+retained evidence. Invalid arguments, expired/wrong-kind handles,
 busy or poisoned owners, conversion failures and caught native panics are typed
 boundary refusals using the shared `ApplicationRejected` classification; they
 do not invent a language rule. Native unwinds and R longjmps must not
@@ -365,12 +430,10 @@ cross the host boundary. Ordinary callback exceptions/conditions stay rooted on
 their originating attempt. Formatting a secondary error must not replace that
 original object.
 
-Version refusal uses the bootstrap mapping above. Ordinary callable boundary
-failures use the negotiated imported records directly. Argument failures before
-negotiation carry bootstrap facts and are mapped by the facade. A fatal process
-abort or allocation abort cannot be turned into a recoverable record.
+A refused handshake raises the typed interface error above, and a call
+before negotiation gets the binding's ordinary boundary refusal. A fatal
+process abort or allocation abort cannot be turned into a recoverable record.
 
-The imported plan record is inspection metadata, not execution authority.
 Neither the resolved JSON artifact nor a previous accepted result authorizes
 another run. Plan reuse ([#2821](https://github.com/elong0527/yamaa/issues/2821))
 is declared here as the `plans` operation and the required `plan_reuse`
@@ -480,15 +543,18 @@ adapters rather than promise zero copies for those conversions.
 
 ## Follow-up verification
 
-Generation already compares this definition with both actual registration
-surfaces. Later steps must preserve existing installed-host behavior while
-adopting the imported record contract. The compatibility step must cover the
-handshake table (including older native/newer facade), refusal before IO or
-callbacks, wrong-kind/busy/expired owners, original callback failures,
-cancellation during conversion/publication, and post-failure cleanup. Reuse
-the existing Arrow pointer, release, early-release, failed-conversion and
-repeated-import/export controls from
-[#2646](https://github.com/elong0527/yamaa/pull/2646), adding generated-boundary
-coverage where needed. Diagnostic full-registry and cross-host payload parity
-remain owned by [#2677](https://github.com/elong0527/yamaa/issues/2677). No test
-may derive benchmark expected values from the implementation.
+Generation compares this definition with both actual registration surfaces.
+The installed interface suites of both hosts test every row of the outcome
+table, the check order and the gate, the Rust handshake family of
+`yamaa-boundary` tests the negotiation, and the handle lifetime suites test
+that dropping a result releases its handle, that an exported table outlives
+its result, and that a refused conversion or a cancelled run or save leaves no
+handle. They reuse the existing Arrow pointer, release, early-release,
+failed-conversion and repeated-import/export controls of
+[#2646](https://github.com/elong0527/yamaa/pull/2646), which gain the census,
+and the interrupt-identity controls of both hosts. A separately loaded engine
+behind a C ABI ([#2870](https://github.com/elong0527/yamaa/issues/2870)) adds
+its own loading and lifetime tests. Diagnostic full-registry and cross-host
+payload parity remain owned by
+[#2677](https://github.com/elong0527/yamaa/issues/2677). No test may derive
+benchmark expected values from the implementation.

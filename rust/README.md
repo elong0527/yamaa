@@ -197,7 +197,9 @@ The supported API lives in one new crate, `rust/crates/yamaa` (package name
 `yamaa`), a small facade over `yamaa-adapters` and `yamaa-core`. The owner
 decided this on 2026-10-16: a separate facade crate, not a module inside
 `yamaa-adapters`. Host crates depend only on the facade (plus their language
-runtime), so the compiler enforces the boundary: the 69 `pub mod`s of
+runtime, and for the two bindings `yamaa-boundary`, which holds their
+interface handshake and no engine code), so the compiler enforces the
+boundary: the 69 `pub mod`s of
 `yamaa-adapters` and the 107 of `yamaa-core` stay internal and cannot be
 reached past the facade. The facade re-exports no adapters or core type; every
 public type below is facade-owned, and adapters/core types are converted at

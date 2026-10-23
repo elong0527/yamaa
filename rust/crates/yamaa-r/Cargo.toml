@@ -20,6 +20,8 @@ bench = false
 
 [dependencies]
 yamaa = { path = "../yamaa" }
+# The interface handshake, the gate and the handle census.
+yamaa-boundary = { path = "../yamaa-boundary" }
 extendr-api = "0.9.0"
 
 [lints]

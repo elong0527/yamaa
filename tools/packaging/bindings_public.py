@@ -972,7 +972,10 @@ class Public:
         """The Python-only classes, which the public module imports as they are."""
         return [name for name in self.classes if self.python_only(name)]
 
-    def render_python(self, header):
+    def render_python(self, header, handshake=()):
+        """The public module. `handshake`, the lines that negotiate the
+        interface, runs right after `_native` is imported, so the imports that
+        follow it mark that they come after code."""
         error = self.errors["refusal"]
         refusal = error["python"]["class"].removeprefix("yamaa.")
         attributes = error["python"]["attributes"]
@@ -1034,17 +1037,28 @@ class Public:
                 ["__all__ = [", *(f"    {name}," for name in quoted), "]"]
             )
         native = self._native_exports()
-        imports = ["from yamaa import _native"]
-        if native:
-            imports.append(f"from yamaa._native import {', '.join(native)}")
+        imports = [f"from yamaa._native import {', '.join(native)}"] if native else []
+        imports.append(single)
+        negotiated = []
+        if handshake:
+            negotiated = ["", "", *handshake, ""]
+            # Each import statement after the handshake's code says why it
+            # follows code, on its first line.
+            imports = [
+                statement.replace("\n", "  # noqa: E402\n", 1)
+                if "\n" in statement
+                else f"{statement}  # noqa: E402"
+                for statement in imports
+            ]
         lines = [
             *header,
             f'"""{doc[0]}',
             *doc[1:],
             '"""',
             "",
+            "from yamaa import _native",
+            *negotiated,
             *imports,
-            single,
             "",
             exports,
             "",

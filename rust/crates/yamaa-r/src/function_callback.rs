@@ -288,7 +288,7 @@ fn describe(value: &Robj, class: Option<&[String]>) -> String {
 /// byte-marked text has no declared Unicode encoding, Latin-1 has one defined
 /// decoding, and any other text must already be valid UTF-8. Nothing is
 /// repaired.
-fn text_at(value: &Robj, index: usize) -> std::result::Result<String, String> {
+pub(crate) fn text_at(value: &Robj, index: usize) -> std::result::Result<String, String> {
     if value.rtype() != Rtype::Strings || index >= value.len() {
         return Err("expected an R character value".into());
     }

@@ -6,6 +6,7 @@ mod api_entry;
 mod arrow_bridge;
 mod context_values;
 mod function_callback;
+mod interface;
 mod interrupt;
 mod project_activation;
 #[pymodule]
@@ -35,5 +36,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(api_entry::_schema, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_info, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_selftest, module)?)?;
+    module.add_function(wrap_pyfunction!(interface::_interface_handshake, module)?)?;
+    module.add_function(wrap_pyfunction!(interface::_live_handles, module)?)?;
     Ok(())
 }

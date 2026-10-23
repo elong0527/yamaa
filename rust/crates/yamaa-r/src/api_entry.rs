@@ -5,7 +5,8 @@
 //! Every function replies `list(value, error)`. `error` is `NULL` on success,
 //! otherwise `list(message, issues, paths)`, where `issues` is the issues data
 //! frame (empty when the refusal carries none) and `paths` the files a refused
-//! save wrote before it stopped.
+//! save wrote before it stopped. Every function replies behind the interface
+//! gate, so it refuses until the handshake succeeds (`crate::interface`).
 use crate::handle::address;
 use extendr_api::prelude::*;
 use std::{
@@ -16,9 +17,10 @@ use std::{
     sync::Arc,
 };
 use yamaa::{Action, Engine, EngineOptions, Error, Failure, HostLanguage, Report};
+use yamaa_boundary::{HandleKind, Live};
 
 /// Why a call could not return its value.
-enum Refusal {
+pub(crate) enum Refusal {
     Failure(Failure),
     Message(String),
 }
@@ -59,7 +61,18 @@ fn refused(error: Refusal) -> List {
     }
 }
 
-fn reply(run: impl FnOnce() -> std::result::Result<Robj, Refusal>) -> List {
+/// Reply with `run`'s value or refusal, behind the interface gate: until the
+/// handshake succeeds, the reply refuses with no issues.
+pub(crate) fn reply(run: impl FnOnce() -> std::result::Result<Robj, Refusal>) -> List {
+    answer(|| {
+        crate::interface::gate()?;
+        run()
+    })
+}
+
+/// Reply with `run`'s value or refusal, containing a panic and keeping an
+/// interrupt the call observed. Only the handshake replies without the gate.
+pub(crate) fn answer(run: impl FnOnce() -> std::result::Result<Robj, Refusal>) -> List {
     let scope = crate::interrupt::Scope::new();
     let result = catch_unwind(AssertUnwindSafe(run));
     if let Some(condition) = scope.take() {
@@ -135,9 +148,10 @@ fn engine(version: &Raw, capabilities: Option<List>) -> std::result::Result<Engi
 }
 
 /// One registered owner per R external pointer: dropping the pointer drops
-/// the owner, and lookups go through the registry, never the pointee.
+/// the owner, and lookups go through the registry, never the pointee. Each
+/// owner counts in the census under `$census` while it lives.
 macro_rules! registry {
-    ($registry:ident, $handle:ident, $store:ident, $lookup:ident, $kind:ty, $what:literal) => {
+    ($registry:ident, $handle:ident, $store:ident, $lookup:ident, $kind:ty, $what:literal, $census:expr) => {
         thread_local! {
             static $registry: RefCell<BTreeMap<usize, Weak<RefCell<$kind>>>> =
                 const { RefCell::new(BTreeMap::new()) };
@@ -146,6 +160,7 @@ macro_rules! registry {
         struct $handle {
             value: Rc<RefCell<$kind>>,
             identity: Cell<usize>,
+            _live: Live,
         }
 
         impl Drop for $handle {
@@ -160,6 +175,7 @@ macro_rules! registry {
             let handle = ExternalPtr::new($handle {
                 value: Rc::new(RefCell::new(value)),
                 identity: Cell::new(0),
+                _live: crate::interface::CENSUS.hold($census),
             });
             let identity = address(handle.as_robj())?;
             handle.identity.set(identity);
@@ -180,14 +196,23 @@ macro_rules! registry {
     };
 }
 
-registry!(RUNS, RunHandle, store, run, yamaa::Run, "run");
+registry!(
+    RUNS,
+    RunHandle,
+    store,
+    run,
+    yamaa::Run,
+    "run",
+    HandleKind::Run
+);
 registry!(
     CHECKS,
     CheckHandle,
     store_check,
     check_of,
     yamaa::Check,
-    "check"
+    "check",
+    HandleKind::Check
 );
 registry!(
     PROJECT_RUNS,
@@ -195,7 +220,8 @@ registry!(
     store_project_run,
     project_run_of,
     yamaa::ProjectRun,
-    "project run"
+    "project run",
+    HandleKind::ProjectRun
 );
 registry!(
     SUBMISSIONS,
@@ -203,7 +229,8 @@ registry!(
     store_submission,
     submission_of,
     yamaa::Submission,
-    "submission"
+    "submission",
+    HandleKind::Submission
 );
 registry!(
     PLANS,
@@ -211,7 +238,8 @@ registry!(
     store_plans,
     plans_of,
     yamaa::Plans,
-    "plans"
+    "plans",
+    HandleKind::Plans
 );
 registry!(
     SELFTESTS,
@@ -219,7 +247,8 @@ registry!(
     store_selftest,
     selftest_of,
     yamaa::SelfTest,
-    "selftest"
+    "selftest",
+    HandleKind::SelfTest
 );
 
 fn table(table: Option<&yamaa::Table>) -> std::result::Result<Robj, Refusal> {

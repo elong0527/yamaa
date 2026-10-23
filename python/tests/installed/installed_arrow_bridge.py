@@ -1,7 +1,9 @@
 """Installed Arrow C Stream handoff with independent values and buffer evidence.
 
 Every result table (output, issues and report) reaches Python through the
-Arrow C stream of the native run, never through IPC bytes.
+Arrow C stream of the native run, never through IPC bytes. The binding's
+census of live native handles (installed_handle_lifetime.py) shows that early
+release, a failed conversion and repeated exports leave no handle behind.
 """
 
 import gc
@@ -15,6 +17,7 @@ import pyarrow as pa
 import pyarrow.compute as pc
 
 import yamaa
+from yamaa import _native
 
 SPEC = """yamaa: "1.0"
 type: spec
@@ -133,6 +136,8 @@ class ArrowBridge(unittest.TestCase):
         self.assertEqual(first["I"][0].as_py(), -(2**63))
 
     def test_failed_conversion_unconsumed_capsule_and_early_release(self):
+        gc.collect()
+        before = _native._live_handles()
         run = self.run_spec()
         exporter = run._native.output()
         for _ in range(30):
@@ -148,12 +153,15 @@ class ArrowBridge(unittest.TestCase):
         reader.close()
         del reader, exporter, run
         gc.collect()
+        self.assertEqual(_native._live_handles(), before)
         self.assertEqual(batch["S"][0].as_py(), "a\0\U0001f980")
         with self.assertRaises(pa.ArrowInvalid):
             pc.cast(batch["I"], pa.int32(), safe=True)
         self.assertEqual(batch["I"][2].as_py(), 2**63 - 1)
 
     def test_repeated_chunked_exports_empty_batches_and_empty_result(self):
+        gc.collect()
+        before = _native._live_handles()
         run = self.run_spec()
         table = pa.table(run._native.output())
         expected = table.to_pydict()
@@ -182,6 +190,9 @@ class ArrowBridge(unittest.TestCase):
             (empty.output.num_rows, len(empty.output.column_names)), (0, 6)
         )
         self.assertEqual(empty_table.schema, pa.table(run._native.output()).schema)
+        del run, empty
+        gc.collect()
+        self.assertEqual(_native._live_handles(), before)
 
 
 if __name__ == "__main__":

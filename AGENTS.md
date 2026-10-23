@@ -207,10 +207,17 @@ Run only these locally (D148 on #3030):
   suite, so it needs no R.
 
 Never run `make check-equivalence`, or a host check with `--equivalence`,
-locally, except to debug a CI failure of that gate. Pull request CI runs only on
-Linux, so a change to paths, file handling, `cfg`-gated code or
-packaging also gets one native qualification run on its branch before
-merge: `gh workflow run native.yml --ref <branch>`.
+locally, except to debug a CI failure of that gate. Native qualification
+(`native.yml`) runs only in the regular CI/CD on main: weekly, and at the
+candidate and release cuts (D233 on #3673). Never dispatch it on a pull
+request's branch or push the branch as `qualification/issue-*`, never wait
+for a native run before opening or finishing a pull request, and never
+reproduce its jobs locally. Pull request CI runs only on Linux, so a pull
+request that changes packaging, paths, file handling, `cfg`-gated code or a
+workflow says so in its body: the next native run on main is its native
+evidence, and a failure there becomes a child issue of the planning issue.
+A "Done when" line that asks for a native run on the branch is met by that
+run on main.
 
 The tests nearest the change:
 

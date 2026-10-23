@@ -17,6 +17,7 @@ applies.
 | `rules/`, `yaml/` | Normative contracts, diagnostics, schemas and grammar fixtures. |
 | `rust/crates/yamaa-core/` | Specification admission, expressions, dataset execution, project lifecycle, verification and submission metadata composition. |
 | `rust/crates/yamaa-adapters/` | Codecs, storage formats, physical IO and filesystem environment capture. |
+| `rust/crates/yamaa-boundary/` | The interface handshake of both host bindings, the gate every native call passes and the census of live native handles. |
 | `rust/crates/yamaa-python/`, `rust/crates/yamaa-r/` | Host arguments, callbacks, scalar conversion and owned result views. |
 | `rust/crates/yamaa-cli/` | The `yamaa` command line: its arguments, exit statuses and printed output, over the facade alone, with the third-party notices and component inventory of its release archives. |
 | `python/`, `R/yamaa/` | Public host packages and package builds. |
@@ -31,11 +32,13 @@ results. Explicit Save publishes held bytes in contract order. Diagnostic codes
 belong to the shared registry. Resource policies and supported platforms have
 one owner in [release guidance](docs/release.md).
 
-The workspace has six crates. `yamaa-core` owns preparation, project ports,
+The workspace has seven crates. `yamaa-core` owns preparation, project ports,
 activation and the complete build lifecycle; its dataset model owns execution.
 `yamaa-adapters` implements physical boundaries, and the `yamaa` facade
 composes the two. The two binding crates and the `yamaa-cli` command line
-implement their host boundaries and depend on the facade alone. Core may use
+implement their host boundaries and depend on the facade; the bindings also
+depend on `yamaa-boundary`, which holds their interface handshake and depends
+on nothing else in the workspace. Core may use
 `std` but holds no file or format code: it keeps the formats' metadata models,
 and the adapters read and write their bytes. Portable math still uses the
 pinned libm policy. `make check-repository` holds both rules of #3030 section
@@ -46,8 +49,9 @@ path modules and its clock, decoding bytes as text, and the XML, SAS transport
 and Parquet marks of a format, with no exception.
 
 The [shared host interface](rust/interface/README.md) owns the binding-generation
-design, declaration input, version negotiation and lifetime contract. Public
-diagnostic/result records are imported from their shared adapter owner.
+design, declaration input, version negotiation and lifetime contract. The
+diagnostic record is imported from core, and the boundary version from
+`yamaa-boundary`.
 
 Use the Rust toolchain selected by `rust/rust-toolchain.toml` and the unchanged
 canonical `rust/Cargo.lock`. The workspace `rust-version` in `rust/Cargo.toml`
@@ -66,8 +70,8 @@ package uses an edition that Rust does not read
 (`tools.packaging.check_minimum_rust`).
 
 One tool, `tools/staging/engine_bundle.py`, stages the engine source bundle
-that each host's source package builds from: the engine crates and that
-host's binding crate, a lock trimmed from the canonical one and verified crate
+that each host's source package builds from: the engine crates, the boundary
+crate and that host's binding crate, a lock trimmed from the canonical one and verified crate
 by crate against it, and the crates.io crates that the lock selects, vendored,
 with no tests and no toolchain file anywhere (#3030 D55). It builds the Python
 source archive, maturin's output over the bundle, with maturin 1.9.6 on the
@@ -547,12 +551,16 @@ source package built with it, minimal format builds, Python 3.15 and minimum
 Python saved artifact readers on each `release/**` push and on dispatch. CI's R job checks minimum R saved
 artifact readers on those same release events. The `R-CMD-check` workflow
 checks macOS, Windows and R-devel packages on release pushes and dispatch.
-Dependency graphs and advisories, native qualification, Harbor and coverage
-run on dispatch (native qualification also on a
-`qualification/issue-*` push, and dependency graphs and advisories also
-weekly on main). Dispatch any of them on a branch with
-`gh workflow run <workflow> --ref <branch>` to check a change that needs them
-before merging.
+Dependency graphs and advisories, Harbor and coverage run on dispatch
+(dependency graphs and advisories also weekly on main). Dispatch any of them
+on a branch with `gh workflow run <workflow> --ref <branch>` to check a change
+that needs them before merging. Native qualification, described below, runs
+only in the regular CI/CD on main: weekly, and at the candidate and release
+cuts (D233 on #3673). Never dispatch it on a pull request's branch or push
+that branch as `qualification/issue-*`; no pull request waits for a native
+run. A pull request that changes packaging, paths, file handling,
+`cfg`-gated code or a workflow says so in its body: the next native run on
+main is its native evidence.
 
 The `Fuzz` workflow fuzzes the readers that parse untrusted input under
 AddressSanitizer, with UndefinedBehaviorSanitizer for the C they compile. A PR
@@ -751,8 +759,10 @@ AddressSanitizer and UndefinedBehaviorSanitizer. It also builds the
 command-line binaries that a release publishes, statically on Linux and
 Windows, and runs each archive's `yamaa selftest` and then the conformance
 corpus with the network disabled on a fresh runner of its platform (its
-`native-cli` and `native-cli-install` jobs). Passing ordinary CI does not
-qualify a release. The final
+`native-cli` and `native-cli-install` jobs), and runs the corpus with the
+installed Windows wheel on an SMB share of the runner's own, through its UNC
+path and through a drive mapped to it (its `native-share` jobs). Passing
+ordinary CI does not qualify a release. The final
 merged revision needs complete native evidence, including the R package
 checks below. A release tag publishes the native run that its
 `Qualified-Run` trailer names, and the `Release rehearsal` workflow, dispatched

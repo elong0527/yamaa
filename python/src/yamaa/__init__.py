@@ -10,8 +10,76 @@ from and every one is unchanged, and compiles again otherwise.
 """
 
 from yamaa import _native
-from yamaa._native import Table
-from yamaa._support import __version__, _fspath, _fspaths, _Lazy
+
+
+class InterfaceError(ImportError):
+    """yamaa's Python code and its native module do not match, so it cannot be imported; the attributes are the handshake's refusal."""
+
+    def __init__(self, outcome: dict):
+        super().__init__(_interface_message(outcome), name="yamaa")
+        self.accepted = outcome["accepted"]
+        self.requested_version = outcome["requested_version"]
+        self.supported_version = outcome["supported_version"]
+        self.reason = outcome["reason"]
+        self.missing_features = outcome["missing_features"]
+
+    def __reduce__(self):
+        """Pickle the refusal, from which the error is made again."""
+        outcome = {field: getattr(self, field) for field in _INTERFACE_FIELDS}
+        return type(self), (outcome,)
+
+
+_INTERFACE_FIELDS = (
+    "accepted",
+    "requested_version",
+    "supported_version",
+    "reason",
+    "missing_features",
+)
+_INTERFACE_REQUEST = {
+    "version": 1,
+    "required": ["structured_records", "arrow_c_stream", "plan_reuse"],
+    "optional": ["format_yaml", "format_parquet", "format_readstat", "format_odm"],
+}
+_INTERFACE_MESSAGES = {
+    "version_mismatch": "yamaa's native module has interface version {supported_version}, but its code needs version {requested_version}: reinstall yamaa",
+    "malformed_request": "yamaa's native module refused its code's interface request as malformed: reinstall yamaa",
+    "missing_feature": "yamaa's native module lacks the interface features {missing_features} that its code needs: reinstall yamaa",
+    "missing_interface": "yamaa's native module has no interface handshake, but its code needs interface version {requested_version}: reinstall yamaa",
+}
+
+
+def _interface_message(outcome: dict) -> str:
+    """A refused handshake's message: the template of its reason, filled from the refusal."""
+    message = _INTERFACE_MESSAGES[outcome["reason"]]
+    for field in ("requested_version", "supported_version"):
+        if outcome[field] is not None:
+            message = message.replace("{" + field + "}", str(outcome[field]))
+    features = ", ".join(outcome["missing_features"])
+    return message.replace("{missing_features}", features)
+
+
+def _negotiate(native) -> None:
+    """Send the interface request before any other native call, and refuse the import unless the native module accepts it."""
+    handshake = getattr(native, "_interface_handshake", None)
+    if handshake is None:
+        outcome = {
+            "accepted": False,
+            "requested_version": _INTERFACE_REQUEST["version"],
+            "supported_version": None,
+            "reason": "missing_interface",
+            "missing_features": [],
+        }
+    else:
+        outcome = handshake(_INTERFACE_REQUEST)
+    if not outcome["accepted"]:
+        raise InterfaceError(outcome)
+
+
+_negotiate(_native)
+
+from yamaa._native import Table  # noqa: E402
+from yamaa._support import __version__, _fspath, _fspaths, _Lazy  # noqa: E402
 
 __all__ = [
     "Error",
