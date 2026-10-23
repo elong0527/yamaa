@@ -112,17 +112,13 @@ Crate: base64 0.22.1
     License: MIT
     Texts: [8] LICENSE-MIT
 
-Crate: base64 0.23.1
+Crate: bitflags 2.13.2
     License: MIT
     Texts: [9] LICENSE-MIT
 
-Crate: bitflags 2.13.2
-    License: MIT
-    Texts: [10] LICENSE-MIT
-
 Crate: brotli 8.0.4
     License: MIT AND BSD-3-Clause
-    Texts: [3] LICENSE.BSD-3-Clause, [11] LICENSE.MIT
+    Texts: [3] LICENSE.BSD-3-Clause, [10] LICENSE.MIT
 
 Crate: brotli-decompressor 5.0.3
     License: BSD-3-Clause
@@ -130,59 +126,59 @@ Crate: brotli-decompressor 5.0.3
 
 Crate: byteorder 1.5.0
     License: MIT
-    Texts: [12] COPYING, [13] LICENSE-MIT
+    Texts: [11] COPYING, [12] LICENSE-MIT
 
 Crate: bytes 1.12.1
     License: MIT
-    Texts: [14] LICENSE
+    Texts: [13] LICENSE
 
 Crate: cfg-if 1.0.5
     License: MIT
-    Texts: [15] LICENSE-MIT
+    Texts: [14] LICENSE-MIT
 
 Crate: chrono 0.4.45
     License: MIT
-    Texts: [16] LICENSE.txt
+    Texts: [15] LICENSE.txt
 
 Crate: core-foundation-sys 0.8.7
     License: MIT
-    Texts: [17] LICENSE-MIT
+    Texts: [16] LICENSE-MIT
 
 Crate: crc32fast 1.5.2
     License: MIT
-    Texts: [18] LICENSE-MIT
+    Texts: [17] LICENSE-MIT
 
 Crate: errno 0.3.14
     License: MIT
-    Texts: [19] LICENSE-MIT
+    Texts: [18] LICENSE-MIT
 
 Crate: flatbuffers 25.12.19
     License: Apache-2.0
-    Texts: [20] canonical Apache-2.0 text; the crate package ships none
+    Texts: [19] canonical Apache-2.0 text; the crate package ships none
 
 Crate: flate2 1.1.10
     License: MIT
-    Texts: [21] LICENSE-MIT
+    Texts: [20] LICENSE-MIT
 
 Crate: getrandom 0.3.4
     License: MIT
-    Texts: [22] LICENSE-MIT
+    Texts: [21] LICENSE-MIT
 
 Crate: half 2.7.1
     License: MIT
-    Texts: [23] LICENSE-MIT
+    Texts: [22] LICENSE-MIT
 
 Crate: hashbrown 0.15.5
     License: MIT
-    Texts: [24] LICENSE-MIT
+    Texts: [23] LICENSE-MIT
 
 Crate: iana-time-zone 0.1.65
     License: MIT
-    Texts: [25] LICENSE-MIT
+    Texts: [24] LICENSE-MIT
 
 Crate: integer-encoding 3.0.4
     License: MIT
-    Texts: [26] LICENSE
+    Texts: [25] LICENSE
 
 Crate: itoa 1.0.18
     License: MIT
@@ -190,15 +186,15 @@ Crate: itoa 1.0.18
 
 Crate: lexical-core 1.0.6
     License: MIT
-    Texts: [1] LICENSE-MIT, [27] LICENSE.md
+    Texts: [1] LICENSE-MIT, [26] LICENSE.md
 
 Crate: lexical-parse-float 1.0.6
     License: MIT
-    Texts: [1] LICENSE-MIT, [27] LICENSE.md
+    Texts: [1] LICENSE-MIT, [26] LICENSE.md
 
 Crate: lexical-parse-integer 1.0.6
     License: MIT
-    Texts: [1] LICENSE-MIT, [27] LICENSE.md
+    Texts: [1] LICENSE-MIT, [26] LICENSE.md
 
 Crate: lexical-util 1.0.7
     License: MIT
@@ -206,71 +202,63 @@ Crate: lexical-util 1.0.7
 
 Crate: lexical-write-float 1.0.6
     License: MIT
-    Texts: [1] LICENSE-MIT, [27] LICENSE.md
+    Texts: [1] LICENSE-MIT, [26] LICENSE.md
 
 Crate: lexical-write-integer 1.0.6
     License: MIT
-    Texts: [1] LICENSE-MIT, [27] LICENSE.md
+    Texts: [1] LICENSE-MIT, [26] LICENSE.md
 
 Crate: libc 0.2.191
     License: MIT
-    Texts: [28] LICENSE-MIT
+    Texts: [27] LICENSE-MIT
 
 Crate: libm 0.2.16
     License: MIT
-    Texts: [29] LICENSE.txt
+    Texts: [28] LICENSE.txt
 
 Crate: linux-raw-sys 0.12.1
     License: MIT
-    Texts: [30] COPYRIGHT, [1] LICENSE-MIT
+    Texts: [29] COPYRIGHT, [1] LICENSE-MIT
 
 Crate: lz4_flex 0.11.6
     License: MIT
-    Texts: [31] LICENSE
-
-Crate: lz4_flex 0.13.1
-    License: MIT
-    Texts: [31] LICENSE
+    Texts: [30] LICENSE
 
 Crate: memchr 2.8.3
     License: MIT
-    Texts: [12] COPYING, [13] LICENSE-MIT
+    Texts: [11] COPYING, [12] LICENSE-MIT
 
 Crate: miniz_oxide 0.9.1
     License: MIT
-    Texts: [32] LICENSE, [33] LICENSE-MIT.md
+    Texts: [31] LICENSE, [32] LICENSE-MIT.md
 
 Crate: num 0.4.3
     License: MIT
-    Texts: [10] LICENSE-MIT
+    Texts: [9] LICENSE-MIT
 
 Crate: num-bigint 0.4.8
     License: MIT
-    Texts: [10] LICENSE-MIT
-
-Crate: num-bigint 0.5.1
-    License: MIT
-    Texts: [10] LICENSE-MIT
+    Texts: [9] LICENSE-MIT
 
 Crate: num-complex 0.4.6
     License: MIT
-    Texts: [10] LICENSE-MIT
+    Texts: [9] LICENSE-MIT
 
 Crate: num-integer 0.1.47
     License: MIT
-    Texts: [10] LICENSE-MIT
+    Texts: [9] LICENSE-MIT
 
 Crate: num-iter 0.1.46
     License: MIT
-    Texts: [10] LICENSE-MIT
+    Texts: [9] LICENSE-MIT
 
 Crate: num-rational 0.4.2
     License: MIT
-    Texts: [10] LICENSE-MIT
+    Texts: [9] LICENSE-MIT
 
 Crate: num-traits 0.2.19
     License: MIT
-    Texts: [10] LICENSE-MIT
+    Texts: [9] LICENSE-MIT
 
 Crate: once_cell 1.21.4
     License: MIT
@@ -278,7 +266,7 @@ Crate: once_cell 1.21.4
 
 Crate: ordered-float 2.10.1
     License: MIT
-    Texts: [34] LICENSE-MIT
+    Texts: [33] LICENSE-MIT
 
 Crate: parquet 55.2.0
     License: Apache-2.0
@@ -286,27 +274,27 @@ Crate: parquet 55.2.0
 
 Crate: quick-xml 0.41.0
     License: MIT
-    Texts: [35] LICENSE-MIT.md
+    Texts: [34] LICENSE-MIT.md
 
 Crate: regex 1.13.1
     License: MIT
-    Texts: [10] LICENSE-MIT
+    Texts: [9] LICENSE-MIT
 
 Crate: regex-automata 0.4.18
     License: MIT
-    Texts: [10] LICENSE-MIT
+    Texts: [9] LICENSE-MIT
 
 Crate: regex-syntax 0.8.11
     License: MIT
-    Texts: [10] LICENSE-MIT
+    Texts: [9] LICENSE-MIT
 
 Crate: rustix 1.1.5
     License: MIT
-    Texts: [36] COPYRIGHT, [1] LICENSE-MIT
+    Texts: [35] COPYRIGHT, [1] LICENSE-MIT
 
 Crate: ryu 1.0.23
     License: Apache-2.0
-    Texts: [37] LICENSE-APACHE
+    Texts: [36] LICENSE-APACHE
 
 Crate: serde 1.0.229
     License: MIT
@@ -322,15 +310,15 @@ Crate: serde_json 1.0.154
 
 Crate: serde_spanned 1.0.4
     License: MIT
-    Texts: [38] LICENSE-MIT
+    Texts: [37] LICENSE-MIT
 
 Crate: simd-adler32 0.3.10
     License: MIT
-    Texts: [39] LICENSE.md
+    Texts: [38] LICENSE.md
 
 Crate: snap 1.1.2
     License: BSD-3-Clause
-    Texts: [40] COPYING
+    Texts: [39] COPYING
 
 Crate: thiserror 2.0.21
     License: MIT
@@ -338,49 +326,49 @@ Crate: thiserror 2.0.21
 
 Crate: thrift 0.17.0
     License: Apache-2.0
-    Texts: [20] canonical Apache-2.0 text; the crate package ships none
+    Texts: [19] canonical Apache-2.0 text; the crate package ships none
 
 Crate: toml 1.0.7+spec-1.1.0
     License: MIT
-    Texts: [38] LICENSE-MIT
+    Texts: [37] LICENSE-MIT
 
 Crate: toml_datetime 1.0.1+spec-1.1.0
     License: MIT
-    Texts: [38] LICENSE-MIT
+    Texts: [37] LICENSE-MIT
 
 Crate: toml_parser 1.0.10+spec-1.1.0
     License: MIT
-    Texts: [38] LICENSE-MIT
+    Texts: [37] LICENSE-MIT
 
 Crate: twox-hash 2.1.5
     License: MIT
-    Texts: [41] LICENSE.txt
+    Texts: [40] LICENSE.txt
 
 Crate: windows-link 0.2.1
     License: MIT
-    Texts: [42] license-mit
+    Texts: [41] license-mit
 
 Crate: windows-sys 0.61.2
     License: MIT
-    Texts: [42] license-mit
+    Texts: [41] license-mit
 
 Crate: winnow 1.0.4
     License: MIT
-    Texts: [43] LICENSE-MIT
+    Texts: [42] LICENSE-MIT
 
 Crate: yamaa-saphyr-parser 0.2.1
     Source: rust/vendor/saphyr-parser
     License: MIT
-    Texts: [44] LICENSE, [45] LICENSES/ChenYuheng-MIT,
-        [46] LICENSES/Ethiraric-MIT
+    Texts: [43] LICENSE, [44] LICENSES/ChenYuheng-MIT,
+        [45] LICENSES/Ethiraric-MIT
 
 Crate: zerocopy 0.8.63
     License: MIT
-    Texts: [47] LICENSE-MIT
+    Texts: [46] LICENSE-MIT
 
 Crate: zlib-rs 0.6.8
     License: Zlib
-    Texts: [48] LICENSE
+    Texts: [47] LICENSE
 
 Crate: zmij 1.0.23
     License: MIT
@@ -388,23 +376,15 @@ Crate: zmij 1.0.23
 
 Crate: zstd 0.13.3
     License: MIT
-    Texts: [49] LICENSE
-
-Crate: zstd 0.14.3
-    License: BSD-3-Clause
-    Texts: [50] LICENSE
+    Texts: [48] LICENSE
 
 Crate: zstd-safe 7.3.0
     License: BSD-3-Clause
-    Texts: [50] LICENSE
-
-Crate: zstd-safe 8.2.0
-    License: BSD-3-Clause
-    Texts: [50] LICENSE
+    Texts: [49] LICENSE
 
 Crate: zstd-sys 2.1.2+zstd.1.5.7
     License: BSD-3-Clause
-    Texts: [50] LICENSE, [51] LICENSE.BSD-3-Clause, [52] zstd/LICENSE
+    Texts: [49] LICENSE, [50] LICENSE.BSD-3-Clause, [51] zstd/LICENSE
 
 Rust standard library
 ---------------------
@@ -450,7 +430,7 @@ File/Directory: .
             Copyright: 2016 The Fuchsia Authors
             Copyright: The Rust Project Developers (see https://thanks.rust-lang.org)
 
-License texts: [53] Apache-2.0, [54] BSD-2-Clause, [55] MIT, [56] Unicode-3.0
+License texts: [52] Apache-2.0, [53] BSD-2-Clause, [54] MIT, [55] Unicode-3.0
 
 From the rust-src component of Rust 1.99.1, lib/rustlib/src/rust/library, the
 crates that the standard library links, and those of its in-tree crates that
@@ -458,7 +438,7 @@ declare a license of their own:
 
 Crate: addr2line 0.27.1
     License: MIT
-    Texts: [57] LICENSE-MIT
+    Texts: [56] LICENSE-MIT
 
 Crate: adler2 2.0.1
     License: MIT
@@ -466,41 +446,41 @@ Crate: adler2 2.0.1
 
 Crate: cfg-if 1.0.4
     License: MIT
-    Texts: [15] LICENSE-MIT
+    Texts: [14] LICENSE-MIT
 
 Crate: compiler_builtins 0.1.160
     Source: in-tree, compiler-builtins/compiler-builtins
     License: MIT AND Apache-2.0 WITH LLVM-exception
-    Texts: [58] compiler-builtins/LICENSE.txt,
-        [29] compiler-builtins/libm/LICENSE.txt
+    Texts: [57] compiler-builtins/LICENSE.txt,
+        [28] compiler-builtins/libm/LICENSE.txt
 
 Crate: gimli 0.34.0
     License: MIT
-    Texts: [59] LICENSE-MIT
+    Texts: [58] LICENSE-MIT
 
 Crate: hashbrown 0.17.1
     License: MIT
-    Texts: [24] LICENSE-MIT
+    Texts: [23] LICENSE-MIT
 
 Crate: libc 0.2.189
     License: MIT
-    Texts: [28] LICENSE-MIT
+    Texts: [27] LICENSE-MIT
 
 Crate: memchr 2.8.3
     License: MIT
-    Texts: [12] COPYING, [13] LICENSE-MIT
+    Texts: [11] COPYING, [12] LICENSE-MIT
 
 Crate: miniz_oxide 0.9.1
     License: MIT
-    Texts: [32] LICENSE, [33] LICENSE-MIT.md
+    Texts: [31] LICENSE, [32] LICENSE-MIT.md
 
 Crate: object 0.39.1
     License: MIT
-    Texts: [60] LICENSE-MIT
+    Texts: [59] LICENSE-MIT
 
 Crate: rustc-demangle 0.1.28
     License: MIT
-    Texts: [15] LICENSE-MIT
+    Texts: [14] LICENSE-MIT
 
 musl C library
 --------------
@@ -986,38 +966,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 ==============================================================================
-[9] Shipped by: base64 0.23.1 (LICENSE-MIT)
-==============================================================================
-
-The MIT License (MIT)
-
-Copyright (c) 2025 Alice Maz, Marshall Pierce
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-
-==============================================================================
-[10] Shipped by: bitflags 2.13.2 (LICENSE-MIT), num 0.4.3 (LICENSE-MIT),
-    num-bigint 0.4.8 (LICENSE-MIT), num-bigint 0.5.1 (LICENSE-MIT),
-    num-complex 0.4.6 (LICENSE-MIT), num-integer 0.1.47 (LICENSE-MIT),
-    num-iter 0.1.46 (LICENSE-MIT), num-rational 0.4.2 (LICENSE-MIT),
-    num-traits 0.2.19 (LICENSE-MIT), regex 1.13.1 (LICENSE-MIT),
-    regex-automata 0.4.18 (LICENSE-MIT), regex-syntax 0.8.11 (LICENSE-MIT)
+[9] Shipped by: bitflags 2.13.2 (LICENSE-MIT), num 0.4.3 (LICENSE-MIT),
+    num-bigint 0.4.8 (LICENSE-MIT), num-complex 0.4.6 (LICENSE-MIT),
+    num-integer 0.1.47 (LICENSE-MIT), num-iter 0.1.46 (LICENSE-MIT),
+    num-rational 0.4.2 (LICENSE-MIT), num-traits 0.2.19 (LICENSE-MIT),
+    regex 1.13.1 (LICENSE-MIT), regex-automata 0.4.18 (LICENSE-MIT),
+    regex-syntax 0.8.11 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2014 The Rust Project Developers
@@ -1047,7 +1001,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[11] Shipped by: brotli 8.0.4 (LICENSE.MIT)
+[10] Shipped by: brotli 8.0.4 (LICENSE.MIT)
 ==============================================================================
 
 Copyright (c) 2009, 2010, 2013-2016 by the Brotli Authors.
@@ -1071,7 +1025,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 ==============================================================================
-[12] Shipped by: byteorder 1.5.0 (COPYING), memchr 2.8.3 (COPYING)
+[11] Shipped by: byteorder 1.5.0 (COPYING), memchr 2.8.3 (COPYING)
 ==============================================================================
 
 This project is dual-licensed under the Unlicense and MIT licenses.
@@ -1079,7 +1033,7 @@ This project is dual-licensed under the Unlicense and MIT licenses.
 You may use this code under the terms of either license.
 
 ==============================================================================
-[13] Shipped by: byteorder 1.5.0 (LICENSE-MIT), memchr 2.8.3 (LICENSE-MIT)
+[12] Shipped by: byteorder 1.5.0 (LICENSE-MIT), memchr 2.8.3 (LICENSE-MIT)
 ==============================================================================
 
 The MIT License (MIT)
@@ -1105,7 +1059,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 ==============================================================================
-[14] Shipped by: bytes 1.12.1 (LICENSE)
+[13] Shipped by: bytes 1.12.1 (LICENSE)
 ==============================================================================
 
 Copyright (c) 2018 Carl Lerche
@@ -1135,7 +1089,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[15] Shipped by: cfg-if 1.0.5 (LICENSE-MIT), cfg-if 1.0.4 (LICENSE-MIT),
+[14] Shipped by: cfg-if 1.0.5 (LICENSE-MIT), cfg-if 1.0.4 (LICENSE-MIT),
     rustc-demangle 0.1.28 (LICENSE-MIT)
 ==============================================================================
 
@@ -1166,7 +1120,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[16] Shipped by: chrono 0.4.45 (LICENSE.txt)
+[15] Shipped by: chrono 0.4.45 (LICENSE.txt)
 ==============================================================================
 
 Rust-chrono is dual-licensed under The MIT License [1] and
@@ -1411,7 +1365,7 @@ limitations under the License.
 
 
 ==============================================================================
-[17] Shipped by: core-foundation-sys 0.8.7 (LICENSE-MIT)
+[16] Shipped by: core-foundation-sys 0.8.7 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2012-2013 Mozilla Foundation
@@ -1441,7 +1395,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[18] Shipped by: crc32fast 1.5.2 (LICENSE-MIT)
+[17] Shipped by: crc32fast 1.5.2 (LICENSE-MIT)
 ==============================================================================
 
 MIT License
@@ -1467,7 +1421,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-[19] Shipped by: errno 0.3.14 (LICENSE-MIT)
+[18] Shipped by: errno 0.3.14 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2014 Chris Wong
@@ -1497,7 +1451,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[20] Canonical Apache-2.0 text from the SPDX License List 3.29.0, for:
+[19] Canonical Apache-2.0 text from the SPDX License List 3.29.0, for:
     flatbuffers 25.12.19, thrift 0.17.0
 ==============================================================================
 
@@ -1576,7 +1530,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 ==============================================================================
-[21] Shipped by: flate2 1.1.10 (LICENSE-MIT)
+[20] Shipped by: flate2 1.1.10 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2014-2026 Alex Crichton
@@ -1606,7 +1560,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[22] Shipped by: getrandom 0.3.4 (LICENSE-MIT)
+[21] Shipped by: getrandom 0.3.4 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2018-2025 The rust-random Project Developers
@@ -1637,7 +1591,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[23] Shipped by: half 2.7.1 (LICENSE-MIT)
+[22] Shipped by: half 2.7.1 (LICENSE-MIT)
 ==============================================================================
 
 MIT License
@@ -1661,7 +1615,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-[24] Shipped by: hashbrown 0.15.5 (LICENSE-MIT),
+[23] Shipped by: hashbrown 0.15.5 (LICENSE-MIT),
     hashbrown 0.17.1 (LICENSE-MIT)
 ==============================================================================
 
@@ -1692,7 +1646,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[25] Shipped by: iana-time-zone 0.1.65 (LICENSE-MIT)
+[24] Shipped by: iana-time-zone 0.1.65 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2020 Andrew D. Straw
@@ -1722,7 +1676,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[26] Shipped by: integer-encoding 3.0.4 (LICENSE)
+[25] Shipped by: integer-encoding 3.0.4 (LICENSE)
 ==============================================================================
 
 The MIT License (MIT)
@@ -1750,7 +1704,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 IN THE SOFTWARE.
 
 ==============================================================================
-[27] Shipped by: lexical-core 1.0.6 (LICENSE.md),
+[26] Shipped by: lexical-core 1.0.6 (LICENSE.md),
     lexical-parse-float 1.0.6 (LICENSE.md),
     lexical-parse-integer 1.0.6 (LICENSE.md),
     lexical-write-float 1.0.6 (LICENSE.md),
@@ -2096,7 +2050,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[28] Shipped by: libc 0.2.191 (LICENSE-MIT), libc 0.2.189 (LICENSE-MIT)
+[27] Shipped by: libc 0.2.191 (LICENSE-MIT), libc 0.2.189 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) The Rust Project Developers
@@ -2126,7 +2080,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[29] Shipped by: libm 0.2.16 (LICENSE.txt),
+[28] Shipped by: libm 0.2.16 (LICENSE.txt),
     compiler_builtins 0.1.160 (compiler-builtins/libm/LICENSE.txt)
 ==============================================================================
 
@@ -2390,7 +2344,7 @@ have been licensed under extremely permissive terms.
 Copyright notices are retained in src/* files where relevant.
 
 ==============================================================================
-[30] Shipped by: linux-raw-sys 0.12.1 (COPYRIGHT)
+[29] Shipped by: linux-raw-sys 0.12.1 (COPYRIGHT)
 ==============================================================================
 
 Short version for non-lawyers:
@@ -2424,7 +2378,7 @@ is licensed under:
 at your option.
 
 ==============================================================================
-[31] Shipped by: lz4_flex 0.11.6 (LICENSE), lz4_flex 0.13.1 (LICENSE)
+[30] Shipped by: lz4_flex 0.11.6 (LICENSE)
 ==============================================================================
 
 The MIT License (MIT)
@@ -2449,7 +2403,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[32] Shipped by: miniz_oxide 0.9.1 (LICENSE)
+[31] Shipped by: miniz_oxide 0.9.1 (LICENSE)
 ==============================================================================
 
 MIT License
@@ -2479,7 +2433,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-[33] Shipped by: miniz_oxide 0.9.1 (LICENSE-MIT.md)
+[32] Shipped by: miniz_oxide 0.9.1 (LICENSE-MIT.md)
 ==============================================================================
 
 MIT License
@@ -2508,7 +2462,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-[34] Shipped by: ordered-float 2.10.1 (LICENSE-MIT)
+[33] Shipped by: ordered-float 2.10.1 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2015 Jonathan Reem
@@ -2538,7 +2492,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[35] Shipped by: quick-xml 0.41.0 (LICENSE-MIT.md)
+[34] Shipped by: quick-xml 0.41.0 (LICENSE-MIT.md)
 ==============================================================================
 
 The MIT License (MIT)
@@ -2566,7 +2520,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 ==============================================================================
-[36] Shipped by: rustix 1.1.5 (COPYRIGHT)
+[35] Shipped by: rustix 1.1.5 (COPYRIGHT)
 ==============================================================================
 
 Short version for non-lawyers:
@@ -2600,7 +2554,7 @@ is licensed under:
 at your option.
 
 ==============================================================================
-[37] Shipped by: ryu 1.0.23 (LICENSE-APACHE)
+[36] Shipped by: ryu 1.0.23 (LICENSE-APACHE)
 ==============================================================================
 
                               Apache License
@@ -2781,7 +2735,7 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 END OF TERMS AND CONDITIONS
 
 ==============================================================================
-[38] Shipped by: serde_spanned 1.0.4 (LICENSE-MIT),
+[37] Shipped by: serde_spanned 1.0.4 (LICENSE-MIT),
     toml 1.0.7+spec-1.1.0 (LICENSE-MIT),
     toml_datetime 1.0.1+spec-1.1.0 (LICENSE-MIT),
     toml_parser 1.0.10+spec-1.1.0 (LICENSE-MIT)
@@ -2808,7 +2762,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-[39] Shipped by: simd-adler32 0.3.10 (LICENSE.md)
+[38] Shipped by: simd-adler32 0.3.10 (LICENSE.md)
 ==============================================================================
 
 MIT License
@@ -2834,7 +2788,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-[40] Shipped by: snap 1.1.2 (COPYING)
+[39] Shipped by: snap 1.1.2 (COPYING)
 ==============================================================================
 
 Copyright 2011, The Snappy-Rust Authors. All rights reserved.
@@ -2866,7 +2820,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ==============================================================================
-[41] Shipped by: twox-hash 2.1.5 (LICENSE.txt)
+[40] Shipped by: twox-hash 2.1.5 (LICENSE.txt)
 ==============================================================================
 
 The MIT License (MIT)
@@ -2892,7 +2846,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-[42] Shipped by: windows-link 0.2.1 (license-mit),
+[41] Shipped by: windows-link 0.2.1 (license-mit),
     windows-sys 0.61.2 (license-mit)
 ==============================================================================
 
@@ -2919,7 +2873,7 @@ SOFTWARE.
     SOFTWARE
 
 ==============================================================================
-[43] Shipped by: winnow 1.0.4 (LICENSE-MIT)
+[42] Shipped by: winnow 1.0.4 (LICENSE-MIT)
 ==============================================================================
 
 Permission is hereby granted, free of charge, to any person obtaining
@@ -2942,7 +2896,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[44] Shipped by: yamaa-saphyr-parser 0.2.1 (LICENSE)
+[43] Shipped by: yamaa-saphyr-parser 0.2.1 (LICENSE)
 ==============================================================================
 
 Code up to and including commit `da52a68615f2ecdd6b7e4567019f280c433c1521` is licensed by Chen Yuheng under either of:
@@ -2956,7 +2910,7 @@ Code modifications starting with commit `1d71a23b151dcc12b289d0f06d8207dd9c76421
 Redistributions of this Work must include licenses of both Chen Yuheng and Ethiraric.
 
 ==============================================================================
-[45] Shipped by: yamaa-saphyr-parser 0.2.1 (LICENSES/ChenYuheng-MIT)
+[44] Shipped by: yamaa-saphyr-parser 0.2.1 (LICENSES/ChenYuheng-MIT)
 ==============================================================================
 
 The MIT License (MIT)
@@ -2982,7 +2936,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-[46] Shipped by: yamaa-saphyr-parser 0.2.1 (LICENSES/Ethiraric-MIT)
+[45] Shipped by: yamaa-saphyr-parser 0.2.1 (LICENSES/Ethiraric-MIT)
 ==============================================================================
 
 The MIT License (MIT)
@@ -3008,7 +2962,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-[47] Shipped by: zerocopy 0.8.63 (LICENSE-MIT)
+[46] Shipped by: zerocopy 0.8.63 (LICENSE-MIT)
 ==============================================================================
 
 Copyright 2023 The Fuchsia Authors
@@ -3039,7 +2993,7 @@ DEALINGS IN THE SOFTWARE.
 
 
 ==============================================================================
-[48] Shipped by: zlib-rs 0.6.8 (LICENSE)
+[47] Shipped by: zlib-rs 0.6.8 (LICENSE)
 ==============================================================================
 
 (C) 2024 Trifecta Tech Foundation 
@@ -3063,7 +3017,7 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 
 ==============================================================================
-[49] Shipped by: zstd 0.13.3 (LICENSE)
+[48] Shipped by: zstd 0.13.3 (LICENSE)
 ==============================================================================
 
 The MIT License (MIT)
@@ -3076,8 +3030,8 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[50] Shipped by: zstd 0.14.3 (LICENSE), zstd-safe 7.3.0 (LICENSE),
-    zstd-safe 8.2.0 (LICENSE), zstd-sys 2.1.2+zstd.1.5.7 (LICENSE)
+[49] Shipped by: zstd-safe 7.3.0 (LICENSE),
+    zstd-sys 2.1.2+zstd.1.5.7 (LICENSE)
 ==============================================================================
 
 BSD 3-Clause License
@@ -3110,7 +3064,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ==============================================================================
-[51] Shipped by: zstd-sys 2.1.2+zstd.1.5.7 (LICENSE.BSD-3-Clause)
+[50] Shipped by: zstd-sys 2.1.2+zstd.1.5.7 (LICENSE.BSD-3-Clause)
 ==============================================================================
 
 The auto-generated bindings are under the 3-clause BSD license:
@@ -3147,7 +3101,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ==============================================================================
-[52] Shipped by: zstd-sys 2.1.2+zstd.1.5.7 (zstd/LICENSE)
+[51] Shipped by: zstd-sys 2.1.2+zstd.1.5.7 (zstd/LICENSE)
 ==============================================================================
 
 BSD License
@@ -3182,7 +3136,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ==============================================================================
-[53] Shipped by: Rust 1.99.1 (share/doc/rust/licenses/Apache-2.0.txt)
+[52] Shipped by: Rust 1.99.1 (share/doc/rust/licenses/Apache-2.0.txt)
 ==============================================================================
 
 Apache License
@@ -3260,7 +3214,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 ==============================================================================
-[54] Shipped by: Rust 1.99.1 (share/doc/rust/licenses/BSD-2-Clause.txt)
+[53] Shipped by: Rust 1.99.1 (share/doc/rust/licenses/BSD-2-Clause.txt)
 ==============================================================================
 
 Copyright (c) <year> <owner> 
@@ -3274,7 +3228,7 @@ Redistribution and use in source and binary forms, with or without modification,
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ==============================================================================
-[55] Shipped by: Rust 1.99.1 (share/doc/rust/licenses/MIT.txt)
+[54] Shipped by: Rust 1.99.1 (share/doc/rust/licenses/MIT.txt)
 ==============================================================================
 
 MIT License
@@ -3288,7 +3242,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[56] Shipped by: Rust 1.99.1 (share/doc/rust/licenses/Unicode-3.0.txt)
+[55] Shipped by: Rust 1.99.1 (share/doc/rust/licenses/Unicode-3.0.txt)
 ==============================================================================
 
 UNICODE LICENSE V3
@@ -3332,7 +3286,7 @@ dealings in these Data Files or Software without prior written
 authorization of the copyright holder.
 
 ==============================================================================
-[57] Shipped by: addr2line 0.27.1 (LICENSE-MIT)
+[56] Shipped by: addr2line 0.27.1 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2016-2018 The gimli Developers
@@ -3362,7 +3316,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[58] Shipped by: compiler_builtins 0.1.160 (compiler-builtins/LICENSE.txt)
+[57] Shipped by: compiler_builtins 0.1.160 (compiler-builtins/LICENSE.txt)
 ==============================================================================
 
 The compiler-builtins crate is available for use under both the MIT license
@@ -3642,7 +3596,7 @@ Additionally, some source files may contain comments with specific copyrights
 or licenses.
 
 ==============================================================================
-[59] Shipped by: gimli 0.34.0 (LICENSE-MIT)
+[58] Shipped by: gimli 0.34.0 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2015 The Rust Project Developers
@@ -3672,7 +3626,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[60] Shipped by: object 0.39.1 (LICENSE-MIT)
+[59] Shipped by: object 0.39.1 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2015 The Gimli Developers
