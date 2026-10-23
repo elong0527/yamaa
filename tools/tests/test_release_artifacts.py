@@ -287,8 +287,14 @@ def downloads(root, identity=IDENTITY):
             )
         elif asset.kind == "conformance":
             # The committed files, which the selector compares with the
-            # checkout.
-            conformance_archive.write(directory, ROOT)
+            # checkout, under the directory that the identity names.
+            cli_zip(
+                path,
+                {
+                    member: ((ROOT / file).read_bytes(), conformance_archive.MODE)
+                    for member, file in conformance_archive.layout(identity).items()
+                },
+            )
         elif asset.kind == "r-binary":
             # R installs the notices of inst/ at the package root.
             r_binary(
