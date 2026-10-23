@@ -537,7 +537,9 @@ impl Batches {
                         self.mode = Mode::Done;
                         return Some(Err(failure(run)));
                     };
-                    let mut batches = table.batches().to_vec().into_iter();
+                    // The reader owns its cursor over the kept table's batches.
+                    let owned: Vec<RecordBatch> = table.batches().to_vec();
+                    let mut batches = owned.into_iter();
                     let first = batches.next();
                     self.mode = Mode::Table(batches);
                     return first.map(Ok);
