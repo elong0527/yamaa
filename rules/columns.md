@@ -83,10 +83,6 @@ graph completes. Both sites read values after stages 1 to 3, as
 [Text](text.md) and
 [Formulas](formulas.md).
 
-A file that declares `schema_version` is read under the rules at the
-`yamaa-v0.5.0` tag, where a named lookup that omits its matching fields, and
-an implicit join, read the applicable output keys.
-
 <a id="column-4"></a>
 
 ### COLUMN-4. Row derivations follow their template's dependency graph and never read a value only column derivation produces
@@ -304,7 +300,7 @@ with several placeholders, it fires when any input is missing. `invalid`,
 `unmapped` and `str_extract`'s `no_match` fire only when every input is
 present.
 
-Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::absent_answers_an_unknown_variable_only_on_the_0_5_surface`, `rust/crates/yamaa-core/src/specification/source_expressions/mod.rs::absent_answers_a_missing_variable_only_on_the_0_5_surface`, `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json`, `schema-handlers`.
+Evidence: `rust/crates/yamaa-core/src/specification/source_expressions/mod.rs::absent_does_not_answer_a_variable_that_does_not_exist`, `rust/crates/yamaa/tests/language_header.rs::absent_does_not_answer_a_variable_the_input_does_not_hold`, `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json`, `schema-handlers`.
 
 On `mapping`, `missing` never answers a non-missing input with no dictionary
 entry; that is `unmapped`'s condition
@@ -313,10 +309,7 @@ answers a missing match value ([LOOKUP-24](lookup.md#lookup-24)), as a source
 binding's `absent` answers one on its implicit join
 ([LOOKUP-24](lookup.md#lookup-24)). Omitted, each of these handlers gives the
 default of [COLUMN-10](#column-10). An `odm` read declares no `absent`, and
-one that identifies no record gives missing ([NAME-13](names.md#name-13)). A
-file that declares `schema_version` is read under the rules at the
-`yamaa-v0.5.0` tag, where `absent` also answers a variable or ODM item that
-does not exist in context.
+one that identifies no record gives missing ([NAME-13](names.md#name-13)).
 
 The owning rule states which values an operation cannot use;
 [Dates and times](temporal.md) states them for the temporal operations in the

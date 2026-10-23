@@ -75,10 +75,7 @@ qualified by an input dataset must name the current row's driver
 only of a driver that every row template has
 ([WINDOW-11](windows.md#window-11)). An unqualified name never falls back to a
 field of the driver's record that no column takes, in a `between` value or a
-key match value alike. A file that declares `schema_version` is read under the
-rules at the `yamaa-v0.5.0` tag, where a named intermediate's unqualified
-`between` value that no column takes reads that field of the driver's record
-([LOOKUP-9](lookup.md#lookup-9)).
+key match value alike.
 
 <a id="name-4"></a>
 

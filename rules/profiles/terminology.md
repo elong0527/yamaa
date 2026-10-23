@@ -36,10 +36,6 @@ verification beside it. A duplicate `id` or `name` fails with
 checked or run without a project file declares no codelist, so each binding
 fails with `project_binding_missing` instead ([CT-13](#ct-13)).
 
-A file that declares `schema_version` is read under the rules at the
-`yamaa-v0.5.0` tag, where a build without a project file does not read a
-codelist binding.
-
 <a id="ct-2"></a>
 
 ### CT-2. A codelist source's `standard` names its published terminology, and a source without one is sponsor-defined
@@ -183,7 +179,7 @@ With a project file, a binding to an item the project does not declare fails
 as [CT-1](#ct-1) and the [project-function rules](functions.md) state.
 
 Fails: `project_binding_missing`.
-Evidence: `negative-codelist-without-project`, `negative-inventory-vocabulary-without-project`, `rust/crates/yamaa/tests/project_binding.rs::each_binding_of_a_specification_without_its_project_fails_before_any_input_is_read`, `rust/crates/yamaa/tests/project_binding.rs::with_its_project_a_binding_names_what_the_project_declares`, `rust/crates/yamaa/tests/project_binding.rs::a_0_5_specification_keeps_its_0_5_meaning`, `rust/crates/yamaa-core/tests/support/diagnostic/front_end.rs::project_binding_reached`.
+Evidence: `negative-codelist-without-project`, `negative-inventory-vocabulary-without-project`, `rust/crates/yamaa/tests/project_binding.rs::each_binding_of_a_specification_without_its_project_fails_before_any_input_is_read`, `rust/crates/yamaa/tests/project_binding.rs::with_its_project_a_binding_names_what_the_project_declares`, `rust/crates/yamaa-core/tests/support/diagnostic/front_end.rs::project_binding_reached`.
 
 The bindings are those of the resolved specification: the `codelist` of a
 column or of a value-level entry ([SUB-12](submission.md#sub-12)), an
@@ -211,12 +207,6 @@ them, so it passes validation alone only when it binds nothing a project
 supplies. A project file that declares no codelists or no functions supplies
 none: a binding then fails as [CT-1](#ct-1) or
 [FUNC-4](functions.md#func-4) states.
-
-A file that declares `schema_version` is read under the rules at the
-`yamaa-v0.5.0` tag, where a build without a project file reads no codelist
-binding, fails each present value of an inventory vocabulary, which admits no
-name without one ([CT-11](#ct-11)), and names no declared function in a call
-([FUNC-4](functions.md#func-4)).
 
 <a id="ct-7"></a>
 
@@ -292,10 +282,6 @@ document check the redundancy, and a specification checked or run without a
 project file fails at the binding instead ([CT-13](#ct-13)). Not every
 constrained column carries published terminology.
 
-A file that declares `schema_version` is read under the rules at the
-`yamaa-v0.5.0` tag, where a build without a project file does not read the
-binding.
-
 ## Documents and inventories
 
 <a id="ct-10"></a>
@@ -338,7 +324,3 @@ published values uses the same inventory. A column that also prohibits
 absence resolves `mandatory` to true ([SUB-11](submission.md#sub-11)). The
 ADaM `SRCDOM` column, whose values name the source SDTM domain or ADaM
 dataset, binds this vocabulary.
-
-A file that declares `schema_version` is read under the rules at the
-`yamaa-v0.5.0` tag, where a domain build without a project file admits no
-name, so each present value fails.

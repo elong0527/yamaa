@@ -218,10 +218,6 @@ before any input is read; on an input whose path selects no profile,
 [INPUT-1](../inputs.md#input-1) fails instead. The artifacts of
 [CSV-1](#csv-1) never carry a mark.
 
-A file that declares `schema_version` is read under the rules at the
-`yamaa-v0.5.0` tag, where an input declares no `byte_order_mark`, so a
-byte-order mark that begins a source always fails.
-
 <a id="csv-11"></a>
 
 ### CSV-11. A record ends in `U+000A`, optionally preceded by `U+000D`, and the last may end the file
