@@ -1453,6 +1453,59 @@ rows:
             );
         }
 
+        /// A `unique` beside a nearest selection may warn, as one beside
+        /// `keep` and `order_by` may (LOOKUP-17, LOOKUP-26): ID 1's two
+        /// visits repeat it, so the check is violated, one repeated ID of
+        /// the two, and its row follows D211; every read still takes the
+        /// visit nearest the reference day, 2 days after it rather than 9
+        /// before it.
+        #[test]
+        fn a_warning_unique_beside_a_nearest_selection_reports_and_reads_take_the_nearest() {
+            let study = Study::new();
+            fs::write(
+                study.0.join("input/ref.csv"),
+                "ID,REFDT\n1,2025-01-10\n2,2025-01-10\n",
+            )
+            .unwrap();
+            fs::write(
+                study.0.join("input/visits.csv"),
+                "ID,VDT,VAL\n1,2025-01-01,a\n1,2025-01-12,b\n2,2025-01-09,c\n",
+            )
+            .unwrap();
+            let mut result = study.build(
+                r#"yamaa: "1.0"
+type: spec
+domain: OUT
+keys: [ID]
+base: REF
+input:
+  REF: {path: input/ref.csv, types: {ID: int, REFDT: date}}
+  VIS: {path: input/visits.csv, types: {ID: int, VDT: date}}
+output: {path: out.csv, columns: [ID, VAL], report: report.csv}
+intermediates:
+  - id: NEAR
+    dataset: VIS
+    key: [ID]
+    nearest: {source: VDT, to: REF.REFDT, unit: day}
+    verifications:
+      - unique: {columns: [ID], severity: warning}
+columns:
+  - {name: ID, type: int, derivation: REF.ID}
+  - {name: VAL, type: str, derivation: NEAR.VAL}
+"#,
+            );
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert!(result.save().unwrap());
+            assert_eq!(
+                fs::read_to_string(study.0.join("out.csv")).unwrap(),
+                "ID,VAL\n1,b\n2,c\n"
+            );
+            assert_eq!(
+                check_rows(&study),
+                ["out.csv,check,intermediates.NEAR.verifications[0].unique,unique,,,LOOKUP-17,warning,violated,duplicate_intermediate_records,1,2,\"[{\"\"ID\"\":1}]\",\"{\"\"columns\"\":[\"\"ID\"\"],\"\"dataset\"\":\"\"VIS\"\",\"\"intermediate\"\":\"\"NEAR\"\"}\""]
+            );
+        }
+
         /// A `not_missing` whose `when` reads a later column checks the rows
         /// that column's completed values select: the `read` template leaves
         /// LATER to its column derivation, which completes after V's, and

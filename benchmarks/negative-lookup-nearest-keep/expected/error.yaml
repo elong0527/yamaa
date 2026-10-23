@@ -1,0 +1,9 @@
+phase: validation
+condition: prohibited_construct
+spec_paths:
+  - intermediates.NEAREST.order_by
+  - intermediates.NEAREST.keep
+  - intermediates.NEAREST.nearest
+rule: LOOKUP-26
+context:
+  intermediate: NEAREST

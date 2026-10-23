@@ -299,6 +299,21 @@ EXPECTED = {
             values=("error", "warning"),
         )
     ],
+    # D206: a named intermediate selects the candidate nearest a reference
+    # (LOOKUP-26).
+    "new.spec.intermediate.nearest": [
+        Field("intermediate_class", "nearest", "nearest_class"),
+        Field("nearest_class", "source", "identifier", True, kind="identifier"),
+        Field("nearest_class", "to", "match_value", True, kind="expression"),
+        Field(
+            "nearest_class",
+            "unit",
+            "str",
+            True,
+            kind="value",
+            values=("day", "week", "month", "year", "second", "minute", "hour"),
+        ),
+    ],
     "new.spec.clear": [Field("root_class", "clear", "list[spec_path]")],
     # A lint suppression comment and a profile chosen by the path's
     # extension: neither is a schema field.

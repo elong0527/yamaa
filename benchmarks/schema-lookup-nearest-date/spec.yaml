@@ -1,0 +1,59 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  ADSL_RAW: {path: input/adsl_raw.csv, types: {RANDDT: date}}
+  VS:
+    path: input/vs.csv
+    types: {VSSEQ: int, VSDT: date, VSSTRESN: float}
+base: ADSL_RAW
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, RANDDT, WTRDT, WTR]
+
+intermediates:
+  # The subject's weight measured nearest the randomization date, in whole
+  # days either side of it; of two measurements as many days away, the
+  # earlier.
+  - id: WEIGHT
+    dataset: VS
+    key: [STUDYID, USUBJID]
+    nearest: {source: VSDT, to: RANDDT, unit: day}
+    columns: [VSDT, VSSTRESN]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ADSL_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ADSL_RAW.USUBJID
+
+  - name: RANDDT
+    type: date
+    label: Date of Randomization
+    derivation: ADSL_RAW.RANDDT
+
+  - name: WTRDT
+    type: date
+    label: Date of Weight Nearest Randomization
+    derivation: WEIGHT.VSDT
+
+  - name: WTR
+    type: float
+    label: Weight (kg) Nearest Randomization
+    derivation: WEIGHT.VSSTRESN
+
+verifications:
+  - row_count:
+      min: 3
+      max: 3
+  - all_or_none:
+      id: weight-and-its-date-travel-together
+      columns: [WTRDT, WTR]
