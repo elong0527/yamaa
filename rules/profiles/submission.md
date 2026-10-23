@@ -105,9 +105,6 @@ bound to a standard of type `CT`: controlled terminology qualifies a codelist
 and not a dataset, and [Controlled terminology](terminology.md) owns that
 binding.
 
-A project file that declares `schema_version` binds one `standard`, which
-composition does not check against the section's model.
-
 ## Dataset metadata
 
 <a id="sub-4"></a>

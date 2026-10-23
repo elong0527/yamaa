@@ -103,14 +103,10 @@ Language rules live in `rules/*.md`, format and file-handling rules in
 `rules/reference/`, and the submission, project-file and project-function
 profiles in `rules/profiles/`.
 
-A specification, function or codelists file that declares `schema_version`,
-written in language version 0.5, is refused wherever the engine reads it
-([SCHEMA-2](reference/schema-language.md#schema-2)). Until
-[#3685](https://github.com/elong0527/yamaa/issues/3685) removes the 0.5
-project path, a project file that declares `schema_version`, and the
-environment files it links, are read under the rules at the `yamaa-v0.5.0`
-tag, the lint still reads a named file that declares `schema_version`, and
-cards keep on their Fails lines the conditions that path still raises.
+A file that declares `schema_version`, written in language version 0.5, is
+refused wherever the engine or the lint reads it
+([SCHEMA-2](reference/schema-language.md#schema-2)); the rules of 0.5 stay at
+the `yamaa-v0.5.0` tag.
 
 | File | Prefix | Covers |
 | --- | --- | --- |
@@ -206,9 +202,7 @@ One term per concept across all rules, schema comments, and messages:
   study's **function files**, each defining one project function with a
   callable for each host language it implements, holds each host language's
   lock, and declares the study's terminology and submission sections
-  ([Project file](profiles/project.md)). A project file that declares
-  `schema_version` links each host language's **environment file** instead,
-  which declares only that host's lock and project functions.
+  ([Project file](profiles/project.md)).
 - **input dataset** / **output dataset** -- state the role whenever it matters.
   Bare `dataset` appears only as a key name. `table` means a documentation
   table, never data.

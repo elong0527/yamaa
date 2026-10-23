@@ -24,8 +24,7 @@ directory or a host default, and a specification cannot select, replace or
 override its project. A run without a project file has no project functions,
 no terminology and no dataset inventory.
 
-Fails: `project_environment_invalid`.
-Evidence: `schema-functions`, `sdtm-dm-metadata`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_project_lists_function_files_and_holds_each_host_lock`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::the_converted_project_files_lower_to_the_roots_of_their_sources`, `rust/crates/yamaa-adapters/tests/project_scope.rs::an_unreadable_project_fails_as_a_check_reports_it`, `rust/crates/yamaa/tests/project_operations.rs::a_project_spelled_through_a_linked_directory_keeps_its_authority`, `rust/crates/yamaa/tests/caller_paths.rs::a_project_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`.
+Evidence: `schema-functions`, `sdtm-dm-metadata`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_project_lists_function_files_and_holds_each_host_lock`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::the_converted_project_files_lower_with_their_written_positions`, `rust/tests/host-fixtures/cases.json::a_listed_function_file_and_codelist_file_that_do_not_exist`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_project_file_that_declares_schema_version_is_refused_as_language_0_5`, `rust/crates/yamaa-adapters/tests/project_scope.rs::an_unreadable_project_fails_as_a_check_reports_it`, `rust/crates/yamaa/tests/project_operations.rs::a_project_spelled_through_a_linked_directory_keeps_its_authority`, `rust/crates/yamaa/tests/caller_paths.rs::a_project_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`.
 
 A project file declares `yamaa`, `type`, `functions`, `environments`,
 `codelists`, `study`, and the `sdtm`, `adam` and `send` sections, each optional
@@ -44,11 +43,11 @@ without a project file fails validation at each function call, codelist
 binding and inventory vocabulary it declares, all of which only a project file
 supplies ([CT-13](terminology.md#ct-13)).
 
-A project file that declares `schema_version` declares `environments`,
-`codelists`, `study` and the sections instead, and is read under the rules at
-the `yamaa-v0.5.0` tag ([Rules](../README.md)): one that does not validate
-against `schema_project.yaml` fails with `project_environment_invalid`
-([FUNC-2](functions.md#func-2)).
+A project file that declares `schema_version` was written for language
+version 0.5, which no 1.x engine reads: it fails as
+`unsupported_language_version` at `schema_version`, naming version `0.5`
+([SCHEMA-2](../reference/schema-language.md#schema-2)), and none of the
+environment files it links is read.
 
 <a id="project-2"></a>
 
@@ -61,19 +60,11 @@ names; the other entry is neither opened nor validated. Function files are
 language-neutral ([FUNC-4](functions.md#func-4)), so one project serves both
 hosts with one copy of its study metadata and its functions.
 
-Fails: `project_environment_missing`.
-Evidence: `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::a_1_0_host_reads_only_its_own_lock_and_every_listed_function_file`, `python/tests/installed/installed_public_environment.py::test_each_host_reads_only_its_own_environment_entry`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::a_project_without_an_environment_for_the_host_leaves_other_languages_unread`.
+Evidence: `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::a_1_0_host_reads_only_its_own_lock_and_every_listed_function_file`, `python/tests/installed/installed_public_environment.py::test_each_host_reads_only_its_own_lock`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::an_engine_without_a_host_language_reads_no_environments_entry`.
 
 An absent entry means the host declares no lock, and its calls run without a
 package-version audit ([FUNC-3](functions.md#func-3)); a call in a host with no
 implementation fails under [FUNC-1](functions.md#func-1).
-
-In a project file that declares `schema_version`, `environments` maps each host
-language key to that language's environment file under
-[Project functions](functions.md), whose key states its language. An absent
-entry leaves that host without an implementation environment, and a call to a
-project function then fails with `project_environment_missing` under
-[FUNC-1](functions.md#func-1).
 
 <a id="project-3"></a>
 
@@ -97,9 +88,7 @@ files of [Dataset-JSON](dataset-json.md#json-1) or
 ([PROJECT-13](#project-13)). A section's `standards` is a list, its first
 entry the guide a specification binds by default; a specification selects
 another by name in `submission.standard`
-([DEFINE-8](define-xml.md#define-8)). A project file that declares
-`schema_version` writes one `standard` and `datasets: json` or `datasets: xpt`
-instead.
+([DEFINE-8](define-xml.md#define-8)).
 
 <a id="project-4"></a>
 
@@ -111,15 +100,11 @@ the directory of the project file. Absolute local paths and parent segments
 have their [File resolution](../reference/files.md) meaning.
 
 Fails: `resource_path_missing`.
-Evidence: `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::a_1_0_host_reads_only_its_own_lock_and_every_listed_function_file`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::lock_and_function_paths_resolve_from_the_environment_file_and_codelists_from_the_project`, `python/tests/installed/installed_public_environment.py::test_project_codelists_keep_project_locations_and_missing_files_fail_there`.
+Evidence: `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::a_1_0_host_reads_only_its_own_lock_and_every_listed_function_file`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_project_reads_a_codelist_file_it_lists_relative_to_itself`, `python/tests/installed/installed_public_environment.py::test_project_codelists_keep_project_locations_and_missing_files_fail_there`.
 
 An absent file fails at its one selected location, without discovery or a
 fallback search. The project file does not change where a specification's own
 resources resolve under [FILE-1](../reference/files.md#file-1).
-
-In a project file that declares `schema_version`, each environment link
-resolves from the project file, and the lock and function definition files an
-environment file writes resolve from that environment file.
 
 ## Specification names
 
@@ -184,9 +169,7 @@ section, a project run builds every declared section
 that names `define` ([PROJECT-13](#project-13)).
 
 The finding has no spec path. Its `section` context is the requested name,
-and its `sections` context lists the declared sections. A project file that
-declares `schema_version` declares its sections under the same keys, and
-selecting one is checked the same way.
+and its `sections` context lists the declared sections.
 
 ## Checking a project
 
