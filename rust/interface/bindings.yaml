@@ -119,6 +119,7 @@ values:
       - scalar_as_text
       - unused_input_key
       - equality_filter
+      - partial_restatement
   # The file types a yamaa file declares in `type` (SCHEMA-2), as schema()
   # takes them (D149).
   file_type:

@@ -36,7 +36,9 @@ it names:
 The check reads each file as its author wrote it, before any inherited layer
 is resolved, and returns a table with one row per finding: the file's absolute
 path with forward slashes, the one-based line and column where the departure
-starts, the finding, its spec path and a message.
+starts, the finding, its spec path and a message. Only
+[`partial_restatement`](#authoring-findings) also reads the layers a
+specification inherits.
 
 | file | line | column | finding | spec_path | message |
 | --- | --- | --- | --- | --- | --- |
@@ -78,6 +80,7 @@ The findings, in the order the lint lists them:
 | `scalar_as_text` | Grammar text for a missing value, number or Boolean | yes |
 | `unused_input_key` | An input's `key` that no read uses | no |
 | `equality_filter` | A lookup filter comparing a donor field and a row value | no |
+| `partial_restatement` | A layer restating an inherited mapping with entries left out | no |
 
 ## Field order
 
@@ -406,6 +409,45 @@ intermediates:
 `RANGES.SEX = LB.SEX` is reported: write
 `key: {LBTESTCD: LBTESTCD, SEX: LB.SEX}` and keep `RANGES.LOW IS NOT NULL` in
 the filter.
+
+**`partial_restatement`.** A layer that writes a member it inherits merges
+with it, a mapping key by key, so an entry the layer leaves out of an
+inherited mapping comes back from its parent
+([LAYER-6](../../rules/inheritance.md#layer-6),
+[LAYER-8](../../rules/inheritance.md#layer-8)). A layer that restates such a
+mapping, writing it empty or writing again an entry exactly as it inherits
+it, and leaves out entries that then come back is reported at the mapping,
+and the message names the entries that come back. The mappings read are an
+input's `types`, a named intermediate's `key` written as a mapping and its
+`derivations`, a row template's `derivations` and the settings of a named
+window. A layer that writes only what it adds or changes is patching and is
+never reported, and neither is a mapping the layer clears: clearing a mapping
+and writing it in the same layer replaces it
+([LAYER-9](../../rules/inheritance.md#layer-9)).
+
+```yaml
+yamaa: "1.0"
+type: spec
+parent: scores-base.yaml
+
+rows:
+  - id: scores
+    derivations:
+      USUBJID: SC.USUBJID
+      VISIT: SC.VISIT
+      AVAL: SC.SCORE
+```
+
+When `scores-base.yaml` also derives `NOTE` in the `scores` template, `NOTE`
+comes back and `rows.scores.derivations` is reported. List the mapping in
+`clear`, as `clear: [rows.scores.derivations]`, to replace it, or write only
+the derivations this layer changes to keep the parent's. A named window is a
+keyed member, which `clear` never names, so each setting the layer leaves
+out is cleared by its own path, such as `windows.BYSUBJ.filter`. Either
+meaning may be intended, so `fix` makes neither rewrite. The check follows
+the file's `parent` chain through the same resolver and composes it as the
+engine does; a file whose layers cannot be read or composed is not read for
+this finding, and validation reports why.
 
 ## Fixes
 
