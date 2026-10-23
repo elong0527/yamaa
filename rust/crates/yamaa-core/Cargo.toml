@@ -15,8 +15,10 @@ ryu = { version = "1.0.20", default-features = false }
 # Disable architecture-specific math implementations. Exact: the portable-math
 # golden values and saved bytes depend on this implementation.
 libm = { version = "=0.2.16", default-features = false }
-# Exact decimal rounding intermediates.
-num-bigint = { version = "0.5.1", default-features = false }
+# Exact decimal rounding intermediates. The 0.4 series that the num crate of
+# Arrow and Parquet 55.2.0 requires, so the engine builds one copy (#3696);
+# 0.4.8 carries the division fix that 0.4.7 lacks.
+num-bigint = { version = "0.4.8", default-features = false }
 # Linear-time matching for the portable regex subset. Unicode tables stay off:
 # the validator spells \d, \w, \s, \b and . as explicit sets. The lazy DFA,
 # one-pass DFA and bounded backtracker are faster crate-internal engines with
