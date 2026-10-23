@@ -5,15 +5,22 @@ use std::path::{Path, PathBuf};
 
 use yamaa_core::language::FileType;
 
-use super::checks::{check, suppressed};
+use super::checks::{check, sort, suppressed};
 use super::document::{Document, Value};
-use super::{fix, Error, Finding, Linted};
+use super::{fix, inheritance, Error, Finding, Linted};
 use crate::yaml_decode::DecodeFailure;
 
 /// The findings that remain in `text` once suppressions apply, one-based.
-pub(super) fn findings(text: &[u8]) -> Result<Vec<Finding>, DecodeFailure> {
+/// With `file`, the path `text` was read from, a specification is also
+/// compared with the layers it inherits.
+pub(super) fn findings(text: &[u8], file: Option<&Path>) -> Result<Vec<Finding>, DecodeFailure> {
     let document = Document::parse(text)?;
-    Ok(suppressed(&document, check(&document))
+    let mut found = check(&document);
+    if let Some(file) = file {
+        found.extend(inheritance::check(&document, file));
+        sort(&mut found);
+    }
+    Ok(suppressed(&document, found)
         .into_iter()
         .map(|item| Finding {
             line: item.line + 1,
@@ -69,10 +76,11 @@ pub(super) fn lint(paths: &[String], fix: bool) -> Result<Vec<Linted>, Error> {
         if changed {
             write(&file, fixed.as_bytes())?;
         }
-        let findings = findings(fixed.as_bytes()).map_err(|failure| Error::Source {
-            file: file.display.clone(),
-            failure,
-        })?;
+        let findings =
+            findings(fixed.as_bytes(), Some(&file.path)).map_err(|failure| Error::Source {
+                file: file.display.clone(),
+                failure,
+            })?;
         linted.push(Linted {
             file: file.display,
             findings,

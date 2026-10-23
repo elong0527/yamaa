@@ -10,7 +10,9 @@
 //! of the files, a directory's yamaa files of every file type in sorted path
 //! order, then by line, column and finding. The result also counts the files
 //! linted and names the files a fix rewrote, for the command line's summary
-//! line, `N lint findings in M of K files`.
+//! line, `N lint findings in M of K files`. A 1.x specification that declares
+//! `parent` is also compared with the layers it inherits, read through the
+//! same resolver, for `partial_restatement`, which no fix rewrites.
 //!
 //! A comment `# yamaa-lint: allow <finding>, ... -- <reason>` directly above a
 //! field or an entry suppresses the named findings within it (P-LINT-1); a
@@ -36,7 +38,7 @@ use crate::text::{self, Action};
 pub const LINT_COLUMNS: [&str; 6] = ["file", "line", "column", "finding", "spec_path", "message"];
 
 /// Every value of the lint table's `finding` column.
-pub const LINT_FINDINGS: [&str; 14] = yamaa_adapters::lint::FINDINGS;
+pub const LINT_FINDINGS: [&str; 15] = yamaa_adapters::lint::FINDINGS;
 
 /// What [`lint`] found: the findings that remain, in table order, with the
 /// number of files it read and the files a fix rewrote. The hosts return its

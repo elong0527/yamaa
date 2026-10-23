@@ -204,6 +204,31 @@ expression, add one field type to an inherited `input` dataset, or add one
 derivation to an inherited row template; a derivation naming a different
 keyword replaces the inherited expression whole.
 
+A layer that restates an inherited mapping merges with it all the same, so an
+entry the layer leaves out comes back from its parent. Clearing the mapping
+in the same layer replaces it instead ([LAYER-9](#layer-9)):
+
+```yaml
+yamaa: "1.0"
+type: spec
+parent: scores-base.yaml
+clear:
+  - rows.scores.derivations
+
+rows:
+  - id: scores
+    derivations:
+      USUBJID: SC.USUBJID
+      VISIT: SC.VISIT
+      AVAL: SC.SCORE
+```
+
+Without the `clear` entry, the `scores` template keeps every other derivation
+`scores-base.yaml` gives it, such as one for `NOTE`, and the lint reports the
+restatement as `partial_restatement`. A named window composes the same way,
+and since `clear` never names the window itself, a layer clears each setting
+it leaves out by that setting's path ([LAYER-8](#layer-8)).
+
 <a id="layer-7"></a>
 
 ### LAYER-7. Requiredness and defaults apply to the composed member, never to one contribution

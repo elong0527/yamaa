@@ -6,7 +6,9 @@
 //! file is read once through the local file resolver, admitted by the shared
 //! YAML document admission, and judged from the shared scanner's located
 //! events with the positions a reader sees; a 1.x file is also read through
-//! its file type's schema, as validation reads it.
+//! its file type's schema, as validation reads it. A 1.x specification that
+//! declares `parent` is compared with the layers it inherits, read through
+//! the same resolver, for `partial_restatement` alone.
 //!
 //! [`lint`] returns each file's findings in file order, then by line, column
 //! and finding. With `fix`, a file is rewritten only when the edited text
@@ -32,6 +34,8 @@ mod fields;
 mod files;
 #[cfg(feature = "yaml")]
 mod fix;
+#[cfg(feature = "yaml")]
+mod inheritance;
 
 #[cfg(all(test, feature = "yaml"))]
 mod tests;
@@ -41,7 +45,7 @@ use yamaa_core::application_issue::{Fault, Step};
 use yamaa_core::diagnostic::Diagnostic;
 
 /// Every finding the lint reports, in the order the style guide names them.
-pub const FINDINGS: [&str; 14] = [
+pub const FINDINGS: [&str; 15] = [
     "field_order",
     "root_spacing",
     "entry_spacing",
@@ -56,6 +60,7 @@ pub const FINDINGS: [&str; 14] = [
     "scalar_as_text",
     "unused_input_key",
     "equality_filter",
+    "partial_restatement",
 ];
 
 /// One departure, at the one-based line and column where it starts.
@@ -236,11 +241,13 @@ pub fn lint(paths: &[String], fix: bool) -> Result<Vec<Linted>, Error> {
     }
 }
 
-/// The findings in `text`, a specification file's complete contents.
+/// The findings in `text`, a specification file's complete contents. Text
+/// has no location to read a `parent` from, so it gives no
+/// `partial_restatement`.
 pub fn check_text(text: &[u8]) -> Result<Vec<Finding>, DecodeFailure> {
     #[cfg(feature = "yaml")]
     {
-        files::findings(text)
+        files::findings(text, None)
     }
     #[cfg(not(feature = "yaml"))]
     {
