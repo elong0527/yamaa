@@ -104,15 +104,18 @@ A row dependency on such a value fails as `phase_boundary`.
 
 After row construction, the column dependency graph is built. Every dependency
 must refer to a column declared earlier, and columns evaluate in declaration
-order. Composition orders the resolved columns only when a specification
-declares a `parent`; otherwise declaration order is the resolved order.
+order. Composition orders the resolved columns
+([LAYER-13](inheritance.md#layer-13)) only when a specification declares a
+`parent` or includes a fragment; otherwise declaration order is the resolved
+order.
 
 Fails: `unknown_reference`, `forward_reference`.
 Evidence: `negative-forward-reference`, `negative-forward-key-reference`, `rust/crates/yamaa-core/tests/schema_references.rs::unknown_dependencies_are_lexical_and_precede_cycle_reporting`, `rust/crates/yamaa-adapters/tests/execution_column_driver_bindings.rs::column_bindings_run_one_driver_after_another`.
 
 [Inheritance](inheritance.md) composes and prunes every specification before
-these rules apply: a specification that declares no `parent` is a composition
-of one layer and is pruned on the same terms as one that declares a `parent`.
+these rules apply: a specification that declares no `parent` and includes no
+fragment is a composition of one layer and is pruned on the same terms as a
+composition of several.
 An unresolved variable or predicate reference fails. A reference to a later
 declared column fails as `forward_reference` and reports both columns.
 
