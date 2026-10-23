@@ -68,8 +68,7 @@ tests:
   - {id: normal, covers: [normal, boundary], args: {text: '  a'}, result: a}
   - {id: missing, covers: ['short-circuit-missing:text'], args: {text: null}, result: null}
 """
-# A section lists only specifications of its model (SUB-3); a 0.5 project
-# lists a 1.0 specification as it lists a 0.5 one (D115).
+# A section lists only specifications of its model (SUB-3).
 SPEC = """\
 yamaa: "1.0"
 type: spec
@@ -84,31 +83,20 @@ output: {path: output.csv, columns: [ID, TEXT]}
 """
 
 
-@pytest.fixture(params=["1.0", "0.5"])
-def study(request, tmp_path):
+@pytest.fixture
+def study(tmp_path):
     """A project whose specification calls `textwrap.dedent`, with its uv lock
-    declared as a 1.0 project declares it, or as a 0.5 environment file does."""
-    if request.param == "1.0":
-        (tmp_path / "functions").mkdir()
-        (tmp_path / "functions/dedent.yaml").write_text(
-            'yamaa: "1.0"\ntype: function\nname: dedent\n'
-            + FUNCTION
-            + "implementations: {python: textwrap.dedent}\n"
-        )
-        (tmp_path / "project.yaml").write_text(
-            'yamaa: "1.0"\ntype: project\nfunctions: [functions/dedent.yaml]\n'
-            "environments:\n  python: {lock: uv.lock}\nadam:\n  specs: [spec.yaml]\n"
-        )
-    else:
-        indented = "".join("    " + line + "\n" for line in FUNCTION.splitlines())
-        (tmp_path / "environment.yaml").write_text(
-            "schema_version: '1.0'\nlock: uv.lock\nfunctions:\n  dedent:\n"
-            "    function: textwrap.dedent\n" + indented
-        )
-        (tmp_path / "project.yaml").write_text(
-            "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n"
-            "adam: {specs: [spec.yaml]}\n"
-        )
+    declared as the project's Python environment."""
+    (tmp_path / "functions").mkdir()
+    (tmp_path / "functions/dedent.yaml").write_text(
+        'yamaa: "1.0"\ntype: function\nname: dedent\n'
+        + FUNCTION
+        + "implementations: {python: textwrap.dedent}\n"
+    )
+    (tmp_path / "project.yaml").write_text(
+        'yamaa: "1.0"\ntype: project\nfunctions: [functions/dedent.yaml]\n'
+        "environments:\n  python: {lock: uv.lock}\nadam:\n  specs: [spec.yaml]\n"
+    )
     (tmp_path / "spec.yaml").write_text(SPEC)
     (tmp_path / "input.csv").write_text("ID,TEXT\n1,a\n")
     return tmp_path

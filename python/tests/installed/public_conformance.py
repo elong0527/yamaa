@@ -133,23 +133,14 @@ def project_for(case, project, entry, specification):
 
 
 def stage_lock(case, project, lock):
-    """Supply the packaging lock a project names for Python: a 1.0 project
-    names it in `environments.python.lock`, and a 0.5 project's environment
-    file names one beside itself."""
+    """Supply the packaging lock a project names for Python in
+    `environments.python.lock`, relative to the project file."""
     document = read_yaml(case / project)
     linked = (document.get("environments") or {}).get("python")
-    if linked is None:
+    written = linked.get("lock") if isinstance(linked, dict) else None
+    if written is None:
         return
-    if "yamaa" in document:
-        # A 1.0 project names its lock directly, relative to the project file.
-        written = linked.get("lock") if isinstance(linked, dict) else None
-        if written is None:
-            return
-        target = (case / project).parent / PurePosixPath(written)
-    else:
-        # A project's links resolve from the project file; the environment
-        # file's lock resolves from the environment file.
-        target = (case / project).parent / PurePosixPath(linked).parent / "uv.lock"
+    target = (case / project).parent / PurePosixPath(written)
     if not target.exists():
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(lock, target)

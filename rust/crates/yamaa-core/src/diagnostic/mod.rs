@@ -165,8 +165,6 @@ macro_rules! conditions {
 }
 
 conditions! {
-    ProjectEnvironmentMissing => ("validation", "project_environment_missing", Some("FUNC-1")),
-    ProjectEnvironmentInvalid => ("validation", "project_environment_invalid", Some("FUNC-2")),
     FunctionImplementationMissing => ("validation", "function_implementation_missing", Some("FUNC-1")),
     FunctionFileInvalid => ("validation", "function_file_invalid", Some("FUNC-2")),
     ProjectLockMismatch => ("validation", "runtime_artifact_mismatch", Some("FUNC-3")),

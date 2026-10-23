@@ -169,7 +169,6 @@ TARGETS = {
             "rust/crates/yamaa-core/src/schema/",
             "rust/crates/yamaa-core/src/schema_capture.rs",
             "rust/crates/yamaa-core/src/specification/",
-            "rust/crates/yamaa-core/src/structural_preparation.rs",
             "rust/vendor/saphyr-parser/",
         ),
         65536,

@@ -498,7 +498,6 @@ mod project {
             let neutral = Environment::admit(
                 None,
                 Draft {
-                    surface: yamaa_core::ast::Surface::V1 { minor: 0 },
                     language: None,
                     lock: None,
                     functions: Some(vec![Definition::of(functions[0].definition())
@@ -2243,7 +2242,6 @@ mod project {
                 assert!(Function::admit(Language::Python, function.clone()).is_ok());
             }
             let draft = Draft {
-                surface: yamaa_core::ast::Surface::V0_5,
                 language: Some(Language::Python),
                 lock: Some(LockReference {
                     written: "uv.lock".into(),

@@ -1,8 +1,9 @@
 """Public installed projects and their environments against independent truth.
 
-A project file links one environment file per host; each host reads only its
-own entry. Project functions, codelists and locks reach a specification only
-through `yamaa.project(path).spec(name)` or `project.run()`.
+A project file lists its function files and holds each host's lock; each host
+reads only its own lock. Project functions, codelists and locks reach a
+specification only through `yamaa.project(path).spec(name)` or
+`project.run()`.
 """
 
 from __future__ import annotations
@@ -37,6 +38,21 @@ FUNCTION_SPEC = (
     "{function: {name: project_value, args: {x: SRC.VALUE}}}}\n"
     "output: {path: output.csv, columns: [ID, VALUE]}\n"
 )
+# The function file defining project_value, which FUNCTION_SPEC calls.
+FUNCTION_FILE = (
+    'yamaa: "1.0"\ntype: function\nname: project_value\n'
+    "description: Return the supplied numeric value.\n"
+    "params: [{name: x, type: float}]\nreturns: float\n"
+    "implementations: {python: yamaa_benchmarks.project_value,"
+    " r: 'yamaabenchmarks::project_value'}\n"
+    "tests:\n"
+    "  - {id: ordinary, covers: [normal, numeric-comparison],"
+    " args: {x: 1.5}, result: 1.5}\n"
+    "  - {id: zero-boundary, covers: [boundary, numeric-comparison],"
+    " args: {x: 0.0}, result: 0.0}\n"
+    "  - {id: missing-short-circuits, covers: ['short-circuit-missing:x'],"
+    " args: {x: null}, result: null}\n"
+)
 
 
 @contextlib.contextmanager
@@ -53,52 +69,6 @@ def no_activation():
         ),
     ):
         yield
-
-
-# negative-function-contract, its argument supplied, under a project and
-# environment files as 0.5 wrote them, for the tests whose subject is an
-# environment file (PublicEnvironment.legacy_study).
-LEGACY_SPEC = (
-    'yamaa: "1.0"\n'
-    "type: spec\n"
-    "domain: TEST\n"
-    "keys: [ID]\n"
-    "input: {SOURCE: {path: input/source.csv, types: {VALUE: float}}}\n"
-    "output: {path: test.csv, columns: [ID, RESULT]}\n"
-    "columns:\n"
-    "  - {name: ID, type: str, label: Identifier, derivation: SOURCE.ID}\n"
-    "  - name: RESULT\n"
-    "    type: float\n"
-    "    label: Project Function Result\n"
-    "    derivation: {function: {name: project_value, args: {x: SOURCE.VALUE}}}\n"
-)
-LEGACY_PROJECT = (
-    "schema_version: '1.0'\n"
-    "environments: {python: python/environment.yaml, r: r/environment.yaml}\n"
-    "adam: {specs: [spec.yaml]}\n"
-)
-
-
-def legacy_environment(callable_, lock):
-    """A 0.5 environment file that declares project_value and its tests."""
-    return (
-        "schema_version: '1.0'\n"
-        f"lock: {lock}\n"
-        "functions:\n"
-        "  project_value:\n"
-        f"    function: {callable_}\n"
-        "    description: Return the supplied numeric value.\n"
-        "    params:\n"
-        "    - {name: x, type: float}\n"
-        "    returns: float\n"
-        "    tests:\n"
-        "    - {id: ordinary, covers: [normal, numeric-comparison],"
-        " args: {x: 1.5}, result: 1.5}\n"
-        "    - {id: zero-boundary, covers: [boundary, numeric-comparison],"
-        " args: {x: 0.0}, result: 0.0}\n"
-        "    - {id: missing-short-circuits, covers: ['short-circuit-missing:x'],"
-        " args: {x: null}, result: null}\n"
-    )
 
 
 def compact(value, *, sort_keys=True):
@@ -180,24 +150,6 @@ class PublicEnvironment(unittest.TestCase):
         )
         return case
 
-    def legacy_study(self):
-        """negative-function-contract, its argument supplied, under a project
-        and environment files as 0.5 wrote them: for the tests whose subject
-        is an environment file, which 1.0 removes (D8). They go with those
-        files."""
-        case = self.study("negative-function-contract")
-        shutil.rmtree(case / "functions")
-        (case / "spec.yaml").write_text(LEGACY_SPEC)
-        (case / "project.yaml").write_text(LEGACY_PROJECT)
-        for language, callable_, lock in (
-            ("python", "yamaa_benchmarks.project_value", "uv.lock"),
-            ("r", "yamaabenchmarks::project_value", "renv.lock"),
-        ):
-            (case / language / "environment.yaml").write_text(
-                legacy_environment(callable_, lock)
-            )
-        return case
-
     def project(self, case=None):
         return yamaa.project((case or Path.cwd()) / "project.yaml")
 
@@ -221,61 +173,42 @@ class PublicEnvironment(unittest.TestCase):
         self,
     ):
         os.chdir(self.directory)
-        Path("environment.yaml").write_text(
-            "schema_version: '1.0'\nlock: missing.lock\n"
-            "functions: {id: missing-function.yaml}\n"
-        )
         Path("project.yaml").write_text(
-            "schema_version: '1.0'\n"
-            "environments: {python: environment.yaml, r: environment.yaml}\n"
+            "yamaa: '1.0'\ntype: project\nfunctions: [missing-function.yaml]\n"
+            "environments: {python: {lock: missing.lock}, r: {lock: missing.lock}}\n"
             "codelists: [missing-codelists.yaml]\nadam: {specs: [absent-spec.yaml]}\n"
         )
-        entry = (Path.cwd() / "project.yaml").as_posix()
+        # A file the project names that does not exist fails at the field
+        # that names it, naming the path as written, as any file a run reads
+        # does (FUNC-2, FILE-7, FILE-11).
         expected = [
-            issue(
-                "project_environment_invalid",
-                "FUNC-2",
-                [declaration],
-                {
-                    "cause": "missing",
-                    "entry": entry,
-                    "environment_path": declaration,
-                    "path": path,
-                },
-            )
+            issue("resource_path_missing", "FILE-7", [declaration], {"path": path})
             for declaration, path in (
-                ("lock", "missing.lock"),
-                ("functions.id", "missing-function.yaml"),
+                ("environments.python.lock", "missing.lock"),
+                ("functions[0]", "missing-function.yaml"),
                 ("codelists[0]", "missing-codelists.yaml"),
             )
         ]
         with no_activation():
             self.assert_refused_project(self.project(), expected)
         self.assertEqual(
-            sorted(p.name for p in self.directory.iterdir()),
-            ["environment.yaml", "project.yaml"],
+            sorted(p.name for p in self.directory.iterdir()), ["project.yaml"]
         )
 
-    def test_missing_environment_file_precedes_bad_or_absent_entry_without_activation(
+    def test_missing_function_file_precedes_bad_or_absent_entry_without_activation(
         self,
     ):
         os.chdir(self.directory)
         Path("project.yaml").write_text(
-            "schema_version: '1.0'\n"
-            "environments: {python: missing-environment.yaml, r: missing-environment.yaml}\n"
+            "yamaa: '1.0'\ntype: project\nfunctions: [missing-function.yaml]\n"
             "adam: {specs: [spec.yaml]}\n"
         )
         expected = [
             issue(
-                "project_environment_invalid",
-                "FUNC-2",
-                ["environments.python"],
-                {
-                    "cause": "missing",
-                    "entry": (Path.cwd() / "project.yaml").as_posix(),
-                    "environment_path": "environments.python",
-                    "path": "missing-environment.yaml",
-                },
+                "resource_path_missing",
+                "FILE-7",
+                ["functions[0]"],
+                {"path": "missing-function.yaml"},
             )
         ]
         with no_activation():
@@ -288,48 +221,20 @@ class PublicEnvironment(unittest.TestCase):
             ["project.yaml", "spec.yaml"],
         )
 
-    def test_each_host_reads_only_its_own_environment_entry(self):
+    def test_each_host_reads_only_its_own_lock(self):
         os.chdir(self.directory)
         Path("spec.yaml").write_text(FUNCTION_SPEC)
-        # The R entry names a file that does not exist; Python never reads it,
-        # so a function call reports the missing Python environment.
+        Path("value.yaml").write_text(FUNCTION_FILE)
+        # The R entry names a lock that does not exist; Python never reads it
+        # (PROJECT-2), and every host reads the function file.
         Path("project.yaml").write_text(
-            "schema_version: '1.0'\nenvironments: {r: r/absent.yaml}\n"
-            "adam: {specs: [spec.yaml]}\n"
+            "yamaa: '1.0'\ntype: project\nfunctions: [value.yaml]\n"
+            "environments: {r: {lock: r/absent.lock}}\nadam: {specs: [spec.yaml]}\n"
         )
-        context = {
-            "cause": "undeclared",
-            "function": "project_value",
-            "language": "python",
-        }
-        path = (Path.cwd() / "spec.yaml").as_posix()
         project = self.project()
         with no_activation():
-            spec = project.spec("TEST")
-            for result in (spec.check(), spec.run()):
-                self.assertEqual(
-                    result.issues.to_pylist(),
-                    [
-                        issue(
-                            "project_environment_missing",
-                            "FUNC-1",
-                            ["columns.VALUE.derivation.function.name"],
-                            context,
-                        )
-                    ],
-                )
-            # A project result names the specification each issue belongs to.
-            self.assertEqual(
-                project.check().issues.to_pylist(),
-                [
-                    issue(
-                        "project_environment_missing",
-                        "FUNC-1",
-                        ["columns.VALUE.derivation.function.name"],
-                        {**context, "entry": path, "source": path},
-                    )
-                ],
-            )
+            self.assertEqual(project.spec("TEST").check().issues.to_pylist(), [])
+            self.assertEqual(project.check().issues.to_pylist(), [])
             # The same file alone has no project, so its function call binds
             # nothing a project supplies (CT-13).
             self.assertEqual(
@@ -345,7 +250,7 @@ class PublicEnvironment(unittest.TestCase):
             )
         self.assertEqual(
             sorted(p.name for p in self.directory.iterdir()),
-            ["project.yaml", "spec.yaml"],
+            ["project.yaml", "spec.yaml", "value.yaml"],
         )
 
     def test_submission_version_schema_admission_precedes_any_artifact_or_study_read(
@@ -1229,71 +1134,6 @@ class PublicEnvironment(unittest.TestCase):
                     )
                 ],
             )
-
-    def test_an_environment_file_is_read_in_the_language_its_project_states(self):
-        case = self.legacy_study()
-        project = self.project(case)
-        entry = (case / "project.yaml").as_posix()
-
-        def lock_kind(environment):
-            return issue(
-                "project_environment_invalid",
-                "FUNC-2",
-                ["lock"],
-                {
-                    "actual_lock_kind": "renv",
-                    "entry": entry,
-                    "environment_path": "lock",
-                    "language": "python",
-                    "reason": "lock_kind_mismatch",
-                    "source": (case / environment).as_posix(),
-                },
-            )
-
-        # Captured syntax, rather than the file name, identifies the lock.
-        shutil.copyfile(case / "r/renv.lock", case / "python/uv.lock")
-        with no_activation():
-            self.assertEqual(
-                project.check().issues.to_pylist(),
-                [lock_kind("python/environment.yaml")],
-            )
-        shutil.copyfile(
-            ROOT / "negative-function-contract/python/uv.lock", case / "python/uv.lock"
-        )
-        # The environments key states the language: Python reads the R file
-        # as a Python environment and refuses its lock and callable.
-        (case / "project.yaml").write_text(
-            "schema_version: '1.0'\n"
-            "environments: {python: r/environment.yaml, r: r/environment.yaml}\n"
-            "adam: {specs: [spec.yaml]}\n"
-        )
-        with no_activation():
-            rows = project.check().issues.to_pylist()
-        self.assertEqual(rows[0], lock_kind("r/environment.yaml"))
-        self.assertEqual(
-            [(row["condition"], json.loads(row["context"])["reason"]) for row in rows],
-            [
-                ("project_environment_invalid", "lock_kind_mismatch"),
-                ("project_environment_invalid", "invalid_callable"),
-            ],
-        )
-        # An environment file no longer states its language.
-        (case / "project.yaml").write_text(LEGACY_PROJECT)
-        environment = case / "python/environment.yaml"
-        environment.write_text(
-            environment.read_text().replace(
-                "schema_version: '1.0'\n", "schema_version: '1.0'\nlanguage: python\n"
-            )
-        )
-        with no_activation():
-            (row,) = project.check().issues.to_pylist()
-        self.assertEqual(
-            (row["condition"], row["rule"], row["spec_paths"]),
-            ("unknown_field", "SCHEMA-13", ["language"]),
-        )
-        self.assertEqual(
-            json.loads(row["context"])["environment_path"], "environments.python"
-        )
 
     def test_called_only_selection_and_no_code_effects_for_empty_selection(self):
         case = self.value_study()

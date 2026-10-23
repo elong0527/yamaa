@@ -27,10 +27,10 @@ pub use expr::{
 pub use path::{PathId, Paths, Segment};
 pub use project::{
     Codelist, CodelistDeclaration, CodelistItem, CodelistSource, CodelistType, Codelists,
-    DefineContext, DocumentKind, ExternalDictionary, Function, FunctionDeclaration, FunctionSource,
-    FunctionTest, GuideStatus, HostEnvironment, Implementation, ImplementationGuide,
-    MetadataVersion, Parameter, Project, Section, Study, SubmissionDeclarations, SubmissionRefused,
-    SupportingDocument, TerminologyStandard, Transport, STANDARD_NAMES,
+    DefineContext, DocumentKind, ExternalDictionary, Function, FunctionDeclaration, FunctionTest,
+    GuideStatus, HostEnvironment, Implementation, ImplementationGuide, MetadataVersion, Parameter,
+    Project, Section, Study, SubmissionDeclarations, SubmissionRefused, SupportingDocument,
+    TerminologyStandard, Transport, STANDARD_NAMES,
 };
 pub use traversal::{Children, Filtered, Ordered, Owner, Read, Role, Scope, Site, Step};
 pub use types::{result_type, Table, TypeEnv};
@@ -128,23 +128,13 @@ pub enum File {
     Function(Box<Function>),
 }
 
-/// The surface a file is written in and the version it declares.
+/// The version a file declares.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Header {
-    pub surface: Surface,
-    /// The version the file declares: a 1.x file's `yamaa`, which a resolved
-    /// specification writes as its chain's version (P-VER-1), or a 0.5
-    /// project file's `schema_version`.
+    /// The file's `yamaa`, which a resolved specification writes as its
+    /// chain's version (P-VER-1).
     pub version: Text,
     pub meta: Meta,
-}
-
-/// The surface a file is written in. A specification is read in 1.x only;
-/// `V0_5` is the surface of a 0.5 project file, whose route goes in P2-13d.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Surface {
-    V0_5,
-    V1 { minor: u32 },
 }
 
 /// `model: SDTM | SEND | ADaM` (P-MODEL-1); no 0.5 form.

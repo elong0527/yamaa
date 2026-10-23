@@ -1,7 +1,7 @@
 # Public installed projects and their environments against independent truth.
-# A project file links one environment file per host; each host reads only its
-# own entry, and project functions, codelists and locks reach a specification
-# only through yamaa_project(path)$spec(name) or $run().
+# A project file lists its function files and holds each host's lock; each
+# host reads only its own lock, and project functions, codelists and locks
+# reach a specification only through yamaa_project(path)$spec(name) or $run().
 library(yamaa)
 # The truth is JSON, and jsonlite, which reads it, is a suggested package:
 # where it is not installed, the file is skipped.
@@ -67,85 +67,82 @@ function_spec <- c('yamaa: "1.0"', "type: spec", "domain: TEST", "keys: [ID]",
   "  - {name: ID, type: str, derivation: SRC.ID}",
   "  - {name: VALUE, type: float, derivation: {function: {name: project_value, args: {x: SRC.VALUE}}}}",
   "output: {path: output.csv, columns: [ID, VALUE]}")
+# The function file defining project_value, which function_spec calls.
+function_file <- c('yamaa: "1.0"', "type: function", "name: project_value",
+  "description: Return the supplied numeric value.", "params: [{name: x, type: float}]", "returns: float",
+  "implementations: {python: yamaa_benchmarks.project_value, r: 'yamaabenchmarks::project_value'}", "tests:",
+  "  - {id: ordinary, covers: [normal, numeric-comparison], args: {x: 1.5}, result: 1.5}",
+  "  - {id: zero-boundary, covers: [boundary, numeric-comparison], args: {x: 0.0}, result: 0.0}",
+  "  - {id: missing-short-circuits, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}")
 
 qualify_metadata_failure_locations <- function() {
   previous <- getwd(); on.exit(setwd(previous))
   work <- tempfile("metadata-locations-"); dir.create(work)
   on.exit(unlink(work, recursive = TRUE), add = TRUE)
   setwd(work)
-  writeLines(c("schema_version: '1.0'", "lock: missing.lock", "functions: {id: missing-function.yaml}"),
-    "environment.yaml")
-  writeLines(c("schema_version: '1.0'", "environments: {python: environment.yaml, r: environment.yaml}",
+  writeLines(c("yamaa: '1.0'", "type: project", "functions: [missing-function.yaml]",
+    "environments: {python: {lock: missing.lock}, r: {lock: missing.lock}}",
     "codelists: [missing-codelists.yaml]", "adam: {specs: [absent-spec.yaml]}"), "project.yaml")
-  entry <- here("project.yaml")
-  expected <- Map(function(declaration, path) issue("project_environment_invalid", "FUNC-2",
-    declaration, paste0('{"cause":"missing","entry":"', entry, '","environment_path":"', declaration,
-      '","path":"', path, '"}')),
-    c("lock", "functions.id", "codelists[0]"),
+  # A file the project names that does not exist fails at the field that
+  # names it, naming the path as written, as any file a run reads does
+  # (FUNC-2, FILE-7, FILE-11).
+  expected <- Map(function(declaration, path) issue("resource_path_missing", "FILE-7",
+    declaration, paste0('{"path":"', path, '"}')),
+    c("environments.r.lock", "functions[0]", "codelists[0]"),
     c("missing.lock", "missing-function.yaml", "missing-codelists.yaml"))
   refuse_activation(refused_project(yamaa_project("project.yaml"), unname(expected),
     "a project of missing metadata files"))
-  expect_identical(sort(list.files()), c("environment.yaml", "project.yaml"), "a refused project writes nothing")
+  expect_identical(sort(list.files()), "project.yaml", "a refused project writes nothing")
   cat("public R project metadata failures name each declared input before any entry or activation\n")
 }
 qualify_metadata_failure_locations()
 
-qualify_unavailable_environment_file <- function() {
+qualify_unavailable_function_file <- function() {
   previous <- getwd(); on.exit(setwd(previous))
-  work <- tempfile("environment-file-"); dir.create(work)
+  work <- tempfile("function-file-"); dir.create(work)
   on.exit(unlink(work, recursive = TRUE), add = TRUE)
   setwd(work)
-  writeLines(c("schema_version: '1.0'",
-    "environments: {python: missing-environment.yaml, r: missing-environment.yaml}",
+  writeLines(c("yamaa: '1.0'", "type: project", "functions: [missing-function.yaml]",
     "adam: {specs: [spec.yaml]}"), "project.yaml")
-  expected <- list(issue("project_environment_invalid", "FUNC-2", "environments.r",
-    paste0('{"cause":"missing","entry":"', here("project.yaml"),
-      '","environment_path":"environments.r","path":"missing-environment.yaml"}')))
+  expected <- list(issue("resource_path_missing", "FILE-7", "functions[0]",
+    '{"path":"missing-function.yaml"}'))
   for (content in list(NULL, "[entry must not be read")) {
     unlink("spec.yaml")
     if (!is.null(content)) writeLines(content, "spec.yaml")
     refuse_activation(refused_project(yamaa_project("project.yaml"), expected,
-      paste("a missing environment file with", if (is.null(content)) "no entry" else "an unreadable entry")))
+      paste("a missing function file with", if (is.null(content)) "no entry" else "an unreadable entry")))
   }
   expect_identical(sort(list.files()), c("project.yaml", "spec.yaml"), "a refused project writes nothing")
-  cat("public R missing environment files refuse the project before entry preparation\n")
+  cat("public R missing function files refuse the project before entry preparation\n")
 }
-qualify_unavailable_environment_file()
+qualify_unavailable_function_file()
 
-qualify_own_environment_entry <- function() {
+qualify_own_lock <- function() {
   previous <- getwd(); on.exit(setwd(previous))
-  work <- tempfile("own-environment-"); dir.create(work)
+  work <- tempfile("own-lock-"); dir.create(work)
   on.exit(unlink(work, recursive = TRUE), add = TRUE)
   setwd(work)
   writeLines(function_spec, "spec.yaml")
-  # The Python entry names a file that does not exist; R never reads it, so
-  # a function call reports the missing R environment.
-  writeLines(c("schema_version: '1.0'", "environments: {python: python/absent.yaml}",
-    "adam: {specs: [spec.yaml]}"), "project.yaml")
+  writeLines(function_file, "value.yaml")
+  # The Python entry names a lock that does not exist; R never reads it
+  # (PROJECT-2), and every host reads the function file.
+  writeLines(c("yamaa: '1.0'", "type: project", "functions: [value.yaml]",
+    "environments: {python: {lock: python/absent.lock}}", "adam: {specs: [spec.yaml]}"), "project.yaml")
   project <- yamaa_project("project.yaml")
-  context <- '"cause":"undeclared","function":"project_value","language":"r"'
-  path <- here("spec.yaml")
   refuse_activation({
-    spec <- project$spec("TEST")
-    for (result in list(spec$check(), spec$run())) {
-      same_issues(result$issues, list(issue("project_environment_missing", "FUNC-1",
-        "columns.VALUE.derivation.function.name", paste0("{", context, "}"))))
-    }
-    # A project result names the specification each issue belongs to.
-    same_issues(project$check()$issues, list(issue("project_environment_missing", "FUNC-1",
-      "columns.VALUE.derivation.function.name",
-      paste0('{"cause":"undeclared","entry":"', path,
-        '","function":"project_value","language":"r","source":"', path, '"}'))))
+    same_issues(project$spec("TEST")$check()$issues, list(), "the specification check's issues")
+    same_issues(project$check()$issues, list(), "the project check's issues")
     # The same file alone has no project, so its function call binds nothing
     # a project supplies (CT-13).
     same_issues(yamaa_spec("spec.yaml")$check()$issues, list(issue("project_binding_missing",
       "CT-13", "columns.VALUE.derivation.function.name",
       '{"binding":"function","function":"project_value"}')))
   })
-  expect_identical(sort(list.files()), c("project.yaml", "spec.yaml"), "reading the environments writes nothing")
-  cat("public R reads only its own environments entry\n")
+  expect_identical(sort(list.files()), c("project.yaml", "spec.yaml", "value.yaml"),
+    "reading the project writes nothing")
+  cat("public R reads only its own lock\n")
 }
-qualify_own_environment_entry()
+qualify_own_lock()
 
 qualify_static_check_without_study_inputs <- function() {
   work <- tempfile("static-check-"); dir.create(work)
@@ -291,43 +288,6 @@ same_issues(refuse_activation(project$check())$issues, list(issue("function_file
     '","environment_path":"environments.r.lock","language":"r","reason":"lock_kind_mismatch","source":"',
     here("project.yaml"), '"}'))))
 invisible(file.copy(file.path(root, name, "r/renv.lock"), lock, overwrite = TRUE))
-# An environment file is read in the language its project states. The
-# project and its environment files are written in 0.5 inline, since 1.0
-# removes environment files (D8).
-legacy_environment <- function(callable, lock) c("schema_version: '1.0'", paste0("lock: ", lock),
-  "functions:", "  project_value:", paste0("    function: ", callable),
-  "    description: Return the supplied numeric value.", "    params: [{name: x, type: float}]",
-  "    returns: float", "    tests:",
-  "      - {id: ordinary, covers: [normal, numeric-comparison], args: {x: 1.5}, result: 1.5}",
-  "      - {id: zero-boundary, covers: [boundary, numeric-comparison], args: {x: 0.0}, result: 0.0}",
-  "      - {id: missing-short-circuits, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}")
-writeLines(legacy_environment("yamaa_benchmarks.project_value", "uv.lock"), "python/environment.yaml")
-writeLines(legacy_environment("base::identity", "renv.lock"), "r/environment.yaml")
-lock_kind <- function(environment) issue("project_environment_invalid", "FUNC-2", "lock",
-  paste0('{"actual_lock_kind":"uv","entry":"', here("project.yaml"),
-    '","environment_path":"lock","language":"r","reason":"lock_kind_mismatch","source":"',
-    here(environment), '"}'))
-# The environments key states the language: R reads the Python file as an R
-# environment and refuses its lock and callable.
-writeLines(c("schema_version: '1.0'", "environments: {python: python/environment.yaml, r: python/environment.yaml}",
-  "adam: {specs: [spec.yaml]}"), "project.yaml")
-checked <- refuse_activation(project$check())$issues
-expect_identical(row_of(checked), lock_kind("python/environment.yaml"), "R refuses the Python file's lock")
-expect_identical(checked$condition, rep("project_environment_invalid", 2L), "R refuses the Python file twice")
-stopifnot("R refuses the Python callable" = grepl('"reason":"invalid_callable"', checked$context[[2L]], fixed = TRUE))
-# An environment file no longer states its language.
-writeLines(c("schema_version: '1.0'", "environments: {python: python/environment.yaml, r: r/environment.yaml}",
-  "adam: {specs: [spec.yaml]}"), "project.yaml")
-writeLines(c("schema_version: '1.0'", "language: r", readtext("r/environment.yaml")[-1L]),
-  "r/environment.yaml")
-checked <- refuse_activation(project$check())$issues
-expect_identical(as.list(checked[c("condition", "rule", "spec_paths")]),
-  list(condition = "unknown_field", rule = "SCHEMA-13", spec_paths = list("language")),
-  "an environment file's language field is unknown")
-stopifnot("the finding names the R environment" =
-  grepl('"environment_path":"environments.r"', checked$context, fixed = TRUE))
-unlink(c("python/environment.yaml", "r/environment.yaml"))
-invisible(file.copy(file.path(root, name, "project.yaml"), "project.yaml", overwrite = TRUE))
 # Project codelists bind and function argument admission collect independent findings.
 writeLines(c(readtext("project.yaml"), "codelists:", "  - codelists:", "      - id: IDENTIFIERS",
   "        name: Identifiers", "        items: [{value: '01'}]"), "project.yaml")

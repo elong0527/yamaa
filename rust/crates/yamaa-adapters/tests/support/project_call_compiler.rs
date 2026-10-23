@@ -1,7 +1,7 @@
 pub use crate::support::document::Tree;
 use crate::support::roots::{Case, Definition, Parameter};
 use yamaa_core::{
-    ast::{self, Surface},
+    ast,
     project_environment::{Draft, Environment, ExecutionEnvironment},
     project_function::{Function, Language},
     schema::Document,
@@ -67,7 +67,6 @@ pub fn project(functions: Vec<ast::Function>) -> ExecutionEnvironment {
     Environment::admit(
         Some(Language::Python),
         Draft {
-            surface: Surface::V1 { minor: 0 },
             language: Some(Language::Python),
             lock: None,
             functions: Some(functions),

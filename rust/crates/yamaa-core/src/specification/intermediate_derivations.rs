@@ -757,7 +757,6 @@ fn unused_slot_placeholder(
         range: None,
         columns: None,
         no_match: Some(Value::Missing),
-        absence: item.absence,
         require_match: false,
         unique: Vec::new(),
         derivations: None,

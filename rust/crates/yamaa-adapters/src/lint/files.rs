@@ -55,7 +55,8 @@ pub(super) fn lint(paths: &[String], fix: bool) -> Result<Vec<Linted>, Error> {
         files.extend(expand(Path::new(path))?);
     }
     // Read and admit every file before writing any, so a file that cannot be
-    // read or admitted refuses the call with nothing changed.
+    // read or admitted refuses the call with nothing changed. A file written
+    // for 0.5 declares `schema_version`, which no reader reads (SCHEMA-2).
     let mut sources = Vec::with_capacity(files.len());
     for file in files {
         let bytes = read(&file)?;
@@ -63,6 +64,9 @@ pub(super) fn lint(paths: &[String], fix: bool) -> Result<Vec<Linted>, Error> {
             file: file.display.clone(),
             failure,
         })?;
+        if document.key(document.root, "schema_version").is_some() {
+            return Err(Error::Language { file: file.display });
+        }
         sources.push((file, document.text));
     }
     let mut linted = Vec::with_capacity(sources.len());
@@ -90,7 +94,7 @@ pub(super) fn lint(paths: &[String], fix: bool) -> Result<Vec<Linted>, Error> {
     Ok(linted)
 }
 
-/// A named file is always linted. A directory names the `.yaml` files beneath
+/// A named file is always read. A directory names the `.yaml` files beneath
 /// it, outside hidden directories, in sorted path order, that are yamaa
 /// files: a root that declares the 1.x header with a `type` naming a file
 /// type (`spec`, `project`, `codelists` or `function`). A mapping dictionary,

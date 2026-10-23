@@ -149,14 +149,22 @@ fn every_project_call_reads_a_1_0_project() {
         engine.project_spec(&project, "DM").unwrap(),
         study.path("dm.yaml")
     );
-    // A 0.5 project lists a 1.0 specification, which is read by its own header.
+    // A project file that declares `schema_version` is written in language
+    // 0.5, which the engine does not read: it is refused at its own
+    // `schema_version`, as a finding of the project file (SCHEMA-2).
     study.write(
         "project.yaml",
         "schema_version: '1.0'\nsdtm: {specs: [dm.yaml]}\n",
     );
     assert_eq!(
         rows(&engine.project_check(&project, &token).unwrap().issues()),
-        []
+        [(
+            "unsupported_language_version".to_owned(),
+            Some("SCHEMA-2".to_owned()),
+            vec!["schema_version".to_owned()],
+            yamaa_adapters::json!({"version": "0.5", "language_versions": ["1.0"],
+                "source": project, "entry": project, "environment_path": "$"}),
+        )]
     );
 }
 

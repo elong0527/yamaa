@@ -1,6 +1,5 @@
 //! Pure dataset declarations. No study data or host effects.
 use super::*;
-use crate::numeric_lifecycle::HandlerKind;
 use crate::value::ColumnType;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -153,11 +152,8 @@ pub struct Intermediate {
     pub columns: Option<Vec<usize>>,
     /// The declared absence answer, written `absent`; `None` answers absence
     /// with missing. Either way each read counts the answer under the
-    /// [`Self::absence`] handler (LOOKUP-24).
+    /// `absent` handler at its path (LOOKUP-24, D202).
     pub no_match: Option<Value>,
-    /// The handler a read counts the absence answer under at its path:
-    /// `absent` for every intermediate a specification declares (D202).
-    pub absence: HandlerKind,
     /// `require_match: true` fails an absence as `unmatched_key` instead;
     /// the compiler refuses it beside a declared absence answer.
     pub require_match: bool,
@@ -285,15 +281,14 @@ fn contains_window(expression: &Expression) -> bool {
 
 /// The handlers a read of a named intermediate counts at the reading path:
 /// `multiple_matches` when `keep` or `nearest` chose among several
-/// candidates (LOOKUP-10, LOOKUP-26), and the intermediate's absence handler
-/// when no candidate survived and no `require_match` fails the read instead
-/// (LOOKUP-24).
+/// candidates (LOOKUP-10, LOOKUP-26), and `absent` when no candidate survived
+/// and no `require_match` fails the read instead (LOOKUP-24, D202).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ReadHandlers {
     pub multiple_matches: bool,
-    /// The intermediate's absence handler; none when the read requires a
-    /// match.
-    pub absence: Option<HandlerKind>,
+    /// Whether the read counts its absence under `absent`; false when the
+    /// read requires a match.
+    pub absent: bool,
 }
 
 /// The handlers a read of each intermediate counts. An intermediate its
@@ -304,7 +299,7 @@ pub fn read_handlers(intermediates: &[Intermediate]) -> Vec<ReadHandlers> {
         .iter()
         .map(|item| ReadHandlers {
             multiple_matches: item.selection.is_some() || item.nearest.is_some(),
-            absence: (!item.require_match).then_some(item.absence),
+            absent: !item.require_match,
         })
         .collect()
 }

@@ -40,10 +40,8 @@ names the file beside that shared layer. If that file is absent, a study's own
 `input/dm.csv` is not substituted. A shared input with `relative_to: entry`
 explicitly names each study entry's own `input/dm.csv`. A project file,
 `yamaa-project.yaml` and old project or data-root settings affect neither
-selection. Missing-file
-diagnostics retain the original declaring field and written path. An
-environment file that a project file declaring `schema_version` links also
-resolves its own relative paths from itself.
+selection. Missing-file diagnostics retain the original declaring field and
+written path.
 
 <a id="file-2"></a>
 
@@ -265,11 +263,10 @@ An implementation may validate once and run many times. Each such run, before
 it activates a project function or reads an input record, verifies every file
 the validation read: the specification, its layers, dictionaries and linked
 producing specifications, and the project file with the function files, lock
-and codelists it declares (for a project file that declares `schema_version`,
-the environment file with its lock and function definitions). A file that changed
-fails that run with `resource_path_content_changed`, naming the field that
-declared it and the path as written. The run neither reads the replacement
-nor validates it in its place.
+and codelists it declares. A file that changed fails that run with
+`resource_path_content_changed`, naming the field that declared it and the
+path as written. The run neither reads the replacement nor validates it in its
+place.
 
 ## Path failures
 

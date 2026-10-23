@@ -1,12 +1,11 @@
 # Dataset-JSON
 
 This file is a profile: it is optional, and it applies only to a build whose
-selected submission section of a project file sets `transport: dataset_json`
-(`datasets: json` in a project file that declares `schema_version`). Such a
-build writes one deterministic Dataset-JSON 1.1 file per
-composed specification, carrying the published dataset and the submission
-metadata the [Define-XML](define-xml.md) document is generated from. A domain
-build never writes Dataset-JSON. [JSON-1](#json-1), [JSON-2](#json-2),
+selected submission section of a project file sets `transport: dataset_json`.
+Such a build writes one deterministic Dataset-JSON 1.1 file per composed
+specification, carrying the published dataset and the submission metadata the
+[Define-XML](define-xml.md) document is generated from. A domain build never
+writes Dataset-JSON. [JSON-1](#json-1), [JSON-2](#json-2),
 [JSON-3](#json-3), [JSON-5](#json-5) and [JSON-14](#json-14) also govern the
 files [SAS Transport](xpt.md) writes.
 
@@ -27,8 +26,7 @@ mapping of [OUTPUT-5](../output.md#output-5) stays closed at `.csv` and
 
 Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `adam-adsl-xpt`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_project_lists_function_files_and_holds_each_host_lock`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `python/tests/installed/installed_public_define.py::test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes`.
 
-A project file that declares `schema_version` spells the field `datasets` and
-the Dataset-JSON value `json`. One section requests one transport. The file's place depends on the document
+One section requests one transport. The file's place depends on the document
 and the dataset name alone, not on where the artifact is published: a `DM`
 dataset beside `out/define.xml` is written to `out/dm.json` or `out/dm.xpt`.
 A section that requests a transport names its document `define.xml`

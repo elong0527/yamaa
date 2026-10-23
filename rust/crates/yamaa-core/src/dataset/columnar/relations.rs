@@ -640,10 +640,10 @@ pub(super) fn named_value<E>(
             multiple.then_some(HandlerKind::MultipleMatches),
         ),
         // The declared literal, or missing by default; counted either way,
-        // under the intermediate's absence handler.
+        // under `absent` (D202).
         Choice::Absent => (
             item.no_match.clone().unwrap_or(Value::Missing),
-            Some(item.absence),
+            Some(HandlerKind::Absent),
         ),
     };
     if let Some(handler) = handler.filter(|_| observe) {

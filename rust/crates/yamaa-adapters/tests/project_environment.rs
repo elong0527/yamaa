@@ -4,21 +4,22 @@
 mod project {
     mod project_environment_projection {
         //! Complete retained-attempt witnesses; expected reports are authored independently.
-        use crate::support::project_schemas::candidate_schemas;
         use std::{cell::Cell, rc::Rc};
         use yamaa_adapters::json;
         use yamaa_adapters::{
+            document::{self, Closures},
             project_environment_diagnostics::{self as diagnostic, Error as ProjectionError},
             project_source::{self, CaptureFailure, Failure, Kind, Origin},
             specification_source::Source,
         };
         use yamaa_core::json::Value;
+        use yamaa_core::language::{FileType, LANGUAGE_VERSION};
         use yamaa_core::resolver::{self, Captured, File, Located, Name, Resolver};
         use yamaa_core::{project_environment::LockKind, project_function::Language};
-        /// The project names its Python environment file, which declares the lock
-        /// and the external function file.
-        const ENVIRONMENT: &str =
-            "schema_version: '1.0'\nlock: uv.lock\nfunctions: {first: function.yaml}\n";
+        /// The project lists one function file and holds the Python lock, each
+        /// relative to itself (D8).
+        const LISTING: &str =
+            "yamaa: '1.0'\ntype: project\nfunctions: [function.yaml]\nenvironments: {python: {lock: uv.lock}}\n";
         // Deliberately neither Clone, Debug nor Send; the exact held error remains owned.
         struct Opaque {
             allocation: Rc<Cell<usize>>,
@@ -27,7 +28,6 @@ mod project {
         struct Port {
             error: Option<Opaque>,
             trace: Vec<(Kind, String)>,
-            environment: String,
             lock_kind: LockKind,
             wide: bool,
             same_identity: bool,
@@ -39,7 +39,6 @@ mod project {
                 Self {
                     error: Some(error),
                     trace: vec![],
-                    environment: ENVIRONMENT.into(),
                     lock_kind: LockKind::Uv,
                     wide: false,
                     same_identity: false,
@@ -53,8 +52,14 @@ mod project {
                 bytes: text.as_bytes().to_vec(),
             }
         }
+        /// A function file defining `name`, whose one case returns `result`.
+        fn function_file(name: &str, result: &str) -> String {
+            format!("yamaa: '1.0'\ntype: function\nname: {name}\ndescription: Constant\nparams: []\nreturns: int\nimplementations: {{python: project.constant}}\ntests: [{{id: ordinary, covers: [normal, boundary], args: {{}}, result: {result}}}]\n")
+        }
         impl Port {
-            /// The held source the double serves for the file a project names.
+            /// The held source the double serves for the file a project names:
+            /// `function.yaml` defines `first`, and `functions/<name>.yaml`
+            /// defines `<name>`.
             fn answer(
                 &mut self,
                 kind: Kind,
@@ -65,31 +70,37 @@ mod project {
                 if written == "missing.yaml" {
                     return Err(self.error.take().unwrap());
                 }
+                let result = if self.wide {
+                    "123456789012345678901234567890"
+                } else {
+                    "true"
+                };
                 Ok(match kind {
-                    Kind::Environment => source("held/environment.yaml", &self.environment),
                     Kind::Lock => {
                         source("held/uv.lock", crate::support::ports::lock(self.lock_kind))
                     }
-                    Kind::Function => source(
-                        // The same spelling as the declaring environment file
-                        // still names the separately captured function file.
-                        if self.same_identity {
-                            "held/environment.yaml"
-                        } else {
-                            "held/function.yaml"
-                        },
-                        if self.wide {
-                            "function: project.constant\ndescription: Constant\nparams: []\nreturns: int\ntests: [{id: ordinary, covers: [normal, boundary], args: {}, result: 123456789012345678901234567890}]\n"
-                        } else {
-                            "function: project.constant\ndescription: Constant\nparams: []\nreturns: int\ntests: [{id: ordinary, covers: [normal, boundary], args: {}, result: true}]\n"
-                        },
-                    ),
+                    Kind::Function => match written.strip_prefix("functions/") {
+                        Some(file) => source(
+                            &format!("held/{written}"),
+                            &function_file(file.trim_end_matches(".yaml"), result),
+                        ),
+                        None => source(
+                            // The same spelling as the project file still
+                            // names the separately captured function file.
+                            if self.same_identity {
+                                "held/project.yaml"
+                            } else {
+                                "held/function.yaml"
+                            },
+                            &function_file("first", result),
+                        ),
+                    },
                     Kind::Codelist => source(
                         "held/ct.yaml",
                         if self.wide {
-                            "codelists: [{id: SEX, name: Sex, data_type: integer, items: [{value: 123456789012345678901234567890}]}]\n"
+                            "yamaa: '1.0'\ntype: codelists\ncodelists: [{id: SEX, name: Sex, data_type: integer, items: [{value: 123456789012345678901234567890}]}]\n"
                         } else {
-                            "codelists: [{id: SEX, name: Sex, items: [{value: true}]}]\n"
+                            "yamaa: '1.0'\ntype: codelists\ncodelists: [{id: SEX, name: Sex, items: [{value: true}]}]\n"
                         },
                     ),
                 })
@@ -127,6 +138,17 @@ mod project {
                 panic!("a project file is never rebased")
             }
         }
+        fn prepare(
+            port: &mut Port,
+            body: &str,
+        ) -> Result<project_source::PreparedEnvironment, Failure<Opaque>> {
+            project_source::prepare(
+                Closures::shipped().unwrap(),
+                source("held/project.yaml", body),
+                Language::Python,
+                port,
+            )
+        }
         fn rejected(
             wide: bool,
             same_identity: bool,
@@ -146,23 +168,17 @@ mod project {
             port.wide = wide;
             port.same_identity = same_identity;
             let body = if wide {
-                "schema_version: '1.0'\nenvironments: {python: environment.yaml}\ncodelists: [missing.yaml, ct.yaml]\n"
+                format!("{LISTING}codelists: [missing.yaml, ct.yaml]\n")
             } else {
-                "schema_version: '1.0'\nenvironments: {python: environment.yaml}\ncodelists: [missing.yaml, ct.yaml, {codelists: [{id: OTHER, name: Other, items: [{value: true}]}]}]\n"
+                format!("{LISTING}codelists: [missing.yaml, ct.yaml, {{codelists: [{{id: OTHER, name: Other, items: [{{value: true}}]}}]}}]\n")
             };
-            let rejected = match project_source::prepare(
-                candidate_schemas(),
-                source("held/project.yaml", body),
-                Language::Python,
-                &mut port,
-            ) {
+            let rejected = match prepare(&mut port, &body) {
                 Err(Failure::Rejected(rejected)) => rejected,
                 _ => panic!("complete retained rejection"),
             };
             assert_eq!(
                 port.trace,
                 [
-                    (Kind::Environment, "environment.yaml".into()),
                     (Kind::Lock, "uv.lock".into()),
                     (Kind::Function, "function.yaml".into()),
                     (Kind::Codelist, "missing.yaml".into()),
@@ -192,6 +208,26 @@ mod project {
             assert_eq!(original.text, "original capture allocation");
             assert_eq!(original.allocation.get(), 19);
         }
+        /// The bounds of `int` beside a literal outside it (VALUE-5).
+        fn overflow(actual: &str) -> [(&'static str, Value); 3] {
+            let number = |text: &str| -> Value { yamaa_adapters::json_wire::decode(text).unwrap() };
+            [
+                ("actual", number(actual)),
+                ("minimum", number("-9223372036854775808")),
+                ("maximum", number("9223372036854775807")),
+            ]
+        }
+        fn with(fields: &[(&'static str, Value)], provenance: Value) -> Value {
+            let Value::Object(mut context) = provenance else {
+                unreachable!()
+            };
+            context.extend(
+                fields
+                    .iter()
+                    .map(|(key, value)| ((*key).into(), value.clone())),
+            );
+            Value::Object(context)
+        }
         #[test]
         fn complete_static_report_keeps_semantics_alongside_original_opaque_capture_and_authored_holes(
         ) {
@@ -199,25 +235,27 @@ mod project {
                 let (rejected, port, allocation, pointer) = rejected(false, same_identity);
                 assert_eq!(rejected.origins.codelists, [1, 2]);
                 let function_source = if same_identity {
-                    "held/environment.yaml"
+                    "held/project.yaml"
                 } else {
                     "held/function.yaml"
                 };
+                // The function file holds its definition alone; the project
+                // lists it at `functions[0]` (FUNC-2, D8).
                 let mut want = vec![expected(
-                    "project_environment_invalid",
+                    "function_file_invalid",
                     "FUNC-2",
                     "tests[0].result",
-                    json!({"function":"first","case":"ordinary","value":true,"reason":"invalid_case_result","source":function_source,"entry":"held/project.yaml","environment_path":"functions.first"}),
+                    json!({"function":"first","case":"ordinary","value":true,"reason":"invalid_case_result","source":function_source,"entry":"held/project.yaml","environment_path":"functions[0]"}),
                 )];
                 for obligation in ["boundary", "normal"] {
-                    want.push(expected("project_environment_invalid", "FUNC-2", "tests", json!({"function":"first","obligation":obligation,"reason":"missing_coverage_obligation","source":function_source,"entry":"held/project.yaml","environment_path":"functions.first"})));
+                    want.push(expected("function_file_invalid", "FUNC-2", "tests", json!({"function":"first","obligation":obligation,"reason":"missing_coverage_obligation","source":function_source,"entry":"held/project.yaml","environment_path":"functions[0]"})));
                 }
                 want.push(expected("codelist_shape_invalid", "CT-4", "codelists[0].items[0].value", json!({"codelist":"SEX","value":true,"source":"held/ct.yaml","entry":"held/project.yaml","environment_path":"codelists[1]"})));
                 want.push(expected("codelist_shape_invalid", "CT-4", "codelists[2].codelists[0].items[0].value", json!({"codelist":"OTHER","value":true,"source":"held/project.yaml","entry":"held/project.yaml","environment_path":"codelists[2]"})));
                 let result = diagnostic::admission(&rejected).unwrap();
                 assert_eq!(crate::support::rows(&result), want);
                 assert_eq!(diagnostic::admission(&rejected).unwrap(), result);
-                assert_eq!(port.trace.len(), 5);
+                assert_eq!(port.trace.len(), 4);
                 opaque(&rejected, &allocation, pointer);
             }
         }
@@ -227,24 +265,30 @@ mod project {
             assert_eq!(diagnostic::admission(&rejected).unwrap(), []);
             let wide: Value =
                 yamaa_adapters::json_wire::decode("123456789012345678901234567890").unwrap();
+            // A function file's value fails as its file does (FUNC-2), and a
+            // codelist file's integer outside the `int` range as any runtime
+            // literal does (VALUE-5).
             let want = [
                 expected(
-                    "project_environment_invalid",
+                    "function_file_invalid",
                     "FUNC-2",
                     "tests[0].result",
-                    json!({"reason":"integer_out_of_range","value":wide,"source":"held/function.yaml","entry":"held/project.yaml","environment_path":"functions.first"}),
+                    json!({"reason":"integer_out_of_range","value":wide,"source":"held/function.yaml","entry":"held/project.yaml","environment_path":"functions[0]"}),
                 ),
                 expected(
-                    "project_environment_invalid",
-                    "FUNC-2",
+                    "integer_overflow",
+                    "VALUE-5",
                     "codelists[0].items[0].value",
-                    json!({"reason":"integer_out_of_range","value":wide,"source":"held/ct.yaml","entry":"held/project.yaml","environment_path":"codelists[1]"}),
+                    with(
+                        &overflow("123456789012345678901234567890"),
+                        json!({"source":"held/ct.yaml","entry":"held/project.yaml","environment_path":"codelists[1]"}),
+                    ),
                 ),
             ];
             let result = diagnostic::scalar_sources(&rejected).unwrap();
             assert_eq!(crate::support::rows(&result), want);
             assert_eq!(diagnostic::scalar_sources(&rejected).unwrap(), result);
-            assert_eq!(port.trace.len(), 5);
+            assert_eq!(port.trace.len(), 4);
             opaque(&rejected, &allocation, pointer);
         }
         #[test]
@@ -260,7 +304,7 @@ mod project {
             let complete = diagnostic::admission(&rejected).unwrap();
             assert_eq!(complete.len(), 5);
             assert_eq!(complete, independent);
-            assert_eq!(port.trace.len(), 5);
+            assert_eq!(port.trace.len(), 4);
             opaque(&rejected, &allocation, pointer);
         }
 
@@ -279,15 +323,30 @@ mod project {
                 diagnostic::admission(&rejected),
                 Err(ProjectionError::InvalidOrigin)
             );
-            rejected.captures[0].origin = Origin::Function("first".into());
+            rejected.captures[0].origin = Origin::FunctionFile(0);
             let complete = diagnostic::admission(&rejected).unwrap();
-            // Equal text through an equal but separately admitted root is not the
-            // retained schema: the function file shares the environment file's
-            // schema, and the codelist file shares the project's schema.
-            let replacement = candidate_schemas();
+            // Equal text admitted against another type's closure is not the
+            // schema a listed file of its type is held with: each listed file
+            // is admitted against the closure of its own type.
+            let closures = Closures::shipped().unwrap();
+            let codelists = |identity: &str| {
+                document::decode_referenced(
+                    source(
+                        identity,
+                        "yamaa: '1.0'\ntype: codelists\ncodelists: [{id: SEX, name: Sex, items: [{value: true}]}]\n",
+                    ),
+                    FileType::Codelists,
+                    LANGUAGE_VERSION,
+                    &closures,
+                )
+                .unwrap()
+                .admit()
+                .unwrap()
+                .into_captured()
+            };
             let function = std::mem::replace(
                 &mut rejected.captures[0].document,
-                replacement.environment.prepare_named_class(source("held/function.yaml", "function: project.constant\ndescription: Constant\nparams: []\nreturns: int\ntests: [{id: ordinary, covers: [normal, boundary], args: {}, result: true}]\n"), "function_definition_class").unwrap(),
+                codelists("held/function.yaml"),
             );
             assert_eq!(
                 diagnostic::admission(&rejected),
@@ -295,22 +354,24 @@ mod project {
             );
             rejected.captures[0].document = function;
             assert_eq!(rejected.captures[1].origin, Origin::Codelist(1));
-            rejected.captures[1].document = replacement
-                .project
-                .prepare_named_class(
-                    source(
-                        "held/ct.yaml",
-                        "codelists: [{id: SEX, name: Sex, items: [{value: true}]}]\n",
-                    ),
-                    "codelist_source_class",
+            let codelist = std::mem::replace(&mut rejected.captures[1].document, {
+                let function = document::decode_referenced(
+                    source("held/ct.yaml", &function_file("first", "true")),
+                    FileType::Function,
+                    LANGUAGE_VERSION,
+                    &closures,
                 )
                 .unwrap();
+                function.admit().unwrap().into_captured()
+            });
             assert_eq!(
                 diagnostic::admission(&rejected),
                 Err(ProjectionError::InvalidOrigin)
             );
+            rejected.captures[1].document = codelist;
+            assert_eq!(diagnostic::admission(&rejected).unwrap(), complete);
             assert_eq!(complete.len(), 5);
-            assert_eq!(port.trace.len(), 5);
+            assert_eq!(port.trace.len(), 4);
             opaque(&rejected, &allocation, pointer);
         }
         #[test]
@@ -323,14 +384,13 @@ mod project {
             );
             rejected.origins.functions.push("first".into());
             assert_eq!(diagnostic::admission(&rejected).unwrap().len(), 5);
-            // Function findings name the linked environment file that declares them.
-            let environment = rejected.environment_file.take();
-            assert!(environment.is_some());
+            // Function findings name the function file the project lists.
+            rejected.origins.function_files.clear();
             assert_eq!(
                 diagnostic::admission(&rejected),
                 Err(ProjectionError::InvalidOrigin)
             );
-            assert_eq!(port.trace.len(), 5);
+            assert_eq!(port.trace.len(), 4);
             opaque(&rejected, &allocation, pointer);
         }
 
@@ -371,12 +431,15 @@ mod project {
             let mut port = RefusingPort { reads: 0 };
             let root = source(
                 "held/project.yaml",
-                "schema_version: '1.0'\ncodelists: [missing.yaml, ct.yaml]\n",
+                "yamaa: '1.0'\ntype: project\ncodelists: [missing.yaml, ct.yaml]\n",
             );
-            let Failure::Rejected(mut rejected) =
-                project_source::prepare(candidate_schemas(), root, Language::Python, &mut port)
-                    .unwrap_err()
-            else {
+            let Failure::Rejected(mut rejected) = project_source::prepare(
+                Closures::shipped().unwrap(),
+                root,
+                Language::Python,
+                &mut port,
+            )
+            .unwrap_err() else {
                 panic!("retained metadata capture owner")
             };
             let expected = LimitExceeded {
@@ -426,103 +489,6 @@ mod project {
         }
 
         #[test]
-        fn missing_environment_file_reports_its_link_and_written_path_beside_other_sources() {
-            use yamaa_adapters::{
-                file_project,
-                file_resources::Error as ResourceError,
-                project_application::{self, Error as ApplicationError},
-            };
-            struct MissingPort {
-                trace: Vec<(Kind, String, String)>,
-            }
-            impl Resolver for MissingPort {
-                type Error = ResourceError;
-                fn inspect(&mut self, name: Name<'_>) -> Result<Located, Self::Error> {
-                    let Name::Written {
-                        file: File::Project(kind),
-                        declaring,
-                        written,
-                    } = name
-                    else {
-                        panic!("unexpected request {name:?}")
-                    };
-                    self.trace.push((kind, declaring.into(), written.into()));
-                    Err(ResourceError::Missing)
-                }
-                fn capture(&mut self, _: Name<'_>) -> Result<Captured, Self::Error> {
-                    unreachable!("a file no inspection located is never captured")
-                }
-                fn failure(&self, _: Name<'_>, _: &Self::Error) -> Option<resolver::Failure> {
-                    None
-                }
-                fn rebase(
-                    &mut self,
-                    _: &Located,
-                    _: &Located,
-                    _: &str,
-                ) -> Result<String, Self::Error> {
-                    unreachable!("a project file is never rebased")
-                }
-            }
-            let mut port = MissingPort { trace: vec![] };
-            let root = source(
-                "held/project.yaml",
-                "schema_version: '1.0'\nenvironments: {python: python/environment.yaml, r: r/environment.yaml}\ncodelists: [ct.yaml]\n",
-            );
-            let Failure::Rejected(rejected) =
-                project_source::prepare(candidate_schemas(), root, Language::Python, &mut port)
-                    .unwrap_err()
-            else {
-                panic!("retained environment file capture owner")
-            };
-            // The R link is never opened; both reads resolve from the project file.
-            assert_eq!(
-                port.trace,
-                [
-                    (
-                        Kind::Environment,
-                        "held/project.yaml".into(),
-                        "python/environment.yaml".into()
-                    ),
-                    (Kind::Codelist, "held/project.yaml".into(), "ct.yaml".into()),
-                ]
-            );
-            assert_eq!(
-                rejected
-                    .sources
-                    .iter()
-                    .map(|source| source.origin.clone())
-                    .collect::<Vec<_>>(),
-                [Origin::Environment(Language::Python), Origin::Codelist(0)]
-            );
-            assert!(rejected.environment_file.is_none());
-            let error = ApplicationError::Project(file_project::Error::Environment(
-                Failure::Rejected(rejected),
-            ));
-            let want = [
-                expected(
-                    "project_environment_invalid",
-                    "FUNC-2",
-                    "environments.python",
-                    json!({"entry":"held/project.yaml","path":"python/environment.yaml","environment_path":"environments.python","cause":"missing"}),
-                ),
-                expected(
-                    "project_environment_invalid",
-                    "FUNC-2",
-                    "codelists[0]",
-                    json!({"entry":"held/project.yaml","path":"ct.yaml","environment_path":"codelists[0]","cause":"missing"}),
-                ),
-            ];
-            for _ in 0..2 {
-                assert_eq!(
-                    crate::support::rows(&project_application::failure(&error)),
-                    want
-                );
-            }
-            assert_eq!(port.trace.len(), 2);
-        }
-
-        #[test]
         fn original_root_wide_codelist_scalars_report_against_the_project_without_capture_effects()
         {
             let allocation = Rc::new(Cell::new(19));
@@ -530,173 +496,89 @@ mod project {
                 allocation,
                 text: "never consumed".into(),
             });
-            let body = "schema_version: '1.0'\nenvironments: {python: environment.yaml}\ncodelists:\n  - {codelists: [{id: WIDE, name: Wide, data_type: integer, items: [{value: 123456789012345678901234567890, rank: -123456789012345678901234567890}, {value: 9223372036854775808}]}]}\n";
-            let (root, findings) = match project_source::prepare(
-                candidate_schemas(),
-                source("held/project.yaml", body),
-                Language::Python,
-                &mut port,
-            ) {
+            let body = format!("{LISTING}codelists:\n  - {{codelists: [{{id: WIDE, name: Wide, data_type: integer, items: [{{value: 123456789012345678901234567890, rank: -123456789012345678901234567890}}, {{value: 9223372036854775808}}]}}]}}\n");
+            let (root, findings) = match prepare(&mut port, &body) {
                 Err(Failure::RootScalar { root, findings }) => (root, findings),
                 _ => panic!("retained original root scalars"),
             };
-            let number = |text: &str| -> Value { yamaa_adapters::json_wire::decode(text).unwrap() };
+            // An inline codelist source's integer outside the `int` range fails
+            // as any runtime literal does (VALUE-5).
+            let project = json!({"source":"held/project.yaml","entry":"held/project.yaml","environment_path":"$"});
             let want = [
-                expected(
-                    "project_environment_invalid",
-                    "FUNC-2",
+                (
                     "codelists[0].codelists[0].items[0].value",
-                    json!({"reason":"integer_out_of_range","value":number("123456789012345678901234567890"),"source":"held/project.yaml","entry":"held/project.yaml","environment_path":"$"}),
+                    "123456789012345678901234567890",
                 ),
-                expected(
-                    "project_environment_invalid",
-                    "FUNC-2",
+                (
                     "codelists[0].codelists[0].items[0].rank",
-                    json!({"reason":"integer_out_of_range","value":number("-123456789012345678901234567890"),"source":"held/project.yaml","entry":"held/project.yaml","environment_path":"$"}),
+                    "-123456789012345678901234567890",
                 ),
-                expected(
-                    "project_environment_invalid",
-                    "FUNC-2",
+                (
                     "codelists[0].codelists[0].items[1].value",
-                    json!({"reason":"integer_out_of_range","value":number("9223372036854775808"),"source":"held/project.yaml","entry":"held/project.yaml","environment_path":"$"}),
+                    "9223372036854775808",
                 ),
-            ];
+            ]
+            .map(|(path, actual)| {
+                expected(
+                    "integer_overflow",
+                    "VALUE-5",
+                    path,
+                    with(&overflow(actual), project.clone()),
+                )
+            });
             let result = diagnostic::scalar_root(&root, &findings).unwrap();
             assert_eq!(crate::support::rows(&result), want);
             assert_eq!(diagnostic::scalar_root(&root, &findings).unwrap(), result);
-            // A failed project scalar stops before its environment link is read.
+            // A failed project scalar stops before any file it names is read.
             assert_eq!(port.trace, []);
             assert!(port.error.is_some());
         }
 
         #[test]
-        fn environment_file_temporal_and_wide_scalars_report_against_its_link_without_later_reads()
-        {
-            for (host, key) in [(Language::Python, "python"), (Language::R, "r")] {
-                let allocation = Rc::new(Cell::new(19));
-                let mut port = Port::new(Opaque {
-                    allocation,
-                    text: "never consumed".into(),
-                });
-                port.environment = "schema_version: '1.0'\nlock: uv.lock\nfunctions:\n  wide: {function: project.constant, description: Constant, params: [], returns: int, tests: [{id: ordinary, covers: [normal], args: {}, result: 123456789012345678901234567890}]}\n  bad_date: {function: project.constant, description: Constant, params: [], returns: date, tests: [{id: ordinary, covers: [normal], args: {}, result: {date: '2024-02-30'}}]}\n  bad_time: {function: project.constant, description: Constant, params: [], returns: datetime, tests: [{id: ordinary, covers: [normal], args: {}, result: {datetime: '2024-01-01T25:00:00'}}]}\n".into();
-                let rejected = match project_source::prepare(
-                    candidate_schemas(),
-                    source(
-                        "held/project.yaml",
-                        &format!(
-                            "schema_version: '1.0'\nenvironments: {{{key}: environment.yaml}}\n"
-                        ),
-                    ),
-                    host,
-                    &mut port,
-                ) {
-                    Err(Failure::Rejected(rejected)) => rejected,
-                    _ => panic!("retained environment file scalars"),
-                };
-                assert_eq!(rejected.sources[0].origin, Origin::Environment(host));
-                let link = format!("environments.{key}");
-                let wide: Value =
-                    yamaa_adapters::json_wire::decode("123456789012345678901234567890").unwrap();
-                let want = [
-                    expected(
-                        "project_environment_invalid",
-                        "FUNC-2",
-                        "functions.wide.tests[0].result",
-                        json!({"reason":"integer_out_of_range","value":wide,"source":"held/environment.yaml","entry":"held/project.yaml","environment_path":link}),
-                    ),
-                    expected(
-                        "project_environment_invalid",
-                        "FUNC-2",
-                        "functions.bad_date.tests[0].result",
-                        json!({"reason":"invalid_date","value":"2024-02-30","source":"held/environment.yaml","entry":"held/project.yaml","environment_path":link}),
-                    ),
-                    expected(
-                        "project_environment_invalid",
-                        "FUNC-2",
-                        "functions.bad_time.tests[0].result",
-                        json!({"reason":"invalid_datetime","value":"2024-01-01T25:00:00","source":"held/environment.yaml","entry":"held/project.yaml","environment_path":link}),
-                    ),
-                ];
-                let result = diagnostic::scalar_sources(&rejected).unwrap();
-                assert_eq!(crate::support::rows(&result), want);
-                assert_eq!(diagnostic::scalar_sources(&rejected).unwrap(), result);
-                assert_eq!(diagnostic::admission(&rejected).unwrap(), []);
-                assert_eq!(diagnostic::schema_sources(&rejected).unwrap(), []);
-                // The failed environment file declares the lock; nothing it writes is read.
-                assert_eq!(port.trace, [(Kind::Environment, "environment.yaml".into())]);
-                assert!(rejected.environment_file.is_none());
-                assert!(port.error.is_some());
-            }
-        }
-
-        #[test]
-        fn lock_kind_mismatch_reports_against_the_environment_file_that_declares_the_lock() {
+        fn lock_kind_mismatch_reports_against_the_project_file_that_holds_the_lock() {
             let allocation = Rc::new(Cell::new(19));
             let mut port = Port::new(Opaque {
                 allocation,
                 text: "never consumed".into(),
             });
-            port.environment = "schema_version: '1.0'\nlock: uv.lock\n".into();
             port.lock_kind = LockKind::Renv;
-            let rejected = match project_source::prepare(
-                candidate_schemas(),
-                source(
-                    "held/project.yaml",
-                    "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n",
-                ),
-                Language::Python,
+            let rejected = match prepare(
                 &mut port,
+                "yamaa: '1.0'\ntype: project\nenvironments: {python: {lock: uv.lock}}\n",
             ) {
                 Err(Failure::Rejected(rejected)) => rejected,
                 _ => panic!("retained lock kind rejection"),
             };
+            // The project file holds the lock at `environments.python.lock`
+            // (FUNC-3).
             let want = [expected(
-                "project_environment_invalid",
+                "function_file_invalid",
                 "FUNC-2",
-                "lock",
-                json!({"reason":"lock_kind_mismatch","language":"python","actual_lock_kind":"renv","source":"held/environment.yaml","entry":"held/project.yaml","environment_path":"lock"}),
+                "environments.python.lock",
+                json!({"reason":"lock_kind_mismatch","language":"python","actual_lock_kind":"renv","source":"held/project.yaml","entry":"held/project.yaml","environment_path":"environments.python.lock"}),
             )];
             let result = diagnostic::admission(&rejected).unwrap();
             assert_eq!(crate::support::rows(&result), want);
             assert_eq!(diagnostic::admission(&rejected).unwrap(), result);
-            assert_eq!(
-                port.trace,
-                [
-                    (Kind::Environment, "environment.yaml".into()),
-                    (Kind::Lock, "uv.lock".into())
-                ]
-            );
-            // The lock belongs to the environment file; without it there is no owner.
-            let mut rejected = rejected;
-            rejected.environment_file = None;
-            assert_eq!(
-                diagnostic::admission(&rejected),
-                Err(ProjectionError::InvalidOrigin)
-            );
+            assert_eq!(port.trace, [(Kind::Lock, "uv.lock".into())]);
             assert!(port.error.is_some());
         }
 
         #[test]
-        fn actual_captured_two_hundred_inline_functions_keep_the_full_six_hundred_record_report() {
+        fn actual_captured_two_hundred_function_files_keep_the_full_six_hundred_record_report() {
             let allocation = Rc::new(Cell::new(19));
             let mut port = Port::new(Opaque {
                 allocation,
                 text: "never consumed".into(),
             });
-            let mut body = String::from("schema_version: '1.0'\nlock: uv.lock\nfunctions:\n");
-            for index in 0..200 {
-                body.push_str(&format!("  function_{index}: {{function: project.constant, description: Constant, params: [], returns: int, tests: [{{id: ordinary, covers: [normal, boundary], args: {{}}, result: true}}]}}\n"));
-            }
-            port.environment = body;
-            let rejected = match project_source::prepare(
-                candidate_schemas(),
-                source(
-                    "held/project.yaml",
-                    "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n",
-                ),
-                Language::Python,
-                &mut port,
-            ) {
+            let files = (0..200)
+                .map(|index| format!("functions/function_{index}.yaml"))
+                .collect::<Vec<_>>();
+            let body = format!(
+                "yamaa: '1.0'\ntype: project\nfunctions: [{}]\nenvironments: {{python: {{lock: uv.lock}}}}\n",
+                files.join(", ")
+            );
+            let rejected = match prepare(&mut port, &body) {
                 Err(Failure::Rejected(rejected)) => rejected,
                 _ => panic!("actual captured static rejection"),
             };
@@ -706,23 +588,20 @@ mod project {
             assert_eq!(findings.len(), 600);
             let result = diagnostic::admission(&rejected).unwrap();
             let mut want = vec![];
-            for index in 0..200 {
+            for (index, file) in files.iter().enumerate() {
                 let name = format!("function_{index}");
-                let declaration = format!("functions.{name}");
-                want.push(expected("project_environment_invalid", "FUNC-2", &format!("{declaration}.tests[0].result"), json!({"function":name,"case":"ordinary","value":true,"reason":"invalid_case_result","source":"held/environment.yaml","entry":"held/project.yaml","environment_path":declaration})));
+                let source = format!("held/{file}");
+                let declaration = format!("functions[{index}]");
+                want.push(expected("function_file_invalid", "FUNC-2", "tests[0].result", json!({"function":name,"case":"ordinary","value":true,"reason":"invalid_case_result","source":source,"entry":"held/project.yaml","environment_path":declaration})));
                 for obligation in ["boundary", "normal"] {
-                    want.push(expected("project_environment_invalid", "FUNC-2", &format!("{declaration}.tests"), json!({"function":name,"obligation":obligation,"reason":"missing_coverage_obligation","source":"held/environment.yaml","entry":"held/project.yaml","environment_path":declaration})));
+                    want.push(expected("function_file_invalid", "FUNC-2", "tests", json!({"function":name,"obligation":obligation,"reason":"missing_coverage_obligation","source":source,"entry":"held/project.yaml","environment_path":declaration})));
                 }
             }
             assert_eq!(crate::support::rows(&result), want);
             assert_eq!(diagnostic::admission(&rejected).unwrap(), result);
-            assert_eq!(
-                port.trace,
-                [
-                    (Kind::Environment, "environment.yaml".into()),
-                    (Kind::Lock, "uv.lock".into())
-                ]
-            );
+            let mut trace = vec![(Kind::Lock, "uv.lock".to_string())];
+            trace.extend(files.iter().map(|file| (Kind::Function, file.clone())));
+            assert_eq!(port.trace, trace);
             assert!(port.error.is_some());
         }
     }
@@ -1125,8 +1004,8 @@ mod project {
         }
     }
     mod project_lock_diagnostics {
-        use crate::support::project_schemas::candidate_schemas;
         use yamaa_adapters::{
+            document::Closures,
             project_lock::{Finding, Reason},
             project_lock_diagnostics::{issues, Error},
             project_source::{self, CapturedEnvironment, Kind},
@@ -1136,9 +1015,7 @@ mod project {
         use yamaa_core::resolver::{self, Captured, File, Located, Name, Resolver};
 
         struct Capture {
-            environments: usize,
             locks: usize,
-            lock: bool,
             /// The bytes of the file last located.
             held: Vec<u8>,
         }
@@ -1151,22 +1028,10 @@ mod project {
                 written: &str,
             ) -> Result<Source, std::convert::Infallible> {
                 match kind {
-                    Kind::Environment => {
-                        assert_eq!(declaring, "study/project.yaml");
-                        assert_eq!(written, "environment.yaml");
-                        self.environments += 1;
-                        Ok(Source {
-                            identity: "study/environment.yaml".into(),
-                            bytes: if self.lock {
-                                b"schema_version: '1.0'\nlock: ../uv.lock\n".to_vec()
-                            } else {
-                                b"schema_version: '1.0'\n".to_vec()
-                            },
-                        })
-                    }
                     Kind::Lock => {
-                        // The environment file writes the lock path; it resolves there.
-                        assert_eq!(declaring, "study/environment.yaml");
+                        // The project file writes the lock path; it resolves
+                        // there (D8).
+                        assert_eq!(declaring, "study/project.yaml");
                         assert_eq!(written, "../uv.lock");
                         self.locks += 1;
                         Ok(Source {
@@ -1210,11 +1075,9 @@ mod project {
                 panic!("a project file is never rebased")
             }
         }
-        fn prepare(project: &str, lock: bool) -> (CapturedEnvironment, Capture) {
+        fn prepare(project: &str) -> (CapturedEnvironment, Capture) {
             let mut capture = Capture {
-                environments: 0,
                 locks: 0,
-                lock,
                 held: vec![],
             };
             let source = Source {
@@ -1222,7 +1085,7 @@ mod project {
                 bytes: project.as_bytes().to_vec(),
             };
             let prepared = project_source::prepare(
-                candidate_schemas(),
+                Closures::shipped().unwrap(),
                 source,
                 Language::Python,
                 &mut capture,
@@ -1231,16 +1094,18 @@ mod project {
             let (_, provenance) = prepared.into_owned().into_parts();
             (provenance, capture)
         }
-        /// The project links one environment file, which may declare a lock.
+        /// The project holds the Python lock, or only the R one, which the
+        /// Python host does not read (PROJECT-2).
         fn environment(locked: bool) -> (CapturedEnvironment, Capture) {
-            prepare(
-                "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n",
-                locked,
-            )
+            prepare(if locked {
+                "yamaa: '1.0'\ntype: project\nenvironments: {python: {lock: ../uv.lock}}\n"
+            } else {
+                "yamaa: '1.0'\ntype: project\nenvironments: {r: {lock: r/renv.lock}}\n"
+            })
         }
-        /// The project names no environment file for the host.
+        /// The project declares no environment.
         fn without_environment() -> (CapturedEnvironment, Capture) {
-            prepare("schema_version: '1.0'\n", false)
+            prepare("yamaa: '1.0'\ntype: project\n")
         }
         fn finding(reason: Reason, expected: &[&str], actual: Option<&str>) -> Finding {
             Finding {
@@ -1255,12 +1120,6 @@ mod project {
         fn complete_classified_host_facts_preserve_order_and_held_lock_origins_without_reads() {
             let (environment, capture) = environment(true);
             let root = environment.root().source().bytes.as_ptr();
-            let file = environment
-                .environment_file()
-                .unwrap()
-                .source()
-                .bytes
-                .as_ptr();
             let lock = environment.lock().unwrap().source.bytes.as_ptr();
             let facts = [
                 finding(Reason::DistributionNotIdentified, &[], None),
@@ -1314,10 +1173,11 @@ mod project {
                 assert_eq!(record.phase(), "validation");
                 assert_eq!(record.condition(), "runtime_artifact_mismatch");
                 assert_eq!(record.rule(), Some("FUNC-3"));
-                assert_eq!(record.spec_paths, ["lock"]);
+                // The project file holds the lock (FUNC-3, D107).
+                assert_eq!(record.spec_paths, ["environments.python.lock"]);
                 assert_eq!(
                     yamaa_core::json::Value::Object(record.context.clone()),
-                    yamaa_adapters::json!({"source":"study/environment.yaml", "entry":"study/project.yaml",
+                    yamaa_adapters::json!({"source":"study/project.yaml", "entry":"study/project.yaml",
                 "lock_source":"held/uv.lock", "lock":"../uv.lock", "package":"program",
                 "reason":reason, "expected":versions, "actual":actual})
                 );
@@ -1326,17 +1186,8 @@ mod project {
                 issues(&environment, Some(Language::Python), &facts).unwrap(),
                 records
             );
-            assert_eq!((capture.environments, capture.locks), (1, 1));
+            assert_eq!(capture.locks, 1);
             assert_eq!(environment.root().source().bytes.as_ptr(), root);
-            assert_eq!(
-                environment
-                    .environment_file()
-                    .unwrap()
-                    .source()
-                    .bytes
-                    .as_ptr(),
-                file
-            );
             assert_eq!(environment.lock().unwrap().source.bytes.as_ptr(), lock);
         }
 
@@ -1421,14 +1272,12 @@ mod project {
 
         #[test]
         fn empty_unlocked_projection_preserves_success_without_lock_capture() {
-            for ((environment, capture), environments) in
-                [(environment(false), 1), (without_environment(), 0)]
-            {
+            for (environment, capture) in [environment(false), without_environment()] {
                 assert_eq!(
                     issues(&environment, Some(Language::Python), &[]).unwrap(),
                     vec![]
                 );
-                assert_eq!((capture.environments, capture.locks), (environments, 0));
+                assert_eq!(capture.locks, 0);
             }
         }
     }

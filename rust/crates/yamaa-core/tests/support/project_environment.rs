@@ -45,7 +45,7 @@ pub fn extended_alias_reached() -> BTreeSet<ConditionCode> {
     }
     .root()];
     draft.language = Some(Language::Python);
-    let findings = project_environment::validate(Some(Language::Python), &draft);
+    let findings = project_environment::validate(&draft);
     let projected = project_environment_diagnostics::diagnostics(&draft, &findings).unwrap();
     assert_eq!(projected.len(), 1, "{projected:?}");
     let finding = &projected[0];
@@ -105,7 +105,7 @@ pub fn format_name_reached() -> BTreeSet<ConditionCode> {
         ],
     }
     .root()];
-    let findings = project_environment::validate(Some(Language::Python), &draft);
+    let findings = project_environment::validate(&draft);
     let projected = project_environment_diagnostics::diagnostics(&draft, &findings).unwrap();
     assert_eq!(projected.len(), 2, "{projected:?}");
     for (finding, (index, codelist, value, data_type)) in projected.iter().zip([
@@ -137,16 +137,15 @@ pub fn format_name_reached() -> BTreeSet<ConditionCode> {
     }
     projected.iter().map(rendered).collect()
 }
-/// FUNC-2, FUNC-3 (P-FN-2): a finding in a 1.0 function file fails as
+/// FUNC-2, FUNC-3 (P-FN-2): a finding in a function file fails as
 /// `function_file_invalid` at that file's own path, and a lock whose kind is
-/// not its host's at the project's `environments.<host>.lock`, with the
-/// reasons and context a 0.5 environment file's findings take.
+/// not its host's at the project's `environments.<host>.lock`, each with its
+/// reason and context.
 pub fn function_file_reached() -> BTreeSet<ConditionCode> {
     use crate::support::project_call_compiler::definition;
     // A function file that names no callable at all.
     let unimplemented = definition("constant").file(&[]);
     let draft = Draft {
-        surface: yamaa_core::ast::Surface::V1 { minor: 0 },
         language: Some(Language::Python),
         lock: Some(LockReference {
             written: "renv.lock".into(),
@@ -164,7 +163,7 @@ pub fn function_file_reached() -> BTreeSet<ConditionCode> {
         ]),
         codelists: vec![],
     };
-    let findings = project_environment::validate(Some(Language::Python), &draft);
+    let findings = project_environment::validate(&draft);
     let projected = project_environment_diagnostics::diagnostics(&draft, &findings).unwrap();
     let expected = [
         (
@@ -265,7 +264,7 @@ pub fn function_file_reached() -> BTreeSet<ConditionCode> {
     reached.insert(rendered(&lock));
     reached
 }
-/// A project that links a Python environment file with no functions and
+/// A project run by the Python host, listing no function files, that
 /// declares two invalid codelists of its own.
 pub fn draft() -> Draft {
     let items = vec![
@@ -299,7 +298,6 @@ pub fn draft() -> Draft {
         }),
     };
     Draft {
-        surface: yamaa_core::ast::Surface::V0_5,
         language: Some(Language::Python),
         lock: None,
         functions: Some(vec![]),
@@ -312,7 +310,7 @@ pub fn draft() -> Draft {
 }
 pub fn reached() -> BTreeSet<ConditionCode> {
     let d = draft();
-    let findings = project_environment::validate(Some(Language::Python), &d);
+    let findings = project_environment::validate(&d);
     let projected = project_environment_diagnostics::diagnostics(&d, &findings).unwrap();
     let expected = [
         (
@@ -412,34 +410,5 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         assert_eq!(finding.operand_route, None);
         reached.insert(rendered(&finding));
     }
-    // The `environments` key states the language, so only the captured lock
-    // syntax can disagree with it.
-    let mut lock_mismatch = d.clone();
-    lock_mismatch.lock = Some(LockReference {
-        written: "renv.lock".into(),
-        kind: LockKind::Renv,
-    });
-    lock_mismatch.codelists.clear();
-    let findings = project_environment::validate(Some(Language::Python), &lock_mismatch);
-    let projected =
-        project_environment_diagnostics::diagnostics(&lock_mismatch, &findings).unwrap();
-    assert_eq!(projected.len(), 1);
-    let finding = &projected[0];
-    assert_eq!(
-        (
-            finding.definition().phase,
-            finding.definition().condition,
-            finding.definition().rule,
-        ),
-        ("validation", "project_environment_invalid", Some("FUNC-2")),
-    );
-    assert_eq!(finding.spec_paths, ["lock"]);
-    assert_eq!(finding.context.len(), 3);
-    assert_eq!(finding.context["reason"], "lock_kind_mismatch");
-    assert_eq!(finding.context["language"], "python");
-    assert_eq!(finding.context["actual_lock_kind"], "renv");
-    assert_eq!(finding.source_span, None);
-    assert_eq!(finding.operand_route, None);
-    reached.insert(rendered(&finding));
     reached
 }

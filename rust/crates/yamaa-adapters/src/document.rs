@@ -8,9 +8,7 @@
 //! needs the newest (P-VER-1), and the layers compose into one resolved
 //! specification, each layer's `clear` applied before it (LAYER-9). A root
 //! that declares `schema_version` is written in language version 0.5, which
-//! the engine does not read: it is refused as `unsupported_language_version`,
-//! except a 0.5 project file, which the 0.5 project route still reads until
-//! it goes (P2-13d).
+//! the engine does not read: it is refused as `unsupported_language_version`.
 //!
 //! The engine reads language version 1.0 (#3030 D76, P1-9): every public call
 //! decodes the files it reads here, and a specification is prepared by
@@ -77,16 +75,6 @@ impl Closures {
     }
 }
 
-/// One decoded document and the route its root selects.
-#[derive(Debug)]
-pub enum Decoded {
-    /// A project file whose root does not declare the 1.x header: the 0.5
-    /// project route reads it, until it goes (P2-13d).
-    Legacy { source: Source, raw: DecodedYaml },
-    /// A 1.x document whose header the engine reads.
-    Versioned(VersionedDocument),
-}
-
 /// A 1.x document, its header read and the 1.0 closure of its type chosen.
 #[derive(Debug)]
 pub struct VersionedDocument {
@@ -103,30 +91,25 @@ pub struct VersionedDocument {
 /// (#3030 D76). The header is read before any
 /// closure is chosen: a version the engine does not read fails as
 /// `unsupported_language_version`, 0.5 at `schema_version` and any other at
-/// `yamaa`, and another type as `unexpected_file_type` at `type`. Only a
-/// project file that does not declare the 1.x header keeps the 0.5 project
-/// route ([`Decoded::Legacy`]).
+/// `yamaa`, and another type as `unexpected_file_type` at `type`.
 pub fn decode(
     source: Source,
     expected: FileType,
     reads: Option<LanguageVersion>,
     closures: &Closures,
-) -> Result<Decoded, Error> {
+) -> Result<VersionedDocument, Error> {
     let raw = decode_yaml(&source.bytes).map_err(|error| Error::Decode {
         identity: source.identity.clone(),
         error,
     })?;
-    if expected == FileType::Project && !language::declares_header(&raw.document) {
-        return Ok(Decoded::Legacy { source, raw });
-    }
     match language::read_header(&raw.document, reads, expected) {
-        Ok(header) => Ok(Decoded::Versioned(VersionedDocument {
+        Ok(header) => Ok(VersionedDocument {
             schema: Arc::clone(closures.get(header.file_type)),
             reads: reads.expect("a read header names a version the engine reads"),
             source,
             raw,
             header,
-        })),
+        }),
         Err(fault) => Err(findings(
             closures.get(expected),
             source,

@@ -1,7 +1,6 @@
 use crate::support::document::Tree;
 use crate::support::roots::{Codelist, CodelistType, Item, Source};
 use yamaa_core::{
-    ast::Surface,
     project_environment::{Draft, Environment, ExecutionEnvironment},
     project_function::Language,
     schema::{Document, DocumentNode as N},
@@ -104,7 +103,6 @@ pub fn environment(extensible: bool) -> ExecutionEnvironment {
     Environment::admit(
         Some(Language::Python),
         Draft {
-            surface: Surface::V1 { minor: 0 },
             language: Some(Language::Python),
             lock: None,
             functions: None,

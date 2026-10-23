@@ -1106,8 +1106,8 @@ impl<'p> Builder<'p> {
     }
 
     /// A named read counts its own `multiple_matches` and absence at the
-    /// reading path, its absence under the intermediate's absence handler,
-    /// as an implicit join read counts its absence.
+    /// reading path, its absence under `absent`, as an implicit join read
+    /// counts its absence.
     fn observed(
         &mut self,
         node: &mut Node,
@@ -1124,7 +1124,8 @@ impl<'p> Builder<'p> {
         let site = format!("{path}.multiple_matches");
         let multiple = handlers.multiple_matches;
         self.site(node, multiple, site, HandlerKind::MultipleMatches);
-        if let Some(kind) = handlers.absence {
+        if handlers.absent {
+            let kind = HandlerKind::Absent;
             let site = format!("{path}.{}", kind.name());
             self.site(node, true, site, kind);
         }

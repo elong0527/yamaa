@@ -195,14 +195,6 @@ results after releasing the compiled handle and require repeated saves to fail
 without publication or recapture. These are private original-document tests,
 not qualification of the replacement public facade or an inventory promotion.
 
-## legacy
-# Frozen 0.5 benchmark files
-
-`legacy/` holds byte copies of the project and environment files of two
-benchmarks as 0.5 wrote them, for the tests of a 0.5 project beside its 1.0
-conversion (`declaration_project_files.rs`). The engine reads no 0.5
-specification; these copies go with the 0.5 project route.
-
 ## native_file_resources
 # Native file resource qualification
 

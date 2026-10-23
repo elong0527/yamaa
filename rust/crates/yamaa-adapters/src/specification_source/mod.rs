@@ -28,10 +28,6 @@ pub enum Error {
     /// not read, or a type the field does not expect: refused at that field,
     /// which the reader of the field names, not in the file (SCHEMA-2).
     Reference(Box<RefusedHeader>),
-    /// A versioned root must retain its schema-version admission gate.
-    VersionedRootRequired,
-    /// Only admitted named classes can be selected from the captured closure.
-    UnknownClass(String),
 }
 
 /// A failed semantic pass retains the exact source, schema and context arena.
@@ -222,72 +218,6 @@ impl CapturedSchema {
     pub fn structure(&self) -> &SchemaStructure {
         &self.structure
     }
-
-    /// Validate and normalize a versioned root without windows, inheritance or IO.
-    /// Environment-specific admission follows this captured structural gate.
-    pub fn prepare_structural(self: &Arc<Self>, source: Source) -> Result<CapturedDocument, Error> {
-        self.prepare_structural_selected(
-            source,
-            yamaa_core::structural_preparation::Selection::StructuralRoot,
-        )
-    }
-
-    /// Normalize a versionless class using the version of its captured schema.
-    /// Function definitions and codelist sources never fabricate document versions.
-    /// A class declaring schema_version must use prepare_structural instead.
-    pub fn prepare_class(self: &Arc<Self>, source: Source) -> Result<CapturedDocument, Error> {
-        self.prepare_named_class(source, &self.structure.root_class().name)
-    }
-    /// Reuse one captured environment schema for independent function/CT sources.
-    /// A selected class cannot bypass its schema-version gate.
-    pub fn prepare_named_class(
-        self: &Arc<Self>,
-        source: Source,
-        class_name: &str,
-    ) -> Result<CapturedDocument, Error> {
-        self.prepare_structural_selected(
-            source,
-            yamaa_core::structural_preparation::Selection::NamedClass(class_name),
-        )
-    }
-
-    fn prepare_structural_selected(
-        self: &Arc<Self>,
-        source: Source,
-        selection: yamaa_core::structural_preparation::Selection<'_>,
-    ) -> Result<CapturedDocument, Error> {
-        use yamaa_core::structural_preparation::{self, Error as StructuralError};
-        let prepared = structural_preparation::prepare(
-            &self.structure,
-            source,
-            selection,
-            &mut crate::decoder::Decoder::<std::convert::Infallible>::default(),
-        )
-        .map_err(|error| match error {
-            StructuralError::UnknownClass(name) => Error::UnknownClass(name),
-            StructuralError::VersionedRootRequired => Error::VersionedRootRequired,
-            StructuralError::Decode(error) => error,
-            StructuralError::Validation(error) => Error::Validation(error),
-            StructuralError::Normalize(error) => Error::Normalize(error),
-            StructuralError::Findings(failure) => {
-                let (source, document, findings) = failure.into_parts();
-                Error::Findings(Box::new(CapturedFindings::new(
-                    Arc::clone(self),
-                    source,
-                    Some(document),
-                    findings,
-                )))
-            }
-        })?;
-        let (source, raw, class_name, normalized) = prepared.into_parts();
-        Ok(CapturedDocument {
-            schema: Arc::clone(self),
-            class_name,
-            source,
-            raw,
-            normalized,
-        })
-    }
 }
 
 /// One `schema` link of a consuming document: the input dataset, the producing
@@ -358,19 +288,12 @@ pub(crate) fn prepare_versioned_within<P: Resolver>(
     port: &mut P,
     resolving: &[String],
 ) -> Result<PreparedDocument, InheritanceError<P::Error>> {
-    use crate::document::{self, Closures, Decoded};
+    use crate::document::{self, Closures};
     use yamaa_core::language::{FileType, LANGUAGE_VERSION};
     let closures = Closures::shipped().map_err(InheritanceError::Entry)?;
     let entry = source.identity.clone();
-    let versioned =
-        match document::decode(source, FileType::Spec, Some(LANGUAGE_VERSION), &closures) {
-            Ok(Decoded::Versioned(versioned)) => versioned,
-            // A specification file never takes the 0.5 project route.
-            Ok(Decoded::Legacy { .. }) => {
-                return Err(InheritanceError::Entry(Error::VersionedRootRequired))
-            }
-            Err(error) => return Err(InheritanceError::Entry(error)),
-        };
+    let versioned = document::decode(source, FileType::Spec, Some(LANGUAGE_VERSION), &closures)
+        .map_err(InheritanceError::Entry)?;
     let schema = Arc::clone(versioned.schema());
     let refuse = |error| InheritanceError::Versioned {
         schema: Arc::clone(&schema),

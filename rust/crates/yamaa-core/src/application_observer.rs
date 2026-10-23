@@ -79,13 +79,15 @@ impl Observer for Noop {
     fn observe(&self, _: Event) {}
 }
 
-/// Every observed operation takes one scope: the observer of its events and
-/// the probe of its cancellation. An unobserved caller passes
-/// `Scope::default()`, which discards events and is never cancelled.
+/// Every observed operation takes one scope: the observer of its events, the
+/// probe of its cancellation and how its runs divide their driver input. An
+/// unobserved caller passes `Scope::default()`, which discards events, is
+/// never cancelled and runs every dataset over its whole input.
 #[derive(Clone, Copy)]
 pub struct Scope<'a> {
     pub observer: &'a dyn Observer,
     cancelled: &'a dyn Fn() -> bool,
+    partitioning: Option<crate::dataset::Partitioning>,
 }
 impl Default for Scope<'_> {
     fn default() -> Self {
@@ -101,7 +103,20 @@ impl<'a> Scope<'a> {
         Self {
             observer,
             cancelled: &never,
+            partitioning: None,
         }
+    }
+    /// The same scope, whose runs divide their driver input as
+    /// `partitioning` asks, or run it whole for `None` (#3697).
+    pub fn partitioned(self, partitioning: Option<crate::dataset::Partitioning>) -> Self {
+        Self {
+            partitioning,
+            ..self
+        }
+    }
+    /// How the operation's runs divide their driver input.
+    pub fn partitioning(self) -> Option<crate::dataset::Partitioning> {
+        self.partitioning
     }
     /// The same scope, cancelled once `cancelled` answers true (#2822). A run
     /// polls it at every checkpoint of its schedule and before each batch of
