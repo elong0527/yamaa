@@ -185,6 +185,7 @@ rule, grammar, or fixture:
   type or class field the vocabulary names, and each rule card table that
   lists it: those of
   [SUB-3](../rules/profiles/submission.md#sub-3),
+  [SUB-6](../rules/profiles/submission.md#sub-6),
   [SUB-9](../rules/profiles/submission.md#sub-9),
   [SUB-10](../rules/profiles/submission.md#sub-10),
   [SUB-15](../rules/profiles/submission.md#sub-15),
@@ -201,8 +202,11 @@ rule, grammar, or fixture:
   equal to its list. `python -m tools.validation.check_cdisc_tables` keeps
   those tables to the file: each value they list is one of its values, and
   each value of a vocabulary they divide among their rows sits in one row,
-  unless the check names it as belonging in none, as it does `BIMO`. A
-  vocabulary only grows: no value is removed in 1.x.
+  unless the check names it as belonging in none, as it does `BIMO`.
+  `python -m tools.validation.check_cdisc_copies` keeps the lists that the
+  cards and the site pages write in prose, and the mapping doc's date and
+  time types, to the file. A vocabulary only grows: no value is removed in
+  1.x.
 - Keep repository-authored source ASCII-only. Spell non-ASCII characters by
   code point in rules, documentation, schemas, specifications, and tests;
   literal Unicode belongs only in input and expected-output data fixtures.

@@ -149,13 +149,19 @@ is informative. Closed grammars are defined in
 `yaml/conditions.yaml` registers every condition an implementation may raise
 with the phases that may raise it and the message its issues carry. The
 tables of [SUB-3](profiles/submission.md#sub-3),
+[SUB-6](profiles/submission.md#sub-6),
 [SUB-9](profiles/submission.md#sub-9),
 [SUB-10](profiles/submission.md#sub-10),
 [SUB-15](profiles/submission.md#sub-15),
 [SUB-26](profiles/submission.md#sub-26) and
-[JSON-10](profiles/dataset-json.md#json-10) list values of the closed CDISC
-vocabularies, which `yaml/vocabulary/cdisc.yaml` holds, and a repository
-check keeps them to that file.
+[JSON-10](profiles/dataset-json.md#json-10), and the lists of
+[SUB-6](profiles/submission.md#sub-6),
+[SUB-10](profiles/submission.md#sub-10),
+[SUB-14](profiles/submission.md#sub-14),
+[CT-2](profiles/terminology.md#ct-2) and
+[DEFINE-6](profiles/define-xml.md#define-6), list values of the closed CDISC
+vocabularies, which `yaml/vocabulary/cdisc.yaml` holds, and repository
+checks keep them to that file.
 
 ## Rule cards
 

@@ -22,9 +22,10 @@
 #
 # `python -m tools.packaging.generate_cdisc_vocabulary --write` writes the
 # engine's enum of each vocabulary from this file, in its order. The tables
-# of SUB-3, SUB-9, SUB-10, SUB-15, SUB-26 and JSON-10 list these values
-# too; `python -m tools.validation.check_cdisc_tables` keeps them to this
-# file.
+# of SUB-3, SUB-6, SUB-9, SUB-10, SUB-15, SUB-26 and JSON-10 list these
+# values too, and so do lists in rule cards, pages and tools;
+# `python -m tools.validation.check_cdisc_tables` keeps the tables to this
+# file and `python -m tools.validation.check_cdisc_copies` the lists.
 version: "1.0"
 source:
   define_xml: "2.1.11"
