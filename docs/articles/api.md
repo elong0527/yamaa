@@ -315,6 +315,33 @@ such as a project section that does not exist, leaves them missing.
     yamaa.spec("sdtm/dm.yaml").check().issues
     ```
 
+A fragment, a specification that a layer lists under `include`, names no
+template of its own, so a check of the fragment alone fails at the first
+value its template would give. `check(parent = )` checks it as if the
+template you name were its parent, before any study file lists it: the
+fragment composes as it would in a file that names that template as its
+`parent`, lists the fragment under `include` and writes nothing else, and the
+check reports what that file's check would report. Each issue is located in
+the fragment or in a layer of the template. `parent` is a path you give, like
+the specification's own: one that cannot be read is an issue that names it
+as you gave it, at no field. A specification that declares `parent` or
+`include` is no fragment, and a `parent` given for it raises `yamaa.Error`,
+as `value_not_permitted` at `parent`
+([LAYER-4](../../rules/inheritance.md#layer-4)). `run()`, `resolve()` and a
+project's `check()` take no `parent`.
+
+=== "R"
+
+    ```r
+    yamaa_spec("fragments/ae-duration.yaml")$check(parent = "templates/adae.yaml")$issues
+    ```
+
+=== "Python"
+
+    ```python
+    yamaa.spec("fragments/ae-duration.yaml").check(parent="templates/adae.yaml").issues
+    ```
+
 ## Status and printed results
 
 Every result has a `status`. A check succeeds when it finds no issue, and a
@@ -913,7 +940,7 @@ usage whatever else is given. Both exit 0.
 ### Commands
 
 ```text
-yamaa check PATH [--spec NAME]
+yamaa check PATH [--spec NAME | --parent PATH]
 yamaa run PATH [--spec NAME | --section SECTION]
 yamaa submission PATH [--section SECTION] [--created TIME]
 yamaa resolve PATH [--spec NAME]
@@ -925,7 +952,7 @@ yamaa selftest
 
 | Command | What it does | In R and Python |
 |---|---|---|
-| `check` | Checks a specification or a project without reading data | `check()` |
+| `check` | Checks a specification or a project without reading data, or with `--parent` a fragment on a template | `check()`, `check(parent = )` |
 | `run` | Builds a specification or a project, then saves what it built and prints each path written | `run()`, then `save()` |
 | `submission` | Composes a project's define.xml and transport files, then saves them and prints each path written | `submission()`, then `save()` |
 | `resolve` | Prints the resolved specification as canonical JSON | `resolve()` |
@@ -941,7 +968,9 @@ does, and `--section SECTION` one of its sections, `sdtm`, `adam` or `send`;
 without them, `check` and `run` cover the whole project, and `submission`
 every section that names `define`. `run` takes `--spec` or `--section`, not
 both, and `resolve` needs `--spec` for a project, which has no resolved form
-of its own. `--created TIME` gives the ISO 8601 creation time that a
+of its own. For a specification, `check --parent` checks it as a fragment
+whose parent is the template the flag names, as `check(parent = )` does, so
+`check` takes `--spec` or `--parent`, not both. `--created TIME` gives the ISO 8601 creation time that a
 submission's documents carry; without it, the submission reads the clock once
 for every section and prints the time it read. A command's flags follow it,
 before or after its arguments, each at most once, and `--` ends the flags, so
@@ -969,6 +998,7 @@ specification, since it runs no project code.
 
 ```sh
 yamaa check project.yaml
+yamaa check fragments/ae-duration.yaml --parent templates/adae.yaml
 yamaa run sdtm/dm.yaml
 yamaa run project.yaml --section sdtm
 yamaa --format json run project.yaml --spec DM
@@ -1045,7 +1075,8 @@ same keys, except where the table names a refusal's.
 
 * `command` is the command's name. `path`, `spec`, `section` and `type` are
   its arguments as given, null for a flag not given; `read-odm`'s `path` is
-  SOURCE.
+  SOURCE, and a check with `--parent` prints the same keys, its `path` the
+  fragment.
 * `status` is the result's status, which a refused save keeps, and `failed`
   for a call refused before it has a result. `lint`'s is `failed` when a
   finding remains, and `selftest`'s when a case failed.

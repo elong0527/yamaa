@@ -258,7 +258,7 @@ platform: linux-x86_64
 
 | Command | Synopsis | Host equivalent |
 | --- | --- | --- |
-| `check` | `yamaa check PATH [--spec NAME]` | `s.check()`, `p.check()`, `p.spec(name).check()` |
+| `check` | `yamaa check PATH [--spec NAME \| --parent PATH]` | `s.check()`, `s.check(parent)` (#3694), `p.check()`, `p.spec(name).check()` |
 | `run` | `yamaa run PATH [--spec NAME \| --section SECTION]` | `run()`, then `save()`; prints the written paths |
 | `submission` | `yamaa submission PATH [--section SECTION] [--created TIME]` | `p.submission(section, created=...)`, then `save()` |
 | `resolve` | `yamaa resolve PATH [--spec NAME]` | `s.resolve()`; prints canonical JSON |
