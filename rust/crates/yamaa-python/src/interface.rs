@@ -12,7 +12,7 @@ use pyo3::{
     prelude::*,
     types::{PyBool, PyDict, PyInt, PyList, PyString, PyTuple},
 };
-use yamaa_boundary::{EngineFacts, Gate, Outcome, Value};
+use yamaa_boundary::{EngineFacts, Gate, Outcome, Value, DEPTH};
 
 /// The gate, which the first accepted handshake opens.
 static GATE: Gate = Gate::new();
@@ -36,7 +36,7 @@ pub fn _interface_handshake<'py>(
     let info = yamaa::info(yamaa::Host::Python, None);
     let engine = EngineFacts::new(&info.features, yamaa::VERSION, &info.language_versions);
     let record = PyDict::new(py);
-    match GATE.negotiate(&value(request), &engine) {
+    match GATE.negotiate(&value(request, 0), &engine) {
         Outcome::Accepted(accepted) => {
             record.set_item("accepted", true)?;
             record.set_item("version", accepted.version)?;
@@ -56,11 +56,13 @@ pub fn _interface_handshake<'py>(
     Ok(record)
 }
 
-/// A request as the boundary reads it: an `int` within 64 bits that is not
-/// a `bool` is an integer, a `str` text, a list or tuple a sequence and a
-/// dict whose keys are all `str` a mapping; anything else is no field of a
-/// request.
-fn value(object: &Bound<'_, PyAny>) -> Value {
+/// A request at `depth` below its mapping, as the boundary reads it, never
+/// deeper than [`DEPTH`]. An `int` within 64 bits that is not a `bool` is an
+/// integer and a `str` text at any depth; a list or tuple above the items is
+/// a sequence; and a dict is the request's mapping, where a key that is not a
+/// `str` reads as the empty key, which names no field. Anything else, or
+/// anything deeper, is no field of a request.
+fn value(object: &Bound<'_, PyAny>, depth: usize) -> Value {
     if object.is_instance_of::<PyBool>() {
         Value::Other
     } else if let Ok(integer) = object.cast::<PyInt>() {
@@ -70,20 +72,29 @@ fn value(object: &Bound<'_, PyAny>) -> Value {
     } else if let Ok(text) = object.cast::<PyString>() {
         text.to_str()
             .map_or(Value::Other, |text| Value::Text(text.to_owned()))
+    } else if depth >= DEPTH {
+        Value::Other
     } else if let Ok(list) = object.cast::<PyList>() {
-        Value::List(list.iter().map(|item| value(&item)).collect())
+        Value::List(list.iter().map(|item| value(&item, depth + 1)).collect())
     } else if let Ok(tuple) = object.cast::<PyTuple>() {
-        Value::List(tuple.iter().map(|item| value(&item)).collect())
-    } else if let Ok(mapping) = object.cast::<PyDict>() {
-        mapping
-            .iter()
-            .map(|(key, item)| {
-                let key = key.cast::<PyString>().ok()?.to_str().ok()?.to_owned();
-                Some((key, value(&item)))
-            })
-            .collect::<Option<Vec<_>>>()
-            .map_or(Value::Other, Value::Map)
+        Value::List(tuple.iter().map(|item| value(&item, depth + 1)).collect())
+    } else if let (0, Ok(mapping)) = (depth, object.cast::<PyDict>()) {
+        Value::Map(
+            mapping
+                .iter()
+                .map(|(key, item)| (key_text(&key), value(&item, depth + 1)))
+                .collect(),
+        )
     } else {
         Value::Other
     }
+}
+
+/// A key of the request's mapping as text, or the empty key, which names no
+/// field, when it is not a `str`.
+fn key_text(key: &Bound<'_, PyAny>) -> String {
+    key.cast::<PyString>()
+        .ok()
+        .and_then(|key| key.to_str().ok())
+        .map_or_else(String::new, str::to_owned)
 }

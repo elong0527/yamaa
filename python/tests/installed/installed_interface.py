@@ -9,6 +9,7 @@ each outcome was written by hand from the handshake's check order.
 """
 
 import json
+import pickle
 import shutil
 import subprocess
 import sys
@@ -82,10 +83,14 @@ def refused(requested, reason):
 
 def python_cases():
     """Requests that only Python builds, each with its authored outcome: a
-    float is no integer, a key must be text, text is no list, and a tuple is
-    a sequence as a list is."""
+    float is no integer, a key that is not text names no field but leaves the
+    version to be read first, text is no list, a tuple is a sequence as a list
+    is, and nothing deeper than a request's own shape is read."""
     required = TRUTH["request"]["required"]
     accepted = case("every required identifier and no optional one")["outcome"]
+    deep = []
+    for _ in range(100_000):
+        deep = [deep]
     return [
         (
             "a float version is malformed",
@@ -95,7 +100,17 @@ def python_cases():
         (
             "a mapping with a key that is not text is malformed",
             {"version": VERSION, "required": required, "optional": [], 1: []},
-            refused(None, "malformed_request"),
+            refused(VERSION, "malformed_request"),
+        ),
+        (
+            "another version with a key that is not text is a mismatch",
+            {"version": VERSION + 1, 1: []},
+            refused(VERSION + 1, "version_mismatch"),
+        ),
+        (
+            "a list nested a hundred thousand deep is malformed",
+            {"version": VERSION, "required": deep, "optional": []},
+            refused(VERSION, "malformed_request"),
         ),
         (
             "text where a list belongs is malformed",
@@ -260,14 +275,20 @@ class Interface(unittest.TestCase):
                 outcome = _native._interface_handshake(request)
                 self.assertEqual(outcome, expected)
                 if not expected["accepted"]:
+                    # An unpickled error is made again from its refusal.
                     error = yamaa.InterfaceError(outcome)
+                    copied = pickle.loads(pickle.dumps(error))
                     self.assertEqual(
-                        (
-                            isinstance(error, ImportError),
-                            str(error),
-                            {field: getattr(error, field) for field in FIELDS},
-                        ),
-                        (True, message(expected), expected),
+                        [
+                            (
+                                isinstance(each, ImportError),
+                                str(each),
+                                {field: getattr(each, field) for field in FIELDS},
+                            )
+                            for each in (error, copied)
+                        ],
+                        [(True, message(expected), expected)] * 2,
+                        f"{name}, as the error and as its unpickled copy",
                     )
 
     def test_a_native_module_without_the_handshake_refuses_import_as_missing_interface(

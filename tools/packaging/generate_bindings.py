@@ -1036,8 +1036,8 @@ def render_manifest(definition, public):
 
 def _check_gate(definition):
     """Every registered native function of each binding reaches the gate,
-    apart from the handshake and the R core version, which pairs with the
-    informational Python constant."""
+    apart from the handshake and the R core version, the R function of an
+    operation whose Python side is only the informational version constant."""
     handshake = definition["handshake"]
     constants = {
         export["name"]
@@ -1047,8 +1047,8 @@ def _check_gate(definition):
     informational = {
         name
         for hosts in definition["operations"].values()
-        if set(hosts["python"]) <= constants
-        for name in hosts["r"]
+        if hosts.get("python") and set(hosts["python"]) <= constants
+        for name in hosts.get("r", [])
     }
     python = [
         export["rust"].rpartition("::")[2]

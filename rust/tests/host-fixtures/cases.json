@@ -7063,7 +7063,7 @@
         "missing_feature": "yamaa's native module lacks the interface features {missing_features} that its code needs: reinstall yamaa",
         "missing_interface": "yamaa's native module has no interface handshake, but its code needs interface version {requested_version}: reinstall yamaa"
       },
-      "gate_message": "yamaa's native module has not negotiated its interface: load it through the yamaa package, which negotiates before any other call",
+      "gate_message": "yamaa's native module has not negotiated its interface: load it through the yamaa package, which negotiates first, or reinstall yamaa",
       "cases": [
         {
           "case": "every required identifier and no optional one",

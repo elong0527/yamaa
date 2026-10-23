@@ -30,8 +30,28 @@ class HandshakeTests(unittest.TestCase):
             with mock.patch.object(handshake, "BOUNDARY", boundary):
                 python = handshake.python_lines(self.definition)
                 r = handshake.r_lines(self.definition)
-        self.assertIn('    "version": 7,', python)
-        self.assertIn("  version = 7L,", r)
+        python = python[python.index("_INTERFACE_REQUEST = {") :][:5]
+        r = r[r.index(".interface_request <- list(") :][:5]
+        self.assertEqual(
+            {"python": python, "r": r},
+            {
+                "python": [
+                    "_INTERFACE_REQUEST = {",
+                    '    "version": 7,',
+                    '    "required": ["structured_records", "arrow_c_stream", "plan_reuse"],',
+                    '    "optional": ["format_yaml", "format_parquet", "format_readstat", "format_odm"],',
+                    "}",
+                ],
+                "r": [
+                    ".interface_request <- list(",
+                    "  version = 7L,",
+                    '  required = c("structured_records", "arrow_c_stream", "plan_reuse"),',
+                    '  optional = c("format_yaml", "format_parquet", "format_readstat", "format_odm")',
+                    ")",
+                ],
+            },
+            "each host's request asks for yamaa-boundary's version 7",
+        )
 
     def test_the_handshake_section_is_a_closed_grammar(self):
         def section(edit):
@@ -134,35 +154,57 @@ class HandshakeTests(unittest.TestCase):
                 ):
                     generator._check_gate(self.definition)
 
+    def test_only_the_informational_version_is_exempt_from_the_gate(self):
+        # The R function of an operation whose Python side is the version
+        # constant needs no gate; an operation with no Python side exempts
+        # nothing.
+        candidate = copy.deepcopy(self.definition)
+        candidate["operations"]["core_version"]["python"] = []
+        with self.assertRaisesRegex(
+            ValueError,
+            "r native functions that do not reach the interface gate: core_version",
+        ):
+            generator._check_gate(candidate)
+
     def test_each_load_negotiates_before_anything_else(self):
         # Python imports nothing else from the package before the handshake,
         # and R's .onLoad does nothing but negotiate.
         rendered = generator.render_all()
         module = rendered[generator.PUBLIC_PYTHON_TARGET].splitlines()
+        negotiation = module.index("_negotiate(_native)")
         imports = [
-            index
+            (index < negotiation, line)
             for index, line in enumerate(module)
             if re.match(r"from [\w.]+ import ", line)
         ]
-        negotiation = module.index("_negotiate(_native)")
+        wrappers = rendered[generator.R_WRAPPERS_TARGET].splitlines()
+        load = wrappers[wrappers.index(".onLoad <- function(libname, pkgname) {") :]
         self.assertEqual(
-            [module[index] for index in imports if index < negotiation],
-            ["from yamaa import _native"],
-        )
-        self.assertTrue(
-            all(
-                module[index].endswith("  # noqa: E402")
-                for index in imports
-                if index > negotiation
-            )
-        )
-        wrappers = rendered[generator.R_WRAPPERS_TARGET]
-        [load] = re.findall(
-            r"(?ms)^\.onLoad <- function\(libname, pkgname\) \{\n.*?^\}", wrappers
-        )
-        self.assertEqual(
-            re.findall(r"^  (\S.*)$", load, re.M)[:2],
-            ["namespace <- topenv()", ".interface_negotiate(function(name) {"],
+            {"python imports, before the negotiation or not": imports, "R load": load},
+            {
+                "python imports, before the negotiation or not": [
+                    (True, "from yamaa import _native"),
+                    (False, "from yamaa._native import Table  # noqa: E402"),
+                    (
+                        False,
+                        "from yamaa._support import __version__, _fspath, _fspaths, "
+                        "_Lazy  # noqa: E402",
+                    ),
+                ],
+                "R load": [
+                    ".onLoad <- function(libname, pkgname) {",
+                    "  namespace <- topenv()",
+                    "  .interface_negotiate(function(name) {",
+                    '    if (exists(paste0("wrap__", name), envir = namespace, '
+                    "inherits = FALSE)) {",
+                    '      get(paste0(".native_", name), envir = namespace, '
+                    "inherits = FALSE)",
+                    "    }",
+                    "  })",
+                    "}",
+                ],
+            },
+            "each load negotiates before anything else",
         )
 
 
