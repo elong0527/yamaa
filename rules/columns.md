@@ -429,9 +429,12 @@ A run registers every handler path before it reads any row, so a run reports
 a path even when it answers nothing. That covers every declared handler and
 every default substitution counted like one, a `partial` date and
 `not_after` included; the `multiple_matches` of each `keep`, on a source
-binding, a collected value or a named intermediate read; and each named
-intermediate read's `absent` at its reading path. A read that requires a
-match registers no `absent`.
+binding, a collected value or a named intermediate read, and of each named
+intermediate read that a `nearest` selection chooses for, which counts only
+records where more than one candidate had a distance
+([LOOKUP-26](lookup.md#lookup-26)); and each named intermediate read's
+`absent` at its reading path. A read that requires a match registers no
+`absent`.
 
 Handler rows come in registration order. The dataset's own paths come first:
 the `unconvertible` paths of the output derivations, in declaration order with

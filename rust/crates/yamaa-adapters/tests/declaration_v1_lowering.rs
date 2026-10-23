@@ -11,9 +11,8 @@ use std::fs;
 use std::path::Path;
 use yamaa_adapters::document::{self, Closures, PreparedSpecification, SpecificationError};
 use yamaa_adapters::specification_source::{Error, Source};
-use yamaa_core::ast::{
-    Comparator, ExprId, ExprKind, JoinKey, KeyDecl, Literal, ModelKind, Profile, Spec,
-};
+use yamaa_core::ast::{Comparator, ExprId, ExprKind, JoinKey, KeyDecl, Literal, Profile, Spec};
+use yamaa_core::cdisc_vocabulary::ModelKind;
 use yamaa_core::diagnostic::ConditionCode;
 use yamaa_core::expression::Context;
 use yamaa_core::inheritance::Source as GraphSource;
@@ -246,7 +245,7 @@ fn model_keys_and_profiles_lower_as_declared() {
     assert_eq!(spec.header.version.text, "1.0");
     assert_eq!(
         spec.model.as_ref().map(|model| model.kind),
-        Some(ModelKind::Adam)
+        Some(ModelKind::ADaM)
     );
     let input = |name: &str| spec.inputs.iter().find(|i| i.name.name == name).unwrap();
     assert_eq!(input("SRC").key, KeyDecl::Undeclared);

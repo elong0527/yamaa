@@ -160,7 +160,7 @@ Evidence: `negative-formula-flag`, `negative-row-aggregate`, `yaml/grammar/expre
 | Written in | Root | Admits | Refuses |
 | --- | --- | --- | --- |
 | a field typed `predicate` | a truth value, under [FORMULA-4](#formula-4) | comparisons, `IN`, `BETWEEN`, `LIKE`, `IS NULL`, `AND`, `OR`, `NOT`, every literal, `str_contains`, and in an operand arithmetic and the numeric functions | a reduction |
-| an expression field: `derivation`, a `derivations` entry, `then`, `otherwise`, a handled wrapper's `value` and a key match value | any value, for each current row | numbers, quoted text, temporal literals, `NULL`, names, arithmetic and the numeric functions | comparisons and `IN`, `BETWEEN`, `LIKE` and `IS NULL`; `AND`, `OR`, `NOT`, `TRUE` and `FALSE`; `str_contains`; a reduction |
+| an expression field: `derivation`, a `derivations` entry, `then`, `otherwise`, a handled wrapper's `value`, a key match value and a nearest selection's `to` | any value, for each current row | numbers, quoted text, temporal literals, `NULL`, names, arithmetic and the numeric functions | comparisons and `IN`, `BETWEEN`, `LIKE` and `IS NULL`; `AND`, `OR`, `NOT`, `TRUE` and `FALSE`; `str_contains`; a reduction |
 | `aggregate.expr` | a number, or a reduction that is the whole expression and keeps the type it reduces ([FORMULA-23](#formula-23)) | numbers, `NULL`, names, arithmetic, the numeric functions and the reducers of [FORMULA-18](#formula-18) | comparisons and `IN`, `BETWEEN`, `LIKE` and `IS NULL`; `AND`, `OR`, `NOT`, `TRUE` and `FALSE`; a string or temporal literal; `str_contains` |
 
 A function argument is also an expression field, and it admits one leaf

@@ -276,7 +276,7 @@ mod diagnostics {
 
             fn a_function_finding_carries_its_own_written_name() {
                 for (field, written, function) in [
-                    (Field::Compute, "  foo(1)", "foo"),
+                    (Field::Derivation, "  foo(1)", "foo"),
                     (Field::Aggregate, "  sumx(SRC.ID)", "sumx"),
                     (Field::Derivation, "  str_contains(A, 'x')", "str_contains"),
                 ] {

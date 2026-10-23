@@ -129,13 +129,14 @@ impl Walk<'_> {
             self.order.push(site.index());
         }
     }
-    /// The key expressions of a region's named intermediates, in order.
+    /// The key expressions of a region's named intermediates, in order,
+    /// each intermediate's keys before its nearest reference.
     fn keys(&mut self, region: RegionId) {
         let plan = self.plan;
         for relation in plan.region_relations(region) {
             let node = plan.relation(relation);
             if matches!(node.kind, RelationKind::Named { .. }) {
-                for key in &node.keys {
+                for key in node.keys.iter().chain(&node.nearest) {
                     if let KeyValue::Expr(expr) = key.value {
                         self.node(expr);
                     }

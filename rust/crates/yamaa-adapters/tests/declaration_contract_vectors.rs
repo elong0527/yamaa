@@ -250,7 +250,6 @@ mod declaration {
         fn context(name: &str) -> Context {
             match name {
                 "predicate" => Context::Predicate,
-                "compute" => Context::Compute,
                 "aggregate" => Context::Aggregate,
                 "derivation" => Context::Derivation,
                 _ => panic!("unknown expression context: {name}"),
@@ -336,7 +335,7 @@ mod declaration {
             let mut case = |context: &str, text: String, accepted: bool, condition: &str| {
                 cases.push(json!({"id":format!("{context}: {text}"), "context":context, "text":text, "parse":if accepted { "accept" } else { "reject" }, "condition":condition}));
             };
-            let contexts = ["predicate", "compute", "aggregate", "derivation"];
+            let contexts = ["predicate", "aggregate", "derivation"];
             for (name, arity) in document["vocabulary"]["function"].as_object().unwrap() {
                 let lower = arity["min_arguments"].as_u64().unwrap() as usize;
                 let upper = arity["max_arguments"].as_u64().map(|value| value as usize);
@@ -381,7 +380,7 @@ mod declaration {
                     "invalid_expression",
                 );
                 case("predicate", format!("D.{word} = 1"), true, "");
-                for context in ["compute", "aggregate", "derivation"] {
+                for context in ["aggregate", "derivation"] {
                     case(
                         context,
                         format!("1 + {}", word.to_ascii_lowercase()),
@@ -409,7 +408,7 @@ mod declaration {
                 .step_by(2)
             {
                 case("predicate", format!("A {operator} 1"), true, "");
-                for context in ["compute", "aggregate", "derivation"] {
+                for context in ["aggregate", "derivation"] {
                     case(
                         context,
                         format!("A {operator} 1"),
@@ -440,14 +439,12 @@ mod declaration {
                         !syntax && argument != "SUM(A)",
                         condition("nested_reduction"),
                     );
-                    for context in ["compute", "derivation"] {
-                        case(
-                            context,
-                            text.clone(),
-                            false,
-                            condition("prohibited_function"),
-                        );
-                    }
+                    case(
+                        "derivation",
+                        text.clone(),
+                        false,
+                        condition("prohibited_function"),
+                    );
                     case(
                         "predicate",
                         format!("{text} = 1"),
@@ -940,17 +937,15 @@ mod declaration {
                 ("'text'", "string"),
                 ("DATE '2025-06-01'", "temporal"),
             ] {
-                for family in ["numeric", "aggregate"] {
-                    let actual = syntax_outcome(family, text);
-                    assert_eq!(
-                        actual["condition"], "prohibited_construct",
-                        "{family}: {text}"
-                    );
-                    assert_eq!(
-                        actual["context"]["construct"], construct,
-                        "{family}: {text}"
-                    );
-                }
+                let actual = syntax_outcome("aggregate", text);
+                assert_eq!(
+                    actual["condition"], "prohibited_construct",
+                    "aggregate: {text}"
+                );
+                assert_eq!(
+                    actual["context"]["construct"], construct,
+                    "aggregate: {text}"
+                );
                 // An expression field admits quoted text and temporal literals.
                 let refused = match compile(text, Context::Derivation, "columns.RESULT.derivation")
                 {

@@ -119,10 +119,10 @@ pub fn findings(spec: &Spec) -> Vec<SchemaDiagnostic> {
                 ],
             });
         }
-        // A `unique` may warn only where `keep` and `order_by` choose the
-        // record every read takes (LOOKUP-17, D210); an `order_by` with no
-        // term orders nothing.
-        let chooses = item.keep.is_some() && !item.order_by.is_empty();
+        // A `unique` may warn only where a selection chooses the record
+        // every read takes: `keep` and `order_by`, or `nearest` (LOOKUP-17,
+        // D210, LOOKUP-26); an `order_by` with no term orders nothing.
+        let chooses = item.keep.is_some() && !item.order_by.is_empty() || item.nearest.is_some();
         for check in &item.checks {
             if check.severity == Severity::Warning && !chooses {
                 findings.push(SchemaDiagnostic {

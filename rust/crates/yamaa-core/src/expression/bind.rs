@@ -117,7 +117,7 @@ pub fn compile(
         syntax.root(),
         match context {
             Context::Predicate => Need::Truth,
-            Context::Compute | Context::Aggregate => Need::Number,
+            Context::Aggregate => Need::Number,
             Context::Derivation => Need::Value,
         },
     )?;
@@ -255,7 +255,7 @@ fn literal(kind: &NodeKind) -> Option<Value> {
 fn refuses(context: Context, construct: Construct) -> bool {
     match context {
         Context::Predicate => false,
-        Context::Compute | Context::Aggregate => true,
+        Context::Aggregate => true,
         Context::Derivation => matches!(construct, Construct::Comparison | Construct::Boolean),
     }
 }
@@ -287,9 +287,9 @@ impl Binder<'_> {
         }
     }
 
-    /// `compute` and `aggregate` refuse comparisons, Boolean logic and text or
-    /// temporal literals wherever they are written, and an expression field
-    /// refuses comparisons and Boolean logic; report the first one.
+    /// `aggregate` refuses comparisons, Boolean logic and text or temporal
+    /// literals wherever they are written, and an expression field refuses
+    /// comparisons and Boolean logic; report the first one.
     fn refused_constructs(&self) -> Result<(), CompileError> {
         let refused = self
             .syntax

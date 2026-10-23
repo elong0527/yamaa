@@ -1,0 +1,78 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int, ASTDTM: datetime}}
+  EX: {path: input/ex.csv, types: {EXSEQ: int, EXDOSE: float}}
+base: AE
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, ASTDTM, EXSEQ, EXSTDTM, EXDOSE]
+
+intermediates:
+  # The subject's dose given nearest in time to the event's start. A dose
+  # whose collected start has no time is placed at midnight; one with no
+  # start, or a start that stops before the day, has no time to measure
+  # from and is never read, nor is any dose for an event with no start.
+  - id: DOSE
+    dataset: EX
+    key: [STUDYID, USUBJID]
+    nearest: {source: EXSTDTM, to: ASTDTM, unit: minute}
+    columns: [EXSEQ, EXSTDTM, EXDOSE]
+    derivations:
+      EXSTDTM:
+        impute:
+          type: datetime
+          source: EXSTDTC
+          time: first
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: ASTDTM
+    type: datetime
+    label: Analysis Start Date/Time
+    derivation: AE.ASTDTM
+
+  - name: EXSEQ
+    type: int
+    label: Sequence Number of the Nearest Dose
+    derivation: DOSE.EXSEQ
+
+  - name: EXSTDTM
+    type: datetime
+    label: Start Date/Time of the Nearest Dose
+    derivation: DOSE.EXSTDTM
+
+  - name: EXDOSE
+    type: float
+    label: Dose of the Nearest Dose
+    derivation: DOSE.EXDOSE
+
+verifications:
+  - row_count:
+      min: 3
+      max: 3
+  - all_or_none:
+      id: nearest-dose-columns-travel-together
+      columns: [EXSEQ, EXSTDTM, EXDOSE]
+  - assert:
+      id: an-event-without-a-start-has-no-dose
+      when: "ASTDTM IS NULL"
+      require: "EXSEQ IS NULL"

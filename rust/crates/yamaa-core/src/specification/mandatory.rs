@@ -6,9 +6,10 @@ use super::*;
 use crate::json::Value as V;
 use crate::{
     ast::{self, ColumnCheckKind, SubmissionMetadata},
+    cdisc_vocabulary::{Core, DatasetClass},
     dataset::{Check, RowScope, Verification, WhereClause},
     diagnostic::{ConditionCode as C, Diagnostic},
-    specification_submission_document::{resolve_mandatory, Core, DatasetClass},
+    specification_submission_document::resolve_mandatory,
     submission_values as values,
 };
 

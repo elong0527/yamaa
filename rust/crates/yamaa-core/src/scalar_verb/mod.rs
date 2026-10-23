@@ -29,6 +29,8 @@ mod str_pad;
 mod str_template;
 mod temporal;
 
+pub(crate) use temporal::difference;
+
 use crate::ast::{self, ExprId, ExprKind, ScalarOp, Slot, Spec};
 use crate::dataset::{
     Assignment, ContextualMatch, Expression, Imputation, MatchRead, MatchValue, Rounding, Temporal,

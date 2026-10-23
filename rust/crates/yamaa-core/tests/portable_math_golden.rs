@@ -51,7 +51,7 @@ fn portable_math_matches_exact_bits_and_domain_failures() {
             "POWER" => "POWER(A, B)",
             _ => panic!("unexpected function {function}"),
         };
-        let plan = compile(expression, Context::Compute, "columns.VALUE.derivation").unwrap();
+        let plan = compile(expression, Context::Derivation, "columns.VALUE.derivation").unwrap();
         let mut resolver = Inputs {
             values: [input(left), input(right)],
             resolutions: Vec::new(),

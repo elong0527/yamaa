@@ -397,9 +397,9 @@ class StagingTests(unittest.TestCase):
             )
 
     def test_shared_grammar_inputs_cover_every_context(self):
-        """The hosts replay every case that a public field reads, each in a 1.0
-        specification, since the engine reads only 1.0 specifications; no
-        public field reads the `compute` context."""
+        """The hosts replay every case, each in a 1.0 specification, since the
+        engine reads only 1.0 specifications and a public field reads each
+        context."""
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory) / "grammar-original"
             grammar.stage(destination)
@@ -422,13 +422,11 @@ class StagingTests(unittest.TestCase):
         self.assertEqual(list(grammar.CONTEXTS), declared)
         self.assertEqual(
             {row["context"] for row in staged if row["contract"] == "expression"},
-            set(declared) - {"compute"},
+            set(declared),
         )
         every = [case for document in documents.values() for case in document["cases"]]
         every += grammar.expansions(documents["expression"])
-        self.assertEqual(
-            len(staged), len([case for case in every if grammar.public(case)])
-        )
+        self.assertEqual(len(staged), len(every))
 
     def test_unread_inputs_follow_gitignore_order_and_refuse_stale_patterns(self):
         with tempfile.TemporaryDirectory() as directory:

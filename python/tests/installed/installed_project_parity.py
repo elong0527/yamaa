@@ -4,7 +4,8 @@ Each case of the shared `project-parity` truth writes its files, makes one
 call and compares every issue row it returns with the authored rows, all
 twelve columns of D28 (#3030): the issues of a project check, a listed
 specification's issues in a project run, the run of a specification the
-project names, or a submission. A case
+project names, or a submission. A case that makes several calls on its
+files lists each with its rows under `calls`. A case
 whose files or rows depend on the host language names them under
 `host_files` and under `issues` by language. `{root}` stands for the
 directory the case is written in, resolved, with forward slashes, and
@@ -46,11 +47,16 @@ def issues(call, root):
     raise ValueError(f"unknown operation: {operation}")
 
 
-def expected(case, root):
-    """The case's rows for this host, with each stand-in filled and each
+def calls(case):
+    """The case's calls, each with its rows: those it lists under `calls`, or
+    its one `call` and `issues`."""
+    return case.get("calls") or [{"call": case["call"], "issues": case["issues"]}]
+
+
+def expected(rows, root):
+    """A call's rows for this host, with each stand-in filled and each
     `file`, written relative to the case's directory, as a location names
     it: the absolute path, resolved, with forward slashes (P-ISSUE-1)."""
-    rows = case["issues"]
     if isinstance(rows, dict):
         rows = rows[HOST]
     values = {"{root}": root.as_posix(), "{version}": yamaa.__version__}
@@ -89,11 +95,14 @@ class ProjectParity(unittest.TestCase):
                     target = root / name
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_bytes(text.encode("utf-8"))
-                self.assertEqual(
-                    issues(case["call"], root).to_pylist(),
-                    expected(case, root),
-                    case["name"],
-                )
+                for entry in calls(case):
+                    operation = entry["call"]["operation"]
+                    with self.subTest(case=case["name"], call=operation):
+                        self.assertEqual(
+                            issues(entry["call"], root).to_pylist(),
+                            expected(entry["issues"], root),
+                            f"{case['name']}: {operation}",
+                        )
 
 
 if __name__ == "__main__":

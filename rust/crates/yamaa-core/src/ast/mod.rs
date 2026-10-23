@@ -27,14 +27,14 @@ pub use expr::{
 pub use path::{PathId, Paths, Segment};
 pub use project::{
     Codelist, CodelistDeclaration, CodelistItem, CodelistSource, CodelistType, Codelists,
-    DefineContext, DocumentKind, ExternalDictionary, Function, FunctionDeclaration, FunctionTest,
-    GuideStatus, HostEnvironment, Implementation, ImplementationGuide, MetadataVersion, Parameter,
-    Project, Section, Study, SubmissionDeclarations, SubmissionRefused, SupportingDocument,
-    TerminologyStandard, Transport, STANDARD_NAMES,
+    DocumentKind, ExternalDictionary, Function, FunctionDeclaration, FunctionTest, HostEnvironment,
+    Implementation, ImplementationGuide, MetadataVersion, Parameter, Project, Section, Study,
+    SubmissionDeclarations, SubmissionRefused, SupportingDocument, TerminologyStandard, Transport,
 };
 pub use traversal::{Children, Filtered, Ordered, Owner, Read, Role, Scope, Site, Step};
 pub use types::{result_type, Table, TypeEnv};
 
+use crate::cdisc_vocabulary::{ModelKind, WhereComparator};
 use crate::value::ColumnType;
 
 /// Where a node is, in the spec and in its file.
@@ -142,24 +142,6 @@ pub struct Header {
 pub struct Model {
     pub kind: ModelKind,
     pub meta: Meta,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ModelKind {
-    Sdtm,
-    Send,
-    Adam,
-}
-
-impl ModelKind {
-    /// The model as `model` writes it.
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Sdtm => "SDTM",
-            Self::Send => "SEND",
-            Self::Adam => "ADaM",
-        }
-    }
 }
 
 /// One resolved specification: composed, pruned and admitted.
@@ -327,6 +309,9 @@ pub struct Intermediate {
     pub filter: Option<ExprId>,
     pub order_by: Vec<OrderTerm>,
     pub keep: Option<Keep>,
+    /// The selection by distance that replaces `order_by` and `keep`
+    /// (LOOKUP-26).
+    pub nearest: Option<Nearest>,
     pub columns: Option<Vec<Named>>,
     /// `absent`, the answer when the lookup selects no record (P-HND-1); it
     /// answers no variable that does not exist where it is read (D67).
@@ -334,10 +319,43 @@ pub struct Intermediate {
     pub require_match: bool,
     pub bindings: Vec<Binding>,
     pub checks: Vec<UniqueCheck>,
-    /// Of `key`, `between`, `filter`, `order_by`, `keep`, `columns`,
-    /// `derivations`, `verifications`, the absence answer and
+    /// Of `key`, `between`, `filter`, `order_by`, `keep`, `nearest`,
+    /// `columns`, `derivations`, `verifications`, the absence answer and
     /// `require_match`.
     pub written: Written,
+    pub meta: Meta,
+}
+
+impl Intermediate {
+    /// The current-row values the lookup reads before any record: each key
+    /// pair's match value, then the `to` of its nearest selection, which is
+    /// read as a key match value is (LOOKUP-5, LOOKUP-26).
+    pub fn match_values(&self) -> impl Iterator<Item = ExprId> + '_ {
+        let pairs = match &self.key {
+            Some(JoinKey::Pairs { pairs, .. }) => pairs.as_slice(),
+            _ => &[],
+        };
+        pairs
+            .iter()
+            .map(|&(_, value)| value)
+            .chain(self.nearest.as_ref().map(|nearest| nearest.to))
+    }
+}
+
+/// `nearest: {source, to, unit}` (LOOKUP-26): of the candidates, the one
+/// whose date or datetime `source` lies nearest the current row's `to`,
+/// counted in `unit` as `diff` counts it (TIME-4).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Nearest {
+    /// The donor field, stored or derived, written bare.
+    pub source: Named,
+    /// The current-row value, read as a key match value is (LOOKUP-5).
+    pub to: ExprId,
+    /// The `to` field itself, where a name written alone is read, as a key
+    /// pair's meta is for its value.
+    pub to_field: Meta,
+    /// The unit as written; `None` when the schema refused it.
+    pub unit: Option<TimeUnit>,
     pub meta: Meta,
 }
 
@@ -564,13 +582,21 @@ impl Comparator {
             Self::NotIn => count >= 2,
         }
     }
+    /// The comparison a written `comparator` states: `NE`, or else `NOTIN`,
+    /// the one other spelling admission leaves.
+    pub fn written_as(spelling: &str) -> Self {
+        match WhereComparator::from_name(spelling) {
+            Some(WhereComparator::Ne) => Self::Ne,
+            Some(WhereComparator::Notin) | None => Self::NotIn,
+        }
+    }
     /// The spelling a written comparator has (`NE` or `NOTIN`), or none for
     /// a bare list.
     pub fn written(self) -> Option<&'static str> {
         match self {
             Self::In => None,
-            Self::Ne => Some("NE"),
-            Self::NotIn => Some("NOTIN"),
+            Self::Ne => Some(WhereComparator::Ne.name()),
+            Self::NotIn => Some(WhereComparator::Notin.name()),
         }
     }
 }

@@ -89,6 +89,52 @@ impl IntermediateDerivations {
     }
 }
 
+/// A selection by distance (LOOKUP-26): of the candidates, the one whose
+/// `source` lies nearest the current row's reference, counted in the
+/// declared unit as `diff` counts it (TIME-4). A tie goes to the earlier
+/// `source`, then to stored order, and a candidate whose distance is missing
+/// is never chosen.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Nearest {
+    /// The donor column, stored or derived, whose type is `date` or
+    /// `datetime`.
+    pub source: usize,
+    /// The current row's value, read as a key match value is: its
+    /// `source_column` is [`Self::source`] and its path is the `to` field's.
+    pub reference: IntermediateKey,
+    /// The signed difference from a candidate's `source` to the reference,
+    /// in the declared unit (TIME-4).
+    pub difference: Temporal,
+}
+
+impl Nearest {
+    /// The type of the source, which the reference shares.
+    pub fn source_type(&self) -> crate::value::ValueType {
+        match self.difference.kind() {
+            TemporalKind::DateTimeDifference { .. } => crate::value::ValueType::DateTime,
+            _ => crate::value::ValueType::Date,
+        }
+    }
+    /// A candidate's distance to the reference: the absolute value of the
+    /// difference from its `source` to `reference`, missing when either is
+    /// missing.
+    pub fn distance(
+        &self,
+        source: &Value,
+        reference: &Value,
+    ) -> Result<Value, crate::diagnostic::Diagnostic> {
+        let step = self
+            .difference
+            .apply_values(&[source.clone(), reference.clone()])
+            .expect("a difference reads two operands")?;
+        Ok(match step {
+            TemporalStep::Value(Value::Int(count)) => Value::Int(count.saturating_abs()),
+            TemporalStep::Value(Value::Float(amount)) => Value::float(amount.get().abs()),
+            TemporalStep::Value(_) | TemporalStep::Invalid => Value::Missing,
+        })
+    }
+}
+
 /// A named secondary record selector with literal absence handling.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Intermediate {
@@ -98,6 +144,9 @@ pub struct Intermediate {
     pub keys: Vec<IntermediateKey>,
     pub filter: Option<RelationPredicate>,
     pub selection: Option<SourceSelection>,
+    /// The selection by distance, which a declaration writes instead of
+    /// `order_by` and `keep` (LOOKUP-26).
+    pub nearest: Option<Nearest>,
     pub range: Option<RelationRange>,
     /// Visible selected fields; donor keys, filters and order still see every slot.
     pub columns: Option<Vec<usize>>,
@@ -146,6 +195,7 @@ impl Intermediate {
     pub fn output_dependencies(&self) -> impl Iterator<Item = usize> + '_ {
         self.keys
             .iter()
+            .chain(self.nearest.iter().map(|nearest| &nearest.reference))
             .flat_map(|key| key.value.reads())
             .filter_map(MatchRead::output_column)
             .chain(
@@ -230,9 +280,9 @@ fn contains_window(expression: &Expression) -> bool {
 }
 
 /// The handlers a read of a named intermediate counts at the reading path:
-/// `multiple_matches` when `keep` chose among several candidates
-/// (LOOKUP-10), and `absent` when no candidate survived and no
-/// `require_match` fails the read instead (LOOKUP-24, D202).
+/// `multiple_matches` when `keep` or `nearest` chose among several
+/// candidates (LOOKUP-10, LOOKUP-26), and `absent` when no candidate survived
+/// and no `require_match` fails the read instead (LOOKUP-24, D202).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ReadHandlers {
     pub multiple_matches: bool,
@@ -248,7 +298,7 @@ pub fn read_handlers(intermediates: &[Intermediate]) -> Vec<ReadHandlers> {
     intermediates
         .iter()
         .map(|item| ReadHandlers {
-            multiple_matches: item.selection.is_some(),
+            multiple_matches: item.selection.is_some() || item.nearest.is_some(),
             absent: !item.require_match,
         })
         .collect()

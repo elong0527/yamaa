@@ -146,8 +146,9 @@ fn compute_and_reduction_reject_known_text_without_evaluation() {
     );
 }
 
-/// EXPR-14: `compute` and `aggregate` take their type from their operands by
-/// VALUE-10 and FORMULA-23, int while every operator and operand keeps int.
+/// EXPR-14: expression-field text and `aggregate` take their type from their
+/// operands by VALUE-10 and FORMULA-23, int while every operator and operand
+/// keeps int.
 #[test]
 fn numeric_and_aggregate_result_types_follow_their_operands() {
     use crate::expression::{compile, Context};
@@ -159,24 +160,36 @@ fn numeric_and_aggregate_result_types_follow_their_operands() {
         _ => ResultType::UNKNOWN,
     };
     let result = |text: &str, context| compile(text, context, "result").unwrap().result_type(kinds);
-    assert_eq!(result("A + 1", Context::Compute), ResultType::INT);
+    assert_eq!(result("A + 1", Context::Derivation), ResultType::INT);
     assert_eq!(
-        result("ABS(A) * MOD(A, 3)", Context::Compute),
+        result("ABS(A) * MOD(A, 3)", Context::Derivation),
         ResultType::INT
     );
-    assert_eq!(result("A + B", Context::Compute), ResultType::FLOAT);
-    assert_eq!(result("A / 1", Context::Compute), ResultType::FLOAT);
-    assert_eq!(result("FLOOR(A)", Context::Compute), ResultType::FLOAT);
+    assert_eq!(result("A + B", Context::Derivation), ResultType::FLOAT);
+    assert_eq!(result("A / 1", Context::Derivation), ResultType::FLOAT);
+    assert_eq!(result("FLOOR(A)", Context::Derivation), ResultType::FLOAT);
     assert_eq!(
-        result("A + POWER(B, 2) / -3", Context::Compute),
+        result("A + POWER(B, 2) / -3", Context::Derivation),
         ResultType::FLOAT
     );
-    assert_eq!(result("NULLIF(A, 0)", Context::Compute), ResultType::INT);
-    assert_eq!(result("NULLIF(A, B)", Context::Compute), ResultType::FLOAT);
-    assert_eq!(result("NULLIF(B, A)", Context::Compute), ResultType::FLOAT);
-    assert_eq!(result("NULLIF(A, NULL)", Context::Compute), ResultType::INT);
-    assert_eq!(result("A + NULL", Context::Compute), ResultType::MISSING);
-    assert_eq!(result("UNTYPED + 1", Context::Compute), ResultType::NUMBER);
+    assert_eq!(result("NULLIF(A, 0)", Context::Derivation), ResultType::INT);
+    assert_eq!(
+        result("NULLIF(A, B)", Context::Derivation),
+        ResultType::FLOAT
+    );
+    assert_eq!(
+        result("NULLIF(B, A)", Context::Derivation),
+        ResultType::FLOAT
+    );
+    assert_eq!(
+        result("NULLIF(A, NULL)", Context::Derivation),
+        ResultType::INT
+    );
+    assert_eq!(result("A + NULL", Context::Derivation), ResultType::MISSING);
+    assert_eq!(
+        result("UNTYPED + 1", Context::Derivation),
+        ResultType::NUMBER
+    );
     assert_eq!(result("SUM(EX.COUNT)", Context::Aggregate), ResultType::INT);
     assert_eq!(result("COUNT(EX.*)", Context::Aggregate), ResultType::INT);
     assert_eq!(
@@ -303,9 +316,12 @@ fn repeated_type_findings_keep_the_complete_ordered_context() {
             .collect();
     }
     let expression = terms.pop().unwrap();
-    let plan =
-        crate::expression::compile(&expression, crate::expression::Context::Compute, "result")
-            .unwrap();
+    let plan = crate::expression::compile(
+        &expression,
+        crate::expression::Context::Derivation,
+        "result",
+    )
+    .unwrap();
     let findings = numeric_kinds(&plan, |_| Some(crate::value::ValueType::Str));
     assert_eq!(findings.len(), 1024);
     for (index, finding) in findings.iter().enumerate() {

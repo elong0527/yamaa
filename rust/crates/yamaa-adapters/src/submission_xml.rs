@@ -7,6 +7,7 @@ use std::collections::BTreeSet;
 use yamaa_core::{
     application_issue::{Fault, Step},
     ast,
+    cdisc_vocabulary::{PublishingSet, StandardName},
     define_diagnostics::{xml_invalid, xml_whitespace},
     diagnostic::ConditionCode,
     limits::Limits,
@@ -460,13 +461,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         .optional("Originator", section.originator.as_ref().map(|v| &v.text))
         .attr("SourceSystem", "yamaa")
         .attr("SourceSystemVersion", study.source_version())
-        .attr(
-            "def:Context",
-            match section.context {
-                ast::DefineContext::Submission => "Submission",
-                ast::DefineContext::Other => "Other",
-            },
-        );
+        .attr("def:Context", section.context.name());
     let declared = study.study();
     let mut root = Element::new("Study", "study").attr("OID", format!("STDY.{}", declared.id.name));
     let mut globals = Element::new("GlobalVariables", "study");
@@ -727,15 +722,14 @@ fn validate_profile(study: &Study) -> Result<(), Finding> {
     // immutable writer fixes element order/cardinality and generated references;
     // independent installed tests validate bytes with the unchanged official XSD.
     for standard in study.standards() {
-        if !ast::STANDARD_NAMES.contains(&standard.name.as_str()) {
+        if StandardName::from_name(&standard.name).is_none() {
             return Err(xml_invalid("standards", "StandardName enumeration"));
         }
-        if standard.publishing_set.as_ref().is_some_and(|set| {
-            !matches!(
-                set.as_str(),
-                "ADaM" | "CDASH" | "DEFINE-XML" | "SDTM" | "SEND"
-            )
-        }) {
+        if standard
+            .publishing_set
+            .as_ref()
+            .is_some_and(|set| PublishingSet::from_name(set).is_none())
+        {
             return Err(xml_invalid(
                 "standards",
                 "StandardPublishingSet enumeration",
