@@ -62,12 +62,13 @@ use arrow_array::{RecordBatch, RecordBatchReader};
 use arrow_schema::{ArrowError, Schema, SchemaRef};
 use yamaa_adapters::application_measurements::Measurements;
 
-use crate::api::{Failure, Run};
+use crate::api::{Failure, Run, Status};
 use crate::cancel::CancellationToken;
 use crate::engine::Engine;
 use crate::error::{Error, TableError};
 use crate::internal::{EngineShared, PublicBatches};
 use crate::plan::Plan;
+use crate::table::Table;
 use crate::text::Action;
 
 /// Where a streamed run stands.
@@ -255,6 +256,12 @@ impl Streamed {
         self.shared.schema.as_ref()
     }
 
+    /// What the run's printed text and refusals name: the dataset name once
+    /// its compilation read it, or else the path as given.
+    pub fn subject(&self) -> &str {
+        &self.shared.subject
+    }
+
     /// Where the run stands.
     pub fn progress(&self) -> Result<Progress, Error> {
         Ok(match &*self.shared.lock()? {
@@ -312,6 +319,23 @@ impl Streamed {
             State::Unread(_) | State::Taken(_) | State::Producing { .. } => {
                 Err(Error::Stream { code: "stream_open" })
             }
+        }
+    }
+
+    /// The output read whole: the table the run keeps once it ran whole,
+    /// which it does now when nobody has started to read its output. A
+    /// failed run refuses with its issues ([`Error::Rejected`]), a run whose
+    /// output was read as a stream with the `stream_taken` code of
+    /// [`Error::Stream`], and otherwise this refuses as [`Streamed::run`]
+    /// does.
+    pub fn table(&self) -> Result<Table, Error> {
+        let run = self.run()?;
+        match run.output() {
+            Some(table) => Ok(table.clone()),
+            None if run.status() == Status::Failed => Err(failure(&run)),
+            None => Err(Error::Stream {
+                code: "stream_taken",
+            }),
         }
     }
 }

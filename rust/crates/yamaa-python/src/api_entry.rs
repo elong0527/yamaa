@@ -45,55 +45,124 @@ fn poisoned() -> PyErr {
     pyo3::exceptions::PyRuntimeError::new_err("run handle is in use or poisoned")
 }
 
+/// A streamed run's refusal of a reader or of its result (#3697): a boundary
+/// refusal, raised as `RuntimeError` as a busy handle's is, with D39's text
+/// of reading the run, such as `cannot read DM: operation cancelled`.
+pub(crate) fn refusal(streamed: &yamaa::Streamed, error: &Error) -> PyErr {
+    pyo3::exceptions::PyRuntimeError::new_err(
+        Failure::from_error(Action::Read(streamed.subject()), error).message,
+    )
+}
+
+/// A run built whole, or a streamed run (#3697), whose result is known once
+/// its output's stream ends.
+enum Held {
+    Built(Mutex<yamaa::Run>),
+    Streamed(Arc<yamaa::Streamed>),
+}
+
 #[pyclass(frozen, module = "yamaa._native", name = "_Run")]
 pub struct Run {
-    pub(crate) inner: Arc<Mutex<yamaa::Run>>,
+    held: Held,
     _live: Live,
 }
 
 impl Run {
     pub(crate) fn new(run: yamaa::Run) -> Self {
+        Self::held(Held::Built(Mutex::new(run)))
+    }
+
+    fn streamed(streamed: yamaa::Streamed) -> Self {
+        Self::held(Held::Streamed(Arc::new(streamed)))
+    }
+
+    fn held(held: Held) -> Self {
         Self {
-            inner: Arc::new(Mutex::new(run)),
+            held,
             _live: CENSUS.hold(HandleKind::Run),
         }
+    }
+
+    /// Read the run's result with `read`. A streamed run nobody started to
+    /// read runs whole first, inside a native call that raises its
+    /// interrupt again (D46); one whose stream has not ended, or that was
+    /// cancelled, refuses.
+    fn result<T>(
+        &self,
+        py: Python<'_>,
+        read: impl FnOnce(&mut yamaa::Run) -> PyResult<T>,
+    ) -> PyResult<T> {
+        match &self.held {
+            Held::Built(run) => read(&mut *run.try_lock().map_err(|_| poisoned())?),
+            Held::Streamed(streamed) => crate::interrupt::run(py, |_| {
+                let mut run = streamed.run().map_err(|error| refusal(streamed, &error))?;
+                read(&mut run)
+            }),
+        }
+    }
+}
+
+/// A streamed run's output: its stream, read through a table, or, once the
+/// run ran whole, the table it keeps; none for a failed run.
+fn streamed_output(streamed: &Arc<yamaa::Streamed>) -> PyResult<Option<Table>> {
+    let progress = streamed
+        .progress()
+        .map_err(|error| refusal(streamed, &error))?;
+    match progress {
+        yamaa::Progress::Cancelled => Err(refusal(streamed, &Error::Cancelled)),
+        yamaa::Progress::Ended => {
+            let run = streamed.run().map_err(|error| refusal(streamed, &error))?;
+            Ok(match run.output() {
+                Some(table) => Some(Table::from(table)),
+                None if run.status() == yamaa::Status::Failed => None,
+                None => Some(Table::stream(Arc::clone(streamed))),
+            })
+        }
+        _ => Ok(Some(Table::stream(Arc::clone(streamed)))),
     }
 }
 
 #[pymethods]
 impl Run {
-    fn status(&self) -> PyResult<&'static str> {
-        let guard = self.inner.try_lock().map_err(|_| poisoned())?;
-        Ok(guard.status().as_str())
+    fn status(&self, py: Python<'_>) -> PyResult<&'static str> {
+        self.result(py, |run| Ok(run.status().as_str()))
     }
     fn output(&self) -> PyResult<Option<Table>> {
-        let guard = self.inner.try_lock().map_err(|_| poisoned())?;
-        Ok(guard.output().map(Table::from))
+        match &self.held {
+            Held::Built(run) => Ok(run
+                .try_lock()
+                .map_err(|_| poisoned())?
+                .output()
+                .map(Table::from)),
+            Held::Streamed(streamed) => streamed_output(streamed),
+        }
     }
-    fn issues(&self) -> PyResult<Table> {
-        let guard = self.inner.try_lock().map_err(|_| poisoned())?;
-        Ok(Table::from(&guard.issues()))
+    fn issues(&self, py: Python<'_>) -> PyResult<Table> {
+        self.result(py, |run| Ok(Table::from(&run.issues())))
     }
-    fn report(&self) -> PyResult<Option<Table>> {
-        let guard = self.inner.try_lock().map_err(|_| poisoned())?;
-        Ok(guard.report().map(Table::from))
+    fn report(&self, py: Python<'_>) -> PyResult<Option<Table>> {
+        self.result(py, |run| Ok(run.report().map(Table::from)))
     }
     fn save(&self, py: Python<'_>) -> PyResult<Vec<String>> {
         crate::interrupt::run(py, |token| {
-            let saved = self.inner.try_lock().map_err(|_| poisoned())?.save(token);
+            let saved = match &self.held {
+                Held::Built(run) => run.try_lock().map_err(|_| poisoned())?.save(token),
+                Held::Streamed(streamed) => streamed
+                    .run()
+                    .map_err(|error| refusal(streamed, &error))?
+                    .save(token),
+            };
             saved.map_err(|failure| raise(py, failure))
         })
     }
     /// The printed text (D37), which `repr()` returns.
-    fn summary(&self) -> PyResult<String> {
-        let guard = self.inner.try_lock().map_err(|_| poisoned())?;
-        Ok(guard.summary().to_string())
+    fn summary(&self, py: Python<'_>) -> PyResult<String> {
+        self.result(py, |run| Ok(run.summary().to_string()))
     }
     /// Private installed-run evidence for qualification suites.
     #[pyo3(signature=(include_measurements=false))]
-    fn observations(&self, include_measurements: bool) -> PyResult<Option<String>> {
-        let guard = self.inner.try_lock().map_err(|_| poisoned())?;
-        Ok(guard.observations(include_measurements))
+    fn observations(&self, py: Python<'_>, include_measurements: bool) -> PyResult<Option<String>> {
+        self.result(py, |run| Ok(run.observations(include_measurements)))
     }
 }
 
@@ -180,23 +249,35 @@ pub fn _plans() -> PyResult<Plans> {
     })
 }
 
+/// A run of one specification: built now, or with `stream` built as its
+/// output is read (#3697), polling a token of its own from then on.
 #[pyfunction]
-#[pyo3(signature=(specification, project=None, plans=None))]
+#[pyo3(signature=(specification, project=None, plans=None, stream=false))]
 pub fn _spec_run(
     py: Python<'_>,
     specification: &str,
     project: Option<&str>,
     plans: Option<PyRef<'_, Plans>>,
+    stream: bool,
 ) -> PyResult<Run> {
     crate::interrupt::run(py, |token| {
         let engine = engine(py)?;
+        let refused = |error| raise_error(py, Action::Read(specification), error);
+        if stream {
+            let once = yamaa::Plans::new();
+            let plans = plans.as_deref().map_or(&once, |plans| &plans.inner);
+            let token = crate::interrupt::stream_token();
+            return engine
+                .spec_stream(specification, project, plans, &token)
+                .map(Run::streamed)
+                .map_err(refused);
+        }
         let run = match plans.as_deref() {
             Some(plans) => engine.spec_run_reusing(specification, project, &plans.inner, token),
             None => engine.spec_run(specification, project, token),
         }
-        .map_err(|error| raise_error(py, Action::Read(specification), error))?;
-        let run = Run::new(run);
-        Ok(run)
+        .map_err(refused)?;
+        Ok(Run::new(run))
     })
 }
 

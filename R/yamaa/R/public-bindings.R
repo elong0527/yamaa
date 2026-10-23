@@ -154,9 +154,9 @@ format.yamaa_submission <- function(x, ...) {
   object$.path <- path
   object$check <- function() .check(.reply(.native_spec_check(path, project, .version())))
   object$resolve <- function() .reply(.native_spec_resolve(path, project, .version()))
-  object$run <- function() {
+  object$run <- function(stream = FALSE) {
     plans <<- .reply(.native_plans(plans))
-    .run(.reply(.native_spec_run(path, project, .version(), .capabilities(), plans)))
+    .run(.reply(.native_spec_run(path, project, .version(), .capabilities(), plans, stream)))
   }
   .object(object, "yamaa_spec")
 }

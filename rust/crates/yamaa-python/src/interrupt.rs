@@ -40,6 +40,45 @@ pub(super) fn remember(py: Python<'_>, error: &PyErr) {
     }
 }
 
+/// Whether the call that keeps `state` is interrupted: an interrupt it kept,
+/// or a pending signal, which it then keeps.
+fn poll(state: &State) -> bool {
+    if state
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .is_some()
+    {
+        return true;
+    }
+    Python::attach(|py| match py.check_signals() {
+        Ok(()) => false,
+        Err(error) => {
+            keep(state, error);
+            true
+        }
+    })
+}
+
+/// The token of a streamed run (#3697), which outlives the call that
+/// started it. On the thread that started the run, its probe polls as the
+/// native call that is running does, which keeps the interrupt and raises
+/// it again; with no native call running, as when another library pulls
+/// the run's Arrow stream, it checks the pending signals, whose interrupt
+/// ends the stream as cancelled. On any other thread it never touches the
+/// interpreter.
+pub(super) fn stream_token() -> CancellationToken {
+    let owner = std::thread::current().id();
+    CancellationToken::with_probe(move || {
+        if std::thread::current().id() != owner {
+            return false;
+        }
+        match ACTIVE.with(|active| active.borrow().clone()) {
+            Some(state) => poll(&state),
+            None => Python::attach(|py| py.check_signals().is_err()),
+        }
+    })
+}
+
 /// Install the call's probe, run the engine, then raise the original interrupt
 /// in preference to cancellation's payload-free facade error.
 pub(super) fn run<T>(
@@ -52,22 +91,7 @@ pub(super) fn run<T>(
         _thread: std::marker::PhantomData,
     };
     let polled = Arc::clone(&state);
-    let token = CancellationToken::with_probe(move || {
-        if polled
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .is_some()
-        {
-            return true;
-        }
-        Python::attach(|py| match py.check_signals() {
-            Ok(()) => false,
-            Err(error) => {
-                keep(&polled, error);
-                true
-            }
-        })
-    });
+    let token = CancellationToken::with_probe(move || poll(&polled));
     let result = run(&token);
     // Also deliver a signal first observed as the engine returns.
     let _ = token.is_cancelled();
