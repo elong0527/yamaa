@@ -14,8 +14,9 @@
 //!
 //! Binding admits these after every other finding, over the reads that
 //! bound: a derivation or filter with a finding of its own, and a lookup
-//! whose key types fail, are not admitted, nor are the derivations of a
-//! lookup binding binds without them.
+//! whose key types fail or whose filter reads a name qualified by nothing
+//! declared, are not admitted, nor are the derivations of a lookup binding
+//! binds without them.
 
 use super::*;
 use crate::ast::{Scope, Step};
@@ -218,7 +219,14 @@ impl Scopes<'_> {
     ) {
         let spec = self.spec;
         loop {
-            if !seen.insert(index) || self.refused.contains(&index) {
+            // Binding binds nothing of a lookup whose filter reads a name
+            // qualified by nothing declared, whether or not this reports it.
+            if !seen.insert(index)
+                || self.refused.contains(&index)
+                || !unknown_filter_qualifiers(spec, self.prepared, &spec.intermediates[index])
+                    .0
+                    .is_empty()
+            {
                 return;
             }
             let item = &spec.intermediates[index];

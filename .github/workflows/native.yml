@@ -928,17 +928,29 @@ jobs:
     name: native-cran (${{ matrix.platform }})
     needs: r-dist
     runs-on: ubuntu-24.04
-    # CRAN's r-devel-linux-x86_64-fedora-gcc flavor as R-hub v2 builds it:
-    # R-devel built with GCC 16 on Fedora 44, CRAN's check settings,
-    # checkbashisms and HTML Tidy, and R-hub's binaries of the Suggests. The
-    # build uses the Cargo and rustc that Fedora packages, as CRAN's Linux
-    # check servers use their distribution's.
+    # CRAN's check configurations as R-hub v2's containers build them, with
+    # CRAN's check settings, checkbashisms and HTML Tidy, and R-hub's binaries
+    # of the Suggests.
+    # - gcc16: CRAN's r-devel-linux-x86_64-fedora-gcc flavor, R-devel built
+    #   with GCC 16 on Fedora 44. The build uses the Cargo and rustc that
+    #   Fedora packages, as CRAN's Linux check servers use their
+    #   distribution's.
+    # - clang-asan: the clang-ASAN configuration of CRAN's additional checks,
+    #   R-devel built with clang 23 and libc++ on Ubuntu 26.04, whose C
+    #   compiler instruments packages with AddressSanitizer and
+    #   UndefinedBehaviorSanitizer. The Makevars give that compiler to Cargo,
+    #   so it instruments the ReadStat and zstd C sources too; the Rust code
+    #   is not instrumented. The image carries no Rust, so the build uses the
+    #   minimum Rust from its standalone installer, as
+    #   native-offline-toolchain does. UndefinedBehaviorSanitizer reports and
+    #   carries on, so check_r.py also fails on a sanitizer report in the
+    #   installation, example or test output.
     container: ghcr.io/r-hub/containers/${{ matrix.platform }}:latest
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        platform: [gcc16]
+        platform: [gcc16, clang-asan]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -949,6 +961,7 @@ jobs:
       # after growing pauses, five attempts over up to 7.5 minutes. The
       # refusing proxy applies to the check step alone.
       - name: Install Fedora's Cargo and rustc, and Python
+        if: matrix.platform == 'gcc16'
         run: |
           for pause in 30 60 120 240 stop; do
             dnf install -y cargo rust python3 && break
@@ -957,6 +970,53 @@ jobs:
             sleep "${pause}"
           done
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+      # As on gcc16, with apt-get. xz unpacks the Rust installer. The image's
+      # newest llvm-symbolizer, when it has one, gives each sanitizer report
+      # the functions, files and lines of its stack.
+      - name: Install Python and xz, and name the symbolizer
+        if: matrix.platform == 'clang-asan'
+        run: |
+          for pause in 30 60 120 240 stop; do
+            apt-get update && apt-get install --yes --no-install-recommends python3 xz-utils && break
+            if [ "${pause}" = stop ]; then exit 1; fi
+            echo "apt-get failed; trying again in ${pause} seconds"
+            sleep "${pause}"
+          done
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          symbolizer=$(find /usr/lib -maxdepth 3 -path '/usr/lib/llvm-*/bin/llvm-symbolizer' | sort -V | tail -n 1)
+          if [ -n "${symbolizer}" ]; then
+            echo "ASAN_SYMBOLIZER_PATH=${symbolizer}" >> "${GITHUB_ENV}"
+          fi
+      # The Rust project signs each standalone installer with the Rust signing
+      # key committed in tools/ci/keys/rust-key.gpg.ascii. gpg checks the .asc
+      # signature before unpacking, with a fresh keyring holding only that
+      # key; neither the download host nor a keyserver supplies a key. Then
+      # install.sh installs rustc, Cargo and the standard library of the
+      # target, the components of rustup's minimal profile, into /opt/rust,
+      # where configure finds them on the PATH, with no rustup.
+      - name: Install the minimum Rust from its standalone installer
+        if: matrix.platform == 'clang-asan'
+        run: |
+          version=$(python3 -c 'from tools.ci.toolchain import minimum; print(minimum())')
+          target="$(uname -m)-unknown-linux-gnu"
+          installer="rust-${version}-${target}.tar.xz"
+          mkdir "${RUNNER_TEMP}/rust-installer"
+          cd "${RUNNER_TEMP}/rust-installer"
+          for file in "dist/${installer}" "dist/${installer}.asc"; do
+            curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+              --retry 3 --remote-name "https://static.rust-lang.org/${file}"
+          done
+          export GNUPGHOME="${PWD}/gnupg"
+          mkdir -m 700 "${GNUPGHOME}"
+          gpg --batch --import "${GITHUB_WORKSPACE}/tools/ci/keys/rust-key.gpg.ascii"
+          gpg --batch --no-auto-key-retrieve --verify "${installer}.asc" "${installer}"
+          tar -xJf "${installer}"
+          "rust-${version}-${target}/install.sh" --prefix=/opt/rust \
+            --components="rustc,cargo,rust-std-${target}" --disable-ldconfig
+          /opt/rust/bin/rustc --version | grep -F "rustc ${version} "
+          /opt/rust/bin/cargo --version | grep -F "cargo ${version} "
+          echo /opt/rust/bin >> "${GITHUB_PATH}"
+          echo "STANDALONE_RUST_VERSION=${version}" >> "${GITHUB_ENV}"
       # pak reads R-hub's binary repository, which the image configures, and
       # retries as the dnf step does.
       - name: Install the package's Suggests
@@ -988,6 +1048,23 @@ jobs:
           echo "directory=${RUNNER_TEMP}/cran-check" >> "${GITHUB_OUTPUT}"
           python3 -m tools.commands.check_r --archive "${RUNNER_TEMP}"/published/yamaa_*.tar.gz \
             --work-dir "${RUNNER_TEMP}/cran-check"
+      - name: Confirm that the build used the minimum Rust
+        if: matrix.platform == 'clang-asan'
+        run: |
+          grep -F "using rustc ${STANDALONE_RUST_VERSION} " "${RUNNER_TEMP}/cran-check/yamaa.Rcheck/00install.out"
+          grep -F "using cargo ${STANDALONE_RUST_VERSION} " "${RUNNER_TEMP}/cran-check/yamaa.Rcheck/00install.out"
+      # entrypoint.c, the package's own C, only passes R's call on, with no
+      # memory access or arithmetic for a sanitizer to check, and the Rust
+      # code is not instrumented, so the installed shared object calls
+      # AddressSanitizer and UndefinedBehaviorSanitizer only from the C that
+      # Cargo compiled with R's compiler.
+      - name: Confirm that the sanitizers instrumented the crates' C
+        if: matrix.platform == 'clang-asan'
+        run: |
+          nm -D --undefined-only "${RUNNER_TEMP}/cran-check/yamaa.Rcheck/yamaa/libs/yamaa.so" \
+            > "${RUNNER_TEMP}/undefined-symbols.txt"
+          grep -E -m 3 ' __asan_(report_)?(load|store)' "${RUNNER_TEMP}/undefined-symbols.txt"
+          grep -F -m 3 ' __ubsan_handle_' "${RUNNER_TEMP}/undefined-symbols.txt"
       # In a container job, ${{ runner.temp }} names the runner's directory,
       # which the runner maps to the container's only at the start of an
       # input, so it would map the first of these paths alone. The check step

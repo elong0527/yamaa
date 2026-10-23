@@ -15,8 +15,13 @@
 //! for no row (LOOKUP-15); and for one more (#3585): a text extraction's or
 //! replacement's source that is not text (TEXT-1) and, once binding takes
 //! its source, its pattern and group (TEXT-6, TEXT-10), wherever binding
-//! binds it. Every case lists the same issues in both routes and hosts, in
-//! the same order.
+//! binds it; and for two more (#3678): an aggregate filter's read outside
+//! what the aggregate reduces (NAME-3), and a lookup filter's field
+//! qualified by nothing declared (LOOKUP-7) where the declarations decide
+//! the finding's `suggestion` (D220). Every case lists the same issues in
+//! both routes and hosts, in the same order, except where only the records
+//! decide a finding: `check` leaves that case to `domain`, whose issues its
+//! own stay a subsequence of (D195, D199).
 use crate::support::Edit as _;
 use std::fs;
 use yamaa_adapters::file_application;
@@ -44,6 +49,20 @@ impl Fixture {
                 "dm.csv",
                 "STUDYID,USUBJID,RFSTDTC,AGE\nS,S-1,2025-01-01,40\n",
             ),
+            // The producer of ADSL, its own input, and the ADSL it saved.
+            (
+                "spec_adsl.yaml",
+                "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [STUDYID, USUBJID]\n\
+                 input:\n  DM: subjects.csv\n\
+                 output:\n  path: adsl.csv\n  columns: [STUDYID, USUBJID, AGE, SEX]\n\
+                 columns:\n\
+                 \x20 - {name: STUDYID, type: str, label: Study Identifier, derivation: DM.STUDYID}\n\
+                 \x20 - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: DM.USUBJID}\n\
+                 \x20 - {name: AGE, type: int, label: Age, derivation: DM.AGE}\n\
+                 \x20 - {name: SEX, type: str, label: Sex, derivation: DM.SEX}\n",
+            ),
+            ("subjects.csv", "STUDYID,USUBJID,AGE,SEX\nS,S-1,40,F\n"),
+            ("adsl.csv", "STUDYID,USUBJID,AGE,SEX\nS,S-1,40,F\n"),
         ] {
             fs::write(root.join(name), content).unwrap();
         }
@@ -123,6 +142,41 @@ fn assert_clean(specifications: &[String]) {
             assert!(
                 checked.is_empty(),
                 "{specification}\n({host:?}): {checked:?}"
+            );
+        }
+    }
+}
+
+/// Check each specification in both routes and hosts where only the records
+/// decide a finding: `check`'s issues, at `checked`, are an exact
+/// subsequence of `domain`'s, at `built` (D195, D199, D220).
+fn assert_subsequence(cases: &[(String, &[&str], &[&str])]) {
+    for (specification, checked_paths, built_paths) in cases {
+        let fixture = Fixture::new(specification);
+        for host in [Language::Python, Language::R] {
+            let (checked, built) = fixture.issues(host);
+            let paths = |issues: &Issues| {
+                issues
+                    .iter()
+                    .map(|(_, paths)| paths.join(", "))
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(
+                paths(&checked),
+                *checked_paths,
+                "{specification}\n({host:?}): {checked:?}"
+            );
+            assert_eq!(
+                paths(&built),
+                *built_paths,
+                "{specification}\n({host:?}): {built:?}"
+            );
+            let mut remaining = built.iter();
+            assert!(
+                checked
+                    .iter()
+                    .all(|issue| remaining.any(|other| other == issue)),
+                "{specification}\n({host:?}): {checked:?} within {built:?}"
             );
         }
     }
@@ -1221,6 +1275,298 @@ fn check_reports_a_text_pattern_where_binding_takes_its_source_as_domain_does() 
         lookup(
             "  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {str_extract: {source: USUBJID, pattern: \"^([A-Z]+)\", group: 1}}}}\n",
             "P.D",
+        ),
+    ]);
+}
+
+/// One row template over VS grouped by subject, whose row phase derives X.
+fn grouped(x: &str) -> String {
+    format!(
+        "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\nkeys: [STUDYID, USUBJID]\n{}\
+         output: {{path: out.csv, columns: [STUDYID, USUBJID, X]}}\n\
+         columns:\n\
+         \x20 - {{name: STUDYID, type: str}}\n\
+         \x20 - {{name: USUBJID, type: str}}\n\
+         \x20 - {{name: X, type: float}}\n\
+         rows:\n\
+         \x20 - id: subject\n    dataset: VS\n    group_by: [VS.STUDYID, VS.USUBJID]\n    derivations:\n\
+         \x20     STUDYID: VS.STUDYID\n      USUBJID: VS.USUBJID\n      X: {x}\n",
+        declarations("")
+    )
+}
+
+/// A qualified aggregate's filter reads only fields of the relation it
+/// reduces, and the filter of one that reduces the output rows only output
+/// columns (`aggregates::bind_filter`): binding refuses each other name as
+/// unknown (NAME-3) at the filter, once, in written order, after the
+/// aggregate's header and before the key it matches on, with or without
+/// `rows`. Whether the relation stores a field of its own is left to its
+/// records.
+#[test]
+fn check_reports_an_aggregate_filter_s_read_outside_what_it_reduces_as_domain_does() {
+    let aggregate = |expr: &str, filter: &str| {
+        format!("{{aggregate: {{expr: \"{expr}\", filter: \"{filter}\"}}}}")
+    };
+    let plan = |filter: &str| implicit("", "", &aggregate("SUM(PLAN.PLANDOSE)", filter), C);
+    let at = "columns.X.derivation.aggregate.filter";
+    let unknown = |path: &str, name: &str| {
+        format!(
+            "unknown_field Some(\"NAME-3\") [\"{path}\"] {{\"identifier\": String(\"{name}\")}}"
+        )
+    };
+    let first = [
+        unknown(at, "XX.Y"),
+        unknown(at, "DM.AGE"),
+        unknown(at, "VSDY"),
+        unknown(at, "PB.PLANDOSE"),
+        unknown(at, "VS.SYSBP"),
+        unknown(at, "HOME.SYSBP"),
+        unknown(at, "F"),
+        unknown("rows.subject.derivations.X.aggregate.filter", "DM.AGE"),
+    ];
+    assert_cases(&[
+        // #3629's three over PLAN without rows: a qualifier nothing
+        // declares, another input and a bare name.
+        (plan("XX.Y > 1"), &[at], &first[0]),
+        (plan("DM.AGE > 1"), &[at], &first[1]),
+        (plan("VSDY > 1"), &[at], &first[2]),
+        // Each name once, in written order, beside a field of PLAN.
+        (
+            plan("PLAN.DOSENUM > 1 AND XX.Y > 1 AND XX.Y < 3 AND VSDY > 0"),
+            &[at, at],
+            &first[0],
+        ),
+        // A lookup's field, and the driver's.
+        (plan("PB.PLANDOSE > 1"), &[at], &first[3]),
+        (plan("VS.SYSBP > 1"), &[at], &first[4]),
+        // An aggregate over the driver, matching on a key of its own.
+        (
+            implicit(
+                "",
+                "",
+                "{aggregate: {expr: \"SUM(VS.SYSBP)\", key: [USUBJID], filter: \"HOME.SYSBP > 1\"}}",
+                C,
+            ),
+            &[at],
+            &first[5],
+        ),
+        // A derive binding is no field of the relation.
+        (
+            implicit(
+                "",
+                "",
+                "{aggregate: {expr: \"COUNT(F)\", derivations: {F: {type: str, derivation: PLAN.USUBJID}}, filter: \"F = 'x'\"}}",
+                C,
+            ),
+            &[at],
+            &first[6],
+        ),
+        // An aggregate that reduces the output rows reads output columns.
+        (
+            implicit(
+                "",
+                "",
+                "{aggregate: {expr: \"SUM(VSDY)\", group_by: [USUBJID], filter: \"DM.AGE > 1 AND NOPE > 2 AND VSDY > 3\"}}",
+                C,
+            ),
+            &[at, at],
+            &first[1],
+        ),
+        // Before HOME's missing key, which the aggregate would match on
+        // (LOOKUP-5).
+        (
+            implicit("", "", &aggregate("SUM(HOME.SYSBP)", "XX.Y > 1"), C),
+            &[at, "columns.X.derivation.aggregate"],
+            &first[0],
+        ),
+        // Under row templates: the column phase, and a grouped template's
+        // row phase, whose aggregate reduces its driver.
+        (
+            record("", "", &aggregate("SUM(PLAN.PLANDOSE)", "XX.Y > 1"), C),
+            &[at],
+            &first[0],
+        ),
+        (
+            grouped(&aggregate("SUM(VS.SYSBP)", "DM.AGE > 1")),
+            &["rows.subject.derivations.X.aggregate.filter"],
+            &first[7],
+        ),
+    ]);
+    // The same filters reading what each reduces bind.
+    assert_clean(&[
+        plan("PLAN.DOSENUM > 1"),
+        implicit(
+            "",
+            "",
+            "{aggregate: {expr: \"SUM(VSDY)\", group_by: [USUBJID], filter: \"VSDY > 3\"}}",
+            C,
+        ),
+        grouped(&aggregate("SUM(VS.SYSBP)", "VS.VSDY > 1")),
+    ]);
+    // A field PLAN may or may not store is left to its records.
+    assert_subsequence(&[(plan("PLAN.NOPE > 1"), &[], &[at])]);
+}
+
+/// A lookup filter's field qualified by nothing declared, as both routes
+/// render it, suggesting the donor's same-named field when it has one.
+fn undeclared_qualifier(intermediate: &str, identifier: &str, suggestion: Option<&str>) -> String {
+    let suggestion = suggestion.map_or_else(String::new, |field| {
+        format!(", \"suggestion\": String(\"{field}\")")
+    });
+    format!(
+        "unknown_field Some(\"LOOKUP-7\") [\"intermediates.{intermediate}.filter\"] \
+         {{\"identifier\": String(\"{identifier}\"), \"intermediate\": String(\"{intermediate}\"){suggestion}}}"
+    )
+}
+
+/// A lookup's filter reads its donor's records and another input's current
+/// record: a field qualified by nothing declared, no input, lookup or the
+/// lookup's own dataset, binds nothing whatever any input stores, so binding
+/// refuses it as unknown (LOOKUP-7) at the filter, once, in written order,
+/// suggesting the donor's same-named field when the donor record has one,
+/// and binds nothing of the lookup, whose every read is unknown (NAME-3).
+/// `check` reports it where the declarations decide that suggestion (D220):
+/// a field the lookup derives, a field the input's `types` names, a
+/// generated ordinal, a linked producer's output columns, and over SELF the
+/// columns every row template derives. Where only the donor's records decide
+/// it, `check` leaves the case to `domain`.
+#[test]
+fn check_reports_a_lookup_filter_s_undeclared_qualifier_where_its_suggestion_is_declared() {
+    let lookup = |fields: &str| {
+        implicit(
+            &format!("  - {{id: P, dataset: PLAN, key: [USUBJID]{fields}}}\n"),
+            "",
+            "P.PLANDOSE",
+            C,
+        )
+    };
+    let filtered = |filter: &str| lookup(&format!(", filter: \"{filter}\""));
+    let unique = |filter: &str| {
+        lookup(&format!(
+            ", filter: \"{filter}\", verifications: [{{unique: [USUBJID]}}]"
+        ))
+    };
+    let selves = |filter: &str| {
+        record("", "", X, "S.USUBJID").edit(
+            "intermediates:\n",
+            &format!(
+                "intermediates:\n  - {{id: S, dataset: SELF, key: [USUBJID], filter: \"{filter}\"}}\n"
+            ),
+        )
+    };
+    let linked = |filter: &str| {
+        implicit(
+            &format!("  - {{id: A, dataset: ADSL, key: [USUBJID], filter: \"{filter}\"}}\n"),
+            "",
+            X,
+            "A.SEX",
+        )
+        .edit(
+            "  DM: {path: dm.csv,",
+            "  ADSL: {path: adsl.csv, schema: spec_adsl.yaml, key: [USUBJID]}\n  DM: {path: dm.csv,",
+        )
+    };
+    let at = "intermediates.P.filter";
+    let read = "columns.X.derivation.source";
+    let first = [
+        undeclared_qualifier("P", "XX.DOSENUM", Some("PLAN.DOSENUM")),
+        undeclared_qualifier("P", "SELF.DOSENUM", Some("PLAN.DOSENUM")),
+        undeclared_qualifier("P", "XX.D", Some("PLAN.D")),
+        undeclared_qualifier("P", "XX.SEQ", Some("PLAN.SEQ")),
+        undeclared_qualifier("S", "XX.VSDY", Some("SELF.VSDY")),
+        undeclared_qualifier("S", "XX.X", None),
+        undeclared_qualifier("A", "XX.AGE", Some("ADSL.AGE")),
+        undeclared_qualifier("A", "XX.NOPE", None),
+    ];
+    assert_cases(&[
+        // PLAN's `types` names DOSENUM; SELF qualifies nothing declared for
+        // a lookup over an input.
+        (filtered("XX.DOSENUM > 1"), &[at, read], &first[0]),
+        (filtered("SELF.DOSENUM > 1"), &[at, read], &first[1]),
+        // A field the lookup derives, and a generated ordinal.
+        (
+            lookup(", derivations: {D: \"PLAN.DOSENUM + 1\"}, filter: \"XX.D > 1\""),
+            &[at, read],
+            &first[2],
+        ),
+        (
+            filtered("XX.SEQ > 1").edit(
+                "PLAN: {path: plan.csv, key: [USUBJID],",
+                "PLAN: {path: plan.csv, key: [USUBJID], ordinal: SEQ,",
+            ),
+            &[at, read],
+            &first[3],
+        ),
+        // Each name once; binding admits no correlated read of a lookup it
+        // does not bind, nor that read's correlation with its uniqueness
+        // verification (LOOKUP-17).
+        (
+            filtered("XX.DOSENUM > 1 AND DM.AGE > 1 AND XX.DOSENUM < 3"),
+            &[at, read],
+            &first[0],
+        ),
+        (
+            unique("XX.DOSENUM > 1 AND DM.AGE > 1"),
+            &[at, read],
+            &first[0],
+        ),
+        // After the lookup's key types fail.
+        (
+            implicit("", "", "PL.PLANDOSE", C).edit(
+                "key: {DOSENUM: VS.USUBJID}}",
+                "key: {DOSENUM: VS.USUBJID}, filter: \"XX.DOSENUM > 1\"}",
+            ),
+            &[PL, "intermediates.PL.filter", read],
+            KEY_TYPES,
+        ),
+        // A row template's read of the lookup.
+        (
+            record("", "      X: P.PLANDOSE\n", X, C).edit(
+                "intermediates:\n",
+                "intermediates:\n  - {id: P, dataset: PLAN, key: [USUBJID], filter: \"XX.DOSENUM > 1\"}\n",
+            ),
+            &[at, "rows.record.derivations.X.source"],
+            &first[0],
+        ),
+        // Over SELF, a column every row template derives is the donor's,
+        // and a column the column phase derives is not.
+        (
+            selves("XX.VSDY > 1"),
+            &["intermediates.S.filter", "columns.C.derivation.source"],
+            &first[4],
+        ),
+        (
+            selves("XX.X > 1"),
+            &["intermediates.S.filter", "columns.C.derivation.source"],
+            &first[5],
+        ),
+        // A linked producer's output columns decide either way.
+        (
+            linked("XX.AGE > 1"),
+            &["intermediates.A.filter", "columns.C.derivation.source"],
+            &first[6],
+        ),
+        (
+            linked("XX.NOPE > 1"),
+            &["intermediates.A.filter", "columns.C.derivation.source"],
+            &first[7],
+        ),
+    ]);
+    // A field PLAN's `types` does not name may or may not be stored, so
+    // `check` leaves its suggestion and the lookup's refusal to `domain`
+    // (D220), and reports a decided one beside it.
+    assert_subsequence(&[
+        (filtered("XX.Y > 1"), &[], &[at, read]),
+        (unique("XX.Y > 1 AND DM.AGE > 1"), &[], &[at, read]),
+        (
+            filtered("XX.DOSENUM > 1 AND XX.Y > 1"),
+            &[at, read],
+            &[at, at, read],
+        ),
+        (
+            filtered("XX.Y > 1 AND XX.DOSENUM > 1"),
+            &[at, read],
+            &[at, at, read],
         ),
     ]);
 }

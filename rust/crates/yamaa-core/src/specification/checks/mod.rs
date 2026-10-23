@@ -435,6 +435,42 @@ pub(super) fn donor_read(spec: &Spec, index: usize) -> bool {
         })
 }
 
+/// Whether `owner` qualifies nothing declared, no input or lookup, so a
+/// field it qualifies binds nothing, whatever any input stores.
+pub(super) fn undeclared(prepared: &PreparedSpecification, owner: &str) -> bool {
+    !prepared.intermediates.contains(owner)
+        && !prepared.sources.iter().any(|input| input.name == owner)
+}
+
+/// The names the filter of the intermediate `item` qualifies by nothing
+/// declared, no input, lookup or its own dataset, each once in written
+/// order with the field it names, and the filter's path. Binding refuses
+/// each (LOOKUP-7, `relation_predicates::bind`) and binds nothing of the
+/// intermediate.
+pub(super) fn unknown_filter_qualifiers<'s>(
+    spec: &'s Spec,
+    prepared: &PreparedSpecification,
+    item: &'s ast::Intermediate,
+) -> (Vec<(&'s str, &'s str)>, &'s str) {
+    let Some(ExprKind::Formula(ast::Formula {
+        compiled: Ok(plan), ..
+    })) = item.filter.map(|filter| &spec.expr(filter).kind)
+    else {
+        return (Vec::new(), "");
+    };
+    let dataset = item.dataset.name.as_str();
+    let mut seen = std::collections::BTreeSet::new();
+    let names = plan
+        .identifiers()
+        .filter(|&name| seen.insert(name))
+        .filter_map(|name| {
+            let (owner, field) = name.split_once('.')?;
+            (owner != dataset && undeclared(prepared, owner)).then_some((name, field))
+        })
+        .collect();
+    (names, plan.spec_path())
+}
+
 /// Whether a match value's reference `name` reads no value of the current
 /// row whatever an input stores (LOOKUP-5): a bare name that no column takes
 /// (NAME-3), or a name qualified by a lookup, by `SELF` or by nothing

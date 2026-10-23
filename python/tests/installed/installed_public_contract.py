@@ -1005,15 +1005,19 @@ class PublicContract(unittest.TestCase):
                         fixture_bytes(case["input_csv"])
                     )
                 call = getattr(yamaa.spec(spec), case["call"])
-                # `{path}` stands for the specification path given, as JSON
-                # text in the context.
+                # `{path}` stands for the specification path given, and
+                # `{entry}` for its absolute path as the engine resolves it,
+                # with forward slashes, each as JSON text in the context.
                 given = os.fspath(spec)
+                entry = spec.resolve().as_posix()
                 expected = [
                     {
                         **row,
                         "message": row["message"].replace("{path}", given),
-                        "context": row["context"].replace(
-                            "{path}", json.dumps(given, ensure_ascii=False)[1:-1]
+                        "context": row["context"]
+                        .replace("{path}", json.dumps(given, ensure_ascii=False)[1:-1])
+                        .replace(
+                            "{entry}", json.dumps(entry, ensure_ascii=False)[1:-1]
                         ),
                     }
                     for row in case["issues"]
