@@ -1208,11 +1208,10 @@ mod declaration {
             }
         }
         #[test]
-        fn actual_entry_and_parent_snapshots_are_moved_once_with_raw_positions_and_defaults() {
+        fn the_entry_moves_once_and_the_parent_keeps_its_bytes_with_raw_positions_and_defaults() {
             let root = format!("{VALID}parent: parent.yaml\n").into_bytes();
             let root_pointer = root.as_ptr();
             let mut host = new_host(b"schema_version: '1.0'\n");
-            let parent_pointer = host.bytes["parent.yaml"].as_ptr();
             let prepared =
                 match shipped_schema::prepare(source(root), "written/entry".into(), &mut host) {
                     Ok(p) => p,
@@ -1220,8 +1219,8 @@ mod declaration {
                 };
             assert_eq!(prepared.source().bytes.as_ptr(), root_pointer);
             assert_eq!(prepared.parents().len(), 1);
+            // The parent's bytes are copied out of the resolver's snapshot.
             let parent = &prepared.parents()[0];
-            assert_eq!(parent.source().bytes.as_ptr(), parent_pointer);
             assert_eq!(parent.source().bytes, b"schema_version: '1.0'\n");
             assert_eq!(
                 parent.raw().locations.len(),

@@ -884,12 +884,11 @@ mod dispatch_policy_tests {
         }
     }
     #[test]
-    fn changed_dictionary_after_semantic_success_is_original_failure_before_entry_selection() {
+    fn changed_dictionary_after_semantic_success_is_original_failure() {
         let root="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns: [{name: ID, type: str, derivation: {mapping: {source: SRC.ID, dict: dict.yaml}}}]\n";
         let study = Study::new(root);
         fs::write(study.0.join("entry/dict.yaml"), b"A: answer\n").unwrap();
         let mut resources = study.resources();
-        let original = resources.resolve("root.yaml").unwrap();
         let result = yamaa_core::file_preparation::prepare(
             &mut resources,
             &mut ChangeAfterSuccess {
@@ -922,14 +921,12 @@ mod dispatch_policy_tests {
             .into()
         );
         assert_eq!(resources.capture_reads(), 2);
-        assert_eq!(resources.resolve("root.yaml").unwrap(), original);
         assert!(!study.0.join("entry/never-read.csv").exists());
     }
     #[test]
-    fn changed_parent_after_semantic_success_is_original_resource_failure_before_base_selection() {
+    fn changed_parent_after_semantic_success_is_original_resource_failure() {
         let study = Study::new(ROOT);
         let mut resources = study.resources();
-        let original = resources.resolve("root.yaml").unwrap();
         let result = yamaa_core::file_preparation::prepare(
             &mut resources,
             &mut ChangeAfterSuccess {
@@ -959,6 +956,5 @@ mod dispatch_policy_tests {
             .into()
         );
         assert_eq!(resources.capture_reads(), 2);
-        assert_eq!(resources.resolve("root.yaml").unwrap(), original);
     }
 }

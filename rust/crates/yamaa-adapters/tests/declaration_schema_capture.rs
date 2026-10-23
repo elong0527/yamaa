@@ -2414,8 +2414,9 @@ mod declaration {
                 "schema_version: '1.0'\nenvironments: {python: environment.yaml}\ncodelists: [ct.yaml]\n";
             // Language and study metadata no longer belong to the environment file.
             let linked = "schema_version: '1.0'\nlanguage: python\nlock: uv.lock\nfunctions: {bad: bad.yaml}\ncodelists: [ct.yaml]\n";
+            // The file keeps its identity's allocation; its bytes are copied
+            // out of the resolver's snapshot.
             let failed = source(ENVIRONMENT, linked);
-            let bytes = failed.bytes.as_ptr();
             let identity = failed.identity.as_ptr();
             let mut port = Metadata::new(vec![
                 (Kind::Environment, "environment.yaml", Ok(failed)),
@@ -2454,7 +2455,7 @@ mod declaration {
             else {
                 panic!("held environment file findings")
             };
-            assert_eq!(captured.source().bytes.as_ptr(), bytes);
+            assert_eq!(captured.source().bytes, linked.as_bytes());
             assert_eq!(captured.source().identity.as_ptr(), identity);
             assert!(std::ptr::eq(
                 captured.schema(),
@@ -2582,8 +2583,9 @@ mod declaration {
             let bad =
                 FUNCTION.to_owned() + "contract_version: '1'\nbinding: {call: project.constant}\n";
             let schemas = candidate_schemas();
+            // The file keeps its identity's allocation; its bytes are copied
+            // out of the resolver's snapshot.
             let failed = source("held/bad.yaml", &bad);
-            let bytes = failed.bytes.as_ptr();
             let identity = failed.identity.as_ptr();
             let mut port = Metadata::new(vec![
                 (
@@ -2631,7 +2633,7 @@ mod declaration {
             else {
                 panic!()
             };
-            assert_eq!(captured.source().bytes.as_ptr(), bytes);
+            assert_eq!(captured.source().bytes, bad.as_bytes());
             assert_eq!(captured.source().identity.as_ptr(), identity);
             assert!(std::ptr::eq(
                 captured.schema(),

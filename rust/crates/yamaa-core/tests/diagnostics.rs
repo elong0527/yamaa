@@ -153,7 +153,6 @@ mod diagnostics {
                     "host_resource_failure",
                     "inheritance_required",
                     "internal",
-                    "invalid_packaging_lock",
                     "invalid_target",
                     "inventory",
                     "issue_projection",
