@@ -732,6 +732,141 @@ pub(crate) fn lookup_reached() -> BTreeSet<ConditionCode> {
     reached
 }
 
+/// A nearest selection's refusals at binding (LOOKUP-26): a source the donor
+/// relation does not have, a source that is neither a date nor a datetime,
+/// and a reference of another type than its source's, a date beside a
+/// datetime.
+pub(crate) fn nearest_reached() -> BTreeSet<ConditionCode> {
+    let mut reached = BTreeSet::new();
+    let source = TableSchema::new(vec![
+        Column {
+            name: "ID".into(),
+            kind: ColumnType::Int,
+        },
+        Column {
+            name: "D".into(),
+            kind: ColumnType::Date,
+        },
+        Column {
+            name: "AT".into(),
+            kind: ColumnType::DateTime,
+        },
+    ])
+    .unwrap();
+    let donor = TableSchema::new(vec![
+        Column {
+            name: "DID".into(),
+            kind: ColumnType::Int,
+        },
+        Column {
+            name: "V".into(),
+            kind: ColumnType::Int,
+        },
+        Column {
+            name: "DT".into(),
+            kind: ColumnType::DateTime,
+        },
+        Column {
+            name: "TXT".into(),
+            kind: ColumnType::Str,
+        },
+    ])
+    .unwrap();
+    for (nearest_source, to, condition, path, fields) in [
+        (
+            "BAD",
+            "SRC.AT",
+            "unknown_field",
+            "intermediates.SEL.nearest.source",
+            vec![("identifier", text("BAD")), ("intermediate", text("SEL"))],
+        ),
+        (
+            "TXT",
+            "SRC.AT",
+            "incompatible_input_type",
+            "intermediates.SEL.nearest.source",
+            vec![
+                ("identifier", text("TXT")),
+                ("intermediate", text("SEL")),
+                ("actual", text("str")),
+                ("permitted", V::Array(vec![text("date"), text("datetime")])),
+            ],
+        ),
+        (
+            "DT",
+            "SRC.D",
+            "incompatible_input_type",
+            "intermediates.SEL.nearest.to",
+            vec![
+                ("intermediate", text("SEL")),
+                ("expected", text("datetime")),
+                ("actual", text("date")),
+            ],
+        ),
+    ] {
+        let mut fields_of = header();
+        fields_of.extend([
+            ("domain", T::text("TEST")),
+            ("base", T::text("SRC")),
+            (
+                "input",
+                T::map(vec![
+                    ("SRC", T::map(vec![("path", T::text("source.csv"))])),
+                    ("DONOR", T::map(vec![("path", T::text("donor.csv"))])),
+                ]),
+            ),
+            ("keys", T::List(vec![T::text("ID")])),
+            (
+                "columns",
+                T::List(vec![
+                    column("ID", Some(expression("SRC.ID"))),
+                    column("VALUE", Some(expression("SEL.V"))),
+                ]),
+            ),
+            (
+                "intermediates",
+                T::List(vec![T::map(vec![
+                    ("id", T::text("SEL")),
+                    ("dataset", T::text("DONOR")),
+                    ("key", T::map(vec![("DID", T::text("ID"))])),
+                    (
+                        "nearest",
+                        T::map(vec![
+                            ("source", T::text(nearest_source)),
+                            ("to", T::text(to)),
+                            ("unit", T::text("hour")),
+                        ]),
+                    ),
+                ])]),
+            ),
+            (
+                "output",
+                T::map(vec![
+                    ("path", T::text("result.csv")),
+                    ("columns", T::List(vec![T::text("ID"), T::text("VALUE")])),
+                ]),
+            ),
+        ]);
+        let prepared = prepare(&T::map(fields_of).document()).unwrap();
+        let Err(BindError::Invalid(found)) = prepared.bind_sources(&[&source, &donor]) else {
+            panic!("the nearest selection must fail: {nearest_source}, {to}")
+        };
+        let projected = found
+            .iter()
+            .flat_map(|f| f.diagnostics(prepared.source()).unwrap())
+            .find(|d| d.definition().rule == Some("LOOKUP-26"))
+            .unwrap();
+        reached.insert(check(
+            projected,
+            condition,
+            Some("LOOKUP-26"),
+            &[path],
+            fields,
+        ));
+    }
+    reached
+}
+
 pub(crate) fn source_filter_reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
     for (variable, predicate, condition, rule, values) in [
