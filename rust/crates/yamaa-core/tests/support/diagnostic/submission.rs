@@ -633,31 +633,81 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             assert_eq!(finding.context.len(), 5, "{:?}", finding.context);
         }
     }
-    // OUTPUT-2: composition refuses a key that is not an output column as
-    // checking the specification does, at the key under its listing and
-    // naming the column: a declared column that `output.columns` leaves out
-    // as `internal_column_in_keys`, a name no column declares as
-    // `undeclared_column`. The internal column declares no submission
-    // metadata, which SUB-1 would refuse on a column that is not an output.
-    for (key, declared, condition, label) in [
+    // OUTPUT-1 and OUTPUT-2: composition refuses `output.columns` and `keys`
+    // as checking the specification does, with the specification's own
+    // refusal at its spec path under the listing. Each case writes one of
+    // the two lists. INTERNAL is a declared column that no list names; it
+    // declares no submission metadata, which SUB-1 would refuse on a column
+    // that is not an output.
+    let key_path = "sdtm.specs[0].keys[1]";
+    let entry_path = "sdtm.specs[0].output.columns[1]";
+    for (field, entries, condition, rule, path, context, label) in [
         (
-            "INTERNAL",
-            true,
+            &["keys"][..],
+            &["VALUE", "INTERNAL"][..],
             "internal_column_in_keys",
+            "OUTPUT-2",
+            key_path,
+            vec![("column", "INTERNAL")],
             "an internal key",
         ),
-        ("MISSING", false, "undeclared_column", "an undeclared key"),
+        (
+            &["keys"][..],
+            &["VALUE", "MISSING"][..],
+            "undeclared_column",
+            "OUTPUT-2",
+            key_path,
+            vec![("column", "MISSING")],
+            "an undeclared key",
+        ),
+        (
+            &["keys"][..],
+            &["VALUE", "VALUE"][..],
+            "duplicate_identifier",
+            "OUTPUT-2",
+            key_path,
+            vec![("identifier", "VALUE")],
+            "a repeated key",
+        ),
+        (
+            &["keys"][..],
+            &[][..],
+            "invalid_field_type",
+            "OUTPUT-2",
+            "sdtm.specs[0].keys",
+            vec![
+                ("expected", "at least one key column"),
+                ("actual", "empty list"),
+            ],
+            "an empty key list",
+        ),
+        (
+            &["output", "columns"][..],
+            &["VALUE", "MISSING"][..],
+            "undeclared_column",
+            "OUTPUT-1",
+            entry_path,
+            vec![("column", "MISSING")],
+            "an undeclared output column",
+        ),
+        (
+            &["output", "columns"][..],
+            &["VALUE", "VALUE"][..],
+            "duplicate_identifier",
+            "OUTPUT-1",
+            entry_path,
+            vec![("column", "VALUE")],
+            "a repeated output column",
+        ),
     ] {
         let mut spec = specification();
-        if declared {
-            let mut internal = column(key);
-            internal.remove(&["submission"]);
-            let Tree::List(columns) = spec.at(&["columns"]) else {
-                unreachable!("columns are a list")
-            };
-            columns.push(internal);
-        }
-        *spec.at(&["keys"]) = Tree::list(vec![Tree::text("VALUE"), Tree::text(key)]);
+        let mut internal = column("INTERNAL");
+        internal.remove(&["submission"]);
+        let Tree::List(columns) = spec.at(&["columns"]) else {
+            unreachable!("columns are a list")
+        };
+        columns.push(internal);
+        *spec.at(field) = Tree::list(entries.iter().map(Tree::text).collect());
         let findings = one(project(), spec, &empty).unwrap_err();
         let [finding] = findings.as_slice() else {
             panic!("{label} fails once: {findings:?}")
@@ -666,9 +716,12 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             &super::Record::record(finding),
             "validation",
             condition,
-            Some("OUTPUT-2"),
-            &["sdtm.specs[0].keys[1]"],
-            vec![("column", super::text(key))],
+            Some(rule),
+            &[path],
+            context
+                .into_iter()
+                .map(|(name, value)| (name, super::text(value)))
+                .collect(),
         ));
     }
     // A `not_missing` check that restates a column's resolved `mandatory` is

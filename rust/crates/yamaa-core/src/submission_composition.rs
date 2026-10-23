@@ -5,6 +5,7 @@ use crate::{
     project_environment::Submission,
     project_terminology as ct,
     schema::{Document, DocumentNode as N},
+    specification::{OutputFinding, PreflightFinding},
     specification_submission_document as spec,
     submission_origin::{self as origin, Reads},
     submission_values as values,
@@ -1822,34 +1823,46 @@ fn compose_datasets(
                 ));
             }
         }
-        let mut ordered = BTreeSet::new();
-        for name in &output_columns {
-            if !ordered.insert(name) {
-                findings.push(Finding::cause(
-                    ConditionCode::SubmissionDuplicateIdentifier,
-                    &format!("{path}.output.columns"),
-                    name,
-                ));
-            }
+        // OUTPUT-2: `keys` fails as checking the specification refuses it, with
+        // the specification's own refusal at its spec path under the listing:
+        // an empty list, and each key an earlier key repeats, no column
+        // declares, or `output.columns` leaves out. A missing list is the
+        // schema's to refuse.
+        let declared = |name: &String| {
+            columns
+                .value
+                .iter()
+                .any(|column| &column.name.value == name)
+        };
+        let written = doc.field(doc.root(), "keys").map(|node| &doc.nodes()[node]);
+        if matches!(written, Some(N::Sequence(items)) if items.is_empty()) {
+            findings.push(Finding::listed(
+                &path,
+                PreflightFinding::EmptyKeys.diagnostic(),
+            ));
         }
-        // OUTPUT-2: a key that is not an output column fails as checking or
-        // running the specification refuses it, at the key under its listing.
         for (position, key) in keys.iter().enumerate() {
-            if output_columns.contains(key) {
-                continue;
+            if keys[..position].contains(key) {
+                let refusal = PreflightFinding::DuplicateKey {
+                    position,
+                    identifier: key.clone(),
+                };
+                findings.push(Finding::listed(&path, refusal.diagnostic()));
             }
-            let refusal = if columns.value.iter().any(|column| &column.name.value == key) {
-                crate::specification::OutputFinding::InternalKey {
+            let refusal = if !declared(key) {
+                PreflightFinding::UndeclaredKey {
+                    position,
+                    column: key.clone(),
+                }
+                .diagnostic()
+            } else if !output_columns.contains(key) {
+                OutputFinding::InternalKey {
                     position,
                     name: key.clone(),
                 }
                 .diagnostic()
             } else {
-                crate::specification::PreflightFinding::UndeclaredKey {
-                    position,
-                    column: key.clone(),
-                }
-                .diagnostic()
+                continue;
             };
             findings.push(Finding::listed(&path, refusal));
         }
@@ -1883,16 +1896,26 @@ fn compose_datasets(
             tabulation,
             class: dataset.class.value.name(),
         };
-        for name in &output_columns {
-            let column_path = format!("{path}.columns.{name}.submission");
-            let Some(column) = columns.value.iter().find(|c| &c.name.value == name) else {
-                findings.push(Finding::cause(
-                    ConditionCode::SubmissionMetadataMissing,
-                    &column_path,
-                    name,
-                ));
-                continue;
+        for (position, name) in output_columns.iter().enumerate() {
+            // OUTPUT-1: an entry that repeats an earlier one, or else names no
+            // declared column, fails as checking the specification refuses
+            // it, at the entry under the listing, and DEFINE-7 reads no
+            // metadata for it.
+            let repeated = output_columns[..position].contains(name);
+            let column = match columns.value.iter().find(|c| &c.name.value == name) {
+                Some(column) if !repeated => column,
+                _ => {
+                    let name = name.clone();
+                    let refusal = if repeated {
+                        OutputFinding::DuplicateColumn { position, name }
+                    } else {
+                        OutputFinding::UndeclaredColumn { position, name }
+                    };
+                    findings.push(Finding::listed(&path, refusal.diagnostic()));
+                    continue;
+                }
             };
+            let column_path = format!("{path}.columns.{name}.submission");
             key_column_mandatory(column, admission.keys, &path, findings);
             // Every origin the column and its entries declare.
             let origins: Vec<_> = column

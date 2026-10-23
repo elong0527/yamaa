@@ -108,13 +108,15 @@ listed specification they belong to and the document they come from
 (PROJECT-7), the run of a specification the project names, and a
 submission, whose `duplicate_dataset_entry` refuses a section that lists two
 specifications of one saved artifact (DEFINE-5). A case that makes several
-calls on the same files lists each call with its rows under `calls`:
-`a_key_that_is_not_an_output_column` checks the project, runs the
-specification it names and composes its submission, and each reports the
-key that `output.columns` leaves out as `internal_column_in_keys` under
-OUTPUT-2, naming the column at the same written key, at `keys[2]` in the
-specification's own calls and at `sdtm.specs[0].keys[2]` in the
-submission's. A case whose files or rows
+calls on the same files lists each call with its rows under `calls`. Six
+cases, from `a_key_that_is_not_an_output_column` to
+`an_output_column_listed_twice`, each break one refusal of OUTPUT-1 or
+OUTPUT-2 (an internal, undeclared or repeated key, an empty `keys`, and an
+undeclared or repeated output column): each checks the project, runs the
+specification it names and composes its submission, and every call reports
+that one refusal at the same written position, at its spec path in the
+specification's own calls (`keys[2]`) and at that path under the listing in
+the submission's (`sdtm.specs[0].keys[2]`). A case whose files or rows
 depend on the host language gives them by language: a function file that
 implements only the other host refuses the call with the running host's
 language (FUNC-1), and each host verifies only its own lock (FUNC-3). The
