@@ -283,7 +283,7 @@ chosen, a tie going to the earlier `source` and then to the earlier stored
 record; a candidate whose distance is missing is never chosen.
 
 Fails: `prohibited_construct`, `incompatible_input_type`, `unknown_field`.
-Evidence: `schema-lookup-nearest-datetime`, `schema-lookup-nearest-date`, `schema-lookup-nearest-missing`, `negative-lookup-nearest-keep`, `rust/crates/yamaa-adapters/tests/execution_lookup_nearest.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`.
+Evidence: `schema-lookup-nearest-datetime`, `schema-lookup-nearest-date`, `schema-lookup-nearest-missing`, `negative-lookup-nearest-keep`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`.
 
 `nearest` declares `source`, `to` and `unit`, each required. It is the
 select step of a named intermediate ([LOOKUP-25](#lookup-25)) and replaces
