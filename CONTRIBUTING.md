@@ -17,7 +17,8 @@ applies.
 | `rules/`, `yaml/` | Normative contracts, diagnostics, schemas and grammar fixtures. |
 | `rust/crates/yamaa-core/` | Specification admission, expressions, dataset execution, project lifecycle, verification and submission metadata composition. |
 | `rust/crates/yamaa-adapters/` | Codecs, storage formats, physical IO and filesystem environment capture. |
-| `rust/crates/yamaa-boundary/` | The interface handshake of both host bindings, the gate every native call passes and the census of live native handles. |
+| `rust/crates/yamaa-boundary/` | The interface handshake of both host bindings, the gate every native call passes, the census of live native handles and the types of the engine's C ABI. |
+| `rust/crates/yamaa-engine/` | The engine's C ABI over the facade: its function table, handle table, callback adapters and Arrow stream export, which no package links yet. |
 | `rust/crates/yamaa-python/`, `rust/crates/yamaa-r/` | Host arguments, callbacks, scalar conversion and owned result views. |
 | `rust/crates/yamaa-cli/` | The `yamaa` command line: its arguments, exit statuses and printed output, over the facade alone, with the third-party notices and component inventory of its release archives. |
 | `python/`, `R/yamaa/` | Public host packages and package builds. |
@@ -32,13 +33,15 @@ results. Explicit Save publishes held bytes in contract order. Diagnostic codes
 belong to the shared registry. Resource policies and supported platforms have
 one owner in [release guidance](docs/release.md).
 
-The workspace has seven crates. `yamaa-core` owns preparation, project ports,
+The workspace has eight crates. `yamaa-core` owns preparation, project ports,
 activation and the complete build lifecycle; its dataset model owns execution.
 `yamaa-adapters` implements physical boundaries, and the `yamaa` facade
 composes the two. The two binding crates and the `yamaa-cli` command line
 implement their host boundaries and depend on the facade; the bindings also
 depend on `yamaa-boundary`, which holds their interface handshake and depends
-on nothing else in the workspace. Core may use
+on nothing else in the workspace. `yamaa-engine` puts the facade behind the
+C ABI whose types `yamaa-boundary` holds, and depends on those two alone; no
+package links it yet. Core may use
 `std` but holds no file or format code: it keeps the formats' metadata models,
 and the adapters read and write their bytes. Portable math still uses the
 pinned libm policy. `make check-repository` holds both rules of #3030 section
