@@ -57,9 +57,9 @@ import yaml
 from tools.validation._repository_yaml import UniqueKeyLoader
 from tools.validation.interface_manifests import Change, ManifestError
 
-# Where the JSON Schemas are committed. P2-13 moves yaml/v1/ up into yaml/ and
-# updates this one path.
-JSON_SCHEMAS = "yaml/v1/json"
+# Where the JSON Schemas are committed. From 1.0.0 they keep this path (#3030
+# D161), so the baseline tag holds them here too.
+JSON_SCHEMAS = "yaml/json"
 SCHEMA_SUFFIX = ".schema.json"
 EXPRESSION = "yaml/grammar/expression.yaml"
 TEMPLATE = "yaml/grammar/string-template.yaml"

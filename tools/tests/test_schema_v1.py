@@ -7,7 +7,7 @@ converter copies or renames by key is compared mechanically: its 1.0 field
 keeps the type and requirement, its default renamed with its values, and has
 the table's kind. An entry the converter transforms (``reshape``, ``new``, or a
 ``rename`` by transform) has a reviewed reading in ``EXPECTED``; a removed
-entry is absent. Every field, keyword and value ``yaml/v1/`` holds is accounted
+entry is absent. Every field, keyword and value ``yaml/`` holds is accounted
 for by an entry, and no reserved spelling is admitted. The table's
 ``conditions``, ``paths`` and ``issues_columns`` describe diagnostics, which no
 schema holds.
@@ -31,7 +31,7 @@ from tools.tests import support
 from tools.validation.repository_schema import SchemaSourceError
 from tools.validation.schema_bundle import Bundle, parse_type, type_text
 
-V1 = ROOT / "yaml/v1"
+SCHEMAS = ROOT / "yaml"
 EXAMPLES = ROOT / "docs/design/interface-1.0/examples"
 ABSENT = object()
 
@@ -50,7 +50,7 @@ def rename_table():
 @functools.cache
 def v1_bundle():
     """The 1.0 schema bundle."""
-    return Bundle(V1)
+    return Bundle(SCHEMAS)
 
 
 @functools.cache
@@ -376,7 +376,7 @@ def entry_kind(entry_id):
 
 
 class RenameTableTests(unittest.TestCase):
-    """Each rename-table entry against yaml/v1/."""
+    """Each rename-table entry against yaml/."""
 
     def setUp(self):
         self.renamed = renamed_fields()
@@ -631,7 +631,7 @@ class RenameTableTests(unittest.TestCase):
         }
         failures = []
         for file_type, (entry, root) in generator.FILE_TYPES.items():
-            bundle = Bundle(V1, entry)
+            bundle = Bundle(SCHEMAS, entry)
             for owner in bundle.reachable(root):
                 for item in v1_bundle().owners()[owner]:
                     if (owner, item.name) not in fields and (

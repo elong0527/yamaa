@@ -58,7 +58,7 @@ language version the file needs, always quoted, as in `yamaa: "1.0"`, and
 
 An engine reads a file that declares its own language version or an older 1.x
 one, and refuses a newer file as `unsupported_language_version`, naming the
-version the file needs. The [schema fields](../reference/schema-fields-v1.md)
+version the file needs. The [schema fields](../reference/schema-fields.md)
 list every field of each file type.
 
 > We recommend using AI to help you create these files. Human review and

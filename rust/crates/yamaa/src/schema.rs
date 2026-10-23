@@ -5,7 +5,7 @@
 //! [`schema`] gives the JSON Schema of `spec`, `project`, `codelists` or
 //! `function` as canonical JSON text. It is the document that
 //! `tools/packaging/generate_json_schema.py` generates from the type's schema
-//! files and commits in `yaml/v1/json/`, indented there for review. The
+//! files and commits in `yaml/json/`, indented there for review. The
 //! engine embeds the committed file when it is built, so nothing is read at
 //! run time, and every host returns the same text, which the command line
 //! prints.

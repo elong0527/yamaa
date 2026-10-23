@@ -72,7 +72,7 @@ class AffectedLanes(unittest.TestCase):
             "rust/Cargo.lock",
             "rust/rust-toolchain.toml",
             "benchmarks/example/expected/table.csv",
-            "yaml/v1/schema_spec.yaml",
+            "yaml/schema_spec.yaml",
             "tools/packaging/check_cargo_lock.py",
             "tools/staging/stage_r_package.py",
             "tools/commands/equivalence.py",

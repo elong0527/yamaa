@@ -533,12 +533,8 @@ def link_errors(root, rules):
 def schema_errors(root, rules):
     """Schema comments point at a rule; descriptions cite rules that resolve."""
     errors = []
-    # The 0.5 schema files and, until Phase 2 removes those, the 1.0 ones.
-    directory = root / "yaml"
-    paths = [*sorted(directory.glob("schema*.yaml"))]
-    paths += sorted((directory / "v1").glob("schema*.yaml"))
-    for path in paths:
-        label = path.relative_to(directory).as_posix()
+    for path in sorted((root / "yaml").glob("schema*.yaml")):
+        label = path.name
         text = path.read_text(encoding="utf-8")
         for comment in SCHEMA_COMMENT.findall(text):
             pointer = POINTER.fullmatch(comment)

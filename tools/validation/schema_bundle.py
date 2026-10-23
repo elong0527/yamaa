@@ -1,7 +1,7 @@
 """Read a schema bundle written in the schema notation: names, types and kinds.
 
 The notation is defined by ``rules/reference/schema-language.md``. The 1.0
-schema files under ``yaml/v1/`` add two keywords (``yaml/README.md``):
+schema files in ``yaml/`` add two keywords (``yaml/README.md``):
 ``kind``, which a named value type declares to give the fields it types their
 kind, and ``since``, the language version that introduced a class field.
 The Rust engine owns admission; this reader serves the repository generators

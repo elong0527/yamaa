@@ -1,5 +1,5 @@
 //! `yamaa::schema` gives the JSON Schema of a file type as canonical JSON
-//! text: the document committed in `yaml/v1/json/`, which the engine embeds
+//! text: the document committed in `yaml/json/`, which the engine embeds
 //! when it is built (#3030 section 2.12, D149). Any other text is refused as
 //! `unexpected_file_type` (SCHEMA-2), as `cannot give the schema of <type>`
 //! (D39). No build feature is needed: the schema is text the engine holds.
@@ -11,7 +11,7 @@ use yamaa::{ContextValue, Severity, FILE_TYPES};
 /// The committed JSON Schema of `file_type`, as canonical JSON text.
 fn committed(file_type: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../yaml/v1/json")
+        .join("../../../yaml/json")
         .join(format!("{file_type}.schema.json"));
     let bytes = std::fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
     yamaa_adapters::json_wire::encode(&yamaa_adapters::json_wire::decode_slice(&bytes).unwrap())

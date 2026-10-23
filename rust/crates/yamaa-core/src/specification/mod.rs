@@ -1227,10 +1227,10 @@ impl PreparedSpecification {
     /// The spec path of the first derivation, in authored order, that calls a
     /// project function the build runs: where a build no host can run is
     /// refused (#3030 D221). Authored order is the order a formatted file
-    /// writes derivations in (yaml/v1): the intermediates', then the
-    /// columns', then the row templates', each in declaration order. A
-    /// column's derivation that every row template replaces calls nothing the
-    /// build runs.
+    /// writes derivations in (yaml/schema_spec.yaml): the intermediates',
+    /// then the columns', then the row templates', each in declaration order.
+    /// A column's derivation that every row template replaces calls nothing
+    /// the build runs.
     pub fn first_calling_derivation(&self) -> Option<&str> {
         self.project_calls
             .as_ref()?

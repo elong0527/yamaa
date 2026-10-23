@@ -1,7 +1,7 @@
 """Installed yamaa.schema(): the JSON Schema of a file type as canonical text.
 
 The facade's own tests compare each schema with the file the repository
-commits in yaml/v1/json/ (the schema module of the yamaa crate); this checks
+commits in yaml/json/ (the schema module of the yamaa crate); this checks
 what the installed host returns and raises for the shared truth, which R reads
 too (#3030 section 2.12, D149).
 """

@@ -17,7 +17,7 @@ rust/crates/yamaa-core/src/schema/printable_data.rs text eol=lf
 # Keep the committed facade API inventory byte-identical on every platform.
 rust/crates/yamaa/public-api.txt text eol=lf
 # The engine embeds the committed JSON Schemas, and tests compare the bytes.
-yaml/v1/json/*.schema.json text eol=lf
+yaml/json/*.schema.json text eol=lf
 # Keep vendored release sources and both installed MIT notices byte-identical.
 rust/vendor/saphyr-parser/** text eol=lf
 python/LICENSE-YAML.txt text eol=lf

@@ -9,13 +9,12 @@
 # only by adding values; a value is never removed in 1.x.
 #
 # Each vocabulary names the schema type that spells it (`type`), or the class
-# field that lists its values (`field`, written class.field), in yaml/ and
-# yaml/v1/, which must list exactly its values; `schemas` limits that to the
-# schema sets it names. One that names a Define-XML `enumeration` must equal
-# that simple type of the Define-XML schema bundled at
-# rust/tests/schemas/define/2.1/define-enumerations.xsd, whose release
-# `source` names. `python -m tools.validation.check_cdisc_vocabulary` checks
-# both.
+# field that lists its values (`field`, written class.field), in the schema
+# files in yaml/, which must list exactly its values. One that names a
+# Define-XML `enumeration` must equal that simple type of the Define-XML
+# schema bundled at rust/tests/schemas/define/2.1/define-enumerations.xsd,
+# whose release `source` names.
+# `python -m tools.validation.check_cdisc_vocabulary` checks both.
 #
 # The tables of SUB-3, SUB-9, SUB-10, SUB-15, SUB-26 and JSON-10 list these
 # values too; `python -m tools.validation.check_cdisc_tables` keeps them to
@@ -25,11 +24,9 @@ source:
   define_xml: "2.1.11"
   terminology: "2026-03-27"
 vocabularies:
-  # The CDISC spellings of the three models (P-MODEL-1). Only the 1.0 schema
-  # declares `model`.
+  # The CDISC spellings of the three models (P-MODEL-1).
   model:
     field: root_class.model
-    schemas: [yaml/v1]
     values:
       - {value: SDTM, since: "1.0"}
       - {value: SEND, since: "1.0"}
@@ -79,13 +76,10 @@ vocabularies:
       - {value: SENDIG-DART, since: "1.0"}
       - {value: SENDIG-GENETOX, since: "1.0"}
   # The Define-XML schema lists these three and also admits any other text;
-  # an implementation guide's status takes only the three. The 0.5 schema in
-  # yaml/ lists Draft and Final, as Provisional is new in 1.0 (P-STD-1), so
-  # only yaml/v1/ is compared.
+  # an implementation guide's status takes only the three (P-STD-1).
   standard_status:
     field: implementation_guide_class.status
     enumeration: StandardStatus
-    schemas: [yaml/v1]
     values:
       - {value: Draft, since: "1.0"}
       - {value: Final, since: "1.0"}
@@ -163,10 +157,9 @@ vocabularies:
       - {value: intervalDatetime, since: "1.0"}
       - {value: URI, since: "1.0"}
   # The comparator a where condition states; a bare list of values is EQ or
-  # IN. Within the Comparator of ODM 1.3.2. Only the 1.0 schema declares it.
+  # IN. Within the Comparator of ODM 1.3.2.
   comparator:
     field: where_comparison_class.comparator
-    schemas: [yaml/v1]
     values:
       - {value: NE, since: "1.0"}
       - {value: NOTIN, since: "1.0"}
