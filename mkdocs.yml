@@ -104,7 +104,7 @@ nav:
       - Style guide: articles/style.md
   - Reference:
       - Schema introduction: articles/schema-intro.md
-      - Schema reference: articles/schema.md
+      - Schema files and JSON Schemas: articles/schema.md
       - Rules: articles/rules.md
       - Rules at a glance: reference/rules-summary.md
       - Rule index: reference/rule-index.md
