@@ -1,0 +1,16 @@
+yamaa: "1.0"
+type: spec
+
+columns:
+  # Reads the analysis dates each template derives, so it serves every
+  # template that lists it.
+  - name: ADURN
+    type: int
+    label: Analysis Duration (N)
+    derivation:
+      diff:
+        type: date
+        start: ASTDT
+        end: AENDT
+        unit: day
+        closed: both

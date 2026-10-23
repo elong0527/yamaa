@@ -62,10 +62,11 @@ These four principles follow from the core principle of one execution:
 
 - **Inheritance**: Each specification names at most one parent, and the chain
   combines in a fixed order, from its root ancestor to the entry, into one final
-  specification; a cycle fails instead of resolving. Every layer is a `spec`
-  file, and a layer removes an inherited value only by naming it in `clear`.
-  A company standard is shared, not copied into files that then change
-  separately.
+  specification; each layer adds the fragments it lists under `include` just
+  before itself, and a cycle or a file reached twice fails instead of
+  resolving. Every layer is a `spec` file, and a layer removes an inherited
+  value only by naming it in `clear`. A company standard is shared, not copied
+  into files that then change separately.
 - **Language neutral**: The same specification with the same inputs generates the
   same output dataset, to the byte, in R, in Python and from the command line,
   on every supported operating system. No host has its own semantics, global

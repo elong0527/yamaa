@@ -196,8 +196,8 @@ impl Run<'_> {
     }
     /// Root fields: keyed collections compose member by member and every
     /// other field replaces whole; a layer clears only through `clear`, in
-    /// which null is the missing value (LAYER-9). `parent` and `clear` are
-    /// never contributed.
+    /// which null is the missing value (LAYER-9). `parent`, `include` and
+    /// `clear` are never contributed.
     fn root(
         &mut self,
         old: Site<'_>,
@@ -214,7 +214,7 @@ impl Run<'_> {
         for &(key, value) in after {
             let name = new.child(key).text()?;
             let value = new.child(value);
-            if name == "parent" || name == "clear" {
+            if matches!(name, "parent" | "include" | "clear") {
                 changes.push(Change::Remove);
                 continue;
             }

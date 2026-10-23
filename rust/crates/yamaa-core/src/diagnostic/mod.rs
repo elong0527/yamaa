@@ -303,6 +303,8 @@ conditions! {
     InheritanceParentUnavailable => ("validation", "parent_not_found", Some("LAYER-2")),
     InheritanceParentOnAnotherShare => ("validation", "parent_on_another_share", Some("LAYER-10")),
     InheritanceCycle => ("validation", "inheritance_cycle", Some("LAYER-3")),
+    InheritanceRepeatedLayer => ("validation", "duplicate_layer", Some("LAYER-3")),
+    InheritanceFragmentField => ("validation", "prohibited_construct", Some("LAYER-4")),
     InheritanceParentLanguageVersion => ("validation", "unsupported_language_version", Some("LAYER-4")),
     InheritanceParentFileType => ("validation", "unexpected_file_type", Some("LAYER-4")),
     PreflightUndeclaredRowColumn => ("validation", "undeclared_column", Some("SPEC-5")),

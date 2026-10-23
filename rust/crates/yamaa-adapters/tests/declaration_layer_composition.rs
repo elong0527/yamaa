@@ -5,8 +5,10 @@
 //! A layer's `clear` removes values it inherits before its own fields
 //! compose, YAML null is the missing value and never removes anything, a
 //! finding names row templates and intermediates by `id`, and the resolved
-//! specification keeps the provenance of every value. The converted
-//! `negative-property-clear` fails where its 0.5 source did.
+//! specification keeps the provenance of every value. A layer's fragments
+//! compose after its parent chain and before its own fields, each fragment
+//! read from its own directory. The converted `negative-property-clear`
+//! fails where its 0.5 source did.
 mod declaration {
     mod layer_composition {
         use crate::support::Edit as _;
@@ -767,6 +769,226 @@ columns:
   - {name: RANK, type: int, derivation: {row_number: {window: OTHER}}}
 output: {path: out.csv, columns: [ID, PREV, RANK]}
 "#;
+
+        /// The entry of a layered study: `base.yaml` as its parent, then
+        /// `header`, then its own fields.
+        fn including(header: &str, rest: &str) -> String {
+            ENTRY.edit(
+                "parent: base.yaml\n",
+                &format!("parent: base.yaml\n{header}"),
+            ) + rest
+        }
+
+        #[test]
+        fn fragments_compose_after_the_parent_chain_and_before_their_layer() {
+            let study = Study::new();
+            study.write("base.yaml", BASE);
+            // The first fragment adds a column and reads the source from its
+            // own directory; the second changes what the first wrote.
+            study.write(
+                "shared/first.yaml",
+                "yamaa: \"1.0\"\ntype: spec\ninput:\n  DS: data/ds.csv\ncolumns:\n  \
+                 - {name: CODE, metadata: {owner: first}}\n  \
+                 - {name: EXTRA, type: str, label: Extra, derivation: \"'A'\"}\n",
+            );
+            study.write(
+                "shared/second.yaml",
+                "yamaa: \"1.0\"\ntype: spec\ncolumns:\n  - {name: CODE, metadata: {owner: second}}\n",
+            );
+            study.write(
+                "spec.yaml",
+                &including(
+                    "include:\n  - shared/first.yaml\n  - shared/second.yaml\n",
+                    "columns:\n  - {name: EXTRA, label: Entry Extra}\n",
+                )
+                .edit("columns: [CODE, REASON]", "columns: [CODE, REASON, EXTRA]"),
+            );
+            let prepared = prepare(&study.path("spec.yaml")).unwrap();
+            let (base, first, second, entry) = (
+                study.path("base.yaml"),
+                study.path("shared/first.yaml"),
+                study.path("shared/second.yaml"),
+                study.path("spec.yaml"),
+            );
+            assert_eq!(
+                prepared
+                    .layers()
+                    .iter()
+                    .map(|layer| layer.source.identity.as_str())
+                    .collect::<Vec<_>>(),
+                [
+                    base.as_str(),
+                    first.as_str(),
+                    second.as_str(),
+                    entry.as_str()
+                ]
+            );
+            let spec = resolved(&prepared);
+            // The later fragment wins over the earlier, and the entry over
+            // both; a mapping still merges key by key (LAYER-6).
+            assert_eq!(
+                at(&spec, "/columns/0/metadata"),
+                &json(r#"{"origin":"collected","owner":"second"}"#)
+            );
+            assert_eq!(at(&spec, "/columns/2/label"), &json(r#""Entry Extra""#));
+            // The fragment's path is read beside the fragment and respelled
+            // from the entry (LAYER-10).
+            assert_eq!(
+                at(&spec, "/input/DS/path"),
+                &json(r#""shared/data/ds.csv""#)
+            );
+            let root = spec.as_object().unwrap();
+            assert!(!root.contains_key("include") && !root.contains_key("parent"));
+            for (path, layer) in [
+                ("columns.CODE.metadata.owner", &second),
+                ("columns.CODE.metadata.origin", &base),
+                ("columns.EXTRA.derivation", &first),
+                ("columns.EXTRA.label", &entry),
+                ("input.DS.path", &first),
+            ] {
+                assert_eq!(
+                    prepared.declaring_source(path),
+                    Some(layer.as_str()),
+                    "{path}"
+                );
+            }
+        }
+
+        #[test]
+        fn a_fragment_clear_applies_to_what_the_layers_before_it_compose() {
+            let study = Study::new();
+            study.write(
+                "shared/unscoped.yaml",
+                "yamaa: \"1.0\"\ntype: spec\nclear: [metadata.scope]\n",
+            );
+            study.write(
+                "spec.yaml",
+                &including("include: [shared/unscoped.yaml]\n", ""),
+            );
+            // On a base that writes the scope, the fragment clears it.
+            study.write("base.yaml", BASE);
+            let spec = resolved(&prepare(&study.path("spec.yaml")).unwrap());
+            assert_eq!(at(&spec, "/metadata"), &json(r#"{"owner":"base"}"#));
+            // On a base that does not, the same fragment names nothing it
+            // inherits: the finding is the fragment's (LAYER-9).
+            study.write(
+                "base.yaml",
+                &BASE.edit("metadata: {scope: organization, owner: base}\n", ""),
+            );
+            let error = prepare(&study.path("spec.yaml")).unwrap_err();
+            assert_eq!(
+                layer_findings(error),
+                (
+                    study.path("shared/unscoped.yaml"),
+                    vec![invalid_clear(0, "scope")]
+                )
+            );
+        }
+
+        #[test]
+        fn an_include_entry_is_a_list_of_paths_judged_in_its_layer() {
+            let study = Study::new();
+            study.write("base.yaml", BASE);
+            // A URI is refused as written (FILE-5), and a path written alone
+            // is not the list `include` is (SCHEMA-12).
+            for (header, path, code) in [
+                (
+                    "include: [\"https://example.test/fragment.yaml\"]\n",
+                    "include[0]",
+                    ConditionCode::ResourceUriScheme,
+                ),
+                (
+                    "include: shared/fragment.yaml\n",
+                    "include",
+                    ConditionCode::SchemaInvalidFieldType,
+                ),
+            ] {
+                study.write("spec.yaml", &including(header, ""));
+                let (source, findings) =
+                    layer_findings(prepare(&study.path("spec.yaml")).unwrap_err());
+                assert_eq!(source, study.path("spec.yaml"), "{header}");
+                let found = findings
+                    .iter()
+                    .map(|(code, path, _)| (*code, path.as_str()))
+                    .collect::<Vec<_>>();
+                assert_eq!(found, [(code, path)], "{header}");
+            }
+        }
+
+        #[test]
+        fn resolve_lists_each_layer_and_each_include_entry_in_contribution_order() {
+            use yamaa_adapters::resolved_artifact::model::{Location, RelativeTo, ResourceRole};
+            let study = Study::new();
+            study.write("base.yaml", BASE);
+            study.write(
+                "shared/labels.yaml",
+                "yamaa: \"1.0\"\ntype: spec\ncolumns:\n  - {name: CODE, label: Collected Code}\n",
+            );
+            study.write(
+                "spec.yaml",
+                &including("include: [shared/labels.yaml]\n", ""),
+            );
+            let prepared = prepare(&study.path("spec.yaml")).unwrap();
+            let artifact = resolved_artifact::versioned(&prepared, None, |base, written| {
+                Ok::<_, yamaa_adapters::file_resources::Error>(identity(&lexical(
+                    &Path::new(base).parent().unwrap().join(written),
+                )))
+            })
+            .unwrap();
+            let [entry] = artifact.entries() else {
+                panic!("one entry");
+            };
+            let (base, labels, spec) = (
+                study.path("base.yaml"),
+                study.path("shared/labels.yaml"),
+                study.path("spec.yaml"),
+            );
+            assert_eq!(entry.layers, [base.clone(), labels.clone(), spec.clone()]);
+            let layered = entry
+                .resources
+                .iter()
+                .filter(|resource| {
+                    matches!(
+                        resource.role,
+                        ResourceRole::ParentSpecification | ResourceRole::IncludedSpecification
+                    )
+                })
+                .map(|resource| {
+                    let Location::Local { path } = &resource.location;
+                    (
+                        resource.spec_path.as_str(),
+                        resource.role.clone(),
+                        resource.declaring_source.as_str(),
+                        resource.relative_to.clone(),
+                        resource.written.as_str(),
+                        path.as_str(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                layered,
+                [
+                    (
+                        "include[0]",
+                        ResourceRole::IncludedSpecification,
+                        spec.as_str(),
+                        RelativeTo::Declaring,
+                        "shared/labels.yaml",
+                        labels.as_str(),
+                    ),
+                    (
+                        "parent",
+                        ResourceRole::ParentSpecification,
+                        spec.as_str(),
+                        RelativeTo::Declaring,
+                        "base.yaml",
+                        base.as_str(),
+                    ),
+                ]
+            );
+            let origin = &entry.origins["/columns/0/label"];
+            assert_eq!(origin.declaring_source.as_deref(), Some(labels.as_str()));
+        }
 
         /// A later definition of an inherited window merges with it by name,
         /// keeping the settings it does not write and the other inherited

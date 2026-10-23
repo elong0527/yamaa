@@ -143,8 +143,9 @@ pub struct OutputDecl {
 }
 
 /// Independent declared types and output declarations of one entry
-/// specification, composed over its `parent` chain exactly like the
-/// conformance runner's `declarations` (types and output paths, never
+/// specification, composed over its `parent` chain and the fragments its
+/// layers include exactly like the conformance runner's `declarations` (types
+/// and output paths, never
 /// derivations). A copy entry declares each column it lists with the type its
 /// producer declares: the specification the input's final `schema` link names,
 /// from the base its final `relative_to` selects (SPEC-9).
@@ -155,8 +156,10 @@ pub fn declarations_for(
     declarations(&case.join(specification), &mut Vec::new())
 }
 
-/// The layers of the chain whose entry is `path`, root ancestor first, each
-/// pushed onto `active`.
+/// The layers of the composition whose entry is `path`, in contribution
+/// order: at each layer its parent chain, then the fragments it includes, in
+/// order, then the layer itself (LAYER-3). Each layer of the chain is pushed
+/// onto `active`.
 fn chain(path: &Path, active: &mut Vec<PathBuf>) -> Result<Vec<(PathBuf, Json)>, String> {
     let canonical = path
         .canonicalize()
@@ -177,6 +180,17 @@ fn chain(path: &Path, active: &mut Vec<PathBuf>) -> Result<Vec<(PathBuf, Json)>,
         )?,
         None => Vec::new(),
     };
+    if let Some(Json::Array(include)) = doc.get("include") {
+        for written in include.iter().filter_map(Json::as_str) {
+            let fragment = path
+                .parent()
+                .expect("specification has a directory")
+                .join(written);
+            let bytes =
+                fs::read(&fragment).map_err(|error| format!("{}: {error}", fragment.display()))?;
+            layers.push((fragment, yaml_json(&bytes)));
+        }
+    }
     layers.push((path.to_path_buf(), doc));
     Ok(layers)
 }

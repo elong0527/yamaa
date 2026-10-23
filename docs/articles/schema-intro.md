@@ -79,9 +79,10 @@ reference the name), and nesting is permitted in exactly two places
 under LOOKUP-6).
 
 A single file keeps its columns in the order they are written, which must be
-a dependency order (COLUMN-5), while a layered specification is re-sorted
-(LAYER-13), because a child layer cannot insert a column between its
-parent's. `output.columns` is never reordered.
+a dependency order (COLUMN-5), while a layered specification, one that names
+a parent or includes fragments, is re-sorted (LAYER-13), because a child
+layer cannot insert a column between its parent's. `output.columns` is never
+reordered.
 
 ## What the schema does not do
 

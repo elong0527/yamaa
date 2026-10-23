@@ -119,6 +119,10 @@ conditions:
   duplicate_key:
     phases: [output]
     message: "the output keys repeat in {duplicate_count} of the rows"
+  # LAYER-3
+  duplicate_layer:
+    phases: [validation]
+    message: "include {path} names a layer the specification already composes"
   duplicate_order_term:
     phases: [validation]
     message: "output.order_by names column {column} more than once"
@@ -161,7 +165,7 @@ conditions:
     message: "{spec_path} reads a value of type {actual}, which it does not accept"
   inheritance_cycle:
     phases: [validation]
-    message: "the parent chain forms a cycle: {cycle}"
+    message: "the layers form a cycle: {cycle}"
   integer_overflow:
     phases: [derivation, validation]
     message: "{value} is outside the int range -9223372036854775808 to 9223372036854775807"

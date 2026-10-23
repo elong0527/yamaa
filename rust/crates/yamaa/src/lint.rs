@@ -11,8 +11,12 @@
 //! order, then by line, column and finding. The result also counts the files
 //! linted and names the files a fix rewrote, for the command line's summary
 //! line, `N lint findings in M of K files`. A 1.x specification that declares
-//! `parent` is also compared with the layers it inherits, read through the
-//! same resolver, for `partial_restatement`, which no fix rewrites.
+//! `parent` or `include` is also compared with the layers it inherits, read
+//! through the same resolver, for `partial_restatement`, which no fix
+//! rewrites. A file that declares either, or that a specification of the
+//! call includes, itself or through the parent chain it inherits, is a layer,
+//! which `restated_default`, `unused_input_key` and `missing_label` do not
+//! read.
 //!
 //! A comment `# yamaa-lint: allow <finding>, ... -- <reason>` directly above a
 //! field or an entry suppresses the named findings within it (P-LINT-1); a

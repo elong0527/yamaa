@@ -131,23 +131,22 @@ and must not carry a governed key such as `core`, `codelist`, `length`, or
 | Sort Order (submission sort) | `output.order_by` | A presentation order applied after every check |
 | Input datasets (usually only in a Comment) | `input:` | Every input is declared and named; an input read by a join declares the columns it joins on in `key` |
 | Structure: "one record per subject per visit" | `base` plus `rows` templates | Row count comes from these, not from a sentence |
-| Copy the corporate template and edit | `parent:`, and `clear:` | Real layering; a change to the parent flows down, and a layer removes an inherited value only by listing its path in `clear` (Specification composition). A layer names one parent; for a fragment several templates share, see [below](#a-fragment-shared-by-several-templates) |
+| Copy the corporate template and edit | `parent:`, `include:` and `clear:` | Real layering; a change to the parent flows down, and a layer removes an inherited value only by listing its path in `clear` (Specification composition). A layer names one parent and lists the reusable fragments it adds under `include`; see [below](#a-fragment-shared-by-several-templates) |
 | Dataset-level review checks | `verifications:` | `unique`, `row_count`, `all_or_none`, `assert` |
 
 ### A fragment shared by several templates
 
 A study often builds a dataset from a template plus small reusable
 fragments, each adding or changing a few variables: an adverse-event
-duration, a treatment-period assignment. Each file names at most one
-`parent`, so the template, its fragments and the study's file form one
-chain. The fragment names the template as its parent, and the study's file
-names the fragment:
+duration, a treatment-period assignment. The study's file names the template
+as its `parent` and lists the fragments under `include`. A fragment names no
+parent and no fragments of its own, so one fragment file serves every
+template that lists it:
 
 ```yaml
-# ae-duration-on-adae.yaml: the duration fragment, on the ADAE template
+# ae-duration.yaml: the duration, on any template that gives ASTDT and AENDT
 yamaa: "1.0"
 type: spec
-parent: adae-template.yaml
 
 columns:
   - name: ADURN
@@ -158,34 +157,50 @@ columns:
 ```
 
 ```yaml
-# adae.yaml: the study's ADAE, on the duration fragment
+# adae.yaml: the study's ADAE, on the ADAE template, with the duration
 yamaa: "1.0"
 type: spec
-parent: ae-duration-on-adae.yaml
+parent: adae-template.yaml
+include:
+  - ae-duration.yaml
 
 output:
   path: adae.csv
   columns: [USUBJID, AESEQ, ASTDT, AENDT, ADURN]
 ```
 
-A fragment used on several templates is one file per template, because its
-`parent` names only one of them. The same duration on an ADCE template is a
-second file, `ae-duration-on-adce.yaml`, that differs only in its `parent`, so
-a fragment used on N templates becomes N files. Generate those files from one
-source for the fragment, one chain for each combination of template and
-fragments a study selects, so that the copies never change separately.
+```yaml
+# adce.yaml: the study's ADCE, on the ADCE template, with the same file
+yamaa: "1.0"
+type: spec
+parent: adce-template.yaml
+include:
+  - ae-duration.yaml
 
-Renaming a 0.4.0 `parents:` list to `parent:` and writing it as a chain keeps
-what the list composed, but not the reuse: a fragment file composes only on
-the template its `parent` names. The `hint` that a `parents:` key or a list
-written at `parent` reports shows how to write the chain; it does not make
-one fragment file serve several templates.
+output:
+  path: adce.csv
+  columns: [USUBJID, CESEQ, ASTDT, AENDT, ADURN]
+```
 
-A separate `include:` key that would apply shared fragments on top of the
-`parent` chain is proposed in
-[#3615](https://github.com/elong0527/yamaa/issues/3615) as the planned
-answer. Until it is decided and released, one generated chain per
-combination is the supported route.
+Each file composes its template first, then the fragments it lists, in
+order, then its own fields, so a later fragment and the file itself win where
+they state the same detail (Specification composition). A fragment's paths
+resolve beside the fragment. A fragment's `clear` removes what the template
+and the fragments listed before it give, so a fragment that clears a value one
+template sets fails as `invalid_clear` on a template that does not set it. A
+file joins one specification at most once: listing a fragment that the
+template already includes fails as `duplicate_layer`.
+
+**From a 0.4.0 `parents:` list.** A 0.4.0 fragment often named the template
+as its own parent, so that it could be checked on its own, and the study's
+file listed both, as `parents: [adae-template.yaml, ae-duration.yaml]`.
+Rewrite the pair by hand in two steps: remove `parent` from the fragment, and
+in the study's file write `parent: adae-template.yaml` and list the fragment
+under `include`, keeping the order the list gave the fragments. A fragment
+that still names a parent fails as `prohibited_construct` at that `parent`.
+The `hint` that a `parents:` key or a list written at `parent` reports shows
+how to write a chain of templates, one `parent` per file; fragments go under
+`include`.
 
 ### 2.2 Variable level
 

@@ -7,8 +7,11 @@
 //! YAML document admission, and judged from the shared scanner's located
 //! events with the positions a reader sees; a 1.x file is also read through
 //! its file type's schema, as validation reads it. A 1.x specification that
-//! declares `parent` is compared with the layers it inherits, read through
-//! the same resolver, for `partial_restatement` alone.
+//! declares `parent` or `include` is compared with the layers it inherits,
+//! read through the same resolver, for `partial_restatement` alone. A
+//! specification that declares either, or that a specification of the call
+//! includes, itself or through the parent chain it inherits, is a layer: a
+//! value it writes may replace one it inherits.
 //!
 //! [`lint`] returns each file's findings in file order, then by line, column
 //! and finding. With `fix`, a file is rewritten only when the edited text
@@ -253,12 +256,12 @@ pub fn lint(paths: &[String], fix: bool) -> Result<Vec<Linted>, Error> {
 }
 
 /// The findings in `text`, a specification file's complete contents. Text
-/// has no location to read a `parent` from, so it gives no
-/// `partial_restatement`.
+/// has no location to read a `parent` or a fragment from, so it gives no
+/// `partial_restatement`, and it is never a fragment another file includes.
 pub fn check_text(text: &[u8]) -> Result<Vec<Finding>, DecodeFailure> {
     #[cfg(feature = "yaml")]
     {
-        files::findings(text, None)
+        files::findings(text, None, false)
     }
     #[cfg(not(feature = "yaml"))]
     {
@@ -272,7 +275,7 @@ pub fn fix_text(text: &[u8]) -> Result<Vec<u8>, DecodeFailure> {
     #[cfg(feature = "yaml")]
     {
         let document = document::Document::parse(text)?;
-        Ok(fix::fix_text(&document.text).into_bytes())
+        Ok(fix::fix_text(&document.text, false).into_bytes())
     }
     #[cfg(not(feature = "yaml"))]
     {

@@ -816,8 +816,10 @@ impl PreparedSpecification {
         }
         let mut extra = Vec::new();
         let has_rows = !spec.rows.templates.is_empty();
-        if spec.written.contains("parent") {
-            reject(&mut extra, "parent", "parent".into());
+        for field in ["parent", "include"] {
+            if spec.written.contains(field) {
+                reject(&mut extra, field, field.into());
+            }
         }
         root_filter::admit(spec, spec.rows.filter)?;
         let odm_inputs = checks::odm::inputs(spec)?;
@@ -841,7 +843,10 @@ impl PreparedSpecification {
         }
         // An uncomposed spec never reaches the closed lowering representation,
         // even when its shapes are valid.
-        if extra.iter().any(|feature| feature.operation == "parent") {
+        if extra
+            .iter()
+            .any(|feature| matches!(feature.operation.as_str(), "parent" | "include"))
+        {
             return Err(PrepareError::Unsupported(extra));
         }
         let (sources, source_interpretations, source_contracts) =

@@ -163,7 +163,7 @@ def reads_a_field_or_literal(derivation):
 def key_order_texts(document):
     """JSON control/permuted texts for the key-order check, or None.
 
-    Eligible documents have no `rows` and no `parent`, at least two keys,
+    Eligible documents have no `rows`, `parent` or `include`, at least two keys,
     and every key column reading one input field or a literal, so key columns
     may be declared in any order (COLUMN-5, OUTPUT-1, OUTPUT-2). The texts
     keep the document's header.
@@ -172,6 +172,7 @@ def key_order_texts(document):
         not isinstance(document, dict)
         or "rows" in document
         or document.get("parent") is not None
+        or document.get("include") is not None
     ):
         return None
     keys = document.get("keys") or []
@@ -398,17 +399,22 @@ def declarations(path, active=()):
 
 
 def chain(path, active=()):
-    """The layers of the chain whose entry is `path`, each as its path and
-    data, root ancestor first."""
+    """The layers of the composition whose entry is `path`, each as its path
+    and data, in contribution order: at each layer its parent chain, then the
+    fragments it includes, in order, then the layer itself (LAYER-3)."""
     if path.resolve() in active:
         raise ValueError("cyclic declarations")
     data = load_yaml(path)
     if not isinstance(data, dict):
         raise TypeError("specification declarations are not a mapping")
     parent = data.get("parent")
-    if parent is None:
-        return [(path, data)]
-    return [*chain(path.parent / parent, (*active, path.resolve())), (path, data)]
+    layers = (
+        [] if parent is None else chain(path.parent / parent, (*active, path.resolve()))
+    )
+    for written in data.get("include") or []:
+        fragment = path.parent / written
+        layers.append((fragment, load_yaml(fragment)))
+    return [*layers, (path, data)]
 
 
 def scalar(value, kind):

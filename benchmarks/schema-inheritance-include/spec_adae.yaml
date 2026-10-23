@@ -1,0 +1,13 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+parent: spec_ae.yaml
+include:
+  - spec_duration.yaml
+  - spec_severity.yaml
+domain: ADAE
+keys: [USUBJID, AESEQ]
+
+output:
+  path: adae.csv
+  columns: [USUBJID, AESEQ, ASTDT, AENDT, ADURN, ASEVN]
