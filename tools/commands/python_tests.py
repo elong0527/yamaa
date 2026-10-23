@@ -7,6 +7,7 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from tools.commands import loaded
 from tools.commands.installed import stage
 from tools.conformance.supplemental_inventory import load_catalog
 from tools.paths import ROOT
@@ -51,6 +52,10 @@ def run_installed_suites(python, work, workers=None):
 def run_tests(python, work):
     """Run pytest and the installed suites on one interpreter; return failures."""
     failed = []
+    if loaded.loaded():
+        # The suites load each fixture engine beside a copy of the package.
+        fixtures = loaded.build_fixtures(work / "fixture-engines")
+        os.environ[loaded.FIXTURES_VARIABLE] = str(fixtures)
     with ThreadPoolExecutor(max_workers=1) as background:
         # The suites run beside pytest; one core stays with pytest.
         suites = background.submit(

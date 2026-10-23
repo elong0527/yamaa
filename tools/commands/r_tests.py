@@ -12,6 +12,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from tools.commands import loaded
 from tools.commands.check_r import check
 from tools.packaging.check_cargo_lock import check_bundle_archive
 from tools.paths import ROOT
@@ -45,6 +46,14 @@ def install(work):
         check=True,
     )
     stage(work / "yamaa")
+    if loaded.loaded():
+        # The staged copy, never the repository's build files, builds the
+        # binding in the loaded mode and installs the engine library beside
+        # it, and the suites load each fixture engine beside a copy of the
+        # package (tools/commands/loaded.py).
+        loaded.patch_r_package(work / "yamaa")
+        fixtures = loaded.build_fixtures(work / "fixture-engines")
+        environment[loaded.FIXTURES_VARIABLE] = str(fixtures)
     subprocess.run(
         ["R", "CMD", "build", "--no-build-vignettes", "--no-manual", "yamaa"],
         cwd=work,

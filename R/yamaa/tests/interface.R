@@ -2,9 +2,9 @@
 # The generated .onLoad negotiates before any other native routine, and every
 # other routine refuses until a negotiation is accepted. The generated
 # request, each crafted request's outcome, the message template of each
-# reason and the gate's refusal are the shared truth's interface family,
-# which Python reads too; each outcome was written by hand from the
-# handshake's check order.
+# reason, the gate's refusal and each fixture engine's outcome in the loaded
+# mode are the shared truth's interface family, which Python reads too; each
+# outcome was written by hand from the handshake's check order.
 library(yamaa)
 # The truth is JSON, and jsonlite, which reads it, is a suggested package:
 # where it is not installed, the file is skipped.
@@ -243,3 +243,48 @@ check_gate <- function() {
   cat("every native routine refuses before negotiation\n")
 }
 check_gate()
+
+# The fixture engines of the test-only loaded mode, which its tooling builds
+# and names in YAMAA_FIXTURE_ENGINES (tools/commands/loaded.py). A copy of the
+# native library, loaded in a fresh R process with dyn.load, loads the
+# fixture engine placed beside it under the engine's name and answers the
+# generated request.
+check_fixtures <- function() {
+  fixtures <- Sys.getenv("YAMAA_FIXTURE_ENGINES")
+  if (!nzchar(fixtures)) {
+    cat("skipped the fixture engines: they exist in the loaded mode alone, whose tooling names them in YAMAA_FIXTURE_ENGINES\n")
+    return(invisible())
+  }
+  windows <- .Platform$OS.type == "windows"
+  engine_name <- if (windows) "yamaa_engine.dll" else "libyamaa_engine.so"
+  libs <- system.file("libs", package = "yamaa", mustWork = TRUE)
+  if (nzchar(.Platform$r_arch)) libs <- file.path(libs, .Platform$r_arch)
+  native_name <- paste0("yamaa", .Platform$dynlib.ext)
+  quote <- function(path) shQuote(path, type = if (windows) "cmd" else "sh")
+  rscript <- file.path(R.home("bin"), if (windows) "Rscript.exe" else "Rscript")
+  for (fixture in truth$fixtures) {
+    work <- tempfile("yamaa-fixture-")
+    dir.create(work)
+    file.copy(file.path(libs, native_name), file.path(work, native_name))
+    engine <- normalizePath(file.path(fixtures, fixture$library), mustWork = TRUE)
+    if (windows) file.copy(engine, file.path(work, engine_name)) else file.symlink(engine, file.path(work, engine_name))
+    input <- file.path(work, "request.rds")
+    output <- file.path(work, "reply.rds")
+    saveRDS(yamaa:::.interface_request, input)
+    child <- file.path(work, "child.R")
+    writeLines(c(
+      "arguments <- commandArgs(trailingOnly = TRUE)",
+      "routines <- getDLLRegisteredRoutines(dyn.load(arguments[[1L]]))$.Call",
+      "saveRDS(.Call(routines[[\"wrap__interface_handshake\"]], readRDS(arguments[[2L]])), arguments[[3L]])"), child)
+    tests <- Sys.getenv("R_TESTS", unset = NA)
+    Sys.setenv(R_TESTS = "")
+    status <- system2(rscript, c("--vanilla", quote(child), quote(file.path(work, native_name)), quote(input),
+      quote(output)))
+    if (is.na(tests)) Sys.unsetenv("R_TESTS") else Sys.setenv(R_TESTS = tests)
+    stopifnot("the child process succeeds" = identical(status, 0L))
+    expect_identical(yamaa:::.reply(readRDS(output)), outcome_of(resolved(fixture$outcome)), fixture$fixture)
+    unlink(work, recursive = TRUE)
+  }
+  cat("each fixture engine gets its authored outcome\n")
+}
+check_fixtures()
