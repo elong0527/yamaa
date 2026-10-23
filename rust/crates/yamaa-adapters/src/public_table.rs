@@ -29,7 +29,7 @@ pub struct PublicTable {
 impl PublicTable {
     /// Materialize the checked output/report projection once into sanitized Arrow
     /// arrays. No IPC byte encoding or decoding is part of this host handoff.
-    pub(crate) fn from_table<T: TableAccess<Error = std::convert::Infallible>>(
+    pub fn from_table<T: TableAccess<Error = std::convert::Infallible>>(
         table: &T,
         projection: &[usize],
     ) -> Result<Self, Error> {
