@@ -7,13 +7,11 @@ The language admits two closed grammars. Each one is defined once, here:
 | [`expression.yaml`](expression.yaml) | [Formulas](../../rules/formulas.md#formula-1) | a field typed `predicate`, `aggregate.expr` and text in an expression field |
 | [`string-template.yaml`](string-template.yaml) | [Text](../../rules/text.md#text-3) | `str_template.template` |
 
-The expression grammar is one language read in four contexts. A context fixes
+The expression grammar is one language read in three contexts. A context fixes
 the root a text must have and the constructs, functions and reducers it admits
 ([FORMULA-27](../../rules/formulas.md#formula-27)), so the same text can be
 admitted in one field and refused in another. `predicate` and `aggregate` are
 read in their fields, and `derivation` in text written in an expression field.
-`compute` reads `compute.expr` in a file that declares `schema_version`, until
-Phase 2 of [#3030](https://github.com/elong0527/yamaa/issues/3030) removes it.
 
 These files are the single authored grammar truth for the shared Rust parser
 used by Python and R. Repository validation renders each rule's grammar block
@@ -25,9 +23,8 @@ boundaries in every context. Installed
 Python and R public suites put the same texts into real specification fields;
 later binding failures remain separate from grammar decisions. Empty expression
 fields fail public schema admission under SCHEMA-12 before reaching the parser.
-The expression fields of the `derivation` context belong to 1.0 files, which
-the engine does not read yet, so until it does the installed suites replay the
-other three contexts and the typed core replays all four.
+Each context is read by a field, so the installed suites and the typed core
+both replay every case.
 
 Changing a grammar therefore starts here. A change that is not carried into
 every consumer fails validation rather than producing two runtimes that

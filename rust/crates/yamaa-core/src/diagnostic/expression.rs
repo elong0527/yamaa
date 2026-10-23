@@ -106,7 +106,7 @@ impl Failure {
                 context.insert("predicate".into(), text(expression));
                 context.insert("position".into(), V::from(position));
             }
-            Field::Compute | Field::Aggregate | Field::Derivation => {
+            Field::Aggregate | Field::Derivation => {
                 context.insert("expr".into(), text(expression));
             }
         }
