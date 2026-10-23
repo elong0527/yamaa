@@ -16,8 +16,10 @@ use std::sync::{
 };
 
 use yamaa::{
-    CancellationToken, Engine, EngineOptions, Error, Failure, HostLanguage, MemoryResolver,
-    Partitions, ResolverFailure, ResolverReply, ResolverRequest, ResourceResolver, Run,
+    Argument, CallError, CancellationToken, Engine, EngineOptions, Error, Failure, FunctionError,
+    FunctionHandle, FunctionIdentity, HostLanguage, LockContext, MemoryResolver, Partitions,
+    ProjectFunctions, ResolverFailure, ResolverReply, ResolverRequest, ResourceResolver, Run,
+    Scalar, ScalarRef, Signature,
 };
 
 /// A partition-safe specification: W converts V to an integer, and the run
@@ -277,6 +279,101 @@ fn mid_partition_a_cancelled_run_returns_no_result_and_publishes_nothing() {
             "cancelled at poll {from}"
         );
     }
+}
+
+/// A specification whose VALUE calls the project function `echo`.
+const FUNCTION_SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, key: [ID]}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: SRC.ID}\n  - {name: VALUE, type: str, label: Value, derivation: {function: {name: echo, args: {x: SRC.NAME}}}}\n";
+const FUNCTION: &[u8] = b"yamaa: \"1.0\"\ntype: function\nname: echo\ndescription: The value itself.\nparams: [{name: x, type: str}]\nreturns: str\nimplementations: {python: pkg.echo}\ntests:\n  - {id: normal, covers: [normal], args: {x: a}, result: a}\n  - {id: empty, covers: [boundary], args: {x: ''}, result: ''}\n  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n";
+const FUNCTION_PROJECT: &str =
+    "yamaa: \"1.0\"\ntype: project\nfunctions: [functions/echo.yaml]\nadam: {specs: [spec.yaml]}\n";
+
+/// `echo` answers its tests' arguments and raises the host's interrupt on
+/// the first data row, `alpha`; it counts the data rows it is called with.
+struct Interrupting {
+    calls: AtomicUsize,
+}
+impl ProjectFunctions for Interrupting {
+    fn verify_lock(
+        &self,
+        _: &LockContext<'_>,
+        _: &[FunctionIdentity],
+    ) -> Result<(), FunctionError> {
+        panic!("no lock is declared")
+    }
+    fn bind(&self, _: &FunctionIdentity, _: &Signature) -> Result<FunctionHandle, FunctionError> {
+        Ok(FunctionHandle::new(()))
+    }
+    fn invoke(&self, _: &FunctionHandle, arguments: &[Argument<'_>]) -> Result<Scalar, CallError> {
+        match arguments[0].value {
+            ScalarRef::Str(value) if value == "alpha" || value == "beta" => {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                Err(CallError::Raised(FunctionError::Interrupted {
+                    payload: None,
+                }))
+            }
+            ScalarRef::Str(value) => Ok(Scalar::Str(value.to_owned())),
+            _ => Ok(Scalar::Missing),
+        }
+    }
+}
+
+/// Mid-partition, cancelled by a callback: a project function needs the
+/// whole table, so it runs only under the fallback, and its interrupt on
+/// the first data row cancels the call there (D46): no result and no issue,
+/// no later row is called, and nothing is staged or published.
+#[test]
+fn mid_partition_a_project_function_interrupt_cancels_the_call() {
+    let resolver = Recording::new(FUNCTION_SPEC, b"ID,NAME\n1,alpha\n2,beta\n", None);
+    for (name, bytes) in [
+        ("project.yaml", FUNCTION_PROJECT.as_bytes()),
+        ("functions/echo.yaml", FUNCTION),
+    ] {
+        resolver
+            .inner
+            .insert("/", name, &format!("{name}:1"), Arc::from(bytes));
+        resolver.inner.insert(
+            "/project.yaml",
+            name,
+            &format!("{name}:1"),
+            Arc::from(bytes),
+        );
+    }
+    resolver.inner.insert(
+        "/project.yaml",
+        "spec.yaml",
+        "spec:1",
+        Arc::from(FUNCTION_SPEC.as_bytes()),
+    );
+    let functions = Arc::new(Interrupting {
+        calls: AtomicUsize::new(0),
+    });
+    let engine = Engine::new(
+        EngineOptions::new(HostLanguage::Python, "test".into(), "0".into())
+            .with_resolver(resolver.clone())
+            .with_functions(functions.clone())
+            .with_partitions(Partitions::new(NonZeroUsize::MIN).with_whole_table_fallback()),
+    );
+    let token = CancellationToken::new();
+    let result = engine.spec_run("spec.yaml", Some("project.yaml"), &token);
+    assert!(matches!(result, Err(Error::Cancelled)));
+    assert_eq!(
+        functions.calls.load(Ordering::SeqCst),
+        1,
+        "data rows called"
+    );
+    assert_eq!(
+        end_state(&resolver, "cancelled".into(), String::new()),
+        EndState {
+            outcome: "cancelled".into(),
+            named: String::new(),
+            published: vec![],
+            staged: 0,
+            committed: 0,
+            left: 0,
+        }
+    );
+    // The interrupt cancelled the call, not the caller's token.
+    assert!(!token.is_cancelled());
 }
 
 /// Mid-partition, failed: the third partition's V does not convert, so the
