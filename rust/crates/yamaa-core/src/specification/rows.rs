@@ -74,8 +74,8 @@ pub(super) enum Rows {
     Templates(Templates),
 }
 /// A spec without `rows` builds one implicit template over its base driver
-/// (`yaml/schema.yaml`'s root `filter` is that template's filter). Its rows
-/// are its keys' distinct combinations of the retained base records, or
+/// (`yaml/schema_spec.yaml`'s root `filter` is that template's filter). Its
+/// rows are its keys' distinct combinations of the retained base records, or
 /// the records themselves when a window derives a key. Every column binds
 /// in declaration order; a key is computed from one base record and is the
 /// template's row-phase assignment, and every other column completes the

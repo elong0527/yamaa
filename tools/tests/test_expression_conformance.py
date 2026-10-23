@@ -61,6 +61,11 @@ class DocumentRulesTests(unittest.TestCase):
                 [f"{label}: unknown covers ['SQUARE']"],
             ),
             (
+                "a cover its text does not write, beside a topic",
+                case(covers=["ABS", "CEIL", "missing"]),
+                [f"{label}: covers ['CEIL'], which its text does not write"],
+            ),
+            (
                 "an id that is not lowercase words",
                 case(id="Probe"),
                 [f"{DOCUMENT}: Probe: an id is unique lowercase words joined by -"],
@@ -113,7 +118,7 @@ class DocumentRulesTests(unittest.TestCase):
             ),
             (
                 "an aggregate written with rows",
-                case(context="aggregate", text="SUM(R.X)"),
+                case(context="aggregate", covers=["SUM"], text="SUM(R.X)"),
                 [
                     f"{label}: a case read in aggregate gives groups, not rows",
                     f"{label}: groups must be a non-empty list",
@@ -128,6 +133,7 @@ class DocumentRulesTests(unittest.TestCase):
                 "a grouping column the case does not declare",
                 case(
                     context="aggregate",
+                    covers=["SUM"],
                     text="SUM(R.X)",
                     rows=...,
                     groups=[[{"X": 1}]],
@@ -140,6 +146,7 @@ class DocumentRulesTests(unittest.TestCase):
                 "a group whose records differ in a grouping column, and an empty one",
                 case(
                     context="aggregate",
+                    covers=["SUM", "*"],
                     text="SUM(R.X) * R.N",
                     columns={"N": "int", "X": "int"},
                     rows=...,
@@ -192,6 +199,32 @@ class DocumentRulesTests(unittest.TestCase):
         ):
             with self.subTest(case=name):
                 self.assertEqual(self.errors(probe), expected)
+
+    def test_a_text_writes_what_the_grammar_reads_its_tokens_as(self):
+        # Each expectation follows yaml/grammar/expression.yaml: the optional
+        # NOT of membership, range and pattern, and of null_test after IS; the
+        # AND of range; factor's sign, which a number literal keeps; star; and
+        # DATE, DATETIME and ESCAPE, which `reserved` leaves out.
+        for text, expected in (
+            ("X NOT IN (1, NULL)", {"NOT IN", "NULL"}),
+            ("NOT X IN (1)", {"NOT", "IN"}),
+            (
+                "S NOT LIKE 'a%' AND NOT X IS NOT NULL",
+                {"NOT LIKE", "AND", "NOT", "IS NOT NULL"},
+            ),
+            ("NULL IS NULL", {"NULL", "IS NULL"}),
+            ("X BETWEEN 1 AND 3", {"BETWEEN"}),
+            ("X NOT BETWEEN 1 AND 3 and Y = 2", {"NOT BETWEEN", "AND", "="}),
+            ("-1 - X * -Y", {"-", "*", "unary -"}),
+            ("+X <> (X) + 1", {"unary +", "<>", "+"}),
+            ("count(R.*) / Sum(R.X)", {"COUNT", "/", "SUM"}),
+            ("S LIKE 'A AND ABS(B)' ESCAPE '!'", {"LIKE", "ESCAPE"}),
+            ("S = 'it''s' OR S >= 'NOT'", {"=", "OR", ">="}),
+            ("DATE '2025-06-01' <= DATE", {"DATE", "<="}),
+            ("DATETIME < 1 OR TRUE", {"<", "OR", "TRUE"}),
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(OWNER.written(text), expected)
 
     def test_the_set_must_cover_the_grammar_and_the_refusals(self):
         cases = committed()["cases"]

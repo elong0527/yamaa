@@ -42,7 +42,8 @@ pub struct Closures {
 }
 
 impl Closures {
-    /// The closures `yaml/v1/` defines, embedded in the package.
+    /// The closures the schema files in `yaml/` define, embedded in the
+    /// package.
     pub fn shipped() -> Result<Self, Error> {
         Ok(Self {
             spec: shipped_schema::capture_versioned(FileType::Spec)?,

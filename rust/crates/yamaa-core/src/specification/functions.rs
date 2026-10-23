@@ -230,8 +230,9 @@ fn requests(spec: &ast::Spec) -> (Vec<Request>, BTreeMap<ExprId, Vec<usize>>, Ve
         }
     }
     // A formatted file writes the intermediates before the columns and the
-    // row templates after them (yaml/v1): the intermediates' calls come
-    // first in authored order, each pass keeping its own order (D221).
+    // row templates after them (yaml/schema_spec.yaml): the intermediates'
+    // calls come first in authored order, each pass keeping its own order
+    // (D221).
     let [columns, intermediates, _] = counts;
     for (index, request) in requests.iter_mut().enumerate() {
         request.authored = match index {

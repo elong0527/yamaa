@@ -37,6 +37,10 @@ submission_dataset_class:
         type: identifier
         required: false
         description: Domain the dataset belongs to; defaults to the specification's domain.
+    - standard:
+        type: standard_reference
+        required: false
+        description: Name of the composing section's standard that binds the dataset; the section's first standard when omitted (DEFINE-6, DEFINE-8).
     - comment:
         type: submission_comment
         required: false
@@ -55,9 +59,9 @@ submission_value_class:
         required: true
         description: Identifier of the entry, unique within the column, naming its value-level definitions (SUB-12, DEFINE-9).
     - where:
-        type: "dict[identifier, list[where_value]]"
+        type: "dict[identifier, where_condition]"
         required: true
-        description: Declared str output columns and the values that select the entry's rows; a row is selected when every listed column holds one of its values (SUB-12).
+        description: Declared str output columns and the values that select the entry's rows; a row is selected when every listed column meets its condition (SUB-12).
     - label:
         type: str
         required: false
@@ -65,16 +69,32 @@ submission_value_class:
         description: Description of the value-level definition; the column's label when omitted (DEFINE-27).
     - fields_from: submission_metadata_fields
 
+where_condition:
+    type: ["list[where_value]", where_comparison_class]
+    kind: value
+    description: Values that select a row by its where column, which equals the one value or any of several, unless a comparator states another comparison (SUB-12).
+
+where_comparison_class:
+    - comparator:
+        type: str
+        required: false
+        values: [NE, NOTIN]
+        description: Comparison of the listed values, NE for a column unequal to one value and NOTIN for a column equal to none of them (SUB-12).
+    - values:
+        type: "list[where_value]"
+        required: true
+        description: Values the comparison reads (SUB-12).
+
 where_value:
     type: str
     min_length: 1
     description: One value a where clause selects rows by (SUB-12).
 
-submission_metadata_fields:
+submission_role_fields:
     - core:
         type: core_designation
         required: false
-        description: Standard core designation, declared and derived by family (SUB-10).
+        description: Standard core designation, declared and derived by model (SUB-10).
     - mandatory:
         type: bool
         required: false
@@ -83,6 +103,9 @@ submission_metadata_fields:
         type: column_role
         required: false
         description: Role the column plays in its dataset (SUB-9).
+
+submission_metadata_fields:
+    - fields_from: submission_role_fields
     - data_type:
         type: define_data_type
         required: false
@@ -108,10 +131,10 @@ submission_metadata_fields:
         type: bool
         required: false
         description: Whether every non-missing value must name a dataset any submission section of the project file declares (CT-11).
-    - origin:
-        type: submission_origin_class
+    - origins:
+        type: "list[submission_origin_class]"
         required: false
-        description: Declared provenance of the value, which the derivation may refute (SUB-19).
+        description: Declared provenance of the value, one entry per origin, which the derivation may refute (SUB-14, SUB-19).
     - method:
         type: submission_method
         required: false
@@ -131,7 +154,7 @@ submission_origin_class:
     - source:
         type: origin_source
         required: false
-        description: Party responsible for the value, admitted and derived by family (SUB-15).
+        description: Party responsible for the value, admitted and derived by model (SUB-15).
     - description:
         type: str
         required: false
@@ -218,20 +241,29 @@ page_reference_class:
 
 submission_comment:
     type: [str, submission_comment_class]
+    kind: value
     description: Comment text, or text with the documents it refers to.
 
 submission_method:
     type: [str, submission_method_class]
+    kind: value
     description: Algorithm stated in prose, or with its name, code, and documents.
 
 document_reference:
     type: [identifier, document_reference_class]
+    kind: identifier
     description: Document identifier, or an identifier with the place it points at.
+
+standard_reference:
+    type: str
+    min_length: 1
+    kind: identifier
+    description: Name of one implementation guide among the standards of the section that composes the dataset (DEFINE-8).
 
 core_designation:
     type: str
     values: [Req, Exp, Perm, Cond]
-    description: Required, expected, conditionally required, or permissible in the dataset's standard, admitted by family (SUB-10).
+    description: Required, expected, conditionally required, or permissible in the dataset's standard, admitted by model (SUB-10).
 
 column_role:
     type: str

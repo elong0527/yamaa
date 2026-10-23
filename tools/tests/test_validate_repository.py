@@ -671,7 +671,10 @@ class TestValidatorCLI(unittest.TestCase):
     def test_cli_missing_schema_fails(self):
         status, output, errors = self.validate()
         self.assertNotEqual(status, 0)
-        self.assertIn("schema.yaml", output)
+        self.assertIn(
+            "ERROR: yaml/schema_spec.yaml: missing repository schema source",
+            output.splitlines(),
+        )
 
     def test_a_yaml_file_that_does_not_load_is_an_error_naming_it(self):
         for case, name, text, fragments in [
@@ -709,7 +712,7 @@ class TestValidatorCLI(unittest.TestCase):
     def test_schema_shared_include_is_not_a_cycle(self):
         yaml_dir = self.root_dir / "yaml"
         yaml_dir.mkdir(exist_ok=True)
-        (yaml_dir / "schema.yaml").write_text(
+        (yaml_dir / "schema_spec.yaml").write_text(
             'version: "1.0"\nincludes: ["schema_left.yaml", "schema_right.yaml"]\n'
             "root_class:\n  - f1: {type: str}\n"
         )
@@ -727,7 +730,7 @@ class TestValidatorCLI(unittest.TestCase):
     def test_schema_include_cannot_escape_yaml_directory(self):
         yaml_dir = self.root_dir / "yaml"
         yaml_dir.mkdir(exist_ok=True)
-        (yaml_dir / "schema.yaml").write_text(
+        (yaml_dir / "schema_spec.yaml").write_text(
             'version: "1.0"\nincludes: ["../outside.yaml"]\n'
             "root_class:\n  - f1: {type: str}\n"
         )
@@ -740,7 +743,7 @@ class TestValidatorCLI(unittest.TestCase):
     def test_schema_include_rejects_symlink_inside_yaml_directory(self):
         yaml_dir = self.root_dir / "yaml"
         yaml_dir.mkdir(exist_ok=True)
-        (yaml_dir / "schema.yaml").write_text(
+        (yaml_dir / "schema_spec.yaml").write_text(
             'version: "1.0"\nincludes: ["schema_link.yaml"]\n'
             "root_class:\n  - f1: {type: str}\n"
         )
@@ -754,7 +757,7 @@ class TestValidatorCLI(unittest.TestCase):
     def test_schema_include_requires_mapping_root(self):
         yaml_dir = self.root_dir / "yaml"
         yaml_dir.mkdir(exist_ok=True)
-        (yaml_dir / "schema.yaml").write_text(
+        (yaml_dir / "schema_spec.yaml").write_text(
             'version: "1.0"\nincludes: ["schema_extra.yaml"]\n'
             "root_class:\n  - f1: {type: str}\n"
         )
@@ -768,7 +771,7 @@ class TestValidatorCLI(unittest.TestCase):
     def test_schema_include_name_must_follow_convention(self):
         yaml_dir = self.root_dir / "yaml"
         yaml_dir.mkdir(exist_ok=True)
-        (yaml_dir / "schema.yaml").write_text(
+        (yaml_dir / "schema_spec.yaml").write_text(
             'version: "1.0"\nincludes: ["other.yaml"]\n'
             "root_class:\n  - f1: {type: str}\n"
         )

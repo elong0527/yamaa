@@ -64,6 +64,7 @@ expressions:
 
 string_template:
     type: str
+    kind: expression
     description: Template string of literal text, braced placeholders and doubled braces (TEXT-3).
 
 str_template_class:

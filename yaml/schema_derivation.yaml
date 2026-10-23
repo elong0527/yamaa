@@ -9,10 +9,19 @@ includes:
     - schema_expression_window.yaml
     - schema_expression_aggregate.yaml
     - schema_expression_odm.yaml
-    - schema_function.yaml
+    - schema_expression_function.yaml
+
+expression:
+    type: [str, int, float, bool, "null", operation]
+    kind: expression
+    description: One expression, either text in the closed grammar, where a bare name is a reference and quoted text a literal, or a YAML number, Boolean or null, which is a literal, or a mapping holding one registered operation (EXPR-5).
+
+operation:
+    registry: expressions
 
 derivation:
-    type: [str, expression, handled_expression_class]
+    type: [expression, handled_expression_class]
+    kind: expression
 
 handled_expression_class:
     - value: {type: expression, required: true}
@@ -21,17 +30,12 @@ handled_expression_class:
 # See LOOKUP-15.
 intermediate_derivation:
     type: [untyped_intermediate_derivation, intermediate_binding_class]
+    kind: expression
 
 untyped_intermediate_derivation:
-    type: [str, expression, intermediate_expression_class]
-
-intermediate_expression_class:
-    - value: {type: expression, required: true}
+    type: expression
 
 intermediate_binding_class:
     - type: {type: column_type, required: true}
     - derivation: {type: untyped_intermediate_derivation, required: true}
     - unconvertible: {type: substitute_value, required: false}
-
-expression:
-    registry: expressions

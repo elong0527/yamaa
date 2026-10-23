@@ -1,7 +1,7 @@
 """yamaa.schema(): the JSON Schema of a file type (#3030 section 2.12, D149).
 
 The engine embeds the JSON Schema that the repository commits for each file
-type in yaml/v1/json/ and returns it as canonical JSON text: the committed
+type in yaml/json/ and returns it as canonical JSON text: the committed
 document on one line, members in key order. These controls compare the
 installed host with the committed files, so they need the compiled native
 extension and the checkout.
@@ -19,7 +19,7 @@ pytest.importorskip(
 
 import yamaa
 
-COMMITTED = Path(__file__).resolve().parents[3] / "yaml" / "v1" / "json"
+COMMITTED = Path(__file__).resolve().parents[3] / "yaml" / "json"
 FILE_TYPES = ["spec", "project", "codelists", "function"]
 
 

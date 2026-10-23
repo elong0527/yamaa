@@ -151,7 +151,7 @@ compiled core version, its interpreter's version, and the platform its
 interpreter reports.
 
 `schema` pairs the installed Python and R `schema()` suites (#3030 D149). Its
-facts were read by hand from the JSON Schemas committed in `yaml/v1/json/`,
+facts were read by hand from the JSON Schemas committed in `yaml/json/`,
 and its refusal text was written from D39's prefix and the template that
 `yaml/conditions.yaml` holds for `unexpected_file_type`. The suites check that
 each schema is one ASCII line whose top-level keys come in key order, as
@@ -178,7 +178,8 @@ for with forward slashes. Every status comes from the `selftest` family's
 vocabulary.
 
 `interface` pairs the installed Python and R interface and handle lifetime
-suites, and `yamaa-boundary`'s handshake and census families read it too. Its
+suites, and `yamaa-boundary`'s handshake and census families and
+`yamaa-engine`'s lifetime and negotiation families read it too. Its
 outcomes were written from the check order of `rust/interface/README.md`
 ("Version and feature handshake") before the engine ran: a request for another
 version is a mismatch whatever else it holds, a malformed version field leaves

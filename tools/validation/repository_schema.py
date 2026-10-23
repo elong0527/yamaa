@@ -61,9 +61,10 @@ def description_rules(source, value, rules):
 def validate_schema_sources(root: Path):
     """Check physical source files and local include spelling without interpretation."""
     directory = root / "yaml"
-    entry = directory / "schema.yaml"
+    # The specification's entry module, which every repository holds.
+    entry = directory / "schema_spec.yaml"
     if not entry.is_file():
-        return ["ERROR: yaml/schema.yaml: missing repository schema source"]
+        return ["ERROR: yaml/schema_spec.yaml: missing repository schema source"]
     errors = []
     for path in sorted(directory.glob("schema*.yaml")):
         label = path.relative_to(root)

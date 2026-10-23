@@ -7,7 +7,7 @@ expressions:
             required: true
             description: String variable used as the dictionary key, or a filtered source carrying it (EXPR-11).
         - dict:
-            type: ["dict[str, substitute_value]", project_path]
+            type: mapping_dict
             required: true
             description: Source-value to result-value dictionary, written inline or as the path of a YAML file holding it (EXPR-11).
         - case_sensitive:
@@ -21,7 +21,6 @@ expressions:
             type: substitute_value
             description: Value returned when the source is present but has no dictionary entry; without it, such a source fails (EXPR-11).
     cut: # See EXPR-13.
-
         - source:
             type: filtered_source
             required: true
@@ -34,10 +33,16 @@ expressions:
             type: "list[str]"
             required: true
             description: One label per interval; exactly one more than breaks (EXPR-13).
-        - right:
-            type: bool
-            default: false
-            description: Right-closed and left-open when true; left-closed and right-open when false (EXPR-13).
+        - closed:
+            type: str
+            default: left
+            values: [left, right]
+            description: Boundary each interval includes, left-closed and right-open, or right-closed and left-open (EXPR-13).
         - missing:
             type: substitute_value
             description: Value returned when the source is missing; without it, a missing source gives missing (EXPR-13).
+
+mapping_dict:
+    type: ["dict[str, substitute_value]", project_path]
+    kind: value
+    description: Inline dictionary, or the path of a YAML file holding one (EXPR-11).

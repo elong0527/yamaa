@@ -19,11 +19,11 @@ expressions:
             required: true
             values: [day, week, month, year, second, minute, hour]
             description: Calendar unit day, week, month or year for dates, or elapsed unit second, minute, hour or day for datetimes, where a day is 86400 seconds (TIME-4).
-        - bounds:
+        - closed:
             type: str
-            default: exclusive
-            values: [exclusive, inclusive, between]
-            description: Which endpoints the day count includes, defined only for dates with unit day (TIME-5).
+            default: right
+            values: [right, both, neither]
+            description: Which endpoints the day count includes, the end only, both or neither, defined only for dates with unit day (TIME-5).
     impute: # See TIME-8.
         - type:
             type: temporal_type
@@ -35,15 +35,10 @@ expressions:
             description: Collected ISO 8601 date or datetime text, read up to its first unknown field, or a value of the declared type (TIME-7).
         - month:
             type: int
-            description: Month supplied to a source carrying only a year, 1 to 12; declared exactly when minimum_source_precision is year (TIME-10).
+            description: Month supplied to a source collected only to the year, 1 to 12, declared only beside day; without it such a source gives missing (TIME-10).
         - day:
             type: [int, day_rule]
-            description: Day supplied to a source carrying no day, an integer from 1 to 31 or first or last resolved against the month the date lands in; declared exactly when minimum_source_precision is year or month (TIME-10).
-        - minimum_source_precision:
-            type: str
-            default: year
-            values: [year, month, day]
-            description: Coarsest collected precision completed; a coarser source gives missing (TIME-8).
+            description: Day supplied to a source collected to the year or the month, an integer from 1 to 31 or first or last resolved against the month the date lands in; without it a source with no day gives missing (TIME-10).
         - time:
             type: time_rule
             description: Time fields supplied when the source does not carry them, first supplying 00 to each and last 23, 59 and 59; declared exactly when type is datetime (TIME-10).
@@ -91,7 +86,7 @@ expressions:
             required: true
             description: Datetime whose calendar date is returned, or ISO 8601 date or datetime text whose date part is returned (TIME-2).
     study_day: # See TIME-6.
-        - date:
+        - source:
             type: variable
             required: true
             description: Date whose study day is returned (TIME-6).
@@ -143,10 +138,10 @@ expressions:
             required: true
             description: Complete date or civil datetime to move (TIME-14).
         - days:
-            type: [variable, int]
+            type: shift_days
             description: Signed integer literal or integer variable moving a date; declared exactly when type is date (TIME-14).
         - amount:
-            type: [variable, int, float]
+            type: shift_amount
             description: Signed numeric literal or variable moving a datetime, an integer with unit second; declared exactly when type is datetime (TIME-14).
         - unit:
             type: str
@@ -180,3 +175,13 @@ time_rule:
     type: str
     values: [first, last]
     description: Earliest or latest civil moment the collected source admits, each missing time field taking its first or last value (TIME-8).
+
+shift_days:
+    type: [variable, int]
+    kind: name
+    description: Integer variable or signed integer literal (TIME-14).
+
+shift_amount:
+    type: [variable, int, float]
+    kind: name
+    description: Numeric variable or signed numeric literal (TIME-14).

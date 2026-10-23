@@ -1,4 +1,4 @@
-"""Generate one JSON Schema per 1.0 file type from the schema files in yaml/v1/.
+"""Generate one JSON Schema per 1.0 file type from the schema files in yaml/.
 
 Each JSON Schema is a view of one file type's schema bundle: a class becomes a
 closed object, a union ``anyOf``, a registry a one-entry object, and every
@@ -17,7 +17,7 @@ import json
 from tools.paths import ROOT
 from tools.validation.schema_bundle import Bundle
 
-SOURCE = ROOT / "yaml/v1"
+SOURCE = ROOT / "yaml"
 TARGET = SOURCE / "json"
 DIALECT = "https://json-schema.org/draft/2020-12/schema"
 # File type: the entry module of its bundle and its root class.
@@ -47,7 +47,7 @@ IDENTITIES = {
 }
 LAYER = "layer"
 FRAGMENT = "fragment."
-GENERATED = "Generated from yaml/v1/ by tools/packaging/generate_json_schema.py."
+GENERATED = "Generated from yaml/ by tools/packaging/generate_json_schema.py."
 
 
 def target(file_type):
@@ -241,7 +241,7 @@ def main(argv=None):
             "python -m tools.packaging.generate_shipped_schema --write"
         )
         return 1
-    print("PASS: the 1.0 JSON Schemas match the schema files in yaml/v1/")
+    print("PASS: the 1.0 JSON Schemas match the schema files in yaml/")
     return 0
 
 

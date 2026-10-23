@@ -10,11 +10,13 @@ expressions:
 odm_item:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*\.[!-~]+$'
+    kind: identifier
     description: See NAME-7.
 
 odm_oid:
     type: str
     pattern: '^[!-~]+$'
+    kind: identifier
     description: See NAME-12.
 
 odm_class:

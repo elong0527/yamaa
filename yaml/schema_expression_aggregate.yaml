@@ -13,20 +13,16 @@ aggregate_class:
     - group_by:
         type: "list[variable]"
         description: Grouping keys of an ordinary right-side or output-row reduction; omit when the enclosing grouped row owns the keys (LOOKUP-19).
-    - derive:
-        type: "list[derive_binding_class]"
+    - derivations:
+        type: "dict[identifier, derive_binding_class]"
         required: false
-        description: Per-record intermediate variable bindings evaluated before reduction (LOOKUP-22).
+        description: Per-record intermediate variables, by the name the reducer expression reads, evaluated in order before reduction (LOOKUP-22).
     - expr:
         type: aggregate_expression
         required: true
         description: Closed reducer expression over the records of one relation (FORMULA-17).
 
 derive_binding_class:
-    - name:
-        type: identifier
-        required: true
-        description: Intermediate variable the aggregate's reducer expression names (LOOKUP-22).
     - type:
         type: column_type
         required: true
@@ -34,9 +30,10 @@ derive_binding_class:
     - derivation:
         type: derivation
         required: true
-        description: Per-record derivation over the relation's fields and earlier bindings (LOOKUP-22).
+        description: Per-record derivation over the relation's fields and earlier variables (LOOKUP-22).
 
 aggregate_expression:
     type: str
     min_length: 1
+    kind: expression
     description: Expression in the closed expression grammar that admits the reducers (FORMULA-27).

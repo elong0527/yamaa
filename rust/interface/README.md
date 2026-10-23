@@ -15,8 +15,11 @@ native qualification lane compare the generated files with this definition
 the version and feature handshake below before any other native call, and the
 boundary compatibility and lifetime tests of
 [#2692](https://github.com/elong0527/yamaa/issues/2692) run in both installed
-suites. An engine that loads separately from the host packages, behind a C
-ABI, is later work of [#2870](https://github.com/elong0527/yamaa/issues/2870).
+suites. The engine's C ABI exists, in `rust/crates/yamaa-engine` over the
+types of `yamaa-boundary`'s `abi` module, with its lifetime tests, but no
+package links it yet: both bindings still call the facade, and an engine
+that loads separately from the host packages is later work of
+[#3702](https://github.com/elong0527/yamaa/issues/3702).
 
 ## Boundary choice and source ownership
 

@@ -1,7 +1,7 @@
 # Installed yamaa_schema(): the JSON Schema of a file type as canonical JSON
 # text, one character string (#3030 section 2.12, D149). The facade's own
 # tests compare each schema with the file the repository commits in
-# yaml/v1/json/; Python reads the same truth.
+# yaml/json/; Python reads the same truth.
 library(yamaa)
 # The truth is JSON, and jsonlite, which reads it, is a suggested package:
 # where it is not installed, the file is skipped.

@@ -2,11 +2,8 @@ version: "1.0"
 
 expressions:
     source: # See EXPR-4.
-        type: [variable, source_binding_class]
-        description: Copies a named source or derived variable (EXPR-4).
-    literal: # See EXPR-4.
-        type: literal_value
-        description: Returns the declared scalar value unchanged (EXPR-4).
+        type: source_binding_class
+        description: Copies a named source or derived variable read with the range, filter, selection or absence answer of its lookup (EXPR-4).
     first_available: # See EXPR-9.
         - sources:
             type: "list[filtered_source]"
@@ -42,7 +39,7 @@ source_binding_class:
     - fields_from: match_selection_fields
     - absent:
         type: substitute_value
-        description: Value used when the source variable or item is absent, or when its implicit join finds no record; without it, a join that finds no record gives missing (LOOKUP-24).
+        description: Value used when its implicit join or lookup finds no record; without it, finding no record gives missing (LOOKUP-24).
     - require_match:
         type: bool
         description: When true, an implicit join that finds no record fails instead of being answered; it cannot be declared with absent (LOOKUP-24).
@@ -65,6 +62,7 @@ flag_class:
 
 filtered_source:
     type: [variable, source_binding_class]
+    kind: name
     description: A variable, or the source_binding_class form carrying it with its range, filter, selection or absent value (LOOKUP-1).
 
 keep_policy:
@@ -74,6 +72,7 @@ keep_policy:
 
 order_by_term:
     type: [variable, order_term_class]
+    kind: name
     description: Order term; a bare variable sorts ascending with missing values first, as the lowest value (VALUE-22).
 
 order_term_class:
@@ -112,4 +111,4 @@ case_otherwise_class:
         description: Result used when no branch condition is true (EXPR-7).
 
 case_result:
-    type: [str, expression]
+    type: expression

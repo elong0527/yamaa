@@ -4,6 +4,7 @@ version: "1.0"
 
 window_selection:
     type: [identifier, window_spec]
+    kind: structure
     description: See WINDOW-1.
 
 window_spec:
@@ -60,11 +61,11 @@ expressions:
             type: variable
             required: true
             description: Candidate baseline date or datetime (WINDOW-9).
-        - reference_date:
+        - reference:
             type: variable
             required: true
             description: Upper bound for the baseline date, of the same temporal type (WINDOW-9).
-        - value:
+        - source:
             type: variable
             required: true
             description: Analysis value the baseline is for; a row whose value is missing is not eligible (WINDOW-9).
@@ -72,9 +73,6 @@ expressions:
             type: bool
             default: true
             description: Whether a date equal to the reference date is eligible; false admits only earlier dates (WINDOW-9).
-        - tie_break:
-            type: "list[order_by_term]"
-            description: Terms ordering eligible rows that share the latest date; the last row is the baseline (WINDOW-9).
         - window:
             type: window_selection
-            description: Baseline-selection partitions and row filter; order_by is not allowed (WINDOW-5).
+            description: Baseline-selection partitions, row filter and the order of eligible rows, whose last row is the baseline; order_by defaults to the date alone (WINDOW-9).

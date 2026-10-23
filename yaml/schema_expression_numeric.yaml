@@ -1,13 +1,6 @@
 version: "1.0"
 
-# See FORMULA-27.
-
 expressions:
-    compute: # See FORMULA-27.
-        - expr:
-            type: numeric_expression
-            required: true
-            description: Numeric expression over named variables in the compute field of the expression language (FORMULA-27).
     round_half_away_from_zero: # See FORMULA-16.
         - source:
             type: variable
@@ -17,8 +10,3 @@ expressions:
             type: int
             required: true
             description: Integer decimal places; negative rounds left of the decimal point (FORMULA-16).
-
-numeric_expression:
-    type: str
-    min_length: 1
-    description: Expression in the closed expression grammar with a numeric root (FORMULA-1).

@@ -290,9 +290,7 @@ mod project {
         }
         /// P-STD-1: `GuideStatus` names each implementation guide status the
         /// data file lists, and the 1.0 project reader lowers each to the
-        /// status of that name and refuses any other. The 0.5 reader lists
-        /// Draft and Final alone, and the file compares only the 1.0 schema
-        /// set (`schemas: [yaml/v1]`).
+        /// status of that name and refuses any other.
         #[test]
         fn the_1_0_reader_admits_exactly_the_guide_statuses_the_file_lists() {
             use yamaa_core::ast::GuideStatus;
