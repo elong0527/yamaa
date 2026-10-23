@@ -359,7 +359,7 @@ fn wire_validation_rejects_incomplete_or_invented_ledgers_and_preserves_large_nu
                 entry["mapping_order"]["/input"] = yamaa_adapters::json!(["INVENTED"]);
             }
             "version" => {
-                entry["schema_version"] = Value::String("99".into());
+                entry["language_version"] = Value::String("99".into());
             }
             "unknown_field" => {
                 entry["unknown"] = Value::Null;

@@ -5,9 +5,7 @@ use crate::{
     file_resources::{Error as ResourceError, Resources},
     project_source,
     specification_run::RejectedRun,
-    specification_source::CapturedSchema,
 };
-use std::sync::Arc;
 use yamaa_core::project_function::Language;
 
 #[derive(Debug)]
@@ -19,39 +17,28 @@ pub enum Error {
 }
 
 /// Prepare `specification` with the project file `environment` from
-/// `resources`. Schemas are retained capabilities; public entry points use
-/// the shipped domain and project closures.
+/// `resources`. The project schemas are retained capabilities; public entry
+/// points use the shipped project closures.
 pub fn prepare(
     mut resources: Resources,
     specification: &str,
     environment: &str,
     host: Language,
-    specification_schema: Arc<CapturedSchema>,
     project_schemas: project_source::ProjectSchemas,
 ) -> Result<FileSpecification, Error> {
     let mut environment =
         capture_environment(&mut resources, environment, Some(host), project_schemas)?;
-    let document = file_preparation::prepare_document(
-        &mut resources,
-        specification,
-        Some(Arc::clone(&specification_schema)),
-    )
-    .map_err(Error::Document)?;
+    let document = file_preparation::prepare_document(&mut resources, specification)
+        .map_err(Error::Document)?;
     crate::file_inventory::prepare(
         &mut resources,
-        &specification_schema,
         &mut environment,
         yamaa_core::submission_inventory::requested(document.document()),
         &document.source().identity,
     )
     .map_err(Error::Document)?;
-    let links = file_preparation::capture_links(
-        &mut resources,
-        &document,
-        Some(&specification_schema),
-        &mut None,
-    )
-    .map_err(Error::Document)?;
+    let links = file_preparation::capture_links(&mut resources, &document, &mut None)
+        .map_err(Error::Document)?;
     FileSpecification::compile(
         resources,
         specification.into(),

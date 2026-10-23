@@ -116,9 +116,10 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     );
 
     // The file whose type a call reads before anything reads it, as the
-    // command line dispatches on it (#3030 D122): a 0.5 file declares no
-    // type, at its `schema_version`, and a type naming none of the four is
-    // unexpected where any is expected (SCHEMA-2).
+    // command line dispatches on it (#3030 D122): a file that declares
+    // `schema_version` is written in language 0.5, which no route reads, and
+    // a type naming none of the four is unexpected where any is expected
+    // (SCHEMA-2).
     let legacy = T::map(vec![("schema_version", T::text("1.0"))]).document();
     let finding = read_declared_header(&legacy, LANGUAGE_VERSION)
         .unwrap_err()

@@ -62,42 +62,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 ("source", "base"),
             ],
         ),
-        (
-            F::Version {
-                source: "base",
-                entry: "entry",
-                expected: "1.0",
-                actual: "0",
-                is_entry: false,
-            },
-            "schema_version_mismatch",
-            "LAYER-4",
-            "parent",
-            vec![
-                ("source", "base"),
-                ("entry", "entry"),
-                ("entry_version", "1.0"),
-                ("parent_version", "0"),
-            ],
-        ),
-        (
-            F::Version {
-                source: "entry",
-                entry: "entry",
-                expected: "1.0",
-                actual: "0",
-                is_entry: true,
-            },
-            "schema_version_mismatch",
-            "SCHEMA-2",
-            "schema_version",
-            vec![
-                ("source", "entry"),
-                ("entry", "entry"),
-                ("expected", "1.0"),
-                ("actual", "0"),
-            ],
-        ),
     ] {
         let finding = cause.diagnostic().unwrap();
         assert_eq!(

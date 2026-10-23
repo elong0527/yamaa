@@ -50,10 +50,11 @@ mod file {
                 study.write("entry/domain.yaml", DOMAIN);
                 study
             }
-            /// The same study as 0.5 wrote it, for the tests of environment
-            /// files, which stay until the 0.5 path goes: the project declares
-            /// its codelists beside itself and links the Python environment
-            /// file, whose lock and function paths resolve from env/.
+            /// The same study under a 0.5 project, for the tests of environment
+            /// files, which stay until the 0.5 project route goes (P2-13d): the
+            /// project declares its codelists beside itself and links the
+            /// Python environment file, whose lock and function paths resolve
+            /// from env/.
             fn legacy() -> Self {
                 let study = Self::empty();
                 study.write(
@@ -70,10 +71,7 @@ mod file {
                     "ct.yaml",
                     "codelists: [{id: SEX, name: Sex, items: [{value: F}, {value: M}]}]\n",
                 );
-                study.write(
-                    "entry/domain.yaml",
-                    &DOMAIN.edit("yamaa: \"1.0\"\ntype: spec\n", "schema_version: '1.0'\n"),
-                );
+                study.write("entry/domain.yaml", DOMAIN);
                 study
             }
             fn text(&self, name: &str) -> String {
@@ -96,7 +94,6 @@ mod file {
                     "domain.yaml",
                     "../project.yaml",
                     Language::Python,
-                    schemas::domain_schema(),
                     schemas::project_schemas(),
                 )
             }
@@ -621,7 +618,6 @@ mod file {
                 "domain.yaml",
                 "../project.yaml",
                 Language::Python,
-                schemas::domain_schema(),
                 schemas::project_schemas(),
             )
             .unwrap();
@@ -699,7 +695,6 @@ mod file {
                     "domain.yaml",
                     "../project.yaml",
                     Language::R,
-                    schemas::domain_schema(),
                     schemas::project_schemas(),
                 )
             else {

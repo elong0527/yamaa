@@ -53,12 +53,6 @@ competition and dense ties, carry-forward values, and baseline flags. The full
 1,035-byte artifact is compared directly. Independent reference execution checks
 the authored report before native and installed-host comparisons.
 
-`window-failures.json` adds nine independently checked cases for zero offsets,
-required/forbidden ordering, unknown source/group/order/filter fields, predicate
-grammar and baseline ties. The baseline case changes a copied source date and
-checks the original partition identity in its failure report; committed source
-and expected benchmark files remain unchanged.
-
 The `schema-inheritance` expectation uses the two committed input/output rows,
 explicit input types, and literal study metadata. It names `spec_study.yaml`,
 contains only the surviving LB source, and declares no verification.

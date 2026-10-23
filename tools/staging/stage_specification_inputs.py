@@ -834,117 +834,6 @@ def stage_row_intermediate_truth(destination: Path):
     )
 
 
-def stage_inheritance_replay(destination: Path):
-    """Translate existing graph inputs to raw JSON/YAML, preserving independent outcomes."""
-    fixtures = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures"
-    with (fixtures / "inheritance_traversal.tsv").open(encoding="ascii") as stream:
-        cases = list(csv.DictReader(stream, delimiter="\t"))
-    with (fixtures / "inheritance_sources.tsv").open(encoding="ascii") as stream:
-        sources = list(csv.DictReader(stream, delimiter="\t"))
-
-    def decoded(tree):
-        def node(index):
-            value = tree["nodes"][index]
-            if value["kind"] == "text":
-                return value["value"]
-            if value["kind"] == "sequence":
-                return [node(i) for i in value["items"]]
-            if value["kind"] == "mapping":
-                return {node(k): node(v) for k, v in value["entries"]}
-            raise ValueError("unexpected inheritance input scalar")
-
-        return json.dumps(node(tree["root"]), separators=(",", ":"))
-
-    fields = [
-        "case",
-        "entry",
-        "entry_yaml",
-        "operation",
-        "declaring",
-        "written",
-        "identity",
-        "display_path",
-        "source_yaml",
-        "expected",
-    ]
-    with (destination / "inheritance-replay.tsv").open(
-        "w", newline="", encoding="ascii"
-    ) as stream:
-        writer = csv.DictWriter(
-            stream,
-            fieldnames=fields,
-            delimiter="\t",
-            lineterminator="\n",
-            quoting=csv.QUOTE_NONE,
-            quotechar=None,
-        )
-        writer.writeheader()
-        for case in cases:
-            request = json.loads(case["request"])
-            expected = json.loads(case["expected"])
-            expected["protocol"] = "specification/prototype"
-            outcome = expected["outcome"]
-            findings = []
-            for finding in outcome["diagnostics"]:
-                context = {}
-                for item in finding["context"]:
-                    reference = item["value"]
-                    if reference["kind"] == "null":
-                        context[item["name"]] = None
-                    elif reference["kind"] in ("text", "text_list", "count"):
-                        context[item["name"]] = reference["value"]
-                    else:
-                        raise ValueError(
-                            "replay truth requires an explicit context value"
-                        )
-                context.update(
-                    {
-                        name: outcome[name]
-                        for name in ("source", "entry", "parent")
-                        if name in outcome
-                    }
-                )
-                findings.append(
-                    dict(
-                        phase="validation",
-                        condition=finding["condition"],
-                        rule=finding["rule"],
-                        spec_paths=[finding["path"]],
-                        context=context,
-                    )
-                )
-            expected["outcome"] = dict(status="invalid", diagnostics=findings)
-            events = [event for event in sources if event["case"] == case["case"]]
-            for event in events or [None]:
-                record = dict.fromkeys(fields, "")
-                record.update(
-                    case=case["case"],
-                    entry=request["entry"]["identity"],
-                    entry_yaml=decoded(request["document"]),
-                    expected=json.dumps(
-                        expected, sort_keys=True, separators=(",", ":")
-                    ),
-                )
-                if event is not None:
-                    ask = json.loads(event["request"])
-                    answer = json.loads(event["reply"])["outcome"]
-                    record["operation"] = ask["operation"]
-                    if ask["operation"] == "canonicalize":
-                        record.update(
-                            declaring=ask["declaring"],
-                            written=ask["path"],
-                            identity=answer.get("identity", ""),
-                            display_path=answer.get("display_path", ""),
-                        )
-                    else:
-                        record.update(
-                            identity=ask["identity"], display_path=ask["display_path"]
-                        )
-                        if answer["status"] == "document":
-                            record["source_yaml"] = decoded(answer["document"])
-                writer.writerow(record)
-
-
 def stage_issue_frame_truth(destination: Path):
     """Project committed report truth to literal R column expectations, never candidate output."""
     reports = {
@@ -1302,7 +1191,6 @@ def stage_completed_lookup_assertion_truth(destination: Path):
 def stage(destination: Path):
     """Keep original files separate from independently authored expected reports."""
     destination.mkdir(parents=True, exist_ok=False)
-    stage_inheritance_replay(destination)
     stage_completed_lookup_assertion_truth(destination)
     stage_json_fixtures(destination)
     stage_source_selection_truth(destination)
@@ -1312,37 +1200,6 @@ def stage(destination: Path):
     stage_source_selection_truth(
         destination, "source_filter_mixed", "source-filter-mixed"
     )
-    shutil.copy2(
-        REPOSITORY
-        / "rust/crates/yamaa-adapters/tests/fixtures/inheritance_preparation.tsv",
-        destination / "inheritance-preparation.tsv",
-    )
-    # Preserve historical reports exactly; rule citations are baked into the fixture.
-    with (destination / "inheritance-preparation.tsv").open(
-        encoding="ascii", newline=""
-    ) as stream:
-        reader = csv.DictReader(stream, delimiter="\t")
-        fields, rows = reader.fieldnames, list(reader)
-    with (destination / "normative-inheritance-preparation.tsv").open(
-        "w", encoding="ascii", newline=""
-    ) as stream:
-        writer = csv.DictWriter(
-            stream,
-            fieldnames=fields,
-            delimiter="\t",
-            lineterminator="\n",
-            quoting=csv.QUOTE_NONE,
-            quotechar=None,
-        )
-        writer.writeheader()
-        for row in rows:
-            row["expected"] = json.dumps(
-                json.loads(row["expected"]),
-                sort_keys=True,
-                separators=(",", ":"),
-                ensure_ascii=True,
-            )
-            writer.writerow(row)
     shutil.copy2(
         REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv",
         destination / "preflight.tsv",

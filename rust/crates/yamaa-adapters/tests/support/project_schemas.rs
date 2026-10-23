@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use yamaa_adapters::{
     project_source::ProjectSchemas,
     specification_source::{CapturedSchema, Source},
@@ -7,9 +6,6 @@ use yamaa_adapters::{
 /// The project root and the environment root a project preparation decodes.
 pub fn project_schemas() -> ProjectSchemas {
     yamaa_adapters::shipped_schema::capture_project().unwrap()
-}
-pub fn domain_schema() -> Arc<CapturedSchema> {
-    yamaa_adapters::shipped_schema::capture().unwrap()
 }
 
 fn module(identity: &str, text: &str) -> Source {

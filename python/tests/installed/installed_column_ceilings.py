@@ -351,20 +351,16 @@ class ColumnCeilings(unittest.TestCase):
             (root / "input.csv").write_text(truth["input_csv"], encoding="ascii")
             names = ["ID", *[truth["column_name"] % index for index in range(1, width)]]
 
-            def document(legacy):
-                """The wide specification; a 0.5 file writes its header as
-                `schema_version` and a text constant as a `literal` (D18)."""
+            def document():
+                """The wide specification, whose text constants are quoted
+                (D18)."""
 
                 def text(value):
-                    return {"literal": value} if legacy else f"'{value}'"
+                    return f"'{value}'"
 
-                header = (
-                    {"schema_version": "1.0"}
-                    if legacy
-                    else {"yamaa": "1.0", "type": "spec"}
-                )
                 return {
-                    **header,
+                    "yamaa": "1.0",
+                    "type": "spec",
                     "domain": "TEST",
                     "keys": ["ID"],
                     "input": {"SRC": "input.csv"},
@@ -394,14 +390,7 @@ class ColumnCeilings(unittest.TestCase):
                     "output": {"path": "out.csv", "columns": names},
                 }
 
-            (root / "parent.yaml").write_text(
-                json.dumps(document(False)), encoding="ascii"
-            )
-            # 0.5 only, until #3447 deletes the 0.5 path: a null parent names
-            # no parent, so the entry stays standalone. A 1.0 file admits YAML
-            # null only in value and expression fields (P-NULL-1).
-            explicit = {**document(True), "parent": None}
-            (root / "explicit.yaml").write_text(json.dumps(explicit), encoding="ascii")
+            (root / "parent.yaml").write_text(json.dumps(document()), encoding="ascii")
             (root / "child.yaml").write_text(
                 'yamaa: "1.0"\ntype: spec\nparent: parent.yaml\n', encoding="ascii"
             )
@@ -487,25 +476,6 @@ class ColumnCeilings(unittest.TestCase):
                     output.read_bytes(),
                     TRUTH["inheritance_depth"]["output_csv"].encode("ascii"),
                 )
-
-    def test_wide_yaml_integer_reaches_its_complete_language_finding(self):
-        digits = "9" * TRUTH["wide_integers"]["digits"]
-        for project in (False, True):
-            route = "project" if project else "specification"
-            spec = self.write_case(f"wide-integers-{route}")
-            routed = self.project_file(spec) if project else None
-            for case in TRUTH["wide_integers"]["cases"]:
-                with self.subTest(case=f"{case['name']} on the {route} route"):
-                    spec.write_text(
-                        case["yaml"].replace("{digits}", digits), encoding="ascii"
-                    )
-                    expected = dict(
-                        case["issue"],
-                        context=case["issue"]["context"].replace("{digits}", digits),
-                    )
-                    for rows in self.refusals(spec, routed):
-                        self.assertEqual(rows, issue_rows([expected]))
-            self.assertFalse(spec.with_name("out.csv").exists())
 
 
 if __name__ == "__main__":

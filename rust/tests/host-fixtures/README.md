@@ -53,7 +53,7 @@ the held bytes.
 | project-parity | Project cases with their complete expected issue rows: the files a case writes, its call (a member of a project run, a specification the project names, or a submission) and every issue row; rows and files that depend on the host language are given by language, `{root}` stands for the case's directory and `{version}` for the installed yamaa version |
 | compact-yaml | A specification with a block and a flow input, the block, compact, flow and explicit-key verification forms with their one output and saved CSV, failed row-count bounds, malformed closers, and raw NULs with their `invalid_yaml` context (#2196, #3125) |
 | longitudinal-capacity | The 50,000-row, 100-column profile: its column names, its value rule (the row index for the key, then an offset plus the row and column index modulo a prime), the size its CSV must exceed, and its source and output formats |
-| column-ceilings | The 1,024 admitted and 1,025 refused widths of each boundary, the compiler-limit, parent-occurrence and wide-integer issue rows (`{digits}` stands for the wide integer), the repaired capacity's remaining error, the inheritance depth that builds and the wide inherited cases' rows by column index modulo 3 |
+| column-ceilings | The 1,024 admitted and 1,025 refused widths of each boundary, the compiler-limit and parent-occurrence issue rows, the repaired capacity's remaining error, the inheritance depth that builds and the wide inherited cases' rows by column index modulo 3 |
 | interface | The generated request, each crafted request with its authored outcome (the accepted record or the refusal envelope), the message template of each reason and the gate's refusal, where `{version}` stands for the boundary version, `{next_version}` for the version after it and `{core_version}` for the installed engine's release; the census kinds; and the lifetime study's specification, input, project and output rows |
 
 `plan-reuse` is the repeated-run truth for #2821. A spec object's first
@@ -227,18 +227,9 @@ range failures and reached `invalid` handler counts across Rust, Python and R.
 The `original-specifications.inheritance_nulls` cases share authored layers,
 missing-lookup CSV bytes, reached absence counts and refusal conditions for
 missing answers written as YAML null, empty children, `clear:` entries and
-rename-only intermediates in both hosts. Each case names the count it
-reaches: `absent_count` for a 1.x file and `no_match_count` for a 0.5 file,
-the handler each surface counts an intermediate's absence under (D202).
-
-Cases whose subject only the 0.5 surface has keep their 0.5 documents until
-the 0.5 path goes (#3447, #3448): the inheritance cases of a null parent and
-of nulls that leave a field absent, the row drivers whose lookup keys 0.5
-inferred, the baseline whose `window.order_by` 0.5 forbade, the wide
-`schema_version` probes of `column-ceilings`, the 0.5 halves of the
-`issue-locations` surface pairs, and `lookup_fallback_0_5_yaml`, the body of
-the structured-binding fallback probes, whose `absent` a 0.5 file reads as
-the answer to a variable the lookup does not hold (D67).
+rename-only intermediates in both hosts. Each case names `absent_count`,
+the number of times it reaches the handler an intermediate's absence counts
+under (D202).
 
 ## Conditions no case reaches
 

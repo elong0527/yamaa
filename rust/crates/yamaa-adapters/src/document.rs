@@ -2,19 +2,19 @@
 //!
 //! It decodes a document's YAML once and reads the header its root declares
 //! before any schema closure is chosen (SCHEMA-2). A root that declares
-//! `schema_version`, or no `yamaa`, keeps the 0.5 path, which reads it under
-//! the rules at the `yamaa-v0.5.0` tag (#3030 D75). A root that declares
 //! `yamaa` and `type` is a 1.x document: the declared type selects its 1.0
 //! closure, and the document is admitted at the version it declares; a
 //! specification's layers are each admitted at their own version, the chain
 //! needs the newest (P-VER-1), and the layers compose into one resolved
-//! specification, each layer's `clear` applied before it (LAYER-9).
+//! specification, each layer's `clear` applied before it (LAYER-9). A root
+//! that declares `schema_version` is written in language version 0.5, which
+//! the engine does not read: it is refused as `unsupported_language_version`,
+//! except a 0.5 project file, which the 0.5 project route still reads until
+//! it goes (P2-13d).
 //!
 //! The engine reads language version 1.0 (#3030 D76, P1-9): every public call
-//! decodes the files it reads here, and a specification that declares the
-//! header is prepared by [`VersionedDocument::prepare_specification`].
-//! Rewrite 3 routes every document read through this decoder and retires the
-//! decode ports each read site has today.
+//! decodes the files it reads here, and a specification is prepared by
+//! [`VersionedDocument::prepare_specification`].
 use crate::shipped_schema;
 use crate::specification_source::{
     CapturedFindings, CapturedParent, CapturedSchema, Error, Source, SourceFailure,
@@ -80,8 +80,8 @@ impl Closures {
 /// One decoded document and the route its root selects.
 #[derive(Debug)]
 pub enum Decoded {
-    /// A root that declares `schema_version`, or no `yamaa`: the 0.5 path
-    /// reads it, with the closure its call chooses.
+    /// A project file whose root does not declare the 1.x header: the 0.5
+    /// project route reads it, until it goes (P2-13d).
     Legacy { source: Source, raw: DecodedYaml },
     /// A 1.x document whose header the engine reads.
     Versioned(VersionedDocument),
@@ -102,8 +102,10 @@ pub struct VersionedDocument {
 /// `reads`; public calls read [`yamaa_core::language::LANGUAGE_VERSION`]
 /// (#3030 D76). The header is read before any
 /// closure is chosen: a version the engine does not read fails as
-/// `unsupported_language_version`, and another type as
-/// `unexpected_file_type`, at the document's own `yamaa` or `type`.
+/// `unsupported_language_version`, 0.5 at `schema_version` and any other at
+/// `yamaa`, and another type as `unexpected_file_type` at `type`. Only a
+/// project file that does not declare the 1.x header keeps the 0.5 project
+/// route ([`Decoded::Legacy`]).
 pub fn decode(
     source: Source,
     expected: FileType,
@@ -114,7 +116,7 @@ pub fn decode(
         identity: source.identity.clone(),
         error,
     })?;
-    if !language::declares_header(&raw.document) {
+    if expected == FileType::Project && !language::declares_header(&raw.document) {
         return Ok(Decoded::Legacy { source, raw });
     }
     match language::read_header(&raw.document, reads, expected) {
@@ -242,8 +244,7 @@ impl AdmittedDocument {
     pub fn normalized(&self) -> &NormalizedDocument {
         &self.normalized
     }
-    /// The document held as the class its declared type selects, as a
-    /// structurally prepared 0.5 root is held.
+    /// The document held as the class its declared type selects.
     pub fn into_captured(self) -> crate::specification_source::CapturedDocument {
         crate::specification_source::CapturedDocument::admitted(
             self.schema,
@@ -565,7 +566,7 @@ impl VersionedDocument {
                 )))
             }
             // An unknown dependency or a cycle of the live columns
-            // (LAYER-11, LAYER-13), reported as a 0.5 chain reports it.
+            // (LAYER-11, LAYER-13).
             Err(VersionedError::Prune(error)) => {
                 return Err(SpecificationError::Entry(Error::Dependencies(*error)))
             }
@@ -746,18 +747,12 @@ impl<P: Resolver> Parents<'_, P> {
             identity: source.identity,
             bytes,
         };
-        let versioned = decode_yaml(&captured.bytes)
-            .is_ok_and(|decoded| language::declares_header(&decoded.document));
-        let prepared = if versioned {
-            crate::specification_source::prepare_versioned_within(
-                captured,
-                written.into(),
-                &mut *self.port,
-                &resolving,
-            )
-        } else {
-            shipped_schema::prepare(captured, written.into(), &mut *self.port)
-        }
+        let prepared = crate::specification_source::prepare_versioned_within(
+            captured,
+            written.into(),
+            &mut *self.port,
+            &resolving,
+        )
         .map_err(|error| ProducerFailure::Preparation(Box::new(error)))?;
         contract::prepare_document(prepared.document()).map_err(|error| match error {
             Invalid::Invalid(causes) => ProducerFailure::Findings(

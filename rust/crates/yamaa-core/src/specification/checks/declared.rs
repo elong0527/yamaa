@@ -393,14 +393,9 @@ impl Checks<'_> {
                         .map(BindFinding::Scalar),
                 );
             }
-            // A row formula: 0.5's `compute` text, or 1.0's derivation text,
-            // which binding compiles alike (FORMULA-27).
-            ExprKind::Formula(formula)
-                if matches!(
-                    formula.context,
-                    ExpressionContext::Compute | ExpressionContext::Derivation
-                ) =>
-            {
+            // A row formula: derivation text, which binding compiles
+            // (FORMULA-27).
+            ExprKind::Formula(formula) if formula.context == ExpressionContext::Derivation => {
                 if let Err(error @ CompileError::Invalid { .. }) = &formula.compiled {
                     findings.push(BindFinding::Numeric {
                         path: render(spec, formula.text.meta),
@@ -523,7 +518,7 @@ impl Checks<'_> {
             ExprKind::Window(window) => {
                 self.window(e, window, scope, findings)?;
                 if output {
-                    self.baseline_types(e, window, findings);
+                    self.baseline_types(window, findings);
                 }
             }
             ExprKind::Aggregate(aggregate) => {
@@ -556,8 +551,7 @@ impl Checks<'_> {
     }
 
     /// Without row templates, a read at `path` of another input through its
-    /// implicit join, which on a 1.0 tree matches on the input's declared
-    /// `key`: an input that declares none fails at the read, whatever it
+    /// implicit join, which matches on the input's declared `key`: an input that declares none fails at the read, whatever it
     /// stores (LOOKUP-5, D111), and so does one whose key column the current
     /// row cannot pair ([`declared_key`]). True when the read binds, as far
     /// as this decides.
@@ -724,9 +718,8 @@ impl Checks<'_> {
     /// row templates, `require_match` and `between` on a read that binds and
     /// is no implicit join ([`join_options`]). Whatever its filter reports,
     /// the implicit template binds a field of the base, a column, or a field
-    /// of a lookup whose key types do not fail, and on the 0.5 surface a
-    /// bare name its absence answers (D67), and reads another input through
-    /// its implicit join ([`Self::join`]). A `first_available` source of a
+    /// of a lookup whose key types do not fail, and reads another input
+    /// through its implicit join ([`Self::join`]). A `first_available` source of a
     /// `case` result (`branch`) binds as a row template's does, only with no
     /// finding of its own.
     fn selection(
@@ -818,13 +811,10 @@ impl Checks<'_> {
                 Some(index) => !self.refused.contains(&index),
                 None => scope.drivers.contains(&owner),
             },
-            None => {
-                spec.columns
-                    .iter()
-                    .any(|column| column.name.name == variable)
-                    || (source.absent.is_some()
-                        && spec.header.surface.absent_answers_unknown_variable())
-            }
+            None => spec
+                .columns
+                .iter()
+                .any(|column| column.name.name == variable),
         };
         if binds {
             join_options(spec, e, findings);
@@ -901,18 +891,16 @@ impl Checks<'_> {
             }
         }
         let column = scope.is_some_and(|scope| !matches!(scope.phase, Some(Phase::Row { .. })));
-        let one_meaning = spec.header.surface.one_meaning_per_form();
-        if let (true, true, Some(relation)) = (column, one_meaning, relation) {
+        if let (true, Some(relation)) = (column, relation) {
             self.aggregate_keys(e, aggregate, relation, findings)?;
         }
         if scope.is_some() && findings.len() != start {
             return Ok(());
         }
-        // Once nothing else of it fails, binding binds its range: on a 1.0
-        // tree a bare value is an output column alone, and one that no column
-        // takes names nothing the row holds, nor does a field of a lookup
-        // binding does not bind or one qualified by nothing declared
-        // (LOOKUP-9).
+        // Once nothing else of it fails, binding binds its range: a bare value
+        // is an output column alone, and one that no column takes names
+        // nothing the row holds, nor does a field of a lookup binding does not
+        // bind or one qualified by nothing declared (LOOKUP-9).
         if let Some((between, value)) = aggregate
             .between
             .as_ref()
@@ -921,7 +909,7 @@ impl Checks<'_> {
             })
             .and_then(|between| Some((between, name(spec, between.value)?)))
             .filter(|&(_, value)| match value.split_once('.') {
-                None => one_meaning && !self.column(value),
+                None => !self.column(value),
                 Some((owner, _)) => self.undeclared(owner) || self.refused_lookup(value),
             })
         {
@@ -1931,13 +1919,10 @@ impl Checks<'_> {
             // An output column, a row's value or a named intermediate's
             // field is one value already: there are no records to filter.
             // Without row templates a bare name that is no output column
-            // fails as a reference first, unless the binding answers its
-            // absence, which only the 0.5 surface does (D67).
+            // fails as a reference first (D67).
             (None, Some(scope))
                 if qualifier.is_some()
                     || scope.phase.is_some()
-                    || (source.absent.is_some()
-                        && spec.header.surface.absent_answers_unknown_variable())
                     || spec
                         .columns
                         .iter()
@@ -2006,11 +1991,12 @@ impl Checks<'_> {
             WindowFunction::Locf { .. } => ("locf", false),
             WindowFunction::BaselineFlag { .. } => ("baseline_flag", true),
         };
-        if window_order(window).is_empty() != baseline {
+        // A positional window needs an order; a baseline orders by its date
+        // and tie-break terms (WINDOW-5).
+        if !baseline && window_order(window).is_empty() {
             findings.push(BindFinding::Window(WindowFinding::Order {
-                path: format!("{path}.window{}", if baseline { ".order_by" } else { "" }),
+                path: format!("{path}.window"),
                 operation: operation.into(),
-                forbidden: baseline,
             }));
         }
         // A partition names each variable once (WINDOW-3); report every repeat.
@@ -2085,7 +2071,7 @@ impl Checks<'_> {
     /// has their declared types: its date is a date or datetime, and its
     /// reference date has the date's type (WINDOW-9). Binding decides every
     /// other read.
-    fn baseline_types(&self, e: ExprId, window: &ast::Window, findings: &mut Vec<BindFinding>) {
+    fn baseline_types(&self, window: &ast::Window, findings: &mut Vec<BindFinding>) {
         let spec = self.spec;
         let WindowFunction::BaselineFlag {
             window_order_by, ..
@@ -2146,11 +2132,11 @@ impl Checks<'_> {
             } else {
                 return;
             };
-        // A 1.0 operand's path is the field its surface writes (P-OP-2).
-        let at = match spec.header.surface {
-            ast::Surface::V0_5 => format!("{}.{operand}", path(spec, e)),
-            ast::Surface::V1 { .. } if operand == "date" => spec.cite(date.meta),
-            ast::Surface::V1 { .. } => spec.cite(spec.expr(reference).meta),
+        // An operand's path is the field it is written in (P-OP-2).
+        let at = if operand == "date" {
+            spec.cite(date.meta)
+        } else {
+            spec.cite(spec.expr(reference).meta)
         };
         let mut finding = LookupFinding::new(&at, C::WindowBaselineInputType);
         for (field, value) in [
@@ -2187,9 +2173,7 @@ impl Checks<'_> {
     /// named intermediate it reads matches on, unless the intermediate drives
     /// the rows. A window reads output columns alone. A field another input
     /// supplies through an implicit join also depends on the columns that
-    /// join matches on: in 1.0 the input's declared key (LOOKUP-1); in 0.5
-    /// the output keys that input stores, which only its captured schema
-    /// decides. `record` names the dataset whose record the rows read
+    /// join matches on: the input's declared key (LOOKUP-1). `record` names the dataset whose record the rows read
     /// directly; with `None` every input joins.
     fn edges(&self, root: ExprId, record: Option<&str>) -> Vec<usize> {
         let spec = self.spec;
@@ -2222,9 +2206,7 @@ impl Checks<'_> {
                 ast::Scope::Row if lookup => edges.extend(self.matched(name)),
                 ast::Scope::Row => {
                     edges.extend(output(name));
-                    let joined = read.name.owner().filter(|&owner| {
-                        Some(owner) != record && !spec.header.surface.infers_join_keys()
-                    });
+                    let joined = read.name.owner().filter(|&owner| Some(owner) != record);
                     if let Some(input) = joined {
                         edges.extend(
                             spec.input_key(input)
@@ -2422,9 +2404,9 @@ impl Checks<'_> {
         unknown_match_value(self.spec, self.prepared, name)
     }
 
-    /// On a 1.0 tree, each reference of a written key match value of the
-    /// lookup at `index` that reads no current-row value
-    /// ([`unknown_match_value`]), at the path binding cites it
+    /// Each reference of a written key match value of the lookup at `index`
+    /// that reads no current-row value ([`unknown_match_value`]), at the path
+    /// binding cites it
     /// (`intermediates::bind_one`): a name written as the value at `key`,
     /// any other value at its own entry, `key.<column>`. A lookup that
     /// another lookup's derivations read binds its key values at each read
@@ -2434,7 +2416,7 @@ impl Checks<'_> {
     fn key_values(&self, index: usize, findings: &mut Vec<BindFinding>) -> Result<bool, BindError> {
         let spec = self.spec;
         let item = &spec.intermediates[index];
-        if !spec.header.surface.one_meaning_per_form() || donor_read(spec, index) {
+        if donor_read(spec, index) {
             return Ok(false);
         }
         let fields = match &item.key {
@@ -2522,8 +2504,8 @@ impl Checks<'_> {
         Ok(())
     }
 
-    /// On a 1.0 tree, what binding refuses of a column aggregate's written
-    /// `key` over `relation` that the declarations decide, for each pair in
+    /// What binding refuses of a column aggregate's written `key` over
+    /// `relation` that the declarations decide, for each pair in
     /// written order (`aggregates::bound_relation`), each where a named
     /// intermediate's would be (LOOKUP-5): a pair whose declared types cannot
     /// compare at `key` (LOOKUP-9), then each reference of its match value
@@ -2956,24 +2938,21 @@ impl Checks<'_> {
                 }
             }
             // A range's value is a value of the reading row: an output
-            // column, or on the 0.5 surface a field of the primary input's
-            // record, or a field of an earlier intermediate or of an input.
+            // column, or a field of an earlier intermediate or of an input.
             // Its bounds are donor fields; each stated one must be typed
-            // (LOOKUP-9). On a 1.0 tree a bare value is an output column
-            // alone, and binding refuses one that no column takes at
-            // `between.value`, whatever its bounds bind, before it types the
-            // range.
+            // (LOOKUP-9). A bare value is an output column alone, and
+            // binding refuses one that no column takes at `between.value`,
+            // whatever its bounds bind, before it types the range.
             if let Some(between) = &item.between {
-                // On a 1.0 tree a bare value that no column takes names
-                // nothing the row holds, unless another lookup's derivations
+                // A bare value that no column takes names nothing the row
+                // holds, unless another lookup's derivations
                 // read this one: binding then keeps it for the donor record,
                 // and refuses it where a row reads the lookup. A value read
                 // from a lookup binding did not bind is none, and so is a
                 // field qualified by nothing declared.
-                let one_meaning = spec.header.surface.one_meaning_per_form();
                 if let Some(value) =
                     name(spec, between.value).filter(|value| match value.split_once('.') {
-                        None => one_meaning && !self.column(value) && !donor_read(spec, index),
+                        None => !self.column(value) && !donor_read(spec, index),
                         Some((owner, _)) => {
                             self.undeclared(owner)
                                 || spec
@@ -2992,15 +2971,13 @@ impl Checks<'_> {
                     ));
                     continue;
                 }
-                let primary = self.prepared.source().name.as_str();
                 let earlier = &donors[..position];
                 let value =
                     name(spec, between.value).and_then(|value| match value.split_once('.') {
                         None if self.column(value) => Some(declared.name(value)),
-                        // A contextual 1.0 value has no type until a donor
+                        // A contextual value has no type until a donor
                         // record gives it one.
-                        None if one_meaning => None,
-                        None => stored(primary, value),
+                        None => None,
                         Some((owner, field)) => {
                             match earlier.iter().find(|prior| prior.item.id.name == owner) {
                                 Some(prior) => prior.field(field, &stored),
@@ -3125,7 +3102,7 @@ impl Checks<'_> {
             }
             self.derivation(root, Some(scope), true, findings)?;
             if let ExprKind::Formula(ast::Formula {
-                context: ExpressionContext::Compute | ExpressionContext::Derivation,
+                context: ExpressionContext::Derivation,
                 compiled: Ok(compiled),
                 text,
                 ..
@@ -3626,10 +3603,10 @@ impl Checks<'_> {
     /// evaluate with the inputs driving them and the named intermediates that
     /// select their records, in binding's order, over the derivations and
     /// filters that bound (`lookup_range::admit`); each refused range is
-    /// reported once, and a refusal already reported is not repeated. On a
-    /// 1.0 tree a named intermediate's bare value that no column takes, which
-    /// stays contextual when another lookup's derivations read it, names no
-    /// value of a row either (LOOKUP-9); a value qualified by a named
+    /// reported once, and a refusal already reported is not repeated. A named
+    /// intermediate's bare value that no column takes, which stays
+    /// contextual when another lookup's derivations read it, names no value
+    /// of a row either (LOOKUP-9); a value qualified by a named
     /// intermediate that builds one of the rows is unsupported; and one
     /// qualified by a row driver that builds none of them is a keyed lookup
     /// of a lookup that declares no key (LOOKUP-3, ROW-2).
@@ -3637,14 +3614,13 @@ impl Checks<'_> {
         let spec = self.spec;
         let named = &self.prepared.intermediates;
         let inputs = &self.prepared.sources;
-        let one_meaning = spec.header.surface.one_meaning_per_form();
         let refused = |value: &str, drivers: &[(&str, Option<&str>)]| {
             value.split_once('.').is_some_and(|(qualifier, _)| {
                 inputs.iter().any(|input| input.name == qualifier)
                     && drivers.iter().any(|&(driver, _)| driver != qualifier)
             })
         };
-        // A value qualified by a 1.0 row driver that builds none of the rows
+        // A value qualified by a row driver that builds none of the rows
         // reads it as a keyed lookup: its qualifier and the `key` it lacks.
         fn keyless<'v, 'n>(
             named: &'n intermediates::Declarations,
@@ -3654,7 +3630,7 @@ impl Checks<'_> {
             let (index, _) = named.reference(value)?;
             Some((qualifier, named.key_required(index)?))
         }
-        let keyless = |value| keyless(named, value).filter(|_| one_meaning);
+        let keyless = |value| keyless(named, value);
         let key_required = |key: &str| {
             BindFinding::Lookup(LookupFinding::from_diagnostic(lookup::key_required(key)))
         };
@@ -3702,8 +3678,7 @@ impl Checks<'_> {
                         continue;
                     };
                     let value = range.value.as_str();
-                    let contextual = one_meaning
-                        && !value.contains('.')
+                    let contextual = !value.contains('.')
                         && !self.column(value)
                         && spec
                             .intermediates
@@ -3711,8 +3686,7 @@ impl Checks<'_> {
                             .position(|item| item.id.name == identifier)
                             .is_some_and(|position| donor_read(spec, position));
                     let driving = value.split_once('.').is_some_and(|(qualifier, _)| {
-                        one_meaning
-                            && named.reference(value).is_some()
+                        named.reference(value).is_some()
                             && drivers.iter().any(|&(_, driver)| driver == Some(qualifier))
                     });
                     let finding = if refused(value, &drivers) || contextual {
@@ -3998,13 +3972,11 @@ fn window_operands<'s>(spec: &'s Spec, window: &ast::Window) -> Vec<(&'s str, St
     reads
 }
 
-/// A window's written `window.order_by`: for `baseline_flag`, which orders
-/// by its date and tie-break, the terms it may not write.
+/// A window's own order, written `window.order_by`: `baseline_flag` orders by
+/// its date and tie-break terms alone, so it has none (WINDOW-5).
 fn window_order(window: &ast::Window) -> &[ast::OrderTerm] {
     match &window.function {
-        WindowFunction::BaselineFlag {
-            window_order_by, ..
-        } => window_order_by,
+        WindowFunction::BaselineFlag { .. } => &[],
         _ => &window.order_by,
     }
 }
@@ -4029,9 +4001,9 @@ fn group_key(variable: &str, driver: &str, phase: Phase<'_>) -> bool {
     }
 }
 
-/// On a 1.0 tree, the range value of the implicit join a structured source at
-/// `e` reads, when the value is a bare name that no column takes: a bare name
-/// is an output column alone (NAME-3), so it names nothing the row holds and
+/// The range value of the implicit join a structured source at `e` reads,
+/// when the value is a bare name that no column takes: a bare name is an
+/// output column alone (NAME-3), so it names nothing the row holds and
 /// binding refuses it at `between.value` (LOOKUP-9), naming the variable.
 pub(super) fn join_range(spec: &Spec, e: ExprId) -> Option<BindFinding> {
     let ExprKind::Source(source) = &spec.expr(e).kind else {
@@ -4040,8 +4012,7 @@ pub(super) fn join_range(spec: &Spec, e: ExprId) -> Option<BindFinding> {
     let between = source
         .between
         .as_ref()
-        .filter(|between| between.lower.is_some() || between.upper.is_some())
-        .filter(|_| spec.header.surface.one_meaning_per_form())?;
+        .filter(|between| between.lower.is_some() || between.upper.is_some())?;
     let value = name(spec, between.value)
         .filter(|value| !value.contains('.'))
         .filter(|value| !spec.columns.iter().any(|column| column.name.name == *value))?;
@@ -4053,9 +4024,9 @@ pub(super) fn join_range(spec: &Spec, e: ExprId) -> Option<BindFinding> {
     ))
 }
 
-/// On a 1.0 tree, the range at `between` of a lookup of `relation`, owned
-/// by `owner`, whose value and stated bounds the declarations type and whose
-/// types cannot compare (`incomparable_range_types`, LOOKUP-9), as binding
+/// The range at `between` of a lookup of `relation`, owned by `owner`, whose
+/// value and stated bounds the declarations type and whose types cannot
+/// compare (`incomparable_range_types`, LOOKUP-9), as binding
 /// reports it once the range's fields bind: the value an output column or a
 /// field of an input's record, each bound a field of the relation. A value
 /// read from a lookup is typed only once its relation is captured.
@@ -4066,9 +4037,6 @@ pub(super) fn range_types(
     relation: &str,
     owner: Owner<'_>,
 ) -> Option<BindFinding> {
-    if !spec.header.surface.one_meaning_per_form() {
-        return None;
-    }
     let declared = prepared.declared_types();
     let value = name(spec, between.value)?;
     let typed = match value.split_once('.') {
@@ -4093,8 +4061,8 @@ pub(super) fn range_types(
     Some(BindFinding::Scalar(diagnostic))
 }
 
-/// On a 1.0 tree, what binding refuses of the range of the implicit join a
-/// structured source at `e` reads, once its read binds: a bare value that no
+/// What binding refuses of the range of the implicit join a structured
+/// source at `e` reads, once its read binds: a bare value that no
 /// column takes ([`join_range`]), or else types that cannot compare
 /// ([`range_types`]).
 pub(super) fn join_range_findings(

@@ -44,9 +44,7 @@ relative to it under the admitted resource policy of
 [File resolution](../reference/files.md). Each call fails with
 `project_environment_missing`, with the host language, when the project links
 no environment for it; a supplied project file that cannot be read fails as
-any path the caller passes ([FILE-1](../reference/files.md#file-1)). A
-specification that declares `schema_version`, checked or run without a project
-file, names no declared function in a call under [FUNC-4](#func-4).
+any path the caller passes ([FILE-1](../reference/files.md#file-1)).
 
 <a id="func-2"></a>
 
@@ -227,10 +225,6 @@ fails validation as `invalid_function_argument` at the argument, its context
 naming the function and the argument, with `cause: expression`. A calculation
 needed by a function is first declared as an internal column and then passed
 by name, preserving its visible dependency.
-
-A file that declares `schema_version` is read under the rules at the
-`yamaa-v0.5.0` tag, where a string literal is written `{literal: text}`, a
-date `{date: YYYY-MM-DD}` and a datetime `{datetime: YYYY-MM-DDThh:mm[:ss]}`.
 
 <a id="func-7"></a>
 

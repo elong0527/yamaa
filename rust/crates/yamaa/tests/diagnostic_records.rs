@@ -177,11 +177,11 @@ fn integer_tokens_beyond_sixty_four_bits_stay_exact_numbers() {
 /// runtime name: an embedder may name its runtime anything (#2838). The
 /// project links only an R environment file, which declares a field no
 /// environment file has, so only an R engine opens it and reports the field,
-/// and a check and a run agree on it. The files stay as 0.5 wrote them until
-/// environment files go (#3030 D8).
+/// and a check and a run agree on it. The project and environment files stay
+/// as 0.5 wrote them until environment files go (#3030 D8).
 #[test]
 fn check_takes_the_host_language_from_the_options_not_the_runtime_name() {
-    const SPECIFICATION: &[u8] = b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n";
+    const SPECIFICATION: &[u8] = b"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n";
     const PROJECT: &[u8] = b"schema_version: '1.0'\nenvironments: {r: environment.yaml}\n";
     const ENVIRONMENT: &[u8] = b"schema_version: '1.0'\nlanguage: r\n";
     for (host, opened) in [(HostLanguage::R, true), (HostLanguage::Python, false)] {

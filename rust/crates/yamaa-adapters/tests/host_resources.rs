@@ -461,7 +461,7 @@ impl<R: Resolver> Resolver for Asked<R> {
 fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
     use yamaa_adapters::file_preparation::{Error as Prepared, FileSpecification};
     use yamaa_core::project_function::Language;
-    const PARENT: &[u8] = b"schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+    const PARENT: &[u8] = b"yamaa: '1.0'\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
     let identity = || yamaa_adapters::specification_report::Identity {
         runtime: "rust",
         runtime_version: "test",
@@ -475,19 +475,13 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
     let directory = scratch.to_path_buf();
     let child = directory.join("child.yaml");
     let child = child.to_str().unwrap();
-    // A 0.5 entry and a 1.0 entry judge their parent the same way (D76).
-    for (header, parent) in ["schema_version: '1.0'\n", "yamaa: \"1.0\"\ntype: spec\n"]
-        .into_iter()
-        .flat_map(|header| {
-            [
-                "std//base.yaml",
-                "std/base.yaml/",
-                "//server/share/std/base.yaml",
-                "std\\base.yaml",
-            ]
-            .map(|parent| (header, parent))
-        })
-    {
+    let header = "yamaa: \"1.0\"\ntype: spec\n";
+    for parent in [
+        "std//base.yaml",
+        "std/base.yaml/",
+        "//server/share/std/base.yaml",
+        "std\\base.yaml",
+    ] {
         let entry = format!("{header}parent: '{parent}'\ndomain: CHILD\n");
         let refused = |issues: &[yamaa_core::diagnostic::Diagnostic], route: &str| {
             assert_eq!(issues.len(), 1, "{parent} {route}: {issues:?}");
@@ -612,17 +606,14 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
 /// other declared file a run reads does, never with the engine's own refusal
 /// (#3030 D73). A caller's resolver that reports a link, a junction or
 /// another reparse point for the parent is refused from that report alone
-/// (FILE-7). A 0.5 entry and a 1.0 entry are refused alike (D76).
+/// (FILE-7).
 #[cfg(feature = "yaml")]
 #[test]
 fn a_linked_parent_is_refused_at_parent_on_every_route() {
     use yamaa_adapters::file_preparation::{Error as Prepared, FileSpecification};
     use yamaa_adapters::host_resources::ResourceKind;
     use yamaa_core::project_function::Language;
-    const HEADERS: [(&str, &str); 2] = [
-        ("0.5", "schema_version: '1.0'\n"),
-        ("1.0", "yamaa: \"1.0\"\ntype: spec\n"),
-    ];
+    const HEADERS: [(&str, &str); 1] = [("1.0", "yamaa: \"1.0\"\ntype: spec\n")];
     let entry = |header: &str, parent: &str| format!("{header}parent: '{parent}'\ndomain: CHILD\n");
     let identity = || yamaa_adapters::specification_report::Identity {
         runtime: "rust",
@@ -651,7 +642,7 @@ fn a_linked_parent_is_refused_at_parent_on_every_route() {
     // directory on its way, and a link whose target does not exist.
     #[cfg(unix)]
     {
-        const PARENT: &[u8] = b"schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+        const PARENT: &[u8] = b"yamaa: '1.0'\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
         // Removed when the test ends, by a panic too.
         let scratch = crate::support::Scratch::new("linked-parent");
         std::fs::create_dir_all(scratch.join("std")).unwrap();

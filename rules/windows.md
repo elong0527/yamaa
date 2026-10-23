@@ -64,7 +64,7 @@ values equal other missing values, and rows with equal present values and equal
 missing group positions share one partition.
 
 Fails: `invalid_field_type`.
-Evidence: `schema-window-functions`, `schema-window-intermediate-rank`, `negative-window-repeated-group`, `rust/crates/yamaa-adapters/tests/fixtures/specs/window-failures.json`.
+Evidence: `schema-window-functions`, `schema-window-intermediate-rank`, `negative-window-repeated-group`.
 
 A `window.group_by` names each variable once; a variable listed again fails as
 `invalid_field_type` at that entry, reporting the variable. A window partition
@@ -165,15 +165,12 @@ along, and omitting it is a validation error. `baseline_flag` also takes
 with that `date` ascending, and its later terms break ties
 ([WINDOW-9](#window-9)).
 
-Fails: `window_order_by_required`, `value_not_permitted`, `window_order_by_forbidden`.
-Evidence: `negative-locf-no-order`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_declared_baseline_order_starts_with_the_date_ascending`, `rust/crates/yamaa-adapters/tests/fixtures/window_diagnostics.tsv`, `rust/crates/yamaa-adapters/tests/fixtures/specs/window-failures.json`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs::value_and_tie_break_bind_at_their_paths_and_window_order_stays_forbidden`.
+Fails: `window_order_by_required`, `value_not_permitted`.
+Evidence: `negative-locf-no-order`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_declared_baseline_order_starts_with_the_date_ascending`, `rust/crates/yamaa-adapters/tests/fixtures/window_diagnostics.tsv`.
 
 A `baseline_flag` order whose first term is not its `date` ascending fails
 validation as `value_not_permitted` at that term, its context naming the
-term's variable, its direction and the `date`. A file that declares
-`schema_version` is read under the rules at the `yamaa-v0.5.0` tag, where
-`baseline_flag` orders by `date` and its own `tie_break` terms, and a declared
-`window.order_by` fails as `window_order_by_forbidden`.
+term's variable, its direction and the `date`.
 
 ## Window operations
 

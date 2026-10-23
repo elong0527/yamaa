@@ -2,7 +2,7 @@
 use super::{
     scalar_diagnostic_label, validation::matches_member, Document, DocumentNode as N,
     NormalizationError, NormalizationResource, SchemaAliasKind, SchemaField, SchemaShape,
-    SchemaStructure, SpecificationDocument, TypeExpression, TypeNode, ValidationError,
+    SchemaStructure, TypeExpression, TypeNode, ValidationError,
 };
 use std::collections::BTreeMap;
 
@@ -307,23 +307,12 @@ impl SchemaStructure {
         })
     }
 
-    /// Derive a compiler-only model from admitted held content. The caller retains
-    /// its original normalized model and origins; this result grants no source IO
-    /// and must not be exposed as authored or resolved specification provenance.
-    pub fn materialize_mapping_dictionaries(
-        &self,
-        input: &SpecificationDocument,
-        dictionaries: &[AdmittedMappingDictionary],
-    ) -> Result<SpecificationDocument, NormalizationError> {
-        let (document, _) =
-            self.materialize_mapping_dictionary_document(input.document(), dictionaries)?;
-        SpecificationDocument::admit(document)?.map_err(NormalizationError::Invalid)
-    }
-
-    /// [`SchemaStructure::materialize_mapping_dictionaries`] for a resolved
-    /// specification of either language, held as a document. Beside the
-    /// derived document, each of its nodes names the node of `input` it
-    /// copies, or, for a node of a dictionary, the reference that read it.
+    /// Derive a compiler-only copy of the resolved specification `input` from
+    /// admitted held content. The caller retains its original document and
+    /// origins; this result grants no source IO and must not be exposed as
+    /// authored or resolved specification provenance. Beside the derived
+    /// document, each of its nodes names the node of `input` it copies, or,
+    /// for a node of a dictionary, the reference that read it.
     pub fn materialize_mapping_dictionary_document(
         &self,
         input: &Document,

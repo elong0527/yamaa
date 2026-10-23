@@ -50,9 +50,8 @@ Evidence: `schema-column-composition`, `rust/crates/yamaa-adapters/tests/project
 
 A study moves governed facts from the map to submission metadata. A reserved
 key fails validation with `reserved_metadata_key`, reporting the key. A
-dataset's `standard` is a dataset metadata field of the 1.0 surface only, so
-a specification that declares `schema_version` may carry it in its root
-`metadata`.
+dataset's `standard` is a dataset metadata field, so the root `metadata`
+map reserves it.
 
 ## Models
 
@@ -69,8 +68,8 @@ When a document composes the specification, the implementation guide
 lists for that model; a guide of another model, or a standard of type `CT`,
 fails.
 
-Fails: `missing_required_field`, `standard_model_mismatch`, `unknown_standard_family`.
-Evidence: `sdtm-dm-metadata`, `negative-submission-model-missing`, `negative-section-model-mismatch`, `rust/crates/yamaa/tests/language_header.rs::submission_metadata_needs_a_model`, `rust/crates/yamaa/tests/language_header.rs::a_section_lists_only_specifications_of_its_model`, `rust/crates/yamaa-core/tests/support/diagnostic/front_end.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionModelMismatch`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionStandardFamily`, `python/tests/installed/installed_public_define.py::test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes`.
+Fails: `missing_required_field`, `standard_model_mismatch`.
+Evidence: `sdtm-dm-metadata`, `negative-submission-model-missing`, `negative-section-model-mismatch`, `rust/crates/yamaa/tests/language_header.rs::submission_metadata_needs_a_model`, `rust/crates/yamaa/tests/language_header.rs::a_section_lists_only_specifications_of_its_model`, `rust/crates/yamaa-core/tests/support/diagnostic/front_end.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionModelMismatch`, `python/tests/installed/installed_public_define.py::test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes`.
 
 | Model | Standard names |
 |---|---|
@@ -106,11 +105,8 @@ bound to a standard of type `CT`: controlled terminology qualifies a codelist
 and not a dataset, and [Controlled terminology](terminology.md) owns that
 binding.
 
-A specification that declares `schema_version` declares no model: a document
-that composes it gives it its section's model. A project file that declares
-`schema_version` binds one `standard`, and a guide outside the section's
-model fails there with `unknown_standard_family` at
-`<section>.standard.name`, reporting the guide in `detail`.
+A project file that declares `schema_version` binds one `standard`, which
+composition does not check against the section's model.
 
 ## Dataset metadata
 
@@ -559,9 +555,7 @@ build with a project and a composed document read the codelists. A
 specification checked or run without a project file fails at each codelist it
 binds ([CT-13](terminology.md#ct-13)), so a specification that passes
 validation has checked every listed value against its where column's
-codelists. A file that declares `schema_version` is read under the rules at the
-`yamaa-v0.5.0` tag, where a build without a project file checks no listed value
-against them.
+codelists.
 
 Validation decides that two where clauses can select one row when one
 clause's columns are all columns of the other and every column they share
@@ -659,8 +653,7 @@ with `conflicting_origins` at its own `origins[<i>]`, naming the column, an
 entry in `entry`, its type in `origin_type`, a declared source in
 `origin_source`, and in `reason` either `same_type_and_source` or
 `exclusive_type`. Which pairs a model admits, `Not Available` among them, is
-[SUB-15](#sub-15)'s. A specification that declares `schema_version` writes
-one `origin`.
+[SUB-15](#sub-15)'s.
 
 <a id="sub-15"></a>
 
@@ -696,17 +689,14 @@ findings columns, and a declared source states it with the pairs the `SDTM`
 table admits, so a `SEND` `Predecessor` or `Not Available` declares none. An
 origin type and source pair the model does not admit, a `source` present where
 these rules require absence, or one absent where they require presence fails
-with `origin_source_not_admitted`. A specification that declares
-`schema_version` keeps the pairs of 0.5.0, whose `SDTM` table also admits
-`Not Available` without a source.
+with `origin_source_not_admitted`.
 
 A specification that declares its model checks the pairs on its own
 ([SUB-23](#sub-23)), for each origin a column or value-level entry declares,
 at that origin's `origins[<i>]`; the context names the column, an entry in
 `entry`, the origin's type in `origin_type`, its declared source in
 `origin_source`, and the model in `model`. A document checks them when it
-composes the dataset, for each origin, at its `origins[<i>]`, or at a 0.5
-specification's `origin`.
+composes the dataset, for each origin, at its `origins[<i>]`.
 
 <a id="sub-16"></a>
 
@@ -730,9 +720,8 @@ generated document carries the whole description, and [SUB-20](#sub-20)
 requires the copy to declare a `filter` when a condition is written. Each
 origin is checked on its own. A description absent where this rule requires
 it fails with `origin_description_missing`, reporting the column and the
-origin's type, at the origin's `origins[<i>]`, or at a 0.5 specification's
-column `submission`; a `Predecessor` description of another form fails the
-same way at the origin's `description`.
+origin's type, at the origin's `origins[<i>]`; a `Predecessor` description
+of another form fails the same way at the origin's `description`.
 
 <a id="sub-17"></a>
 
@@ -1005,10 +994,6 @@ Checked when a document composes the specification:
   labels of [SUB-20](#sub-20), which read every section's specifications;
 - the rules that depend on the model again, under the section's model, which
   [SUB-3](#sub-3) makes the specification's.
-
-A specification that declares `schema_version` declares no model
-([SUB-3](#sub-3)), so the rules that depend on one are checked only when a
-document composes it, under its section's model.
 
 The row checks of [SUB-13](#sub-13) run in every build of the specification,
 before publication. The transport lengths of [SUB-24](#sub-24) are measured

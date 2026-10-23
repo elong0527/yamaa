@@ -166,13 +166,13 @@ under the names [SPEC-2](specification.md#spec-2) admits. The `parquet`
 profile carries its own types: an artifact read by another specification needs
 no declaration to be understood. The `csv` profile's bytes are fixed exactly.
 
-A profile and the specification's `schema_version` identify the bytes exactly.
-A consumer selects the profile from its own path under
+A profile and the language version the specification declares identify the
+bytes exactly. A consumer selects the profile from its own path under
 [INPUT-1](inputs.md#input-1) and reads the producer's output contract
 through the producing-specification link of
 [INPUT-10](inputs.md#input-10). A profile's byte and value mapping is fixed
-by its producer's `schema_version`; a mapping that diverges at the same schema
-version must use a new profile name.
+by its producer's language version; a mapping that diverges at the same
+language version must use a new profile name.
 
 ## Publication
 

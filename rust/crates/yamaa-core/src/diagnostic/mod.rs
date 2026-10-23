@@ -212,11 +212,7 @@ conditions! {
     TemporalUnit => ("validation", "value_not_permitted", Some("TIME-4")),
     TemporalFieldRequired => ("validation", "missing_required_field", Some("TIME-1")),
     TemporalFieldNotPermitted => ("validation", "unknown_field", Some("TIME-1")),
-    ImputationMonthNotPermitted => ("validation", "month_not_permitted", Some("TIME-10")),
-    ImputationMonthRequired => ("validation", "month_required", Some("TIME-10")),
     ImputationMonthRange => ("validation", "month_out_of_range", Some("TIME-10")),
-    ImputationDayRequired => ("validation", "day_required", Some("TIME-10")),
-    ImputationDayNotPermitted => ("validation", "day_not_permitted", Some("TIME-10")),
     ImputationDayRange => ("validation", "value_not_permitted", Some("TIME-10")),
     ImputationDayRule => ("validation", "value_not_permitted", Some("TIME-10")),
     ImputeMonthWithoutDay => ("validation", "missing_required_field", Some("TIME-10")),
@@ -263,16 +259,11 @@ conditions! {
     PublicationTargetMissing => ("output", "resource_path_missing", Some("FILE-7")),
     PublicationTargetNotRegularFile => ("output", "resource_path_not_regular_file", Some("FILE-7")),
     PublicationTargetSymlink => ("output", "resource_path_symlink", Some("FILE-8")),
-    SchemaModelInvalidValue => ("validation", "model_contract_mismatch", Some("SCHEMA-12")),
-    SchemaModelMissingField => ("validation", "model_contract_mismatch", Some("SCHEMA-13")),
-    SchemaModelUnknownField => ("validation", "model_contract_mismatch", Some("SCHEMA-13")),
-    SchemaModelInvalidOperationCount => ("validation", "model_contract_mismatch", Some("SCHEMA-7")),
     SchemaInvalidFieldType => ("validation", "invalid_field_type", Some("SCHEMA-12")),
     SchemaMissingRequiredField => ("validation", "missing_required_field", Some("SCHEMA-13")),
     SchemaUnknownField => ("validation", "unknown_field", Some("SCHEMA-13")),
     SchemaInvalidOperationCount => ("validation", "invalid_operation_count", Some("SCHEMA-7")),
     SchemaUnknownOperation => ("validation", "unknown_operation", Some("SCHEMA-7")),
-    SchemaVersionMismatch => ("validation", "schema_version_mismatch", Some("SCHEMA-2")),
     // The 1.x header (SCHEMA-2, LAYER-4, P-VER-1): a file a call reads, the file a
     // referencing field names, and a parent layer.
     HeaderLanguageVersion => ("validation", "unsupported_language_version", Some("SCHEMA-2")),
@@ -283,22 +274,16 @@ conditions! {
     // whose JSON Schema `schema` gives.
     ArgumentFileType => ("validation", "unexpected_file_type", Some("SCHEMA-2")),
     SchemaUnknownFieldSince => ("validation", "unknown_field", Some("SCHEMA-2")),
-    SchemaBareDerivationScalar => ("validation", "bare_derivation_scalar", Some("EXPR-5")),
     SchemaRedundantLongForm => ("validation", "redundant_long_form", Some("SCHEMA-15")),
     SchemaCaseItems => ("validation", "invalid_field_type", Some("EXPR-7")),
-    SchemaLayerInvalidFieldType => ("validation", "invalid_field_type", Some("SCHEMA-12")),
-    SchemaLayerUnknownField => ("validation", "unknown_field", Some("SCHEMA-13")),
-    SchemaLayerMissingRequiredField => ("validation", "missing_required_field", Some("SCHEMA-13")),
     SchemaLayerInvalidClear => ("validation", "invalid_clear", Some("LAYER-9")),
     SchemaLayerIdentifierRepeated => ("validation", "duplicate_identifier", Some("LAYER-4")),
-    SchemaLayerVersionMismatch => ("validation", "schema_version_mismatch", Some("LAYER-4")),
     CopyDuplicateIdentifier => ("validation", "duplicate_identifier", Some("SPEC-9")),
     CopyUnknownDataset => ("validation", "unknown_field", Some("SPEC-9")),
     CopyUnlinkedInput => ("validation", "prohibited_construct", Some("SPEC-9")),
     CopyUnknownColumn => ("validation", "unknown_field", Some("SPEC-9")),
     CopyProducerCycle => ("validation", "producer_workflow_cycle", Some("SPEC-9")),
     SchemaUnknownWindow => ("validation", "unknown_window", Some("WINDOW-1")),
-    SchemaResolvedOutputRequired => ("validation", "missing_required_field", Some("LAYER-12")),
     SchemaDescriptorValueNotPermitted => ("validation", "value_not_permitted", Some("SCHEMA-12")),
     SchemaDescriptorPatternMismatch => ("validation", "pattern_mismatch", Some("SCHEMA-12")),
     SchemaDescriptorMinimumLength => ("validation", "minimum_length", Some("SCHEMA-12")),
@@ -320,8 +305,6 @@ conditions! {
     InheritanceParentUnavailable => ("validation", "parent_not_found", Some("LAYER-2")),
     InheritanceParentOnAnotherShare => ("validation", "parent_on_another_share", Some("LAYER-10")),
     InheritanceCycle => ("validation", "inheritance_cycle", Some("LAYER-3")),
-    InheritanceParentVersion => ("validation", "schema_version_mismatch", Some("LAYER-4")),
-    InheritanceEntryVersion => ("validation", "schema_version_mismatch", Some("SCHEMA-2")),
     InheritanceParentLanguageVersion => ("validation", "unsupported_language_version", Some("LAYER-4")),
     InheritanceParentFileType => ("validation", "unexpected_file_type", Some("LAYER-4")),
     PreflightUndeclaredRowColumn => ("validation", "undeclared_column", Some("SPEC-5")),
@@ -514,12 +497,10 @@ conditions! {
     ValueLevelMultipleMatches => ("verification", "value_level_multiple_matches", Some("SUB-13")),
     ValueLevelUnmatched => ("verification", "value_level_unmatched", Some("SUB-13")),
     SubmissionPredecessorLabel => ("validation", "predecessor_label_mismatch", Some("SUB-20")),
-    SubmissionStandardFamily => ("validation", "unknown_standard_family", Some("SUB-3")),
     // A 1.0 specification without the `model` its submission metadata or a
     // section's listing requires (D25).
     SubmissionModelRequired => ("validation", "missing_required_field", Some("SUB-3")),
-    // A listed specification's `model` outside the section's model: the 1.0
-    // name of `unknown_standard_family` (D58).
+    // A listed specification's `model` outside the section's model (D58).
     SubmissionModelMismatch => ("validation", "standard_model_mismatch", Some("SUB-3")),
     // A 1.0 section's guide outside the section's model, and a guide name an
     // earlier entry of its `standards` takes (D16).
@@ -570,7 +551,6 @@ conditions! {
     ColumnKeyRecordRead => ("validation", "key_dependency", Some("COLUMN-7")),
     WindowZeroOffset => ("validation", "zero_offset", Some("WINDOW-7")),
     WindowOrderRequired => ("validation", "window_order_by_required", Some("WINDOW-5")),
-    WindowOrderForbidden => ("validation", "window_order_by_forbidden", Some("WINDOW-5")),
     WindowBaselineOrder => ("validation", "value_not_permitted", Some("WINDOW-5")),
     WindowRepeatedGroup => ("validation", "invalid_field_type", Some("WINDOW-3")),
     WindowBaselineInputType => ("validation", "incompatible_input_type", Some("VALUE-2")),

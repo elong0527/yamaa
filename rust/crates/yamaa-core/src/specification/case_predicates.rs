@@ -126,7 +126,7 @@ pub(super) fn bind(
 /// FORMULA-12).
 fn implicit_predicate(
     cx: &mut BindContext<'_, '_>,
-    implicit: binder::Implicit<'_>,
+    implicit: binder::Implicit,
     plan: &CompiledExpression,
 ) -> Result<Option<BoundPredicate>, BindError> {
     let catalog = cx.catalog;

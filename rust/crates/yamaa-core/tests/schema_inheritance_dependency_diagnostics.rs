@@ -114,7 +114,7 @@ mod schema {
         use std::collections::BTreeSet;
         use yamaa_core::{
             diagnostic::{ScalarSubmissionRule as Rule, SCALAR_SUBMISSION_RULES},
-            front_end::{lowering::sections as environment, v0_5::sections::sections},
+            front_end::{lowering::sections as environment, v0_5::project::sections},
             schema::{Document, DocumentNode as N},
             specification_submission_document as spec,
         };
@@ -725,14 +725,11 @@ mod schema {
         //! The normalized layers of a 1.x specification compose by
         //! `compose_versioned_layers`, root ancestor first, and the resolved
         //! specification's normalization materializes defaults once (LAYER-5
-        //! to LAYER-9). A test marked 0.5 exercises the 0.5 composition, in
-        //! which YAML null clears (`compose_descriptor`,
-        //! `compose_layer_fragments`, `compose_layers`), and goes with it
-        //! (#3447).
+        //! to LAYER-9).
         use yamaa_core::language::LanguageVersion;
         use yamaa_core::schema::{
-            ComposedLayers, Document, DocumentNode as N, NormalizationError, NormalizedDocument,
-            SchemaModule, SchemaOrigin, SchemaSource, SchemaStructure,
+            ComposedLayers, Document, DocumentNode as N, NormalizedDocument, SchemaModule,
+            SchemaOrigin, SchemaSource, SchemaStructure,
         };
 
         use crate::support::document::Tree as V;
@@ -762,10 +759,6 @@ mod schema {
                             "root_class",
                             V::List(vec![
                                 field("value", "patch"),
-                                // A 0.5 layer is headed by `schema_version`,
-                                // whose null the 0.5 composition refuses by
-                                // name, and a 1.x layer by `yamaa`.
-                                field("schema_version", "str"),
                                 required("yamaa", "str"),
                                 field("type", "str"),
                                 field("parent", "str"),
@@ -965,16 +958,6 @@ mod schema {
         fn check_member(actual: &Document, patch: V) {
             check(actual, columns(patch));
         }
-        /// The 0.5 composition of one field's value, in which a null clears.
-        fn compose_v0_5(old: V, new: V) -> yamaa_core::schema::ComposedValue {
-            let s = schema();
-            s.compose_descriptor(
-                s.root_class().fields[0].descriptor,
-                &document(old),
-                &document(new),
-            )
-            .unwrap()
-        }
 
         #[test]
         fn recursive_patches_keep_positions_merge_mappings_replace_lists_and_defer_defaults() {
@@ -1026,170 +1009,6 @@ mod schema {
                 ]),
             );
         }
-        /// 0.5 only (#3447): a null that clears is the 0.5 clear marker. In
-        /// a 1.x layer null is the missing value, and `clear` lists what a
-        /// layer clears (LAYER-9).
-        #[test]
-        fn a_null_at_any_depth_clears_the_inherited_value_and_is_never_retained() {
-            let value = compose_v0_5(
-                V::map(vec![
-                    ("label", V::text("parent")),
-                    (
-                        "metadata",
-                        V::map(vec![("a", V::text("A")), ("b", V::text("B"))]),
-                    ),
-                    (
-                        "options",
-                        V::map(vec![("left", V::text("L")), ("right", V::text("R"))]),
-                    ),
-                ]),
-                V::map(vec![
-                    ("label", V::Scalar(N::Null)),
-                    ("metadata", V::map(vec![("a", V::Scalar(N::Null))])),
-                    (
-                        "options",
-                        V::map(vec![
-                            ("right", V::Scalar(N::Null)),
-                            ("defaulted", V::Scalar(N::Null)),
-                        ]),
-                    ),
-                    ("items", V::Scalar(N::Null)),
-                ]),
-            );
-            check(
-                &value.document,
-                V::map(vec![
-                    ("metadata", V::map(vec![("b", V::text("B"))])),
-                    ("options", V::map(vec![("left", V::text("L"))])),
-                ]),
-            );
-            // A first declaration drops its nulls at every depth.
-            let value = compose_v0_5(
-                V::map(vec![]),
-                V::map(vec![
-                    (
-                        "options",
-                        V::map(vec![("left", V::Scalar(N::Null)), ("right", V::text("R"))]),
-                    ),
-                    ("metadata", V::map(vec![("a", V::Scalar(N::Null))])),
-                ]),
-            );
-            check(
-                &value.document,
-                V::map(vec![
-                    ("options", V::map(vec![("right", V::text("R"))])),
-                    ("metadata", V::map(vec![])),
-                ]),
-            );
-        }
-        #[test]
-        fn matching_registry_payloads_compose_but_different_keywords_replace() {
-            let inherited = V::map(vec![(
-                "expression",
-                V::map(vec![("select", V::map(vec![("left", V::text("L"))]))]),
-            )]);
-            let value = compose(
-                inherited.clone(),
-                V::map(vec![(
-                    "expression",
-                    V::map(vec![("select", V::map(vec![("right", V::text("R"))]))]),
-                )]),
-            );
-            check_member(
-                &value.document,
-                V::map(vec![(
-                    "expression",
-                    V::map(vec![(
-                        "select",
-                        V::map(vec![("left", V::text("L")), ("right", V::text("R"))]),
-                    )]),
-                )]),
-            );
-            let value = compose(
-                inherited,
-                V::map(vec![(
-                    "expression",
-                    V::map(vec![("literal", V::Scalar(N::Null))]),
-                )]),
-            );
-            check_member(
-                &value.document,
-                V::map(vec![(
-                    "expression",
-                    V::map(vec![("literal", V::Scalar(N::Null))]),
-                )]),
-            );
-        }
-        #[test]
-        fn named_inline_window_transitions_replace_whole() {
-            let inline = V::map(vec![
-                ("group_by", V::List(vec![V::text("ID")])),
-                ("order_by", V::List(vec![V::text("SEQ")])),
-            ]);
-            let value = compose(
-                V::map(vec![("window", inline.clone())]),
-                V::map(vec![("window", V::text("W"))]),
-            );
-            check_member(&value.document, V::map(vec![("window", V::text("W"))]));
-            let value = compose(
-                V::map(vec![("window", V::text("W"))]),
-                V::map(vec![("window", inline.clone())]),
-            );
-            check_member(&value.document, V::map(vec![("window", inline)]));
-        }
-        #[test]
-        fn retained_and_replaced_leaves_point_to_their_original_occurrences() {
-            let old = normalized(columns(V::map(vec![(
-                "options",
-                V::map(vec![("left", V::text("L")), ("right", V::text("old"))]),
-            )])));
-            let new = normalized(columns(V::map(vec![(
-                "options",
-                V::map(vec![("right", V::text("new"))]),
-            )])));
-            let originals = [old.clone(), new.clone()];
-            let value = versioned()
-                .compose_versioned_layers(&[old.clone(), new.clone()])
-                .unwrap();
-            assert_eq!(old, originals[0]);
-            assert_eq!(new, originals[1]);
-            assert_eq!(value.node_origins.len(), value.document.nodes().len());
-            // The options of the first column, in `document`.
-            let options = |document: &Document| {
-                let columns = document.field(document.root(), "columns").unwrap();
-                let N::Sequence(members) = &document.nodes()[columns] else {
-                    panic!("columns are a list")
-                };
-                document.field(members[0], "options").unwrap()
-            };
-            for (name, input) in [("left", 0), ("right", 1)] {
-                let result = value
-                    .document
-                    .field(options(&value.document), name)
-                    .unwrap();
-                let origin = value.node_origins[result];
-                assert_eq!(origin.layer, Some(input));
-                let source = &originals[input].document;
-                assert_eq!(
-                    origin.origin.node,
-                    source.field(options(source), name).unwrap()
-                );
-                assert_eq!(
-                    value.document.nodes()[result],
-                    source.nodes()[origin.origin.node]
-                );
-            }
-        }
-        #[test]
-        fn independent_compositions_preserve_the_written_override() {
-            let old = V::map(vec![("label", V::text("old"))]);
-            let new = V::map(vec![("label", V::text("new"))]);
-            let first = compose(old.clone(), new.clone());
-            let second = compose(old, new);
-            assert_eq!(first, second);
-            check_member(&first.document, V::map(vec![("label", V::text("new"))]));
-        }
-
         #[test]
         fn layers_keep_keyed_order_replace_ordinary_fields_and_track_written_provenance() {
             let layers = vec![
@@ -1292,7 +1111,6 @@ mod schema {
             ];
             let original = layers.clone();
             let result = versioned().compose_versioned_layers(&layers).unwrap();
-            assert!(result.diagnostics.is_empty());
             assert_eq!(layers, original);
             check(
                 &result.document,
@@ -1390,243 +1208,6 @@ mod schema {
                 || p.path == "clear"));
         }
 
-        /// 0.5 only (#3447): a null that clears is the 0.5 clear marker. A
-        /// 1.x layer clears through `clear`, and its null is a value
-        /// (LAYER-9).
-        #[test]
-        fn first_declaration_nulls_are_absent_and_required_clears_fail() {
-            let layers = vec![document(V::map(vec![
-                ("metadata", V::Scalar(N::Null)),
-                (
-                    "columns",
-                    V::List(vec![V::map(vec![
-                        ("name", V::text("NEW")),
-                        ("label", V::Scalar(N::Null)),
-                    ])]),
-                ),
-                ("keys", V::Scalar(N::Null)),
-                ("output", V::Scalar(N::Null)),
-            ]))];
-            let result = schema().compose_layer_fragments(&layers).unwrap();
-            assert_eq!(
-                result
-                    .diagnostics
-                    .iter()
-                    .map(|d| (
-                        d.path.as_str(),
-                        d.definition().condition,
-                        d.definition().rule
-                    ))
-                    .collect::<Vec<_>>(),
-                vec![("output", "invalid_clear", Some("LAYER-9"))]
-            );
-            check(
-                &result.document,
-                V::map(vec![(
-                    "columns",
-                    V::List(vec![V::map(vec![("name", V::text("NEW"))])]),
-                )]),
-            );
-        }
-
-        /// 0.5 only (#3447): the 0.5 clear marker, as above.
-        #[test]
-        fn first_declaration_nulls_are_absent_at_every_boundary_but_a_literal_payload_is_a_value() {
-            let first = document(V::map(vec![
-                ("literal", V::Scalar(N::Null)),
-                (
-                    "value",
-                    V::map(vec![(
-                        "expression",
-                        V::map(vec![("literal", V::Scalar(N::Null))]),
-                    )]),
-                ),
-                (
-                    "input",
-                    V::map(vec![("SRC", V::map(vec![("missing", V::Scalar(N::Null))]))]),
-                ),
-                (
-                    "columns",
-                    V::List(vec![V::map(vec![
-                        ("name", V::text("A")),
-                        ("missing", V::Scalar(N::Null)),
-                    ])]),
-                ),
-                (
-                    "rows",
-                    V::List(vec![V::map(vec![
-                        ("id", V::text("R")),
-                        ("missing", V::Scalar(N::Null)),
-                    ])]),
-                ),
-                (
-                    "intermediates",
-                    V::List(vec![V::map(vec![
-                        ("id", V::text("LOOK")),
-                        ("no_match", V::Scalar(N::Null)),
-                    ])]),
-                ),
-            ]));
-            let child = document(V::map(vec![("schema_version", V::text("1.0"))]));
-            let result = schema()
-                .compose_layer_fragments(&[first.clone(), child])
-                .unwrap();
-            assert!(result.diagnostics.is_empty());
-            for path in [
-                "literal",
-                "input.SRC.missing",
-                "columns.A.missing",
-                "rows.R.missing",
-                "intermediates.LOOK.no_match",
-            ] {
-                assert!(!result.provenance.iter().any(|p| p.path == path), "{path}");
-            }
-            check(
-                &result.document,
-                V::map(vec![
-                    (
-                        "value",
-                        V::map(vec![(
-                            "expression",
-                            V::map(vec![("literal", V::Scalar(N::Null))]),
-                        )]),
-                    ),
-                    ("input", V::map(vec![("SRC", V::map(vec![]))])),
-                    (
-                        "columns",
-                        V::List(vec![V::map(vec![("name", V::text("A"))])]),
-                    ),
-                    ("rows", V::List(vec![V::map(vec![("id", V::text("R"))])])),
-                    (
-                        "intermediates",
-                        V::List(vec![V::map(vec![("id", V::text("LOOK"))])]),
-                    ),
-                    ("schema_version", V::text("1.0")),
-                ]),
-            );
-            let same_member = document(V::map(vec![(
-                "intermediates",
-                V::List(vec![V::map(vec![
-                    ("id", V::text("LOOK")),
-                    ("no_match", V::text("UNKNOWN")),
-                ])]),
-            )]));
-            let result = schema()
-                .compose_layer_fragments(&[same_member, first])
-                .unwrap();
-            assert!(result.diagnostics.is_empty());
-            assert!(!result
-                .provenance
-                .iter()
-                .any(|p| p.path == "intermediates.LOOK.no_match"));
-        }
-
-        /// 0.5 only (#3447): the 0.5 clear marker, as above.
-        #[test]
-        fn inherited_handler_is_cleared_a_repeated_null_stays_absent_and_a_value_returns() {
-            for inherited in [V::text("UNKNOWN"), V::Scalar(N::Null)] {
-                let first = document(V::map(vec![(
-                    "intermediates",
-                    V::List(vec![V::map(vec![
-                        ("id", V::text("LOOK")),
-                        ("no_match", inherited),
-                    ])]),
-                )]));
-                let next = document(V::map(vec![(
-                    "intermediates",
-                    V::List(vec![V::map(vec![
-                        ("id", V::text("LOOK")),
-                        ("no_match", V::Scalar(N::Null)),
-                    ])]),
-                )]));
-                let result = schema()
-                    .compose_layer_fragments(&[first.clone(), next.clone()])
-                    .unwrap();
-                assert!(result.diagnostics.is_empty());
-                check(
-                    &result.document,
-                    V::map(vec![(
-                        "intermediates",
-                        V::List(vec![V::map(vec![("id", V::text("LOOK"))])]),
-                    )]),
-                );
-                assert!(!result
-                    .provenance
-                    .iter()
-                    .any(|p| p.path == "intermediates.LOOK.no_match"));
-                let result = schema()
-                    .compose_layer_fragments(&[first.clone(), next.clone(), next.clone()])
-                    .unwrap();
-                assert!(result.diagnostics.is_empty());
-                check(
-                    &result.document,
-                    V::map(vec![(
-                        "intermediates",
-                        V::List(vec![V::map(vec![("id", V::text("LOOK"))])]),
-                    )]),
-                );
-                let again = document(V::map(vec![(
-                    "intermediates",
-                    V::List(vec![V::map(vec![
-                        ("id", V::text("LOOK")),
-                        ("no_match", V::text("AGAIN")),
-                    ])]),
-                )]));
-                let result = schema()
-                    .compose_layer_fragments(&[first, next, again])
-                    .unwrap();
-                check(
-                    &result.document,
-                    V::map(vec![(
-                        "intermediates",
-                        V::List(vec![V::map(vec![
-                            ("id", V::text("LOOK")),
-                            ("no_match", V::text("AGAIN")),
-                        ])]),
-                    )]),
-                );
-                assert_eq!(
-                    result
-                        .provenance
-                        .iter()
-                        .find(|p| p.path == "intermediates.LOOK.no_match")
-                        .unwrap()
-                        .layer,
-                    2
-                );
-            }
-        }
-
-        /// 0.5 only (#3447): the 0.5 clear marker, as above.
-        #[test]
-        fn null_collections_are_absent_and_a_later_layer_supplies_them() {
-            let first = document(V::map(vec![
-                ("windows", V::Scalar(N::Null)),
-                ("rows", V::Scalar(N::Null)),
-                ("intermediates", V::Scalar(N::Null)),
-            ]));
-            let result = schema()
-                .compose_layer_fragments(std::slice::from_ref(&first))
-                .unwrap();
-            assert!(result.diagnostics.is_empty());
-            check(&result.document, V::map(vec![]));
-            let next = document(V::map(vec![
-                ("windows", V::map(vec![])),
-                ("rows", V::List(vec![])),
-                ("intermediates", V::List(vec![])),
-            ]));
-            let result = schema().compose_layer_fragments(&[first, next]).unwrap();
-            assert!(result.diagnostics.is_empty());
-            check(
-                &result.document,
-                V::map(vec![
-                    ("windows", V::map(vec![])),
-                    ("rows", V::List(vec![])),
-                    ("intermediates", V::List(vec![])),
-                ]),
-            );
-        }
-
         #[test]
         fn malformed_collection_shapes_and_duplicate_identifiers_are_refused() {
             let schema = versioned();
@@ -1703,7 +1284,6 @@ mod schema {
                     ])]),
                 )]),
             ]);
-            assert!(result.diagnostics.is_empty());
             // Composition materializes no default; the resolved
             // specification's normalization does, once, in schema order.
             let resolved = versioned()
@@ -1752,46 +1332,6 @@ mod schema {
                 .provenance
                 .iter()
                 .any(|p| p.path == "columns.B.options.defaulted"));
-        }
-
-        /// 0.5 only (#3447): `compose_layers` materializes member defaults
-        /// beside the 0.5 clear markers' findings. A 1.x composition
-        /// materializes none (LAYER-7).
-        #[test]
-        fn materialization_failure_precedes_collected_clear_diagnostics_without_partial_output() {
-            let layers = [document(V::map(vec![
-                ("output", V::Scalar(N::Null)),
-                (
-                    "columns",
-                    V::List(vec![V::map(vec![
-                        ("name", V::text("A")),
-                        ("mandatory", V::map(vec![])),
-                    ])]),
-                ),
-            ]))];
-            let Err(yamaa_core::schema::LayerCompositionError {
-                error: NormalizationError::Invalid(diagnostics),
-                ..
-            }) = schema().compose_layers(&layers)
-            else {
-                panic!("expected normalization failure")
-            };
-            assert_eq!(diagnostics.len(), 1);
-            assert_eq!(
-                diagnostics[0].definition().condition,
-                "missing_required_field"
-            );
-            assert_eq!(diagnostics[0].path, "columns.A.mandatory.one");
-            let layers = [document(V::map(vec![("output", V::Scalar(N::Null))]))];
-            let Err(yamaa_core::schema::LayerCompositionError {
-                error: NormalizationError::Invalid(diagnostics),
-                ..
-            }) = schema().compose_layers(&layers)
-            else {
-                panic!("expected clear failure")
-            };
-            assert_eq!(diagnostics[0].definition().condition, "invalid_clear");
-            assert_eq!(diagnostics[0].path, "output");
         }
     }
     mod schema_descriptor {
@@ -2535,19 +2075,16 @@ mod schema {
                     assert_eq!(value.to_bits(), (-0.0_f64).to_bits());
                 };
             }
-            for (kind, value, layer) in [
-                (K::Null, "null", "NoneType"),
-                (K::Boolean, "bool", "bool"),
-                (K::Integer, "int", "int"),
-                (K::Float, "float", "float"),
-                (K::Text, "str", "str"),
-                (K::Sequence, "sequence", "list"),
-                (K::Mapping, "mapping", "dict"),
+            for (kind, value) in [
+                (K::Null, "null"),
+                (K::Boolean, "bool"),
+                (K::Integer, "int"),
+                (K::Float, "float"),
+                (K::Text, "str"),
+                (K::Sequence, "sequence"),
+                (K::Mapping, "mapping"),
             ] {
-                let findings = [issue(
-                    "kind",
-                    vec![("value", C::ValueKind(kind)), ("layer", C::LayerKind(kind))],
-                )];
+                let findings = [issue("kind", vec![("value", C::ValueKind(kind))])];
                 let report = admit_schema_diagnostics(&schema, None, &findings, &[]).unwrap();
                 assert_eq!(
                     records(&report),
@@ -2556,16 +2093,12 @@ mod schema {
                         "kind",
                         "pattern_mismatch",
                         Some("SCHEMA-12"),
-                        vec![("value", V::Text(value)), ("layer", V::Text(layer))]
+                        vec![("value", V::Text(value))]
                     )]
                 );
                 assert_eq!(
                     schema_diagnostic_kind_label(&C::ValueKind(kind)),
                     Some(value)
-                );
-                assert_eq!(
-                    schema_diagnostic_kind_label(&C::LayerKind(kind)),
-                    Some(layer)
                 );
             }
             assert_eq!(schema_diagnostic_kind_label(&C::Null), None);

@@ -11,20 +11,17 @@ The documents of `binding_diagnostics.tsv`, `grammar_diagnostics.tsv`,
 `window_diagnostics.tsv` are written in 1.0 (#3437). Their reports keep every
 recorded value except the paths 1.0 spells differently: a formula reports at
 its `derivation`, a bare reference at `derivation.source`, and a row template
-by its `id`, such as `rows.first` where 0.5 wrote `rows[0]`. The forbidden
-baseline-flag order case of `window_diagnostics.tsv` stays in 0.5: the
-condition it pins, `window_order_by_forbidden`, retires with 0.5 (D101).
+by its `id`, such as `rows.first` where 0.5 wrote `rows[0]`.
 
 The specifications in the JSON fixtures are written in 1.0: `tools/migrate`
 converted the captured 0.5 text (#3436). Where 1.0 declares a key that 0.5
 inferred, names a row or intermediate by its id, or counts an absence under
-`absent`, the document and its expectations follow the recorded decision. A
-case whose behaviour only 0.5 has keeps its captured text until the engine
-stops reading 0.5 specifications. So do
-`inheritance_preparation_reference.json`, which pins the 0.5 model, and the
-specification text of the `originals` in `flag_reference.json`, which no test
-runs: each benchmark runs as it is written, and only its captured handlers and
-findings are compared.
+`absent`, the document and its expectations follow the recorded decision. The
+cases whose behaviour only 0.5 had went when the engine stopped reading 0.5
+specifications (#3676). The specification text of the `originals` in
+`flag_reference.json` keeps its captured 0.5 text, which no test runs: each
+benchmark runs as it is written, and only its captured handlers and findings
+are compared.
 
 ## binding_diagnostics
 # Original-document binding findings
@@ -201,15 +198,10 @@ not qualification of the replacement public facade or an inventory promotion.
 ## legacy
 # Frozen 0.5 benchmark files
 
-`legacy/` holds byte copies of benchmark files as 0.5 wrote them, for the
-tests of 0.5-only behaviour: a 0.5 source beside its 1.0 conversion
-(`declaration_layer_composition.rs`, `declaration_project_files.rs`); the 0.5
-admission's origins, named windows, shorthand expansion, standalone route and
-model admission (`specification_sources.rs`, `declaration_schema_capture.rs`);
-the 0.5 inheritance lifecycle and the window failures, one of which 1.0 refuses
-at admission rather than as WINDOW-5 (`specification_reports.rs`). The
-benchmarks move to 1.0 one prefix at a time; these copies do not, and go when
-the engine stops reading 0.5 specifications.
+`legacy/` holds byte copies of the project and environment files of two
+benchmarks as 0.5 wrote them, for the tests of a 0.5 project beside its 1.0
+conversion (`declaration_project_files.rs`). The engine reads no 0.5
+specification; these copies go with the 0.5 project route.
 
 ## native_file_resources
 # Native file resource qualification
@@ -384,18 +376,17 @@ This extends existing conversion recovery without changing engine evaluation. Ru
 ## original_source_bindings
 # Original source bindings
 
-Sixteen independently authored original YAML documents, source records, complete
+Twelve independently authored original YAML documents, source records, complete
 reports, handler counts and exact CSV bytes cover scalar driver and secondary
 source bindings. The truth was written from COLUMN-2, COLUMN-11, COLUMN-12, COLUMN-14,
 LOOKUP-1 and LOOKUP-10. No candidate or reference execution generated the expectations.
 
 Cases cover eligibility before ordered selection, stable first/last ties, explicit
 null placement with descending order, empty matches with zero handler counts,
-absent variables with a literal or explicit null, present missing values without
-absence handling, driver collection selection, lazy intermediate and secondary
-first_available operands, duplicate donor records with equal values, and missing
-applicable keys, exact int/float comparisons beyond 2^53, and reached/unused
-invalid absence replacements with both handler and conversion context. Successful cases are saved twice; every document is run twice
+present missing values without absence handling, driver collection selection,
+lazy intermediate and secondary first_available operands, duplicate donor
+records with equal values, exact int/float comparisons beyond 2^53, and an
+unused invalid absence replacement. Successful cases are saved twice; every document is run twice
 with fresh attempt-local choices and handler counts. Negative results cannot save.
 
 The source.condition wording in issue #1980 has no grammar definition.
@@ -692,7 +683,7 @@ document; they do not close the remaining public API report support gates.
 ## window_diagnostics
 # Original window diagnostic truth
 
-Three independently authored original documents were captured from the unchanged Python reference on 2026-10-07, based on merged `c6bbdc1ae315c6b9c86ff8688cc56ed765f4093c`. Complete failed reports pin zero row-value offset, required rank order and forbidden baseline-flag order, including exact requirement IDs, authored paths, context and one captured/ingested `ID,V\n1,2\n` source. No existing expectation is regenerated.
+Two independently authored original documents were captured from the unchanged Python reference on 2026-10-07, based on merged `c6bbdc1ae315c6b9c86ff8688cc56ed765f4093c`. Complete failed reports pin zero row-value offset and required rank order, including exact requirement IDs, authored paths, context and one captured/ingested `ID,V\n1,2\n` source. No existing expectation is regenerated.
 
 The common core diagnostic owns window context and its canonical cause mapping. Rust and both installed hosts compare complete retained reports after dropping the prepared handle and block repeated save attempts without publication or source recapture. R replay runs with Python unavailable. Named-selection and window predicate findings also project through the common core diagnostic; their existing locked syntax mappings and separately documented original-report gaps are retained.
 

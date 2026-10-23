@@ -63,21 +63,6 @@ fn a_retired_parent_list_names_the_chain_without_missing_root_fields() {
     assert!(findings
         .iter()
         .any(|f| f["spec_paths"] == json!(["unrelated"])));
-    // A 0.5 file also reports a written column's missing name in the same
-    // pass. 0.5-only until #3447: a 1.0 layer leaves requiredness to the
-    // composed member (LAYER-7).
-    let legacy = raw.replacen(HEADER, "schema_version: '1.0'\n", 1);
-    let findings = diagnostics(&format!("{legacy}unrelated: 1\ncolumns: [{{type: str}}]\n"));
-    assert!(findings
-        .iter()
-        .any(|f| f["spec_paths"] == json!(["unrelated"])));
-    assert!(findings.iter().any(|f| {
-        f["condition"] == "missing_required_field" && f["spec_paths"] == json!(["columns[0].name"])
-    }));
-    assert!(findings
-        .iter()
-        .filter(|f| f["condition"] == "missing_required_field")
-        .all(|f| { f["spec_paths"][0].as_str().unwrap().starts_with("columns") }));
 
     // An ordinary incomplete specification still asks for its root fields.
     let asks_for_domain = |findings: &[Value]| {
@@ -86,15 +71,6 @@ fn a_retired_parent_list_names_the_chain_without_missing_root_fields() {
         })
     };
     assert!(asks_for_domain(&diagnostics(HEADER)));
-    // A 0.5 file asks for them beside an empty retired list too. 0.5-only
-    // until #3447: a 1.0 layer defers its root fields' requiredness to the
-    // resolved specification, which a layer that writes an unknown field
-    // never reaches (LAYER-4).
-    for parents in ["parents: []\n", "parents: null\n"] {
-        assert!(asks_for_domain(&diagnostics(&format!(
-            "schema_version: '1.0'\n{parents}"
-        ))));
-    }
 }
 
 #[test]

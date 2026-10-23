@@ -61,24 +61,12 @@ impl Study {
         fs::read(self.0.join(case).join("xa.csv"))
             .unwrap_or_else(|error| panic!("{case}/{entry} saved artifact: {error}"))
     }
-    /// Write the three entry forms for one specification body and assert that
-    /// all three build with identical saved outputs.
+    /// Write the two entry forms for one specification body and assert that
+    /// both build with identical saved outputs.
     fn assert_forms_agree(&self, case: &str, body: &str) {
         let dir = self.0.join(case);
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("flat.yaml"), body).unwrap();
-        // A null parent is absent only in 0.5, so this form takes the 0.5
-        // standalone route; a 1.0 layer without a parent omits the field
-        // (LAYER-2). 0.5-only until #3447.
-        fs::write(
-            dir.join("null_parent.yaml"),
-            body.replacen(
-                "yamaa: \"1.0\"\ntype: spec\n",
-                "schema_version: \"1.0\"\nparent: null\n",
-                1,
-            ),
-        )
-        .unwrap();
         fs::write(
             dir.join("child.yaml"),
             "yamaa: \"1.0\"\ntype: spec\nparent: flat.yaml\n",
@@ -86,7 +74,6 @@ impl Study {
         .unwrap();
         let flat = self.build(case, "flat.yaml");
         assert_eq!(flat, b"ID,AGE\n1,40\n2,52\n", "{case} flat output");
-        assert_eq!(self.build(case, "null_parent.yaml"), flat, "{case} null");
         assert_eq!(self.build(case, "child.yaml"), flat, "{case} child");
     }
 }

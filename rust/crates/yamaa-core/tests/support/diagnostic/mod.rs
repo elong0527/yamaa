@@ -84,7 +84,7 @@ impl Record for SchemaDiagnostic {
             SchemaContext::TextList(values) => {
                 Value::Array(values.iter().cloned().map(Value::String).collect())
             }
-            SchemaContext::ValueKind(_) | SchemaContext::LayerKind(_) => Value::String(
+            SchemaContext::ValueKind(_) => Value::String(
                 schema_diagnostic_kind_label(context)
                     .expect("a kind has a label")
                     .into(),

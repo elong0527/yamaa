@@ -24,10 +24,9 @@ pub(super) struct Declaration {
     keys: Option<Vec<(String, match_values::Declaration)>>,
     /// A written `key` that names no pair (LOOKUP-5).
     empty_key: bool,
-    /// A 1.0 aggregate without `key` of its own, which matches on its
-    /// input's declared `key` (LOOKUP-5, D63).
+    /// An aggregate without `key` of its own, which matches on its input's
+    /// declared `key` (LOOKUP-5, D63).
     from_input: bool,
-    output_keys: Vec<String>,
     filter: Option<(String, Result<CompiledExpression, CompileError>)>,
     derive: Option<Vec<DeriveDeclaration>>,
     derive_relations: Vec<String>,
@@ -123,7 +122,6 @@ impl Declaration {
             empty_key: keys.as_ref().is_some_and(Vec::is_empty),
             keys,
             from_input: matches!(aggregate.key, Some(ast::JoinKey::FromInput)),
-            output_keys: spec.keys.iter().map(|key| key.name.clone()).collect(),
             filter,
             derive,
             derive_relations,
@@ -623,9 +621,7 @@ fn bind_groups_and_operands(
     declaration: &Declaration,
     declared: Option<&[String]>,
     relation: Option<&str>,
-    donor: AggregateSource,
     catalog: &Catalog,
-    secondary: &[SecondarySource],
     donor_schema: &TableSchema,
     grain: &[&str],
     phase: Phase<'_>,
@@ -674,30 +670,17 @@ fn bind_groups_and_operands(
     }
     // LOOKUP-19: a qualified aggregate's group_by columns must also be
     // output keys: the keys the reduction joins on, either its explicit
-    // `key` pairs or the defaults: the output keys inferred applicable
-    // (0.5), or its input's declared `key` (1.0). The
-    // Matched executor matches donor records on those keys only, so a
-    // group_by column outside them would silently merge distinct groups.
+    // `key` pairs or its input's declared `key`. The Matched executor
+    // matches donor records on those keys only, so a group_by column
+    // outside them would silently merge distinct groups.
     if matches!(phase, Phase::Column { .. }) && findings.len() == group_columns_before {
         if let Some(relation_name) = relation {
-            let applicable: Vec<&str> = match (&declaration.keys, declared) {
-                (Some(pairs), _) => pairs.iter().map(|(field, _)| field.as_str()).collect(),
-                (None, Some(declared)) => declared.iter().map(String::as_str).collect(),
-                (None, None) => declaration
-                    .output_keys
+            let applicable: Vec<&str> = match &declaration.keys {
+                Some(pairs) => pairs.iter().map(|(field, _)| field.as_str()).collect(),
+                None => declared
+                    .unwrap_or_default()
                     .iter()
                     .map(String::as_str)
-                    .filter(|name| {
-                        let written = format!("{relation_name}.{name}");
-                        match donor {
-                            AggregateSource::Primary => catalog.bind(&written).is_some(),
-                            AggregateSource::Secondary(index) => secondary[index]
-                                .schema
-                                .columns()
-                                .iter()
-                                .any(|column| column.name == *name),
-                        }
-                    })
                     .collect(),
             };
             if declaration.groups.iter().any(|name| {
@@ -940,68 +923,31 @@ fn bound_relation(
                         plan.spec_path()
                     })
             };
-            // Without `key`: the applicable output keys (0.5), or the input's
-            // declared key, each column paired with the current row's
-            // same-named value (1.0).
-            let defaults = match declared {
-                Some(declared) => declared
-                    .iter()
-                    .map(|name| {
-                        (
-                            name.clone(),
-                            match_values::Declaration::Variable(name.clone()),
-                        )
-                    })
-                    .collect::<Vec<_>>(),
-                None => declaration
-                    .output_keys
-                    .iter()
-                    .filter(|name| {
-                        let written = format!("{relation}.{name}");
-                        match donor {
-                            AggregateSource::Primary => catalog.bind(&written).is_some(),
-                            AggregateSource::Secondary(index) => secondary[index]
-                                .schema
-                                .columns()
-                                .iter()
-                                .any(|column| column.name == **name),
-                        }
-                    })
-                    .map(|name| {
-                        (
-                            name.clone(),
-                            match_values::Declaration::Variable(name.clone()),
-                        )
-                    })
-                    .collect::<Vec<_>>(),
-            };
+            // Without `key`: the input's declared key, each column paired with
+            // the current row's same-named value.
+            let defaults = declared
+                .unwrap_or_default()
+                .iter()
+                .map(|name| {
+                    (
+                        name.clone(),
+                        match_values::Declaration::Variable(name.clone()),
+                    )
+                })
+                .collect::<Vec<_>>();
             let pairs = declaration.keys.as_ref().unwrap_or(&defaults);
             if pairs.is_empty() {
-                if declaration.empty_key {
-                    finding(
+                finding(
+                    if declaration.empty_key {
                         Finding::MissingKeys {
                             path: &declaration.path,
                             dataset: relation,
-                        },
-                        findings,
-                    )?;
-                    return Ok(None);
-                }
-                if declared.is_some() {
-                    finding(
+                        }
+                    } else {
                         Finding::UndeclaredInputKey {
                             path: &declaration.path,
                             dataset: relation,
-                        },
-                        findings,
-                    )?;
-                    return Ok(None);
-                }
-                finding(
-                    Finding::NoApplicableKeys {
-                        path: &declaration.path,
-                        dataset: relation,
-                        keys: &declaration.output_keys,
+                        }
                     },
                     findings,
                 )?;
@@ -1011,16 +957,17 @@ fn bound_relation(
             // record of any input at that input's own port, as a named
             // intermediate's key does (LOOKUP-5). Whether the rows that
             // evaluate the aggregate have that record is admitted for each
-            // reading context (`admit_record_keys`). A written 1.0 `key` owns
+            // reading context (`admit_record_keys`). A written `key` owns
             // its refusals, as a named intermediate's does (LOOKUP-5): a key
             // column the relation lacks, or a pair whose types cannot
             // compare, at `key`; a match value that reads no current-row
             // value at its pair, `key.<column>`, where a row context that
-            // lacks its record refuses it too. A 0.5 key, and the key a 1.0
-            // input declares, report at the read.
-            let owned = (declaration.keys.is_some()
-                && tree.spec().header.surface.one_meaning_per_form())
-            .then(|| format!("{}.key", declaration.path));
+            // lacks its record refuses it too. The key an input declares
+            // reports at the read.
+            let owned = declaration
+                .keys
+                .is_some()
+                .then(|| format!("{}.key", declaration.path));
             let records = record_catalog(catalog, driver, output, secondary)?;
             let values = records.as_ref().unwrap_or(catalog);
             let mut keys = Vec::new();
@@ -1069,9 +1016,9 @@ fn bound_relation(
                             },
                             findings,
                         )?;
-                        // A 1.0 key still reads its match value, as a named
-                        // intermediate's does; a 0.5 key reads nothing more
-                        // of the pair.
+                        // A written key still reads its match value, as a
+                        // named intermediate's does; the key an input
+                        // declares reads nothing more of the pair.
                         if owned.is_none() {
                             continue;
                         }
@@ -1254,8 +1201,8 @@ pub(super) fn bind(
         } => groups.to_vec(),
         _ => declaration.groups.iter().map(String::as_str).collect(),
     };
-    // A 1.0 aggregate without `key` of its own matches on its input's
-    // declared `key`, none when the input declares none (LOOKUP-5, D63).
+    // An aggregate without `key` of its own matches on its input's declared
+    // `key`, none when the input declares none (LOOKUP-5, D63).
     let declared = declaration.from_input.then(|| {
         relation
             .and_then(|relation| tree.spec().input_key(relation))
@@ -1269,9 +1216,7 @@ pub(super) fn bind(
         declaration,
         declared.as_deref(),
         relation,
-        donor,
         catalog,
-        secondary,
         &donor_schema,
         &grain,
         phase,
@@ -1339,7 +1284,6 @@ pub(super) fn bind(
         &donor_schema,
         secondary,
         intermediates,
-        tree.spec().header.surface.one_meaning_per_form(),
         edges,
         findings,
     )?;
@@ -1543,8 +1487,8 @@ pub(super) fn late_reads(plan: &crate::dataset::DatasetPlan) -> Vec<BindFinding>
 
 /// A qualified aggregate's range (LOOKUP-9): bounds are fields of its
 /// relation and the value a value of the current row, admitted for every row
-/// the column is derived for ([`lookup_range::admit`]). With `one_meaning`
-/// (1.0) a bare value that no column takes fails whatever the bounds bind.
+/// the column is derived for ([`lookup_range::admit`]). A bare value that no
+/// column takes fails whatever the bounds bind.
 #[allow(clippy::too_many_arguments)]
 fn bind_range(
     declaration: &Declaration,
@@ -1552,7 +1496,6 @@ fn bind_range(
     donor: &TableSchema,
     secondary: &[SecondarySource],
     intermediates: &[Option<crate::dataset::Intermediate>],
-    one_meaning: bool,
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<crate::dataset::RelationRange>, BindError> {
@@ -1578,7 +1521,7 @@ fn bind_range(
             .map(BindFinding::AggregateDiagnostic),
     );
     let Some(bounds) = bounds else {
-        if one_meaning && range.names_no_column(catalog) {
+        if range.names_no_column(catalog) {
             findings.push(BindFinding::AggregateDiagnostic(
                 range.unknown_value(Owner::Unnamed),
             ));

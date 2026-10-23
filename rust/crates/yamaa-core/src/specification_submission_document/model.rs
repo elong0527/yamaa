@@ -25,8 +25,8 @@ vocabulary!(FieldName {
     ValueLevel => "value_level", Where => "where", Origins => "origins", Standard => "standard"
 });
 /// Governed fields share one vocabulary in declaration and execution admission.
-/// These are the dataset fields a 1.0 specification declares, `standard`
-/// among them (P-STD-1).
+/// These are the dataset fields a specification declares, `standard` among
+/// them (P-STD-1), which its root `metadata` map must not carry (SUB-2).
 pub const DATASET_METADATA_FIELDS: &[FieldName] = &[
     FieldName::HasNoData,
     FieldName::Label,
@@ -39,29 +39,6 @@ pub const DATASET_METADATA_FIELDS: &[FieldName] = &[
     FieldName::Standard,
     FieldName::Comment,
 ];
-/// The dataset fields a 0.5 specification declares: every one but
-/// `standard`, which 1.0 adds.
-pub const DATASET_METADATA_FIELDS_V0_5: &[FieldName] = &[
-    FieldName::HasNoData,
-    FieldName::Label,
-    FieldName::Class,
-    FieldName::Subclass,
-    FieldName::Structure,
-    FieldName::Repeating,
-    FieldName::ReferenceData,
-    FieldName::Domain,
-    FieldName::Comment,
-];
-/// The governed dataset fields a specification declares, which its root
-/// `metadata` map must not carry (SUB-2): a 1.0 specification's, or a 0.5
-/// one's.
-pub fn dataset_metadata_fields(v1: bool) -> &'static [FieldName] {
-    if v1 {
-        DATASET_METADATA_FIELDS
-    } else {
-        DATASET_METADATA_FIELDS_V0_5
-    }
-}
 pub const COLUMN_METADATA_FIELDS: &[FieldName] = &[
     FieldName::Core,
     FieldName::Mandatory,
@@ -281,19 +258,6 @@ impl OriginType {
                     )
             }
         }
-    }
-    /// The pairs of 0.5.0, which a specification that declares
-    /// `schema_version` keeps (D75): SDTM also admits `Not Available`
-    /// without a source.
-    pub fn admits_source_v0_5(
-        self,
-        model: crate::ast::ModelKind,
-        source: Option<OriginSource>,
-    ) -> bool {
-        self.admits_source(model, source)
-            || (model == crate::ast::ModelKind::Sdtm
-                && self == Self::NotAvailable
-                && source.is_none())
     }
 }
 impl OriginSource {

@@ -5,22 +5,11 @@ use yamaa_core::{
     diagnostic::ConditionCode,
     schema::{
         Document, DocumentNode as N, NormalizationError, SchemaContext as C, SchemaDiagnostic,
-        SchemaModule, SchemaStructure, SpecificationDocument,
+        SchemaModule, SchemaStructure,
     },
 };
 
-fn document(mut tree: T) -> Document {
-    if let T::Map(items) = &mut tree {
-        if !items
-            .iter()
-            .any(|(k, _)| k == "schema_version" || k == "version")
-        {
-            items.insert(0, ("schema_version".into(), T::text("1.0")));
-        }
-    }
-    raw_document(tree)
-}
-fn raw_document(tree: T) -> Document {
+fn document(tree: T) -> Document {
     tree.document()
 }
 fn integer(value: &str) -> T {
@@ -39,12 +28,7 @@ fn field(name: &str, kind: &str, required: bool) -> T {
     )])
 }
 fn schema(fields: Vec<T>, declarations: Vec<(&str, T)>) -> SchemaStructure {
-    let mut fields_with_version = vec![field("schema_version", "str", false)];
-    fields_with_version.extend(fields);
-    let mut entries = vec![
-        ("version", T::text("1.0")),
-        ("root_class", T::List(fields_with_version)),
-    ];
+    let mut entries = vec![("version", T::text("1.0")), ("root_class", T::List(fields))];
     entries.extend(declarations);
     SchemaStructure::admit(
         vec![SchemaModule {
@@ -104,7 +88,11 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "unknown_field",
         "SCHEMA-13",
     );
-    let findings = basic.validate_document(&document(T::map(vec![]))).unwrap();
+    // A root that writes no field is not the root class's mapping at all;
+    // one that omits the required field is missing it.
+    let findings = basic
+        .validate_document(&document(T::map(vec![("extra", T::text("x"))])))
+        .unwrap();
     check(
         &mut reached,
         &findings,
@@ -113,39 +101,8 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "missing_required_field",
         "SCHEMA-13",
     );
-    // `schema_version_mismatch` retires with the 0.5 path (#3447).
-    let findings = basic
-        .validate_document(&document(T::map(vec![("schema_version", T::text("old"))])))
-        .unwrap();
-    check(
-        &mut reached,
-        &findings,
-        SchemaVersionMismatch,
-        "schema_version",
-        "schema_version_mismatch",
-        "SCHEMA-2",
-    );
-    assert_eq!(findings.len(), 1); // Version rejection precedes missing-field detection.
-    let resolved = schema(vec![field("output", "str", true)], vec![]);
-    let findings = resolved
-        .validate_resolved_document(&document(T::map(vec![])))
-        .unwrap();
-    check(
-        &mut reached,
-        &findings,
-        SchemaResolvedOutputRequired,
-        "output",
-        "missing_required_field",
-        "LAYER-12",
-    );
-    let ordinary = resolved
-        .validate_document(&document(T::map(vec![])))
-        .unwrap();
-    assert_eq!(ordinary[0].code, SchemaMissingRequiredField);
-    assert_eq!(ordinary[0].definition().rule, Some("SCHEMA-13"));
 
-    // A written long form holding only its shorthand's field restates it; the
-    // resolved, canonical document holds that long form and is not refused.
+    // A written long form holding only its shorthand's field restates it.
     let shorthand = schema(
         vec![field("item", "item_value", false)],
         vec![
@@ -176,13 +133,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         findings[0].context,
         [
             ("field", C::Text("name".into())),
-            ("shorthand", C::InputValue(4)),
+            ("shorthand", C::InputValue(2)),
         ]
     );
-    assert!(shorthand
-        .validate_resolved_document(&long_form)
-        .unwrap()
-        .is_empty());
 
     let operations = schema(
         vec![field("derive", "derivation", false)],
@@ -215,15 +168,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "derive.absent",
             "unknown_operation",
             "SCHEMA-7",
-        ),
-        // `bare_derivation_scalar` retires with the 0.5 path (#3447): a 1.0
-        // expression field reads a YAML scalar as a literal (D18).
-        (
-            integer("2"),
-            SchemaBareDerivationScalar,
-            "derive",
-            "bare_derivation_scalar",
-            "EXPR-5",
         ),
     ] {
         let findings = operations
@@ -360,7 +304,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     let layer_schema = schema(
         vec![
             field("columns", "list[column_class]", false),
-            field("output", "str", true),
+            field("clear", "list[str]", false),
         ],
         vec![
             (
@@ -370,71 +314,28 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ("identifier", descriptor("str")),
         ],
     );
-    // The 0.5 layer admission (`normalize_layer`), which alone raises these
-    // causes, and whose null clears (LAYER-9) and version check (LAYER-4)
-    // only 0.5 has; #3447 deletes them with the 0.5 path.
-    for (fields, code, path, condition, req) in [
-        (
-            vec![
-                ("schema_version", T::text("1.0")),
-                ("columns", T::text("x")),
-            ],
-            SchemaLayerInvalidFieldType,
-            "columns",
-            "invalid_field_type",
-            "SCHEMA-12",
-        ),
-        (
-            vec![("schema_version", T::text("1.0")), ("extra", T::text("x"))],
-            SchemaLayerUnknownField,
-            "extra",
-            "unknown_field",
-            "SCHEMA-13",
-        ),
-        (
-            vec![
-                ("schema_version", T::text("1.0")),
-                ("columns", T::List(vec![T::map(vec![])])),
-            ],
-            SchemaLayerMissingRequiredField,
-            "columns[0].name",
-            "missing_required_field",
-            "SCHEMA-13",
-        ),
-        (
-            vec![
-                ("schema_version", T::text("1.0")),
-                ("output", T::Scalar(N::Null)),
-            ],
-            SchemaLayerInvalidClear,
-            "output",
-            "invalid_clear",
-            "LAYER-9",
-        ),
-        (
-            vec![("extra", T::text("x"))],
-            SchemaLayerVersionMismatch,
-            "schema_version",
-            "schema_version_mismatch",
-            "LAYER-4",
-        ),
-    ] {
-        let input = if code == SchemaLayerVersionMismatch {
-            raw_document(T::map(fields))
-        } else {
-            document(T::map(fields))
-        };
-        let NormalizationError::Invalid(findings) =
-            layer_schema.normalize_layer(&input).unwrap_err()
-        else {
-            panic!("authored layer finding")
-        };
-        check(&mut reached, &findings, code, path, condition, req);
-    }
+    // A 1.x layer, checked as it declares (LAYER-9): a `clear` entry that
+    // covers an entry before it is refused at that entry, naming the field it
+    // ends at.
+    let findings = layer_schema
+        .validate_layer(&document(T::map(vec![(
+            "clear",
+            T::List(vec![T::text("columns.X"), T::text("columns")]),
+        )])))
+        .unwrap();
+    check(
+        &mut reached,
+        &findings,
+        SchemaLayerInvalidClear,
+        "clear[1]",
+        "invalid_clear",
+        "LAYER-9",
+    );
+    assert_eq!(findings[0].context, [("field", C::Text("columns".into()))]);
     // A 1.x layer, checked as it declares (LAYER-4): two members of one
     // keyed collection must not share an identifier.
     let findings = layer_schema
-        .validate_layer(&raw_document(T::map(vec![(
+        .validate_layer(&document(T::map(vec![(
             "columns",
             T::List(vec![
                 T::map(vec![("name", T::text("X"))]),
@@ -480,63 +381,5 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "unknown_window",
         "WINDOW-1",
     );
-    // The 0.5 model contract (#2844 decision 5), which only the 0.5 path
-    // reads; #3447 deletes it.
-    for (extra, code, path, req) in [
-        (
-            vec![("domain", integer("7"))],
-            SchemaModelInvalidValue,
-            "domain",
-            "SCHEMA-12",
-        ),
-        (
-            vec![("output", T::map(vec![]))],
-            SchemaModelMissingField,
-            "output.path",
-            "SCHEMA-13",
-        ),
-        (
-            vec![("extra", T::text("x"))],
-            SchemaModelUnknownField,
-            "extra",
-            "SCHEMA-13",
-        ),
-        (
-            vec![("verifications", T::List(vec![T::map(vec![])]))],
-            SchemaModelInvalidOperationCount,
-            "verifications.0",
-            "SCHEMA-7",
-        ),
-    ] {
-        let mut fields = vec![
-            ("schema_version", T::text("1.0")),
-            ("domain", T::text("X")),
-            ("input", T::map(vec![])),
-            ("keys", T::List(vec![])),
-            (
-                "output",
-                T::map(vec![
-                    ("path", T::text("o.csv")),
-                    ("columns", T::List(vec![])),
-                ]),
-            ),
-            ("columns", T::List(vec![])),
-        ];
-        for (name, value) in extra {
-            fields.retain(|(k, _)| *k != name);
-            fields.push((name, value));
-        }
-        let findings = SpecificationDocument::admit(document(T::map(fields)))
-            .unwrap()
-            .unwrap_err();
-        check(
-            &mut reached,
-            &findings,
-            code,
-            path,
-            "model_contract_mismatch",
-            req,
-        );
-    }
     reached
 }

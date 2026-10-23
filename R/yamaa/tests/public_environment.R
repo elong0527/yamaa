@@ -62,7 +62,7 @@ refused_project <- function(project, expected, label = "a refused project") {
   stopifnot_case(label, "selecting its specification signals yamaa_error" = inherits(error, "yamaa_error"))
   same_issues(error$issues, expected, paste(label, "selection:"))
 }
-function_spec <- c("schema_version: '1.0'", "domain: TEST", "keys: [ID]",
+function_spec <- c('yamaa: "1.0"', "type: spec", "domain: TEST", "keys: [ID]",
   "input: {SRC: {path: input.csv, types: {VALUE: float}}}", "columns:",
   "  - {name: ID, type: str, derivation: SRC.ID}",
   "  - {name: VALUE, type: float, derivation: {function: {name: project_value, args: {x: SRC.VALUE}}}}",
@@ -136,9 +136,11 @@ qualify_own_environment_entry <- function() {
       "columns.VALUE.derivation.function.name",
       paste0('{"cause":"undeclared","entry":"', path,
         '","function":"project_value","language":"r","source":"', path, '"}'))))
-    # The same file alone has no project, so the function is unknown.
-    same_issues(yamaa_spec("spec.yaml")$check()$issues, list(issue("unknown_project_function",
-      "FUNC-4", "columns.VALUE.derivation.function.name", '{"function":"project_value"}')))
+    # The same file alone has no project, so its function call binds nothing
+    # a project supplies (CT-13).
+    same_issues(yamaa_spec("spec.yaml")$check()$issues, list(issue("project_binding_missing",
+      "CT-13", "columns.VALUE.derivation.function.name",
+      '{"binding":"function","function":"project_value"}')))
   })
   expect_identical(sort(list.files()), c("project.yaml", "spec.yaml"), "reading the environments writes nothing")
   cat("public R reads only its own environments entry\n")
@@ -289,8 +291,9 @@ same_issues(refuse_activation(project$check())$issues, list(issue("function_file
     '","environment_path":"environments.r.lock","language":"r","reason":"lock_kind_mismatch","source":"',
     here("project.yaml"), '"}'))))
 invisible(file.copy(file.path(root, name, "r/renv.lock"), lock, overwrite = TRUE))
-# An environment file is read in the language its project states. The study
-# is written in 0.5 inline, since 1.0 removes environment files (D8).
+# An environment file is read in the language its project states. The
+# project and its environment files are written in 0.5 inline, since 1.0
+# removes environment files (D8).
 legacy_environment <- function(callable, lock) c("schema_version: '1.0'", paste0("lock: ", lock),
   "functions:", "  project_value:", paste0("    function: ", callable),
   "    description: Return the supplied numeric value.", "    params: [{name: x, type: float}]",

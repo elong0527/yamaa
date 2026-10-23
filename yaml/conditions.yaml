@@ -43,9 +43,6 @@ conditions:
   assert_failed:
     phases: [verification]
     message: "the assert predicate is not TRUE in {failure_count} of the rows"
-  bare_derivation_scalar:
-    phases: [validation]
-    message: "a bare {actual} derivation is not a column reference"
   codelist_duplicate_value:
     phases: [validation]
     message: "codelist {codelist} lists the value {value} more than once"
@@ -89,12 +86,6 @@ conditions:
   data_type_failed:
     phases: [verification]
     message: "column {column} holds a value that is not ISO 8601 {data_type} text in {failure_count} of the rows"
-  day_not_permitted:
-    phases: [validation]
-    message: "impute declares day {day}, but its minimum_source_precision leaves no day to complete"
-  day_required:
-    phases: [validation]
-    message: "impute must declare day when minimum_source_precision is {minimum_source_precision}"
   decimals_not_applicable:
     phases: [validation]
     message: "output.decimals applies only to a csv artifact that no transport file reads"
@@ -287,18 +278,9 @@ conditions:
   mixed_relations:
     phases: [validation]
     message: "{expr} mixes the relations {relations}"
-  model_contract_mismatch:
-    phases: [validation]
-    message: "the specification does not fit its model: {reason}"
-  month_not_permitted:
-    phases: [validation]
-    message: "impute declares month {month}, but its minimum_source_precision leaves no month to complete"
   month_out_of_range:
     phases: [validation]
     message: "month {month} is outside 1 to 12"
-  month_required:
-    phases: [validation]
-    message: "impute must declare month when minimum_source_precision is {minimum_source_precision}"
   multiple_matches:
     phases: [join]
     message: "lookup {intermediate} finds {match_count} matching records in {dataset} and has no rule to choose one"
@@ -457,9 +439,6 @@ conditions:
   sas_name_too_long:
     phases: [validation]
     message: "{name} does not match the SAS name pattern {pattern}"
-  schema_version_mismatch:
-    phases: [validation]
-    message: "the version at {spec_path} does not match the version expected there"
   source_byte_order_mark:
     phases: [ingest]
     message: "{path} must start with exactly one byte order mark when its input declares one, and none otherwise"
@@ -561,8 +540,7 @@ conditions:
   stale_artifact:
     phases: [validation]
     message: "the saved artifact of {dataset} is stale against its run report {report}"
-  # SUB-3 and DEFINE-6 on a 1.0 project: the 1.0 name of
-  # unknown_standard_family (D58)
+  # SUB-3 and DEFINE-6 on a 1.0 project (D58)
   standard_model_mismatch:
     phases: [validation]
     message: "{value} is outside the {model} model of section {section}"
@@ -649,9 +627,6 @@ conditions:
   unknown_standard:
     phases: [validation]
     message: "section {section} declares no standard {value}"
-  unknown_standard_family:
-    phases: [validation]
-    message: "the implementation guide {detail} does not belong to the section's family"
   unknown_window:
     phases: [validation]
     message: "window {window} is not declared"
@@ -699,9 +674,6 @@ conditions:
   value_not_permitted:
     phases: [validation]
     message: "{spec_path} has a value that is not permitted"
-  window_order_by_forbidden:
-    phases: [validation]
-    message: "{operation} does not take a window order_by"
   window_order_by_required:
     phases: [validation]
     message: "{operation} needs a window order_by"

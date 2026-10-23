@@ -19,7 +19,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     let group = vec![("D.ID".into(), Value::Missing)];
     let relations = vec!["D".into(), "<output>".into()];
     let types = [ValueType::Str, ValueType::Int, ValueType::Str];
-    let keys = vec!["ID".into(), "PARAM".into()];
     let mut reached = BTreeSet::new();
     // A written key naming no pair is the one empty-key cause of every
     // lookup (LOOKUP-5).
@@ -232,18 +231,21 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 ("actual", text("int")),
             ],
         ),
+        // A qualified aggregate without `key` of its own reads an input that
+        // declares none (LOOKUP-5; D23, D63, D111).
         (
-            Finding::NoApplicableKeys {
+            Finding::UndeclaredInputKey {
                 path: "aggregate",
                 dataset: "D",
-                keys: &keys,
             },
             "no_applicable_keys",
             "LOOKUP-5",
             vec![
                 ("dataset", text("D")),
-                ("keys", V::Array(vec![text("ID"), text("PARAM")])),
-                ("hint", text("declare the `key` explicitly")),
+                (
+                    "hint",
+                    text("declare `key` on the input or on the aggregate"),
+                ),
             ],
         ),
     ];

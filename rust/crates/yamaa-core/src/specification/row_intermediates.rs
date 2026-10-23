@@ -192,53 +192,18 @@ pub(super) fn bind(
         return Ok(None);
     }
     let donor = item.source_schema(secondary).ok_or(BindError::Internal)?;
-    if item.keys.is_empty() {
-        // A 1.0 row driver declares no key, so it is read only as the
-        // driver of its rows, never as a keyed lookup (LOOKUP-3, ROW-2).
-        // Each such read reports it, as a 0.5 driver's keys that cannot be
-        // inferred are reported at each read: a read refused without a
-        // finding of its own would leave its formula, predicate or filter
-        // to bind without it.
-        if let Some(key) = declarations.key_required(index) {
-            findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
-                crate::diagnostic::lookup::key_required(key),
-            )));
-            return Ok(None);
-        }
-        if let Some(root_keys) = declarations.driver_keys(index) {
-            let keys = (0..root_keys.columns().len()).collect::<Vec<_>>();
-            let fields = root_keys
-                .columns()
-                .iter()
-                .map(|column| reference_binding::Field {
-                    name: &column.name,
-                    column_type: column.kind,
-                })
-                .collect::<Vec<_>>();
-            let root_catalog = Catalog::compile(&fields, &[]).map_err(BindError::Catalog)?;
-            // A scalar read still needs lookup keys even when this relation also drives rows.
-            let dataset = match &item.source {
-                crate::dataset::IntermediateSource::Input(index) => secondary
-                    .get(*index)
-                    .map(|source| source.name.as_str())
-                    .ok_or(BindError::Internal)?,
-                crate::dataset::IntermediateSource::Primary { name, .. } => name.as_str(),
-                crate::dataset::IntermediateSource::SelfRows { .. } => "SELF",
-            };
-            intermediate_admission::inferred_keys(
-                &root_catalog,
-                root_keys,
-                &keys,
-                donor,
-                &|column| item.source_kind(secondary, column),
-                &|column| item.admits_donor_column(column),
-                &item.path,
-                &item.identifier,
-                dataset,
-                findings,
-            )?;
-            return Ok(None);
-        }
+    // A row driver declares no key, so it is read only as the driver of its
+    // rows, never as a keyed lookup (LOOKUP-3, ROW-2). Each such read reports
+    // it: a read refused without a finding of its own would leave its
+    // formula, predicate or filter to bind without it.
+    if let Some(key) = declarations
+        .key_required(index)
+        .filter(|_| item.keys.is_empty())
+    {
+        findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
+            crate::diagnostic::lookup::key_required(key),
+        )));
+        return Ok(None);
     }
     for key in &item.keys {
         let read_kind = key

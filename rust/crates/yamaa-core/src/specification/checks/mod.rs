@@ -173,16 +173,15 @@ pub(super) fn template_driver<'a>(spec: &'a Spec, template: &'a ast::Template) -
     }
 }
 
-/// Whether the input `owner` declares no `key` on a 1.0 tree, where an
-/// implicit join of it, and a qualified aggregate over it without `key` of
-/// its own, match on that declared key (D23, D63): such a read has nothing to
-/// match on, whatever the input stores (D111). A 0.5 join infers its keys
-/// from the captured schemas.
+/// Whether the input `owner` declares no `key`, which an implicit join of it,
+/// and a qualified aggregate over it without `key` of its own, match on (D23,
+/// D63): such a read has nothing to match on, whatever the input stores
+/// (D111).
 pub(super) fn keyless(spec: &Spec, owner: &str) -> bool {
-    !spec.header.surface.infers_join_keys() && spec.input_key(owner).is_none_or(<[_]>::is_empty)
+    spec.input_key(owner).is_none_or(<[_]>::is_empty)
 }
 
-/// The refusal at `path` of a read of the keyless 1.0 input `dataset` through
+/// The refusal at `path` of a read of the keyless input `dataset` through
 /// its implicit join (`no_applicable_keys`, LOOKUP-5, D111), as binding
 /// reports it ([`crate::reference_binding::JoinedFinding::key_diagnostic`]).
 pub(super) fn undeclared_key(path: &str, dataset: &str) -> BindFinding {
@@ -220,7 +219,7 @@ pub(super) fn unknown_range_value(
     ))
 }
 
-/// What a 1.0 implicit join pairs each column of its input's declared `key`
+/// What an implicit join pairs each column of its input's declared `key`
 /// with (LOOKUP-1, LOOKUP-2).
 #[derive(Clone, Copy)]
 pub(super) enum Pairing<'a> {
@@ -271,7 +270,7 @@ pub(super) fn stored_type(
     declared.name(&format!("{owner}.{field}"))
 }
 
-/// What binding decides at `path` of the declared `key` of the 1.0 input
+/// What binding decides at `path` of the declared `key` of the input
 /// `owner` that an implicit join there matches on (D111 item 2), for each
 /// column in declared order (`key_relation::declared`,
 /// `Catalog::joined_read`): the input does not store it, as far as
@@ -292,9 +291,6 @@ pub(super) fn declared_key(
 ) -> Option<BindFinding> {
     use crate::diagnostic::lookup::{self, Owner};
     use crate::result_type::ResultType;
-    if spec.header.surface.infers_join_keys() {
-        return None;
-    }
     let source = |diagnostic| {
         Some(BindFinding::Source(
             source_expressions::SourceFinding::from_diagnostic(diagnostic),

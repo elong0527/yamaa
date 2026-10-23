@@ -38,8 +38,7 @@ impl Admission<'_> {
                 "semantic_depth",
                 crate::limits::Limits::SEMANTIC_DEPTH,
                 Some(depth),
-                site.map(|site| spec.render(site, spec.notation()))
-                    .as_deref(),
+                site.map(|site| spec.render(site)).as_deref(),
             ));
         }
         match &spec.expr(e).kind {

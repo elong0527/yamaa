@@ -96,13 +96,12 @@ pub struct Intermediate {
     pub range: Option<RelationRange>,
     /// Visible selected fields; donor keys, filters and order still see every slot.
     pub columns: Option<Vec<usize>>,
-    /// The declared absence answer, `absent` in 1.0 and `no_match` in 0.5;
-    /// `None` answers absence with missing. Either way each read counts the
-    /// answer under the [`Self::absence`] handler (LOOKUP-24).
+    /// The declared absence answer, written `absent`; `None` answers absence
+    /// with missing. Either way each read counts the answer under the
+    /// [`Self::absence`] handler (LOOKUP-24).
     pub no_match: Option<Value>,
-    /// The handler a read counts the absence answer under at its path: on a
-    /// 1.x tree `absent`, on a 0.5 tree `no_match`
-    /// ([`crate::ast::Surface::intermediate_absence`]).
+    /// The handler a read counts the absence answer under at its path:
+    /// `absent` for every intermediate a specification declares (D202).
     pub absence: HandlerKind,
     /// `require_match: true` fails an absence as `unmatched_key` instead;
     /// the compiler refuses it beside a declared absence answer.
@@ -235,8 +234,8 @@ fn contains_window(expression: &Expression) -> bool {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ReadHandlers {
     pub multiple_matches: bool,
-    /// `absent` on a 1.x tree, `no_match` on a 0.5 tree; none when the read
-    /// requires a match.
+    /// The intermediate's absence handler; none when the read requires a
+    /// match.
     pub absence: Option<HandlerKind>,
 }
 

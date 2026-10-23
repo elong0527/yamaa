@@ -107,8 +107,6 @@ pub mod project_preparation;
 
 pub mod dictionary_preparation;
 
-pub mod document_preparation;
-
 pub mod domain_entry;
 
 pub mod inheritance;
@@ -126,8 +124,6 @@ pub mod resolution;
 pub mod build;
 
 pub mod table_grouping;
-
-pub mod standalone_preparation;
 
 pub mod numeric_lifecycle;
 

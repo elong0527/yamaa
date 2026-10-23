@@ -51,6 +51,17 @@ fn header(document: &Document, metas: &mut Metas<'_>, root: usize, meta: Meta) -
     }
 }
 
+/// Lower the study and sections of a whole 0.5 project document, as
+/// [`project`] does, into an arena of their own.
+pub fn sections(
+    input: &Document,
+) -> Result<crate::ast::SubmissionDeclarations, sections::Error<'_>> {
+    let mut paths = Paths::new();
+    let mut metas = Metas::new(None, &mut paths);
+    let meta = metas.root(input.root());
+    sections::lower(input, input.root(), &mut metas, meta, Surface::V0_5)
+}
+
 /// Lower a project file. Its study and sections lower beside it: a project
 /// whose declarations Define-XML composition could not read still prepares,
 /// and a specification still builds with it, so their refusal is kept in
@@ -295,7 +306,7 @@ fn function_at(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{CodelistSource, FunctionSource, Notation, Parameter};
+    use crate::ast::{CodelistSource, FunctionSource, Parameter};
     use crate::front_end::v1::project::tests::{body, codelist_source, function_file, with_header};
     use crate::test_document::Tree;
     use crate::value::{ColumnType, Value, ValueType};
@@ -372,7 +383,7 @@ mod tests {
             Language::Python,
         )
         .unwrap();
-        let path = |meta: Meta| function.paths.render(meta.path, Notation::V0_5);
+        let path = |meta: Meta| function.paths.render(meta.path);
         assert_eq!(path(function.params[0].meta), "params[0]");
         assert_eq!(path(function.params[0].name.meta), "params[0].name");
         assert_eq!(path(function.tests[0].id.meta), "tests[0].id");
@@ -382,7 +393,7 @@ mod tests {
         assert_eq!(function.name.name, "identity");
         assert_eq!(function.implementation(Language::R), None);
         let project = project(&project_tree().document(), None).unwrap();
-        let path = |meta: Meta| project.paths.render(meta.path, Notation::V0_5);
+        let path = |meta: Meta| project.paths.render(meta.path);
         let python = project.environment(Language::Python).unwrap();
         assert_eq!(path(python.meta), "environments.python");
         assert!(project.environment(Language::R).is_none());
@@ -393,14 +404,9 @@ mod tests {
         // An inline source is a root of its own; diagnostics prefix its
         // declaration.
         let item = &source.codelists[0].items.as_ref().unwrap()[0];
+        assert_eq!(source.paths.render(item.meta.path), "codelists[0].items[0]");
         assert_eq!(
-            source.paths.render(item.meta.path, Notation::V0_5),
-            "codelists[0].items[0]"
-        );
-        assert_eq!(
-            source
-                .paths
-                .render(source.codelists[0].id.meta.path, Notation::V0_5),
+            source.paths.render(source.codelists[0].id.meta.path),
             "codelists[0].id"
         );
     }
@@ -442,7 +448,7 @@ mod tests {
             .as_ref()
             .unwrap();
         assert_eq!(lock.text, "uv.lock");
-        assert_eq!(project.paths.render(lock.meta.path, Notation::V0_5), "lock");
+        assert_eq!(project.paths.render(lock.meta.path), "lock");
         let functions = project.functions.as_ref().unwrap();
         assert!(
             matches!(&functions[0].source, FunctionSource::File(path) if path.text == "first.yaml")
@@ -452,7 +458,7 @@ mod tests {
         };
         assert_eq!(definition.name.name, "wide");
         assert_eq!(
-            project.paths.render(functions[1].meta.path, Notation::V0_5),
+            project.paths.render(functions[1].meta.path),
             "functions.wide"
         );
     }

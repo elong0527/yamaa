@@ -1,12 +1,9 @@
 //! Imputation declarations read their declared type, literal handlers and
 //! named operand scope.
 use super::*;
-use crate::{
-    dataset::{
-        completion_policy_findings, DatePolicyError, DayDeclaration, FlagPart, ImputationKind,
-        TemporalType, TimeRule,
-    },
-    temporal::Precision,
+use crate::dataset::{
+    completion_policy_findings, DatePolicyError, DayDeclaration, FlagPart, ImputationKind,
+    TemporalType, TimeRule,
 };
 /// The completion policy of `impute`, or the month, day and time findings
 /// that refuse it, in declaration order.
@@ -14,7 +11,6 @@ fn policy(
     target: TemporalType,
     month: Option<&str>,
     day: Option<DayDeclaration<'_>>,
-    minimum: Precision,
     time: Option<TimeRule>,
     path: &str,
 ) -> Result<ImputationKind, Refusal> {
@@ -27,7 +23,7 @@ fn policy(
     };
     let time_finding = time_finding
         .map(|required| Temporal::type_field_diagnostic(required, path, "time", target.name()));
-    match completion_policy_findings(target, month, day, minimum, time, path) {
+    match completion_policy_findings(target, month, day, time, path) {
         Ok(Ok(completion)) => match time_finding {
             None => Ok(ImputationKind::Impute(completion)),
             Some(finding) => Err(Refusal::Findings(vec![finding])),
@@ -52,16 +48,10 @@ fn tree_completion(
     kind: ast::TemporalType,
     month: Option<&str>,
     day: Option<&ast::DayRule>,
-    minimum: ast::Precision,
     time: Option<ast::TimeRule>,
     path: &str,
 ) -> Result<ImputationKind, Refusal> {
     let target = tree_type(kind);
-    let minimum = match minimum {
-        ast::Precision::Year => Precision::Year,
-        ast::Precision::Month => Precision::Month,
-        ast::Precision::Day => Precision::Day,
-    };
     let day = day.map(|day| match day {
         ast::DayRule::Day(value) => DayDeclaration::Number(value),
         ast::DayRule::First => DayDeclaration::Position("first"),
@@ -71,21 +61,7 @@ fn tree_completion(
         ast::TimeRule::First => TimeRule::First,
         ast::TimeRule::Last => TimeRule::Last,
     });
-    policy(target, month, day, minimum, time, path)
-}
-
-/// The coarsest collected precision an `impute` that writes no
-/// `minimum_source_precision` completes. 0.5 defaults the field to `year`.
-/// A 1.0 `impute` holds no such field (D61): its rules imply the precision,
-/// a year alone with `month` and `day`, a year and month with `day` alone,
-/// and a whole date with neither (TIME-8). Validation refuses `month`
-/// without `day` (TIME-10).
-fn unwritten_precision(spec: &Spec, month: bool, day: bool) -> ast::Precision {
-    match (spec.header.surface, month, day) {
-        (ast::Surface::V0_5, _, _) | (_, true, _) => ast::Precision::Year,
-        (_, false, true) => ast::Precision::Month,
-        (_, false, false) => ast::Precision::Day,
-    }
+    policy(target, month, day, time, path)
 }
 
 /// One imputation verb's executor operation from the tree. Each operand
@@ -117,17 +93,8 @@ fn imputation(spec: &Spec, e: ExprId) -> Result<Imputation, Refusal> {
             kind,
             month,
             day,
-            minimum_source_precision,
             time,
-        } => tree_completion(
-            *kind,
-            month.as_deref(),
-            day.as_ref(),
-            minimum_source_precision
-                .unwrap_or_else(|| unwritten_precision(spec, month.is_some(), day.is_some())),
-            *time,
-            &path,
-        )?,
+        } => tree_completion(*kind, month.as_deref(), day.as_ref(), *time, &path)?,
         ScalarOp::Precision { kind } => ImputationKind::Precision {
             target: tree_type(*kind),
         },
@@ -196,30 +163,25 @@ pub(super) fn preflight(
 mod tests {
     use super::*;
     use crate::dataset::Completion;
-    use crate::front_end::v0_5::tests::{column, derivation, document, op};
-    use crate::schema::Document;
+    use crate::temporal::Precision;
     use crate::test_document::Tree;
+    use crate::test_specification::{column, derivation, document, lower, op};
 
-    /// The completion of an `impute` of a date with `rules`, read from a
-    /// tree lowered in `surface`.
-    fn completion(rules: &[(&str, Tree)], surface: ast::Surface) -> Result<Completion, Refusal> {
+    /// The completion of an `impute` of a date with `rules`.
+    fn completion(rules: &[(&str, Tree)]) -> Result<Completion, Refusal> {
         let mut payload = vec![
             ("source", Tree::text("SRC.DTC")),
             ("type", Tree::text("date")),
         ];
         payload.extend(rules.iter().cloned());
-        let tree = document(
+        let spec = lower(document(
             vec![column(
                 "DT",
                 "date",
                 derivation(op("impute", Tree::map(payload))),
             )],
             vec![],
-        );
-        let mut nodes = Vec::new();
-        let root = tree.append(&mut nodes);
-        let document = Document::new(nodes, root).unwrap();
-        let spec = crate::front_end::lowering::lower_surface(&document, None, surface).into_spec();
+        ));
         let e = spec.columns[1].derivation.as_ref().unwrap().expr;
         match imputation(&spec, e)?.kind() {
             ImputationKind::Impute(completion) => Ok(completion),
@@ -227,14 +189,12 @@ mod tests {
         }
     }
 
-    /// A 1.0 `impute` holds no `minimum_source_precision` (D61): it
-    /// completes the coarsest precision its rules reach, a year alone with
-    /// `month` and `day`, a year and month with `day` alone, and a whole date
-    /// with neither (TIME-8). On a 0.5 tree the unwritten field is `year`,
-    /// which requires a `month` (TIME-10 at the `yamaa-v0.5.0` tag).
+    /// An `impute` completes the coarsest precision its rules reach, a year
+    /// alone with `month` and `day`, a year and month with `day` alone, and a
+    /// whole date with neither (TIME-8); `month` without `day` completes no
+    /// date, a missing required field at the operation (TIME-10).
     #[test]
-    fn a_1_0_impute_completes_the_precision_its_rules_imply() {
-        let v1 = ast::Surface::V1 { minor: 0 };
+    fn an_impute_completes_the_precision_its_rules_imply() {
         let month = ("month", Tree::integer(6));
         let day = ("day", Tree::text("first"));
         for (rules, minimum) in [
@@ -242,19 +202,23 @@ mod tests {
             (vec![day.clone()], Precision::Month),
             (vec![], Precision::Day),
         ] {
-            assert_eq!(completion(&rules, v1).unwrap().minimum, minimum);
+            assert_eq!(completion(&rules).unwrap().minimum, minimum);
         }
-
-        let Err(Refusal::Findings(findings)) = completion(&[day], ast::Surface::V0_5) else {
-            panic!("a 0.5 minimum of year requires a month");
+        let Err(Refusal::Findings(findings)) = completion(&[month]) else {
+            panic!("a month without a day completes no date");
         };
-        let [diagnostic] = findings.as_slice() else {
-            panic!("one finding: {findings:?}");
-        };
-        // TIME-10 at the `yamaa-v0.5.0` tag.
         assert_eq!(
-            diagnostic.code,
-            crate::diagnostic::ConditionCode::ImputationMonthRequired
+            findings,
+            [crate::diagnostic::Diagnostic {
+                code: crate::diagnostic::ConditionCode::ImputeMonthWithoutDay,
+                spec_paths: vec!["columns.DT.derivation.impute".into()],
+                context: crate::diagnostic::Context::from([(
+                    "field".into(),
+                    crate::json::Value::String("day".into())
+                )]),
+                source_span: None,
+                operand_route: None,
+            }]
         );
     }
 }

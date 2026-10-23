@@ -1833,7 +1833,6 @@ columns:
             let spec = yamaa_adapters::json!({"yamaa":"1.0","type":"spec","domain":"TEST","keys":["ID"],"input":{"SRC":"input.csv"},"output":{"path":"output.csv","columns":names},"columns":columns});
             // Prepared in the language it is written in.
             let document = crate::support::specification_run::prepare(
-                &yamaa_adapters::shipped_schema::capture().unwrap(),
                 yamaa_adapters::json_wire::encode(&spec).as_bytes(),
             );
             let Err(yamaa_adapters::specification_run::Error::Prepare(
@@ -2397,9 +2396,7 @@ columns:
         #[test]
         fn complete_template_findings_precede_zero_rows_and_inherited_row_defaults() {
             fn admission(spec: yamaa_core::json::Value, paths: Vec<String>) {
-                let schema = yamaa_adapters::shipped_schema::capture().unwrap();
                 let document = crate::support::specification_run::prepare(
-                    &schema,
                     yamaa_adapters::json_wire::encode(&spec).as_bytes(),
                 );
                 let Err(yamaa_adapters::specification_run::Error::Prepare(
@@ -2463,9 +2460,7 @@ columns:
                 columns.push(yamaa_adapters::json!({"name":format!("X{index}"),"type":"str","derivation":{"str_template":"{ID}".repeat(400)}}));
             }
             spec["output"]["columns"] = yamaa_adapters::json!(["ID"]);
-            let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             let document = crate::support::specification_run::prepare(
-                &schema,
                 yamaa_adapters::json_wire::encode(&spec).as_bytes(),
             );
             assert!(yamaa_adapters::specification_run::PreparedRun::prepare(document).is_ok());

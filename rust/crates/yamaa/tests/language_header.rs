@@ -1,8 +1,8 @@
 //! Public calls read language version 1.0 (SCHEMA-2, #3030 D76): a file that
 //! declares `yamaa: "1.0"` passes `check`, `run`, `resolve`, `submission` and
-//! `lint` beside the 0.5 files, which keep their meaning. A newer version
-//! fails as `unsupported_language_version`. Every 1.0 form is built, so none
-//! is refused as `unsupported_operation` any longer (D76).
+//! `lint`. A newer version fails as `unsupported_language_version`. Every 1.0
+//! form is built, so none is refused as `unsupported_operation` any longer
+//! (D76).
 #![cfg(feature = "yaml")]
 
 use arrow_array::{Array, ListArray, StringArray};
@@ -77,8 +77,6 @@ fn rows(table: &Table) -> Vec<(String, Option<String>, Vec<String>, Value)> {
 }
 
 const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n  - {name: SITE, type: str, label: Site, derivation: \"'S01'\"}\noutput: {path: dm.csv, columns: [USUBJID, SITE]}\n";
-/// [`SPEC`] written for 0.5.
-const LEGACY: &str = "schema_version: '1.0'\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n  - {name: SITE, type: str, label: Site, derivation: {literal: S01}}\noutput: {path: dm.csv, columns: [USUBJID, SITE]}\n";
 
 /// The value at `key` of a resolved tree's map.
 fn field<'a>(value: &'a ContextValue, key: &str) -> &'a ContextValue {
@@ -107,8 +105,7 @@ fn every_specification_call_reads_a_1_0_specification() {
         run.save(&CancellationToken::new()).unwrap(),
         [study.path("dm.csv")]
     );
-    let written = study.read("dm.csv");
-    assert_eq!(written, b"USUBJID,SITE\nP1,S01\nP2,S01\n");
+    assert_eq!(study.read("dm.csv"), b"USUBJID,SITE\nP1,S01\nP2,S01\n");
     // The resolved artifact records the language version, never
     // `schema_version` (D84).
     let resolved = engine.spec_resolve(&spec, None).unwrap();
@@ -128,12 +125,6 @@ fn every_specification_call_reads_a_1_0_specification() {
         field(field(entry, "specification"), "yamaa"),
         &ContextValue::Text("1.0".into())
     );
-    // The same specification written for 0.5 writes the same bytes.
-    study.write("spec.yaml", LEGACY);
-    let mut run = engine.spec_run(&spec, None, &token).unwrap();
-    assert_eq!(rows(&run.issues()), []);
-    run.save(&CancellationToken::new()).unwrap();
-    assert_eq!(study.read("dm.csv"), written);
 }
 
 #[test]
@@ -200,29 +191,23 @@ fn lint_reads_a_1_0_file() {
     assert_eq!(lint.files(), 1);
 }
 
-/// D67 on a public run (D102): in 0.5 `absent` answers a variable the input
-/// does not hold; the same column written for 1.0, as the converter writes
-/// it, fails at the read, since there `absent` answers only a lookup that
-/// finds no record (NAME-3).
+/// D67 on a public run (D102): `absent` answers only a lookup that finds no
+/// record, so a column that reads a variable the input does not hold fails
+/// at the read, whatever its `absent` declares (NAME-3).
 #[test]
-fn absent_answers_a_variable_the_input_does_not_hold_only_in_0_5() {
+fn absent_does_not_answer_a_variable_the_input_does_not_hold() {
     let study = Study::new();
     study.write("raw.csv", "USUBJID\nP1\n");
-    let spec = |header: &str| {
-        format!(
-            "{header}domain: DM\nkeys: [USUBJID]\ninput: {{RAW: raw.csv}}\ncolumns:\n  - {{name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}}\n  - {{name: V, type: int, label: Value, derivation: {{source: {{variable: RAW.UNKNOWN, absent: 7}}}}}}\noutput: {{path: dm.csv, columns: [USUBJID, V]}}\n"
-        )
-    };
-    let path = study.path("spec.yaml");
-    let engine = engine();
-    let token = CancellationToken::new();
-    study.write("spec.yaml", &spec("schema_version: '1.0'\n"));
-    let mut run = engine.spec_run(&path, None, &token).unwrap();
-    assert_eq!(rows(&run.issues()), []);
-    run.save(&CancellationToken::new()).unwrap();
-    assert_eq!(study.read("dm.csv"), b"USUBJID,V\nP1,7\n");
-    study.write("spec.yaml", &spec("yamaa: \"1.0\"\ntype: spec\n"));
-    let issues = rows(&engine.spec_run(&path, None, &token).unwrap().issues());
+    study.write(
+        "spec.yaml",
+        "yamaa: \"1.0\"\ntype: spec\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n  - {name: V, type: int, label: Value, derivation: {source: {variable: RAW.UNKNOWN, absent: 7}}}\noutput: {path: dm.csv, columns: [USUBJID, V]}\n",
+    );
+    let issues = rows(
+        &engine()
+            .spec_run(&study.path("spec.yaml"), None, &CancellationToken::new())
+            .unwrap()
+            .issues(),
+    );
     let [(condition, rule, paths, context)] = issues.as_slice() else {
         panic!("one issue: {issues:?}")
     };
@@ -507,7 +492,7 @@ fn a_column_declares_several_origins() {
 }
 
 /// D65: a 1.0 SDTM or ADaM column takes no `Not Available` origin, which a
-/// SEND column keeps; a 0.5 specification keeps the pairs of 0.5.0 (D75).
+/// SEND column keeps.
 #[test]
 fn not_available_is_an_origin_of_send_alone() {
     let study = define_study();
@@ -685,7 +670,7 @@ fn a_value_level_entry_selects_the_rows_that_hold_none_of_its_values() {
 }
 
 /// SUB-2: a dataset's `standard` is governed in 1.0, so a 1.0 root
-/// `metadata` map does not carry it; a 0.5 one still may.
+/// `metadata` map does not carry it.
 #[test]
 fn a_1_0_root_metadata_reserves_standard() {
     let study = Study::new();
@@ -693,10 +678,6 @@ fn a_1_0_root_metadata_reserves_standard() {
     study.write(
         "spec.yaml",
         &format!("{SPEC}metadata: {{standard: SDTMIG, note: kept}}\n"),
-    );
-    study.write(
-        "legacy.yaml",
-        &format!("{LEGACY}metadata: {{standard: SDTMIG}}\n"),
     );
     let engine = engine();
     let token = CancellationToken::new();
@@ -716,7 +697,6 @@ fn a_1_0_root_metadata_reserves_standard() {
     assert_eq!(rule.as_deref(), Some("SUB-2"));
     assert_eq!(paths, &["metadata.standard"]);
     assert_eq!(context["key"], Value::String("standard".into()));
-    assert_eq!(check("legacy.yaml"), []);
 }
 
 /// D16 (P-STD-1, DEFINE-6, DEFINE-8): the document lists every guide of the

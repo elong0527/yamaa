@@ -827,7 +827,6 @@ fn rebase(
 ) -> Result<Vec<Option<Intermediate>>, BindError> {
     let mut result = previous.to_vec();
     let original_secondary = outer_secondary(sources, schemas, driver);
-    let one_meaning = tree.spec().header.surface.one_meaning_per_form();
     // The authored input whose record a current read at record port `owner`
     // reads in the outer plan.
     let authored = |owner: usize| -> Result<usize, BindError> {
@@ -915,11 +914,11 @@ fn rebase(
                     .any(|field| field.name == outer.columns()[column].name))
                 .then(|| field.identifier.clone()),
                 CurrentRead::Intermediate { index, .. } => unavailable.get(&index).cloned(),
-                // A donor read gives the donor record alone (LOOKUP-16): on a
-                // 1.0 tree the record of any other input names no value of it.
-                CurrentRead::Record { source: owner, .. } => (one_meaning
-                    && authored(owner).is_ok_and(|authored| Some(authored) != donor))
-                .then(|| field.identifier.clone()),
+                // A donor read gives the donor record alone (LOOKUP-16): the
+                // record of any other input names no value of it.
+                CurrentRead::Record { source: owner, .. } => authored(owner)
+                    .is_ok_and(|authored| Some(authored) != donor)
+                    .then(|| field.identifier.clone()),
                 CurrentRead::Contextual => donor_field(&field.identifier)
                     .is_none()
                     .then(|| field.identifier.clone()),
@@ -928,7 +927,7 @@ fn rebase(
                 // A lookup a range value reads runs for the donor record too,
                 // so its key values read that record alone. The read of a
                 // lookup a derivation reads refuses its own key values.
-                (one_meaning && !direct.contains(&index))
+                (!direct.contains(&index))
                     .then(|| {
                         chained_key(
                             item,

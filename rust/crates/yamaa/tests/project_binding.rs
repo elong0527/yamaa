@@ -3,7 +3,7 @@
 //! vocabulary and project function a 1.0 specification names fails
 //! validation as `project_binding_missing`, before any input is read. With
 //! a project file, a binding to an item the project does not declare keeps
-//! that item's condition, and a 0.5 specification keeps its 0.5.0 meaning.
+//! that item's condition.
 #![cfg(feature = "yaml")]
 
 use arrow_array::{Array, ListArray, StringArray};
@@ -265,50 +265,6 @@ fn with_its_project_a_binding_names_what_the_project_declares() {
         issue.paths,
         ["columns.AVALU.submission.value_level.GLUC.codelist"]
     );
-}
-
-#[test]
-fn a_0_5_specification_keeps_its_0_5_meaning() {
-    let study = Study::new();
-    study.write(
-        "raw.csv",
-        "USUBJID,PARAMCD,AVALU,SRCDOM,WEIGHT\nP1,GLUC,mg/dL,LB,70\nP1,CREAT,mg/dL,LB,70\n",
-    );
-    let legacy = |call: bool| {
-        spec(true, call)
-            .replace(
-                "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\n",
-                "schema_version: '1.0'\n",
-            )
-            .replace(
-                "origins: [{type: Assigned}]",
-                "origin: {type: Assigned, source: Sponsor}",
-            )
-    };
-    let path = study.path("spec.yaml");
-    let token = CancellationToken::new();
-    let engine = engine();
-    // No codelist binding is read without a project, and the inventory
-    // admits no name, which fails the glucose row's present SRCDOM once the
-    // dataset is built (CT-11).
-    study.write("spec.yaml", &legacy(false));
-    let checked = issues(&engine.spec_check(&path, None, &token).unwrap().issues());
-    assert_eq!(checked, []);
-    let found = issues(&engine.spec_run(&path, None, &token).unwrap().issues());
-    let [issue] = found.as_slice() else {
-        panic!("one issue: {found:?}")
-    };
-    assert_eq!(issue.condition, "allowed_values_failed");
-    assert_eq!(issue.rule.as_deref(), Some("CT-11"));
-    // A call names no declared function (FUNC-4).
-    study.write("spec.yaml", &legacy(true));
-    let found = issues(&engine.spec_check(&path, None, &token).unwrap().issues());
-    let [issue] = found.as_slice() else {
-        panic!("one issue: {found:?}")
-    };
-    assert_eq!(issue.condition, "unknown_project_function");
-    assert_eq!(issue.rule.as_deref(), Some("FUNC-4"));
-    assert_eq!(issue.paths, ["columns.BMI.derivation.function.name"]);
 }
 
 #[test]

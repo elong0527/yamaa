@@ -1,8 +1,7 @@
 #![cfg(feature = "yaml")]
 //! Execution contracts: retired ODM context, row count lookups, row
-//! derivations, row filter paths, row intermediate operands, row join keys,
-//! scoped windows checks, temporal arithmetic and typed intermediate
-//! derivations.
+//! derivations, row intermediate operands, row join keys, scoped windows
+//! checks, temporal arithmetic and typed intermediate derivations.
 mod execution {
     mod retired_odm_context {
         //! Original retired ODM-context operands through the shared public file engine.
@@ -205,7 +204,7 @@ mod execution {
 
         #[test]
         fn original_binding_fixture_keeps_output_names_literal_fields_and_complete_source_count() {
-            use yamaa_adapters::{shipped_schema, specification_run::PreparedRun};
+            use yamaa_adapters::specification_run::PreparedRun;
             use yamaa_core::{
                 reference_binding::{Binding, Catalog, Dataset, Field},
                 specification::BindError,
@@ -215,10 +214,7 @@ mod execution {
             let original = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("../../../benchmarks/schema-odm-form-items/spec.yaml");
             // The benchmark in the language it is written in (#3422).
-            let document = crate::support::specification_run::prepare(
-                &shipped_schema::capture().unwrap(),
-                &fs::read(original).unwrap(),
-            );
+            let document = crate::support::specification_run::prepare(&fs::read(original).unwrap());
             let run = PreparedRun::prepare(document).unwrap();
             let compiled = run.compiled();
             let source = TableSchema::new(
@@ -802,122 +798,6 @@ rows:
             // COLUMN-3/COLUMN-4 run grouped filters after the complete row graph,
             // including windows. ROW-6's pre-window restriction is ungrouped.
             assert_eq!(saved(&fixture), b"ID,TOTAL,SEQ\n2,7,2\n");
-        }
-    }
-    mod row_filter_paths {
-        //! Static and build diagnostics use declaration indices, never arbitrary row IDs.
-        //! That is the 0.5 path notation: a 1.0 file names a row by its id (P-CLR-2),
-        //! so this module keeps its 0.5 documents until the 0.5 path goes (#3447).
-        use std::fs;
-        use yamaa_adapters::json;
-        use yamaa_adapters::{
-            file_application, file_preparation::FileSpecification, file_resources::Resources,
-        };
-        use yamaa_core::diagnostic::Diagnostic;
-        use yamaa_core::domain_entry::Request;
-        use yamaa_core::json::Value;
-
-        struct Study(crate::support::Scratch);
-        impl Study {
-            fn new() -> Self {
-                let path = crate::support::Scratch::canonical("row-filter-path");
-                fs::create_dir_all(path.join("parent")).unwrap();
-                Self(path)
-            }
-            fn identity(&self, name: &str) -> String {
-                let value = self.0.join(name).to_string_lossy().into_owned();
-                #[cfg(windows)]
-                let value = value.replace('\\', "/");
-                value
-            }
-        }
-        fn issues(rows: &[Diagnostic]) -> Value {
-            Value::Array(
-                rows.iter()
-                    .map(|issue| {
-                        let mut value = yamaa_adapters::report_storage::diagnostic_value(issue);
-                        value["context"] = yamaa_core::json::Value::Object(issue.context.clone());
-                        value
-                    })
-                    .collect(),
-            )
-        }
-        #[test]
-        fn check_and_build_retain_index_paths_and_literal_id_inherited_provenance() {
-            for inherited in [false, true] {
-                for row_id in ["ordinary", "dot.id", "bracket[999]"] {
-                    let study = Study::new();
-                    let entry = study.0.join("spec.yaml");
-                    let text = format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: result.csv, columns: [ID]}}\ncolumns: [{{name: ID, type: str}}]\nrows:\n  - {{id: clean, dataset: SRC, derivations: {{ID: SRC.ID}}}}\n  - {{id: '{row_id}', dataset: SRC, filter: 'ID >', derivations: {{ID: SRC.ID}}}}\n");
-                    let owner = if inherited {
-                        study.0.join("parent/base.yaml")
-                    } else {
-                        entry.clone()
-                    };
-                    fs::write(&owner, text).unwrap();
-                    fs::write(owner.parent().unwrap().join("input.csv"), "ID\na\n").unwrap();
-                    if inherited {
-                        fs::write(&entry, "schema_version: '1.0'\nparent: parent/base.yaml\n")
-                            .unwrap();
-                    }
-                    // Frozen pre-static row-filter grammar truth carries these two public
-                    // context fields. Human declaring-file attribution uses held provenance.
-                    let context = json!({"predicate":"ID >","position":4});
-                    let prepared = FileSpecification::prepare(
-                        Resources::new(study.0.to_str().unwrap(), study.0.to_str().unwrap(), &[])
-                            .unwrap(),
-                        "spec.yaml",
-                    )
-                    .unwrap();
-                    let owner_identity = study.identity(if inherited {
-                        "parent/base.yaml"
-                    } else {
-                        "spec.yaml"
-                    });
-                    assert_eq!(
-                        prepared
-                            .run()
-                            .document()
-                            .declaring_source(&format!("rows.{row_id}.filter")),
-                        Some(owner_identity.as_str())
-                    );
-                    assert_eq!(prepared.capture_reads(), if inherited { 2 } else { 1 });
-                    let expected = json!([{"phase":"validation","condition":"invalid_expression","rule":"FORMULA-1","spec_paths":["rows[1].filter"],"context":context}]);
-                    let written = entry.to_str().unwrap();
-                    let request = || Request {
-                        specification: written,
-                        environment: None,
-                    };
-                    let identity = || {
-                        crate::support::study::identity(
-                            "independent-row-filter-attribution",
-                            written,
-                        )
-                    };
-                    assert_eq!(
-                        issues(&file_application::check(
-                            yamaa_core::project_function::Language::Python,
-                            request(),
-                            identity()
-                        )),
-                        expected,
-                        "{row_id}: check inherited={inherited}"
-                    );
-                    let built = crate::support::study::domain(
-                        yamaa_core::project_function::Language::Python,
-                        request(),
-                        identity(),
-                    )
-                    .unwrap();
-                    assert_eq!(
-                        issues(&built.issues()),
-                        expected,
-                        "{row_id}: build inherited={inherited}"
-                    );
-                    assert!(built.output().is_none());
-                    assert!(!study.0.join("result.csv").exists());
-                }
-            }
         }
     }
     mod row_intermediate_operands {

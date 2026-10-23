@@ -391,8 +391,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
 /// A 1.0 specification prepared without a project file binds nothing a
 /// project supplies: each codelist, inventory vocabulary and project function
 /// it names fails as `project_binding_missing` (CT-13) at the field that
-/// binds it, naming what it binds. A 0.5 specification keeps its 0.5.0
-/// meaning (#3030 D75).
+/// binds it, naming what it binds.
 pub fn project_binding_reached() -> BTreeSet<ConditionCode> {
     use yamaa_core::json::Value;
     use yamaa_core::specification::{PrepareError, PreparedSpecification};

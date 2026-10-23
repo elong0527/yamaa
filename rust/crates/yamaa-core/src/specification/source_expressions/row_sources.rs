@@ -27,12 +27,11 @@ pub(in crate::specification) fn bind(
     let catalog = cx.catalog;
     let before = cx.findings.len();
     let name = &declaration.variable;
-    let mut variable_absent = false;
-    let expression = if let Some((index, field)) = named.reference(name).filter(|_| {
+    let expression = if let Some((index, _)) = named.reference(name).filter(|_| {
         name.split_once('.')
             .is_none_or(|(owner, _)| owner != driver)
     }) {
-        let Some(item) = items.get(index).and_then(Option::as_ref) else {
+        if items.get(index).and_then(Option::as_ref).is_none() {
             // An earlier selector may be unavailable in this donor scope.
             // Let the named-read owner report it at the authored operand path.
             return row_intermediates::bind(
@@ -48,29 +47,21 @@ pub(in crate::specification) fn bind(
                 cx.edges,
                 cx.findings,
             );
-        };
-        declaration.bind_row_filter(path, driver, catalog, named, cx.findings)?;
-        if declaration.answers_unknown
-            && !item.source.is_self()
-            && item.source_column(secondary, field).is_none()
-        {
-            variable_absent = true;
-            Some(Expression::Literal(Value::Missing))
-        } else {
-            row_intermediates::bind(
-                name,
-                path,
-                named,
-                secondary,
-                items,
-                cx.output,
-                catalog,
-                cx.row(),
-                cx.scope.available,
-                cx.edges,
-                cx.findings,
-            )?
         }
+        declaration.bind_row_filter(path, driver, catalog, named, cx.findings)?;
+        row_intermediates::bind(
+            name,
+            path,
+            named,
+            secondary,
+            items,
+            cx.output,
+            catalog,
+            cx.row(),
+            cx.scope.available,
+            cx.edges,
+            cx.findings,
+        )?
     } else {
         let dataset = name.split_once('.').map(|(dataset, _)| dataset);
         let donor = dataset.and_then(|dataset| catalog.joined(dataset));
@@ -109,86 +100,71 @@ pub(in crate::specification) fn bind(
         } else {
             None
         };
-        let missing_field = if let Some((_, field)) = name.split_once('.') {
-            schema
-                .as_deref()
-                .is_some_and(|schema| !schema.columns().iter().any(|column| column.name == field))
-        } else {
-            catalog.bind(name).is_none()
-        };
-        if missing_field && declaration.answers_unknown {
-            variable_absent = true;
-            Some(Expression::Literal(Value::Missing))
-        } else {
-            match cx.direct_read(name, path)? {
-                // A source binding keeps its range, options and absence answer
-                // on the implicit join (LOOKUP-25).
-                Some(Expression::Joined(read)) => {
-                    // A range value naming the row's driver reads a single value
-                    // of its record, a group key in a grouped row.
-                    if let Some(value) = declaration.range_value().filter(|value| {
-                        value
-                            .split_once('.')
-                            .is_some_and(|(owner, _)| owner == driver)
-                    }) {
-                        use crate::reference_scope::{self, Reach, Scope};
-                        let row = cx.row();
-                        cx.findings.extend(
-                            reference_scope::validate(
-                                catalog,
-                                value,
-                                None,
-                                Scope {
-                                    drivers: &[driver],
-                                    current_driver: false,
-                                    reach: Reach::Scalar,
-                                    joined: false,
-                                    phase,
-                                },
-                            )
-                            .map_err(BindError::Catalog)?
-                            .into_iter()
-                            .map(|finding| {
-                                BindFinding::QualifiedReference {
-                                    path: format!("{path}.between.value"),
-                                    name: value.into(),
-                                    row: row.map(String::from),
-                                    finding,
-                                }
-                            }),
-                        );
-                    }
-                    declaration
-                        .bind_range(
-                            &read.schema,
+        match cx.direct_read(name, path)? {
+            // A source binding keeps its range, options and absence answer
+            // on the implicit join (LOOKUP-25).
+            Some(Expression::Joined(read)) => {
+                // A range value naming the row's driver reads a single value
+                // of its record, a group key in a grouped row.
+                if let Some(value) = declaration.range_value().filter(|value| {
+                    value
+                        .split_once('.')
+                        .is_some_and(|(owner, _)| owner == driver)
+                }) {
+                    use crate::reference_scope::{self, Reach, Scope};
+                    let row = cx.row();
+                    cx.findings.extend(
+                        reference_scope::validate(
                             catalog,
-                            secondary,
-                            items,
-                            cx.row(),
-                            Some(driver),
-                            cx.scope.available,
-                            cx.spec().header.surface.one_meaning_per_form(),
-                            cx.edges,
-                            cx.findings,
-                        )?
-                        .map(|range| Expression::JoinedSource {
-                            read,
-                            range,
-                            filter,
-                            selection,
-                            absence: Some(declaration.absence(path)),
-                        })
+                            value,
+                            None,
+                            Scope {
+                                drivers: &[driver],
+                                current_driver: false,
+                                reach: Reach::Scalar,
+                                joined: false,
+                                phase,
+                            },
+                        )
+                        .map_err(BindError::Catalog)?
+                        .into_iter()
+                        .map(|finding| BindFinding::QualifiedReference {
+                            path: format!("{path}.between.value"),
+                            name: value.into(),
+                            row: row.map(String::from),
+                            finding,
+                        }),
+                    );
                 }
-                Some(Expression::Source(column)) if filter.is_some() || selection.is_some() => {
-                    Some(Expression::Collect {
-                        column,
-                        identifier: name.clone(),
+                declaration
+                    .bind_range(
+                        &read.schema,
+                        catalog,
+                        secondary,
+                        items,
+                        cx.row(),
+                        Some(driver),
+                        cx.scope.available,
+                        cx.edges,
+                        cx.findings,
+                    )?
+                    .map(|range| Expression::JoinedSource {
+                        read,
+                        range,
                         filter,
                         selection,
+                        absence: Some(declaration.absence(path)),
                     })
-                }
-                expression => expression,
             }
+            Some(Expression::Source(column)) if filter.is_some() || selection.is_some() => {
+                Some(Expression::Collect {
+                    column,
+                    identifier: name.clone(),
+                    filter,
+                    selection,
+                })
+            }
+            expression => expression,
         }
     };
     if cx.findings.len() != before {
@@ -200,5 +176,5 @@ pub(in crate::specification) fn bind(
     }) {
         return Ok(None);
     }
-    Ok(expression.map(|expression| declaration.wrap(expression, column, path, variable_absent)))
+    Ok(expression.map(|expression| declaration.wrap(expression, column, path)))
 }

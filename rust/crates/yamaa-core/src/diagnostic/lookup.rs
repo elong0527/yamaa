@@ -65,31 +65,7 @@ pub(crate) fn key_type(
     finding(C::LookupKeyType, vec![path.into()], context)
 }
 
-/// An omitted `key` whose relation carries none of the output keys (LOOKUP-5).
-pub(crate) fn no_applicable_keys(
-    path: &str,
-    dataset: &str,
-    keys: &[&str],
-    declarable: bool,
-) -> Diagnostic {
-    let hint = if declarable {
-        "declare the `key` explicitly"
-    } else {
-        "declare a named intermediate with its `key`"
-    };
-    finding(
-        C::LookupNoApplicableKeys,
-        vec![path.into()],
-        [
-            ("dataset".into(), text(dataset)),
-            ("keys".into(), texts(keys)),
-            ("hint".into(), text(hint)),
-        ]
-        .into(),
-    )
-}
-
-/// A read of a 1.0 input that declares no `key`, by an implicit join or by a
+/// A read of an input that declares no `key`, by an implicit join or by a
 /// qualified aggregate without `key` of its own, at the read (LOOKUP-1,
 /// LOOKUP-5; D23, D63).
 pub(crate) fn undeclared_input_key(path: &str, dataset: &str, aggregate: bool) -> Diagnostic {
@@ -109,7 +85,7 @@ pub(crate) fn undeclared_input_key(path: &str, dataset: &str, aggregate: bool) -
     )
 }
 
-/// A 1.0 intermediate read as a lookup without `key`, at its `key` (LOOKUP-3,
+/// An intermediate read as a lookup without `key`, at its `key` (LOOKUP-3,
 /// ROW-2; D23, D63). The record is the schema's own for a missing required
 /// field: the field and its class.
 pub(crate) fn key_required(path: &str) -> Diagnostic {

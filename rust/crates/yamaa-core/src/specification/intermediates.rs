@@ -24,9 +24,8 @@ struct Declaration {
     unique: UniqueDeclarations,
     derivations: Vec<intermediate_derivations::Derivation>,
     driver_prohibited: Vec<String>,
-    driver_keys: Option<std::sync::Arc<TableSchema>>,
-    /// The `key` path of a 1.0 row driver, which declares no key, so a read
-    /// of it as a lookup is refused there (LOOKUP-3, ROW-2).
+    /// The `key` path of a row driver, which declares no key, so a read of it
+    /// as a lookup is refused there (LOOKUP-3, ROW-2).
     key_required: Option<String>,
 }
 #[derive(Debug, Default)]
@@ -55,7 +54,6 @@ fn finish_item(
     result: &[Option<Intermediate>],
     secondary: &[SecondarySource],
     pairs: &[IntermediateKey],
-    one_meaning: bool,
     contextual: bool,
     failed: &mut bool,
     derivations: &Option<crate::dataset::IntermediateDerivations>,
@@ -143,8 +141,6 @@ fn finish_item(
                 &donor_kind,
                 &admits,
                 catalog,
-                schemas[driver],
-                one_meaning,
                 contextual,
                 result,
                 secondary,
@@ -215,7 +211,6 @@ fn bind_one(
     driver: usize,
     schemas: &[&TableSchema],
     output: &TableSchema,
-    keys: &[usize],
     self_columns: Option<&[usize]>,
     project: Option<&crate::project_calls::ProjectCalls>,
     tree: &types::Tree,
@@ -330,37 +325,10 @@ fn bind_one(
         })
         .collect::<Vec<_>>();
     let catalog = Catalog::compile(&output_fields, &datasets).map_err(BindError::Catalog)?;
-    // A 0.5 lookup without `key` infers the applicable keys. A 1.0
-    // intermediate without `key` drives rows and is never a keyed lookup
+    // An intermediate without `key` drives rows and is never a keyed lookup
     // (ROW-2, LOOKUP-3); preparation refused every other.
-    let default_keys = if item.keys.is_none() && tree.spec().header.surface.infers_join_keys() {
-        let before_keys = findings.len();
-        match intermediate_admission::inferred_keys(
-            &catalog,
-            output,
-            keys,
-            schema,
-            &donor_kind,
-            &admits,
-            &item.path,
-            &item.name,
-            source_name,
-            findings,
-        )? {
-            Some(keys) => keys,
-            None if item.driver_keys.is_some() => {
-                // A driver traverses donor records, without selecting by output keys.
-                findings.truncate(before_keys);
-                Vec::new()
-            }
-            None => {
-                return Ok(None);
-            }
-        }
-    } else {
-        Vec::new()
-    };
-    let pairs_declared = item.keys.as_ref().unwrap_or(&default_keys);
+    let no_keys = Vec::new();
+    let pairs_declared = item.keys.as_ref().unwrap_or(&no_keys);
     // Result types and donor fields precede expression declarations and reads.
     for (field, declaration) in pairs_declared {
         if let Some(donor) = schema
@@ -462,7 +430,6 @@ fn bind_one(
         result,
         secondary,
         &pairs,
-        tree.spec().header.surface.one_meaning_per_form(),
         contextual_reader,
         &mut failed,
         &derivations,
@@ -496,7 +463,7 @@ fn bind_one(
         filter,
         selection: item.keep.map(|keep| SourceSelection { order_by, keep }),
         no_match: item.no_match.clone(),
-        absence: tree.spec().header.surface.intermediate_absence(),
+        absence: crate::numeric_lifecycle::HandlerKind::Absent,
         require_match: item.require_match,
         unique,
         derivations,
@@ -574,10 +541,7 @@ impl Declarations {
             .iter()
             .any(|item| item.name == name && item.keep.is_some())
     }
-    pub(super) fn driver_keys(&self, index: usize) -> Option<&TableSchema> {
-        self.0.get(index)?.driver_keys.as_deref()
-    }
-    /// Where a read of the 1.0 row driver at `index` as a keyed lookup is
+    /// Where a read of the row driver at `index` as a keyed lookup is
     /// refused: its `key`, which it does not declare (LOOKUP-3, ROW-2).
     pub(super) fn key_required(&self, index: usize) -> Option<&str> {
         self.0.get(index)?.key_required.as_deref()
@@ -737,8 +701,6 @@ impl Declarations {
     pub fn prepare(
         spec: &ast::Spec,
         sources: &[SourceDeclaration],
-        output: &TableSchema,
-        keys: &[usize],
         project: Option<&functions::Prepared>,
         extra: &mut Vec<UnsupportedFeature>,
     ) -> Result<Self, PrepareError> {
@@ -762,26 +724,11 @@ impl Declarations {
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
-        let driver_key_schema = std::sync::Arc::new(
-            TableSchema::new(
-                keys.iter()
-                    .map(|&key| output.columns()[key].clone())
-                    .collect(),
-            )
-            .map_err(|_| PrepareError::Internal)?,
-        );
         let calls = project.is_some();
         for index in derivation_order(spec, calls)? {
             let item = &spec.intermediates[index];
             let path = checks::render(spec, item.meta);
             let name = item.id.name.as_str();
-            let row_driver = spec.rows.templates.iter().any(|template| {
-                template
-                    .driver
-                    .as_ref()
-                    .is_some_and(|driver| driver.name == name)
-            });
-            let driver_keys = row_driver.then(|| std::sync::Arc::clone(&driver_key_schema));
             let range = intermediate_range::prepare(spec, item)?;
             let columns = intermediate_range::prepare_columns(item)?;
             let dataset = item.dataset.name.as_str();
@@ -908,8 +855,9 @@ impl Declarations {
                     unique,
                     derivations,
                     driver_prohibited,
-                    driver_keys,
-                    key_required: (item.key.is_none() && !spec.header.surface.infers_join_keys())
+                    key_required: item
+                        .key
+                        .is_none()
                         .then(|| format!("{}.key", checks::render(spec, item.meta))),
                 });
         }
@@ -922,7 +870,6 @@ impl Declarations {
         driver: usize,
         schemas: &[&TableSchema],
         output: &TableSchema,
-        keys: &[usize],
         self_columns: Option<&[usize]>,
         project: Option<&crate::project_calls::ProjectCalls>,
         tree: &types::Tree,
@@ -947,7 +894,6 @@ impl Declarations {
                 driver,
                 schemas,
                 output,
-                keys,
                 self_columns,
                 project,
                 tree,
