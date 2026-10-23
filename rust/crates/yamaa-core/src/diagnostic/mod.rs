@@ -435,6 +435,9 @@ conditions! {
     IntermediateDuplicateRecords => ("verification", "duplicate_intermediate_records", Some("LOOKUP-17")),
     IntermediateUniqueField => ("validation", "unknown_field", Some("LOOKUP-17")),
     IntermediateUniqueCorrelatedFilter => ("validation", "correlated_filter_with_unique_verification", Some("LOOKUP-17")),
+    // A `warning` unique on an intermediate without `keep` and `order_by`
+    // (D210).
+    IntermediateUniqueSeverity => ("validation", "value_not_permitted", Some("LOOKUP-17")),
     IntermediateIdentifierCollision => ("validation", "duplicate_identifier", Some("LOOKUP-3")),
     // A 1.0 intermediate read as a lookup without `key` (D23, D63).
     IntermediateKeyRequired => ("validation", "missing_required_field", Some("LOOKUP-3")),

@@ -12,8 +12,8 @@
 //! nothing published.
 
 use crate::ast::{
-    DatasetCheckKind, Derivation, ExprId, ExprKind, Intermediate, JoinKey, Literal, Named, Role,
-    Scope, Segment, Spec, Step, Template,
+    ColumnCheckKind, DatasetCheckKind, Derivation, ExprId, ExprKind, Intermediate, JoinKey,
+    Literal, Named, Role, Scope, Segment, Spec, Step, Template,
 };
 use crate::dependency_analysis;
 use crate::expression::{CompileError, Context};
@@ -432,8 +432,17 @@ impl<'a> Live<'a> {
         if let Some(base) = &spec.rows.base {
             self.inputs.insert(base.name.clone());
         }
-        // The columns dataset verifications read, and the root filter's.
+        // The columns dataset verifications read, those a column check's
+        // `when` reads (CHECK-5), and the root filter's.
         let mut readings = Vec::new();
+        for check in spec.columns.iter().flat_map(|column| &column.checks) {
+            if let ColumnCheckKind::NotMissing {
+                when: Some(when), ..
+            } = &check.kind
+            {
+                self.read(*when, Scope::Row, &mut readings)?;
+            }
+        }
         for check in &spec.checks {
             match &check.kind {
                 DatasetCheckKind::Unique { columns } | DatasetCheckKind::AllOrNone { columns } => {

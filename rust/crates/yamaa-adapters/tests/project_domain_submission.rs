@@ -1210,6 +1210,7 @@ mod project {
                 inventory: None,
                 row_count: None,
                 entries: None,
+                denominator: None,
             }];
             let projected = yamaa_core::verification_diagnostics::project(
                 compiled,

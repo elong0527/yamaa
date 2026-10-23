@@ -6,7 +6,7 @@ use crate::bound_expression::{Binding, BoundPredicate, Read as BoundRead};
 use crate::dataset::execution::{
     CheckRecord, CodelistObservation, ExecutionError, ExecutionEvent, ExecutionPhase, RowIdentity,
 };
-use crate::dataset::resolved::{CheckId, CheckPayload, CheckScope, RegionId, ResolvedPlan};
+use crate::dataset::resolved::{CheckId, CheckPayload, CheckScope, Read, RegionId, ResolvedPlan};
 use crate::dataset::{Check, InventoryScope, RowScope, VerificationSeverity, WhereClause};
 use crate::expression::{Condition, ErrorKind, Truth};
 use crate::table::{CellError, TableAccess, TableSchema, ValueRef};
@@ -120,15 +120,14 @@ pub(super) fn check_columns<E>(
             .map(|(index, _)| CheckId::try_from(index).expect("a check slot"))
             .collect();
         if !group.is_empty() {
-            // A value-level check reads its completed where columns. A later
-            // where column delays the declared check prefix until its value
-            // is complete; it never silently selects from a partial row.
+            // A check reads the completed columns it selects its rows by: a
+            // value-level check's where columns and a `not_missing`'s `when`
+            // columns. A later one delays the declared check prefix until its
+            // value is complete; it never silently selects from a partial row.
             if group.iter().any(|&check| {
-                declared(plan, check)
-                    .clauses()
-                    .iter()
-                    .flat_map(|clause| clause.columns())
-                    .any(|column| !completed[column])
+                plan.check_reads(check).iter().any(|read| {
+                    matches!(read, Read::Column(column) if !completed[column.index() - first])
+                })
             }) {
                 return Ok(());
             }
@@ -220,6 +219,7 @@ fn column_check<E>(
                 inventory: None,
                 row_count: None,
                 entries: Some(matched),
+                denominator: None,
             });
         }
         Check::ValueEntryMatch { clause, .. } => {
@@ -236,10 +236,66 @@ fn column_check<E>(
                 inventory: None,
                 row_count: None,
                 entries: None,
+                denominator: None,
             });
         }
-        declared_check @ (Check::NotMissing
-        | Check::Mandatory(_)
+        Check::NotMissing { when, max_fraction } => {
+            let schema = &plan.region(RegionId::DATASET).output;
+            let dataset = Completed { frame, schema };
+            // `when` selects the rows checked: a `TRUE` row is checked, and a
+            // `FALSE` or `UNKNOWN` one passes (CHECK-5, CHECK-12).
+            let checked: Vec<usize> = match when {
+                Some(when) => {
+                    validate_predicate(plan, when, &dataset, records)?;
+                    let mut checked = Vec::new();
+                    for row in 0..rows {
+                        if completed_truth(when, &dataset, row, records)? == Truth::True {
+                            checked.push(row);
+                        }
+                    }
+                    checked
+                }
+                None => (0..rows).collect(),
+            };
+            let missing: Vec<usize> = checked
+                .iter()
+                .copied()
+                .filter(|&row| matches!(frame.get(row, column), ValueRef::Missing))
+                .collect();
+            // The share of the checked rows that are missing is compared as a
+            // `row_count`'s share is, zero when no row is checked (CHECK-13);
+            // a violated check offends at every one of those rows (D209).
+            let violated = match max_fraction {
+                Some(max) => crate::dataset::share(missing.len(), checked.len()) > *max,
+                None => !missing.is_empty(),
+            };
+            let offending_rows: Vec<RowIdentity> = if violated {
+                missing
+                    .iter()
+                    .map(|&row| {
+                        failure_identity(frame, keys, row)
+                            .expect("all keys are complete before column checks")
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            records.push(CheckRecord {
+                path,
+                code: crate::diagnostic::ConditionCode::VerificationNotMissingFailed,
+                // Rows are its unit, every output row its total (CHECK-24).
+                evaluated_count: rows,
+                failed_count: offending_rows.len(),
+                output_rows: rows,
+                offending_rows,
+                codelist: None,
+                inventory: None,
+                row_count: None,
+                entries: None,
+                denominator: max_fraction.map(|_| checked.len()),
+            });
+        }
+        declared_check @ (Check::Mandatory(_)
         | Check::DataType { .. }
         | Check::AllowedValues(_)
         | Check::Codelist { .. }
@@ -346,6 +402,7 @@ fn column_check<E>(
                     row_count: None,
                     offending_rows,
                     entries: None,
+                    denominator: None,
                 });
             }
         }
@@ -391,6 +448,7 @@ pub(super) fn verify_output<'a, E>(
                 row_count: None,
                 offending_rows: identities(frame, &keys, missing),
                 entries: None,
+                denominator: None,
             });
         }
     }
@@ -413,6 +471,7 @@ pub(super) fn verify_output<'a, E>(
             row_count: None,
             offending_rows: identities(frame, &keys, duplicates),
             entries: None,
+            denominator: None,
         });
     }
     if !failures.is_empty() {
@@ -505,6 +564,7 @@ pub(super) fn verify_output<'a, E>(
                     row_count: None,
                     offending_rows: identities(frame, &keys, offending),
                     entries: None,
+                    denominator: None,
                 }
             }
             Check::Unique(columns) => {
@@ -536,6 +596,7 @@ pub(super) fn verify_output<'a, E>(
                             .flat_map(|members| members.iter().copied()),
                     ),
                     entries: None,
+                    denominator: None,
                 }
             }
             Check::AllOrNone(columns) => {
@@ -559,6 +620,7 @@ pub(super) fn verify_output<'a, E>(
                     row_count: None,
                     offending_rows,
                     entries: None,
+                    denominator: None,
                 }
             }
             Check::ScopedRowCount(count) => row_count_check(
@@ -577,6 +639,7 @@ pub(super) fn verify_output<'a, E>(
                     row_count: None,
                     offending_rows: Vec::new(),
                     entries: None,
+                    denominator: None,
                 }
             }
             _ => unreachable!("column-only check is rejected at admission"),
@@ -681,6 +744,29 @@ impl TableAccess for DatasetTable<'_, '_> {
     }
 }
 
+/// One row's truth of a verification predicate that reads completed columns
+/// alone.
+fn completed_truth<E>(
+    predicate: &BoundPredicate,
+    dataset: &Completed<'_>,
+    row: usize,
+    records: &mut Vec<CheckRecord>,
+) -> Result<Truth, Fail<E>> {
+    let table = DatasetTable(dataset);
+    super::predicates::row_truth(
+        predicate,
+        Table::<Infallible>::Source(&table),
+        0,
+        |column| dataset.frame.get(row, column),
+    )
+    .map_err(|error| {
+        Box::new(ExecutionError::VerificationPredicate {
+            error: *error,
+            records: std::mem::take(records),
+        })
+    })
+}
+
 /// One row's truth of a verification predicate: over the completed values,
 /// or through the case evaluator when it reads a lookup.
 #[allow(clippy::too_many_arguments)]
@@ -700,19 +786,7 @@ fn evaluate_predicate<'a, E>(
         .iter()
         .any(|binding| matches!(binding.read, BoundRead::Intermediate { .. }))
     {
-        let table = DatasetTable(dataset);
-        return super::predicates::row_truth(
-            predicate,
-            Table::<Infallible>::Source(&table),
-            0,
-            |column| frame.get(row, column),
-        )
-        .map_err(|error| {
-            Box::new(ExecutionError::VerificationPredicate {
-                error: *error,
-                records: std::mem::take(records),
-            })
-        });
+        return completed_truth(predicate, dataset, row, records);
     }
     let mut cx = run.template_cx(
         frame,
@@ -836,6 +910,7 @@ fn row_count_check<'a, E>(
                 .then_some(denominators),
         }),
         entries: None,
+        denominator: None,
     })
 }
 

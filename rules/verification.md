@@ -18,7 +18,7 @@ infers its declared column and runs after that column's derivation and
 conversion. Dataset verifications run after all column work, output-key
 validation, and column verifications finish.
 
-Evidence: `schema-verification-log`, `negative-single-verification`, `rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.json`.
+Evidence: `schema-verification-log`, `negative-single-verification`, `rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.json`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::a_not_missing_when_waits_for_the_later_column_it_reads`.
 
 A column's `verifications` and the dataset's `verifications` are each a list
 of checks, and a single check is written as a one-item list. A check written
@@ -85,7 +85,7 @@ an incompatible column type fails, and so does an unknown column in `unique`,
 `all_or_none`, `assert`, `not_missing.when` or `row_count.group_by`.
 
 Fails: `invalid_declaration`, `unknown_field`.
-Evidence: `rust/crates/yamaa-adapters/tests/fixtures/static_verification_checks.json`, `rust/crates/yamaa-adapters/tests/fixtures/completed_lookup_assertions.json`.
+Evidence: `negative-not-missing-share-range`, `rust/crates/yamaa-adapters/tests/fixtures/static_verification_checks.json`, `rust/crates/yamaa-adapters/tests/fixtures/completed_lookup_assertions.json`.
 
 ## Column verifications
 
@@ -102,14 +102,16 @@ column is never missing under [OUTPUT-3](output.md#output-3), so a
 `not_missing` on a key column restates the keys and fails validation.
 
 Fails: `not_missing_failed`, `redundant_declaration`.
-Evidence: `negative-not-missing-age`, `rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.json`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::VerificationNotMissingRedundant`.
+Evidence: `negative-not-missing-age`, `schema-not-missing-share`, `negative-not-missing-share`, `negative-not-missing-when`, `rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.json`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::VerificationNotMissingRedundant`.
 
 `when` is a [Formulas](formulas.md) predicate over one constructed output row
 that selects rows as the `when` of `assert` does ([CHECK-12](#check-12)), not
 groups as that of `row_count` does ([CHECK-14](#check-14)): a row whose `when`
 is `FALSE` or `UNKNOWN` is not checked and passes. It reads completed values:
 the check runs once every column it reads is complete, and check rows keep
-column declaration order ([CHECK-23](#check-23)).
+column declaration order ([CHECK-23](#check-23)). Its names are columns: a
+field of a named intermediate, which a dataset verification may read, fails
+here as `unknown_field` ([CHECK-4](#check-4)).
 
 `max_fraction` is a share from 0 through 1 ([CHECK-4](#check-4)). The checked
 rows whose value is missing, divided by the checked rows, is the share the
@@ -396,7 +398,7 @@ writes the report file for a failed run too; the report is diagnostic output,
 never an accepted artifact.
 
 Fails: `missing_report`.
-Evidence: `schema-adsl-age-quality`, `schema-verification-log`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `python/tests/installed/installed_run_report.py::test_fatal_check_saves_only_the_report_and_keeps_original_issues`, `rust/crates/yamaa-adapters/tests/specification_sources.rs::verification_declarations_preserve_completed_prefix_and_phase_precedence`.
+Evidence: `schema-adsl-age-quality`, `schema-verification-log`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `python/tests/installed/installed_run_report.py::test_fatal_check_saves_only_the_report_and_keeps_original_issues`, `rust/crates/yamaa-adapters/tests/specification_sources.rs::verification_declarations_preserve_completed_prefix_and_phase_precedence`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::an_intermediate_warning_needs_a_report_file`.
 
 A specification declaring a `warning` without `output.report` fails validation
 with `missing_report`, a `warning` on an intermediate's `unique`
@@ -438,7 +440,7 @@ registration order, zero counts included; one `column` row per output column in
 evaluated check in execution order. An intermediate's `error` checks have no
 row, and a check a stopped run never reached has none.
 
-Evidence: `schema-verification-log`, `schema-row-count-fractions`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::failed_runs_report_the_prefix_they_reached_and_no_columns`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::handler_rows_register_every_path_at_zero_in_one_order`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::a_row_template_s_handler_rows_name_their_column_and_cite_their_surface_s_rule`.
+Evidence: `schema-verification-log`, `schema-row-count-fractions`, `schema-lookup-intermediate-unique-warning`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::intermediate_warning_checks_lead_the_check_rows_in_declaration_order`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::failed_runs_report_the_prefix_they_reached_and_no_columns`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::handler_rows_register_every_path_at_zero_in_one_order`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::a_row_template_s_handler_rows_name_their_column_and_cite_their_surface_s_rule`.
 
 `SPEC_PATH` names each row's stable specification item and is unique within
 the report:
@@ -483,7 +485,7 @@ those [Values](values.md) types. A kind leaves missing each column the table
 gives it no value for. The report carries no version and no timestamp: the
 same specification and inputs give the same report bytes.
 
-Evidence: `schema-verification-log`, `schema-parquet`, `schema-adsl-age-quality`, `schema-row-count-fractions`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::date_and_time_data_types_check_each_completed_value_against_their_form`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::a_row_template_s_handler_rows_name_their_column_and_cite_their_surface_s_rule`.
+Evidence: `schema-verification-log`, `schema-parquet`, `schema-adsl-age-quality`, `schema-row-count-fractions`, `schema-not-missing-share`, `schema-lookup-intermediate-unique-warning`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::date_and_time_data_types_check_each_completed_value_against_their_form`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::a_row_template_s_handler_rows_name_their_column_and_cite_their_surface_s_rule`.
 
 | Column | Type | Value |
 |---|---|---|
@@ -593,7 +595,7 @@ lower case, numbers in [Values](values.md)'s `str` form, and strings escaped to
 ASCII by JSON's short escapes where one exists and lower-case `\\u`
 hexadecimal escapes otherwise.
 
-Evidence: `schema-verification-log`, `schema-adsl-age-quality`, `rust/crates/yamaa-adapters/src/run_report.rs::governed_projection_preserves_ascii_details_and_all_keys`.
+Evidence: `schema-verification-log`, `schema-adsl-age-quality`, `schema-lookup-intermediate-unique-warning`, `rust/crates/yamaa-adapters/src/run_report.rs::governed_projection_preserves_ascii_details_and_all_keys`.
 
 A scalar above `U+FFFF` is its JSON surrogate-pair escape. `KEYS` is an array
 holding one object per offending row, its output keys by name, or per

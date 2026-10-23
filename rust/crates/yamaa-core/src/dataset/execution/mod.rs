@@ -133,6 +133,9 @@ pub struct CheckRecord {
     /// The value-level entry identifiers each offending row matches, aligned
     /// with `offending_rows`, when two entries of one column select a row.
     pub entries: Option<Vec<Vec<String>>>,
+    /// The rows a `not_missing` under `max_fraction` checked, the share's
+    /// denominator (CHECK-5, D209).
+    pub denominator: Option<usize>,
 }
 
 impl CheckRecord {

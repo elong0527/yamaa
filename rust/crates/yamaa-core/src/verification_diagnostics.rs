@@ -54,6 +54,7 @@ fn code(record: &CheckRecord, phase: Phase) -> Result<ConditionCode, Error> {
             | VerificationMatchesFailed
             | ValueLevelMultipleMatches
             | ValueLevelUnmatched
+            | IntermediateDuplicateRecords
     ) && record.code.definition().phase == phase.name()
     {
         Ok(record.code)
@@ -231,7 +232,32 @@ fn base_context<'a>(
             if let Check::DataType { form, .. } = check {
                 context.insert("data_type", Fact::Text(form.name()));
             }
+            // The rows a `not_missing` under `max_fraction` checked, under the
+            // name `row_count` gives the same quantity (D209).
+            if let Some(denominator) = record.denominator {
+                if !matches!(check, Check::NotMissing { .. }) {
+                    return Err(Error::InvalidObservation);
+                }
+                context.insert("denominator", Fact::Unsigned(denominator));
+            }
             context
+        }
+        // An intermediate's warning `unique`: the failure's context, its
+        // count of repeated combinations as `failure_count` (D211).
+        IntermediateDuplicateRecords => {
+            let check = compiled
+                .intermediate_check(record.path.as_str())
+                .ok_or(Error::InvalidObservation)?;
+            [
+                (
+                    "columns",
+                    Fact::Sequence(check.columns.iter().copied().map(Fact::Text).collect()),
+                ),
+                ("dataset", Fact::Text(check.dataset)),
+                ("failure_count", failed),
+                ("intermediate", Fact::Text(check.intermediate)),
+            ]
+            .into()
         }
         ValueLevelMultipleMatches | ValueLevelUnmatched => {
             let column = compiled
@@ -312,6 +338,13 @@ pub fn project<'a>(
                     .flatten()
                     .map(|&c| compiled.output().columns()[c].name.as_str())
                     .collect();
+            }
+            // A repeated combination names the intermediate check's columns.
+            if code == ConditionCode::IntermediateDuplicateRecords {
+                key_names = compiled
+                    .intermediate_check(record.path.as_str())
+                    .ok_or(Error::InvalidObservation)?
+                    .columns;
             }
             let mut keys = keys(&key_names, &record.offending_rows)?;
             // An ungrouped count and an entry that matches no row examine the
@@ -420,6 +453,8 @@ pub fn project<'a>(
         if phase == Phase::Verification {
             let check = if code == ConditionCode::VerificationMaxLengthFailed {
                 "max_length"
+            } else if code == ConditionCode::IntermediateDuplicateRecords {
+                "unique"
             } else if matches!(
                 code,
                 ConditionCode::ValueLevelMultipleMatches | ConditionCode::ValueLevelUnmatched

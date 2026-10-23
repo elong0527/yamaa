@@ -22,6 +22,12 @@ pub struct IntermediateUnique {
     pub path: String,
     pub columns: Vec<usize>,
     pub identity: Option<String>,
+    /// An `error` check fails the run; a `warning` one is a row of the run
+    /// report and fails nothing (LOOKUP-17).
+    pub severity: VerificationSeverity,
+    /// The intermediate's position among those the specification declares,
+    /// which orders its warning rows (CHECK-23).
+    pub declared: usize,
 }
 impl IntermediateUnique {
     pub fn diagnostic(

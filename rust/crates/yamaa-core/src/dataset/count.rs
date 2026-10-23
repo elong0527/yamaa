@@ -76,13 +76,20 @@ pub struct RowCount {
     pub filter: Option<crate::bound_expression::BoundPredicate>,
     pub when: Option<crate::bound_expression::BoundPredicate>,
 }
+/// The share `count` is of `total`, zero when `total` is: the share a
+/// `row_count` fraction bound and a `not_missing`'s `max_fraction` compare
+/// (CHECK-13, CHECK-5).
+pub fn share(count: usize, total: usize) -> f64 {
+    if total == 0 {
+        0.0
+    } else {
+        count as f64 / total as f64
+    }
+}
+
 impl RowCount {
     pub fn accepts(&self, count: usize, total: usize) -> bool {
-        let fraction = if total == 0 {
-            0.0
-        } else {
-            count as f64 / total as f64
-        };
+        let fraction = share(count, total);
         self.min
             .as_ref()
             .is_none_or(|min| min.compare_count(count) != Ordering::Greater)

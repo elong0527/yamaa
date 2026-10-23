@@ -730,7 +730,7 @@ mod execution {
         #[test]
         fn static_verification_checks_match_complete_issues_without_study_authority() {
             let rows = fixture_rows(include_str!("fixtures/static_verification_checks.json"));
-            assert_eq!(rows.len(), 15);
+            assert_eq!(rows.len(), 20);
             for row in &rows {
                 let document = prepare(&fixture_bytes(&row["source"]));
                 let run =

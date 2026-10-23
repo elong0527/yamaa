@@ -1,0 +1,31 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, WEIGHTBL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  # The limit was meant as 15 percent but entered as 1.5: a share above one
+  # allows every subject to lack a weight and more, so it is refused.
+  - name: WEIGHTBL
+    type: float
+    label: Weight (kg) at Baseline
+    derivation: DM.WEIGHT
+    verifications:
+      - not_missing: {max_fraction: 1.5}

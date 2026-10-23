@@ -1,0 +1,9 @@
+phase: validation
+condition: value_not_permitted
+spec_paths:
+  - intermediates.DS_EOS.verifications[0].unique.severity
+rule: LOOKUP-17
+context:
+  intermediate: DS_EOS
+  value: warning
+  permitted: [error]

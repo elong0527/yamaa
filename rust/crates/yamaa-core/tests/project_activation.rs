@@ -2064,6 +2064,7 @@ mod project {
                 inventory: None,
                 row_count: None,
                 entries: None,
+                denominator: None,
             }
         }
         #[test]

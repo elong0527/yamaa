@@ -11,7 +11,7 @@ use std::{collections::BTreeMap, vec};
 mod conversion;
 pub use conversion::ConversionHandler;
 mod count;
-pub use count::{CountBoundError, RowCount, RowCountBound};
+pub use count::{share, CountBoundError, RowCount, RowCountBound};
 mod flags;
 pub use flags::{flag_condition_diagnostic, Flag, FlagBinding, FlagError, FlagRead};
 mod functions;
@@ -348,8 +348,13 @@ impl ColumnBinding {
 /// Error-severity dataset checks supported by this closed application slice.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Check {
-    /// Presence of the owning completed column, before later derivations.
-    NotMissing,
+    /// Presence of the owning completed column, before later derivations, on
+    /// the rows `when` selects, every row without it; with `max_fraction`, at
+    /// most that share of those rows may be missing (CHECK-5).
+    NotMissing {
+        when: Option<BoundPredicate>,
+        max_fraction: Option<f64>,
+    },
     /// Presence required by the column's resolved `mandatory`. Without a scope
     /// every row is checked; a scope selects rows by value-level where clauses.
     Mandatory(Option<RowScope>),
@@ -523,6 +528,29 @@ pub struct ValueCodelist {
 }
 
 impl Check {
+    /// The plain `not_missing`: every row, no share allowed.
+    pub const NOT_MISSING: Self = Self::NotMissing {
+        when: None,
+        max_fraction: None,
+    };
+    /// The completed columns a column check's `when` reads, each once, in
+    /// first-read order (CHECK-5).
+    pub fn when_columns(&self) -> Vec<usize> {
+        let mut columns = Vec::new();
+        if let Self::NotMissing {
+            when: Some(when), ..
+        } = self
+        {
+            for binding in when.bindings() {
+                if let Read::Column(column) = binding.read {
+                    if !columns.contains(&column) {
+                        columns.push(column);
+                    }
+                }
+            }
+        }
+        columns
+    }
     /// The where clauses a value-level check selects its rows by.
     pub fn clauses(&self) -> Vec<&WhereClause> {
         match self {

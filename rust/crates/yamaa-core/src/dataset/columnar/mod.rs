@@ -548,7 +548,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             .map(|&table| Table::Source(table))
             .collect();
         self.poll(super::resolved::Step::VerifyIntermediates { self_rows: false })?;
-        self.verify_intermediates(&frame, &secondary, false)?;
+        self.verify_intermediates(&frame, &secondary, false, records)?;
         let template_ids: Vec<TemplateId> = plan.region_templates(region).collect();
         let keyed = template_ids.first().is_some_and(|&template| {
             plan.template(template).driver.grain == super::resolved::Grain::Keys
@@ -569,6 +569,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                     &secondary,
                     &mut next_identity,
                     templates,
+                    records,
                 )?;
             }
         }
@@ -646,7 +647,9 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
 
     /// Build the candidates of one row template: evaluate its prewindow
     /// bindings, apply its filter, complete its window stage and post-window
-    /// filter, then publish its SELF rows.
+    /// filter, then publish its SELF rows and verify the SELF intermediates,
+    /// a warning's record joining `records`.
+    #[allow(clippy::too_many_arguments)]
     fn process_template(
         &mut self,
         index: usize,
@@ -655,6 +658,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         secondary: &[Table<'a, E>],
         next_identity: &mut usize,
         templates: &mut Vec<TemplateRows>,
+        records: &mut Vec<CheckRecord>,
     ) -> Result<(), Fail<E>> {
         let plan = self.plan;
         let node = plan.template(template);
@@ -864,7 +868,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         });
         self.relations.publish_self(plan);
         self.poll(super::resolved::Step::VerifyIntermediates { self_rows: true })?;
-        self.verify_intermediates(frame, secondary, true)?;
+        self.verify_intermediates(frame, secondary, true, records)?;
         Ok(())
     }
 
@@ -1173,8 +1177,9 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         frame: &Frame,
         secondary: &[Table<'a, E>],
         self_rows: bool,
+        records: &mut Vec<CheckRecord>,
     ) -> Result<(), Fail<E>> {
-        relations::verify(self, frame, secondary, self_rows)
+        relations::verify(self, frame, secondary, self_rows, records)
     }
 }
 

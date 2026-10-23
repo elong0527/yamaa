@@ -75,7 +75,9 @@ pub(super) fn prepare(
         )
     };
     match &check.kind {
-        ColumnCheckKind::NotMissing => Ok(Check::NotMissing),
+        // `not_missing` compiles with its `when` predicate, beside the
+        // dataset predicates (`Verifications::prepare_column`).
+        ColumnCheckKind::NotMissing { .. } => Err(PrepareError::Internal),
         ColumnCheckKind::Matches(pattern) => {
             if kind != ColumnType::Str {
                 return Ok(wrong_type());
