@@ -765,8 +765,7 @@ pub struct Engine {
     /// The engine information that ran a selftest's cases.
     pub selftest_info:
         unsafe extern "C" fn(result: Handle, out: *mut Info, refusal: *mut Refusal) -> Status,
-    pub rows:
-        unsafe extern "C" fn(table: Handle, out: *mut u64, refusal: *mut Refusal) -> Status,
+    pub rows: unsafe extern "C" fn(table: Handle, out: *mut u64, refusal: *mut Refusal) -> Status,
     pub columns:
         unsafe extern "C" fn(table: Handle, out: *mut Texts, refusal: *mut Refusal) -> Status,
     /// The table's printed preview (D167).
@@ -819,8 +818,7 @@ pub struct ArrowArray {
 #[repr(C)]
 #[derive(Debug)]
 pub struct ArrowArrayStream {
-    pub get_schema:
-        Option<unsafe extern "C" fn(*mut ArrowArrayStream, *mut ArrowSchema) -> c_int>,
+    pub get_schema: Option<unsafe extern "C" fn(*mut ArrowArrayStream, *mut ArrowSchema) -> c_int>,
     pub get_next: Option<unsafe extern "C" fn(*mut ArrowArrayStream, *mut ArrowArray) -> c_int>,
     pub get_last_error: Option<unsafe extern "C" fn(*mut ArrowArrayStream) -> *const c_char>,
     pub release: Option<unsafe extern "C" fn(*mut ArrowArrayStream)>,

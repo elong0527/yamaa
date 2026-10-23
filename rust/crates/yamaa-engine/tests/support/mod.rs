@@ -517,7 +517,9 @@ pub fn reader(stream: abi::ArrowArrayStream) -> ArrowArrayStreamReader {
     let mut stream = stream;
     // SAFETY: the engine's stream has the C stream interface's layout; the
     // reader moves it out and leaves it released.
-    let stream = unsafe { FFI_ArrowArrayStream::from_raw((&mut stream as *mut abi::ArrowArrayStream).cast()) };
+    let stream = unsafe {
+        FFI_ArrowArrayStream::from_raw((&mut stream as *mut abi::ArrowArrayStream).cast())
+    };
     ArrowArrayStreamReader::try_new(stream).unwrap()
 }
 
@@ -549,7 +551,10 @@ pub fn records(stream: abi::ArrowArrayStream, columns: &[&str]) -> Vec<Json> {
 /// The severity, phase, condition and rule of each issue of a result.
 pub fn conditions(result: Handle) -> Vec<Json> {
     let issues = table(engine().issues, result).done();
-    let records = records(export(issues).done(), &["severity", "phase", "condition", "rule"]);
+    let records = records(
+        export(issues).done(),
+        &["severity", "phase", "condition", "rule"],
+    );
     release(issues);
     records
 }
