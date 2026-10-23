@@ -6,9 +6,8 @@ mod service {
     use std::sync::{Arc, Mutex};
     use yamaa_adapters::{
         file_define::{self, Define, PublicationState},
-        file_project, file_publication, file_resources,
+        file_publication, file_resources,
         host_resources::{Failure, MemoryResolver, Operation, Reply, Request, Resolver},
-        project_application,
         publication::Cause,
     };
     use yamaa_core::{
@@ -182,23 +181,40 @@ mod service {
     }
 
     /// A captured file that changed before verification refuses the
-    /// composition before any target is requested.
+    /// composition with FILE-10's condition at the field that declared it, the
+    /// path as written, before any target is requested. A caller's resolver
+    /// names the file by a reference that is not its location, and the
+    /// verification still finds its declaration.
     #[test]
-    fn verification_failure_retains_original_payload_and_never_acquires_a_publisher() {
+    fn a_file_changed_before_verification_fails_at_its_field_before_any_target() {
         let resolver = Arc::new(Recorder::new(&format!("{STUDY}{SDTM}")).refusing(
             |request| request.operation == Operation::Capture && request.reference.is_some(),
             Failure::Changed,
         ));
         let define = compose(&resolver, Submission::Sdtm, Some(CREATED));
         // The composition keeps the resolver's original change.
-        let changed = match define.failure() {
-            Some(file_define::Failure::ClassifiedResource { error, .. })
-            | Some(file_define::Failure::Project(project_application::Error::Project(
-                file_project::Error::Resource(error),
-            ))) => *error == file_resources::Error::Changed,
-            _ => false,
-        };
-        assert!(changed, "{:?}", define.failure());
+        assert!(
+            matches!(
+                define.failure(),
+                Some(file_define::Failure::ClassifiedResource {
+                    error: file_resources::Error::Changed,
+                    ..
+                })
+            ),
+            "{:?}",
+            define.failure()
+        );
+        assert_eq!(
+            crate::support::rows(define.issues()),
+            [yamaa_adapters::json!({
+                "phase": "ingest",
+                "condition": "resource_path_content_changed",
+                "rule": "FILE-10",
+                "spec_paths": ["environment"],
+                "context": {"path": "project.yaml"},
+            })],
+            "a changed project file"
+        );
         assert_eq!(
             resolver.seen(),
             requests(&[
