@@ -98,7 +98,9 @@ class Streaming(unittest.TestCase):
         (root / "input.csv").write_text("ID,NAME\n" + records, encoding="utf-8")
         return root
 
-    def test_a_streamed_output_holds_the_expected_rows_and_saves_the_expected_file(self):
+    def test_a_streamed_output_holds_the_expected_rows_and_saves_the_expected_file(
+        self,
+    ):
         root = self.study()
         spec = yamaa.spec(root / "spec.yaml")
         whole = spec.run().output.to_arrow()
@@ -159,7 +161,11 @@ class Streaming(unittest.TestCase):
         self.assertEqual(
             (refusals, run.status),
             (
-                [TRUTH["stream_taken"], TRUTH["stream_taken"], EXPORTED + TRUTH["stream_taken"]],
+                [
+                    TRUTH["stream_taken"],
+                    TRUTH["stream_taken"],
+                    EXPORTED + TRUTH["stream_taken"],
+                ],
                 "succeeded",
             ),
         )
@@ -181,7 +187,9 @@ class Streaming(unittest.TestCase):
             (LARGE["batches"][0], [TRUTH["cancelled"]] * 3, False),
         )
 
-    def test_an_interrupt_before_the_first_pull_or_between_batches_cancels_the_run(self):
+    def test_an_interrupt_before_the_first_pull_or_between_batches_cancels_the_run(
+        self,
+    ):
         previous = signal.signal(signal.SIGINT, signal.default_int_handler)
         self.addCleanup(signal.signal, signal.SIGINT, previous)
         root = self.large()
@@ -195,11 +203,20 @@ class Streaming(unittest.TestCase):
                     # interrupt_main trips SIGINT without running its
                     # handler; the pull, called from C with no Python frame
                     # between, polls the signal before it builds anything.
-                    list(map(operator.call, [_thread.interrupt_main, reader.read_next_batch]))
+                    list(
+                        map(
+                            operator.call,
+                            [_thread.interrupt_main, reader.read_next_batch],
+                        )
+                    )
                 with self.assertRaises(RuntimeError) as refused:
                     run.status
                 self.assertEqual(
-                    (str(raised.exception), str(refused.exception), (root / "output.csv").exists()),
+                    (
+                        str(raised.exception),
+                        str(refused.exception),
+                        (root / "output.csv").exists(),
+                    ),
                     (EXPORTED + TRUTH["cancelled"], TRUTH["cancelled"], False),
                 )
 
@@ -208,14 +225,22 @@ class Streaming(unittest.TestCase):
         run = yamaa.project(case / "project.yaml").spec("TEST").run(stream=True)
         reader = pa.RecordBatchReader.from_stream(run.output)
         with (
-            patch.object(host, "resolve_callable", side_effect=interrupting(host.resolve_callable)),
+            patch.object(
+                host,
+                "resolve_callable",
+                side_effect=interrupting(host.resolve_callable),
+            ),
             self.assertRaises(pa.ArrowInvalid) as raised,
         ):
             reader.read_next_batch()
         with self.assertRaises(RuntimeError) as refused:
             run.status
         self.assertEqual(
-            (str(raised.exception), str(refused.exception), (case / "test.csv").exists()),
+            (
+                str(raised.exception),
+                str(refused.exception),
+                (case / "test.csv").exists(),
+            ),
             (EXPORTED + TRUTH["cancelled"], TRUTH["cancelled"], False),
         )
 
