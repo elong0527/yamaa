@@ -1,0 +1,53 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADEG
+keys: [STUDYID, USUBJID, EGSEQ]
+input:
+  EG: {path: input/eg.csv, types: {EGSEQ: int, EGDTC: datetime}}
+  PC:
+    path: input/pc.csv
+    types: {PCSEQ: int, PCDTM: datetime, PCSTRESN: float}
+base: EG
+
+output:
+  path: adeg.csv
+  columns: [STUDYID, USUBJID, EGSEQ, PCSEQ, PCCONC]
+
+intermediates:
+  # The sample nearest the ECG, with the earlier choice of the latest sample
+  # left beside it: two rules would choose the record, so the specification
+  # is refused before any record is read.
+  - id: NEAREST
+    dataset: PC
+    key: [STUDYID, USUBJID]
+    order_by: [PC.PCDTM]
+    keep: last
+    nearest: {source: PCDTM, to: EG.EGDTC, unit: minute}
+    columns: [PCSEQ, PCSTRESN]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: EG.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: EG.USUBJID
+
+  - name: EGSEQ
+    type: int
+    label: Sequence Number
+    derivation: EG.EGSEQ
+
+  - name: PCSEQ
+    type: int
+    label: Sequence Number of the Nearest Sample
+    derivation: NEAREST.PCSEQ
+
+  - name: PCCONC
+    type: float
+    label: Concentration of the Nearest Sample
+    derivation: NEAREST.PCSTRESN
