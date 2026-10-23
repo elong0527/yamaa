@@ -311,13 +311,16 @@ where a partial date lies.
 the record of the row's driver, an expression over them, or a literal such as
 `DATE '2024-03-10'` or `DATETIME '2024-03-10T08:00'`
 ([FORMULA-3](formulas.md#formula-3)). It never reads a lookup: derive such a
-value into a column first. It is read with the match values, before any
-record is read, and a missing `to` seeks no record, so absence is answered
-([LOOKUP-24](#lookup-24)). Its result type must be the type of `source`;
-another, a `date` beside a `datetime` included, fails as
-`incompatible_input_type` at `nearest.to`, reporting `expected` and `actual`,
-before any record is read, or, for a type decided per value, when the value
-is read.
+value into a column first. A field it reads names the driver of every row
+that reads the intermediate, or fails as `unknown_field` at `nearest.to`, and
+in grouped construction a group key, or fails as `ungrouped_driver_field`
+there, as a match value does ([LOOKUP-2](#lookup-2), [LOOKUP-5](#lookup-5)).
+It is read with the match values, before any record is read, and a missing
+`to` seeks no record, so absence is answered ([LOOKUP-24](#lookup-24)). Its
+result type must be the type of `source`; another, a `date` beside a
+`datetime` included, fails as `incompatible_input_type` at `nearest.to`,
+reporting `expected` and `actual`, before any record is read, or, for a type
+decided per value, when the value is read.
 
 `unit` is a unit `diff` counts the source's type in: `day`, `week`, `month`
 or `year` for a `date`, and `second`, `minute`, `hour` or `day` for a
