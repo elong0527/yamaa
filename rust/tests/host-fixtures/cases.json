@@ -7185,7 +7185,15 @@
           "request": {"version": "{version}", "required": ["structured_records", "arrow_c_stream", "plan_reuse", 1], "optional": []},
           "outcome": {"accepted": false, "requested_version": "{version}", "supported_version": "{version}", "reason": "malformed_request", "missing_features": []}
         }
-      ]
+      ],
+      "census_kinds": ["check", "run", "project_run", "submission", "selftest", "plans", "table"],
+      "lifetime": {
+        "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv, types: {ID: int, NAME: str}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n  - {name: NAME, type: str, label: Name, derivation: SRC.NAME}\noutput: {path: output.csv, columns: [ID, NAME]}\n",
+        "input_csv": "ID,NAME\n1,alpha\n2,beta\n",
+        "project_yaml": "yamaa: \"1.0\"\ntype: project\nadam: {specs: [spec.yaml]}\n",
+        "rows": [{"ID": 1, "NAME": "alpha"}, {"ID": 2, "NAME": "beta"}],
+        "function_study_csv": "ID,RESULT\n01,1.5\n"
+      }
     }
   }
 }

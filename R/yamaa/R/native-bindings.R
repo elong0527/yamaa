@@ -193,6 +193,10 @@
   .Call(wrap__interface_handshake, request)
 }
 
+.native_live_handles <- function() {
+  .Call(wrap__live_handles)
+}
+
 # The interface handshake (rust/interface/README.md): .onLoad sends this
 # request before any other native call, and a refusal stops the load.
 .interface_request <- list(

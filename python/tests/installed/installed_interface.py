@@ -206,6 +206,7 @@ CALLS = {
     "_schema": ["spec"],
     "_info": [],
     "_selftest": [],
+    "_live_handles": [],
 }
 
 # A native module from before the handshake: it has no _interface_handshake.

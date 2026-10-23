@@ -54,7 +54,7 @@ the held bytes.
 | compact-yaml | A specification with a block and a flow input, the block, compact, flow and explicit-key verification forms with their one output and saved CSV, failed row-count bounds, malformed closers, and raw NULs with their `invalid_yaml` context (#2196, #3125) |
 | longitudinal-capacity | The 50,000-row, 100-column profile: its column names, its value rule (the row index for the key, then an offset plus the row and column index modulo a prime), the size its CSV must exceed, and its source and output formats |
 | column-ceilings | The 1,024 admitted and 1,025 refused widths of each boundary, the compiler-limit, parent-occurrence and wide-integer issue rows (`{digits}` stands for the wide integer), the repaired capacity's remaining error, the inheritance depth that builds and the wide inherited cases' rows by column index modulo 3 |
-| interface | The generated request, each crafted request with its authored outcome (the accepted record or the refusal envelope), the message template of each reason and the gate's refusal, where `{version}` stands for the boundary version, `{next_version}` for the version after it and `{core_version}` for the installed engine's release |
+| interface | The generated request, each crafted request with its authored outcome (the accepted record or the refusal envelope), the message template of each reason and the gate's refusal, where `{version}` stands for the boundary version, `{next_version}` for the version after it and `{core_version}` for the installed engine's release; the census kinds; and the lifetime study's specification, input, project and output rows |
 
 `plan-reuse` is the repeated-run truth for #2821. A spec object's first
 `run()` compiles and later runs reuse the plan, so study A, then B, then A on
@@ -175,8 +175,9 @@ so the location names its file by its absolute path, which `{root}` stands
 for with forward slashes. Every status comes from the `selftest` family's
 vocabulary.
 
-`interface` pairs the installed Python and R interface suites, and
-`yamaa-boundary`'s handshake family reads it too. Its outcomes were written from the check order of `rust/interface/README.md`
+`interface` pairs the installed Python and R interface and handle lifetime
+suites, and `yamaa-boundary`'s handshake and census families read it too. Its
+outcomes were written from the check order of `rust/interface/README.md`
 ("Version and feature handshake") before the engine ran: a request for another
 version is a mismatch whatever else it holds, a malformed version field leaves
 `requested_version` null, missing identifiers come in request order, and an
@@ -184,7 +185,8 @@ accepted record enables the required identifiers and then the supported
 optional ones, in request order, of a shipped build, which supports every
 format. Its message templates are those of the `handshake` section of
 `rust/interface/bindings.yaml`. A request only one host can build, such as
-R's `NA` or a Python float, is written in that host's suite.
+R's `NA` or a Python float, is written in that host's suite. The lifetime
+study's two output rows were written by hand from its input.
 
 `compact-yaml`, `longitudinal-capacity` and `column-ceilings` pair the
 installed Python and R suites of the same names. Where a case is too wide to

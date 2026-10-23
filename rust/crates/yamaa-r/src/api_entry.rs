@@ -17,6 +17,7 @@ use std::{
     sync::Arc,
 };
 use yamaa::{Action, Engine, EngineOptions, Error, Failure, HostLanguage, Report};
+use yamaa_boundary::{HandleKind, Live};
 
 /// Why a call could not return its value.
 pub(crate) enum Refusal {
@@ -147,9 +148,10 @@ fn engine(version: &Raw, capabilities: Option<List>) -> std::result::Result<Engi
 }
 
 /// One registered owner per R external pointer: dropping the pointer drops
-/// the owner, and lookups go through the registry, never the pointee.
+/// the owner, and lookups go through the registry, never the pointee. Each
+/// owner counts in the census under `$census` while it lives.
 macro_rules! registry {
-    ($registry:ident, $handle:ident, $store:ident, $lookup:ident, $kind:ty, $what:literal) => {
+    ($registry:ident, $handle:ident, $store:ident, $lookup:ident, $kind:ty, $what:literal, $census:expr) => {
         thread_local! {
             static $registry: RefCell<BTreeMap<usize, Weak<RefCell<$kind>>>> =
                 const { RefCell::new(BTreeMap::new()) };
@@ -158,6 +160,7 @@ macro_rules! registry {
         struct $handle {
             value: Rc<RefCell<$kind>>,
             identity: Cell<usize>,
+            _live: Live,
         }
 
         impl Drop for $handle {
@@ -172,6 +175,7 @@ macro_rules! registry {
             let handle = ExternalPtr::new($handle {
                 value: Rc::new(RefCell::new(value)),
                 identity: Cell::new(0),
+                _live: crate::interface::CENSUS.hold($census),
             });
             let identity = address(handle.as_robj())?;
             handle.identity.set(identity);
@@ -192,14 +196,23 @@ macro_rules! registry {
     };
 }
 
-registry!(RUNS, RunHandle, store, run, yamaa::Run, "run");
+registry!(
+    RUNS,
+    RunHandle,
+    store,
+    run,
+    yamaa::Run,
+    "run",
+    HandleKind::Run
+);
 registry!(
     CHECKS,
     CheckHandle,
     store_check,
     check_of,
     yamaa::Check,
-    "check"
+    "check",
+    HandleKind::Check
 );
 registry!(
     PROJECT_RUNS,
@@ -207,7 +220,8 @@ registry!(
     store_project_run,
     project_run_of,
     yamaa::ProjectRun,
-    "project run"
+    "project run",
+    HandleKind::ProjectRun
 );
 registry!(
     SUBMISSIONS,
@@ -215,7 +229,8 @@ registry!(
     store_submission,
     submission_of,
     yamaa::Submission,
-    "submission"
+    "submission",
+    HandleKind::Submission
 );
 registry!(
     PLANS,
@@ -223,7 +238,8 @@ registry!(
     store_plans,
     plans_of,
     yamaa::Plans,
-    "plans"
+    "plans",
+    HandleKind::Plans
 );
 registry!(
     SELFTESTS,
@@ -231,7 +247,8 @@ registry!(
     store_selftest,
     selftest_of,
     yamaa::SelfTest,
-    "selftest"
+    "selftest",
+    HandleKind::SelfTest
 );
 
 fn table(table: Option<&yamaa::Table>) -> std::result::Result<Robj, Refusal> {

@@ -209,6 +209,7 @@ class PublicContract(unittest.TestCase):
                 "_info",
                 "_interface_handshake",
                 "_lint",
+                "_live_handles",
                 "_plans",
                 "_project_check",
                 "_project_names",

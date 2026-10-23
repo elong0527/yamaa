@@ -1021,8 +1021,11 @@
         "python/tests/installed/installed_column_ceilings.py",
         "R/yamaa/tests/column_ceilings.R",
         "rust/crates/yamaa-boundary/tests/handshake.rs",
+        "rust/crates/yamaa-boundary/tests/census.rs",
         "python/tests/installed/installed_interface.py",
-        "R/yamaa/tests/interface.R"
+        "R/yamaa/tests/interface.R",
+        "python/tests/installed/installed_handle_lifetime.py",
+        "R/yamaa/tests/handle_lifetime.R"
       ]
     },
     {
