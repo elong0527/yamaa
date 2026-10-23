@@ -15,9 +15,10 @@ Work this way.
 1. Claim the issue by assigning yourself, or say in your report that you
    could not. Create a worktree from `origin/main`:
    `git worktree add --no-track -b <branch> .worktrees/<name> origin/main`,
-   and point Cargo at the machine's shared target
-   (`CARGO_TARGET_DIR=<machine>/yamaa-target`, `CARGO_INCREMENTAL=0` for
-   one-off checks). Run `make setup` once in the worktree.
+   give it its own Cargo target behind the machine's sccache
+   (`CARGO_TARGET_DIR=<machine>/yamaa-target/<name>`, `RUSTC_WRAPPER=sccache`,
+   the shared `SCCACHE_DIR`; `CARGO_INCREMENTAL=0` for one-off checks), and
+   run `make setup` once in the worktree.
 2. Read the files the issue names before editing them. Build the smallest
    change that meets every "Done when" line. Remove obsolete interfaces and
    their callers together; never add compatibility aliases.

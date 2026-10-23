@@ -138,18 +138,26 @@ merge steps and the review gate.
   branch, or link the pull request on the issue when you cannot assign.
   Leave an issue another session holds. A follow-up found in review goes to
   the session that owns the chain it belongs to.
-- **One worktree per pull request, one Cargo target per machine.** Create
-  the branch with `git worktree add --no-track -b <branch>
-  .worktrees/<name> origin/main` and push with an explicit refspec,
-  `git push -u origin HEAD:refs/heads/<branch>`: a branch that tracks
-  `origin/main` otherwise pushes to main. Point every worktree at one
-  shared target, `CARGO_TARGET_DIR=<machine>/yamaa-target`: Cargo
-  serialises builds with its own lock, the locked dependencies are built
-  once for every branch, and only the workspace crates rebuild per
-  worktree. Give a worktree its own target only when two builds must run
-  at the same time. Set `CARGO_INCREMENTAL=0` for a one-off check (Clippy,
-  the full suite); incremental artifacts pay only for the edit-build loop
-  on one crate. Remove a worktree when its pull request merges.
+- **One worktree per pull request, one Cargo target per worktree, one
+  sccache cache per machine.** Create the branch with `git worktree add
+  --no-track -b <branch> .worktrees/<name> origin/main` and push with an
+  explicit refspec, `git push -u origin HEAD:refs/heads/<branch>`: a branch
+  that tracks `origin/main` otherwise pushes to main. Give each worktree
+  its own target, `CARGO_TARGET_DIR=<machine>/yamaa-target/<name>`, never
+  a target another worktree uses: Cargo names a workspace crate's
+  artifacts without the worktree's path, so two worktrees write the same
+  file names into a shared target, and Cargo, which trusts modification
+  times, compiles one worktree against the other's artifacts (D232).
+  Share the compilation instead with sccache: install it once per machine
+  (`cargo install sccache`) and give every worktree `RUSTC_WRAPPER=sccache`,
+  one `SCCACHE_DIR=<machine>/yamaa-sccache` and a `SCCACHE_CACHE_SIZE`
+  above the 10G default, such as 50G, so each locked dependency compiles
+  once per machine and every other target takes it from the cache. The
+  cache saves time, not disk: each target holds its own artifacts, so
+  remove a worktree and its target when its pull request merges. sccache
+  caches nothing compiled incrementally, which is only the workspace
+  crates in the edit-build loop; set `CARGO_INCREMENTAL=0` for a one-off
+  check (Clippy, the full suite).
 - **Sequence shared files.** Read the issue's "Order" line and its
   sequencing comments before starting. An issue that edits a file an open
   pull request reshapes waits for that pull request.
