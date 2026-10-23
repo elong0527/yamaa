@@ -174,7 +174,11 @@ pub const HOST_R: u32 = 2;
 /// The options of one call: the host, its runtime and its callbacks. An
 /// entry that takes a call takes its `context`, whatever it answers, and
 /// releases it once when it no longer needs the callbacks, at the latest as
-/// it returns. A callback left null is one the host does not offer.
+/// it returns. A callback left null is one the host does not offer. The
+/// callbacks that verify a declared lock (Python's installed-distribution
+/// queries, R's locked-version comparison) and the batch call join at the
+/// end with the hosts' own use of the boundary; until then the engine calls
+/// a function once per row and refuses to verify a lock.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct Call {
@@ -196,22 +200,6 @@ pub struct Call {
     pub bind: Option<Bind>,
     /// Calling a bound project function once.
     pub invoke: Option<Invoke>,
-    /// Calling a bound project function once per batch; without it the
-    /// engine calls `invoke` row by row.
-    pub call_batch: Option<CallBatch>,
-    /// Whether a function failure is the host's interrupt; without it, a
-    /// failure of kind [`ERROR_INTERRUPTED`] is.
-    pub is_interrupt: Option<IsInterrupt>,
-    /// The five installed-distribution queries with which the engine
-    /// verifies a uv lock (Python, D172).
-    pub providers: Option<Query>,
-    pub standard_library: Option<Query>,
-    pub distribution_version: Option<Query>,
-    pub environment: Option<Query>,
-    pub integer_digits: Option<Query>,
-    /// The comparison of the versions the engine decoded from an renv lock
-    /// with the installed ones (R).
-    pub compare_locked: Option<CompareLocked>,
 }
 
 /// The call goes on.
@@ -228,8 +216,8 @@ pub type Probe = unsafe extern "C" fn(context: *mut c_void) -> c_int;
 pub const ANSWERED: c_int = 0;
 /// A callback failed: `reply.error` holds the failure.
 pub const RAISED: c_int = 1;
-/// `invoke` or `call_batch` could not represent what the function returned:
-/// `reply.error` holds why.
+/// `invoke` could not represent what the function returned: `reply.error`
+/// holds why.
 pub const INVALID: c_int = 2;
 
 /// Resolve `identity` to a host callable with the parameters of `signature`,
@@ -250,51 +238,6 @@ pub type Invoke = unsafe extern "C" fn(
     arguments_len: usize,
     reply: *mut Reply,
 ) -> c_int;
-/// Call the bound `function` once for `rows` rows: [`ANSWERED`] with one
-/// result per row in `reply.scalars`, [`RAISED`] or [`INVALID`].
-pub type CallBatch = unsafe extern "C" fn(
-    context: *mut c_void,
-    function: *mut c_void,
-    rows: usize,
-    arguments: *const BatchArgument,
-    arguments_len: usize,
-    reply: *mut Reply,
-) -> c_int;
-/// Whether a failure of `kind`, an `ERROR_*` code or 0 for a failure of the
-/// engine's own, holding the kept host object `payload` or null, is the
-/// host's interrupt: 1 or 0.
-pub type IsInterrupt =
-    unsafe extern "C" fn(context: *mut c_void, kind: u32, payload: *mut c_void) -> c_int;
-/// One installed-distribution query, asked with its texts: [`ANSWERED`] or
-/// [`RAISED`]. `providers` is asked the top-level modules and answers
-/// (module, distribution) pairs in `reply.texts`; `standard_library` is asked
-/// one module and answers a boolean `reply.scalar`; `distribution_version` is
-/// asked one distribution and answers its version as text, a missing scalar
-/// when none of that name is installed, or any other kind when its metadata
-/// records no version text; `environment` is asked nothing and answers the
-/// marker environment as (name, value) pairs; `integer_digits` is asked
-/// nothing and answers the interpreter's limit on the digits of an integer
-/// read from text as an integer, 0 when the limit is off.
-pub type Query = unsafe extern "C" fn(
-    context: *mut c_void,
-    texts: *const Str,
-    texts_len: usize,
-    reply: *mut Reply,
-) -> c_int;
-/// Compare the locked versions, (package, version) pairs in `packages`, with
-/// the installed ones for the functions whose logical calls are `calls`:
-/// [`ANSWERED`] with the findings in `reply.texts`, four items each (the
-/// package, the reason, the expected version or no text, the actual version
-/// or no text), or [`RAISED`].
-pub type CompareLocked = unsafe extern "C" fn(
-    context: *mut c_void,
-    packages: *const Str,
-    packages_len: usize,
-    calls: *const Str,
-    calls_len: usize,
-    reply: *mut Reply,
-) -> c_int;
-
 /// What a callback answers into. The engine passes it with every field null
 /// and takes every [`Root`] in it, whatever the answer: a root it does not
 /// keep it releases at once.
@@ -303,15 +246,8 @@ pub type CompareLocked = unsafe extern "C" fn(
 pub struct Reply {
     /// `bind`: the bound function, which the engine keeps.
     pub function: Root,
-    /// `invoke`, `standard_library`, `distribution_version` and
-    /// `integer_digits`: the answer.
+    /// `invoke`: the function's result.
     pub scalar: Scalar,
-    /// `call_batch`: one result per row.
-    pub scalars: *const Scalar,
-    pub scalars_len: usize,
-    /// `providers`, `environment` and `compare_locked`: the answer's texts.
-    pub texts: *const Str,
-    pub texts_len: usize,
     /// [`RAISED`] and [`INVALID`]: the failure.
     pub error: HostError,
     /// Releases the host memory this reply points into, or null when it
@@ -327,10 +263,6 @@ impl Reply {
         Self {
             function: Root::NONE,
             scalar: Scalar::MISSING,
-            scalars: std::ptr::null(),
-            scalars_len: 0,
-            texts: std::ptr::null(),
-            texts_len: 0,
             error: HostError::NONE,
             release: None,
             private_data: std::ptr::null_mut(),
@@ -458,15 +390,6 @@ pub struct Signature {
 pub struct Argument {
     pub name: Str,
     pub value: Scalar,
-}
-
-/// One named batch argument: one value per row.
-#[repr(C)]
-#[derive(Clone, Copy, Debug)]
-pub struct BatchArgument {
-    pub name: Str,
-    pub values: *const Scalar,
-    pub values_len: usize,
 }
 
 /// A null.

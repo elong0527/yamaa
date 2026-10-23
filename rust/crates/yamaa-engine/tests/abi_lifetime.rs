@@ -16,17 +16,21 @@ use crate::support::{
     reader, records, release, save, serial, spec_run, status, table, Answer, Host, Invoked,
 };
 
-/// Every root a host handed over for one call that binds nothing: its
-/// context, made and released once.
+/// The roots of a host whose call binds nothing: its context, once.
 const CONTEXT_ONLY: [(&str, (usize, usize)); 3] = [
     ("context", (1, 1)),
     ("function", (0, 0)),
     ("payload", (0, 0)),
 ];
+/// The roots of a host whose call binds `echo` once and keeps no payload.
+const BOUND_ONCE: [(&str, (usize, usize)); 3] = [
+    ("context", (1, 1)),
+    ("function", (1, 1)),
+    ("payload", (0, 0)),
+];
 
-/// The rows the lifetime study's run outputs, as the truth states them.
-fn lifetime_rows() -> serde_json::Value {
-    family("interface")["lifetime"]["rows"].clone()
+fn done(text: &str) -> Answer<String> {
+    Answer::Done(text.to_owned())
 }
 
 #[test]
@@ -34,76 +38,56 @@ fn every_released_handle_leaves_the_census() {
     let _serial = serial();
     let study = lifetime_study("handles");
     let (spec, project) = (study.spelled("spec.yaml"), study.spelled("project.yaml"));
-    let run = spec_run(&call(), &spec, None, 0).done();
+    let (spec, project) = (Str::of(&spec), Str::of(&project));
     let engine = engine();
-    // SAFETY, for each case: the arguments are valid for the call.
-    let cases: [(&str, &str, Box<dyn Fn() -> Answer<u64>>); 7] = [
-        (
-            "a plans holder",
-            "plans",
-            Box::new(|| answer(|out, refusal| unsafe { (engine.plans_new)(out, refusal) })),
-        ),
-        (
-            "a check",
-            "check",
-            Box::new(|| {
-                answer(|out, refusal| unsafe {
-                    (engine.spec_check)(&call(), Str::of(&spec), Str::NONE, out, refusal)
-                })
-            }),
-        ),
-        (
-            "a run",
-            "run",
-            Box::new(|| spec_run(&call(), &spec, None, 0)),
-        ),
-        (
-            "a project run",
-            "project_run",
-            Box::new(|| {
-                answer(|out, refusal| unsafe {
-                    (engine.project_run)(&call(), Str::of(&project), Str::NONE, 0, out, refusal)
-                })
-            }),
-        ),
-        (
-            "a submission",
-            "submission",
-            Box::new(|| {
-                answer(|out, refusal| unsafe {
-                    (engine.project_submission)(
-                        &call(),
-                        Str::of(&project),
-                        Str::NONE,
-                        Str::NONE,
-                        out,
-                        refusal,
-                    )
-                })
-            }),
-        ),
-        (
-            "a selftest",
-            "selftest",
-            Box::new(|| answer(|out, refusal| unsafe { (engine.selftest)(&call(), out, refusal) })),
-        ),
-        ("a table", "table", Box::new(|| table(engine.output, run))),
-    ];
+    let run = spec_run(&call(), &study.spelled("spec.yaml"), None, 0).done();
+    // SAFETY, for every case: the arguments are valid for the call.
+    let cases: [(&str, Box<dyn Fn() -> Answer<u64>>); 7] = unsafe {
+        [
+            (
+                "plans",
+                Box::new(|| answer(|o, r| (engine.plans_new)(o, r))),
+            ),
+            (
+                "check",
+                Box::new(|| answer(|o, r| (engine.spec_check)(&call(), spec, Str::NONE, o, r))),
+            ),
+            (
+                "run",
+                Box::new(|| answer(|o, r| (engine.spec_run)(&call(), spec, Str::NONE, 0, o, r))),
+            ),
+            (
+                "project_run",
+                Box::new(|| {
+                    answer(|o, r| (engine.project_run)(&call(), project, Str::NONE, 0, o, r))
+                }),
+            ),
+            (
+                "submission",
+                Box::new(|| {
+                    answer(|o, r| {
+                        (engine.project_submission)(&call(), project, Str::NONE, Str::NONE, o, r)
+                    })
+                }),
+            ),
+            (
+                "selftest",
+                Box::new(|| answer(|o, r| (engine.selftest)(&call(), o, r))),
+            ),
+            ("table", Box::new(|| table(engine.output, run))),
+        ]
+    };
     let before = census();
-    let mut seen = Vec::new();
-    let mut expected = Vec::new();
-    for (label, kind, make) in &cases {
+    let (mut seen, mut expected) = (Vec::new(), Vec::new());
+    for (kind, make) in &cases {
         let made = make().done();
         let held = census();
         release(made);
-        seen.push((*label, held, census()));
-        expected.push((*label, before.plus(kind, 1), before.clone()));
+        seen.push((*kind, held, census()));
+        expected.push((*kind, before.plus(kind), before.clone()));
     }
     release(run);
-    assert_eq!(
-        seen, expected,
-        "each result, plans holder and table, made and released"
-    );
+    assert_eq!(seen, expected, "each kind of handle, made and released");
 }
 
 #[test]
@@ -119,8 +103,12 @@ fn an_exported_stream_outlives_its_run() {
     let held = census();
     let rows = records(stream, &["ID", "NAME"]);
     assert_eq!(
-        (held, serde_json::Value::from(rows), census()),
-        (before.streams(1), lifetime_rows(), before),
+        (held, rows, census()),
+        (
+            before.streams(1),
+            family("interface")["lifetime"]["rows"].clone(),
+            before
+        ),
         "a stream exported from a run's output, read after the run and its table are released"
     );
 }
@@ -133,22 +121,18 @@ fn a_released_handle_refuses_as_expired() {
     let output = table(engine().output, run).done();
     release(run);
     release(output);
-    let expired = Answer::Boundary("expired native handle".to_owned());
     let seen = [
-        (
-            "the status of a released run",
-            status(run, None).map(|_| ()),
-        ),
-        (
-            "the output of a released run",
-            table(engine().output, run).map(|_| ()),
-        ),
-        ("the save of a released run", save(&call(), run).map(|_| ())),
-        ("the export of a released table", export(output).map(|_| ())),
+        status(run, None).map(|_| ()),
+        table(engine().output, run).map(|_| ()),
+        save(&call(), run).map(|_| ()),
+        export(output).map(|_| ()),
     ];
-    for (label, answer) in seen {
-        assert_eq!(answer, expired, "{label}");
-    }
+    let expired = Answer::Boundary("expired native handle".to_owned());
+    assert_eq!(
+        seen,
+        [expired.clone(), expired.clone(), expired.clone(), expired],
+        "the status, output and save of a released run, and the export of a released table"
+    );
 }
 
 #[test]
@@ -162,33 +146,26 @@ fn a_handle_of_another_kind_refuses() {
     let run = spec_run(&call(), &spec, None, 0).done();
     let output = table(engine.output, run).done();
     let seen = [
-        (
-            "the status of a plans holder",
-            status(plans, None).map(|_| ()),
-        ),
+        status(plans, None).map(|_| ()),
         // SAFETY: the arguments are valid for the call.
-        (
-            "the rows of a run",
-            answer(|out, refusal| unsafe { (engine.rows)(run, out, refusal) }).map(|_| ()),
-        ),
-        (
-            "a run reusing a table as its plans",
-            spec_run(&call(), &spec, None, output).map(|_| ()),
-        ),
-        ("a member of a run", status(run, Some("TEST")).map(|_| ())),
+        answer(|out, refusal| unsafe { (engine.rows)(run, out, refusal) }).map(|_| ()),
+        spec_run(&call(), &spec, None, output).map(|_| ()),
+        status(run, Some("TEST")).map(|_| ()),
     ];
-    let expected = [
-        "status does not take a plans handle",
-        "rows does not take a run handle",
-        "spec_run does not take a table handle",
-        "a run handle has no members",
-    ];
-    for ((label, answer), reason) in seen.into_iter().zip(expected) {
-        assert_eq!(answer, Answer::Boundary(reason.to_owned()), "{label}");
-    }
     for handle in [plans, run, output] {
         release(handle);
     }
+    let refused = |reason: &str| Answer::Boundary(reason.to_owned());
+    assert_eq!(
+        seen,
+        [
+            refused("status does not take a plans handle"),
+            refused("rows does not take a run handle"),
+            refused("spec_run does not take a table handle"),
+            refused("a run handle has no members"),
+        ],
+        "a plans holder's status, a run's rows, a table as a run's plans and a run's member"
+    );
 }
 
 #[test]
@@ -210,8 +187,8 @@ fn releasing_twice_is_harmless() {
         (
             abi::DONE,
             [abi::DONE; 3],
-            (Answer::Done("succeeded".to_owned()), before.plus("run", 1)),
-            before,
+            (done("succeeded"), before.plus("run")),
+            before
         ),
         "a run released, its stale handle released twice more and 0 released"
     );
@@ -222,10 +199,8 @@ fn a_reentrant_call_into_a_busy_owner_refuses() {
     let _serial = serial();
     let study = lifetime_study("busy");
     let spec = study.spelled("spec.yaml");
-    let (first, second) = (
-        spec_run(&call(), &spec, None, 0).done(),
-        spec_run(&call(), &spec, None, 0).done(),
-    );
+    let first = spec_run(&call(), &spec, None, 0).done();
+    let second = spec_run(&call(), &spec, None, 0).done();
     let seen = RefCell::new(Vec::new());
     let host = Host::new().probing(|| {
         seen.borrow_mut()
@@ -233,22 +208,22 @@ fn a_reentrant_call_into_a_busy_owner_refuses() {
         abi::GO_ON
     });
     let saved = save(&host.call(), first);
+    let roots = host.roots();
+    drop(host);
     for handle in [first, second] {
         release(handle);
     }
-    let roots = host.roots();
-    drop(host);
-    let (busy, done) = (
-        Answer::Boundary("run handle is in use or poisoned".to_owned()),
-        Answer::Done("succeeded".to_owned()),
-    );
+    let busy = Answer::Boundary("run handle is in use or poisoned".to_owned());
     assert_eq!(
         (saved, seen.into_inner(), roots),
         (
             Answer::Done(vec![study.spelled("output.csv")]),
             // The save polls once before its first commit, holding the run
             // (D74), and the entry once more as it returns (D186).
-            vec![(busy, done.clone()), (done.clone(), done)],
+            vec![
+                (busy, done("succeeded")),
+                (done("succeeded"), done("succeeded"))
+            ],
             CONTEXT_ONLY,
         ),
         "a save whose probe asks the status of the run it saves and of another run"
@@ -264,11 +239,8 @@ fn every_exported_stream_is_released_exactly_once() {
     let before = census();
     // Three exports of one table, each with its own cursor: one read to its
     // end, one released after its schema, one released unread.
-    let (read, early, mut unread) = (
-        export(output).done(),
-        export(output).done(),
-        export(output).done(),
-    );
+    let (read, early) = (export(output).done(), export(output).done());
+    let mut unread = export(output).done();
     let held = census();
     let rows = records(read, &["ID", "NAME"]);
     drop(reader(early));
@@ -280,8 +252,12 @@ fn every_exported_stream_is_released_exactly_once() {
         release(handle);
     }
     assert_eq!(
-        (held, serde_json::Value::from(rows), after),
-        (before.streams(3), lifetime_rows(), (true, before)),
+        (held, rows, after),
+        (
+            before.streams(3),
+            family("interface")["lifetime"]["rows"].clone(),
+            (true, before)
+        ),
         "three streams of one table: read whole, released early and released unread"
     );
 }
@@ -298,9 +274,8 @@ fn a_failed_conversion_releases_every_buffer() {
     let output = table(engine().output, run).done();
     let mut stream = reader(export(output).done());
     let batch = stream.next().unwrap().unwrap();
-    let id = batch.column_by_name("ID").unwrap();
+    let id = batch.column_by_name("ID").unwrap().as_any();
     let id = id
-        .as_any()
         .downcast_ref::<arrow_array::Int64Array>()
         .unwrap()
         .value(0);
@@ -317,13 +292,8 @@ fn a_failed_conversion_releases_every_buffer() {
         "alpha" => Invoked::Bytes(b"\xff"),
         _ => Invoked::Echo,
     });
-    let run = spec_run(
-        &host.call(),
-        &study.spelled("spec.yaml"),
-        Some(&study.spelled("project.yaml")),
-        0,
-    )
-    .done();
+    let project = study.spelled("project.yaml");
+    let run = spec_run(&host.call(), &study.spelled("spec.yaml"), Some(&project), 0).done();
     let refusal = (status(run, None), conditions(run));
     release(run);
     assert_eq!(
@@ -339,19 +309,13 @@ fn a_failed_conversion_releases_every_buffer() {
             true,
             before.clone(),
             (
-                Answer::Done("failed".to_owned()),
-                vec![
-                    json!({"severity": "error", "phase": "derivation", "condition": "invalid_function_result", "rule": "FUNC-9"})
-                ],
+                done("failed"),
+                json!([{"severity": "error", "phase": "derivation", "condition": "invalid_function_result", "rule": "FUNC-9"}]),
             ),
             // The function's tests pass `a` and empty text, and the first
             // row `alpha`, whose failure stops the run (FUNC-8, FUNC-9).
             (3, 3),
-            [
-                ("context", (1, 1)),
-                ("function", (1, 1)),
-                ("payload", (0, 0))
-            ],
+            BOUND_ONCE,
             before,
         ),
         "a host refusing an integer beyond 2^53, and a function answering text that is not UTF-8"
@@ -407,7 +371,7 @@ fn a_cancelled_call_creates_no_handle_and_releases_every_root_once() {
             Answer::Cancelled,
             before.clone(),
             Answer::Cancelled,
-            (false, Answer::Done("succeeded".to_owned())),
+            (false, done("succeeded")),
             Answer::Done(vec![study.spelled("out.csv")]),
             "ID,VALUE\n1,alpha\n2,beta\n".to_owned(),
             [
@@ -417,11 +381,7 @@ fn a_cancelled_call_creates_no_handle_and_releases_every_root_once() {
                     ("function", (1, 1)),
                     ("payload", (1, 1))
                 ],
-                [
-                    ("context", (1, 1)),
-                    ("function", (1, 1)),
-                    ("payload", (0, 0))
-                ],
+                BOUND_ONCE,
                 CONTEXT_ONLY,
             ],
             before,
@@ -440,16 +400,10 @@ fn a_panicking_operation_is_a_boundary_refusal() {
     // its entry contains.
     let host = Host::new().probing(|| 7);
     let answered = spec_run(&host.call(), &study.spelled("spec.yaml"), None, 0);
+    let reason = "internal engine failure: the host's probe answered 7, which is neither 0 nor 1";
     assert_eq!(
         (answered, host.roots(), census()),
-        (
-            Answer::Boundary(
-                "internal engine failure: the host's probe answered 7, which is neither 0 nor 1"
-                    .to_owned()
-            ),
-            CONTEXT_ONLY,
-            before,
-        ),
+        (Answer::Boundary(reason.to_owned()), CONTEXT_ONLY, before),
         "a run whose probe answers 7"
     );
 }
@@ -467,29 +421,18 @@ fn a_panicking_callback_is_contained() {
         "alpha" => panic!("the host's code panicked"),
         _ => Invoked::Echo,
     });
-    let run = spec_run(
-        &host.call(),
-        &study.spelled("spec.yaml"),
-        Some(&study.spelled("project.yaml")),
-        0,
-    )
-    .done();
+    let project = study.spelled("project.yaml");
+    let run = spec_run(&host.call(), &study.spelled("spec.yaml"), Some(&project), 0).done();
     let failed = (status(run, None), conditions(run));
     release(run);
     assert_eq!(
         (failed, host.roots(), census()),
         (
             (
-                Answer::Done("failed".to_owned()),
-                vec![
-                    json!({"severity": "error", "phase": "engine", "condition": "engine_rejected", "rule": null})
-                ],
+                done("failed"),
+                json!([{"severity": "error", "phase": "engine", "condition": "engine_rejected", "rule": null}]),
             ),
-            [
-                ("context", (1, 1)),
-                ("function", (1, 1)),
-                ("payload", (0, 0))
-            ],
+            BOUND_ONCE,
             before,
         ),
         "a run whose project function's host code panics on its first row"
