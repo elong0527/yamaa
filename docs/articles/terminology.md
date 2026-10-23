@@ -366,7 +366,7 @@ does not declare fails with `unknown_codelist`.
 `yamaa_schema("codelists")`, `yamaa.schema("codelists")` or
 `yamaa schema codelists` gives the codelists file's JSON Schema, which an
 editor can use to check a file as it is typed. See the
-[terminology schema](../../yaml/v1/schema_terminology.yaml) for the fields a
+[terminology schema](../../yaml/schema_terminology.yaml) for the fields a
 codelists file or an inline source accepts and the
 [controlled terminology rule](../../rules/profiles/terminology.md) for
 binding, extension and verification requirements. The

@@ -282,13 +282,13 @@ starts at 1.0.0 (#3030 D1).
 **What is frozen.** Each surface is named by the files that hold it.
 
 - Files: the four file types, `project`, `spec`, `codelists` and `function`,
-  as the committed JSON Schemas in `yaml/v1/json/` give them: every field's
+  as the committed JSON Schemas in `yaml/json/` give them: every field's
   name, kind, type, default and meaning, and the verbs and verifications with
   their parameters. Also the closed grammars in `yaml/grammar/`, and the
   closed vocabularies, such as column types, profiles and the CDISC lists in
   `yaml/vocabulary/cdisc.yaml`. Each release's JSON Schema for a file type is
   that committed file at the release's tag; for `spec` in 1.0.0 it is
-  `https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v1.0.0/yaml/v1/json/spec.schema.json`.
+  `https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v1.0.0/yaml/json/spec.schema.json`.
   From 1.0.0 the files keep their path, and they carry no `$id`
   (#3030 D161).
 - Diagnostics: the condition names in `yaml/conditions.yaml` and the phases
@@ -543,7 +543,9 @@ components are tracked by hand:
 
 - `saphyr-parser` 0.2.1 with the reviewed compact-flow patch and 0.2.2's raw
   NUL fix, vendored as `yamaa-saphyr-parser`, a path dependency in
-  `rust/vendor/saphyr-parser`. #2583 replaces it with a published release.
+  `rust/vendor/saphyr-parser`. It stays vendored for 1.0.0; #3682 holds the
+  upstream pull request and any later swap to a published release (#3030
+  D229).
 - The ReadStat 1.1.9 SAS reader subset in
   `rust/crates/yamaa-adapters/vendor/readstat`, with the later upstream fixes
   that its README lists through the review baseline it records.

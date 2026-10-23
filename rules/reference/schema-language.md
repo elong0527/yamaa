@@ -32,11 +32,8 @@ in the bundle. An unknown or duplicate type, registry, registry entry or schema
 construct fails, and so does an invalid include or an inconsistent bundle
 version.
 
-Until Phase 2 of [#3030](https://github.com/elong0527/yamaa/issues/3030)
-removes the 0.5 schema, the 1.0 bundles sit in `yaml/v1/`, beside the 0.5
-bundles in `yaml/`, which govern no file the engine reads; `yaml/v1/` then
-moves up. A 1.0 schema document also declares `kind` on its named value types
-and may declare `since` on a class field ([SCHEMA-11](#schema-11)).
+A schema document also declares `kind` on its named value types and may
+declare `since` on a class field ([SCHEMA-11](#schema-11)).
 
 <a id="schema-2"></a>
 
