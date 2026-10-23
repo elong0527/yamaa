@@ -6,6 +6,8 @@
 
 mod support;
 
+mod abi_lifetime;
+
 /// A file under `tests/` that is neither a module here nor its own `[[test]]`
 /// in the manifest would never run (#3556).
 #[test]
