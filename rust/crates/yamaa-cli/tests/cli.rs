@@ -2003,18 +2003,22 @@ fn the_engine_reads_no_host_lock_and_refuses_a_run_that_calls_a_function() {
     let location = refused.location.clone().expect("a located refusal");
     assert_eq!(
         (
+            refused.phase.as_str(),
             refused.code.as_str(),
+            refused.rule.as_deref(),
             refused.spec_path.as_slice(),
             location.file,
             location.position.map(|at| (at.line, at.column)),
-            refused.context.get("operation"),
+            refused.context.to_json(),
         ),
         (
+            "planning",
             "unsupported_operation",
+            None,
             ["columns.LOUD.derivation".to_owned()].as_slice(),
             calls.replace('\\', "/"),
             Some((9, 42)),
-            Some(&ContextValue::Text("environment".to_owned()))
+            r#"{"operation":"environment"}"#,
         ),
         "the refused run"
     );
