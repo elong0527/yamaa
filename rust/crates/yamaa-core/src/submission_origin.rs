@@ -5,10 +5,10 @@
 //! host or data access.
 use crate::{
     ast::{self, ExprId, ExprKind, Slot},
+    cdisc_vocabulary::OriginType,
     expression::{self, NodeKind, Reducer},
     scalar_verb::Recode,
     schema::{Document, DocumentNode as N},
-    specification_submission_document::OriginType,
 };
 use std::collections::BTreeSet;
 

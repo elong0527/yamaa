@@ -77,8 +77,7 @@ pub(crate) fn entries(d: &Document, column: usize) -> Vec<Entry<'_>> {
                     let (comparator, values) = match &d.nodes()[values] {
                         N::Mapping(_) => (
                             match present(d, values, "comparator").and_then(|id| text(d, id)) {
-                                Some("NE") => Comparator::Ne,
-                                Some(_) => Comparator::NotIn,
+                                Some(written) => Comparator::written_as(written),
                                 None => Comparator::In,
                             },
                             present(d, values, "values").unwrap_or(values),

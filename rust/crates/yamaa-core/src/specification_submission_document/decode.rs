@@ -1,5 +1,8 @@
 //! One owned semantic decode of the held input, retaining exact occurrence facts.
 use super::*;
+use crate::cdisc_vocabulary::{
+    Core, DataType, DatasetClass, DatasetSubclass, MethodType, OriginSource, OriginType, PageType,
+};
 use crate::diagnostic::ScalarSubmissionRule;
 
 use FieldName as F;
@@ -544,7 +547,7 @@ impl<'a> Parser<'a> {
                         .field(value, "comparator")
                         .map(|id| &self.input.nodes()[id])
                     {
-                        Some(N::Text(written)) if written == "NE" => crate::ast::Comparator::Ne,
+                        Some(N::Text(written)) => crate::ast::Comparator::written_as(written),
                         Some(_) => crate::ast::Comparator::NotIn,
                         None => crate::ast::Comparator::In,
                     },

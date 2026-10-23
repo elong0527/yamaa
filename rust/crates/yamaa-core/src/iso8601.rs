@@ -3,6 +3,7 @@
 //! (TIME-7), and the interval and duration text that is not date text
 //! (TIME-13).
 
+use crate::cdisc_vocabulary::DataType;
 use crate::temporal::month_length;
 
 /// One date or time component: its separator before it, its width, and its
@@ -315,20 +316,24 @@ impl Form {
         Self::IntervalDatetime,
     ];
     /// The submission data type that names the form.
-    pub fn name(self) -> &'static str {
+    pub fn data_type(self) -> DataType {
         match self {
-            Self::Date => "date",
-            Self::Time => "time",
-            Self::Datetime => "datetime",
-            Self::PartialDate => "partialDate",
-            Self::PartialTime => "partialTime",
-            Self::PartialDatetime => "partialDatetime",
-            Self::IncompleteDate => "incompleteDate",
-            Self::IncompleteTime => "incompleteTime",
-            Self::IncompleteDatetime => "incompleteDatetime",
-            Self::DurationDatetime => "durationDatetime",
-            Self::IntervalDatetime => "intervalDatetime",
+            Self::Date => DataType::Date,
+            Self::Time => DataType::Time,
+            Self::Datetime => DataType::Datetime,
+            Self::PartialDate => DataType::PartialDate,
+            Self::PartialTime => DataType::PartialTime,
+            Self::PartialDatetime => DataType::PartialDatetime,
+            Self::IncompleteDate => DataType::IncompleteDate,
+            Self::IncompleteTime => DataType::IncompleteTime,
+            Self::IncompleteDatetime => DataType::IncompleteDatetime,
+            Self::DurationDatetime => DataType::DurationDatetime,
+            Self::IntervalDatetime => DataType::IntervalDatetime,
         }
+    }
+    /// The spelling of the submission data type that names the form.
+    pub fn name(self) -> &'static str {
+        self.data_type().name()
     }
     /// The form a submission data type names, or `None` for a type that is
     /// not a date or time type.
