@@ -50,7 +50,7 @@ the held bytes.
 | info | The engine information's fields in order, the host vocabulary, and a shipped build's language versions and features |
 | printing | A study's files, and the status and printed lines of each result: a check, a failed check, a project check, a run, a failed run, a project run and each of its members, a submission, and a lazy specification and project; `{path}` stands for the path the test gave and `{root}` for its study directory, with forward slashes |
 | issue-locations | One case for each rule of P-ISSUE-1 (`docs/design/interface-1.0/api.md`, "Issue locations"): the files a case writes, its call, and its first issue's condition, first spec path, file, line and column, counted by hand in those files |
-| project-parity | Project cases with their complete expected issue rows: the files a case writes, its call (a project check, a member of a project run, a specification the project names, or a submission) and every issue row; rows and files that depend on the host language are given by language, `{root}` stands for the case's directory and `{version}` for the installed yamaa version |
+| project-parity | Project cases with their complete expected issue rows: the files a case writes, its call (a project check, a member of a project run, a specification the project names, or a submission) and every issue row, or under `calls` each of several calls on those files with its rows; rows and files that depend on the host language are given by language, `{root}` stands for the case's directory and `{version}` for the installed yamaa version |
 | compact-yaml | A specification with a block and a flow input, the block, compact, flow and explicit-key verification forms with their one output and saved CSV, failed row-count bounds, malformed closers, and raw NULs with their `invalid_yaml` context (#2196, #3125) |
 | longitudinal-capacity | The 50,000-row, 100-column profile: its column names, its value rule (the row index for the key, then an offset plus the row and column index modulo a prime), the size its CSV must exceed, and its source and output formats |
 | column-ceilings | The 1,024 admitted and 1,025 refused widths of each boundary, the compiler-limit and parent-occurrence issue rows, the repaired capacity's remaining error, the inheritance depth that builds and the wide inherited cases' rows by column index modulo 3 |
@@ -107,7 +107,14 @@ whose `unlinked_producer` and `producer_not_completed` findings name the
 listed specification they belong to and the document they come from
 (PROJECT-7), the run of a specification the project names, and a
 submission, whose `duplicate_dataset_entry` refuses a section that lists two
-specifications of one saved artifact (DEFINE-5). A case whose files or rows
+specifications of one saved artifact (DEFINE-5). A case that makes several
+calls on the same files lists each call with its rows under `calls`:
+`a_key_that_is_not_an_output_column` checks the project, runs the
+specification it names and composes its submission, and each reports the
+key that `output.columns` leaves out as `internal_column_in_keys` under
+OUTPUT-2, naming the column at the same written key, at `keys[2]` in the
+specification's own calls and at `sdtm.specs[0].keys[2]` in the
+submission's. A case whose files or rows
 depend on the host language gives them by language: a function file that
 implements only the other host refuses the call with the running host's
 language (FUNC-1), and each host verifies only its own lock (FUNC-3). The

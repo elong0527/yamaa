@@ -526,7 +526,6 @@ conditions! {
     SubmissionTransportDecimals => ("validation", "decimals_not_applicable", Some("JSON-5")),
     XptFileTooLarge => ("output", "xpt_file_too_large", Some("XPT-10")),
     XptLastRowBlank => ("output", "xpt_last_row_blank", Some("XPT-10")),
-    SubmissionKeyNotOutput => ("validation", "value_not_permitted", Some("DEFINE-7")),
     SubmissionColumnNotOutput => ("validation", "submission_not_output_column", Some("SUB-1")),
     SubmissionCdiscAliasMissing => ("validation", "missing_required_field", Some("DEFINE-4")),
     SubmissionXmlWhitespace => ("validation", "untransportable_text", Some("DEFINE-24")),
