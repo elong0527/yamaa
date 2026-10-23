@@ -493,6 +493,13 @@ fn schema(file_type: Raw) -> List {
     })
 }
 
+/// The condition catalogue (#3700) as a data frame: every condition the
+/// engine may report, and every condition a release retired.
+#[extendr]
+fn conditions() -> List {
+    reply(|| Ok(crate::public_table::frame(&yamaa::conditions().table())?))
+}
+
 #[extendr]
 fn run_status(handle: Robj) -> List {
     reply(|| read_run(&handle, |run| Ok(r!(run.status().as_str()))))

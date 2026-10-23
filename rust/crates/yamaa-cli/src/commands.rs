@@ -15,7 +15,10 @@
 //!   canonical JSON, and `schema` the JSON Schema of a file type as the
 //!   facade gives it; `read-odm` prints only the file it saved, as an
 //!   absolute path, or, when the save is refused, D39's error text and the
-//!   lines of the other issues, as a refusal does. `selftest` prints the
+//!   lines of the other issues, as a refusal does. `conditions` prints the
+//!   condition catalogue as a table (#3700): a line of its column names, then
+//!   one line per condition, each cell separated by a tab, a list's items
+//!   joined with `, ` and a missing cell empty. `selftest` prints the
 //!   facade's report as the hosts print it (D119): its summary line, `first
 //!   failure:` when a case failed, `not covered:` when an adapter is not
 //!   covered, then the engine, language, host and platform.
@@ -33,16 +36,18 @@
 //!   the read, as a run's follows the run: a read that completed is
 //!   `succeeded` even when the save of OUT is then refused, which shows as
 //!   the save's issues and exit status 1, and only a refused read is `failed`
-//!   (D169). `selftest` gives its `cases` and the engine `info` as
-//!   `--version` prints it; the adapters no case covers are named on its
-//!   printed line alone (D119).
+//!   (D169). `conditions` gives each condition as an object with the
+//!   catalogue's columns, its lists as lists. `selftest` gives its `cases`
+//!   and the engine `info` as `--version` prints it; the adapters no case
+//!   covers are named on its printed line alone (D119).
 //! - **Exit status.** 0 when the result succeeded and its save wrote
-//!   everything, when `read-odm` saved OUT, when `resolve` or `schema`
-//!   printed, when no lint finding remains, and when no selftest case failed;
-//!   1 for a `failed` or `skipped` result, a refusal, a remaining lint
-//!   finding or a failed selftest case (D68, D98). A selftest case that this
-//!   build does not cover fails nothing (D119). An argument the facade cannot
-//!   take, a value that is not UTF-8 text, exits 2.
+//!   everything, when `read-odm` saved OUT, when `resolve`, `schema` or
+//!   `conditions` printed, when no lint finding remains, and when no
+//!   selftest case failed; 1 for a `failed` or `skipped` result, a refusal,
+//!   a remaining lint finding or a failed selftest case (D68, D98). A
+//!   selftest case that this build does not cover fails nothing (D119). An
+//!   argument the facade cannot take, a value that is not UTF-8 text, exits
+//!   2.
 //!
 //! `check`, `run`, `submission` and `resolve` dispatch on the type their PATH
 //! declares in its `type:` header, which the facade reads before anything
@@ -72,8 +77,8 @@ use std::collections::BTreeMap;
 use std::ffi::OsStr;
 
 use yamaa::{
-    Action, CancellationToken, ContextValue, Diagnostic, Engine, EngineOptions, Error, Failure,
-    FileType, Host, Info, LintFinding, OdmOptions, ProjectRun, Run, Status, Summary,
+    Action, CancellationToken, Condition, ContextValue, Diagnostic, Engine, EngineOptions, Error,
+    Failure, FileType, Host, Info, LintFinding, OdmOptions, ProjectRun, Run, Status, Summary,
 };
 
 use crate::arguments::{Call, Format, Usage};
@@ -100,6 +105,7 @@ pub(crate) fn execute(call: &Call, format: Format, token: &CancellationToken) ->
         "read-odm" => read_odm(call),
         "lint" => lint(call),
         "schema" => schema(call),
+        "conditions" => Ok(conditions()),
         "selftest" => Ok(selftest()),
         other => unreachable!("the arguments admit no command {other}"),
     };
@@ -699,6 +705,32 @@ fn schema(call: &Call) -> Result<Printed, Execution> {
         Ok(json) => verbatim(json),
         Err(failure) => refusal(document("schema", [("type", text(file_type))]), failure),
     })
+}
+
+/// `yamaa conditions`: `conditions()`, the condition catalogue (#3700). It
+/// prints the facade's table lines: the column names, then one line per
+/// condition. Its JSON holds the status, which nothing can make `failed`,
+/// and each condition with `cli.json.condition_keys`, in name order. It
+/// exits 0.
+fn conditions() -> Printed {
+    let catalogue = yamaa::conditions();
+    let mut document = document("conditions", []);
+    document.insert("status".into(), text(Status::Succeeded.as_str()));
+    document.insert(
+        "conditions".into(),
+        ContextValue::List(
+            catalogue
+                .entries()
+                .iter()
+                .map(Condition::to_value)
+                .collect(),
+        ),
+    );
+    Printed {
+        lines: catalogue.lines(),
+        json: ContextValue::Map(document).to_json(),
+        status: SUCCEEDED,
+    }
 }
 
 /// `yamaa selftest`: `selftest()`, for the command line, which runs on no

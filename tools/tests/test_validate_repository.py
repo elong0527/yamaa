@@ -343,6 +343,65 @@ class TestConditionRegistry(unittest.TestCase):
             with self.subTest(stray=stray):
                 self.assertIsNone(placeholders(stray), stray)
 
+    def test_malformed_history_is_rejected(self):
+        changed = copy.deepcopy(self.registry)
+        conditions = changed["conditions"]
+        conditions["window_order_by_required"]["renamed_from"] = "Order By"
+        conditions["xpt_last_row_blank"]["renamed_from"] = "unknown_window"
+        conditions["zero_offset"]["renamed_from"] = "schema_version_mismatch"
+        retired = changed["retired"]
+        retired["day_required"]["retired_in"] = "1.0"
+        retired["month_required"]["reason"] = "gone"
+        retired["aggregate_multiple_records"] = {"retired_in": "1.0.0"}
+
+        errors = OWNER_REPOSITORY_MANIFESTS.validate_condition_registry(
+            self.root, changed
+        )
+
+        label = "ERROR: yaml/conditions.yaml"
+        self.assertEqual(
+            errors,
+            [
+                f"{label}.retired: expected sorted keys",
+                f"{label}.retired.day_required.retired_in: expected the release "
+                "that retired it, such as '1.0.0'",
+                f"{label}.retired.month_required.reason: unknown field",
+                f"{label}.retired.aggregate_multiple_records: a registered "
+                "condition is not retired",
+                f"{label}.conditions.window_order_by_required.renamed_from: "
+                "expected a snake-case name",
+                f"{label}.conditions.xpt_last_row_blank.renamed_from: "
+                "unknown_window is still a condition of the registry",
+                f"{label}.conditions.zero_offset.renamed_from: "
+                "unsupported_language_version was renamed from "
+                "schema_version_mismatch too",
+            ],
+        )
+
+    def test_a_benchmark_that_expects_a_retired_condition_is_rejected(self):
+        changed = copy.deepcopy(self.registry)
+        del changed["conditions"]["aggregate_multiple_records"]
+        changed["retired"] = {
+            "aggregate_multiple_records": {"retired_in": "1.1.0"},
+            **changed["retired"],
+        }
+
+        errors = OWNER_REPOSITORY_MANIFESTS.validate_condition_registry(
+            self.root, changed
+        )
+
+        self.assertEqual(
+            errors,
+            [
+                f"ERROR: benchmarks/{case}/expected/error.yaml.condition: "
+                "condition 'aggregate_multiple_records' is retired"
+                for case in (
+                    "negative-adlb-duplicate-wbc",
+                    "negative-multiple-baselines",
+                )
+            ],
+        )
+
     def test_wrong_phase_condition_is_rejected(self):
         changed = copy.deepcopy(self.registry)
         changed["conditions"]["aggregate_multiple_records"]["phases"] = ["derivation"]

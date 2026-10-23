@@ -63,8 +63,9 @@ pub(crate) struct Command {
 }
 
 /// Every command, in the order of the design's table (#3030 section 2.8,
-/// with D68's `--spec` and `--section`, and #3694's `--parent`).
-pub(crate) static COMMANDS: [Command; 8] = [
+/// with D68's `--spec` and `--section` and #3694's `--parent`), and
+/// `conditions` beside `schema` (#3700).
+pub(crate) static COMMANDS: [Command; 9] = [
     Command {
         name: "check",
         synopsis: "check PATH [--spec NAME | --parent PATH]",
@@ -123,6 +124,14 @@ pub(crate) static COMMANDS: [Command; 8] = [
         name: "schema",
         synopsis: "schema TYPE",
         arguments: &["TYPE"],
+        repeats: false,
+        flags: &[],
+        exclusive: &[],
+    },
+    Command {
+        name: "conditions",
+        synopsis: "conditions",
+        arguments: &[],
         repeats: false,
         flags: &[],
         exclusive: &[],

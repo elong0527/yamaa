@@ -125,6 +125,13 @@ tables.odm_items.columns[29]: SourceOrdinal: int
 tables.selftest_cases.columns[0]: case: str
 tables.selftest_cases.columns[1]: status: str, values status
 tables.selftest_cases.columns[2]: message: optional<str>
+tables.conditions.columns[0]: condition: str, values yaml/conditions.yaml
+tables.conditions.columns[1]: severity: str, values severity
+tables.conditions.columns[2]: phases: list<str>, values phase
+tables.conditions.columns[3]: rules: list<str>
+tables.conditions.columns[4]: message: optional<str>
+tables.conditions.columns[5]: renamed_from: optional<str>
+tables.conditions.columns[6]: retired_in: optional<str>
 records.info.fields[0]: version: str
 records.info.fields[1]: language_versions: list<str>
 records.info.fields[2]: features: list<str>, values feature
@@ -213,6 +220,10 @@ cli.commands.schema.refusal_keys.command
 cli.commands.schema.refusal_keys.type
 cli.commands.schema.refusal_keys.status
 cli.commands.schema.refusal_keys.issues
+cli.commands.conditions: yamaa conditions
+cli.commands.conditions.json_keys.command
+cli.commands.conditions.json_keys.status
+cli.commands.conditions.json_keys.conditions
 cli.commands.selftest: yamaa selftest
 cli.commands.selftest.json_keys.command
 cli.commands.selftest.json_keys.status
@@ -244,6 +255,13 @@ cli.json.finding_keys.message
 cli.json.case_keys.case
 cli.json.case_keys.status
 cli.json.case_keys.message
+cli.json.condition_keys.condition
+cli.json.condition_keys.severity
+cli.json.condition_keys.phases
+cli.json.condition_keys.rules
+cli.json.condition_keys.message
+cli.json.condition_keys.renamed_from
+cli.json.condition_keys.retired_in
 cli.json.info_keys.version
 cli.json.info_keys.language_versions
 cli.json.info_keys.features
@@ -295,6 +313,7 @@ public.functions.lint.args[0]: paths: path_list
 public.functions.lint.args[1]: fix: flag = false
 public.functions.schema: python yamaa.schema; r yamaa_schema; returns json_text; raises refusal
 public.functions.schema.args[0]: file_type: file_type
+public.functions.conditions: python yamaa.conditions; r yamaa_conditions; returns table; table conditions
 public.functions.info: python yamaa.info; r yamaa_info; returns info; record info
 public.functions.selftest: python yamaa.selftest; r yamaa_selftest; returns SelfTest
 public.classes.Check: python yamaa.Check; r yamaa_check
@@ -370,6 +389,7 @@ public.errors.refusal: python yamaa.Error(Exception) with issues: table, paths: 
 public.python.exports.Error
 public.python.exports.Table
 public.python.exports.__version__
+public.python.exports.conditions
 public.python.exports.info
 public.python.exports.lint
 public.python.exports.project
@@ -382,6 +402,7 @@ public.r.exports.yamaa_project
 public.r.exports.yamaa_read_odm
 public.r.exports.yamaa_lint
 public.r.exports.yamaa_schema
+public.r.exports.yamaa_conditions
 public.r.exports.yamaa_info
 public.r.exports.yamaa_selftest
 public.r.s3methods.yamaa_check.names: status, issues

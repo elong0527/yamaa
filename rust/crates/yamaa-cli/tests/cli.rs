@@ -176,6 +176,7 @@ fn help_prints_every_command_and_wins_over_other_arguments() {
          [--max-expanded-bytes N] [--max-xml-depth N]\n",
         "  lint [--fix] PATH...\n",
         "  schema TYPE\n",
+        "  conditions\n",
         "  selftest\n",
     ] {
         assert!(stdout.contains(synopsis), "{synopsis}");
@@ -321,6 +322,11 @@ fn a_usage_error_exits_with_status_2_and_writes_only_to_standard_error() {
             &["schema", "spec", "project"],
             "schema: unexpected argument project",
         ),
+        (
+            &["conditions", "now"],
+            "conditions: unexpected argument now",
+        ),
+        (&["conditions", "--fix"], "conditions: unknown option --fix"),
         (&["selftest", "now"], "selftest: unexpected argument now"),
         (&["selftest", "--fix"], "selftest: unknown option --fix"),
     ];
