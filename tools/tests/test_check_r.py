@@ -46,6 +46,29 @@ A complete check needs the 'checkbashisms' script.
 See section 'Configure and cleanup' in the 'Writing R Extensions'
 manual.
 """
+# What R's check.R prints for the manuals, which a check without --no-manual
+# builds and validates: both checks OK, a PDF that LaTeX could not build, and
+# the validation that R skips without HTML Tidy.
+MANUALS = """\
+* checking PDF version of manual ... [6s/7s] OK
+* checking HTML version of manual ... [2s/2s] OK
+"""
+NO_LATEX_PACKAGE = """\
+* checking PDF version of manual ... WARNING
+LaTeX errors when creating PDF version.
+This typically indicates Rd problems.
+LaTeX errors found:
+! LaTeX Error: File `inconsolata.sty' not found.
+* checking PDF version of manual without index ... ERROR
+* checking HTML version of manual ... [2s/2s] OK
+"""
+NO_TIDY = """\
+* checking PDF version of manual ... [6s/7s] OK
+* checking HTML version of manual ... NOTE
+Skipping checking HTML validation: no command 'tidy' found.
+Please obtain a recent version of HTML Tidy by downloading a binary
+release or compiling the source code from <https://www.html-tidy.org/>.
+"""
 
 
 def log(*parts, status):
@@ -152,6 +175,45 @@ class FindingsTests(unittest.TestCase):
             ),
             [],
         )
+
+    def test_a_check_with_the_manuals_passes_only_when_both_report_ok(self):
+        pdf = "checking PDF version of manual: not OK, as a check with the manuals must report"
+        html = "checking HTML version of manual: not OK, as a check with the manuals must report"
+        for label, text, manual, problems in (
+            ("both manuals OK", log(HEAD, MANUALS, status="1 NOTE"), True, []),
+            # A check that leaves the manuals out reports neither check.
+            ("manuals left out", log(HEAD, status="1 NOTE"), True, [pdf, html]),
+            (
+                "a LaTeX package missing",
+                log(HEAD, NO_LATEX_PACKAGE, status="1 ERROR, 1 WARNING, 1 NOTE"),
+                True,
+                [
+                    "WARNING: checking PDF version of manual",
+                    "    LaTeX errors when creating PDF version.",
+                    "    This typically indicates Rd problems.",
+                    "    LaTeX errors found:",
+                    "    ! LaTeX Error: File `inconsolata.sty' not found.",
+                    "ERROR: checking PDF version of manual without index",
+                    pdf,
+                ],
+            ),
+            (
+                "HTML Tidy missing",
+                log(HEAD, NO_TIDY, status="2 NOTEs"),
+                True,
+                [
+                    "NOTE: checking HTML version of manual",
+                    "    Skipping checking HTML validation: no command 'tidy' found.",
+                    "    Please obtain a recent version of HTML Tidy by downloading a binary",
+                    "    release or compiling the source code from <https://www.html-tidy.org/>.",
+                    html,
+                ],
+            ),
+            # Without --manual, a check need not report the manuals.
+            ("manuals not asked for", log(HEAD, status="1 NOTE"), False, []),
+        ):
+            with self.subTest(case=label):
+                self.assertEqual(check_r.unexpected(text, manual=manual), problems)
 
     def test_a_log_without_a_status_line_is_refused(self):
         with self.assertRaisesRegex(ValueError, "no Status line"):
@@ -268,9 +330,10 @@ class FakeCheckTests(unittest.TestCase):
         self.archive = self.root / "yamaa_0.5.0.tar.gz"
         self.archive.write_bytes(b"archive")
 
-    def run_check(self, returncode, outputs):
+    def run_check(self, returncode, outputs, manual=False, check_log=None):
         """Run check() against a fake R CMD check that writes `outputs`, by
-        path below yamaa.Rcheck, and exits with `returncode`."""
+        path below yamaa.Rcheck, and `check_log` or a log with the explained
+        note as its 00check.log, and exits with `returncode`."""
         commands = []
         # Each check needs a work directory of its own.
         work = Path(tempfile.mkdtemp(dir=self.root)) / "check"
@@ -282,7 +345,7 @@ class FakeCheckTests(unittest.TestCase):
             for name, text in outputs.items():
                 (directory / name).write_text(text, encoding="utf-8")
             (directory / "00check.log").write_text(
-                log(HEAD, status="1 NOTE"), encoding="utf-8"
+                check_log or log(HEAD, status="1 NOTE"), encoding="utf-8"
             )
             return check_r.subprocess.CompletedProcess(command, returncode)
 
@@ -297,7 +360,7 @@ class FakeCheckTests(unittest.TestCase):
             contextlib.redirect_stdout(printed),
         ):
             try:
-                check_r.check(self.archive, work)
+                check_r.check(self.archive, work, manual=manual)
                 failure = None
             except (check_r.subprocess.CalledProcessError, RuntimeError) as error:
                 failure = error
@@ -327,6 +390,54 @@ class FailingTestsTests(FakeCheckTests):
             ],
         )
         self.assertIsNone(failure)
+
+    def test_a_check_with_the_manuals_builds_them_and_requires_both_ok(self):
+        # --manual leaves --no-manual out, and the log must then report both
+        # manual checks OK.
+        command = [
+            "R",
+            "CMD",
+            "check",
+            "--as-cran",
+            "--no-stop-on-test-error",
+            str(self.archive.resolve()),
+        ]
+        incoming = (
+            "NOTE: checking CRAN incoming feasibility\n"
+            "    Maintainer: 'Yilong Zhang <elong0527@gmail.com>'\n"
+            "    New submission\n"
+            "    Size of tarball: 14539245 bytes\n"
+        )
+        for label, check_log, printed, failure in (
+            (
+                "both manuals OK",
+                log(HEAD, MANUALS, status="1 NOTE"),
+                incoming
+                + "R CMD check built the PDF manual and validated the HTML manual\n"
+                "R CMD check --as-cran: every finding is one that cran-comments.md "
+                "explains\n",
+                None,
+            ),
+            (
+                "manuals left out",
+                log(HEAD, status="1 NOTE"),
+                incoming,
+                "R CMD check --as-cran found what R/yamaa/cran-comments.md does not "
+                "explain:\n"
+                "checking PDF version of manual: not OK, as a check with the manuals "
+                "must report\n"
+                "checking HTML version of manual: not OK, as a check with the manuals "
+                "must report",
+            ),
+        ):
+            with self.subTest(case=label):
+                commands, output, error = self.run_check(
+                    0, {}, manual=True, check_log=check_log
+                )
+                self.assertEqual(
+                    (commands, output, None if error is None else str(error)),
+                    ([(command, False)], printed, failure),
+                )
 
     def test_a_failing_check_prints_each_failing_test_file_whole(self):
         _, printed, failure = self.run_check(

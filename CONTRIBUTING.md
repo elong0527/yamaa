@@ -788,7 +788,11 @@ also fails on any AddressSanitizer or UndefinedBehaviorSanitizer report in
 the installation, example or test output, which it prints whole: R passes a
 test that UndefinedBehaviorSanitizer reported on. Remote checks (CRAN's
 package index, URLs and the clock) stay off unless the caller sets
-`_R_CHECK_CRAN_INCOMING_REMOTE_` or `_R_CHECK_SYSTEM_CLOCK_`. The Linux jobs
+`_R_CHECK_CRAN_INCOMING_REMOTE_` or `_R_CHECK_SYSTEM_CLOCK_`. The PDF and
+HTML manuals, which need LaTeX and HTML Tidy, stay out (`--no-manual`)
+unless the caller passes `--manual`, as native qualification's
+`native-cran (ubuntu-24.04, R devel, manual)` job does after installing
+both; the check then fails unless R reports both manual checks OK. The Linux jobs
 have `checkbashisms`, and those of CI, native qualification and R-CMD-check
 also `aspell`, so the check covers the configure scripts and the spelling of
 `DESCRIPTION` as CRAN's does; elsewhere R warns that it lacks

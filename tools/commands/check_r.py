@@ -9,8 +9,12 @@ instruments packages with AddressSanitizer and UndefinedBehaviorSanitizer, a
 sanitizer report in the installation, example or test output fails the check
 too, since R passes a test that UndefinedBehaviorSanitizer reported on.
 
-    python -m tools.commands.check_r --archive <yamaa_X.Y.Z.tar.gz> --work-dir <new dir>
-    python -m tools.commands.check_r --log <yamaa.Rcheck/00check.log>
+The check leaves out the PDF and HTML manuals (--no-manual), which need LaTeX
+and HTML Tidy. With --manual it builds and validates them, as CRAN's incoming
+checks do, and fails unless R reports both of those checks OK.
+
+    python -m tools.commands.check_r --archive <yamaa_X.Y.Z.tar.gz> --work-dir <new dir> [--manual]
+    python -m tools.commands.check_r --log <yamaa.Rcheck/00check.log> [--manual]
 
 The second form compares the log of a check that ran elsewhere.
 """
@@ -68,6 +72,13 @@ NO_CHECKBASHISMS = (
         r"manual\.",
     ),
 )
+# The checks that R runs only without --no-manual: the PDF manual, which
+# pdflatex builds with the LaTeX packages and fonts that R's Rd.sty loads, and
+# the validation of the HTML manual with HTML Tidy. R reports a failed PDF as
+# a WARNING and a missing HTML Tidy as a NOTE, which fail anyway; a check with
+# the manuals must also report both OK, so a log in which either did not run
+# fails too.
+MANUAL_CHECKS = ("PDF version of manual", "HTML version of manual")
 # What CRAN's checks set beyond --as-cran: its incoming checks
 # (check_CRAN_incoming.R) and, for the CPU limits, its regular checks
 # (check.Renviron), both in CRAN/QA/Kurt in R's R-dev-web repository. The CPU
@@ -162,11 +173,12 @@ def lacks_checkbashisms(finding):
     )
 
 
-def unexpected(log, expected=EXPECTED_NOTES, checkbashisms=True):
+def unexpected(log, expected=EXPECTED_NOTES, checkbashisms=True, manual=False):
     """Describe every finding of a check log that `expected` does not allow.
 
     `checkbashisms` says whether the check could run that script; without it,
-    the warning that NO_CHECKBASHISMS describes is allowed.
+    the warning that NO_CHECKBASHISMS describes is allowed. `manual` says
+    whether the check built the manuals, whose MANUAL_CHECKS must report OK.
     """
     found, counts = findings(log)
     problems = []
@@ -187,6 +199,13 @@ def unexpected(log, expected=EXPECTED_NOTES, checkbashisms=True):
                 size[1]
             ) > TARBALL_LIMIT:
                 problems.append(tarball_problem(int(size[1])))
+    if manual:
+        reported = {finding.check: finding.status for finding in found}
+        problems += [
+            f"checking {check}: not OK, as a check with the manuals must report"
+            for check in MANUAL_CHECKS
+            if reported.get(check) != "OK"
+        ]
     seen = dict.fromkeys(COUNTED, 0)
     for finding in found:
         if finding.status in seen:
@@ -203,15 +222,16 @@ def tarball_problem(size):
     )
 
 
-def report(log, checkbashisms=True):
-    """Print the check's findings; fail on any that EXPECTED_NOTES lacks."""
+def report(log, checkbashisms=True, manual=False):
+    """Print the check's findings; fail on any that EXPECTED_NOTES lacks, and
+    with `manual` unless the manuals were built and validated."""
     found = findings(log)[0]
     for finding in found:
         if finding.status in (*COUNTED, "INFO"):
             print(f"{finding.status}: checking {finding.check}")
             for line in finding.lines:
                 print(f"    {line}")
-    problems = unexpected(log, checkbashisms=checkbashisms)
+    problems = unexpected(log, checkbashisms=checkbashisms, manual=manual)
     if problems:
         raise RuntimeError(
             "R CMD check --as-cran found what R/yamaa/cran-comments.md does not "
@@ -221,6 +241,8 @@ def report(log, checkbashisms=True):
         print(
             "checkbashisms is not installed, so R did not check configure and cleanup"
         )
+    if manual:
+        print("R CMD check built the PDF manual and validated the HTML manual")
     print("R CMD check --as-cran: every finding is one that cran-comments.md explains")
 
 
@@ -303,7 +325,7 @@ def sanitizer_reports(work):
     ]
 
 
-def check(archive, work, environment=None):
+def check(archive, work, environment=None, manual=False):
     archive, work = archive.resolve(), work.resolve()
     if work.is_relative_to(ROOT):
         raise ValueError("R package checks must run outside the checkout")
@@ -318,12 +340,13 @@ def check(archive, work, environment=None):
     (work / "source-revision.txt").write_text(revision, encoding="utf-8")
     environment = check_environment(environment)
     # Every test file runs, so one failing file does not hide the others.
+    # Without `manual`, R leaves out the PDF and HTML manuals.
     command = [
         "R",
         "CMD",
         "check",
         "--as-cran",
-        "--no-manual",
+        *([] if manual else ["--no-manual"]),
         "--no-stop-on-test-error",
         str(archive),
     ]
@@ -348,6 +371,7 @@ def check(archive, work, environment=None):
     report(
         logs[0].read_text(encoding="utf-8"),
         checkbashisms=has_checkbashisms(environment),
+        manual=manual,
     )
 
 
@@ -359,11 +383,21 @@ def main():
     parser.add_argument("--archive", type=Path)
     parser.add_argument("--work-dir", type=Path)
     parser.add_argument("--log", type=Path, help="compare an existing 00check.log")
+    parser.add_argument(
+        "--manual",
+        action="store_true",
+        help="build and validate the PDF and HTML manuals, which needs LaTeX and "
+        "HTML Tidy, and require both checks to report OK",
+    )
     args = parser.parse_args()
     if args.log is not None:
         if args.archive is not None or args.work_dir is not None:
             parser.error("--log compares a log and takes no --archive or --work-dir")
-        report(args.log.read_text(encoding="utf-8"), checkbashisms=has_checkbashisms())
+        report(
+            args.log.read_text(encoding="utf-8"),
+            checkbashisms=has_checkbashisms(),
+            manual=args.manual,
+        )
         return
     if args.archive is None or args.work_dir is None:
         parser.error("--archive and --work-dir are required without --log")
@@ -376,7 +410,7 @@ def main():
         parser.error(
             "R_LIBS must identify the installed package and dependency library"
         )
-    check(archive, work)
+    check(archive, work, manual=args.manual)
 
 
 if __name__ == "__main__":

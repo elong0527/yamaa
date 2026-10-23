@@ -40,6 +40,12 @@ CRAN_CONTAINERS = ("gcc16", "clang-asan")
 # Rust.
 CRAN_NO_SUGGESTS_PLATFORMS = ("ubuntu-24.04",)
 CRAN_NO_SUGGESTS_R_VERSIONS = ("devel",)
+# The same check with the PDF and HTML manuals, which CRAN's incoming checks
+# build and validate and the other lanes leave out (--no-manual), since their
+# runners have neither LaTeX nor HTML Tidy: R-devel on Linux, with the LaTeX
+# packages and fonts of R's Rd.sty, HTML Tidy and the minimum Rust.
+CRAN_MANUAL_PLATFORMS = ("ubuntu-24.04",)
+CRAN_MANUAL_R_VERSIONS = ("devel",)
 # The source archives of these hosts that a release publishes, built and
 # installed with the network disabled from their vendored crates (#3030 D55)
 # on every platform, then run on the conformance corpus: on Linux in a
@@ -137,6 +143,10 @@ def coverage():
         "cran_no_suggests": {
             "os": list(CRAN_NO_SUGGESTS_PLATFORMS),
             "r": list(CRAN_NO_SUGGESTS_R_VERSIONS),
+        },
+        "cran_manual": {
+            "os": list(CRAN_MANUAL_PLATFORMS),
+            "r": list(CRAN_MANUAL_R_VERSIONS),
         },
         "offline_source": {
             "os": list(OFFLINE_SOURCE_PLATFORMS),

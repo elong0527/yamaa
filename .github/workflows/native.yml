@@ -924,6 +924,82 @@ jobs:
             ${{ runner.temp }}/cran-check/yamaa.Rcheck/tests/*.Rout*
           if-no-files-found: ignore
 
+  cran-manual:
+    name: native-cran (${{ matrix.os }}, R ${{ matrix.r }}, manual)
+    needs: r-dist
+    runs-on: ${{ matrix.os }}
+    # The check with the PDF and HTML manuals, which CRAN's incoming checks
+    # build and validate. Every other CRAN lane runs without LaTeX and HTML
+    # Tidy and leaves both out with --no-manual. This is the Linux R-devel
+    # lane above with both installed: check_r.py --manual drops --no-manual
+    # and fails unless R reports both manual checks OK.
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04]
+        r: [devel]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install repository tools
+        run: python -m pip install --no-deps -e .
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: ${{ matrix.r }}
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          working-directory: R/yamaa
+      # With checkbashisms and aspell, the check also covers the configure
+      # scripts and the spelling of DESCRIPTION, as CRAN's does. pdflatex
+      # builds the PDF manual with the LaTeX packages and fonts that R's
+      # Rd.sty loads: Times from texlive-fonts-recommended, and Inconsolata,
+      # which R's default manual fonts require, from texlive-fonts-extra.
+      # HTML Tidy, 5.0.0 or later, validates the HTML manual.
+      - name: Install the programs that CRAN's checks use
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends devscripts aspell aspell-en \
+            texlive-latex-base texlive-latex-recommended texlive-fonts-recommended \
+            texlive-fonts-extra tidy
+      # Activation writes RUSTUP_TOOLCHAIN for the later steps.
+      - name: Install the minimum Rust
+        run: python -m tools.ci.toolchain --minimum --install
+      - name: Download the published R source archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: native-r-ubuntu-24.04
+          path: ${{ runner.temp }}/published
+      - name: Check the R source package as CRAN does
+        env:
+          R_LIBS: ${{ env.R_LIBS_USER }}
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          python -m tools.commands.check_r --archive "${RUNNER_TEMP}"/published/yamaa_*.tar.gz \
+            --work-dir "${RUNNER_TEMP}/cran-check" --manual
+      - name: Confirm that the build used the minimum Rust
+        run: |
+          grep -F "using rustc ${RUSTUP_TOOLCHAIN} " "${RUNNER_TEMP}/cran-check/yamaa.Rcheck/00install.out"
+          grep -F "using cargo ${RUSTUP_TOOLCHAIN} " "${RUNNER_TEMP}/cran-check/yamaa.Rcheck/00install.out"
+      - name: Preserve the CRAN check
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: native-cran-${{ matrix.os }}-${{ matrix.r }}-manual
+          path: |
+            ${{ runner.temp }}/cran-check/yamaa.Rcheck/00check.log
+            ${{ runner.temp }}/cran-check/yamaa.Rcheck/00install.out
+            ${{ runner.temp }}/cran-check/yamaa.Rcheck/tests/*.Rout*
+          if-no-files-found: ignore
+
   cran-container:
     name: native-cran (${{ matrix.platform }})
     needs: r-dist

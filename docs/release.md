@@ -220,6 +220,11 @@ refuses connections and runs two Cargo jobs.
   gives the tests only the Depends and Imports, and with
   `_R_CHECK_FORCE_SUGGESTS_=false` R reports the missing packages instead of
   stopping. The tests skip, with a message, what needs `arrow` or `jsonlite`.
+- With R-devel on Linux and the PDF and HTML manuals, which CRAN's incoming
+  checks build and validate and the other jobs leave out with `--no-manual`:
+  the job installs pdflatex with the LaTeX packages and fonts of R's manual,
+  and HTML Tidy, and `check_r.py --manual` fails unless R reports both manual
+  checks OK.
 - In R-hub v2's `gcc16` container, CRAN's r-devel-linux-x86_64-fedora-gcc
   configuration (R-devel built with GCC 16 on Fedora 44, with CRAN's check
   settings), the build uses the Cargo and rustc that Fedora packages, as
