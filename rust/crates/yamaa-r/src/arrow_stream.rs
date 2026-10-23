@@ -5,9 +5,9 @@
 //! release callback null; its finalizer releases a stream nobody moved,
 //! which ends a run's production when that stream had started it. The
 //! finalizer calls no R code and no project code.
+use arrow_array::ffi_stream::FFI_ArrowArrayStream;
 use extendr_api::prelude::*;
 use std::ffi::{c_int, c_void};
-use yamaa::FFI_ArrowArrayStream;
 
 // R's SEXP is an opaque pointer, as in `crate::interrupt`.
 type Sexp = *mut c_void;
