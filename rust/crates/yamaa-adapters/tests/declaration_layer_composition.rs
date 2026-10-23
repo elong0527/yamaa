@@ -1,6 +1,6 @@
 #![cfg(feature = "yaml")]
-//! Composition of 1.0 specification layers (LAYER-1 to LAYER-10, P-CLR-1,
-//! P-CLR-2, P-NULL-1).
+//! Composition of 1.0 specification layers (LAYER-1 to LAYER-10, LAYER-12,
+//! P-CLR-1, P-CLR-2, P-NULL-1).
 //!
 //! A layer's `clear` removes values it inherits before its own fields
 //! compose, YAML null is the missing value and never removes anything, a
@@ -816,6 +816,38 @@ output: {path: out.csv, columns: [ID, PREV, RANK]}
             assert_eq!(
                 fs::read_to_string(study.0.join("out.csv")).unwrap(),
                 "ID,PREV,RANK\na,20,1\nb,,2\nc,10,3\n"
+            );
+        }
+
+        /// Requiredness applies to the pruned resolved specification, never to
+        /// one layer (LAYER-12): an entry that omits `output` resolves when its
+        /// parent contributes it, and when no layer contributes `output` the
+        /// resolved specification fails as `missing_required_field` at
+        /// `output`, naming the root class, the finding SCHEMA-13 owns. The
+        /// key column survives pruning (LAYER-11), so `output` is the one
+        /// required root field the resolved specification lacks.
+        #[test]
+        fn a_resolved_specification_to_which_no_layer_contributes_output_fails_at_output() {
+            let study = Study::new();
+            let output = "output: {path: out.csv, columns: [CODE, REASON]}\n";
+            study.write("base.yaml", &format!("{BASE}{output}"));
+            study.write("spec.yaml", &ENTRY.edit(output, ""));
+            let prepared = prepare(&study.path("spec.yaml")).unwrap();
+            assert_eq!(
+                at(&resolved(&prepared), "/output/path"),
+                &json(r#""out.csv""#)
+            );
+            study.write("base.yaml", BASE);
+            assert_eq!(
+                resolved_findings(prepare(&study.path("spec.yaml")).unwrap_err()),
+                [(
+                    ConditionCode::SchemaMissingRequiredField,
+                    "output".to_string(),
+                    vec![
+                        ("field", C::Text("output".into())),
+                        ("class", C::Text("root_class".into())),
+                    ],
+                )]
             );
         }
 

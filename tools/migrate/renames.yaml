@@ -97,7 +97,7 @@ summary:
     rename, decided: 9
     reshape, decided: 19
     value, decided: 5
-  conditions: 19
+  conditions: 20
   paths: 13
   reserved: 22
 transforms:
@@ -7357,6 +7357,12 @@ conditions:
   kind: removed
   decision: decided (D18)
   reason: YAML numbers, Booleans and null are literals in an expression field.
+- today: model_contract_mismatch
+  kind: removed
+  decision: decided (#3676)
+  reason: 'Only the 0.5 model contract raised it, on a normalized model that the schema had already refused,
+    so no public route reached it; it retires with that contract (P2-13c), and a 1.0 file reports the same
+    faults under their schema conditions (SCHEMA-7, SCHEMA-12, SCHEMA-13).'
 - today: no_applicable_keys
   kind: restated
   decision: decided (D23)

@@ -103,14 +103,14 @@ Language rules live in `rules/*.md`, format and file-handling rules in
 `rules/reference/`, and the submission, project-file and project-function
 profiles in `rules/profiles/`.
 
-A specification that declares `schema_version`, written in language version
-0.5, is refused on every route
-([SCHEMA-2](reference/schema-language.md#schema-2)). Until Phase 2 of
-[#3030](https://github.com/elong0527/yamaa/issues/3030) removes the 0.5
-project path (P2-13), a project file that declares `schema_version`, and the
+A specification, function or codelists file that declares `schema_version`,
+written in language version 0.5, is refused wherever the engine reads it
+([SCHEMA-2](reference/schema-language.md#schema-2)). Until
+[#3685](https://github.com/elong0527/yamaa/issues/3685) removes the 0.5
+project path, a project file that declares `schema_version`, and the
 environment files it links, are read under the rules at the `yamaa-v0.5.0`
-tag, and cards keep on their Fails lines the conditions that path still
-raises.
+tag, the lint still reads a named file that declares `schema_version`, and
+cards keep on their Fails lines the conditions that path still raises.
 
 | File | Prefix | Covers |
 | --- | --- | --- |

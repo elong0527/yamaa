@@ -50,12 +50,16 @@ Two schema sets exist until Phase 2 of
 [#3030](https://github.com/elong0527/yamaa/issues/3030) removes the 0.5 set
 and moves `v1/` up into this folder (P2-13):
 
-- `schema*.yaml` in this folder is the 0.5 schema, which the engine reads
-  for a file that declares `schema_version`.
+- `schema*.yaml` in this folder is the 0.5 schema. The engine embeds and
+  reads three of its modules, `schema_project.yaml`, `schema_environment.yaml`
+  and `schema_shared.yaml`, for a 0.5 project file and the environment files
+  it links only, until [#3685](https://github.com/elong0527/yamaa/issues/3685)
+  removes that route; any other file that declares `schema_version` is
+  refused ([SCHEMA-2](../rules/reference/schema-language.md#schema-2)).
 - [v1/](v1/) is the 1.0 schema, written from the approved rename table,
   [tools/migrate/renames.yaml](../tools/migrate/renames.yaml). The engine
-  embeds each file type's closure beside the 0.5 ones, and a file that
-  declares `yamaa` selects it by its header
+  embeds each file type's closure, and a file that declares `yamaa` selects
+  it by its header
   ([SCHEMA-2](../rules/reference/schema-language.md#schema-2)). Public calls
   read 1.0 files, and every benchmark is written in 1.0.
 
