@@ -202,11 +202,11 @@ without `column.submission` fails at that column's `submission`,
 `label` in `detail`; a column that lacks both fails once, for its
 `submission`.
 
-A key that is not an output column fails under
-[OUTPUT-2](../output.md#output-2), as checking the specification reports it:
-`internal_column_in_keys` for a declared column and `undeclared_column` for a
-name no column declares, at the key under its listing,
-`<section>.specs[<n>].keys[<i>]`, naming the column in `column`.
+The specification's `output.columns` and `keys` are validated under
+[OUTPUT-1](../output.md#output-1) and [OUTPUT-2](../output.md#output-2).
+A composed submission reports those findings at the corresponding entry under
+its specification listing. Output columns rejected by OUTPUT-1 have no
+metadata for this rule to check.
 
 <a id="define-8"></a>
 
