@@ -74,7 +74,7 @@ use crate::text::Action;
 /// Where a streamed run stands.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Progress {
+pub enum StreamProgress {
     /// Nothing is built and no reader has started its stream.
     Unread,
     /// A reader has started its stream, which has not ended.
@@ -263,12 +263,12 @@ impl Streamed {
     }
 
     /// Where the run stands.
-    pub fn progress(&self) -> Result<Progress, Error> {
+    pub fn progress(&self) -> Result<StreamProgress, Error> {
         Ok(match &*self.shared.lock()? {
-            State::Unread(_) => Progress::Unread,
-            State::Taken(_) | State::Producing { .. } => Progress::Reading,
-            State::Ended { .. } => Progress::Ended,
-            State::Cancelled => Progress::Cancelled,
+            State::Unread(_) => StreamProgress::Unread,
+            State::Taken(_) | State::Producing { .. } => StreamProgress::Reading,
+            State::Ended { .. } => StreamProgress::Ended,
+            State::Cancelled => StreamProgress::Cancelled,
         })
     }
 

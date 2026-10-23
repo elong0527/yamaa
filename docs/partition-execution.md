@@ -2,9 +2,9 @@
 
 This is the execution inventory and whole-table equivalence contract for
 [#2683](https://github.com/elong0527/yamaa/issues/2683), and the partitioned
-executor built on it (#3697), with its end states. Streaming follows on the
-same seams. Neither changes language behavior; existing language requirements
-remain authoritative.
+executor and the streamed runs built on it (#3697), with their end states.
+None of them changes language behavior; existing language requirements remain
+authoritative.
 
 Here a **data partition** is a physical subset of an immutable source snapshot,
 with original source coordinates retained. In the current engine,
@@ -186,9 +186,9 @@ These are implementation seams for subsequent work, not new callable APIs.
    before an accepted `Dataset` can leave core.
 7. **Adapter result and Save:** core returns one `ExecutionAttempt`; adapters
    retain success/failure evidence and publish held bytes only through explicit
-   Save. Streaming batches must stay provisional until all preceding barriers
-   succeed. [The end states](#end-states) fix what a cancelled or failed run
-   and save leave behind.
+   Save. A streamed run builds its first batch only once all preceding barriers
+   succeed ([Streamed runs](#streamed-runs)). [The end states](#end-states) fix
+   what a cancelled or failed run and save leave behind.
 
 ## The partitioned executor
 
@@ -236,6 +236,34 @@ with no host surface.
   between the partitions of each divided unit, and before each batch of
   project-function calls. A cancelled run keeps nothing any partition built.
 
+### Streamed runs
+
+`Engine::spec_stream` runs a specification whose output its consumer reads as
+a stream of Arrow batches (#3697), and the hosts' `run(stream = TRUE)` returns
+such a run. The consumer's pull drives it:
+
+- **The first pull builds the run**, whole or over the partitions, through
+  every barrier above, so a batch exists only once the whole output is
+  accepted.
+- **Each later pull builds one batch** of the accepted rows. No batch is built
+  ahead of a pull or kept once handed out, and there is no queue: the pull is
+  the backpressure. A batch holds at most 65,536 records, or on an engine with
+  partitions at most their `rows`, and never crosses a batch of the
+  whole-table run's table, so the batches hold its values in its order
+  (`public_table::PublicBatches` in the adapters builds them).
+- **No table is built.** A build whose output is streamed checks that its
+  table could be built, so it fails exactly when the whole-table build fails,
+  and keeps only the accepted rows the batches are built from.
+- **The token** is polled at every checkpoint of the schedule and before each
+  batch, and releasing the reader before the end of a stream it started
+  cancels the run.
+- **The host's thread.** When the run can call its host's project functions,
+  only the thread that started it builds it; a pull on another thread fails
+  with `host_thread` (the engine boundary design of #2870, section 3.6).
+
+A run whose output nobody has started to read runs whole when its result is
+asked for, and a reader then reads the table it keeps.
+
 ### End states
 
 The cancel-or-fail by phase matrix is #3697's accepted contract. It derives
@@ -246,7 +274,7 @@ of `save()`.
 | --- | --- | --- |
 | Before start, through admission | `Error::Cancelled`; no result, nothing staged or published | A failed result with no output, such as the `partition_global` refusal; its save writes only the report file |
 | Mid-partition, through output keys and verification | `Error::Cancelled`; every partition's partial state is dropped; nothing staged or published | The whole-table run's first failure, handler counts and retained records; no output; its save writes only the report file |
-| Mid-stream (streaming, step 4) | Abandoning the stream or a token found between batches ends production; no batch is retained; nothing published | A batch that cannot be produced ends the stream with the run's issue |
+| Mid-stream, while a reader pulls the batches of a streamed run | Releasing the reader or a token found before a batch ends production; no batch is retained; no result, so nothing published | A batch that cannot be produced, at the first pull a failed run's, ends the stream with the run's issue; its save writes only the report file |
 | During publication | Polled once, after every file is staged and before the first commit (D74): every staged file removed, nothing published | Before the first commit: nothing published, staged files removed. During the commit: earlier files stay replaced whole, later staged files removed, `Failure.paths` lists the files written |
 
 In every cell a cancellation is `Error::Cancelled` with no result and no issue
@@ -271,5 +299,8 @@ existing suites; this inventory alone does not establish an implementation.
 The partitioned executor's controls are `yamaa-core`'s
 `dataset/partitioned_execution.rs` and the facade's `partitioned_corpus.rs`,
 which runs every single-specification benchmark over one-record partitions
-against its expected files, and `end_states.rs`, one test per cell of the end
-states.
+against its expected files and reads each as a stream of one-record batches,
+and `end_states.rs`, one test per cell of the end states. The streamed run's
+are the facade's `streaming.rs`, the adapters' `table_public_batches.rs`, whose
+counting source proves that a consumer that stops pulling stops production,
+and the installed `streaming` suites of both hosts.

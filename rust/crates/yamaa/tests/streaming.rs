@@ -18,7 +18,7 @@ use arrow_array::ffi_stream::ArrowArrayStreamReader;
 use arrow_array::{Array, Int64Array, RecordBatchReader, StringArray};
 use yamaa::{
     CancellationToken, Engine, EngineOptions, Error, HostLanguage, MemoryResolver, Partitions,
-    Plans, Progress, RecordBatch,
+    Plans, StreamProgress, RecordBatch,
 };
 
 use crate::support::NoFunctions;
@@ -126,7 +126,7 @@ fn streamed_batches_hold_the_whole_table_output_in_its_order() {
             assert_eq!(batch, &whole_rows, "{label}, rows from {start}");
             start += batch.num_rows();
         }
-        assert_eq!(streamed.progress().unwrap(), Progress::Ended, "{label}");
+        assert_eq!(streamed.progress().unwrap(), StreamProgress::Ended, "{label}");
         let mut run = streamed.run().unwrap();
         assert!(run.output().is_none(), "{label}: a streamed output is not kept");
         assert_eq!(
@@ -160,7 +160,7 @@ fn a_streamed_run_reads_its_input_at_its_first_pull() {
     let streamed = engine(resolver.clone(), None)
         .spec_stream("spec.yaml", None, &Plans::new(), &CancellationToken::new())
         .unwrap();
-    assert_eq!(streamed.progress().unwrap(), Progress::Unread);
+    assert_eq!(streamed.progress().unwrap(), StreamProgress::Unread);
     insert_input(&resolver);
     let rows: usize = streamed
         .reader()
@@ -198,7 +198,7 @@ fn a_consumer_that_stops_pulling_stops_production() {
     assert_eq!(polls.swap(0, Ordering::SeqCst), first, "the first batch");
     drop(reader);
     assert_eq!(polls.load(Ordering::SeqCst), 0, "nothing after the release");
-    assert_eq!(streamed.progress().unwrap(), Progress::Cancelled);
+    assert_eq!(streamed.progress().unwrap(), StreamProgress::Cancelled);
     assert!(matches!(streamed.run(), Err(Error::Cancelled)));
 }
 
@@ -229,7 +229,7 @@ fn a_started_stream_belongs_to_its_reader_until_it_ends() {
         .unwrap();
     let mut first = streamed.reader();
     first.next().unwrap().unwrap();
-    assert_eq!(streamed.progress().unwrap(), Progress::Reading);
+    assert_eq!(streamed.progress().unwrap(), StreamProgress::Reading);
     let mut second = streamed.reader();
     assert!(
         matches!(second.next(), Some(Err(Error::Stream { code: "stream_taken" }))),
@@ -273,7 +273,7 @@ fn a_run_that_can_call_its_host_is_built_only_on_its_own_thread() {
             );
         });
     });
-    assert_eq!(streamed.progress().unwrap(), Progress::Unread);
+    assert_eq!(streamed.progress().unwrap(), StreamProgress::Unread);
     assert_eq!(streamed.reader().count(), 1, "on its own thread");
     let free = engine(resolver(true), None)
         .spec_stream("spec.yaml", None, &Plans::new(), &token)

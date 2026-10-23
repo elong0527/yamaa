@@ -513,8 +513,8 @@ fn run_output(handle: Robj) -> List {
         };
         let refused = |error| stream_refusal(streamed, &error);
         let failed = match streamed.progress().map_err(refused)? {
-            yamaa::Progress::Cancelled => return Err(refused(Error::Cancelled)),
-            yamaa::Progress::Ended => {
+            yamaa::StreamProgress::Cancelled => return Err(refused(Error::Cancelled)),
+            yamaa::StreamProgress::Ended => {
                 streamed.run().map_err(refused)?.status() == yamaa::Status::Failed
             }
             _ => false,

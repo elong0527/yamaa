@@ -94,7 +94,7 @@ pub use resolver::{
 pub use scalar::{Date, DateTime, EncodedScalar, Scalar, ScalarDecodeError, ScalarRef};
 pub use schema::schema;
 pub use selftest::{selftest, SelfTest, SelfTestCase, SELFTEST_COLUMNS};
-pub use stream::{Batches, Progress, RunGuard, Streamed};
+pub use stream::{Batches, RunGuard, StreamProgress, Streamed};
 pub use table::{
     Array, DataType, Date32Array, FFI_ArrowArrayStream, Field, Fields, Float64Array, InputFrame,
     Int64Array, LargeStringArray, ListArray, RecordBatch, SchemaRef, StringArray, StringViewArray,
