@@ -53,22 +53,25 @@ invariant.
 
 <a id="expr-3"></a>
 
-### EXPR-3. Expressions nest only in case results and key match values
+### EXPR-3. Expressions nest only in case results, key match values and a nearest selection's `to`
 
 Text in an expression field, a YAML number, Boolean or null, and a
 structured `source` are expression leaves. Every other expression names its
 input variables directly, except in fields whose declared type contains
 `expression`, which are evaluated recursively: each `case` `then` and
-trailing `otherwise`, and a `key` match value under
-[LOOKUP-6](lookup.md#lookup-6). A derivation's own top-level expression, in
-`derivation` or `handled_expression_class.value`, is not restricted by this
-rule. That text and fields typed `string_template` and
+trailing `otherwise`, a `key` match value under
+[LOOKUP-6](lookup.md#lookup-6), and a `nearest` selection's `to` under
+[LOOKUP-26](lookup.md#lookup-26). A derivation's own top-level expression,
+in `derivation` or `handled_expression_class.value`, is not restricted by
+this rule. That text and fields typed `string_template` and
 `aggregate_expression` are leaves whose identifiers their own rules resolve.
 
-Evidence: `schema-expressions`.
+Evidence: `schema-expressions`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs::the_reference_may_be_a_literal_or_an_expression_over_the_current_row`.
 
-`case` selects among expressions, and a key match value computes the operand
-it matches. [FORMULA-9](formulas.md#formula-9) resolves the identifiers of
+`case` selects among expressions, a key match value computes the operand it
+matches, and a nearest selection's `to`, read as a key match value is,
+computes the value each candidate's distance is measured to.
+[FORMULA-9](formulas.md#formula-9) resolves the identifiers of
 expression-field text and of `aggregate_expression`, and
 [Text](text.md) those of `string_template`.
 
