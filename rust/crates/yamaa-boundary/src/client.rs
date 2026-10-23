@@ -61,7 +61,10 @@ impl Gate {
     /// the request's header alone, which the engine reads no further than
     /// its version. The host derives the enabled and the missing identifiers
     /// from the supported ones. An acceptance opens the gate; a refusal, or a
-    /// later acceptance, leaves it as it was.
+    /// later acceptance, leaves it as it was. An accepted table that this
+    /// client cannot read, of another boundary version or shorter than its
+    /// own, leaves the gate closed and answers a version mismatch that names
+    /// the table's version.
     ///
     /// # Safety
     ///
@@ -130,12 +133,28 @@ impl Gate {
                 missing_features,
             })
         };
-        if matches!(answer, Outcome::Accepted(_)) && !table.is_null() {
-            let empty = std::ptr::null_mut();
-            let table = table.cast_mut();
-            let _ =
-                (self.table).compare_exchange(empty, table, Ordering::AcqRel, Ordering::Acquire);
+        if !matches!(answer, Outcome::Accepted(_)) || table.is_null() {
+            return answer;
         }
+        // SAFETY: an engine's table starts with its size and version, which
+        // every boundary version keeps; nothing past them is read here.
+        let (size, version) = unsafe {
+            (
+                std::ptr::addr_of!((*table).size).read(),
+                std::ptr::addr_of!((*table).version).read(),
+            )
+        };
+        if version != crate::BOUNDARY_VERSION || (size as usize) < size_of::<abi::Engine>() {
+            return Outcome::Refused(Refusal {
+                requested_version: Some(crate::BOUNDARY_VERSION),
+                supported_version: (version != 0).then_some(version),
+                reason: Reason::VersionMismatch,
+                missing_features: Vec::new(),
+            });
+        }
+        let empty = std::ptr::null_mut();
+        let table = table.cast_mut();
+        let _ = (self.table).compare_exchange(empty, table, Ordering::AcqRel, Ordering::Acquire);
         answer
     }
 
@@ -143,7 +162,8 @@ impl Gate {
     pub fn pass(&self) -> Result<Engine, Closed> {
         let table = self.table.load(Ordering::Acquire);
         // SAFETY: the gate holds only the static table an accepted
-        // negotiation of an engine's entry returned.
+        // negotiation of an engine's entry returned, of this client's
+        // boundary version and at least its size.
         unsafe { table.as_ref() }.map(Engine).ok_or(Closed)
     }
 }
@@ -400,7 +420,9 @@ impl<'a> Call<'a> {
     }
 
     /// The same call with `host`'s probe, and, when `functions`, its
-    /// project functions and their lock verification.
+    /// project functions and their lock verification. Every callback is
+    /// then `host`'s or none, so none of an earlier host's is left to run
+    /// with this host's context.
     pub fn with<H: Callbacks>(mut self, host: &'a H, functions: bool) -> Self {
         let record = &mut self.record;
         // The engine releases the context before the call returns; the host
@@ -410,18 +432,16 @@ impl<'a> Call<'a> {
             release: None,
         };
         record.probe = Some(probe::<H>);
-        if functions {
-            record.bind = Some(bind::<H>);
-            record.invoke = Some(invoke::<H>);
-            record.call_batch = Some(call_batch::<H>);
-            record.is_interrupt = Some(is_interrupt::<H>);
-            record.providers = Some(providers::<H>);
-            record.standard_library = Some(standard_library::<H>);
-            record.distribution_version = Some(distribution_version::<H>);
-            record.environment = Some(environment::<H>);
-            record.integer_digits = Some(integer_digits::<H>);
-            record.compare_locked = Some(compare_locked::<H>);
-        }
+        record.bind = functions.then_some(bind::<H> as abi::Bind);
+        record.invoke = functions.then_some(invoke::<H> as abi::Invoke);
+        record.call_batch = functions.then_some(call_batch::<H> as abi::CallBatch);
+        record.is_interrupt = functions.then_some(is_interrupt::<H> as abi::IsInterrupt);
+        record.providers = functions.then_some(providers::<H> as abi::Query);
+        record.standard_library = functions.then_some(standard_library::<H> as abi::Query);
+        record.distribution_version = functions.then_some(distribution_version::<H> as abi::Query);
+        record.environment = functions.then_some(environment::<H> as abi::Query);
+        record.integer_digits = functions.then_some(integer_digits::<H> as abi::Query);
+        record.compare_locked = functions.then_some(compare_locked::<H> as abi::CompareLocked);
         self
     }
 }
@@ -1762,9 +1782,10 @@ pub fn civil_datetime(seconds: i64) -> Option<(i32, u8, u8, u8, u8, u8)> {
     Some((year, month, day, hour as u8, minute as u8, second as u8))
 }
 
-/// The batch trampoline, driven at the ABI as the engine calls it: no engine
-/// path batches yet (only core's registry activation does, which no facade
-/// entry reaches), so no installed suite reaches it.
+/// The client's own side of the ABI, driven as the engine drives it: the
+/// batch trampoline, which no engine path calls yet (only core's registry
+/// activation batches, which no facade entry reaches), the callbacks a call
+/// offers, and the gate's check of the table an engine returns.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1776,14 +1797,19 @@ mod tests {
 
     /// A host whose bound function adds its offset to the sum of its
     /// arguments, or answers missing when one is missing, keeping the
-    /// arguments of each call.
+    /// arguments of each call; its probe answers `cancelled`.
     #[derive(Default)]
     struct Adder {
         calls: RefCell<Vec<Arguments>>,
+        cancelled: bool,
     }
 
     impl Callbacks for Adder {
         type Object = i64;
+
+        fn cancelled(&self) -> bool {
+            self.cancelled
+        }
 
         fn invoke(
             &self,
@@ -1846,6 +1872,7 @@ mod tests {
                 &mut reply,
             )
         };
+        assert_eq!(status, abi::ANSWERED, "the batch call answers");
         // SAFETY: an answered batch holds one result per row in `scalars`.
         let results = unsafe { std::slice::from_raw_parts(reply.scalars, reply.scalars_len) };
         let results: Vec<(u32, i64)> = results.iter().map(|r| (r.kind, r.int)).collect();
@@ -1860,9 +1887,8 @@ mod tests {
         }
         let row = |x: i64, y: Option<i64>| vec![("x".to_owned(), Some(x)), ("y".to_owned(), y)];
         assert_eq!(
-            (status, results, host.calls.take()),
+            (results, host.calls.take()),
             (
-                abi::ANSWERED,
                 vec![
                     (abi::SCALAR_INT, 111),
                     (abi::SCALAR_INT, 122),
@@ -1872,5 +1898,116 @@ mod tests {
             ),
             "a batch of three rows whose last y is missing, through the default batch call"
         );
+    }
+
+    #[test]
+    fn a_later_host_replaces_every_callback_of_an_earlier_one() {
+        let (first, second) = (
+            Adder::default(),
+            Adder {
+                cancelled: true,
+                ..Adder::default()
+            },
+        );
+        let record = Call::new(Language::Python, "python", "3.12.4")
+            .with(&first, true)
+            .with(&second, false)
+            .record;
+        let offered = [
+            ("bind", record.bind.is_some()),
+            ("invoke", record.invoke.is_some()),
+            ("call_batch", record.call_batch.is_some()),
+            ("is_interrupt", record.is_interrupt.is_some()),
+            ("providers", record.providers.is_some()),
+            ("standard_library", record.standard_library.is_some()),
+            (
+                "distribution_version",
+                record.distribution_version.is_some(),
+            ),
+            ("environment", record.environment.is_some()),
+            ("integer_digits", record.integer_digits.is_some()),
+            ("compare_locked", record.compare_locked.is_some()),
+        ];
+        let offered: Vec<&str> = offered
+            .into_iter()
+            .filter_map(|(name, offered)| offered.then_some(name))
+            .collect();
+        let probe = record.probe.expect("a call with a host has its probe");
+        // SAFETY: the context is `second`, whose probe this is, and which
+        // outlives the call.
+        let probed = unsafe { probe(record.context.pointer) };
+        assert_eq!(
+            (offered, probed),
+            (Vec::<&str>::new(), abi::CANCEL),
+            "a host that offers no functions after one that did: no function \
+             callback is left, and the probe asks the later host"
+        );
+    }
+
+    /// A table header as an engine of another build might return it: only
+    /// the size and version every boundary version keeps.
+    #[repr(C)]
+    struct Header {
+        size: u32,
+        version: u32,
+    }
+
+    static TABLES: [Header; 2] = [
+        Header {
+            size: size_of::<abi::Engine>() as u32,
+            version: crate::BOUNDARY_VERSION + 1,
+        },
+        Header {
+            size: size_of::<Header>() as u32,
+            version: crate::BOUNDARY_VERSION,
+        },
+    ];
+
+    /// A negotiation entry that accepts any request and returns table
+    /// `INDEX` of [`TABLES`].
+    unsafe extern "C" fn accepting<const INDEX: usize>(
+        _request: *const abi::Request,
+        outcome: *mut abi::Outcome,
+    ) -> *const abi::Engine {
+        // SAFETY: the client passes its outcome for the call.
+        let outcome = unsafe { &mut *outcome };
+        (outcome.accepted, outcome.requested_version) = (1, crate::BOUNDARY_VERSION);
+        outcome.supported_version = crate::BOUNDARY_VERSION;
+        std::ptr::addr_of!(TABLES[INDEX]).cast()
+    }
+
+    #[test]
+    fn a_table_this_client_cannot_read_keeps_the_gate_closed() {
+        let request = Value::Map(Vec::new());
+        let cases: [(&str, Negotiate, Option<u32>); 2] = [
+            (
+                "a table of the next boundary version",
+                accepting::<0>,
+                Some(crate::BOUNDARY_VERSION + 1),
+            ),
+            (
+                "a table shorter than this client's",
+                accepting::<1>,
+                Some(crate::BOUNDARY_VERSION),
+            ),
+        ];
+        for (label, entry, supported_version) in cases {
+            let gate = Gate::new();
+            // SAFETY: the entry answers as a negotiation entry does.
+            let outcome = unsafe { gate.negotiate(&request, entry) };
+            assert_eq!(
+                (outcome, gate.pass().map(|_| ())),
+                (
+                    Outcome::Refused(Refusal {
+                        requested_version: Some(crate::BOUNDARY_VERSION),
+                        supported_version,
+                        reason: Reason::VersionMismatch,
+                        missing_features: Vec::new(),
+                    }),
+                    Err(Closed),
+                ),
+                "{label}"
+            );
+        }
     }
 }

@@ -206,7 +206,7 @@ vocabulary.
 
 `interface` pairs the installed Python and R interface and handle lifetime
 suites, and `yamaa-boundary`'s handshake and census families and
-`yamaa-engine`'s lifetime and negotiation families read it too. Its
+`yamaa-engine`'s lifetime, negotiation and client families read it too. Its
 outcomes were written from the check order of `rust/interface/README.md`
 ("Version and feature handshake") before the engine ran: a request for another
 version is a mismatch whatever else it holds, a malformed version field leaves
