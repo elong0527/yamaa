@@ -10,7 +10,7 @@ use std::ffi::{c_int, c_void};
 use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{LazyLock, Mutex, MutexGuard, OnceLock, PoisonError};
 
@@ -34,27 +34,17 @@ pub fn family(name: &str) -> &'static Json {
     family
 }
 
-/// The function table, negotiated once with the request the generated
-/// layers send: the boundary version, the capabilities and the formats.
-pub fn engine() -> &'static abi::Engine {
-    static ENGINE: OnceLock<&'static abi::Engine> = OnceLock::new();
-    ENGINE.get_or_init(|| {
-        let required: Vec<Str> = CAPABILITIES.iter().map(|name| Str::of(name)).collect();
-        let optional: Vec<Str> = FORMATS.iter().map(|(name, _)| Str::of(name)).collect();
-        let request = abi::Request {
-            size: size_of::<abi::Request>() as u32,
-            version: BOUNDARY_VERSION,
-            required: required.as_ptr(),
-            required_len: required.len(),
-            optional: optional.as_ptr(),
-            optional_len: optional.len(),
-        };
-        let mut outcome = outcome(size_of::<abi::Outcome>());
-        // SAFETY: the request and the outcome are valid for the call.
-        let table = unsafe { yamaa_engine::negotiate(&request, &mut outcome) };
-        // SAFETY: an accepted negotiation returns the static table.
-        unsafe { table.as_ref() }.expect("the generated request is accepted")
-    })
+/// A request of this boundary version for `required` and `optional`, which
+/// the texts it borrows outlive.
+pub fn request(required: &[Str], optional: &[Str]) -> abi::Request {
+    abi::Request {
+        size: size_of::<abi::Request>() as u32,
+        version: BOUNDARY_VERSION,
+        required: required.as_ptr(),
+        required_len: required.len(),
+        optional: optional.as_ptr(),
+        optional_len: optional.len(),
+    }
 }
 
 /// An outcome of `size` bytes, its fields zero.
@@ -63,6 +53,21 @@ pub fn outcome(size: usize) -> abi::Outcome {
     let mut outcome: abi::Outcome = unsafe { MaybeUninit::zeroed().assume_init() };
     outcome.size = size as u32;
     outcome
+}
+
+/// The function table, negotiated once with the request the generated
+/// layers send: the boundary version, the capabilities and the formats.
+pub fn engine() -> &'static abi::Engine {
+    static ENGINE: OnceLock<&'static abi::Engine> = OnceLock::new();
+    ENGINE.get_or_init(|| {
+        let required: Vec<Str> = CAPABILITIES.iter().map(|name| Str::of(name)).collect();
+        let optional: Vec<Str> = FORMATS.iter().map(|(name, _)| Str::of(name)).collect();
+        let mut answer = outcome(size_of::<abi::Outcome>());
+        // SAFETY: the request and the outcome are valid for the call; an
+        // accepted negotiation returns the static table.
+        unsafe { yamaa_engine::negotiate(&request(&required, &optional), &mut answer).as_ref() }
+            .expect("the generated request is accepted")
+    })
 }
 
 /// Hold the census still while a test runs.
@@ -88,17 +93,25 @@ impl<T: std::fmt::Debug> Answer<T> {
             other => panic!("expected a done call, got {other:?}"),
         }
     }
+
+    pub fn map<U>(self, convert: impl FnOnce(T) -> U) -> Answer<U> {
+        match self {
+            Answer::Done(value) => Answer::Done(convert(value)),
+            Answer::Refused(message) => Answer::Refused(message),
+            Answer::Cancelled => Answer::Cancelled,
+            Answer::Boundary(message) => Answer::Boundary(message),
+        }
+    }
 }
 
 /// Call an entry with fresh destinations; a refusal's issues and paths are
 /// released here.
 pub fn answer<T>(entry: impl FnOnce(*mut T, *mut abi::Refusal) -> abi::Status) -> Answer<T> {
-    let mut out = MaybeUninit::<T>::uninit();
-    let mut refusal = MaybeUninit::<abi::Refusal>::uninit();
+    let (mut out, mut refusal) = (MaybeUninit::uninit(), MaybeUninit::uninit());
     let status = entry(out.as_mut_ptr(), refusal.as_mut_ptr());
     let refused = || {
         // SAFETY: the entry wrote the refusal.
-        let refusal = unsafe { refusal.assume_init_read() };
+        let refusal: abi::Refusal = unsafe { refusal.assume_init_read() };
         release(refusal.issues);
         texts(refusal.paths);
         text(refusal.message)
@@ -113,46 +126,37 @@ pub fn answer<T>(entry: impl FnOnce(*mut T, *mut abi::Refusal) -> abi::Status) -
     }
 }
 
-/// Release a buffer the engine handed out.
-fn released<T>(mut buffer: abi::Buffer<T>) {
+/// The items of a buffer the engine handed out, copied, then the buffer
+/// released.
+fn copied<T, U>(mut buffer: abi::Buffer<T>, copy: impl Fn(&T) -> U) -> Vec<U> {
+    let items = match buffer.len {
+        0 => Vec::new(),
+        // SAFETY: a buffer's items stay valid until it is released.
+        len => unsafe { std::slice::from_raw_parts(buffer.ptr, len) }
+            .iter()
+            .map(copy)
+            .collect(),
+    };
     if let Some(release) = buffer.release {
         // SAFETY: the engine handed the buffer out with this release.
         unsafe { release(&mut buffer) };
     }
+    items
 }
 
-/// The items of a buffer the engine handed out.
-fn items<T>(buffer: &abi::Buffer<T>) -> &[T] {
-    if buffer.len == 0 {
-        &[]
-    } else {
-        // SAFETY: a buffer's items stay valid until it is released.
-        unsafe { std::slice::from_raw_parts(buffer.ptr, buffer.len) }
-    }
+/// Borrowed text, copied.
+fn owned(text: &Str) -> String {
+    // SAFETY: the text is valid while its buffer or reply lives.
+    let bytes = (text.len > 0).then(|| unsafe { std::slice::from_raw_parts(text.ptr, text.len) });
+    String::from_utf8(bytes.unwrap_or_default().to_vec()).unwrap()
 }
 
-fn copied(text: Str) -> String {
-    let bytes = if text.len == 0 {
-        &[][..]
-    } else {
-        // SAFETY: the text borrows a buffer that is not released yet.
-        unsafe { std::slice::from_raw_parts(text.ptr, text.len) }
-    };
-    String::from_utf8(bytes.to_vec()).unwrap()
-}
-
-/// Copy a text the engine handed out, and release it.
 pub fn text(buffer: abi::Text) -> String {
-    let text = String::from_utf8(items(&buffer).to_vec()).unwrap();
-    released(buffer);
-    text
+    String::from_utf8(copied(buffer, |byte| *byte)).unwrap()
 }
 
-/// Copy a list of texts the engine handed out, and release it.
 pub fn texts(buffer: abi::Texts) -> Vec<String> {
-    let texts = items(&buffer).iter().map(|item| copied(*item)).collect();
-    released(buffer);
-    texts
+    copied(buffer, owned)
 }
 
 /// What the engine holds for its holders.
@@ -165,13 +169,11 @@ pub struct Census {
 }
 
 impl Census {
-    /// The same census with `count` more handles of `kind`.
-    pub fn plus(&self, kind: &str, count: u64) -> Census {
+    /// The same census with one more handle of `kind`.
+    pub fn plus(&self, kind: &str) -> Census {
         let mut census = self.clone();
         for (name, held) in &mut census.handles {
-            if *name == kind {
-                *held += count;
-            }
+            *held += u64::from(*name == kind);
         }
         census
     }
@@ -219,31 +221,35 @@ pub enum Invoked {
     Interrupt,
 }
 
+/// The roots a host makes: the callbacks' context, bound functions and kept
+/// payloads.
+const CONTEXT: usize = 0;
+const FUNCTION: usize = 1;
+const PAYLOAD: usize = 2;
+
 /// A test host: its callbacks answer as the test chooses and count what they
 /// hand over and get back. A call takes the host as its context.
 pub struct Host<'a> {
     probe: Box<dyn Fn() -> c_int + 'a>,
     invoke: Box<dyn Fn(&str) -> Invoked + 'a>,
-    /// The roots made and released, by what they hold: the callbacks'
-    /// context, bound functions and kept payloads.
+    /// The roots made and released, by what they hold.
     roots: [Cell<(usize, usize)>; 3],
     /// The replies made that point into the host's memory, and released.
     replies: Cell<(usize, usize)>,
 }
 
-const CONTEXT: usize = 0;
-const FUNCTION: usize = 1;
-const PAYLOAD: usize = 2;
+/// Count `made` and `released` more.
+fn count(cell: &Cell<(usize, usize)>, made: usize, released: usize) {
+    let (was_made, was_released) = cell.get();
+    cell.set((was_made + made, was_released + released));
+}
 
-/// A root the host made: what it holds, and the host that counts it.
+/// What a root or a reply points at: what it holds, and the host that
+/// counts it.
 struct Mark {
     host: *const Host<'static>,
     kind: usize,
-}
-
-fn counted(cell: &Cell<(usize, usize)>, made: usize, released: usize) {
-    let (was_made, was_released) = cell.get();
-    cell.set((was_made + made, was_released + released));
+    _bytes: Vec<u8>,
 }
 
 impl<'a> Host<'a> {
@@ -259,26 +265,22 @@ impl<'a> Host<'a> {
     }
 
     pub fn probing(self, probe: impl Fn() -> c_int + 'a) -> Self {
-        Host {
-            probe: Box::new(probe),
-            ..self
-        }
+        let probe = Box::new(probe);
+        Host { probe, ..self }
     }
 
     pub fn invoking(self, invoke: impl Fn(&str) -> Invoked + 'a) -> Self {
-        Host {
-            invoke: Box::new(invoke),
-            ..self
-        }
+        let invoke = Box::new(invoke);
+        Host { invoke, ..self }
     }
 
-    /// The roots made and released: the context, bound functions and kept
-    /// payloads.
+    /// The roots made and released, by what they hold.
     pub fn roots(&self) -> [(&'static str, (usize, usize)); 3] {
+        let [context, function, payload] = &self.roots;
         [
-            ("context", self.roots[CONTEXT].get()),
-            ("function", self.roots[FUNCTION].get()),
-            ("payload", self.roots[PAYLOAD].get()),
+            ("context", context.get()),
+            ("function", function.get()),
+            ("payload", payload.get()),
         ]
     }
 
@@ -286,21 +288,28 @@ impl<'a> Host<'a> {
         self.replies.get()
     }
 
-    fn root(&self, kind: usize) -> abi::Root {
-        counted(&self.roots[kind], 1, 0);
-        let mark = Mark {
-            host: (self as *const Host<'a>).cast(),
+    fn mark(&self, kind: usize, bytes: Vec<u8>) -> *mut c_void {
+        let host = (self as *const Host<'a>).cast();
+        Box::into_raw(Box::new(Mark {
+            host,
             kind,
-        };
+            _bytes: bytes,
+        }))
+        .cast()
+    }
+
+    fn root(&self, kind: usize) -> abi::Root {
+        count(&self.roots[kind], 1, 0);
+        let pointer = self.mark(kind, Vec::new());
         abi::Root {
-            pointer: Box::into_raw(Box::new(mark)).cast(),
+            pointer,
             release: Some(release_root),
         }
     }
 
     /// A call from the Python host with this host's callbacks.
     pub fn call(&self) -> abi::Call {
-        counted(&self.roots[CONTEXT], 1, 0);
+        count(&self.roots[CONTEXT], 1, 0);
         abi::Call {
             context: abi::Root {
                 pointer: (self as *const Host<'a>).cast_mut().cast(),
@@ -325,14 +334,6 @@ pub fn call() -> abi::Call {
         probe: None,
         bind: None,
         invoke: None,
-        call_batch: None,
-        is_interrupt: None,
-        providers: None,
-        standard_library: None,
-        distribution_version: None,
-        environment: None,
-        integer_digits: None,
-        compare_locked: None,
     }
 }
 
@@ -348,14 +349,20 @@ unsafe fn host<'a>(context: *mut c_void) -> &'a Host<'a> {
 
 unsafe extern "C" fn release_context(context: *mut c_void) {
     // SAFETY: the context is the host, which outlives the call.
-    counted(&unsafe { host(context) }.roots[CONTEXT], 0, 1);
+    count(&unsafe { host(context) }.roots[CONTEXT], 0, 1);
 }
 
 unsafe extern "C" fn release_root(pointer: *mut c_void) {
-    // SAFETY: the pointer is a mark the host boxed, released once.
+    // SAFETY: the pointer is a mark the host boxed, released once, and the
+    // host outlives every root it made.
     let mark = unsafe { Box::from_raw(pointer.cast::<Mark>()) };
-    // SAFETY: the host outlives every root it made.
-    counted(&unsafe { &*mark.host }.roots[mark.kind], 0, 1);
+    count(&unsafe { &*mark.host }.roots[mark.kind], 0, 1);
+}
+
+unsafe extern "C" fn release_reply(reply: *mut abi::Reply) {
+    // SAFETY: the reply's private data is a mark the host boxed.
+    let mark = unsafe { Box::from_raw((*reply).private_data.cast::<Mark>()) };
+    count(&unsafe { &*mark.host }.replies, 0, 1);
 }
 
 unsafe extern "C" fn probe(context: *mut c_void) -> c_int {
@@ -374,19 +381,6 @@ unsafe extern "C" fn bind(
     abi::ANSWERED
 }
 
-/// The memory a text reply points into, and the host that counts it.
-struct ReplyText {
-    host: *const Host<'static>,
-    _bytes: Vec<u8>,
-}
-
-unsafe extern "C" fn release_reply(reply: *mut abi::Reply) {
-    // SAFETY: the reply's private data is the text the host boxed.
-    let text = unsafe { Box::from_raw((*reply).private_data.cast::<ReplyText>()) };
-    // SAFETY: the host outlives the call.
-    counted(&unsafe { &*text.host }.replies, 0, 1);
-}
-
 unsafe extern "C" fn invoke(
     context: *mut c_void,
     _: *mut c_void,
@@ -394,92 +388,78 @@ unsafe extern "C" fn invoke(
     arguments_len: usize,
     reply: *mut abi::Reply,
 ) -> c_int {
-    // SAFETY: the engine passes the call's context.
-    let host = unsafe { host(context) };
-    // SAFETY: the engine passes its arguments for the call.
-    let value = unsafe { std::slice::from_raw_parts(arguments, arguments_len) }[0].value;
-    let argument = (value.kind == abi::SCALAR_TEXT).then(|| copied(value.text));
+    // SAFETY: the engine passes the call's context, its arguments for the
+    // call and a fresh reply, which the host fills.
+    let (host, value, reply) = unsafe {
+        let arguments = std::slice::from_raw_parts(arguments, arguments_len);
+        (host(context), arguments[0].value, &mut *reply)
+    };
+    let argument = (value.kind == abi::SCALAR_TEXT).then(|| owned(&value.text));
     // A panic of the host's own code is contained here, as a binding's
-    // callbacks contain theirs, and answered as its failure.
+    // callbacks contain theirs, and answered as a failure of its own.
     let invoked = catch_unwind(AssertUnwindSafe(|| {
         (host.invoke)(argument.as_deref().unwrap_or_default())
     }));
-    // SAFETY: the engine passes a fresh reply, which the host fills.
-    let reply = unsafe { &mut *reply };
     let bytes = match (invoked, argument) {
         (Ok(Invoked::Echo), Some(text)) => text.into_bytes(),
         (Ok(Invoked::Echo), None) => return abi::ANSWERED,
         (Ok(Invoked::Bytes(bytes)), _) => bytes.to_vec(),
         (Ok(Invoked::Interrupt), _) => {
+            let payload = host.root(PAYLOAD);
+            let kind = abi::ERROR_INTERRUPTED;
             reply.error = abi::HostError {
-                kind: abi::ERROR_INTERRUPTED,
-                payload: host.root(PAYLOAD),
+                kind,
+                payload,
                 ..abi::HostError::NONE
             };
             return abi::RAISED;
         }
         (Err(_), _) => {
+            let (kind, message) = (abi::ERROR_INTERNAL, Str::of("function_boundary"));
             reply.error = abi::HostError {
-                kind: abi::ERROR_INTERNAL,
-                message: Str::of("function_boundary"),
+                kind,
+                message,
                 ..abi::HostError::NONE
             };
             return abi::RAISED;
         }
     };
-    counted(&host.replies, 1, 0);
+    count(&host.replies, 1, 0);
+    let text = Str {
+        ptr: bytes.as_ptr(),
+        len: bytes.len(),
+    };
     reply.scalar = abi::Scalar {
         kind: abi::SCALAR_TEXT,
-        text: Str {
-            ptr: bytes.as_ptr(),
-            len: bytes.len(),
-        },
+        text,
         ..abi::Scalar::MISSING
     };
     reply.release = Some(release_reply);
-    reply.private_data = Box::into_raw(Box::new(ReplyText {
-        host: (host as *const Host<'_>).cast(),
-        _bytes: bytes,
-    }))
-    .cast();
+    reply.private_data = host.mark(0, bytes);
     abi::ANSWERED
 }
 
 /// A specification run with `call`.
 pub fn spec_run(
     call: &abi::Call,
-    specification: &str,
+    spec: &str,
     project: Option<&str>,
     plans: Handle,
 ) -> Answer<Handle> {
-    answer(|out, refusal| {
-        // SAFETY: the arguments are valid for the call.
-        unsafe {
-            (engine().spec_run)(
-                call,
-                Str::of(specification),
-                Str::optional(project),
-                plans,
-                out,
-                refusal,
-            )
-        }
-    })
+    let (spec, project) = (Str::of(spec), Str::optional(project));
+    // SAFETY: the arguments are valid for the call.
+    answer(|out, refusal| unsafe { (engine().spec_run)(call, spec, project, plans, out, refusal) })
 }
 
 /// A result's status, or its member's.
 pub fn status(result: Handle, member: Option<&str>) -> Answer<String> {
+    let member = Str::optional(member);
     // SAFETY: the arguments are valid for the call.
-    answer(|out, refusal| unsafe { (engine().status)(result, Str::optional(member), out, refusal) })
-        .map(text)
+    answer(|out, refusal| unsafe { (engine().status)(result, member, out, refusal) }).map(text)
 }
 
-/// One of the accessors that answer a table handle: `output`, `issues` or
-/// `report`.
-pub type TableEntry =
-    unsafe extern "C" fn(Handle, Str, *mut Handle, *mut abi::Refusal) -> abi::Status;
-
-pub fn table(entry: TableEntry, result: Handle) -> Answer<Handle> {
+/// The table one of `output`, `issues` and `report` answers for a result.
+pub fn table(entry: abi::OnMember<Handle>, result: Handle) -> Answer<Handle> {
     // SAFETY: the arguments are valid for the call.
     answer(|out, refusal| unsafe { entry(result, Str::NONE, out, refusal) })
 }
@@ -501,55 +481,41 @@ pub fn save(call: &abi::Call, result: Handle) -> Answer<Vec<String>> {
     answer(|out, refusal| unsafe { (engine().save)(call, result, out, refusal) }).map(texts)
 }
 
-impl<T> Answer<T> {
-    pub fn map<U>(self, convert: impl FnOnce(T) -> U) -> Answer<U> {
-        match self {
-            Answer::Done(value) => Answer::Done(convert(value)),
-            Answer::Refused(message) => Answer::Refused(message),
-            Answer::Cancelled => Answer::Cancelled,
-            Answer::Boundary(message) => Answer::Boundary(message),
-        }
-    }
-}
-
 /// A host's reader over an exported stream, which takes it.
 pub fn reader(stream: abi::ArrowArrayStream) -> ArrowArrayStreamReader {
     let mut stream = stream;
     // SAFETY: the engine's stream has the C stream interface's layout; the
     // reader moves it out and leaves it released.
-    let stream = unsafe {
-        FFI_ArrowArrayStream::from_raw((&mut stream as *mut abi::ArrowArrayStream).cast())
-    };
+    let stream = unsafe { FFI_ArrowArrayStream::from_raw((&raw mut stream).cast()) };
     ArrowArrayStreamReader::try_new(stream).unwrap()
 }
 
-/// The `columns` of each row a stream holds, as a JSON object per row:
-/// integers, texts and nulls. Reading takes the stream and releases it.
-pub fn records(stream: abi::ArrowArrayStream, columns: &[&str]) -> Vec<Json> {
+/// The `columns` of each row a stream holds, as a JSON object per row of
+/// integers, texts and nulls; reading takes the stream and releases it.
+pub fn records(stream: abi::ArrowArrayStream, columns: &[&str]) -> Json {
     let mut records = Vec::new();
     for batch in reader(stream) {
         let batch = batch.unwrap();
         for row in 0..batch.num_rows() {
             let record = columns.iter().map(|name| {
-                let column = batch.column_by_name(name).unwrap();
-                let value = if column.is_null(row) {
-                    Json::Null
-                } else if let Some(integers) = column.as_any().downcast_ref::<Int64Array>() {
-                    Json::from(integers.value(row))
-                } else {
-                    let texts = column.as_any().downcast_ref::<StringArray>().unwrap();
-                    Json::from(texts.value(row))
+                let column = batch.column_by_name(name).unwrap().as_any();
+                let integers = column.downcast_ref::<Int64Array>();
+                let texts = column.downcast_ref::<StringArray>();
+                let value = match (integers, texts) {
+                    (Some(array), _) if array.is_valid(row) => Json::from(array.value(row)),
+                    (_, Some(array)) if array.is_valid(row) => Json::from(array.value(row)),
+                    _ => Json::Null,
                 };
                 ((*name).to_owned(), value)
             });
             records.push(Json::Object(record.collect()));
         }
     }
-    records
+    Json::Array(records)
 }
 
 /// The severity, phase, condition and rule of each issue of a result.
-pub fn conditions(result: Handle) -> Vec<Json> {
+pub fn conditions(result: Handle) -> Json {
     let issues = table(engine().issues, result).done();
     let records = records(
         export(issues).done(),
@@ -595,8 +561,8 @@ impl Scratch {
 }
 
 impl Deref for Scratch {
-    type Target = std::path::Path;
-    fn deref(&self) -> &std::path::Path {
+    type Target = Path;
+    fn deref(&self) -> &Path {
         &self.0
     }
 }
@@ -634,7 +600,8 @@ pub fn function_study(label: &str) -> Scratch {
          input: {SRC: {path: input.csv, key: [ID]}}\n\
          output: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n\
          \x20 - {name: ID, type: str, label: Identifier, derivation: SRC.ID}\n\
-         \x20 - {name: VALUE, type: str, label: Value, derivation: {function: {name: echo, args: {x: SRC.NAME}}}}\n",
+         \x20 - {name: VALUE, type: str, label: Value, derivation: \
+         {function: {name: echo, args: {x: SRC.NAME}}}}\n",
     );
     scratch.write("input.csv", "ID,NAME\n1,alpha\n2,beta\n");
     scratch.write(

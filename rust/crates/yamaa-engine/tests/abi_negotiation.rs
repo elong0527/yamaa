@@ -1,252 +1,166 @@
-//! The negotiation entry (#3702; the design on #2870, section 3.4): each
-//! request of the shared truth's `interface` family, sent through the C
-//! entry as a host's client sends it, negotiates to its authored outcome,
-//! the table comes back only on acceptance, and a request or outcome too
-//! short for its fields is refused in the check order.
+//! The negotiation entry (#3702; the design on #2870, section 3.4): it
+//! answers each request in the boundary's check order, reads another
+//! version's request no further than its header, writes no field past the
+//! caller's outcome, and returns the table only on acceptance. Each outcome
+//! is derived from the check order of `yamaa-boundary` and the fixed part of
+//! the outcome that `abi::Outcome` documents.
 use std::mem::offset_of;
 
-use serde_json::{json, Value as Json};
 use yamaa_boundary::abi::{self, Str};
 use yamaa_boundary::BOUNDARY_VERSION;
 
-use crate::support::{family, outcome};
+use crate::support::{family, outcome, request};
 
-/// The truth with its placeholders filled: `{version}` is the boundary
-/// version, `{next_version}` the one after it and `{core_version}` the
-/// engine's release.
-fn resolved(value: &Json) -> Json {
-    match value {
-        Json::String(text) if text == "{version}" => json!(BOUNDARY_VERSION),
-        Json::String(text) if text == "{next_version}" => json!(BOUNDARY_VERSION + 1),
-        Json::String(text) if text == "{core_version}" => json!(env!("CARGO_PKG_VERSION")),
-        Json::Array(items) => Json::Array(items.iter().map(resolved).collect()),
-        Json::Object(fields) => Json::Object(
-            fields
-                .iter()
-                .map(|(key, item)| (key.clone(), resolved(item)))
-                .collect(),
-        ),
-        other => other.clone(),
-    }
-}
+/// What one negotiation answered: whether the table came back, the fixed
+/// part if written, and the supported identifiers if written.
+type Negotiated = (bool, Option<[u32; 4]>, Vec<String>);
 
-fn texts(value: Option<&Json>) -> Option<Vec<String>> {
-    value?
-        .as_array()?
-        .iter()
-        .map(|item| item.as_str().map(str::to_owned))
-        .collect()
-}
-
-fn strs(texts: &[String]) -> Vec<Str> {
-    texts.iter().map(|text| Str::of(text)).collect()
-}
-
-/// The texts an outcome points at.
-fn listed(items: *const Str, len: usize) -> Vec<String> {
-    if len == 0 {
-        return Vec::new();
-    }
-    // SAFETY: an outcome points at static texts.
-    unsafe { std::slice::from_raw_parts(items, len) }
-        .iter()
-        .map(|text| {
-            // SAFETY: as above.
-            let bytes = unsafe { std::slice::from_raw_parts(text.ptr, text.len) };
-            String::from_utf8(bytes.to_vec()).unwrap()
-        })
-        .collect()
-}
-
-/// Negotiate `request` as a host's client sends it: a version that is no
-/// positive 32-bit integer as 0, which the entry reads as malformed, and a
-/// request whose other fields are not exactly two lists of texts as its
-/// header alone, which the entry reads no further than its version. Answer
-/// the record the hosts return, whose enabled and missing identifiers the
-/// host derives from the supported ones, and whether the table came back.
-fn negotiated(request: &Json) -> (Json, bool) {
-    let version = request
-        .get("version")
-        .and_then(Json::as_u64)
-        .filter(|version| (1..=u64::from(u32::MAX)).contains(version))
-        .map_or(0, |version| version as u32);
-    let lists = request
-        .as_object()
-        .filter(|fields| fields.len() == 3 && fields.contains_key("version"))
-        .and_then(|fields| {
-            Some((
-                texts(fields.get("required"))?,
-                texts(fields.get("optional"))?,
-            ))
-        });
-    let (required, optional) = lists.clone().unwrap_or_default();
-    let (required_strs, optional_strs) = (strs(&required), strs(&optional));
-    let request = abi::Request {
-        size: match lists {
-            Some(_) => size_of::<abi::Request>(),
-            None => offset_of!(abi::Request, required),
-        } as u32,
-        version,
-        required: required_strs.as_ptr(),
-        required_len: required_strs.len(),
-        optional: optional_strs.as_ptr(),
-        optional_len: optional_strs.len(),
-    };
-    let mut answer = outcome(size_of::<abi::Outcome>());
+/// Negotiate `request` into an outcome of `size` bytes, checking that no
+/// field past the caller's size is written.
+fn negotiated(request: Option<&abi::Request>, size: usize) -> Negotiated {
+    let mut answer = outcome(size);
+    // Marks past a short caller's size, which the entry must not write.
+    (answer.reason, answer.supported_len) = (u32::MAX, usize::MAX);
+    let request = request.map_or(std::ptr::null(), |request| request as *const _);
     // SAFETY: the request and the outcome are valid for the call.
-    let table = unsafe { yamaa_engine::negotiate(&request, &mut answer) };
-    let supported = listed(answer.supported, answer.supported_len);
-    let record = if answer.accepted == 1 {
-        let enabled: Vec<&String> = required
+    let table = unsafe { yamaa_engine::negotiate(request, &mut answer) };
+    let fixed = (answer.reason != u32::MAX).then_some([
+        answer.accepted,
+        answer.requested_version,
+        answer.supported_version,
+        answer.reason,
+    ]);
+    let whole = size >= size_of::<abi::Outcome>();
+    assert!(
+        whole || answer.supported_len == usize::MAX,
+        "a write past the outcome's size"
+    );
+    let supported = match whole && answer.supported_len != usize::MAX {
+        // SAFETY: an outcome points at static texts.
+        true => unsafe { std::slice::from_raw_parts(answer.supported, answer.supported_len) }
             .iter()
-            .chain(optional.iter().filter(|name| supported.contains(name)))
-            .collect();
-        json!({
-            "accepted": true,
-            "version": answer.requested_version,
-            "enabled": enabled,
-            "supported": supported,
-            "core_version": listed(&answer.core_version, 1)[0],
-            "language_versions": listed(answer.language_versions, answer.language_versions_len),
-        })
-    } else {
-        let missing: Vec<&String> = match answer.reason {
-            abi::REASON_MISSING_FEATURE => required
-                .iter()
-                .filter(|name| !supported.contains(name))
-                .collect(),
-            _ => Vec::new(),
-        };
-        let reasons = [
-            "",
-            "version_mismatch",
-            "malformed_request",
-            "missing_feature",
-        ];
-        json!({
-            "accepted": false,
-            "requested_version": (answer.requested_version != 0).then_some(answer.requested_version),
-            "supported_version": answer.supported_version,
-            "reason": reasons[answer.reason as usize],
-            "missing_features": missing,
-        })
+            // SAFETY: as above.
+            .map(|text| unsafe { std::slice::from_raw_parts(text.ptr, text.len) })
+            .map(|bytes| String::from_utf8(bytes.to_vec()).unwrap())
+            .collect(),
+        false => Vec::new(),
     };
-    // SAFETY: a table the entry returned is the engine's static table.
+    // SAFETY: a table the entry returns is the engine's static table.
     let table = unsafe { table.as_ref() }.is_some_and(|table| {
-        table.size as usize == size_of::<abi::Engine>() && table.version == BOUNDARY_VERSION
+        (table.size as usize, table.version) == (size_of::<abi::Engine>(), BOUNDARY_VERSION)
     });
-    (record, table)
+    (table, fixed, supported)
 }
 
 #[test]
-fn every_interface_case_negotiates_to_its_authored_outcome_through_the_entry() {
-    let interface = family("interface");
-    let mut cases = vec![(
-        "the generated request".to_owned(),
-        resolved(&interface["request"]),
-        resolved(&interface["accepted"]),
-    )];
-    for case in interface["cases"].as_array().unwrap() {
-        cases.push((
-            case["case"].as_str().unwrap().to_owned(),
-            resolved(&case["request"]),
-            resolved(&case["outcome"]),
-        ));
-    }
-    for (label, request, expected) in cases {
-        let accepted = expected["accepted"] == true;
-        assert_eq!(negotiated(&request), (expected, accepted), "{label}");
-    }
-}
-
-#[test]
-fn a_request_or_outcome_too_short_for_its_fields_is_refused() {
-    let names: Vec<Str> = ["structured_records", "arrow_c_stream", "plan_reuse"]
-        .iter()
-        .map(|name| Str::of(name))
-        .collect();
-    let request = |size: usize| abi::Request {
-        size: size as u32,
-        version: BOUNDARY_VERSION,
-        required: names.as_ptr(),
-        required_len: names.len(),
-        optional: std::ptr::null(),
-        optional_len: 0,
-    };
-    let fixed = offset_of!(abi::Outcome, reason) + size_of::<u32>();
-    // Each case: a request, the outcome's size, and what the entry answers:
-    // the table or none, and the fixed part it wrote, or nothing.
+fn each_request_negotiates_in_the_check_order_through_the_entry() {
+    let names = |names: &[&'static str]| names.iter().map(|name| Str::of(name)).collect::<Vec<_>>();
+    let required = names(&["structured_records", "arrow_c_stream", "plan_reuse"]);
+    let (outside, unknown) = (
+        names(&["Format_YAML"]),
+        names(&["structured_records", "batch_stream"]),
+    );
     let whole = size_of::<abi::Outcome>();
-    let cases: [(&str, Option<abi::Request>, usize, (bool, Option<[u32; 4]>)); 5] = [
+    let fixed = offset_of!(abi::Outcome, reason) + size_of::<u32>();
+    let sized = |size: usize, version: u32, lists: &[Str]| abi::Request {
+        size: size as u32,
+        version,
+        ..request(lists, &[])
+    };
+    let full = size_of::<abi::Request>();
+    // A next version's lists that this version could not read, and does not.
+    let next = abi::Request {
+        required: std::ptr::null(),
+        required_len: 7,
+        ..sized(full, BOUNDARY_VERSION + 1, &[])
+    };
+    let supported: Vec<String> = family("interface")["accepted"]["supported"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|name| name.as_str().unwrap().to_owned())
+        .collect();
+    let (version, malformed) = (BOUNDARY_VERSION, abi::REASON_MALFORMED_REQUEST);
+    let cases: [(&str, Option<abi::Request>, usize, Negotiated); 9] = [
         (
-            "the generated request",
-            Some(request(size_of::<abi::Request>())),
+            "the required identifiers",
+            Some(request(&required, &[])),
             whole,
             (
                 true,
-                Some([1, BOUNDARY_VERSION, BOUNDARY_VERSION, abi::REASON_NONE]),
+                Some([1, version, version, abi::REASON_NONE]),
+                supported.clone(),
             ),
         ),
         (
             "no request",
             None,
             whole,
-            (
-                false,
-                Some([0, 0, BOUNDARY_VERSION, abi::REASON_MALFORMED_REQUEST]),
-            ),
+            (false, Some([0, 0, version, malformed]), Vec::new()),
         ),
         (
             "a request that stops inside its version",
-            Some(request(offset_of!(abi::Request, version))),
+            Some(sized(offset_of!(abi::Request, version), version, &required)),
+            whole,
+            (false, Some([0, 0, version, malformed]), Vec::new()),
+        ),
+        (
+            "a version of zero",
+            Some(sized(full, 0, &required)),
+            whole,
+            (false, Some([0, 0, version, malformed]), Vec::new()),
+        ),
+        (
+            "the next version, read no further than its header",
+            Some(next),
             whole,
             (
                 false,
-                Some([0, 0, BOUNDARY_VERSION, abi::REASON_MALFORMED_REQUEST]),
+                Some([0, version + 1, version, abi::REASON_VERSION_MISMATCH]),
+                Vec::new(),
             ),
         ),
         (
-            "an outcome of only the fixed part",
-            Some(request(size_of::<abi::Request>())),
-            fixed,
+            "this version without its lists",
+            Some(sized(
+                offset_of!(abi::Request, required),
+                version,
+                &required,
+            )),
+            whole,
+            (false, Some([0, version, version, malformed]), Vec::new()),
+        ),
+        (
+            "an identifier outside the grammar",
+            Some(request(&outside, &[])),
+            whole,
+            (false, Some([0, version, version, malformed]), Vec::new()),
+        ),
+        // The host names the missing identifiers: those of `required` that
+        // the supported ones lack, in request order.
+        (
+            "an unknown required identifier",
+            Some(request(&unknown, &[])),
+            whole,
             (
                 false,
-                Some([
-                    0,
-                    BOUNDARY_VERSION,
-                    BOUNDARY_VERSION,
-                    abi::REASON_MALFORMED_REQUEST,
-                ]),
+                Some([0, version, version, abi::REASON_MISSING_FEATURE]),
+                supported,
             ),
         ),
         (
-            "an outcome too short for its fixed part",
-            Some(request(size_of::<abi::Request>())),
-            fixed - 1,
-            (false, None),
+            "an outcome of only its fixed part",
+            Some(request(&required, &[])),
+            fixed,
+            (false, Some([0, version, version, malformed]), Vec::new()),
         ),
     ];
     for (label, request, size, expected) in cases {
-        let mut answer = outcome(size);
-        // A mark past the caller's size, which the entry must not write.
-        answer.supported_len = usize::MAX;
-        answer.reason = u32::MAX;
-        let request = request
-            .as_ref()
-            .map_or(std::ptr::null(), |request| request as *const _);
-        // SAFETY: the request and the outcome are valid for the call.
-        let table = unsafe { yamaa_engine::negotiate(request, &mut answer) };
-        let written = (answer.reason != u32::MAX).then_some([
-            answer.accepted,
-            answer.requested_version,
-            answer.supported_version,
-            answer.reason,
-        ]);
-        let untouched = size == whole || answer.supported_len == usize::MAX;
-        assert_eq!(
-            (!table.is_null(), written, untouched),
-            (expected.0, expected.1, true),
-            "{label}"
-        );
+        assert_eq!(negotiated(request.as_ref(), size), expected, "{label}");
     }
+    assert_eq!(
+        negotiated(Some(&request(&required, &[])), fixed - 1),
+        (false, None, Vec::new()),
+        "an outcome too short for its fixed part"
+    );
 }
