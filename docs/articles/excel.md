@@ -202,7 +202,7 @@ combination is the supported route.
 | `Origin` = Collected (CRF / eDT) | `odm: ODM.IT.DM.AGE` | Reads the one record of the item among the ODM records the row was built from; `event`, `form`, `item_group`, and `filter` narrow it (Name binding) |
 | `Origin` = Predecessor | a copy entry, `copy: {dataset: ADSL, columns: [TRTSDT]}`, or a read, `derivation: ADSL.TRTSDT` | A copy entry takes each column's type and label, and its Predecessor origin, length and codelist, from the producing spec the input links through `schema`; both forms join on the input's declared `key` (Lookup and joins) |
 | `Origin` = Derived | an expression or a verb | See [the derivation vocabulary](schema-intro.md#the-derivation-vocabulary) |
-| `Core` (Req / Exp / Perm for SDTM and SEND; Req / Cond / Perm for ADaM) | `submission.core` | Conformance classification; it says nothing about derivation |
+| `Core` (`Req` / `Exp` / `Perm` for SDTM and SEND; `Req` / `Cond` / `Perm` for ADaM) | `submission.core` | Conformance classification; it says nothing about derivation |
 | `Conversion Definition` | `derivation:` | From a sentence a person reads to an expression a machine runs |
 | A sponsor macro the definition calls | `function: {name: bmi, args: {weight_kg: WEIGHTKG, height_cm: HEIGHTCM}}` | A `function` file declares the routine once, with its parameters, return type, tests and each host's implementation; the project lists the file under `functions`, and a spec that calls it runs with its project |
 | `Variable Order` | `columns` order **and** `output.columns` | One Excel column doing two jobs |

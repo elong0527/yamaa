@@ -10,6 +10,7 @@ pub mod front_end;
 
 pub mod aggregate_reduction;
 pub mod bound_expression;
+pub mod cdisc_vocabulary;
 pub mod column_dependencies;
 pub mod conversion;
 pub mod copy_expansion;

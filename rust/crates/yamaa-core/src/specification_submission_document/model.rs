@@ -1,4 +1,8 @@
 //! Closed declarations and normalized occurrence facts; no written-file claim.
+use crate::cdisc_vocabulary::{
+    Core, DataType, DatasetClass, DatasetSubclass, MethodType, ModelKind, OriginSource, OriginType,
+    PageType,
+};
 use crate::diagnostic::ScalarSubmissionRule;
 
 macro_rules! vocabulary {
@@ -74,30 +78,6 @@ pub const VALUE_ENTRY_FIELDS: &[FieldName] = &[
     FieldName::Comment,
 ];
 vocabulary!(ColumnType { String => "str", Integer => "int", Float => "float", Date => "date", Datetime => "datetime" });
-vocabulary!(Core { Required => "Req", Expected => "Exp", Permissible => "Perm", Conditional => "Cond" });
-vocabulary!(OriginType { Assigned => "Assigned", Collected => "Collected", Derived => "Derived", NotAvailable => "Not Available", Other => "Other", Predecessor => "Predecessor", Protocol => "Protocol" });
-vocabulary!(OriginSource { Investigator => "Investigator", Sponsor => "Sponsor", Subject => "Subject", Vendor => "Vendor" });
-/// Every role a column's `role` takes: the nine of the SDTM model, which
-/// `yaml/vocabulary/cdisc.yaml` holds (SUB-9). A role stays text.
-pub const ROLES: &[&str] = &[
-    "Identifier",
-    "Topic",
-    "Timing",
-    "Grouping Qualifier",
-    "Result Qualifier",
-    "Synonym Qualifier",
-    "Record Qualifier",
-    "Variable Qualifier",
-    "Rule",
-];
-vocabulary!(MethodType { Computation => "Computation", Imputation => "Imputation" });
-vocabulary!(PageType { Physical => "PhysicalRef", Named => "NamedDestination" });
-vocabulary!(DataType {
-    Text => "text", Integer => "integer", Float => "float", Date => "date", Datetime => "datetime", Time => "time",
-    PartialDate => "partialDate", PartialTime => "partialTime", PartialDatetime => "partialDatetime",
-    IncompleteDate => "incompleteDate", IncompleteTime => "incompleteTime", IncompleteDatetime => "incompleteDatetime",
-    DurationDatetime => "durationDatetime", IntervalDatetime => "intervalDatetime", Uri => "URI"
-});
 impl ColumnType {
     pub fn default_data_type(self) -> DataType {
         match self {
@@ -173,13 +153,6 @@ pub fn numeric_date_format_name(column: &str, adam: bool) -> Option<&'static str
         .find(|(name, _)| *name == column)
         .and_then(|(_, column)| column.numeric_date_format(adam))
 }
-vocabulary!(DatasetClass {
-    AdamOther => "ADAM OTHER", BasicData => "BASIC DATA STRUCTURE", DeviceLevel => "DEVICE LEVEL ANALYSIS DATASET",
-    Events => "EVENTS", Findings => "FINDINGS", FindingsAbout => "FINDINGS ABOUT", Interventions => "INTERVENTIONS",
-    MedicalDeviceBasic => "MEDICAL DEVICE BASIC DATA STRUCTURE", MedicalDeviceOccurrence => "MEDICAL DEVICE OCCURRENCE DATA STRUCTURE",
-    Occurrence => "OCCURRENCE DATA STRUCTURE", Reference => "REFERENCE DATA STRUCTURE", Relationship => "RELATIONSHIP",
-    SpecialPurpose => "SPECIAL PURPOSE", StudyReference => "STUDY REFERENCE", SubjectLevel => "SUBJECT LEVEL ANALYSIS DATASET", TrialDesign => "TRIAL DESIGN"
-});
 impl DatasetClass {
     /// The classes the tabulation families (`sdtm`, `send`) publish. Every other
     /// class is an analysis class, where `core` never derives `mandatory`.
@@ -204,31 +177,17 @@ impl DatasetClass {
     }
 }
 impl Core {
-    /// Read a written core designation.
-    pub fn from_name(name: &str) -> Option<Self> {
-        Self::VALUES
-            .iter()
-            .find(|(text, _)| *text == name)
-            .map(|(_, core)| *core)
-    }
     /// Whether `model` publishes this designation (SUB-10): `Req`, `Exp` and
     /// `Perm` for SDTM and SEND, and `Req`, `Cond` and `Perm` for ADaM.
-    pub fn admitted_by(self, model: crate::ast::ModelKind) -> bool {
+    pub fn admitted_by(self, model: ModelKind) -> bool {
         match self {
-            Self::Expected => model != crate::ast::ModelKind::Adam,
-            Self::Conditional => model == crate::ast::ModelKind::Adam,
-            Self::Required | Self::Permissible => true,
+            Self::Exp => model != ModelKind::ADaM,
+            Self::Cond => model == ModelKind::ADaM,
+            Self::Req | Self::Perm => true,
         }
     }
 }
 impl OriginType {
-    /// Read a written origin type.
-    pub fn from_name(name: &str) -> Option<Self> {
-        Self::VALUES
-            .iter()
-            .find(|(text, _)| *text == name)
-            .map(|(_, kind)| *kind)
-    }
     /// Every origin type, in the vocabulary's published order.
     pub fn all() -> impl Iterator<Item = Self> {
         Self::VALUES.iter().map(|(_, kind)| *kind)
@@ -237,8 +196,8 @@ impl OriginType {
     /// table of pairs, which has no `Not Available` (D65), SEND without a
     /// source or with a pair SDTM admits, and ADaM four types whose source is
     /// derived, never declared.
-    pub fn admits_source(self, model: crate::ast::ModelKind, source: Option<OriginSource>) -> bool {
-        use crate::ast::ModelKind as M;
+    pub fn admits_source(self, model: ModelKind, source: Option<OriginSource>) -> bool {
+        use ModelKind as M;
         use OriginSource as S;
         match model {
             M::Sdtm => match self {
@@ -250,7 +209,7 @@ impl OriginType {
                 Self::NotAvailable => false,
             },
             M::Send => source.is_none() || self.admits_source(M::Sdtm, source),
-            M::Adam => {
+            M::ADaM => {
                 source.is_none()
                     && matches!(
                         self,
@@ -258,15 +217,6 @@ impl OriginType {
                     )
             }
         }
-    }
-}
-impl OriginSource {
-    /// Read a written origin source.
-    pub fn from_name(name: &str) -> Option<Self> {
-        Self::VALUES
-            .iter()
-            .find(|(text, _)| *text == name)
-            .map(|(_, source)| *source)
     }
 }
 /// The one `mandatory` resolution shared by the domain build and composition: a
@@ -278,12 +228,8 @@ pub fn resolve_mandatory(
     core: Option<Core>,
     tabulation: bool,
 ) -> bool {
-    key || declared.unwrap_or(tabulation && core == Some(Core::Required))
+    key || declared.unwrap_or(tabulation && core == Some(Core::Req))
 }
-vocabulary!(DatasetSubclass {
-    AdverseEvent => "ADVERSE EVENT", MedicalDeviceTimeToEvent => "MEDICAL DEVICE TIME-TO-EVENT",
-    NonCompartmental => "NON-COMPARTMENTAL ANALYSIS", PopulationPharmacokinetic => "POPULATION PHARMACOKINETIC ANALYSIS", TimeToEvent => "TIME-TO-EVENT"
-});
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Origin {
     pub container: usize,

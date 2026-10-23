@@ -14,9 +14,10 @@
 
 use super::project::Metas;
 use crate::ast::{
-    DefineContext, DocumentKind, GuideStatus, ImplementationGuide, Meta, MetadataVersion, Named,
-    Section, Study, SubmissionDeclarations, SupportingDocument, Text, Transport, STANDARD_NAMES,
+    DocumentKind, ImplementationGuide, Meta, MetadataVersion, Named, Section, Study,
+    SubmissionDeclarations, SupportingDocument, Text, Transport,
 };
+use crate::cdisc_vocabulary::{DefineContext, GuideStatus, StandardName};
 use crate::diagnostic::ScalarSubmissionRule;
 use crate::project_environment::Submission;
 use crate::schema::{Document, DocumentNode as N};
@@ -509,11 +510,15 @@ impl<'d> Parser<'d, '_, '_> {
         }
         let node = origin.node.unwrap();
         let name_origin = self.get(node, FieldName::Name);
-        let names: Vec<_> = STANDARD_NAMES.iter().map(|name| (*name, *name)).collect();
         let name = self
-            .choice(name_origin, path.field(FieldName::Name), &names, None)
+            .choice(
+                name_origin,
+                path.field(FieldName::Name),
+                StandardName::VALUES,
+                None,
+            )
             .map(|name| Text {
-                text: name.into(),
+                text: name.name().into(),
                 meta: self.meta(meta, name_origin),
             });
         let version =
@@ -521,11 +526,7 @@ impl<'d> Parser<'d, '_, '_> {
         let status = self.choice(
             self.get(node, FieldName::Status),
             path.field(FieldName::Status),
-            &[
-                ("Draft", GuideStatus::Draft),
-                ("Final", GuideStatus::Final),
-                ("Provisional", GuideStatus::Provisional),
-            ],
+            GuideStatus::VALUES,
             None,
         );
         Some(ImplementationGuide {
@@ -668,10 +669,7 @@ impl<'d> Parser<'d, '_, '_> {
         let context = self.choice(
             self.get(node, FieldName::Context),
             path.field(FieldName::Context),
-            &[
-                ("Submission", DefineContext::Submission),
-                ("Other", DefineContext::Other),
-            ],
+            DefineContext::VALUES,
             Some(DefineContext::Submission),
         );
         let xml_lang = self.text_at(

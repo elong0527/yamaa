@@ -7,10 +7,10 @@
 use std::io::{self, Write};
 use yamaa_core::{
     application_issue::{Fault, Step},
+    cdisc_vocabulary::DataType,
     diagnostic::ConditionCode,
     limits::{LimitExceeded, Limits},
     project_environment::Submission,
-    specification_submission_document::DataType,
     submission_composition::{Dataset, Finding, Study},
     table::{TableAccess, ValueRef},
 };
