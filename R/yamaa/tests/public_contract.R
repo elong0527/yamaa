@@ -158,6 +158,7 @@ qualify_signatures <- function() {
   limits <- host_truth[["read_odm_limits"]]
   options <- formals(yamaa_read_odm)
   stopifnot("read_odm's archive member defaults to NULL" = is.null(options$archive_member),
+    "a spec check's parent defaults to NULL" = is.null(formals(spec$check)$parent),
     "a project run's section defaults to NULL" = is.null(formals(project$run)$section),
     "a submission's section defaults to NULL" = is.null(formals(project$submission)$section),
     "a submission's creation time defaults to NULL" = is.null(formals(project$submission)$created),

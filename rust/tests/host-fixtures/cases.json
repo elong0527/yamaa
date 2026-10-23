@@ -4655,7 +4655,9 @@
           "paths",
           "fix"
         ],
-        "spec.check": [],
+        "spec.check": [
+          "parent"
+        ],
         "spec.resolve": [],
         "spec.run": [
           "stream"
@@ -6448,7 +6450,12 @@
         "twice.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: twice-template.yaml\ninclude: [duration.yaml]\ndomain: ADAE\nkeys: [USUBJID, AESEQ]\noutput: {path: adae.csv, columns: [USUBJID, AESEQ, ADURN]}\n",
         "absent-template.yaml": "yamaa: \"1.0\"\ntype: spec\ninclude: [absent.yaml]\n",
         "below-absent.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: absent-template.yaml\ninclude: [duration.yaml]\ndomain: ADAE\nkeys: [USUBJID]\noutput: {path: adae.csv, columns: [USUBJID]}\n",
-        "missing.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: ae.yaml\ninclude: [absent.yaml]\ndomain: ADAE\nkeys: [USUBJID, AESEQ]\noutput: {path: adae.csv, columns: [USUBJID, AESEQ]}\n"
+        "missing.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: ae.yaml\ninclude: [absent.yaml]\ndomain: ADAE\nkeys: [USUBJID, AESEQ]\noutput: {path: adae.csv, columns: [USUBJID, AESEQ]}\n",
+        "adae-template.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: ae.yaml\ndomain: ADAE\nkeys: [USUBJID, AESEQ]\noutput: {path: adae.csv, columns: [USUBJID, AESEQ, ADURN]}\n",
+        "onset.yaml": "yamaa: \"1.0\"\ntype: spec\ncolumns:\n  - name: ADURN\n    type: int\n    label: Duration\n    derivation: {diff: {type: date, start: AONSET, end: AENDT, unit: day, closed: both}}\n",
+        "duration-child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: adae-template.yaml\ninclude: [duration.yaml]\n",
+        "onset-child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: adae-template.yaml\ninclude: [onset.yaml]\n",
+        "severity-child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: adae-template.yaml\ninclude: [severity.yaml]\n"
       },
       "checks": [
         {
@@ -6561,6 +6568,113 @@
               "column": 11,
               "message": "absent.yaml does not exist",
               "context": "{\"path\":\"absent.yaml\",\"source\":\"{root}/absent-template.yaml\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        }
+      ],
+      "parent_checks": [
+        {
+          "name": "a_fragment_on_a_given_parent_checks_clean_as_a_child_that_includes_it",
+          "fragment": "duration.yaml",
+          "parent": "adae-template.yaml",
+          "child": "duration-child.yaml",
+          "issues": []
+        },
+        {
+          "name": "a_column_the_fragment_reads_and_no_layer_declares_is_located_in_the_fragment",
+          "fragment": "onset.yaml",
+          "parent": "adae-template.yaml",
+          "child": "onset-child.yaml",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "unknown_reference",
+              "rule": "COLUMN-5",
+              "spec_paths": [
+                "columns.ADURN.derivation"
+              ],
+              "file": "onset.yaml",
+              "line": 7,
+              "column": 5,
+              "message": "ADURN reads AONSET, which no input or earlier column declares",
+              "context": "{\"column\":\"ADURN\",\"dependency\":\"AONSET\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "a_column_the_parent_outputs_and_the_fragment_lacks_is_located_in_the_parent",
+          "fragment": "severity.yaml",
+          "parent": "adae-template.yaml",
+          "child": "severity-child.yaml",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "undeclared_column",
+              "rule": "OUTPUT-1",
+              "spec_paths": [
+                "output.columns[2]"
+              ],
+              "file": "adae-template.yaml",
+              "line": 6,
+              "column": 52,
+              "message": "ADURN is not a declared column",
+              "context": "{\"column\":\"ADURN\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        }
+      ],
+      "parent_refusals": [
+        {
+          "name": "a_parent_given_for_a_layer_that_names_a_parent_is_refused",
+          "path": "named-parent.yaml",
+          "parent": "adae-template.yaml",
+          "message": "cannot read {path}: parent has the value {parent}, which is not permitted [value_not_permitted, LAYER-4]",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "value_not_permitted",
+              "rule": "LAYER-4",
+              "spec_paths": [
+                "parent"
+              ],
+              "file": null,
+              "line": null,
+              "column": null,
+              "message": "parent has the value {parent}, which is not permitted",
+              "context": "{\"construct\":\"parent\",\"value\":\"{parent}\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "a_parent_given_for_a_layer_that_includes_fragments_is_refused",
+          "path": "cyclic-template.yaml",
+          "parent": "ae.yaml",
+          "message": "cannot read {path}: parent has the value {parent}, which is not permitted [value_not_permitted, LAYER-4]",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "value_not_permitted",
+              "rule": "LAYER-4",
+              "spec_paths": [
+                "parent"
+              ],
+              "file": null,
+              "line": null,
+              "column": null,
+              "message": "parent has the value {parent}, which is not permitted",
+              "context": "{\"construct\":\"include\",\"value\":\"{parent}\"}",
               "source_span": null,
               "operand_route": null
             }

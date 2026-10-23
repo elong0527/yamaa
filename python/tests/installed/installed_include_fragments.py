@@ -5,6 +5,11 @@ parent chain and an `include` list compose, and the files of four refusals.
 Each check case checks one entry and compares every issue row it returns
 with the authored rows, all twelve columns of D28 (#3030); `{root}` stands
 for the directory the study is written in, resolved, with forward slashes.
+Each parent case checks a fragment with `check(parent=)` and the child that
+names that parent and includes the fragment, and requires both to return its
+rows (#3694); each refused parent raises its error text and its rows, where
+`{path}` stands for the path the test gave and `{parent}` for the parent it
+gave.
 The resolve case compares the layers the entry composes, in contribution
 order, the `parent` and `include` resources, the resolved columns, the layer
 each named value comes from, and the fields the resolved specification never
@@ -14,6 +19,7 @@ holds (LAYER-14). R's include_fragments.R checks the same truth.
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -48,6 +54,21 @@ def expected(rows, root):
     ]
 
 
+def with_parent(rows, parent):
+    """`rows` with `{parent}` filled: the parent path the test gave, as given
+    in the message and as JSON text in the context."""
+    spelled = os.fspath(parent)
+    quoted = json.dumps(spelled, ensure_ascii=False)[1:-1]
+    return [
+        {
+            **row,
+            "message": row["message"].replace("{parent}", spelled),
+            "context": row["context"].replace("{parent}", quoted),
+        }
+        for row in rows
+    ]
+
+
 class IncludeFragments(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="yamaa-include-fragments-")
@@ -62,6 +83,41 @@ class IncludeFragments(unittest.TestCase):
                 self.assertEqual(
                     checked.issues.to_pylist(),
                     expected(case["issues"], self.root),
+                    case["name"],
+                )
+
+    def test_a_fragment_on_a_parent_returns_the_rows_of_the_child_that_includes_it(
+        self,
+    ):
+        for case in TRUTH["parent_checks"]:
+            with self.subTest(case=case["name"]):
+                rows = expected(case["issues"], self.root)
+                fragment = yamaa.spec(self.root / case["fragment"]).check(
+                    parent=self.root / case["parent"]
+                )
+                child = yamaa.spec(self.root / case["child"]).check()
+                self.assertEqual(
+                    (fragment.issues.to_pylist(), child.issues.to_pylist()),
+                    (rows, rows),
+                    case["name"],
+                )
+
+    def test_a_parent_given_for_a_file_that_is_no_fragment_is_refused(self):
+        for case in TRUTH["parent_refusals"]:
+            with self.subTest(case=case["name"]):
+                given = self.root / case["path"]
+                parent = self.root / case["parent"]
+                with self.assertRaises(yamaa.Error) as caught:
+                    yamaa.spec(given).check(parent=parent)
+                error = caught.exception
+                message = case["message"].replace("{path}", os.fspath(given))
+                self.assertEqual(
+                    (str(error), error.paths, error.issues.to_pylist()),
+                    (
+                        message.replace("{parent}", os.fspath(parent)),
+                        [],
+                        with_parent(expected(case["issues"], self.root), parent),
+                    ),
                     case["name"],
                 )
 
