@@ -281,6 +281,24 @@ EXPECTED = {
     "new.spec.input.byte_order_mark": [
         Field("dataset_class", "byte_order_mark", "bool")
     ],
+    # D208: `not_missing` selects its rows and allows a share (CHECK-5).
+    "new.spec.column_verifications.not_missing.when": [
+        Field("column_verifications.not_missing", "when", "predicate")
+    ],
+    "new.spec.column_verifications.not_missing.max_fraction": [
+        Field("column_verifications.not_missing", "max_fraction", "float")
+    ],
+    # D210: an intermediate's `unique` may warn under keep and order_by
+    # (LOOKUP-17).
+    "new.spec.intermediate_unique_arguments.severity": [
+        Field(
+            "intermediate_unique_arguments",
+            "severity",
+            "verification_severity",
+            default="error",
+            values=("error", "warning"),
+        )
+    ],
     "new.spec.clear": [Field("root_class", "clear", "list[spec_path]")],
     # A lint suppression comment and a profile chosen by the path's
     # extension: neither is a schema field.

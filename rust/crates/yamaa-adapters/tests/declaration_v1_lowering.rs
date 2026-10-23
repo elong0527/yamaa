@@ -438,7 +438,10 @@ fn a_check_that_declares_no_field_is_written_as_its_bare_keyword() {
     let column = tree.columns.iter().find(|c| c.name.name == "V").unwrap();
     assert_eq!(
         column.checks[0].kind,
-        yamaa_core::ast::ColumnCheckKind::NotMissing
+        yamaa_core::ast::ColumnCheckKind::NotMissing {
+            when: None,
+            max_fraction: None
+        }
     );
     assert_eq!(
         tree.cite(column.checks[0].meta),

@@ -1,0 +1,41 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  DS: input/ds.csv
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, EOSDT]
+  report: adsl-checks.csv
+
+intermediates:
+  # Each subject's end-of-study record, a repeated subject meant to be
+  # reported rather than refused. Nothing says which of its records to
+  # read, so the warning is refused before any record is read.
+  - id: DS_EOS
+    dataset: DS
+    key: [STUDYID, USUBJID]
+    filter: "DS.DSCAT = 'DISPOSITION EVENT'"
+    verifications:
+      - unique: {columns: [STUDYID, USUBJID], severity: warning}
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: EOSDT
+    type: str
+    label: End of Study Date
+    derivation: DS_EOS.DSSTDTC

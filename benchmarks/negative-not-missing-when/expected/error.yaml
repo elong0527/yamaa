@@ -1,0 +1,12 @@
+phase: verification
+condition: not_missing_failed
+spec_paths:
+  - columns.AEDECOD.verifications[0].not_missing
+rule: CHECK-5
+context:
+  column: AEDECOD
+  failure_count: 1
+  keys:
+    - STUDYID: YAMAA-01
+      USUBJID: P01
+      AESEQ: 2

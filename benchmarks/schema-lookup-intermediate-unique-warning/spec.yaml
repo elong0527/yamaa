@@ -1,0 +1,48 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  EX: input/ex.csv
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRTEDT]
+  # The warning's line in the run report lists the subjects with several
+  # exposure records, which needs a report file.
+  report: adsl-checks.csv
+
+intermediates:
+  # Each subject's latest exposure record. The subject key is expected to
+  # be unique across the exposure records, but a subject with several is
+  # reported rather than refused, and the record that starts last is read:
+  # the check warns only because the order and keep choose one record.
+  - id: LAST_EX
+    dataset: EX
+    key: [STUDYID, USUBJID]
+    order_by: [EX.EXSTDTC, EX.EXSEQ]
+    keep: last
+    verifications:
+      - unique:
+          id: one-exposure-record
+          columns: [STUDYID, USUBJID]
+          severity: warning
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: TRTEDT
+    type: date
+    label: Date of Last Exposure to Treatment
+    derivation: LAST_EX.EXENDTC

@@ -158,7 +158,10 @@ mod file {
                 );
                 assert!(matches!(
                     compiled.column_check(&path),
-                    Some(yamaa_core::dataset::Check::NotMissing)
+                    Some(yamaa_core::dataset::Check::NotMissing {
+                        when: None,
+                        max_fraction: None
+                    })
                 ));
             }
             assert!(!study.0.join("never-read.csv").exists());

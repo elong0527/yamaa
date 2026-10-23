@@ -2377,6 +2377,14 @@ column_verification_entry:
 column_verifications:
     not_missing:
         - id: {type: verification_id, required: false}
+        - when:
+            type: predicate
+            required: false
+            description: See CHECK-5.
+        - max_fraction:
+            type: float
+            required: false
+            description: See CHECK-5.
         - severity: {type: verification_severity, required: false, default: error}
     allowed_values:
         - id: {type: verification_id, required: false}
@@ -2443,6 +2451,11 @@ dataset_unique_arguments:
 intermediate_unique_arguments:
     - id: {type: verification_id, required: false}
     - columns: {type: "list[variable]", required: true}
+    - severity:
+        type: verification_severity
+        required: false
+        default: error
+        description: See LOOKUP-17.
 
 verification_id:
     type: str
@@ -2708,6 +2721,18 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
               "$ref": "#/$defs/verification_id",
               "x-yamaa-kind": "identifier",
               "x-yamaa-type": "verification_id"
+            },
+            "when": {
+              "$ref": "#/$defs/predicate",
+              "description": "See CHECK-5.",
+              "x-yamaa-kind": "expression",
+              "x-yamaa-type": "predicate"
+            },
+            "max_fraction": {
+              "type": "number",
+              "description": "See CHECK-5.",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "float"
             },
             "severity": {
               "$ref": "#/$defs/verification_severity",
@@ -3576,6 +3601,18 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
               "x-yamaa-kind": "identifier",
               "x-yamaa-type": "verification_id"
             },
+            "when": {
+              "$ref": "#/$defs/predicate",
+              "description": "See CHECK-5.",
+              "x-yamaa-kind": "expression",
+              "x-yamaa-type": "predicate"
+            },
+            "max_fraction": {
+              "type": "number",
+              "description": "See CHECK-5.",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "float"
+            },
             "severity": {
               "$ref": "#/$defs/verification_severity",
               "default": "error",
@@ -4125,6 +4162,13 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           },
           "x-yamaa-kind": "name",
           "x-yamaa-type": "list[variable]"
+        },
+        "severity": {
+          "$ref": "#/$defs/verification_severity",
+          "default": "error",
+          "description": "See LOOKUP-17.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "verification_severity"
         }
       },
       "additionalProperties": false
@@ -5834,6 +5878,13 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           },
           "x-yamaa-kind": "name",
           "x-yamaa-type": "list[variable]"
+        },
+        "severity": {
+          "$ref": "#/$defs/verification_severity",
+          "default": "error",
+          "description": "See LOOKUP-17.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "verification_severity"
         }
       },
       "required": [
