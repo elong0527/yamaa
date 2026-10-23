@@ -31,6 +31,14 @@ pub enum Error {
     /// [`ProjectFunctions::is_interrupt`](crate::ProjectFunctions::is_interrupt)
     /// classifies it (D46). The operation returns no result and no issue.
     Cancelled,
+    /// A streamed run refused a reader or its result (#3697), with the
+    /// stable `code` that names why: `host_thread`, a run that can call its
+    /// host's project functions would be built off the thread that started
+    /// it; `stream_taken`, another reader started its stream; `stream_open`,
+    /// its result was asked for while a reader's stream has not ended; and
+    /// `busy`, another call, such as a project function its build called,
+    /// uses it. See [`crate::stream`].
+    Stream { code: &'static str },
     /// A stable internal code with no internal payload.
     Internal { code: &'static str },
 }
@@ -69,6 +77,18 @@ impl std::fmt::Display for Error {
                 write!(f, "format feature not compiled in: {feature}")
             }
             Self::Cancelled => f.write_str("operation cancelled"),
+            Self::Stream { code } => {
+                let reason = match *code {
+                    "host_thread" => {
+                        "a run that can call project functions is built only on the thread that started it"
+                    }
+                    "stream_taken" => "another reader has read the run's output stream",
+                    "stream_open" => "the run's output stream has not been read to its end",
+                    "busy" => "the streamed run is in use",
+                    _ => "the streamed run refused",
+                };
+                write!(f, "{reason} [{code}]")
+            }
             Self::Internal { code } => write!(f, "internal failure: {code}"),
         }
     }

@@ -349,7 +349,7 @@ pub(crate) fn save(
     }
     let failed = parts
         .iter()
-        .any(|part| matches!(part, Part::Built { build, .. } if build.output().is_none()));
+        .any(|part| matches!(part, Part::Built { build, .. } if !build.accepted()));
 
     // 1. Plan every part's files.
     let mut files = Vec::new();
@@ -457,7 +457,7 @@ pub(crate) fn save(
                 });
                 build.measure_save(if local.is_some() || written.len() < files.end {
                     "refused"
-                } else if build.output().is_none() {
+                } else if !build.accepted() {
                     "failed"
                 } else {
                     "succeeded"

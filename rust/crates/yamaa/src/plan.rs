@@ -111,4 +111,44 @@ impl Plan {
             token,
         )
     }
+
+    /// One run of this plan whose output is read as a stream (#3697), as
+    /// [`Plan::run_through`] runs it with no held artifacts: the build, and
+    /// an accepted output's rows, handed out at most `rows` records at a
+    /// time.
+    pub(crate) fn stream_through(
+        &self,
+        shared: &EngineShared,
+        measurements: &Arc<Measurements>,
+        token: &CancellationToken,
+        rows: std::num::NonZeroUsize,
+    ) -> (Build, Option<crate::internal::PublicBatches>) {
+        crate::internal::run_streamed(
+            shared,
+            &self.compiled.specification,
+            &self.compiled.state,
+            measurements,
+            token,
+            rows,
+        )
+    }
+
+    /// The public schema of the output this plan builds, known before it
+    /// runs; none for a refused compilation.
+    pub(crate) fn schema(&self) -> Option<arrow_schema::SchemaRef> {
+        match &self.compiled.state {
+            Compiled::Ready(prepared, _) => {
+                yamaa_adapters::public_table::output_schema(prepared.run().compiled())
+            }
+            Compiled::Refused { .. } => None,
+        }
+    }
+
+    /// Whether a run of this plan can call its host: an engine with project
+    /// functions runs a specification with a project, whose activation and
+    /// derivations call them.
+    pub(crate) fn calls_host(&self, shared: &EngineShared) -> bool {
+        shared.functions.is_some()
+            && matches!(&self.compiled.state, Compiled::Ready(prepared, _) if prepared.run().has_project())
+    }
 }
