@@ -1,8 +1,9 @@
 #![cfg(feature = "yaml")]
 //! The cancel-or-fail by phase matrix (#3697, the contract in its comment of
-//! 2026-10-23): one test per cell of the before-start, mid-partition and
-//! publication rows, on a partitioned engine over a memory resolver. The
-//! mid-stream row comes with streaming (step 4).
+//! 2026-10-23): one test per cell of the before-start, mid-partition,
+//! mid-stream and publication rows, on a partitioned engine over a memory
+//! resolver. The mid-stream cells read a streamed run's output one record per
+//! batch (`Engine::spec_stream`).
 //!
 //! Each cell asserts its end state whole: the outcome and its identity
 //! (cancelled, or the first issue's phase, condition and paths), what names
@@ -17,7 +18,7 @@ use std::sync::{
 
 use yamaa::{
     Argument, CallError, CancellationToken, Engine, EngineOptions, Error, Failure, FunctionError,
-    FunctionHandle, FunctionIdentity, HostLanguage, LockContext, MemoryResolver, Partitions,
+    FunctionHandle, FunctionIdentity, HostLanguage, LockContext, MemoryResolver, Partitions, Plans,
     ProjectFunctions, ResolverFailure, ResolverReply, ResolverRequest, ResourceResolver, Run,
     Scalar, ScalarRef, Signature,
 };
@@ -63,6 +64,15 @@ impl Recording {
             .unwrap()
             .iter()
             .filter(|(name, _)| name == operation)
+            .count()
+    }
+    /// The requests of `operation` for the path written as `written`.
+    fn requested(&self, operation: &str, written: &str) -> usize {
+        self.requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(name, path)| name == operation && path == written)
             .count()
     }
 }
@@ -153,7 +163,7 @@ fn end_state(resolver: &Recording, outcome: String, named: String) -> EndState {
 }
 
 /// The end state of a failed run and of its save.
-fn failed_and_saved(resolver: &Recording, mut run: Run) -> (EndState, EndState) {
+fn failed_and_saved(resolver: &Recording, run: &mut Run) -> (EndState, EndState) {
     let built = end_state(
         resolver,
         issues(&run.diagnostics()),
@@ -215,13 +225,13 @@ fn before_start_a_cancelled_run_returns_no_result_and_publishes_nothing() {
 #[test]
 fn before_start_a_refused_partitioned_run_publishes_only_its_report() {
     let resolver = Recording::new(WINDOW, INPUT, None);
-    let run = engine(Arc::clone(&resolver), false)
+    let mut run = engine(Arc::clone(&resolver), false)
         .spec_run("spec.yaml", None, &CancellationToken::new())
         .unwrap();
     assert!(run.output().is_none());
     let outcome = r#"Error engine engine_rejected None ["columns.RN.derivation.row_number"] {"code":"partition_global","step":"execute"} None None"#.to_owned();
     assert_eq!(
-        failed_and_saved(&resolver, run),
+        failed_and_saved(&resolver, &mut run),
         (
             EndState {
                 outcome: outcome.clone(),
@@ -453,13 +463,156 @@ fn mid_partition_a_project_function_interrupt_cancels_the_call() {
 #[test]
 fn mid_partition_a_failed_run_publishes_only_its_report() {
     let resolver = Recording::new(SPEC, FAILING, None);
-    let run = engine(Arc::clone(&resolver), false)
+    let mut run = engine(Arc::clone(&resolver), false)
         .spec_run("spec.yaml", None, &CancellationToken::new())
         .unwrap();
     assert!(run.output().is_none());
     let outcome = r#"Error convert conversion_failed Some("VALUE-7") ["columns.W"] {"from":"float","keys":[{"ID":3}],"to":"int","value":3.5} None None"#.to_owned();
     assert_eq!(
-        failed_and_saved(&resolver, run),
+        failed_and_saved(&resolver, &mut run),
+        (
+            EndState {
+                outcome: outcome.clone(),
+                named: "yamaa run of TEST:".into(),
+                published: vec![],
+                staged: 0,
+                committed: 0,
+                left: 0,
+            },
+            EndState {
+                outcome,
+                named: "cannot save TEST:".into(),
+                published: vec![REPORT],
+                staged: 1,
+                committed: 1,
+                left: 0,
+            },
+        )
+    );
+}
+
+/// A streamed run of `SPEC` over `input` on a one-record partitioned engine,
+/// whose output is read one record per batch.
+fn streamed(resolver: &Arc<Recording>, token: &CancellationToken) -> yamaa::Streamed {
+    engine(Arc::clone(resolver), false)
+        .spec_stream("spec.yaml", None, &Plans::new(), token)
+        .unwrap()
+}
+
+/// The end state of a cancelled call.
+const CANCELLED: fn() -> EndState = || EndState {
+    outcome: "cancelled".into(),
+    named: String::new(),
+    published: vec![],
+    staged: 0,
+    committed: 0,
+    left: 0,
+};
+
+/// Mid-stream, cancelled: a token found cancelled before the first pull or
+/// between two batches, or the reader released after its first batch, ends
+/// production. The pull fails with no issue, no further batch is built, and
+/// the run has no result, so nothing is staged or published. A token
+/// cancelled before the first pull ends the run before it reads its input.
+#[test]
+fn mid_stream_a_cancelled_run_builds_nothing_more_and_publishes_nothing() {
+    for (label, batches_before, released, input_read) in [
+        ("before the first pull", 0, false, 0),
+        ("between batches", 1, false, 1),
+        ("by releasing the reader", 1, true, 1),
+    ] {
+        let resolver = Recording::new(SPEC, INPUT, None);
+        let token = CancellationToken::new();
+        let streamed = streamed(&resolver, &token);
+        let mut reader = streamed.reader();
+        let built = reader
+            .by_ref()
+            .take(batches_before)
+            .map(|batch| batch.unwrap().num_rows())
+            .collect::<Vec<_>>();
+        assert_eq!(built, vec![1; batches_before], "{label}");
+        let ended = if released {
+            drop(reader);
+            None
+        } else {
+            token.cancel();
+            let ended = reader.next();
+            assert!(reader.next().is_none(), "{label}: no later batch");
+            ended
+        };
+        assert!(
+            matches!(ended, None | Some(Err(Error::Cancelled))),
+            "{label}: {ended:?}"
+        );
+        assert!(
+            matches!(streamed.run(), Err(Error::Cancelled)),
+            "{label}: no result"
+        );
+        assert_eq!(
+            (
+                end_state(&resolver, "cancelled".into(), String::new()),
+                resolver.requested("capture", "input.csv"),
+            ),
+            (CANCELLED(), input_read),
+            "{label}"
+        );
+    }
+}
+
+/// Mid-stream, cancelled by a callback: under the fallback the stream's
+/// first pull builds the run, and a project function's interrupt on the
+/// first data row cancels it there (D46): the pull fails with no issue, no
+/// later row is called, the run has no result, and nothing is staged or
+/// published.
+#[test]
+fn mid_stream_a_project_function_interrupt_cancels_the_run() {
+    let functions = Arc::new(Echo {
+        interrupt: true,
+        calls: AtomicUsize::new(0),
+    });
+    let (engine, resolver) = function_study(
+        FUNCTION_SPEC,
+        functions.clone(),
+        Partitions::new(NonZeroUsize::MIN).with_whole_table_fallback(),
+    );
+    let token = CancellationToken::new();
+    let streamed = engine
+        .spec_stream("spec.yaml", Some("project.yaml"), &Plans::new(), &token)
+        .unwrap();
+    let mut reader = streamed.reader();
+    assert!(matches!(reader.next(), Some(Err(Error::Cancelled))));
+    assert!(reader.next().is_none(), "no later batch");
+    assert!(matches!(streamed.run(), Err(Error::Cancelled)));
+    assert_eq!(
+        (
+            functions.calls.load(Ordering::SeqCst),
+            end_state(&resolver, "cancelled".into(), String::new()),
+        ),
+        (1, CANCELLED()),
+    );
+    assert!(!token.is_cancelled(), "the interrupt is not the token");
+}
+
+/// Mid-stream, failed: the third record's V does not convert, so no batch
+/// can be built, and the stream's first pull ends it with the run's issue,
+/// the whole-table run's `conversion_failed` at W. No later batch is built;
+/// the run has the issue and no output, and its save writes only the report
+/// file.
+#[test]
+fn mid_stream_a_failed_run_ends_its_stream_with_its_issue() {
+    let resolver = Recording::new(SPEC, FAILING, None);
+    let streamed = streamed(&resolver, &CancellationToken::new());
+    let mut reader = streamed.reader();
+    let Some(Err(Error::Rejected(report))) = reader.next() else {
+        panic!("the stream ends with the run's issue");
+    };
+    assert!(reader.next().is_none(), "no later batch");
+    let outcome = r#"Error convert conversion_failed Some("VALUE-7") ["columns.W"] {"from":"float","keys":[{"ID":3}],"to":"int","value":3.5} None None"#.to_owned();
+    assert_eq!(issues(&report.diagnostics), outcome, "the stream's error");
+    let mut run = streamed.run().unwrap();
+    assert!(run.output().is_none());
+    assert_eq!(
+        failed_and_saved(&resolver, &mut run),
         (
             EndState {
                 outcome: outcome.clone(),

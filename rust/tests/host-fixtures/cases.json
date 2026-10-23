@@ -4657,7 +4657,9 @@
         ],
         "spec.check": [],
         "spec.resolve": [],
-        "spec.run": [],
+        "spec.run": [
+          "stream"
+        ],
         "project.spec": [
           "name"
         ],
@@ -7832,6 +7834,28 @@
         "rows": [{"ID": 1, "NAME": "alpha"}, {"ID": 2, "NAME": "beta"}],
         "function_study_csv": "ID,RESULT\n01,1.5\n"
       }
+    },
+    "streaming": {
+      "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, V: float, D: date, T: datetime}}}\noutput: {path: output.csv, columns: [ID, NAME, V, D, T], order_by: [{variable: ID, direction: desc}]}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n  - {name: NAME, type: str, label: Name, derivation: SRC.NAME}\n  - {name: V, type: float, label: Value, derivation: SRC.V}\n  - {name: D, type: date, label: Day, derivation: SRC.D}\n  - {name: T, type: datetime, label: Time, derivation: SRC.T}\n",
+      "input_csv": "ID,NAME,V,D,T\n1,alpha,1.5,2024-01-01,2024-01-01T08:30:00\n2,beta,,2024-02-29,\n3,gamma,2.25,,2024-03-01T00:00:00\n4,,-0.5,2023-12-31,2023-12-31T23:59:59\n5,epsilon,10,2024-03-01,2024-03-01T12:00:05\n",
+      "rows": [
+        {"ID": 5, "NAME": "epsilon", "V": 10, "D": "2024-03-01", "T": "2024-03-01T12:00:05"},
+        {"ID": 4, "NAME": null, "V": -0.5, "D": "2023-12-31", "T": "2023-12-31T23:59:59"},
+        {"ID": 3, "NAME": "gamma", "V": 2.25, "D": null, "T": "2024-03-01T00:00:00"},
+        {"ID": 2, "NAME": "beta", "V": null, "D": "2024-02-29", "T": null},
+        {"ID": 1, "NAME": "alpha", "V": 1.5, "D": "2024-01-01", "T": "2024-01-01T08:30:00"}
+      ],
+      "output_csv": "ID,NAME,V,D,T\n5,epsilon,10,2024-03-01,2024-03-01T12:00:05\n4,,-0.5,2023-12-31,2023-12-31T23:59:59\n3,gamma,2.25,,2024-03-01T00:00:00\n2,beta,,2024-02-29,\n1,alpha,1.5,2024-01-01,2024-01-01T08:30:00\n",
+      "large": {
+        "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: output.csv, columns: [ID, NAME]}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n  - {name: NAME, type: str, label: Name, derivation: SRC.NAME}\n",
+        "records": 70000,
+        "name_prefix": "n",
+        "batches": [65536, 4464]
+      },
+      "stream_class": "nanoarrow_array_stream",
+      "cancelled": "cannot read TEST: operation cancelled",
+      "stream_taken": "cannot read TEST: the run's output stream has already been read [stream_taken]",
+      "host_thread": "cannot read TEST: a run that can call project functions is built only on the thread that started it [host_thread]"
     }
   }
 }

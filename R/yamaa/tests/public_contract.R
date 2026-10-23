@@ -160,7 +160,8 @@ qualify_signatures <- function() {
   stopifnot("read_odm's archive member defaults to NULL" = is.null(options$archive_member),
     "a project run's section defaults to NULL" = is.null(formals(project$run)$section),
     "a submission's section defaults to NULL" = is.null(formals(project$submission)$section),
-    "a submission's creation time defaults to NULL" = is.null(formals(project$submission)$created))
+    "a submission's creation time defaults to NULL" = is.null(formals(project$submission)$created),
+    "a specification's run does not stream by default" = identical(formals(spec$run)$stream, FALSE))
   for (name in names(limits)) {
     expect_identical(options[[name]], as.numeric(limits[[name]]), paste("read_odm's default", name))
   }

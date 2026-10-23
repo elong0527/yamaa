@@ -264,43 +264,63 @@ impl Engine {
         token: &CancellationToken,
     ) -> Result<Build, Error> {
         let measurements = Arc::new(Measurements::new());
-        // The run-start check runs outside the holder's lock.
-        let kept = identity
-            .as_ref()
-            .and_then(|identity| plans.get(identity))
-            .filter(|plan| plan.reusable_by(&self.shared));
-        let (build, name) = match kept {
-            Some(plan) => {
-                measurements.plan("reused");
-                let build = plan.run_through(&self.shared, held, &measurements, token);
-                (build, plan.name().map(str::to_owned))
-            }
-            None => {
-                let plan = self.compile(request, &measurements);
-                measurements.plan(if plan.report().is_empty() {
-                    "compiled"
-                } else {
-                    "refused"
-                });
-                // The compilation has just captured the files it holds.
-                let build = plan.run_through(&self.shared, held, &measurements, token);
-                if let Some(identity) = identity {
-                    // Keep the plan only for the identity it was compiled
-                    // from: a path that resolved elsewhere meanwhile keeps
-                    // nothing, so its next run compiles again.
-                    let stable = crate::internal::request_identity(&self.shared, request).as_ref()
-                        == Some(&identity);
-                    plans.replace(identity, stable.then_some(&plan));
-                }
-                (build, plan.name().map(str::to_owned))
-            }
-        };
+        let (plan, compiled) = self.plan_reusing(plans, request, identity.as_ref(), &measurements);
+        // A compilation has just captured the files it holds.
+        let build = plan.run_through(&self.shared, held, &measurements, token);
+        if compiled {
+            self.keep(plans, request, identity, &plan);
+        }
         if build.interrupted() || token.is_cancelled() {
             return Err(Error::Cancelled);
         }
         measurements.complete(build.accepted());
-        let subject = name.as_deref().unwrap_or(request.specification);
+        let subject = plan.name().unwrap_or(request.specification);
         Ok(build.with_subject(subject))
+    }
+
+    /// The plan `request` runs: the one `plans` keeps for `identity`, what
+    /// the request resolves to now, when the run-start check finds its files
+    /// unchanged, or else a new compilation, with `true`. The choice is
+    /// counted in `measurements`.
+    pub(crate) fn plan_reusing(
+        &self,
+        plans: &crate::api::Plans,
+        request: &Request<'_>,
+        identity: Option<&crate::api::PlanKey>,
+        measurements: &Arc<Measurements>,
+    ) -> (Plan, bool) {
+        // The run-start check runs outside the holder's lock.
+        let kept = identity
+            .and_then(|identity| plans.get(identity))
+            .filter(|plan| plan.reusable_by(&self.shared));
+        if let Some(plan) = kept {
+            measurements.plan("reused");
+            return (plan, false);
+        }
+        let plan = self.compile(request, measurements);
+        measurements.plan(if plan.report().is_empty() {
+            "compiled"
+        } else {
+            "refused"
+        });
+        (plan, true)
+    }
+
+    /// Keep the newly compiled `plan` in `plans` for `identity`, the identity
+    /// it was compiled from: a request that resolves elsewhere meanwhile, or
+    /// a refused compilation, keeps nothing, so its next run compiles again.
+    pub(crate) fn keep(
+        &self,
+        plans: &crate::api::Plans,
+        request: &Request<'_>,
+        identity: Option<crate::api::PlanKey>,
+        plan: &Plan,
+    ) {
+        if let Some(identity) = identity {
+            let stable = crate::internal::request_identity(&self.shared, request).as_ref()
+                == Some(&identity);
+            plans.replace(identity, stable.then_some(plan));
+        }
     }
 
     /// A project-run specification that did not build, with the findings
@@ -320,6 +340,12 @@ impl Engine {
 
     pub(crate) fn shared(&self) -> &EngineShared {
         &self.shared
+    }
+
+    /// The engine's shared configuration, owned, for a run that outlives
+    /// the call that started it.
+    pub(crate) fn shared_owned(&self) -> Arc<EngineShared> {
+        Arc::clone(&self.shared)
     }
 
     /// Resolve one specification entry into its owned inspection artifact,
@@ -353,6 +379,9 @@ pub(crate) struct Build {
     built: Vec<Diagnostic>,
     report: Report,
     output: Option<Table>,
+    /// The rows and columns of an accepted output read as a stream, which
+    /// builds no table (#3697).
+    streamed: Option<(usize, usize)>,
     run_report: Option<Table>,
     /// The host failures the attempt retained. The build owns them, and so
     /// their original host objects, for as long as it lives, as the host
@@ -393,6 +422,7 @@ impl Build {
             built: Vec::new(),
             report: Report::default(),
             output: None,
+            streamed: None,
             run_report: None,
             _failures: failures,
             interrupted,
@@ -435,10 +465,31 @@ impl Build {
         };
     }
 
-    /// Whether the build produced its primary output.
+    /// Whether the build produced its primary output, as a table or to be
+    /// read as a stream.
     pub(crate) fn accepted(&self) -> bool {
-        self.domain()
-            .is_some_and(|domain| domain.output().is_some())
+        self.domain().is_some_and(Domain::accepted)
+    }
+
+    /// The accepted output's columns among the accepted dataset's, which the
+    /// batches of a stream of it project.
+    pub(crate) fn projection(&self) -> Option<&[usize]> {
+        self.domain()?.projection()
+    }
+
+    /// Record that the accepted output, of `rows` rows and `columns`
+    /// columns, is read as a stream instead of a table.
+    pub(crate) fn streamed(&mut self, rows: usize, columns: usize) {
+        self.streamed = Some((rows, columns));
+    }
+
+    /// The accepted output's rows and columns, whether it is a table or read
+    /// as a stream; none when the build has no output.
+    pub(crate) fn dimensions(&self) -> Option<(usize, usize)> {
+        match &self.output {
+            Some(table) => Some((table.rows(), table.columns().len())),
+            None => self.streamed.filter(|_| self.accepted()),
+        }
     }
 
     /// Borrow the output table, when the build produced one.
@@ -481,7 +532,7 @@ impl Build {
                 .all(|issue| issue.code == ConditionCode::ProjectProducerNotCompleted);
         if skipped {
             Status::Skipped
-        } else if self.output.is_some() && !crate::outcome::fails(issues) {
+        } else if self.accepted() && !crate::outcome::fails(issues) {
             Status::Succeeded
         } else {
             Status::Failed
