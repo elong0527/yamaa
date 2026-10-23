@@ -129,6 +129,12 @@ pub enum Condition {
         identifier: String,
         actual: ValueType,
     },
+    /// A reduction or grouping column that `aggregate.expr`'s arithmetic
+    /// reads holds a value of another type (FORMULA-23).
+    AggregateOperand {
+        operand: String,
+        actual: ValueType,
+    },
     Arithmetic(ArithmeticErrorKind),
 }
 
@@ -158,7 +164,7 @@ impl CompiledExpression {
         &self,
         resolver: &mut R,
     ) -> Result<Truth, Box<EvaluationError<R::Error>>> {
-        Evaluator::new(self, resolver, &[]).truth(self.syntax.root())
+        Evaluator::new(self, resolver, &[], false).truth(self.syntax.root())
     }
 
     /// Evaluate a numeric expression in written association.
@@ -166,7 +172,7 @@ impl CompiledExpression {
         &self,
         resolver: &mut R,
     ) -> Result<Number, Box<EvaluationError<R::Error>>> {
-        Evaluator::new(self, resolver, &[]).number(self.syntax.root())
+        Evaluator::new(self, resolver, &[], false).number(self.syntax.root())
     }
 
     /// Evaluate an aggregate's arithmetic once every reduction has its value.
@@ -175,7 +181,7 @@ impl CompiledExpression {
         resolver: &mut R,
         reductions: &[Value],
     ) -> Result<Number, Box<EvaluationError<R::Error>>> {
-        Evaluator::new(self, resolver, reductions).number(self.syntax.root())
+        Evaluator::new(self, resolver, reductions, true).number(self.syntax.root())
     }
 
     /// Evaluate one reduction's numeric argument for one record.
@@ -185,7 +191,7 @@ impl CompiledExpression {
         resolver: &mut R,
     ) -> Result<Number, Box<EvaluationError<R::Error>>> {
         let node = self.reductions[reduction].operand_node;
-        Evaluator::new(self, resolver, &[]).number(node)
+        Evaluator::new(self, resolver, &[], false).number(node)
     }
 }
 
@@ -205,15 +211,24 @@ struct Evaluator<'a, R: Resolver> {
     compiled: &'a CompiledExpression,
     resolver: &'a mut R,
     reductions: &'a [Value],
+    /// Whether this evaluates an aggregate's arithmetic over its reductions,
+    /// where every name outside a reduction is a grouping column.
+    grouped: bool,
     route: Vec<Step>,
 }
 
 impl<'a, R: Resolver> Evaluator<'a, R> {
-    fn new(compiled: &'a CompiledExpression, resolver: &'a mut R, reductions: &'a [Value]) -> Self {
+    fn new(
+        compiled: &'a CompiledExpression,
+        resolver: &'a mut R,
+        reductions: &'a [Value],
+        grouped: bool,
+    ) -> Self {
         Self {
             compiled,
             resolver,
             reductions,
+            grouped,
             route: Vec::new(),
         }
     }
@@ -443,10 +458,15 @@ impl<'a, R: Resolver> Evaluator<'a, R> {
                     }
                 };
                 return Number::try_from(&value).map_err(|actual| {
+                    let operand = identifier.into();
                     self.condition(
-                        Condition::NumericInput {
-                            identifier: identifier.into(),
-                            actual,
+                        if self.grouped {
+                            Condition::AggregateOperand { operand, actual }
+                        } else {
+                            Condition::NumericInput {
+                                identifier: operand,
+                                actual,
+                            }
                         },
                         span,
                     )
@@ -457,8 +477,8 @@ impl<'a, R: Resolver> Evaluator<'a, R> {
                 let value = &self.reductions[compiled.reduction_at(id)];
                 return Number::try_from(value).map_err(|actual| {
                     self.condition(
-                        Condition::NumericInput {
-                            identifier: reduction.reference.clone(),
+                        Condition::AggregateOperand {
+                            operand: reduction.reference.clone(),
                             actual,
                         },
                         span,
