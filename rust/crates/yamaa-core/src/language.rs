@@ -185,15 +185,20 @@ fn header_field<'a>(
 
 /// The root must be a non-empty mapping before its header is read; the
 /// finding names `class`, the root class of the type the reader expects, as
-/// the expected value, when the reader expects one.
+/// the expected value, or a non-empty dict when the reader expects none.
 fn root_mapping(document: &Document, class: Option<&str>) -> Result<(), HeaderFault> {
     let root = &document.nodes()[document.root()];
     if matches!(root, N::Mapping(entries) if !entries.is_empty()) {
         return Ok(());
     }
-    let mut context = Vec::new();
-    context.extend(class.map(|class| ("expected", C::Text(class.into()))));
-    context.push(("actual", C::ValueKind(root.kind())));
+    // Without a type, the root is expected to be what every type's root is.
+    let context = vec![
+        (
+            "expected",
+            C::Text(class.unwrap_or("non-empty dict").into()),
+        ),
+        ("actual", C::ValueKind(root.kind())),
+    ];
     Err(shape("$", ConditionCode::SchemaInvalidFieldType, context))
 }
 
@@ -1032,19 +1037,26 @@ mod tests {
             header,
             Err(TypeFault::Header(HeaderFault::Version { .. }))
         ));
-        // Without a type it knows, a malformed header's finding names no class.
+        // Without a type it knows, a malformed header's finding names no
+        // class: the root is expected to be a non-empty dict.
         let shapes = [
             (
                 T::list(vec![]),
                 "$",
                 ConditionCode::SchemaInvalidFieldType,
-                vec![("actual", C::ValueKind(K::Sequence))],
+                vec![
+                    ("expected", C::Text("non-empty dict".into())),
+                    ("actual", C::ValueKind(K::Sequence)),
+                ],
             ),
             (
                 T::map(vec![]),
                 "$",
                 ConditionCode::SchemaInvalidFieldType,
-                vec![("actual", C::ValueKind(K::Mapping))],
+                vec![
+                    ("expected", C::Text("non-empty dict".into())),
+                    ("actual", C::ValueKind(K::Mapping)),
+                ],
             ),
             (
                 T::map(vec![("domain", T::text("DM"))]),

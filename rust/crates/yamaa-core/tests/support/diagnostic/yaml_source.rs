@@ -37,7 +37,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "$.x",
         ),
     ] {
-        let result = diagnostics(failure, Some("source.yaml"));
+        let result = diagnostics(failure, "source.yaml");
         assert_eq!(result.len(), 1);
         let diagnostic = &result[0];
         let definition = diagnostic.code.definition();
@@ -46,12 +46,18 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ("validation", condition, Some(rule))
         );
         assert_eq!(diagnostic.spec_path, path);
-        if diagnostic.code == ConditionCode::SourceNonAscii {
-            assert_eq!(diagnostic.context["path"], Fact::Text("source.yaml"));
-            assert_eq!(diagnostic.context["line"], Fact::Unsigned(1));
-            assert_eq!(diagnostic.context["column"], Fact::Unsigned(4));
-        } else {
-            assert!(!diagnostic.context.contains_key("path"));
+        // A finding about the file's text names the file; a YAML syntax
+        // finding names its position alone.
+        match diagnostic.code {
+            ConditionCode::SourceNonAscii => {
+                assert_eq!(diagnostic.context["path"], Fact::Text("source.yaml"));
+                assert_eq!(diagnostic.context["line"], Fact::Unsigned(1));
+                assert_eq!(diagnostic.context["column"], Fact::Unsigned(4));
+            }
+            ConditionCode::SourceInvalidText => {
+                assert_eq!(diagnostic.context["path"], Fact::Text("source.yaml"));
+            }
+            _ => assert!(!diagnostic.context.contains_key("path")),
         }
         reached.insert(rendered(&diagnostic));
     }

@@ -1724,13 +1724,17 @@ fn a_refused_read_or_save_prints_its_error_text_and_exits_1() {
                 .collect(),
         )
     };
-    let option_issue = |name: &'static str, minimum| ExpectedIssue {
+    // An option below its minimum names the minimum and the value given.
+    let option_issue = |name: &'static str, minimum, value| ExpectedIssue {
         condition: "value_not_permitted",
         phase: "validation",
         rule: "ODM-1",
         spec_path: Some(name),
-        context: context(&[("minimum", ContextValue::Int(minimum))]),
-        message: format!("{name} has a value that is not permitted"),
+        context: context(&[
+            ("minimum", ContextValue::Int(minimum)),
+            ("value", ContextValue::Int(value)),
+        ]),
+        message: format!("{name} has the value {value}, which is not permitted"),
     };
     let cases: [(&str, &[&str], OdmOptions, ExpectedIssue); 6] = [
         (
@@ -1750,19 +1754,19 @@ fn a_refused_read_or_save_prints_its_error_text_and_exits_1() {
             &source,
             &["--max-expanded-bytes", "0"],
             OdmOptions::new().with_max_expanded_bytes(0),
-            option_issue("max_expanded_bytes", 1),
+            option_issue("max_expanded_bytes", 1, 0),
         ),
         (
             &source,
             &["--max-archive-members", "0"],
             OdmOptions::new().with_max_archive_members(0),
-            option_issue("max_archive_members", 1),
+            option_issue("max_archive_members", 1, 0),
         ),
         (
             &source,
             &["--max-xml-depth", "7"],
             OdmOptions::new().with_max_xml_depth(7),
-            option_issue("max_xml_depth", 8),
+            option_issue("max_xml_depth", 8, 7),
         ),
         (
             &source,

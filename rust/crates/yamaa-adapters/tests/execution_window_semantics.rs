@@ -137,7 +137,7 @@ fn window_filter_evaluates_both_operands_of_and() {
             "condition": "incompatible_input_type",
             "rule": "FORMULA-5",
             "spec_paths": ["columns.SEQ.derivation.row_number.window.filter"],
-            "context": {"left_type": "int", "right_type": "str"}
+            "context": {"actual": "str", "left_type": "int", "right_type": "str"}
         })
     );
 }

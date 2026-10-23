@@ -124,7 +124,10 @@ pub enum PreflightFinding {
         column: String,
         rows: Vec<String>,
     },
-    ConflictingRowConstruction,
+    /// A root filter beside the row templates, named by their ids (ROW-9).
+    ConflictingRowConstruction {
+        rows: Vec<String>,
+    },
     InvalidGroup {
         row_path: String,
         row: String,

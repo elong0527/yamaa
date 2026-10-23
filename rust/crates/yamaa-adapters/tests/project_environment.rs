@@ -209,10 +209,13 @@ mod project {
             assert_eq!(original.allocation.get(), 19);
         }
         /// The bounds of `int` beside a literal outside it (VALUE-5).
-        fn overflow(actual: &str) -> [(&'static str, Value); 3] {
+        /// A literal outside int's range: its value as a number and as
+        /// written, and the range (VALUE-5).
+        fn overflow(actual: &str) -> [(&'static str, Value); 4] {
             let number = |text: &str| -> Value { yamaa_adapters::json_wire::decode(text).unwrap() };
             [
                 ("actual", number(actual)),
+                ("value", Value::String(actual.into())),
                 ("minimum", number("-9223372036854775808")),
                 ("maximum", number("9223372036854775807")),
             ]

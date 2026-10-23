@@ -133,7 +133,7 @@ local({
   source(file.path(root,"key-truth.R"),local=TRUE)
   original <- file.path(root,"keys","dependency_before_bad_filter")
   type_truth <- list(phase="validation",condition="incompatible_input_type",rule="FORMULA-5",
-    spec_paths=list("intermediates.LOOK.filter"),context='{"left_type":"int","right_type":"str"}')
+    spec_paths=list("intermediates.LOOK.filter"),context='{"actual":"str","left_type":"int","right_type":"str"}')
   directory <- tempfile("retained-filter-types-");dir.create(directory)
   on.exit(unlink(directory,recursive=TRUE))
   for(variant in c("duplicate","resolved","empty_donor","empty_driver","missing_filter_operand","unused","unread_branch","boolean_missing")) {

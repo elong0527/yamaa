@@ -208,13 +208,14 @@ fn a_declared_mark_on_another_profile_fails_before_any_input_is_read() {
         assert_eq!(issue.condition, "value_not_permitted");
         assert_eq!(issue.rule.as_deref(), Some("CSV-10"));
         assert_eq!(issue.paths, ["input.RAW.byte_order_mark"]);
+        // The context names the mark as declared: `true`.
         assert_eq!(
             issue.context,
-            yamaa_adapters::json_wire::decode("{\"dataset\":\"RAW\"}").unwrap()
+            yamaa_adapters::json_wire::decode("{\"dataset\":\"RAW\",\"value\":true}").unwrap()
         );
         assert_eq!(
             issue.message,
-            "input.RAW.byte_order_mark has a value that is not permitted"
+            "input.RAW.byte_order_mark has the value true, which is not permitted"
         );
     }
 }

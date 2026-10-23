@@ -57,6 +57,13 @@ impl SourceFinding {
         })
     }
 }
+/// The dataset a source binding's variable reads: its qualifier.
+pub(super) fn source_dataset(variable: &str) -> &str {
+    variable
+        .split_once('.')
+        .map_or(variable, |(dataset, _)| dataset)
+}
+
 impl Declaration {
     /// A declared grouped key is already one scalar in both row and column phase.
     /// Group scope is declaration metadata and grants no study-source authority.
@@ -75,7 +82,7 @@ impl Declaration {
             findings.push(BindFinding::Source(SourceFinding::new(
                 C::SourceFilterSingleValue,
                 &format!("{path}.filter"),
-                &[("identifier", &self.variable)],
+                &[("identifier", &self.variable), ("construct", "filter")],
             )));
         }
         scalar
@@ -170,6 +177,7 @@ impl Declaration {
                 format!("{path}.absent"),
                 format!("{path}.require_match"),
                 Owner::Source(&variable),
+                source_dataset(&variable),
             ));
         }
         Ok(Self {
@@ -209,7 +217,7 @@ impl Declaration {
             findings.push(BindFinding::Source(SourceFinding::new(
                 C::SourceFilterSingleValue,
                 &path,
-                &[("identifier", &self.variable)],
+                &[("identifier", &self.variable), ("construct", "filter")],
             )));
             return Ok(None);
         };
@@ -312,7 +320,7 @@ impl Declaration {
             findings.push(BindFinding::Source(SourceFinding::new(
                 C::SourceFilterSingleValue,
                 &path,
-                &[("identifier", &self.variable)],
+                &[("identifier", &self.variable), ("construct", "filter")],
             )));
             return Ok(None);
         };
@@ -437,7 +445,10 @@ impl Declaration {
             findings.push(BindFinding::Source(SourceFinding::new(
                 C::SourceRequireMatchScope,
                 &format!("{path}.require_match"),
-                &[("identifier", &self.variable)],
+                &[
+                    ("identifier", &self.variable),
+                    ("construct", "require_match"),
+                ],
             )));
         }
         refused
@@ -460,7 +471,7 @@ impl Declaration {
             findings.push(BindFinding::Source(SourceFinding::new(
                 C::SourceRangeScope,
                 &format!("{path}.between"),
-                &[("identifier", &self.variable)],
+                &[("identifier", &self.variable), ("construct", "between")],
             )));
         }
         refused

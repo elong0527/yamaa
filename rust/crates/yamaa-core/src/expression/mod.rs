@@ -182,8 +182,8 @@ pub enum Failure {
     InvalidRegex { byte: usize, reason: &'static str },
     /// A `str_contains` pattern that is not a string literal (FORMULA-8).
     PatternNotLiteral,
-    /// An integer literal outside the signed 64-bit range.
-    IntegerOverflow,
+    /// An integer literal outside the signed 64-bit range, as written.
+    IntegerOverflow { literal: String },
     /// A construct the context refuses.
     ProhibitedConstruct { construct: Construct },
     /// A function or reducer the context does not admit, or another arity.

@@ -1063,7 +1063,11 @@ mod source {
                     expected(
                         C::SourceTypeUnknownField,
                         "input.SRC.types.Z",
-                        vec![("dataset", text("SRC")), ("field", text("Z"))]
+                        vec![
+                            ("dataset", text("SRC")),
+                            ("field", text("Z")),
+                            ("identifier", text("Z")),
+                        ]
                     ),
                     expected(
                         C::SourceTypeFieldParse,

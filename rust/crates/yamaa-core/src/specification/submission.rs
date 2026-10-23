@@ -261,14 +261,22 @@ fn admit_counts(
         result.push(finding(
             C::SubmissionLengthMissing,
             path,
-            &[("column", s(name)), ("data_type", s(resolved))],
+            &[
+                ("column", s(name)),
+                ("data_type", s(resolved)),
+                ("field", s("length")),
+            ],
         ));
     }
     if !length_type && effective.length.is_some() && maxima.is_empty() {
         result.push(finding(
             C::SubmissionLengthNotApplicable,
             path,
-            &[("column", s(name)), ("data_type", s(resolved))],
+            &[
+                ("column", s(name)),
+                ("data_type", s(resolved)),
+                ("field", s("length")),
+            ],
         ));
     }
     if resolved == "float" && effective.digits.is_none() {
@@ -714,6 +722,7 @@ pub(super) fn admit(
                 C::SubmissionReferenceRepeating,
                 &spec.cite(dataset.meta),
                 &[
+                    ("dataset", s(&spec.domain.name)),
                     ("reference_data", V::Bool(true)),
                     ("repeating", V::Bool(true)),
                 ],

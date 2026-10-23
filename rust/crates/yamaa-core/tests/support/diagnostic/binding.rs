@@ -451,7 +451,10 @@ pub(crate) fn window_reached() -> BTreeSet<ConditionCode> {
             "invalid_field_type",
             "WINDOW-3",
             ".window.group_by[1]",
-            vec![("identifier", text("ID"))],
+            vec![
+                ("identifier", text("ID")),
+                ("expected", text("each variable once")),
+            ],
         ),
     ] {
         let value = T::map(vec![("value", T::map(vec![(operation, payload)]))]);
@@ -882,7 +885,7 @@ pub(crate) fn source_filter_reached() -> BTreeSet<ConditionCode> {
             "SRC.V =",
             "prohibited_construct",
             "LOOKUP-8",
-            vec![("identifier", text("ID"))],
+            vec![("identifier", text("ID")), ("construct", text("filter"))],
         ),
     ] {
         let prepared = compile(
@@ -924,13 +927,16 @@ pub(crate) fn source_match_reached() -> BTreeSet<ConditionCode> {
                 "columns.VALUE.derivation.source.absent",
                 "columns.VALUE.derivation.source.require_match",
             ],
-            vec![("variable", text("SRC.V"))],
+            vec![("variable", text("SRC.V")), ("dataset", text("SRC"))],
         ),
         (
             vec![("require_match", T::boolean(true))],
             "prohibited_construct",
             vec!["columns.VALUE.derivation.source.require_match"],
-            vec![("identifier", text("SRC.V"))],
+            vec![
+                ("identifier", text("SRC.V")),
+                ("construct", text("require_match")),
+            ],
         ),
     ] {
         let mut fields = vec![("variable", T::text("SRC.V"))];
@@ -961,7 +967,10 @@ pub(crate) fn source_range_reached() -> BTreeSet<ConditionCode> {
             vec![("value", T::text("ID")), ("lower", T::text("V"))],
             "prohibited_construct",
             "columns.VALUE.derivation.source.between",
-            vec![("identifier", text("SRC.V"))],
+            vec![
+                ("identifier", text("SRC.V")),
+                ("construct", text("between")),
+            ],
         ),
         (
             vec![("value", T::text("ID"))],
@@ -1237,12 +1246,19 @@ pub fn verification_declarations_reached() -> BTreeSet<ConditionCode> {
         let findings = prepared.verification_declaration_diagnostics();
         assert_eq!(prepared.verification_declaration_diagnostics(), findings);
         assert_eq!(findings.len(), 1);
+        // A repeated id and an unknown column also name the identifier.
+        let mut values = vec![("reason", text(reason))];
+        match condition {
+            "duplicate_identifier" => values.push(("identifier", text("same"))),
+            "unknown_field" => values.push(("identifier", text("UNKNOWN"))),
+            _ => {}
+        }
         reached.insert(check(
             findings.into_iter().next().unwrap(),
             condition,
             Some(rule),
             &[path],
-            vec![("reason", text(reason))],
+            values,
         ));
         assert_eq!(prepared.source().path, "source.csv");
     }

@@ -206,9 +206,11 @@ pub(super) fn unknown_field_context(
     field: &str,
     class: &str,
 ) -> Vec<(&'static str, SchemaContext)> {
+    // The unknown field is the identifier the document writes there.
     let mut context = vec![
         ("field", SchemaContext::Text(field.into())),
         ("class", SchemaContext::Text(class.into())),
+        ("identifier", SchemaContext::Text(field.into())),
     ];
     if class == "root_class" && field == "parents" {
         context.push(one_parent_hint());

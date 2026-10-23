@@ -101,7 +101,10 @@ pub fn findings(spec: &Spec) -> Vec<SchemaDiagnostic> {
             findings.push(SchemaDiagnostic {
                 path: format!("{}.byte_order_mark", spec.cite(input.meta)),
                 code: ConditionCode::CsvByteOrderMarkProfile,
-                context: vec![("dataset", C::Text(input.name.name.clone()))],
+                context: vec![
+                    ("dataset", C::Text(input.name.name.clone())),
+                    ("value", C::Boolean(input.source.byte_order_mark)),
+                ],
             });
         }
     }
@@ -159,13 +162,22 @@ pub fn findings(spec: &Spec) -> Vec<SchemaDiagnostic> {
                     Direction::Asc => "asc",
                     Direction::Desc => "desc",
                 };
+                let (variable, date) = (name(first.variable), name(date.variable));
+                // The refused value: a first variable other than the date, or
+                // the date's descending direction.
+                let value = if variable == date {
+                    direction.to_string()
+                } else {
+                    variable.clone()
+                };
                 findings.push(SchemaDiagnostic {
                     path: spec.cite(first.meta),
                     code: ConditionCode::WindowBaselineOrder,
                     context: vec![
-                        ("variable", C::Text(name(first.variable))),
+                        ("variable", C::Text(variable)),
                         ("direction", C::Text(direction.into())),
-                        ("date", C::Text(name(date.variable))),
+                        ("date", C::Text(date)),
+                        ("value", C::Text(value)),
                     ],
                 });
             }

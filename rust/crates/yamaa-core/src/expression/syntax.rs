@@ -241,7 +241,9 @@ pub fn parse(text: &str) -> Result<Parsed, CompileError> {
                 return Err(invalid(
                     text,
                     node.span.start,
-                    Failure::IntegerOverflow,
+                    Failure::IntegerOverflow {
+                        literal: written.clone(),
+                    },
                     "integer literal is outside the signed 64-bit range",
                 ));
             }
