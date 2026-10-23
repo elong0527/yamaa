@@ -2,7 +2,7 @@
 mod diagnostics {
     mod diagnostic {
         use crate::support::diagnostic::*;
-        use std::{collections::BTreeSet, convert::Infallible};
+        use std::convert::Infallible;
         use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             conversion::convert,
@@ -220,9 +220,9 @@ mod diagnostics {
         /// vocabulary is independent literal truth, not copied from the registry at runtime.
         #[test]
         fn every_registered_cause_is_reached_with_its_normative_mapping() {
-            let mut reached = BTreeSet::new();
+            // The expected issues written as data, under tests/fixtures/diagnostics/.
+            let mut reached = replay::replay();
             reached.extend(record_operations::reached());
-            reached.extend(mapping_cut::reached());
             reached.extend(temporal_arithmetic::reached());
             let publication =
                 yamaa_core::application_issue::publication_failed("generated/producer.csv");
@@ -435,7 +435,6 @@ mod diagnostics {
             reached.insert(rendered(&changed));
             reached.extend(submission::reached());
             reached.extend(schema::reached());
-            reached.extend(yaml_source::reached());
             reached.extend(project_activation::reached());
             reached.extend(project_functions::reached());
             reached.extend(project_functions::donor_keep_reached());
@@ -477,7 +476,6 @@ mod diagnostics {
             reached.extend(front_end::reached());
             reached.extend(front_end::project_binding_reached());
             reached.extend(grammar::predicate_reached());
-            reached.extend(predicate_evaluation::reached());
             reached.extend(binding::reached());
             reached.extend(intermediate_scopes::reached());
             reached.extend(binding::window_reached());
@@ -725,7 +723,6 @@ mod diagnostics {
             assert_eq!(diagnostic.context["pattern"], JsonValue::String("(".into()));
             assert_eq!(diagnostic.source_span, None);
             reached.insert(rendered(&diagnostic));
-            reached.extend(dataset::reached());
             reached.extend(aggregate::reached());
             reached.extend(verification::reached());
             reached.extend(odm::reached());
@@ -754,16 +751,7 @@ mod diagnostics {
             assert_eq!(diagnostic.operand_route, None);
             reached.insert(rendered(&diagnostic));
             reached.extend(preflight::temporal_reached());
-            reached.extend(temporal_imputation::reached());
-            reached.extend(text_case::reached());
-            reached.extend(text_pad::reached());
             reached.extend(declarative_flags::reached());
-            reached.extend(text_extract::reached());
-            reached.extend(text_template::reached());
-            reached.extend(csv::reached());
-            reached.extend(csv::typing_reached());
-            reached.extend(parquet::reached());
-            reached.extend(sas::reached());
             reached.extend(odm_read::reached());
             reached.extend(result_types::reached());
             let check = yamaa_core::dataset::Check::Codelist {

@@ -1089,10 +1089,30 @@ mod scalar {
                 }
             }
         }
-        use crate::support::diagnostic::temporal_imputation as diagnostic;
+        /// Each reading of collected date text answers a missing source with
+        /// missing, never a failure (TIME-13); its refusals are cases of
+        /// `tests/fixtures/diagnostics/temporal.json`.
         #[test]
-        fn independent_diagnostic_truth_reaches_every_imputation_cause() {
-            assert_eq!(diagnostic::reached().len(), 13);
+        fn a_missing_source_completes_to_missing_under_every_reading() {
+            let date =
+                completion_policy(T::Date, Some("12"), Some(D::Number("31")), None, "impute");
+            for (kind, label) in [
+                (K::Impute(date.unwrap()), "a date impute"),
+                (datetime_kind(TimeRule::First), "a datetime impute"),
+                (K::Precision { target: T::Date }, "a date precision"),
+                (
+                    K::Precision {
+                        target: T::DateTime,
+                    },
+                    "a datetime precision",
+                ),
+            ] {
+                assert_eq!(
+                    operation(kind, false, None).source_value(ValueRef::Missing),
+                    Ok(S::Missing),
+                    "{label}"
+                );
+            }
         }
 
         #[test]

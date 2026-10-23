@@ -16,7 +16,7 @@ specification.
 sources; a source of another runtime type fails rather than being converted.
 
 Fails: `incompatible_input_type`.
-Evidence: `negative-str-case-number`, `rust/crates/yamaa-core/tests/support/diagnostic/text_case.rs`.
+Evidence: `negative-str-case-number`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_case_refuses_a_source_that_is_not_text`.
 
 A source of another type fails under [VALUE-2](values.md#value-2).
 

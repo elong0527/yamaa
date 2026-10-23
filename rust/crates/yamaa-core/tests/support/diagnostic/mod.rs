@@ -1,21 +1,20 @@
-//! Native assertion helpers for independently authored diagnostic contracts.
+//! The diagnostic contracts: the replay of the expected issues written as
+//! data under `tests/fixtures/diagnostics/` (#3691), its readers, and the
+//! independently authored Rust tables not yet moved there.
 pub mod aggregate;
 pub mod binding;
 pub mod copy_entry;
-pub mod csv;
-pub mod dataset;
 pub mod declarative_flags;
 pub mod front_end;
 pub mod grammar;
 pub mod inheritance;
 pub mod intermediate_ranges;
 pub mod intermediate_scopes;
+pub mod json;
 pub mod language;
-pub mod mapping_cut;
 pub mod odm;
 pub mod odm_read;
-pub mod parquet;
-pub mod predicate_evaluation;
+pub mod operations;
 pub mod preflight;
 pub mod producer;
 pub mod project_activation;
@@ -24,18 +23,12 @@ pub mod project_functions;
 pub mod project_lock;
 pub mod project_scope;
 pub mod record_operations;
+pub mod replay;
 pub mod result_types;
-pub mod sas;
 pub mod schema;
 pub mod submission;
 pub mod temporal_arithmetic;
-pub mod temporal_imputation;
-pub mod text_case;
-pub mod text_extract;
-pub mod text_pad;
-pub mod text_template;
 pub mod verification;
-pub mod yaml_source;
 
 use std::{cell::RefCell, collections::BTreeSet};
 use yamaa_core::{

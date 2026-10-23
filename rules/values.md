@@ -343,7 +343,7 @@ where one is specified. Ill-formed encoded text or a decoded surrogate code
 point fails with `invalid_text` at its entry boundary.
 
 Fails: `invalid_text`.
-Evidence: `negative-source-bad-encoding`, `rust/crates/yamaa-core/tests/support/diagnostic/yaml_source.rs`.
+Evidence: `negative-source-bad-encoding`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::a_decoded_yaml_surrogate_is_invalid_text_at_its_path`.
 
 Surrogate code points are invalid. Ill-formed encoded values are rejected,
 never replaced, skipped or decoded by a machine default, and no host default

@@ -395,6 +395,14 @@ made to both, and `make check-repository` fails while they differ
 - Authored controls are files under `tests/fixtures/`, read with
   `include_str!`; assert their row count so a truncated fixture fails
   (`tests/portable_math_golden.rs` in core).
+- Core's expected diagnostics are data (#3691): each case of
+  `tests/fixtures/diagnostics/*.json` names the behaviour it proves, the
+  core operation that reaches it, that operation's input and the complete
+  issue rows it reports, in the shape `assert_issues` compares.
+  `support::diagnostic::replay` replays every case once, inside
+  `diagnostics.rs`'s registry walk, and renders each issue's message. A case
+  of an existing operation is data alone; a new operation gets its reader in
+  `support::diagnostic::operations`.
 - A variant of a document comes from an exact-once edit,
   `document.edit(from, to)` through the adapters' `support::Edit`, never
   from `str::replace`, which does nothing when its pattern is missing.

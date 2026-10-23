@@ -100,7 +100,14 @@ mod diagnostics {
             }
         }
         mod dataset {
-            use crate::support::diagnostic::dataset::*;
+            use crate::support::diagnostic::text;
+            use yamaa_core::json::Value as V;
+            use yamaa_core::{
+                diagnostic::{ConditionCode, DatasetFinding as F, ProjectionError},
+                reduction::NumericReducer,
+                temporal::{Date, DateTime, Precision},
+                value::{Value, ValueType},
+            };
             #[test]
 
             fn temporal_spelling_and_nonnumeric_reduction_types_remain_complete() {
@@ -348,15 +355,6 @@ mod diagnostics {
                 assert_eq!(diagnostic.operand_route, None);
             }
         }
-        mod mapping_cut {
-            use crate::support::diagnostic::mapping_cut::*;
-            #[test]
-
-            fn failures_have_complete_independently_authored_geometry() {
-                // A missing source no longer fails mapping or cut (COLUMN-10).
-                assert_eq!(reached().len(), 5);
-            }
-        }
         mod odm {
             use crate::support::diagnostic::odm::*;
             #[test]
@@ -421,7 +419,22 @@ mod diagnostics {
             }
         }
         mod parquet {
-            use crate::support::diagnostic::parquet::*;
+            use yamaa_core::parquet_source::{
+                self as p, Converted, Field, Logical, Physical, Representation,
+            };
+            fn field(name: &str) -> Field {
+                Field {
+                    name: name.into(),
+                    leaves: 1,
+                    path: name.into(),
+                    repetition: 0,
+                    physical: Physical::Int64,
+                    logical: Logical::None,
+                    converted: Converted::None,
+                    representation: Representation::Int64,
+                    stored_type: "int64".into(),
+                }
+            }
             #[test]
 
             fn alignment_and_early_profile_failure_do_not_inspect_later_codec_metadata() {
@@ -445,7 +458,41 @@ mod diagnostics {
             }
         }
         mod predicate_evaluation {
-            use crate::support::diagnostic::predicate_evaluation::*;
+            use crate::support::diagnostic::text;
+            use std::convert::Infallible;
+            use yamaa_core::json::Value as V;
+            use yamaa_core::{
+                diagnostic::EvaluationDiagnosticError as P,
+                expression::{
+                    compile, CompiledExpression, Condition, Context, ErrorKind, EvaluationError,
+                    Resolver, Step as Route,
+                },
+                value::{Selection, Value},
+            };
+            fn plan(expression: &str) -> CompiledExpression {
+                compile(expression, Context::Predicate, "rows[2].filter").unwrap()
+            }
+            /// A host error the resolver hands back unchanged.
+            struct Payload {
+                original: Box<u8>,
+            }
+            /// Reads `v` and `low`, and fails reading `high` with its payload.
+            struct Port {
+                payload: Option<Payload>,
+                trace: Vec<String>,
+            }
+            impl Resolver for Port {
+                type Error = Payload;
+                fn resolve(&mut self, name: &str) -> Result<Selection, Payload> {
+                    self.trace.push(name.into());
+                    match name {
+                        "v" => Ok(Selection::Present(Value::Bool(true))),
+                        "low" => Ok(Selection::Present(Value::Int(0))),
+                        "high" => Err(self.payload.take().unwrap()),
+                        _ => Ok(Selection::Absent),
+                    }
+                }
+            }
             #[test]
 
             fn original_context_projection_admits_all_fields_and_retains_rich_parser_facts() {
@@ -534,11 +581,6 @@ mod diagnostics {
                     ]
                     .into()
                 );
-            }
-            #[test]
-
-            fn every_native_predicate_cause_retains_independent_context_and_structural_route() {
-                assert_eq!(reached().len(), 5)
             }
             #[test]
 
@@ -1408,7 +1450,10 @@ mod diagnostics {
             }
         }
         mod yaml_source {
-            use crate::support::diagnostic::yaml_source::*;
+            use yamaa_core::{
+                project_diagnostics::Fact,
+                yaml_diagnostics::{diagnostics, Failure, UnicodeIssue},
+            };
             #[test]
 
             fn reason_and_identity_borrow_original_facts_and_unicode_order_is_complete() {
