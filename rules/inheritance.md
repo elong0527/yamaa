@@ -30,6 +30,10 @@ specification; for a relative path it also records the declaring layer and
 that layer's spelling, which [Resource resolution](reference/files.md#file-2)
 resolves once.
 
+A check may compose a fragment on a parent the caller names
+([LAYER-4](#layer-4)): the fragment is then the entry file, and that parent
+and every layer it reaches are layers that contribute before it.
+
 <a id="layer-2"></a>
 
 ### LAYER-2. A parent or a fragment is one local YAML file resolved from the layer that names it
@@ -97,7 +101,7 @@ an earlier one. Reaching a layer that is still being composed is a cycle, and
 an `include` entry that reaches any other layer already reached fails.
 
 Fails: `inheritance_cycle`, `duplicate_layer`.
-Evidence: `schema-inheritance`, `negative-cyclic-parent`, `schema-inheritance-include`, `negative-include-cycle`, `negative-include-twice`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::fragments_contribute_after_the_parent_chain_and_before_their_layer`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::an_include_that_reaches_a_layer_still_composing_is_a_cycle`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::an_include_that_reaches_a_layer_already_composed_repeats_it`.
+Evidence: `schema-inheritance`, `negative-cyclic-parent`, `schema-inheritance-include`, `negative-include-cycle`, `negative-include-twice`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_given_parent_that_is_the_fragment_itself_is_a_cycle_at_parent`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::fragments_contribute_after_the_parent_chain_and_before_their_layer`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::an_include_that_reaches_a_layer_still_composing_is_a_cycle`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::an_include_that_reaches_a_layer_already_composed_repeats_it`.
 
 For a study entry whose parent is a compound layer whose parent is an
 organization layer, the contribution order is
@@ -140,8 +144,8 @@ invalid values fail in the layer that writes them. Two members of one keyed
 collection in one layer must not share an identifier. A fragment declares
 neither `parent` nor `include`.
 
-Fails: `unsupported_language_version`, `unexpected_file_type`, `duplicate_identifier`, `prohibited_construct`.
-Evidence: `negative-version-mismatch`, `negative-include-parent`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_fragment_declares_neither_parent_nor_include`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_fragment_with_an_unread_header_fails_at_the_include_entry_naming_it`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_layer_is_admitted_at_its_own_version_and_the_chain_needs_the_newest`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_parent_naming_an_unread_version_or_another_type_fails_at_parent`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_layer_is_a_fragment_and_a_single_layer_is_complete`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_schema_version_root_is_refused_as_language_0_5_wherever_it_is_read`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_keyed_list_member_carries_its_identity_in_the_layer_that_writes_it`.
+Fails: `unsupported_language_version`, `unexpected_file_type`, `duplicate_identifier`, `prohibited_construct`, `value_not_permitted`.
+Evidence: `negative-version-mismatch`, `negative-include-parent`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_fragment_declares_neither_parent_nor_include`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_parent_a_caller_names_contributes_before_the_fragment`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_fragment_that_names_a_layer_refuses_the_given_parent_before_it_is_read`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_given_parent_with_an_unread_header_fails_in_that_file`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_fragment_with_an_unread_header_fails_at_the_include_entry_naming_it`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_layer_is_admitted_at_its_own_version_and_the_chain_needs_the_newest`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_parent_naming_an_unread_version_or_another_type_fails_at_parent`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_layer_is_a_fragment_and_a_single_layer_is_complete`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_schema_version_root_is_refused_as_language_0_5_wherever_it_is_read`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_keyed_list_member_carries_its_identity_in_the_layer_that_writes_it`.
 
 Requiredness is deferred for every root field and at every depth inside a
 member of `input`, `intermediates`, `columns`, `rows` and `windows`. An entry
@@ -171,6 +175,20 @@ contribute the same value. A long form that only restates its shorthand fails
 in the layer that writes it under
 [SCHEMA-15](reference/schema-language.md#schema-15); the composed document
 holds the expanded classes and is not checked again.
+
+A check may compose a fragment on a parent the caller names, a
+specification it gives as the `parent` argument. The fragment composes as it
+would in a file that names that specification as its `parent`, lists the
+fragment under `include` and writes nothing else: it is the entry, and the
+given parent's layers contribute before it ([LAYER-3](#layer-3)). The given
+parent is a path the caller passes ([FILE-1](reference/files.md#file-1)),
+and a header it declares that the engine does not read fails at its own
+`yamaa` or `type`, as the entry's does. An entry that declares `parent` or
+`include` is no fragment: the given parent is refused with
+`value_not_permitted` at `parent`, the argument, its context naming the
+construct and its `value` the path as the caller gave it, before it is
+read. A given parent that is the entry itself is an
+`inheritance_cycle` at `parent`.
 
 ## Composition
 

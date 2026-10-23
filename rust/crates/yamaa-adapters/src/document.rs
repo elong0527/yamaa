@@ -462,18 +462,20 @@ impl VersionedDocument {
         display_path: String,
         port: &mut P,
     ) -> Result<PreparedSources, SpecificationError<P::Error>> {
-        self.prepare_sources_within(display_path, port, &[])
+        self.prepare_sources_within(display_path, port, &[], None)
     }
 
     /// [`VersionedDocument::prepare_sources`] for a producer that a copy
     /// entry copies from while the specifications and layers `resolving`
     /// names, entry first, are being resolved: a copy that leads back to one
-    /// of them fails (SPEC-9).
+    /// of them fails (SPEC-9). With a `parent` the caller names, this entry
+    /// is a fragment checked on that file as its parent (#3694).
     pub(crate) fn prepare_sources_within<P: Resolver>(
         self,
         display_path: String,
         port: &mut P,
         resolving: &[String],
+        parent: Option<graph::CallerParent<'_>>,
     ) -> Result<PreparedSources, SpecificationError<P::Error>> {
         if self.header.file_type != FileType::Spec {
             let finding =
@@ -499,6 +501,7 @@ impl VersionedDocument {
             self.reads,
             entry,
             self.raw.document.clone(),
+            parent,
             port,
             &mut crate::decoder::Decoder::<std::convert::Infallible>::default(),
         )
@@ -728,6 +731,7 @@ fn read_producer<P: Resolver>(
         written.into(),
         &mut *port,
         &resolving,
+        None,
     )
     .map_err(|error| ProducerFailure::Preparation(Box::new(error)))?;
     contract::prepare_document(prepared.document()).map_err(|error| match error {

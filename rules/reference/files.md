@@ -18,10 +18,11 @@ that writes it, including an inherited layer, a producing specification and a
 project file. No project configuration is discovered, and a project file does
 not select a specification's resource locations.
 
-Evidence: `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/tests/file_resources.rs::inherited_parent_keeps_its_own_input_and_output_locations_without_configuration`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::project_configuration_is_ignored_and_missing_input_has_no_fallback`, `rust/crates/yamaa/tests/caller_paths.rs::a_specification_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`, `rust/crates/yamaa/tests/caller_paths.rs::a_project_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`.
+Evidence: `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/tests/file_resources.rs::inherited_parent_keeps_its_own_input_and_output_locations_without_configuration`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::project_configuration_is_ignored_and_missing_input_has_no_fallback`, `rust/crates/yamaa/tests/caller_paths.rs::a_specification_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`, `rust/crates/yamaa/tests/caller_paths.rs::a_project_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`, `rust/crates/yamaa/tests/caller_paths.rs::a_parent_path_that_reaches_no_regular_file_is_the_check_s_issue_named_as_given`.
 
-A caller's path argument, the entry or the project file, is resolved as the
-host resolves a path, except that the file it names must be a regular file
+A caller's path argument, the entry, the project file or the parent a
+fragment is checked on ([LAYER-4](../inheritance.md#layer-4)), is resolved as
+the host resolves a path, except that the file it names must be a regular file
 and must not be a symbolic link. One that reaches no entry fails with
 `resource_path_missing`, and one that reaches a directory or another entry
 that is not a regular file fails with `resource_path_not_regular_file`
@@ -289,9 +290,9 @@ Evidence: `negative-path-symlink`, `rust/crates/yamaa-core/tests/source_csv_prec
 
 An absolute written path supplied by the specification may be repeated.
 Resolved paths retained as provenance are not substituted for the authored
-path in these diagnostics. A path the caller passes, the entry or the project
-file, has no declaring field: its failure names the path as the caller gave
-it, at no field ([FILE-1](#file-1)).
+path in these diagnostics. A path the caller passes, the entry, the project
+file or a given parent, has no declaring field: its failure names the path
+as the caller gave it, at no field ([FILE-1](#file-1)).
 
 A save walks to each file it publishes as it publishes the file
 ([OUTPUT-8](../output.md#output-8)). A directory on the way that does not

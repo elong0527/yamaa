@@ -138,6 +138,7 @@ fn layers(file: &Path, entry: Values) -> Option<(SchemaStructure, Vec<Normalized
         LANGUAGE_VERSION,
         source,
         entry,
+        None,
         &mut AliasCache::new(&mut resources),
         &mut crate::decoder::Decoder::<std::convert::Infallible>::default(),
     )

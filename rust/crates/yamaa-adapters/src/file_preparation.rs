@@ -300,6 +300,20 @@ pub(crate) fn prepare_document_from(
     })
 }
 
+/// [`prepare_document_from`] of the entry a caller names, `written`, as a
+/// fragment checked on the parent a caller names (#3694): that file is read
+/// as a file the caller names (FILE-1), and a fragment that declares `parent`
+/// or `include` refuses it (LAYER-4).
+pub(crate) fn prepare_fragment_from(
+    resources: &mut Resources,
+    written: &str,
+    parent: yamaa_core::inheritance::CallerParent<'_>,
+) -> Result<crate::specification_source::PreparedDocument, Error> {
+    prepare_with(resources, None, written, |source, display, aliases| {
+        crate::specification_source::prepare_fragment(source, display, parent, aliases)
+    })
+}
+
 /// Capture the entry `written` names, prepare its document with `prepare`
 /// through a cache that keeps every spelling that located a metadata file,
 /// and, only once it has prepared, capture every spelling of each file it

@@ -8,6 +8,7 @@ use crate::{
     file_resources::Resources,
 };
 use std::sync::Arc;
+use yamaa_core::inheritance::CallerParent;
 use yamaa_core::project_function::Language;
 
 /// Repository metadata preparation uses the public application's declaring-only
@@ -218,9 +219,39 @@ pub fn select_request(
     request: yamaa_core::build::Request<'_>,
     host: Option<Language>,
 ) -> Result<Selected, SelectionError> {
+    select_local(request, None, host)
+}
+
+/// [`select_request`] of a fragment checked on the parent a caller names,
+/// `parent` as given (#3694). It is a caller path like the entry and the
+/// project file, made absolute against the current directory, with its
+/// existing parent directory selected so that the caller's own spelling of
+/// that directory keeps its authority (FILE-1, FILE-7).
+pub fn select_fragment(
+    request: yamaa_core::build::Request<'_>,
+    parent: &str,
+    host: Option<Language>,
+) -> Result<Selected, SelectionError> {
+    select_local(request, Some(parent), host)
+}
+
+fn select_local(
+    request: yamaa_core::build::Request<'_>,
+    parent: Option<&str>,
+    host: Option<Language>,
+) -> Result<Selected, SelectionError> {
     let given = request;
-    let request =
+    let mut request =
         configure(given.specification, given.environment).map_err(SelectionError::Preparation)?;
+    let parent = parent
+        .map(|given| {
+            let written = crate::project_application::environment_path(given)
+                .map_err(|error| caller(given, error))?;
+            request.resources.select_caller_parent(&written);
+            Ok((given, written))
+        })
+        .transpose()
+        .map_err(SelectionError::Preparation)?;
     let (resources, environment) = capture_environment(
         request.resources,
         &request.entry,
@@ -229,7 +260,17 @@ pub fn select_request(
         request.closures,
     )
     .map_err(SelectionError::Preparation)?;
-    compile(resources, given.specification, &request.entry, environment)
+    let parent = parent.as_ref().map(|(given, written)| CallerParent {
+        written: written.as_str(),
+        given,
+    });
+    compile(
+        resources,
+        given.specification,
+        &request.entry,
+        environment,
+        parent,
+    )
 }
 
 /// Host authority replaces physical lookup while all metadata preparation
@@ -239,27 +280,53 @@ pub fn select_with_resolver(
     host: Option<Language>,
     resolver: Arc<dyn crate::host_resources::Resolver>,
 ) -> Result<Selected, SelectionError> {
+    select_through(request, None, host, resolver)
+}
+
+/// [`select_with_resolver`] of a fragment checked on the parent a caller
+/// names, which `resolver` serves as it serves the entry (#3694).
+pub fn select_fragment_with_resolver(
+    request: yamaa_core::build::Request<'_>,
+    parent: &str,
+    host: Option<Language>,
+    resolver: Arc<dyn crate::host_resources::Resolver>,
+) -> Result<Selected, SelectionError> {
+    select_through(request, Some(parent), host, resolver)
+}
+
+fn select_through(
+    request: yamaa_core::build::Request<'_>,
+    parent: Option<&str>,
+    host: Option<Language>,
+    resolver: Arc<dyn crate::host_resources::Resolver>,
+) -> Result<Selected, SelectionError> {
     let closures =
         Closures::shipped().map_err(|error| SelectionError::Preparation(Error::Schema(error)))?;
-    select_with_optional_resources(
+    select_resources(
         Resources::with_resolver(resolver, request.specification),
         request.specification,
         request.environment,
         host,
         closures,
+        parent.map(|parent| CallerParent {
+            written: parent,
+            given: parent,
+        }),
     )
 }
 
 /// Capture the entry and the producing specifications its links name under
 /// the captured environment, then compile. `entry` names the entry to
-/// `resources`, and `given` is the path the caller passed.
+/// `resources`, and `given` is the path the caller passed. With a `parent`
+/// the caller names, the entry is a fragment checked on it.
 fn compile(
     resources: Resources,
     given: &str,
     entry: &str,
     environment: crate::project_source::OwnedEnvironment,
+    parent: Option<CallerParent<'_>>,
 ) -> Result<Selected, SelectionError> {
-    let entry = crate::file_entry::capture(resources, given, entry, environment)
+    let entry = crate::file_entry::capture(resources, given, entry, environment, parent)
         .map_err(|error| SelectionError::Preparation(Error::Entry(error)))?;
     FileSpecification::from_workflow(entry).map_err(SelectionError::Compile)
 }
@@ -281,6 +348,19 @@ pub fn select_with_optional_resources(
     host: Option<Language>,
     closures: Closures,
 ) -> Result<Selected, SelectionError> {
+    select_resources(resources, entry, environment, host, closures, None)
+}
+
+/// [`select_with_optional_resources`], or with a `parent` the caller names,
+/// of a fragment checked on it.
+fn select_resources(
+    resources: Resources,
+    entry: &str,
+    environment: Option<&str>,
+    host: Option<Language>,
+    closures: Closures,
+    parent: Option<CallerParent<'_>>,
+) -> Result<Selected, SelectionError> {
     let (resources, environment) = capture_environment(
         resources,
         entry,
@@ -289,7 +369,7 @@ pub fn select_with_optional_resources(
         closures,
     )
     .map_err(SelectionError::Preparation)?;
-    compile(resources, entry, entry, environment)
+    compile(resources, entry, entry, environment, parent)
 }
 
 /// Capture the project file `environment` names, as the path the caller gave

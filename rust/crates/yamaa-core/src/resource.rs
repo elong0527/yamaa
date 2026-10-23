@@ -64,6 +64,29 @@ impl ResourceFailure {
         }
     }
 
+    /// A path the caller passes, which no file declares, that cannot be read:
+    /// the path as the caller gave it, at no field (FILE-1, FILE-11). A file
+    /// over its boundary is the preparation's resource limit.
+    pub fn caller_diagnostic(self, given: &str) -> Diagnostic {
+        if let Self::Boundary(limit) = self {
+            return crate::application_issue::resource_rejected(
+                crate::application_issue::Step::Prepare,
+                crate::application_issue::Fault::ResourceLimit,
+                limit.resource,
+                limit.limit,
+                limit.actual,
+                Vec::new(),
+            );
+        }
+        Diagnostic {
+            code: self.code(),
+            spec_paths: Vec::new(),
+            context: [(String::from("path"), JsonValue::String(given.into()))].into(),
+            source_span: None,
+            operand_route: None,
+        }
+    }
+
     /// Only authored dataset/path identities enter semantic context. Canonical
     /// filesystem names and host exception messages are deliberately unavailable.
     pub fn diagnostic(self, dataset: &str, written_path: &str) -> Diagnostic {

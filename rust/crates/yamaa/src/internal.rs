@@ -308,6 +308,32 @@ pub(crate) fn run_check(
     Ok((issues, Arc::new(locator)))
 }
 
+/// [`run_check`] of a fragment checked on the parent a caller names (#3694).
+/// A specification that is no fragment refuses that parent: the call fails
+/// with the issue that says so, located in no file.
+pub(crate) fn run_check_on(
+    shared: &EngineShared,
+    specification: &str,
+    environment: Option<&str>,
+    parent: &str,
+    token: &CancellationToken,
+) -> Result<(Vec<yamaa_core::diagnostic::Diagnostic>, Arc<Locator>), Error> {
+    if token.is_cancelled() {
+        return Err(Error::Cancelled);
+    }
+    let (issues, locator) = yamaa_adapters::file_application::check_fragment_located(
+        shared.language,
+        yamaa_core::domain_entry::Request {
+            specification,
+            environment,
+        },
+        parent,
+        resolver_bridge(shared),
+    )
+    .map_err(|refusal| Error::Rejected(crate::diagnostic::Report::from_issues(&refusal)))?;
+    Ok((issues, Arc::new(locator)))
+}
+
 /// One compiled request: the prepared member, or a refused compilation that
 /// still owns its diagnostics and the dataset name it read. Either keeps
 /// what locates the issues of its runs (P-ISSUE-1).

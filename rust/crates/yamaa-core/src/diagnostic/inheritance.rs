@@ -51,6 +51,14 @@ pub enum InheritanceFinding<'a> {
         entry: &'a str,
         field: &'a str,
     },
+    /// A caller named a parent, `value` as the caller gave it, for an entry
+    /// that declares `field`, `parent` or `include`, so the entry is no
+    /// fragment to check on it (LAYER-4, #3694): reported at `parent`, the
+    /// argument, which no file holds.
+    NotFragment {
+        field: &'a str,
+        value: &'a str,
+    },
     /// A layer declares a language version the engine does not read (SCHEMA-2,
     /// LAYER-4): reported at the entry's `yamaa`, or at the `parent` or
     /// `include` entry naming it.
@@ -110,8 +118,11 @@ impl InheritanceFinding<'_> {
                 returns_to_entry,
                 named,
             } => {
-                let Some(field) = named.field() else {
-                    return Err(ProjectionError::InvalidContext);
+                // A parent a caller names that is the entry itself closes
+                // the cycle at the argument that names it.
+                let field = match named {
+                    Named::CallerParent => String::from("parent"),
+                    named => named.field().ok_or(ProjectionError::InvalidContext)?,
                 };
                 if path.len() < 2 || path.first() != path.last() {
                     return Err(ProjectionError::InvalidContext);
@@ -152,6 +163,11 @@ impl InheritanceFinding<'_> {
                 context.insert("entry".into(), text(entry));
                 context.insert("source".into(), text(source));
                 (C::InheritanceFragmentField, field.into())
+            }
+            Self::NotFragment { field, value } => {
+                context.insert("construct".into(), text(field));
+                context.insert("value".into(), text(value));
+                (C::InheritanceNotFragment, String::from("parent"))
             }
             Self::LanguageVersion {
                 source,

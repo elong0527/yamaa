@@ -156,6 +156,27 @@ pub struct Check {
 }
 
 impl Check {
+    /// The check of the one specification at `subject`, the path as given,
+    /// whose `issues` `locator` locates.
+    fn of(
+        subject: &str,
+        issues: Vec<yamaa_core::diagnostic::Diagnostic>,
+        locator: Arc<Locator>,
+    ) -> Self {
+        Self {
+            outcome: Outcome {
+                members: vec![Member {
+                    name: None,
+                    identity: None,
+                    work: Work::Checked(issues, locator),
+                }],
+                issues: Vec::new(),
+                locator: Arc::new(Locator::none()),
+            },
+            subject: subject.to_owned(),
+        }
+    }
+
     /// What is wrong, one row per finding; empty when nothing is. A project
     /// check lists the project findings first, then each specification's.
     pub fn issues(&self) -> Table {
@@ -474,18 +495,31 @@ impl Engine {
     ) -> Result<Check, Error> {
         let (issues, locator) =
             crate::internal::run_check(self.shared(), specification, project, token)?;
-        Ok(Check {
-            outcome: Outcome {
-                members: vec![Member {
-                    name: None,
-                    identity: None,
-                    work: Work::Checked(issues, locator),
-                }],
-                issues: Vec::new(),
-                locator: Arc::new(Locator::none()),
-            },
-            subject: specification.to_owned(),
-        })
+        Ok(Check::of(specification, issues, locator))
+    }
+
+    /// [`Engine::spec_check`] of a fragment, a specification that declares
+    /// neither `parent` nor `include`, on the specification `parent` names
+    /// (#3694). The fragment composes as it would in a file that names
+    /// `parent` as its parent, includes the fragment and writes nothing else:
+    /// the parent's layers first, then the fragment (LAYER-3). The fragment
+    /// stands as the entry, so every issue is located in it or in a layer of
+    /// the parent (P-ISSUE-1), and `parent` is a caller path like
+    /// `specification`: one that cannot be read is the check's issue, naming
+    /// it as given at no field (FILE-1). A specification that declares
+    /// `parent` or `include` refuses the given parent: the call fails with
+    /// `value_not_permitted` at `parent` (LAYER-4). Otherwise only
+    /// cancellation fails the call.
+    pub fn spec_check_on(
+        &self,
+        specification: &str,
+        project: Option<&str>,
+        parent: &str,
+        token: &CancellationToken,
+    ) -> Result<Check, Error> {
+        let (issues, locator) =
+            crate::internal::run_check_on(self.shared(), specification, project, parent, token)?;
+        Ok(Check::of(specification, issues, locator))
     }
 
     /// Build one specification in memory; nothing is written until `save`.
