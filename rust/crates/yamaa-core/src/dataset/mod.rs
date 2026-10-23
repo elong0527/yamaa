@@ -918,9 +918,12 @@ impl DatasetPlan {
 
 #[cfg(test)]
 mod admission_boundaries;
+#[cfg(test)]
+mod partitioned_execution;
 
 mod execution;
 pub use execution::{
     CheckRecord, CodelistObservation, Dataset, Execution, ExecutionAttempt, ExecutionError,
-    ExecutionEvent, ExecutionPhase, Resource, RowCountObservation, RowIdentity, TemplateRows,
+    ExecutionEvent, ExecutionPhase, Partitioning, Resource, RowCountObservation, RowIdentity,
+    TemplateRows,
 };

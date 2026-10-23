@@ -89,6 +89,9 @@ vocabulary! {
         ParquetCodecUnavailable => "parquet_codec_unavailable",
         ParquetLimit => "parquet_limit",
         ParquetReaderUnavailable => "parquet_reader_unavailable",
+        /// A partitioned run that needs the whole table at a step and was not
+        /// allowed to fall back to it (#3697).
+        PartitionGlobal => "partition_global",
         PathMismatch => "path_mismatch",
         ProducerContract => "producer_contract",
         ProducerMetadata => "producer_metadata",
@@ -128,9 +131,7 @@ vocabulary! {
         TableLimit => "table_limit",
         TargetChanged => "target_changed",
         Transport => "transport",
-        UnknownClass => "unknown_class",
         ValidationPolicy => "validation_policy",
-        VersionedRootRequired => "versioned_root_required",
         YamlAdmission => "yaml_admission",
         YamlDecode => "yaml_decode",
         YamlReaderUnavailable => "yaml_reader_unavailable",
@@ -139,8 +140,8 @@ vocabulary! {
 
 /// Format classified installed-package disagreement. Packaging tools supply the
 /// facts; this owns the stable normative issue identity without comparing versions.
-/// `field` declares the lock: `lock` in a 0.5 environment file, and
-/// `environments.<host>.lock` in a 1.0 project file (FUNC-3).
+/// `field` declares the lock: `environments.<host>.lock` in the project file
+/// (FUNC-3).
 pub fn lock_mismatch(field: &str, context: crate::diagnostic::Context) -> Diagnostic {
     Diagnostic {
         code: ConditionCode::ProjectLockMismatch,
@@ -185,6 +186,20 @@ pub fn rejected(step: Step, fault: Fault) -> Diagnostic {
         .collect(),
         source_span: None,
         operand_route: None,
+    }
+}
+
+/// The refusal of a partitioned run without the whole-table fallback
+/// (#3697): the step at `path` needs the whole table. It is the engine's,
+/// at the spec path of the step it cannot divide, or at none for a step
+/// with no authored path.
+pub fn partition_global(path: &str) -> Diagnostic {
+    Diagnostic {
+        spec_paths: (!path.is_empty())
+            .then(|| path.to_owned())
+            .into_iter()
+            .collect(),
+        ..rejected(Step::Execute, Fault::PartitionGlobal)
     }
 }
 

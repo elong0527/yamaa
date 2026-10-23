@@ -91,18 +91,6 @@ fn packed() -> String {
     )
 }
 
-/// CANONICAL written in 0.5, for the 0.5-only tests that #3685 deletes.
-fn legacy() -> String {
-    CANONICAL
-        .replacen(
-            "yamaa: \"1.0\"\ntype: spec\n",
-            "schema_version: \"1.0\"\n",
-            1,
-        )
-        .replacen("    key: [STUDYID, USUBJID]\n", "", 1)
-        .replacen("then: null", "then: {literal: null}", 1)
-}
-
 #[test]
 fn canonical_specification_has_no_findings() {
     assert!(findings(CANONICAL).is_empty());
@@ -821,45 +809,6 @@ fn a_long_block_scalar_at_the_end_is_left_to_its_author() {
 }
 
 #[test]
-fn the_block_form_of_a_literal_is_not_a_finding() {
-    // `literal_form` retires with `{literal: X}` in 1.0; the lint names no
-    // spelling of a literal. 0.5-only until #3685.
-    for block in [
-        "    derivation:\n      literal: DM\n",
-        "    derivation:\n      literal: [1, 2]\n",
-        "    derivation:\n      literal:\n        DM\n",
-        "    derivation:\n      {literal: [1, 2]}\n",
-        "    derivation:\n      literal: DM\n      note: x\n",
-        "    derivation: {}\n",
-    ] {
-        let text = legacy().replace("    derivation: DM.USUBJID\n", block);
-        assert!(names(&text).is_empty(), "{block}");
-    }
-}
-
-#[test]
-fn source_spellings_are_left_to_the_language() {
-    // The language itself refuses {source: X} where the bare string is the
-    // shorthand, so the lint names no source spelling. 0.5-only until #3685.
-    for (from, to) in [
-        (
-            "    derivation: DM.USUBJID\n",
-            "    derivation:\n      source: DM.USUBJID\n",
-        ),
-        (
-            "    derivation: DM.USUBJID\n",
-            "    derivation:\n      upcase:\n        source: DM.USUBJID\n",
-        ),
-        (
-            "    derivation: DM.STUDYID\n",
-            "    derivation:\n      source: {variable: DM.STUDYID, filter: \"DM.X = 1\"}\n",
-        ),
-    ] {
-        assert!(names(&legacy().replace(from, to)).is_empty(), "{to}");
-    }
-}
-
-#[test]
 fn a_suppression_with_a_reason_covers_its_entry() {
     let allowed = packed().replace(
         "  - name: USUBJID",
@@ -972,7 +921,10 @@ fn text_that_admission_refuses_is_not_linted() {
     }
 }
 
-const REPEATED: &str = r#"schema_version: "1.0"
+/// A 1.0 specification whose two row templates derive the same three
+/// columns, none of which has a column-level derivation.
+const REPEATED: &str = r#"yamaa: "1.0"
+type: spec
 domain: DM
 keys: [STUDYID, USUBJID]
 input:
@@ -1000,19 +952,21 @@ rows:
     derivations:
       STUDYID: DM.STUDYID
       USUBJID: DM.USUBJID
-      DOMAIN: {literal: DM}
+      DOMAIN: "'DM'"
 
   - id: b
     derivations:
       STUDYID: DM.STUDYID
       USUBJID: DM.USUBJID
-      DOMAIN: {literal: DM}
+      DOMAIN: "'DM'"
 "#;
 
+/// The finding for `column`, at the first template's derivation, which the
+/// spec path notation names by the template's `id` (P-CLR-2).
 fn repeated(column: &str) -> (&'static str, String) {
     (
         "repeated_row_derivation",
-        format!("rows[0].derivations.{column}"),
+        format!("rows.a.derivations.{column}"),
     )
 }
 
@@ -1026,7 +980,7 @@ fn repeated_row_derivations_move_to_column_level() {
             .collect::<Vec<_>>(),
         [repeated("STUDYID"), repeated("USUBJID"), repeated("DOMAIN")]
     );
-    assert_eq!((found[0].line, found[0].column), (27, 7));
+    assert_eq!((found[0].line, found[0].column), (28, 7));
     assert_eq!(
         found[0].message,
         "derivation of `STUDYID` is identical in every row template; move it to columns[].derivation"
@@ -1037,13 +991,9 @@ fn repeated_row_derivations_move_to_column_level() {
 
 #[test]
 fn repeated_row_derivation_positions_ignore_stray_row_entries() {
+    // A template is named by its `id`, wherever a stray entry stands.
     let stray = REPEATED.replace("rows:\n  - id: a\n", "rows:\n  - stray\n\n  - id: a\n");
-    let expected = ["STUDYID", "USUBJID", "DOMAIN"].map(|column| {
-        (
-            "repeated_row_derivation",
-            format!("rows[1].derivations.{column}"),
-        )
-    });
+    let expected = ["STUDYID", "USUBJID", "DOMAIN"].map(repeated);
     assert_eq!(paths(&stray), expected);
 }
 
@@ -1063,31 +1013,23 @@ fn repeated_row_derivation_needs_every_template() {
 fn repeated_row_derivation_skips_row_phase_work() {
     let aggregate = REPEATED
         .replace(
-            "      DOMAIN: {literal: DM}\n\n  - id: b",
+            "      DOMAIN: \"'DM'\"\n\n  - id: b",
             "      DOMAIN:\n        aggregate:\n          filter: \"DM.X = 1\"\n          expr: \"ONLY(DM.Y)\"\n\n  - id: b",
         )
         .replace(
-            "      DOMAIN: {literal: DM}\n",
+            "      DOMAIN: \"'DM'\"\n",
             "      DOMAIN:\n        aggregate:\n          filter: \"DM.X = 1\"\n          expr: \"ONLY(DM.Y)\"\n",
         );
     let found = paths(&aggregate);
     assert!(found.contains(&repeated("STUDYID")));
     assert!(!found.contains(&repeated("DOMAIN")));
-    let intermediate = REPEATED
-        .replace(
-            "output:\n  path: dm.csv",
-            "intermediates:\n  - id: PICK\n    dataset: DM\n    filter: \"DM.X = 1\"\n    \
-             no_match: {literal: null}\n\noutput:\n  path: dm.csv",
-        )
-        .replace("DOMAIN: {literal: DM}", "DOMAIN: PICK.X");
-    assert!(!paths(&intermediate).contains(&repeated("DOMAIN")));
 }
 
 #[test]
 fn repeated_row_derivation_skips_existing_defaults() {
     let defaulted = REPEATED.replace(
         "  - name: DOMAIN\n    type: str\n    label: Domain Abbreviation\n",
-        "  - name: DOMAIN\n    type: str\n    label: Domain Abbreviation\n    derivation: {literal: DM}\n",
+        "  - name: DOMAIN\n    type: str\n    label: Domain Abbreviation\n    derivation: \"'DM'\"\n",
     );
     let found = paths(&defaulted);
     assert!(!found.contains(&repeated("DOMAIN")));
@@ -1140,7 +1082,8 @@ fn repeated_row_derivation_skips_columns_read_by_a_filter() {
     assert!(!paths(&underscored).contains(&repeated("_X")));
 }
 
-const PREDICATE_CHAIN: &str = r#"schema_version: "1.0"
+const PREDICATE_CHAIN: &str = r#"yamaa: "1.0"
+type: spec
 domain: ADXX
 keys: [STUDYID, USUBJID]
 input:
@@ -1162,7 +1105,7 @@ columns:
     derivation: DM.USUBJID
 
   - name: AGG
-    type: num
+    type: float
     label: Aggregate Value
     derivation:
       aggregate:
@@ -1201,155 +1144,54 @@ fn repeated_row_derivation_follows_predicate_reads_of_blocked_columns() {
     assert!(paths(&local).contains(&repeated("RESULT")));
 }
 
-const REDUNDANT: &str = r#"schema_version: "1.0"
-domain: ADSL
-keys: [STUDYID, USUBJID]
-input:
-  DM: input/dm.csv
-  ADSL: input/adsl.csv
-
-output:
-  path: adsl.csv
-  columns: [STUDYID, USUBJID, AGE]
-
-intermediates:
-  - id: ADSL1
-    dataset: ADSL
-    key: [STUDYID, USUBJID]
-    no_match: {literal: null}
-
-columns:
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation: DM.STUDYID
-
-  - name: USUBJID
-    type: str
-    label: Unique Subject Identifier
-    derivation: DM.USUBJID
-
-  - name: AGE
-    type: int
-    label: Age
-    derivation: ADSL1.AGE
-"#;
-
-#[test]
-fn a_redundant_intermediate_reads_the_dataset_directly() {
-    let found = findings(REDUNDANT);
-    assert_eq!(
-        found
-            .iter()
-            .map(|item| (
-                item.finding,
-                item.spec_path.as_str(),
-                item.line,
-                item.column
-            ))
-            .collect::<Vec<_>>(),
-        [("redundant_intermediate", "intermediates[0]", 13, 5)]
-    );
-    assert_eq!(
-        found[0].message,
-        "intermediate `ADSL1` reads exactly what the implicit join to `ADSL` reads; read `ADSL` directly"
-    );
-    assert_eq!(fixed(REDUNDANT), REDUNDANT);
-    // A stray entry keeps the written index of the entries after it.
-    let stray = REDUNDANT.replace(
-        "intermediates:\n  - id: ADSL1\n",
-        "intermediates:\n  - stray\n\n  - id: ADSL1\n",
-    );
-    assert_eq!(
-        paths(&stray),
-        [("redundant_intermediate", "intermediates[1]".to_owned())]
-    );
-}
-
-#[test]
-fn a_redundant_intermediate_keeps_narrowing_lookups() {
-    let filtered = REDUNDANT.replace(
-        "    key: [STUDYID, USUBJID]\n    no_match: {literal: null}",
-        "    key: [STUDYID, USUBJID]\n    filter: \"ADSL.EFFFL = 'Y'\"\n    no_match: {literal: null}",
-    );
-    assert!(names(&filtered).is_empty());
-    let custom = REDUNDANT.replace("    key: [STUDYID, USUBJID]", "    key: [USUBJID]");
-    assert!(names(&custom).is_empty());
-    let required = REDUNDANT.replace("no_match: {literal: null}", "require_match: true");
-    assert!(!names(&required).contains(&"redundant_intermediate"));
-    // Omitted or cleared by a bare null, the answer is missing, as the join's.
-    let omitted = REDUNDANT.replace("\n    no_match: {literal: null}", "");
-    assert!(names(&omitted).contains(&"redundant_intermediate"));
-    let cleared = REDUNDANT.replace("no_match: {literal: null}", "no_match: null");
-    assert!(names(&cleared).contains(&"redundant_intermediate"));
-    let answered = REDUNDANT.replace("no_match: {literal: null}", "no_match: {literal: 0}");
-    assert!(!names(&answered).contains(&"redundant_intermediate"));
-    // An input requiring a match fails its implicit join where the
-    // intermediate answers with missing.
-    let input_required = REDUNDANT.replace(
-        "  ADSL: input/adsl.csv",
-        "  ADSL: {path: input/adsl.csv, require_match: true}",
-    );
-    assert!(!names(&input_required).contains(&"redundant_intermediate"));
-    // An omitted key is a rename that validation owns.
-    let rename_only = REDUNDANT.replace(
-        "    key: [STUDYID, USUBJID]\n    no_match: {literal: null}",
-        "    no_match: {literal: null}",
-    );
-    assert!(!names(&rename_only).contains(&"redundant_intermediate"));
-    // A key mapping that restates each output key is the same key.
-    let mapped = REDUNDANT.replace(
-        "    key: [STUDYID, USUBJID]",
-        "    key: {STUDYID: STUDYID, USUBJID: USUBJID}",
-    );
-    assert!(names(&mapped).contains(&"redundant_intermediate"));
-}
-
 #[test]
 fn a_redundant_intermediate_is_not_read_by_a_longer_name() {
     // The only qualified read is of the ADSL dataset, whose name merely
     // ends with the intermediate's id.
-    let suffix = REDUNDANT
+    let suffix = REDUNDANT_1_0
         .replace("  - id: ADSL1\n", "  - id: DSL\n")
         .replace("    derivation: ADSL1.AGE", "    derivation: ADSL.AGE");
     assert!(!names(&suffix).contains(&"redundant_intermediate"));
     let genuine = suffix.replace("    derivation: ADSL.AGE", "    derivation: DSL.AGE");
     assert!(names(&genuine).contains(&"redundant_intermediate"));
-    let reads_suffix = REPEATED
-        .replace(
-            "input:\n  DM: input/dm.csv",
-            "input:\n  DM: input/dm.csv\n  ADSL: input/adsl.csv",
-        )
-        .replace(
-            "output:\n  path: dm.csv",
-            "intermediates:\n  - id: DSL\n    dataset: DM\n    key: [STUDYID, USUBJID]\n    \
-             no_match: {literal: null}\n\noutput:\n  path: dm.csv",
-        )
-        .replace("DOMAIN: {literal: DM}", "DOMAIN: ADSL.AGE");
-    assert!(paths(&reads_suffix).contains(&repeated("DOMAIN")));
+    // A read of a `SELF` intermediate is not row-local (SPEC-6); a read of a
+    // dataset whose name ends with its id is no read of it.
+    let self_read = |derivation: &str| {
+        REPEATED
+            .replace(
+                "input:\n  DM: input/dm.csv",
+                "input:\n  DM: input/dm.csv\n  ADSL: input/adsl.csv",
+            )
+            .replace(
+                "output:\n  path: dm.csv",
+                "intermediates:\n  - id: DSL\n    dataset: SELF\n    key: [STUDYID, USUBJID]\n\n\
+                 output:\n  path: dm.csv",
+            )
+            .replace("DOMAIN: \"'DM'\"", &format!("DOMAIN: {derivation}"))
+    };
+    assert!(paths(&self_read("ADSL.AGE")).contains(&repeated("DOMAIN")));
+    assert!(!paths(&self_read("DSL.AGE")).contains(&repeated("DOMAIN")));
 }
 
 #[test]
 fn qualified_reads_after_escaped_unicode_preserve_identifier_boundaries() {
     // ASCII YAML source can decode to two-, three- or four-byte UTF-8 scalars.
     for escape in [r"\u00e9", r"\u4e2d", r"\U0001f600"] {
-        let redundant = REDUNDANT.replace(
+        let redundant = REDUNDANT_1_0.replace(
             "derivation: ADSL1.AGE",
             &format!("derivation: \"{escape} ADSL1.AGE\""),
         );
-        assert_eq!(paths(&redundant), paths(REDUNDANT));
+        assert_eq!(paths(&redundant), paths(REDUNDANT_1_0));
         assert!(!names(&redundant.replace(" ADSL1.AGE", " XADSL1.AGE"))
             .contains(&"redundant_intermediate"));
 
+        // A read of a `SELF` intermediate is not row-local (SPEC-6).
         let repeated_read = REPEATED
             .replace(
                 "columns:\n  - name:",
-                "intermediates:\n  - id: PICK\n    dataset: DM\n\ncolumns:\n  - name:",
+                "intermediates:\n  - id: PICK\n    dataset: SELF\n\ncolumns:\n  - name:",
             )
-            .replace(
-                "DOMAIN: {literal: DM}",
-                &format!("DOMAIN: \"{escape} PICK.X\""),
-            );
+            .replace("DOMAIN: \"'DM'\"", &format!("DOMAIN: \"{escape} PICK.X\""));
         assert!(!paths(&repeated_read).contains(&repeated("DOMAIN")));
         assert!(paths(&repeated_read.replace(" PICK.X", " XPICK.X")).contains(&repeated("DOMAIN")));
     }
@@ -1649,11 +1491,6 @@ fn a_1_0_file_names_members_in_the_spec_path_notation() {
         "  order_by:\n    - {variable: AESEQ, direction: desc}\n  columns: [STUDYID, USUBJID, AESEQ, AGE, SEX]\n",
     );
     assert!(paths(&order).contains(&("field_order", "output.columns".to_owned())));
-    // A 0.5 file keeps positional paths.
-    assert_eq!(
-        paths(&packed.replace("yamaa: \"1.0\"\ntype: spec\n", "schema_version: \"1.0\"\n")),
-        [("entry_spacing", "columns[1]".to_owned())]
-    );
 }
 
 /// A standalone 1.0 specification written in its canonical spellings.
@@ -2210,9 +2047,6 @@ fn an_input_key_no_read_uses_is_reported() {
     // A layer's columns may come from the layer it inherits.
     let layer = base.replace("domain: ADLB\n", "parent: base.yaml\ndomain: ADLB\n");
     assert!(!names(&layer).contains(&"unused_input_key"));
-    // A 0.5 file declares no input keys.
-    let legacy = base.replace("yamaa: \"1.0\"\ntype: spec\n", "schema_version: \"1.0\"\n");
-    assert!(!names(&legacy).contains(&"unused_input_key"));
     // A shared parent layer suppresses it with a reason.
     let shared = base.replace(
         "  LB: {path",
@@ -2370,14 +2204,6 @@ fn internal_and_inherited_columns_need_no_label() {
         "type: spec\nparent: base.yaml\ndomain: ADSL",
     );
     assert!(!names(&inherited).contains(&"missing_label"));
-    // A 0.5 null parent names no parent: the standalone file owns its labels.
-    // 0.5-only until #3685: a 1.0 layer without a parent omits the field
-    // (LAYER-2).
-    let standalone = MISSING_LABEL.replace(
-        "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL",
-        "schema_version: \"1.0\"\nparent: null\ndomain: ADSL",
-    );
-    assert!(names(&standalone).contains(&"missing_label"));
 }
 
 #[test]
@@ -2570,7 +2396,14 @@ mod files {
         directory.write("untyped.yaml", &broken.replace("type: spec\n", ""));
         directory.write("dictionaries/sex.yaml", "F: Female\nM: Male\n");
         // SCHEMA-2, #3443: directory discovery admits only the 1.x header.
-        directory.write("legacy.yaml", &super::legacy());
+        directory.write(
+            "legacy.yaml",
+            &CANONICAL.replacen(
+                "yamaa: \"1.0\"\ntype: spec\n",
+                "schema_version: \"1.0\"\n",
+                1,
+            ),
+        );
         // A root that declares `schema_version` beside `yamaa` is no 1.x
         // file, as the engine reads it.
         directory.write(
@@ -2607,15 +2440,53 @@ mod files {
     fn a_named_file_is_always_linted_and_files_keep_argument_order() {
         let directory = Directory::new("named");
         let clean = directory.write("clean.yaml", CANONICAL);
-        let environment = directory.write(
-            "environment.yaml",
-            "schema_version: \"1.0\"\nstudy: {id: S1}\n",
-        );
-        let linted = lint(&[text(&environment), text(&clean)], false).unwrap();
+        // A named file without the 1.x header is still read.
+        let notes = directory.write("notes.yaml", "domain: TEST\nstudy: {id: S1}\n");
+        let linted = lint(&[text(&notes), text(&clean)], false).unwrap();
         assert_eq!(linted.len(), 2);
-        assert_eq!(linted[0].file, display(&environment));
+        assert_eq!(linted[0].file, display(&notes));
         assert_eq!(linted[0].findings[0].finding, "root_spacing");
         assert!(linted[1].findings.is_empty());
+    }
+
+    /// A named file written for 0.5 declares `schema_version`, which no
+    /// reader reads: the lint refuses the whole call as
+    /// `unsupported_language_version`, naming 0.5 (SCHEMA-2), and writes
+    /// nothing, the files named before it included.
+    #[test]
+    fn a_named_file_that_declares_schema_version_refuses_the_call() {
+        let directory = Directory::new("named-0-5");
+        let packed = CANONICAL.replace("base: DM\n\noutput:", "base: DM\noutput:");
+        let fixable = directory.write("fixable.yaml", &packed);
+        let legacy = directory.write(
+            "legacy.yaml",
+            &CANONICAL.replacen(
+                "yamaa: \"1.0\"\ntype: spec\n",
+                "schema_version: \"1.0\"\n",
+                1,
+            ),
+        );
+        let error = lint(&[text(&fixable), text(&legacy)], true).unwrap_err();
+        assert_eq!(error.file(), Some(display(&legacy).as_str()));
+        let diagnostics = error.diagnostics();
+        assert_eq!(
+            diagnostics
+                .iter()
+                .map(|diagnostic| (
+                    diagnostic.code,
+                    diagnostic.spec_paths.clone(),
+                    yamaa_core::json::Value::Object(diagnostic.context.clone()),
+                    diagnostic.source_span.is_none() && diagnostic.operand_route.is_none(),
+                ))
+                .collect::<Vec<_>>(),
+            [(
+                yamaa_core::diagnostic::ConditionCode::HeaderLanguageVersion,
+                vec!["schema_version".to_string()],
+                crate::json!({"version": "0.5", "language_versions": ["1.0"]}),
+                true,
+            )]
+        );
+        assert_eq!(std::fs::read_to_string(&fixable).unwrap(), packed);
     }
 
     #[cfg(unix)]

@@ -21,7 +21,7 @@ from unittest.mock import patch
 from tools.ci import publish_release as publisher
 from tools.ci import release_assets, toolchain
 from tools.ci import select_release_artifacts as release
-from tools.packaging import cli_archive, release_identity
+from tools.packaging import cli_archive, conformance_archive, release_identity
 from tools.packaging import generate_component_inventory as inventory
 from tools.packaging.release_identity import Identity
 from tools.paths import ROOT
@@ -284,6 +284,16 @@ def downloads(root, identity=IDENTITY):
             cli_zip(
                 path,
                 cli_members(identity, target, cli_licenses, asset.artifact.encode()),
+            )
+        elif asset.kind == "conformance":
+            # The committed files, which the selector compares with the
+            # checkout, under the directory that the identity names.
+            cli_zip(
+                path,
+                {
+                    member: ((ROOT / file).read_bytes(), conformance_archive.MODE)
+                    for member, file in conformance_archive.layout(identity).items()
+                },
             )
         elif asset.kind == "r-binary":
             # R installs the notices of inst/ at the package root.
@@ -886,6 +896,29 @@ class DownloadedPackages(unittest.TestCase):
                         self.select()
                 finally:
                     path.write_bytes(original)
+        self.assertEqual(len(self.select()), len(ASSETS))
+
+    def test_the_conformance_archive_carries_the_committed_files(self):
+        """The grammars, the evaluation set and the license as the checkout
+        holds them: an edited file fails the whole selection."""
+        [asset] = [asset for asset in ASSETS if asset.kind == "conformance"]
+        path = self.directory / asset.artifact / example_name(asset, IDENTITY)
+        original = path.read_bytes()
+        members = {
+            name: (payload, conformance_archive.MODE)
+            for name, payload in self.read(path).items()
+        }
+        file = "yaml/conformance/expressions.yaml"
+        member = f"{path.name.removesuffix('.zip')}/{file}"
+        payload, mode = members[member]
+        cli_zip(path, dict(members, **{member: (payload + b"# edited\n", mode)}))
+        try:
+            with self.assertRaisesRegex(
+                ValueError, f"{member} differs from {file} in the checkout"
+            ):
+                self.select()
+        finally:
+            path.write_bytes(original)
         self.assertEqual(len(self.select()), len(ASSETS))
 
     def read(self, path):
@@ -1953,7 +1986,19 @@ class ReleaseAssetDeclaration(unittest.TestCase):
             for asset in ASSETS
             if asset.file.endswith("-x86_64-unknown-linux-musl.zip")
         )
+        conformance = next(asset for asset in ASSETS if asset.kind == "conformance")
         for asset, accepted, refused in [
+            (
+                conformance,
+                # The release's version, as its tag and title spell it.
+                ["yamaa-1.0.0-rc.1-conformance.zip"],
+                [
+                    "yamaa-1.0.0rc1-conformance.zip",
+                    "yamaa-1.0.0-conformance.zip",
+                    "yamaa-1.0.0-rc.1-conformance.tar.gz",
+                    "yamaa_1.0.0-rc.1-conformance.zip",
+                ],
+            ),
             (
                 cli,
                 # The engine's version, which `yamaa --version` prints.
@@ -2007,12 +2052,16 @@ class ReleaseAssetDeclaration(unittest.TestCase):
     def test_each_release_artifact_has_one_producer(self):
         coverage = MATRIX.coverage()
         binaries = len(coverage["r_binary"]["os"]) * len(coverage["r_binary"]["r"])
+        # The Python source archive shares the source platform's wheel
+        # artifact; the R source package and the conformance archive have
+        # one each.
         self.assertEqual(
             len(release_assets.artifacts(ASSETS)),
             len(coverage["build"]["include"])
             + 1
             + binaries
-            + len(coverage["cli"]["include"]),
+            + len(coverage["cli"]["include"])
+            + 1,
         )
         clash = release_assets.Asset("wheel", "clash", "x", ASSETS[0].artifact, "other")
         with self.assertRaisesRegex(ValueError, "two producing jobs"):
@@ -2077,6 +2126,25 @@ class ReleaseAssetDeclaration(unittest.TestCase):
                     f"native-cli ({lane['os']}, {lane['target']})",
                 )
                 for lane in lanes
+            ],
+        )
+
+    def test_one_conformance_archive_built_on_the_source_platform(self):
+        # Its files are the same for every platform (#3690).
+        source = MATRIX.SOURCE_PLATFORM
+        self.assertEqual(
+            [
+                (asset.title, asset.file, asset.artifact, asset.producer)
+                for asset in ASSETS
+                if asset.kind == "conformance"
+            ],
+            [
+                (
+                    "Grammars and expression evaluation set",
+                    "yamaa-<Cargo version>-conformance.zip",
+                    f"native-conformance-{source}",
+                    f"native-conformance ({source})",
+                )
             ],
         )
 

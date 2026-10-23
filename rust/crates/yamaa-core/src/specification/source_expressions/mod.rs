@@ -1040,7 +1040,7 @@ mod tests {
         .unwrap();
         let spec = lower(document(columns, vec![]));
         let prepared =
-            PreparedSpecification::from_tree(spec, Vec::new(), None, None, None, None).unwrap();
+            PreparedSpecification::from_tree(spec, Vec::new(), None, None, None).unwrap();
         let Err(BindError::Invalid(findings)) = prepared.bind(&source) else {
             panic!("a variable that does not exist fails");
         };
@@ -1088,7 +1088,7 @@ mod tests {
         .unwrap();
         let spec = lower(document(columns, vec![]));
         let prepared =
-            PreparedSpecification::from_tree(spec, Vec::new(), None, None, None, None).unwrap();
+            PreparedSpecification::from_tree(spec, Vec::new(), None, None, None).unwrap();
         assert_eq!(prepared.check_declaration_diagnostics(), []);
         let Err(BindError::Invalid(findings)) = prepared.bind(&source) else {
             panic!("binding refuses the read");

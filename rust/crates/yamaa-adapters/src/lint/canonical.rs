@@ -132,10 +132,10 @@ struct Read<'a> {
 
 impl<'a> Read<'a> {
     fn new(document: &'a Document) -> Option<Self> {
-        if !document.versioned {
+        let values = &document.decoded.as_ref()?.document;
+        if !yamaa_core::language::declares_header(values) {
             return None;
         }
-        let values = &document.decoded.as_ref()?.document;
         let (view, layer) = view(values)?;
         let nodes = correspond(document, values)?;
         let sites = view.written_sites(values, layer).ok()?;
@@ -514,8 +514,8 @@ fn scalar(text: &str) -> Option<(String, &'static str)> {
     same.then_some((scalar, what))
 }
 
-/// Every canonical-spelling departure in a 1.x `document`; none in a 0.5
-/// file, or when the engine reads no schema for it.
+/// Every canonical-spelling departure in a 1.x `document`; none when the
+/// engine reads no schema for it.
 pub(super) fn check(document: &Document) -> Vec<Departure> {
     let Some(read) = Read::new(document) else {
         return Vec::new();

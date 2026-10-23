@@ -1,9 +1,8 @@
 //! Captured YAML codec and compatibility results for engine project preparation.
-use crate::document::{self, Closures, Decoded};
-use crate::specification_source::{CapturedDocument, CapturedSchema, Error, Source};
+use crate::document::{self, Closures};
+use crate::specification_source::{CapturedDocument, Error, Source};
 pub use application::{DecodeTarget, Kind, LockCapture, Origin, SourceOrigins};
-use std::sync::Arc;
-use yamaa_core::language::{FileType, LanguageVersion};
+use yamaa_core::language::{FileType, LANGUAGE_VERSION};
 use yamaa_core::project_preparation as application;
 use yamaa_core::{
     ast, project_environment::Environment, project_function::Language, project_function_document,
@@ -13,71 +12,29 @@ pub type SourceFailure<E> = application::SourceFailure<E, CapturedDocument, Erro
 pub type DocumentCapture = application::DocumentCapture<CapturedDocument>;
 pub type RejectedEnvironment<E> = application::RejectedEnvironment<E, CapturedDocument, Error>;
 
-/// The schemas one project preparation decodes with: the two separately
-/// versioned 0.5 roots, the project file with its codelist sources and the
-/// environment file a project links with its function definitions, and, for
-/// an engine that reads 1.x files, the 1.0 closure of each file type with the
-/// newest version it reads.
-#[derive(Clone, Debug)]
-pub struct ProjectSchemas {
-    pub project: Arc<CapturedSchema>,
-    pub environment: Arc<CapturedSchema>,
-    /// The 1.0 closures and the newest 1.x version a preparation reads, or
-    /// none for one that reads no 1.x file. Public calls read 1.0 files
-    /// (#3030 D76): `shipped_schema::capture_project` sets this.
-    pub versioned: Option<(Closures, LanguageVersion)>,
-}
-impl ProjectSchemas {
-    /// These schemas, reading 1.x files up to `reads` against `closures`: a
-    /// 1.0 project, and each function file and codelist file it lists (D8,
-    /// P-TYPE-1).
-    pub fn reading(self, closures: Closures, reads: LanguageVersion) -> Self {
-        Self {
-            versioned: Some((closures, reads)),
-            ..self
-        }
-    }
-}
-
-/// Where one admitted definition is declared: the file that holds it and the
-/// field that declares it, and whether that file holds it alone, so a path in
-/// it starts at that file's root (FUNC-2, D8).
+/// Where one admitted definition is declared: the function file that holds it,
+/// which a path in it starts at the root of, and the project's field that
+/// lists that file (FUNC-2, D8).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FunctionOrigin<'a> {
-    /// The identity of the file that holds the definition: a 0.5 definition
-    /// file, the 0.5 environment file that declares it inline, or a 1.0
-    /// function file.
+    /// The identity of the function file.
     pub source: &'a str,
-    /// The field that declares it: `functions.<name>` in a 0.5 environment
-    /// file, or `functions[i]` in a 1.0 project file.
-    pub declaration: Declaration<'a>,
-    /// Whether `source` holds this definition alone.
-    pub external: bool,
+    /// The index in the project's `functions` of the field that lists it.
+    pub listed: usize,
 }
-/// The field that declares one definition.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Declaration<'a> {
-    /// `functions.<name>` in a 0.5 environment file.
-    Keyed(&'a str),
-    /// `functions[i]` in a 1.0 project file.
-    Listed(usize),
-}
-impl std::fmt::Display for Declaration<'_> {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Keyed(name) => write!(formatter, "functions.{name}"),
-            Self::Listed(index) => write!(formatter, "functions[{index}]"),
-        }
+impl FunctionOrigin<'_> {
+    /// The project field that lists the function file, `functions[i]`.
+    pub fn declaration(&self) -> String {
+        format!("functions[{}]", self.listed)
     }
 }
 
 #[derive(Debug)]
 pub struct PreparedEnvironment {
-    /// The project file lowered, with the environment file the host reads.
+    /// The project file lowered.
     pub project: ast::Project,
     pub origins: SourceOrigins,
     pub root: CapturedDocument,
-    pub environment_file: Option<CapturedDocument>,
     pub captures: Vec<DocumentCapture>,
     pub lock: Option<LockCapture>,
     pub environment: Environment,
@@ -91,7 +48,6 @@ pub struct OwnedEnvironment {
     /// The project file path as preparation was given it.
     written: Option<String>,
     root: Option<CapturedDocument>,
-    environment_file: Option<CapturedDocument>,
     captures: Vec<DocumentCapture>,
     lock: Option<LockCapture>,
     environment: yamaa_core::project_environment::ExecutionEnvironment,
@@ -107,12 +63,11 @@ pub struct CapturedEnvironment {
     origins: SourceOrigins,
     written: Option<String>,
     root: Option<CapturedDocument>,
-    environment_file: Option<CapturedDocument>,
     captures: Vec<DocumentCapture>,
     lock: Option<LockCapture>,
 }
 impl CapturedEnvironment {
-    /// The project file lowered, with the environment file the host reads.
+    /// The project file lowered.
     pub fn project(&self) -> Option<&ast::Project> {
         self.project.as_ref()
     }
@@ -133,11 +88,6 @@ impl CapturedEnvironment {
     pub fn written(&self) -> Option<&str> {
         self.written.as_deref()
     }
-    /// The environment file the project links for the host language. It
-    /// declares the lock and functions; their paths resolve from it.
-    pub fn environment_file(&self) -> Option<&CapturedDocument> {
-        self.environment_file.as_ref()
-    }
     pub fn captures(&self) -> &[DocumentCapture] {
         &self.captures
     }
@@ -145,43 +95,17 @@ impl CapturedEnvironment {
         self.lock.as_ref()
     }
     /// Where the admitted definition at `index`, in admission order, is
-    /// declared: a 1.0 definition by the function file the project lists at
-    /// `functions[i]`, and a 0.5 one by its definition file or, inline, by the
-    /// environment file at `functions.<name>`. `None` when the held origins
-    /// name no such definition.
+    /// declared: by the function file the project lists at `functions[i]`.
+    /// `None` when the held origins name no such definition.
     pub fn function_origin(&self, index: usize) -> Option<FunctionOrigin<'_>> {
-        let name = self.origins.functions.get(index)?;
-        fn identity(capture: &DocumentCapture) -> &str {
-            capture.document.source().identity.as_str()
-        }
-        if self
-            .project
-            .as_ref()
-            .is_some_and(|project| matches!(project.header.surface, ast::Surface::V1 { .. }))
-        {
-            let listed = *self.origins.function_files.get(index)?;
-            let capture = self
-                .captures
-                .iter()
-                .find(|capture| capture.origin == Origin::FunctionFile(listed))?;
-            return Some(FunctionOrigin {
-                source: identity(capture),
-                declaration: Declaration::Listed(listed),
-                external: true,
-            });
-        }
-        let external = self
+        let listed = *self.origins.function_files.get(index)?;
+        let capture = self
             .captures
             .iter()
-            .find(|capture| matches!(&capture.origin, Origin::Function(held) if held == name));
-        let source = match external {
-            Some(capture) => identity(capture),
-            None => self.environment_file.as_ref()?.source().identity.as_str(),
-        };
+            .find(|capture| capture.origin == Origin::FunctionFile(listed))?;
         Some(FunctionOrigin {
-            source,
-            declaration: Declaration::Keyed(name),
-            external: external.is_some(),
+            source: capture.document.source().identity.as_str(),
+            listed,
         })
     }
 }
@@ -192,7 +116,6 @@ impl PreparedEnvironment {
             origins: self.origins,
             written: None,
             root: Some(self.root),
-            environment_file: self.environment_file,
             captures: self.captures,
             lock: self.lock,
             environment: self.environment.into_execution(),
@@ -208,7 +131,6 @@ impl OwnedEnvironment {
             origins: SourceOrigins::default(),
             written: None,
             root: None,
-            environment_file: None,
             captures: Vec::new(),
             lock: None,
             environment: yamaa_core::build::without_environment(host),
@@ -259,7 +181,6 @@ impl OwnedEnvironment {
                 origins: self.origins,
                 written: self.written,
                 root: self.root,
-                environment_file: self.environment_file,
                 captures: self.captures,
                 lock: self.lock,
             },
@@ -268,7 +189,7 @@ impl OwnedEnvironment {
     pub fn origins(&self) -> &SourceOrigins {
         &self.origins
     }
-    /// The project file lowered, with the environment file the host reads.
+    /// The project file lowered.
     pub fn project(&self) -> Option<&ast::Project> {
         self.project.as_ref()
     }
@@ -278,10 +199,6 @@ impl OwnedEnvironment {
     }
     pub fn root_optional(&self) -> Option<&CapturedDocument> {
         self.root.as_ref()
-    }
-    /// The environment file the project links for the host language.
-    pub fn environment_file(&self) -> Option<&CapturedDocument> {
-        self.environment_file.as_ref()
     }
     pub fn captures(&self) -> &[DocumentCapture] {
         &self.captures
@@ -308,67 +225,46 @@ pub enum Failure<E> {
     Rejected(Box<RejectedEnvironment<E>>),
 }
 
-impl ProjectSchemas {
-    /// Decode `source`, a file a project names, and admit it as `target`. A
-    /// 0.5 project, and every file it links, is read against the 0.5 roots,
-    /// which refuse a file that declares the 1.x header (#3030 D76). Schemas
-    /// that read 1.x files ([`ProjectSchemas::versioned`]) admit a project
-    /// file that declares the header against the 1.0 project closure, at the
-    /// version it declares, and each function file and codelist file a 1.0
-    /// project lists against the closure of its type; a listed file must
-    /// declare the header, and one whose version the engine does not read, or
-    /// whose type is another, is refused at the project's field that lists it
-    /// (SCHEMA-2).
-    pub(crate) fn admit(
-        &self,
-        source: Source,
-        target: DecodeTarget,
-    ) -> Result<CapturedDocument, Error> {
-        let schemas = self;
-        let listed = match target {
-            DecodeTarget::Environment => return schemas.environment.prepare_structural(source),
-            DecodeTarget::Function => {
-                return schemas
-                    .environment
-                    .prepare_named_class(source, "function_definition_class")
-            }
-            DecodeTarget::Codelist => {
-                return schemas
-                    .project
-                    .prepare_named_class(source, "codelist_source_class")
-            }
-            DecodeTarget::Project => None,
-            DecodeTarget::FunctionFile => Some(FileType::Function),
-            DecodeTarget::CodelistFile => Some(FileType::Codelists),
-        };
-        let Some((closures, reads)) = &schemas.versioned else {
-            // Schemas that read no 1.x file admit no 1.0 project, so
-            // preparation never asks them for a file only one lists.
-            assert!(listed.is_none(), "a 0.5 decoder admits no 1.0 project");
-            return schemas.project.prepare_structural(source);
-        };
-        if let Some(expected) = listed {
-            let document = document::decode_referenced(source, expected, *reads, closures)?;
-            return Ok(document.admit()?.into_captured());
+/// Decode `source`, a file a project names, and admit it as `target` against
+/// the 1.0 closure of each file type: an engine that reads
+/// [`yamaa_core::language::LANGUAGE_VERSION`] admits the project file against
+/// the project closure, at the version it declares, and each function file
+/// and codelist file it lists against the closure of its type (#3030 D76).
+/// Every file must declare the 1.x header: a project file that declares
+/// `schema_version` is refused as `unsupported_language_version`, naming 0.5,
+/// and one that declares neither `yamaa` nor `schema_version` as
+/// `missing_required_field` at `yamaa`. A listed file whose version the engine
+/// does not read, or whose type is another, is refused at the project's field
+/// that lists it (SCHEMA-2).
+pub(crate) fn admit(
+    closures: &Closures,
+    source: Source,
+    target: DecodeTarget,
+) -> Result<CapturedDocument, Error> {
+    let document = match target {
+        DecodeTarget::Project => {
+            document::decode(source, FileType::Project, Some(LANGUAGE_VERSION), closures)?
         }
-        match document::decode(source, FileType::Project, Some(*reads), closures)? {
-            Decoded::Versioned(document) => Ok(document.admit()?.into_captured()),
-            Decoded::Legacy { source, .. } => schemas.project.prepare_structural(source),
+        DecodeTarget::FunctionFile => {
+            document::decode_referenced(source, FileType::Function, LANGUAGE_VERSION, closures)?
         }
-    }
+        DecodeTarget::CodelistFile => {
+            document::decode_referenced(source, FileType::Codelists, LANGUAGE_VERSION, closures)?
+        }
+    };
+    Ok(document.admit()?.into_captured())
 }
 
-/// Decode through the captured schema codecs; the engine owns ordering and
-/// admission. A 1.0 project is read only by schemas that read 1.x files
-/// ([`ProjectSchemas::reading`]), as public calls do (#3030 D76).
+/// Decode through the 1.0 closures `closures`; the engine owns ordering and
+/// admission.
 pub fn prepare<P: yamaa_core::resolver::Resolver>(
-    schemas: ProjectSchemas,
+    closures: Closures,
     source: Source,
     host: Language,
     port: &mut P,
 ) -> Result<PreparedEnvironment, Failure<P::Error>> {
     adapt_preparation(application::prepare(
-        &mut crate::decoder::Decoder::<std::convert::Infallible>::with_schemas(schemas),
+        &mut crate::decoder::Decoder::<std::convert::Infallible>::with_closures(closures),
         source,
         Some(host),
         port,
@@ -384,7 +280,6 @@ pub(crate) fn adapt_preparation<E>(
             project: prepared.project,
             origins: prepared.origins,
             root: prepared.root,
-            environment_file: prepared.environment_file,
             captures: prepared.captures,
             lock: prepared.lock,
             environment: prepared.environment,

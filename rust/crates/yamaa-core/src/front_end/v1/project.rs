@@ -2,12 +2,12 @@
 //! [`crate::ast::project`] (D8, D16, P-TYPE-1).
 //!
 //! Each file was admitted against the 1.0 closure its `type` selects, at the
-//! version its `yamaa` declares, before it lowers here. It lowers as a 0.5
-//! file does: every written scalar of a definition or a codelist converts to
-//! the value the engine runs with, and lowering reports each one that does
-//! not, and each node whose shape the schema should have refused, as a
-//! finding at the file's own path to it, keeping the text it is written as.
-//! Those findings decide preparation; nothing after lowering reads the file.
+//! version its `yamaa` declares, before it lowers here. Every written scalar
+//! of a definition or a codelist converts to the value the engine runs with,
+//! and lowering reports each one that does not, and each node whose shape the
+//! schema should have refused, as a finding at the file's own path to it,
+//! keeping the text it is written as. Those findings decide preparation;
+//! nothing after lowering reads the file.
 //!
 //! - A project file ([`project`]) lists its function files in `functions` and
 //!   holds each host language's lock in `environments.<host>.lock`, both
@@ -20,12 +20,12 @@
 //! - A codelist file ([`codelists`]) holds one codelist source (P-TYPE-1).
 
 use crate::ast::{
-    Codelists, Function, FunctionDeclaration, FunctionSource, Header, HostEnvironment,
-    Implementation, Meta, Named, Paths, Project, SubmissionRefused, Surface, Text,
+    Codelists, Function, FunctionDeclaration, Header, HostEnvironment, Implementation, Meta, Named,
+    Paths, Project, SubmissionRefused, Text,
 };
 use crate::front_end::lowering::project::{
     cases, codelist_declarations, codelist_source, column_kind, comparison_decimals, parameters,
-    text_field, text_of, Metas, Values,
+    text_field, text_of, Metas,
 };
 use crate::front_end::lowering::{sections, Positions};
 use crate::language::LanguageVersion;
@@ -43,8 +43,7 @@ fn header(
 ) -> Header {
     let node = document.field(root, "yamaa");
     let written = node.and_then(|node| text_of(document, node));
-    let version = written.and_then(LanguageVersion::parse);
-    if version.is_none() {
+    if written.and_then(LanguageVersion::parse).is_none() {
         reader.fault("yamaa", node.unwrap_or(root), Kind::NormalizedShape);
     }
     let meta = match node {
@@ -52,9 +51,6 @@ fn header(
         None => meta,
     };
     Header {
-        surface: Surface::V1 {
-            minor: version.map_or(0, LanguageVersion::minor),
-        },
         version: Text {
             text: written.unwrap_or_default().into(),
             meta,
@@ -91,8 +87,7 @@ pub fn project(
                 let meta = metas.index(declared, index, node);
                 let text = reader.text(node, &format!("functions[{index}]"));
                 FunctionDeclaration {
-                    key: None,
-                    source: FunctionSource::File(Text { text, meta }),
+                    file: Text { text, meta },
                     meta,
                 }
             })
@@ -107,8 +102,8 @@ pub fn project(
         at,
         &mut leaves,
     );
-    let submission = sections::lower(document, root, &mut metas, meta, header.surface)
-        .map_err(|_| SubmissionRefused);
+    let submission =
+        sections::lower(document, root, &mut metas, meta).map_err(|_| SubmissionRefused);
     let mut findings = reader.finish();
     findings.extend(leaves);
     if !findings.is_empty() {
@@ -123,6 +118,17 @@ pub fn project(
         paths,
         meta,
     })
+}
+
+/// Lower the study and sections of a whole project document, as [`project`]
+/// does, into an arena of their own, keeping why they cannot be read.
+pub fn sections(
+    input: &Document,
+) -> Result<crate::ast::SubmissionDeclarations, sections::Error<'_>> {
+    let mut paths = Paths::new();
+    let mut metas = Metas::new(None, &mut paths);
+    let meta = metas.root(input.root());
+    sections::lower(input, input.root(), &mut metas, meta)
 }
 
 /// Each host language's `environments` entry, which holds only its lock. A
@@ -154,7 +160,6 @@ fn environments(
         );
         environments.push(HostEnvironment {
             language,
-            file: None,
             lock: Some(lock),
             meta,
         });
@@ -184,24 +189,18 @@ pub fn function(
         "description",
         "description",
     );
-    let params = parameters(&mut reader, &mut metas, document, at, Values::Declared);
+    let params = parameters(&mut reader, &mut metas, document, at);
     let returns = column_kind(&mut reader, root, "returns");
     let may_return_missing = reader.boolean(root, "may_return_missing", "may_return_missing");
     let comparison_decimals = comparison_decimals(&mut reader, root);
     let implementations = implementations(&mut reader, &mut metas, document, at);
-    let tests = cases(
-        &mut reader,
-        &mut metas,
-        document,
-        at,
-        (&params, returns, Values::Declared),
-    );
+    let tests = cases(&mut reader, &mut metas, document, at, (&params, returns));
     let findings = reader.finish();
     if !findings.is_empty() {
         return Err(findings);
     }
     Ok(Function {
-        header: Some(header),
+        header,
         name: Named {
             name: name.text,
             meta: name.meta,
@@ -288,7 +287,7 @@ pub fn codelists(
 }
 
 #[cfg(test)]
-pub(in crate::front_end) mod tests {
+mod tests {
     use super::*;
     use crate::ast::{CodelistSource, DefineContext, GuideStatus, Transport};
     use crate::test_document::Tree;
@@ -301,14 +300,11 @@ pub(in crate::front_end) mod tests {
         ]
     }
 
-    pub(in crate::front_end) fn with_header(
-        file_type: &str,
-        fields: Vec<(&'static str, Tree)>,
-    ) -> Tree {
+    fn with_header(file_type: &str, fields: Vec<(&'static str, Tree)>) -> Tree {
         Tree::map(header(file_type).into_iter().chain(fields).collect())
     }
 
-    pub(in crate::front_end) fn codelist_source() -> Vec<(&'static str, Tree)> {
+    fn codelist_source() -> Vec<(&'static str, Tree)> {
         vec![
             (
                 "standard",
@@ -337,12 +333,9 @@ pub(in crate::front_end) mod tests {
         ]
     }
 
-    /// A definition's body, which both surfaces write alike.
-    pub(in crate::front_end) fn body(
-        default: Tree,
-        argument: Tree,
-        result: Tree,
-    ) -> Vec<(&'static str, Tree)> {
+    /// A definition's body: what a function file writes beside its name and
+    /// implementations.
+    fn body(default: Tree, argument: Tree, result: Tree) -> Vec<(&'static str, Tree)> {
         vec![
             ("description", Tree::text("Days from a date")),
             (
@@ -375,7 +368,7 @@ pub(in crate::front_end) mod tests {
         .collect()
     }
 
-    pub(in crate::front_end) fn function_file(default: Tree, argument: Tree, result: Tree) -> Tree {
+    fn function_file(default: Tree, argument: Tree, result: Tree) -> Tree {
         let mut fields = vec![("name", Tree::text("shift"))];
         fields.extend(body(default, argument, result));
         // `implementations` is written before `tests`, as the converter does.
@@ -446,24 +439,17 @@ pub(in crate::front_end) mod tests {
         );
         let project = project(&tree.document(), None).unwrap();
         let path = |meta: Meta| project.paths.render(meta.path);
-        assert_eq!(project.header.surface, Surface::V1 { minor: 0 });
         assert_eq!(project.header.version.text, "1.0");
         assert_eq!(path(project.header.meta), "yamaa");
-        // A function file names its own function, so its declaration has no
-        // key; it is relative to the project file.
+        // A function file names its own function; it is relative to the
+        // project file.
         let functions = project.functions.as_ref().unwrap();
         assert_eq!(functions.len(), 2);
-        assert_eq!(functions[1].key, None);
-        let FunctionSource::File(written) = &functions[1].source else {
-            panic!("a function file")
-        };
-        assert_eq!(written.text, "functions/shift.yaml");
+        assert_eq!(functions[1].file.text, "functions/shift.yaml");
         assert_eq!(path(functions[1].meta), "functions[1]");
-        // Only the host that declares a lock has an entry, and it holds no
-        // environment file.
+        // Only the host that declares a lock has an entry.
         assert!(project.environment(Language::Python).is_none());
         let r = project.environment(Language::R).unwrap();
-        assert_eq!(r.file, None);
         let lock = r.lock.as_ref().unwrap();
         assert_eq!(lock.text, "r/renv.lock");
         assert_eq!(path(lock.meta), "environments.r.lock");
@@ -497,9 +483,9 @@ pub(in crate::front_end) mod tests {
 
     #[test]
     fn a_section_keeps_to_its_own_surface_spellings() {
-        // 0.5's `standard` and `datasets` are not 1.0 section fields; the
-        // schema refuses them first, and the section lowering refuses them
-        // too.
+        // `standard` and `datasets`, which 0.5 wrote, are not section
+        // fields, and `json` is no transport; the schema refuses them first,
+        // and the section lowering refuses them too (D16, P-PRJ-1).
         for (field, value) in [
             (
                 "standard",
@@ -557,7 +543,6 @@ pub(in crate::front_end) mod tests {
             let Err(findings) = crate::submission_composition::Required::admit(
                 declarations.study.as_ref(),
                 &declarations.sections[0],
-                project.header.surface,
             ) else {
                 panic!("a section without a guide")
             };
@@ -616,7 +601,6 @@ pub(in crate::front_end) mod tests {
         let required = crate::submission_composition::Required::admit(
             declarations.study.as_ref(),
             &declarations.sections[0],
-            project.header.surface,
         )
         .unwrap();
         let Err(findings) = crate::submission_composition::compose(
@@ -666,8 +650,8 @@ pub(in crate::front_end) mod tests {
         );
         let function = function(&tree.document(), None).unwrap();
         let path = |meta: Meta| function.paths.render(meta.path);
-        let header = function.header.as_ref().unwrap();
-        assert_eq!(header.surface, Surface::V1 { minor: 0 });
+        assert_eq!(function.header.version.text, "1.0");
+        assert_eq!(path(function.header.meta), "yamaa");
         assert_eq!(function.name.name, "shift");
         assert_eq!(path(function.name.meta), "name");
         // Each host language's callable, in written order.
@@ -730,8 +714,8 @@ pub(in crate::front_end) mod tests {
                 ("tests[0].result", Kind::InvalidDateTime, Some("2024-03-01")),
             ]
         );
-        // A tagged value is a 0.5 spelling, which the 1.0 schema refuses: no
-        // value of a function file is a mapping.
+        // A tagged value, which 0.5 wrote, is refused by the schema: no value
+        // of a function file is a mapping.
         let tagged = function_file(
             Tree::map(vec![("date", Tree::text("2024-01-01"))]),
             Tree::text("2024-02-29"),

@@ -1962,25 +1962,20 @@ fn source_version<'a>(section: &'a ast::Section, installed: &'a str) -> Option<&
 pub struct Required<'a> {
     pub study: &'a ast::Study,
     pub section: &'a ast::Section,
-    /// The section's implementation guides, never empty: 1.0's `standards`
-    /// in declaration order, or 0.5's one `standard` (DEFINE-6).
+    /// The section's implementation guides, never empty: its `standards` in
+    /// declaration order (DEFINE-6).
     pub standards: &'a [ast::ImplementationGuide],
     pub define: &'a ast::Text,
-    /// The surface the project is written in, which spells the guides' path:
-    /// `standard` in 0.5, `standards[<i>]` in 1.0.
-    pub surface: ast::Surface,
 }
 impl<'a> Required<'a> {
     /// A section admits for runs with only its `specs`. Composition of the
     /// selected `section` requires the project `study` and the section's
     /// guide and `define`, and reports every missing one together as a
-    /// missing required field: the guide as a project written in `surface`
-    /// spells it, `standards` in 1.0, whose list may also be empty, and
-    /// `standard` in 0.5 (DEFINE-28).
+    /// missing required field: the guide as `standards`, whose list may also
+    /// be empty (DEFINE-28).
     pub fn admit(
         study: Option<&'a ast::Study>,
         section: &'a ast::Section,
-        surface: ast::Surface,
     ) -> Result<Self, Vec<Finding>> {
         let family = family_name(section.family);
         let missing = |path: String, field: &str| {
@@ -1994,7 +1989,6 @@ impl<'a> Required<'a> {
                 section,
                 standards,
                 define,
-                surface,
             });
         }
         let mut findings = Vec::new();
@@ -2002,11 +1996,7 @@ impl<'a> Required<'a> {
             findings.push(missing("study".into(), "study"));
         }
         if standards.is_none() {
-            let field = match surface {
-                ast::Surface::V0_5 => "standard",
-                ast::Surface::V1 { .. } => "standards",
-            };
-            findings.push(missing(format!("{family}.{field}"), field));
+            findings.push(missing(format!("{family}.standards"), "standards"));
         }
         if define.is_none() {
             findings.push(missing(format!("{family}.define"), "define"));
@@ -2039,7 +2029,6 @@ pub fn compose(
         section,
         standards: guides,
         define,
-        surface,
     } = required;
     let mut findings = Vec::new();
     let specifications: Vec<&Document> = inputs
@@ -2063,12 +2052,9 @@ pub fn compose(
             "incomplete captured dataset set",
         ));
     }
-    // Every guide a 1.0 section lists belongs to its model under a name of
-    // its own (DEFINE-6, D16). A 0.5 project's one `standard` is not
-    // checked, until the 0.5 project route goes (P2-13d).
-    if matches!(surface, ast::Surface::V1 { .. }) {
-        section_standards(section.family, guides, &mut findings);
-    }
+    // Every guide a section lists belongs to its model under a name of its
+    // own (DEFINE-6, D16).
+    section_standards(section.family, guides, &mut findings);
     if !define.text.to_ascii_lowercase().ends_with(".xml") {
         findings.push(cause(
             ConditionCode::SubmissionDefineExtension,

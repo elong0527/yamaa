@@ -707,7 +707,6 @@ impl PreparedSpecification {
             environment.map(|e| e.catalogue()),
             links,
             environment.map(|e| e.inventory()),
-            environment.and_then(|e| e.undeclared()),
         )
     }
     /// Admit the links `document` declares, then prepare `tree`, its
@@ -719,7 +718,6 @@ impl PreparedSpecification {
         catalogue: Option<&crate::project_terminology::Catalogue>,
         links: crate::producer_contract::Links<'_>,
         inventory: Option<&crate::submission_inventory::Inventory>,
-        undeclared: Option<crate::project_environment::Undeclared>,
     ) -> Result<Self, PrepareError> {
         checks::root::limits(&tree)?;
         // Link admission precedes every other declaration finding: a refused
@@ -736,7 +734,7 @@ impl PreparedSpecification {
                 AdmissionError::Boundary => PrepareError::Internal,
             }
         })?;
-        Self::from_tree(tree, contracts, functions, catalogue, inventory, undeclared)
+        Self::from_tree(tree, contracts, functions, catalogue, inventory)
     }
     /// Prepare the specification `tree`, whose linked inputs have the
     /// producer `contracts`, before any source is read: every refusal the
@@ -747,7 +745,6 @@ impl PreparedSpecification {
         functions: Option<&[crate::project_function::Function]>,
         catalogue: Option<&crate::project_terminology::Catalogue>,
         inventory: Option<&crate::submission_inventory::Inventory>,
-        undeclared: Option<crate::project_environment::Undeclared>,
     ) -> Result<Self, PrepareError> {
         let spec = &tree;
         // A 1.x specification prepared without a project file, which is when
@@ -779,9 +776,8 @@ impl PreparedSpecification {
         .map_err(PrepareError::OutputSchema)?;
         // Absence supplies no callable definitions. It does not invent an
         // environment document, and unknown calls retain ordinary static causes.
-        // A project without an environment for the host names that cause instead.
         let functions = functions.unwrap_or(&[]);
-        let project = match functions::prepare(spec, functions, undeclared, projectless) {
+        let project = match functions::prepare(spec, functions, projectless) {
             Ok(project) => Some(project),
             Err(PrepareError::Invalid(errors)) => {
                 findings.extend(errors);

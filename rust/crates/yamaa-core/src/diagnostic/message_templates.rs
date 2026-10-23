@@ -119,8 +119,6 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("prohibited_construct", "a construct is written where its field does not admit it"),
     ("prohibited_function", "function {function} is not allowed here"),
     ("project_binding_missing", "{spec_path} needs a project file, and none is given"),
-    ("project_environment_invalid", "the environment file cannot be admitted"),
-    ("project_environment_missing", "{spec_path} needs an environment file for this host that the project does not declare"),
     ("publication_failed", "the file of {spec_path} could not be published"),
     ("qualified_identifier", "{expr} reads the qualified name {identifier}, which is not visible there"),
     ("range_failed", "column {column} holds a value outside its range in {failure_count} of the rows"),

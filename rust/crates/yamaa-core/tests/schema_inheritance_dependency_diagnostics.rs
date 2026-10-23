@@ -114,7 +114,7 @@ mod schema {
         use std::collections::BTreeSet;
         use yamaa_core::{
             diagnostic::{ScalarSubmissionRule as Rule, SCALAR_SUBMISSION_RULES},
-            front_end::{lowering::sections as environment, v0_5::project::sections},
+            front_end::{lowering::sections as environment, v1::project::sections},
             schema::{Document, DocumentNode as N},
             specification_submission_document as spec,
         };
@@ -161,6 +161,7 @@ mod schema {
                 ("protocol_name", "P"),
             ]);
             let guide = a.texts(&[("name", "UNKNOWN"), ("version", "3.4"), ("status", "Final")]);
+            let standards = a.node(N::Sequence(vec![guide]));
             let specs = a.node(N::Sequence(vec![]));
             let define = a.node(N::Null);
             let doc = a.texts(&[
@@ -172,7 +173,7 @@ mod schema {
             let documents = a.node(N::Sequence(vec![doc]));
             let language = a.text("e-123456789");
             let section = a.map(&[
-                ("standard", guide),
+                ("standards", standards),
                 ("specs", specs),
                 ("define", define),
                 ("documents", documents),

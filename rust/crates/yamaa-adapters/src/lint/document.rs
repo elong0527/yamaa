@@ -81,11 +81,8 @@ pub(super) struct Document {
     content: Vec<bool>,
     pub suppressions: Vec<Suppression>,
     pub newline: &'static str,
-    /// The root declares the 1.x header as the engine reads it: `yamaa` and
-    /// no `schema_version` (SCHEMA-2). Its findings write the 1.x spec path
-    /// notation (P-CLR-2).
-    pub versioned: bool,
-    /// Each node's spec path; a mapping key has its value's.
+    /// Each node's spec path, in the notation findings write (P-CLR-2); a
+    /// mapping key has its value's.
     paths: Vec<String>,
     /// The values document admission decoded, which the schema findings
     /// read; none for the directory scan's structure alone.
@@ -405,11 +402,8 @@ impl Document {
             root,
             suppressions: Vec::new(),
             newline: dominant_ending(text),
-            versioned: false,
             decoded: None,
         };
-        document.versioned = document.key(document.root, "yamaa").is_some()
-            && document.key(document.root, "schema_version").is_none();
         if let Some(root) = document.root {
             let mut content = std::mem::take(&mut document.content);
             document.mark_content(root, &mut content);
@@ -551,11 +545,10 @@ impl Document {
     }
 
     /// The spec path of a node, `$` for the root; a mapping key has its
-    /// value's. A 0.5 file names a list entry by its index
-    /// (`columns[3].name`). A 1.x file writes the notation its findings use
-    /// (P-CLR-1, P-CLR-2): a list entry that writes `name`, or else `id`, as
-    /// text is named by it (`columns.AGE.name`), any other by its index, and
-    /// a key that is not a bare segment is quoted (`['NOT DONE']`).
+    /// value's. It is written in the notation findings use (P-CLR-1,
+    /// P-CLR-2): a list entry that writes `name`, or else `id`, as text is
+    /// named by it (`columns.AGE.name`), any other by its index, and a key
+    /// that is not a bare segment is quoted (`['NOT DONE']`).
     pub(super) fn path(&self, id: usize) -> &str {
         &self.paths[id]
     }
@@ -582,9 +575,6 @@ impl Document {
     /// `path` followed by the step that names mapping key `key`.
     fn key_path(&self, path: &str, key: usize) -> String {
         let name = self.scalar(key).unwrap_or("");
-        if !self.versioned {
-            return join(path, name);
-        }
         let parent = if path == "$" { "" } else { path };
         match self.text_scalar(key) {
             Some(name) => spec_join(parent, name),
@@ -595,16 +585,14 @@ impl Document {
 
     /// `path` followed by the step that names entry `index` of a list.
     fn item_path(&self, path: &str, index: usize, item: usize) -> String {
-        if self.versioned {
-            // The engine takes `name` when the entry writes it, else `id`,
-            // and names the entry by it only when it is text.
-            let identity = self
-                .member(Some(item), "name")
-                .or_else(|| self.member(Some(item), "id"))
-                .and_then(|node| self.text_scalar(node));
-            if let Some(identity) = identity {
-                return spec_join(if path == "$" { "" } else { path }, identity);
-            }
+        // The engine takes `name` when the entry writes it, else `id`, and
+        // names the entry by it only when it is text.
+        let identity = self
+            .member(Some(item), "name")
+            .or_else(|| self.member(Some(item), "id"))
+            .and_then(|node| self.text_scalar(node));
+        if let Some(identity) = identity {
+            return spec_join(if path == "$" { "" } else { path }, identity);
         }
         format!("{path}[{index}]")
     }
@@ -713,14 +701,6 @@ impl Document {
             });
         }
         suppressions
-    }
-}
-
-fn join(path: &str, key: &str) -> String {
-    if path == "$" {
-        key.to_owned()
-    } else {
-        format!("{path}.{key}")
     }
 }
 

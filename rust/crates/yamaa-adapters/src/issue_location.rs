@@ -436,29 +436,23 @@ impl Locator {
         root
     }
 
-    /// A project file and the files it reads: the environment file and each
-    /// codelist and function file, each linked from the field that names it,
-    /// and the lock, which holds no spec path. Returns the project file's
-    /// root.
+    /// A project file and the files it reads: each codelist and function
+    /// file, each linked from the field that names it, and the lock, which
+    /// holds no spec path. Returns the project file's root.
     fn environment(&mut self, files: ProjectFiles<'_>) -> Option<usize> {
         use crate::project_source::Origin;
         let project = files.root.map(|root| self.captured(root));
-        let environment = files.environment.map(|file| self.captured(file));
         if let Some(lock) = files.lock {
             self.file(lock);
         }
         for capture in files.captures {
             let target = self.captured(&capture.document);
-            let (from, path) = match &capture.origin {
-                Origin::Environment(language) => {
-                    (project, format!("environments.{}", language.key()))
-                }
-                Origin::FunctionFile(index) => (project, format!("functions[{index}]")),
-                Origin::Codelist(index) => (project, format!("codelists[{index}]")),
-                Origin::Function(name) => (environment, format!("functions.{name}")),
+            let path = match &capture.origin {
+                Origin::FunctionFile(index) => format!("functions[{index}]"),
+                Origin::Codelist(index) => format!("codelists[{index}]"),
                 Origin::Lock => continue,
             };
-            if let Some(from) = from {
+            if let Some(from) = project {
                 self.link(from, &path, target);
             }
         }
@@ -770,12 +764,10 @@ pub(crate) fn project<'a>(
 }
 
 /// The files a project reads, as an environment holds them: the project
-/// file, the environment file it links, the codelist and function files, and
-/// the lock.
+/// file, the codelist and function files, and the lock.
 #[derive(Clone, Copy, Default)]
 pub(crate) struct ProjectFiles<'a> {
     pub(crate) root: Option<&'a CapturedDocument>,
-    pub(crate) environment: Option<&'a CapturedDocument>,
     pub(crate) captures: &'a [crate::project_source::DocumentCapture],
     pub(crate) lock: Option<&'a str>,
 }
@@ -784,7 +776,6 @@ impl<'a> From<&'a crate::project_source::CapturedEnvironment> for ProjectFiles<'
     fn from(captured: &'a crate::project_source::CapturedEnvironment) -> Self {
         Self {
             root: captured.root_optional(),
-            environment: captured.environment_file(),
             captures: captured.captures(),
             lock: captured.lock().map(|lock| lock.source.identity.as_str()),
         }
@@ -795,7 +786,6 @@ impl<'a> From<&'a crate::project_source::OwnedEnvironment> for ProjectFiles<'a> 
     fn from(owned: &'a crate::project_source::OwnedEnvironment) -> Self {
         Self {
             root: owned.root_optional(),
-            environment: owned.environment_file(),
             captures: owned.captures(),
             lock: owned.lock().map(|lock| lock.source.identity.as_str()),
         }

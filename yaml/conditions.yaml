@@ -373,12 +373,6 @@ conditions:
   project_binding_missing:
     phases: [validation]
     message: "{spec_path} needs a project file, and none is given"
-  project_environment_invalid:
-    phases: [validation]
-    message: "the environment file cannot be admitted"
-  project_environment_missing:
-    phases: [validation]
-    message: "{spec_path} needs an environment file for this host that the project does not declare"
   publication_failed:
     phases: [output]
     message: "the file of {spec_path} could not be published"

@@ -74,6 +74,7 @@ yamaa::ODM_COLUMNS: pub use yamaa::odm::ODM_COLUMNS
 yamaa::OdmOptions: pub use yamaa::odm::OdmOptions
 yamaa::PHASES: pub use yamaa::diagnostic::PHASES
 yamaa::Parameter: pub use yamaa::functions::Parameter
+yamaa::Partitions: pub use yamaa::engine::Partitions
 yamaa::Plans: pub use yamaa::api::Plans
 yamaa::Position: pub use yamaa::diagnostic::Position
 yamaa::ProjectFunctions: pub use yamaa::functions::ProjectFunctions
@@ -260,11 +261,19 @@ yamaa::engine::EngineOptions::functions: pub functions: Option<Arc<dyn ProjectFu
 yamaa::engine::EngineOptions::host_language: pub host_language: Option<HostLanguage>
 yamaa::engine::EngineOptions::neutral: pub fn neutral(runtime_name: String, runtime_version: String) -> Self
 yamaa::engine::EngineOptions::new: pub fn new(host_language: HostLanguage, runtime_name: String, runtime_version: String) -> Self
+yamaa::engine::EngineOptions::partitions: pub partitions: Option<Partitions>
 yamaa::engine::EngineOptions::resolver: pub resolver: Option<Arc<dyn ResourceResolver>>
 yamaa::engine::EngineOptions::runtime_name: pub runtime_name: String
 yamaa::engine::EngineOptions::runtime_version: pub runtime_version: String
 yamaa::engine::EngineOptions::with_functions: pub fn with_functions(mut self, functions: Arc<dyn ProjectFunctions>) -> Self
+yamaa::engine::EngineOptions::with_partitions: pub fn with_partitions(mut self, partitions: Partitions) -> Self
 yamaa::engine::EngineOptions::with_resolver: pub fn with_resolver(mut self, resolver: Arc<dyn ResourceResolver>) -> Self
+yamaa::engine::Partitions: impl Partitions
+yamaa::engine::Partitions: pub struct Partitions [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::engine::Partitions::new: pub fn new(rows: NonZeroUsize) -> Self
+yamaa::engine::Partitions::rows: pub rows: NonZeroUsize
+yamaa::engine::Partitions::whole_table_fallback: pub whole_table_fallback: bool
+yamaa::engine::Partitions::with_whole_table_fallback: pub fn with_whole_table_fallback(mut self) -> Self
 yamaa::error::Error: impl std::error::Error for Error
 yamaa::error::Error: impl std::fmt::Display for Error
 yamaa::error::Error: pub enum Error [derive(Clone, Debug)] [non_exhaustive]

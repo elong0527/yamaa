@@ -5900,6 +5900,10 @@
         {
           "yaml": null,
           "condition": "resource_path_missing"
+        },
+        {
+          "yaml": "schema_version: '1.0'\ndomain: TEST\n",
+          "condition": "unsupported_language_version"
         }
       ],
       "partial_restatement": {
@@ -6605,6 +6609,51 @@
               }
             ]
           }
+        },
+        {
+          "name": "a_listed_function_file_and_codelist_file_that_do_not_exist",
+          "files": {
+            "project.yaml": "yamaa: \"1.0\"\ntype: project\nfunctions:\n- functions/project_value.yaml\ncodelists:\n- codelists.yaml\n\nadam:\n  specs:\n  - spec.yaml\n",
+            "spec.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: test.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: SRC.ID}\n"
+          },
+          "call": {
+            "operation": "project_check",
+            "path": "project.yaml"
+          },
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "resource_path_missing",
+              "rule": "FILE-7",
+              "spec_paths": [
+                "functions[0]"
+              ],
+              "file": "project.yaml",
+              "line": 4,
+              "column": 3,
+              "message": "functions/project_value.yaml does not exist",
+              "context": "{\"path\":\"functions/project_value.yaml\"}",
+              "source_span": null,
+              "operand_route": null
+            },
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "resource_path_missing",
+              "rule": "FILE-7",
+              "spec_paths": [
+                "codelists[0]"
+              ],
+              "file": "project.yaml",
+              "line": 6,
+              "column": 3,
+              "message": "codelists.yaml does not exist",
+              "context": "{\"path\":\"codelists.yaml\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
         }
       ]
     },

@@ -290,7 +290,10 @@ starts at 1.0.0 (#3030 D1).
   that committed file at the release's tag; for `spec` in 1.0.0 it is
   `https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v1.0.0/yaml/v1/json/spec.schema.json`.
   From 1.0.0 the files keep their path, and they carry no `$id`
-  (#3030 D161).
+  (#3030 D161). The grammars at the tag, with the evaluation set of the
+  expression language, `yaml/conformance/expressions.yaml`, also ship as one
+  release asset, `yamaa-<Cargo version>-conformance.zip`, as
+  [Publication](#publication) describes.
 - Diagnostics: the condition names in `yaml/conditions.yaml` and the phases
   each may report; the condition and the rule that an existing failure
   reports; a `context` key that a benchmark's expected `error.yaml` pins,
@@ -628,8 +631,9 @@ The named run must be a completed successful native run of the peeled tag
 commit: a scheduled main run, a main dispatch, or a same-repository
 `qualification/issue-*` push. It requires all installed lanes, the offline
 wheel and source installs, the offline toolchain route, the R binary
-installs and the unpacked command-line archives among them, the R binary and
-command-line builds, shared Rust/math, complete cohort comparisons, strict R package
+installs and the unpacked command-line archives among them, the R binary,
+command-line and conformance archive builds, shared Rust/math, complete cohort
+comparisons, strict R package
 checks and CRAN's incoming checks to have passed. Branch dispatches cannot release. A tag other than the one the release
 identity names fails before any request: a candidate tag on a final release, a
 final release tag on a candidate, or another version or candidate number. So
@@ -658,6 +662,7 @@ equal to it:
 | Command-line binary for macOS arm64 | `yamaa-<Cargo version>-aarch64-apple-darwin.zip` | `native-cli-aarch64-apple-darwin` |
 | Command-line binary for Windows x64 | `yamaa-<Cargo version>-x86_64-pc-windows-msvc.zip` | `native-cli-x86_64-pc-windows-msvc` |
 | Command-line binary for Linux aarch64 | `yamaa-<Cargo version>-aarch64-unknown-linux-musl.zip` | `native-cli-aarch64-unknown-linux-musl` |
+| Grammars and expression evaluation set | `yamaa-<Cargo version>-conformance.zip` | `native-conformance-ubuntu-24.04` |
 
 `R CMD INSTALL --build` names a binary package `yamaa_<R version>.zip` on
 Windows and `yamaa_<R version>.tgz` on macOS. The two R series' binaries of
@@ -675,6 +680,19 @@ Windows, and the package notices. The selector requires exactly those files:
 the executable with Unix mode 0755 and a header that names its target's
 format and architecture, so that `unzip` gives an executable that runs, and
 the notices with mode 0644, unchanged.
+
+The conformance archive's name gives the release's version in the same
+Cargo spelling, which its tag and title use. It holds one directory of the
+same name, with the closed grammars, `yaml/grammar/expression.yaml` and
+`yaml/grammar/string-template.yaml`, the evaluation set of the expression
+language, `yaml/conformance/expressions.yaml`, and the project license,
+`LICENSE`, each at its path in the repository (#3690). Another
+implementation can check itself against the grammars' vectors and the
+evaluation cases of the release that it names. The selector requires
+exactly those files, each with Unix mode 0644 and the bytes of its copy in
+the checkout, so a release publishes them as committed at its tag. The
+files are the same for every platform, so the source platform's
+`native-conformance` job builds the archive once.
 
 Each native artifact holds exactly the assets listed for it, so a release
 publishes every asset that the native run built, or nothing: a missing,

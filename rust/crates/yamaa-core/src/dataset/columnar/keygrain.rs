@@ -35,27 +35,41 @@ pub(super) fn construct<'a, E>(
     if let Some(&first) = bindings.first() {
         run.poll(Step::Row(first))?;
     }
-    // Finish the entire source filter before any key conversion can fail.
+    // A partitioned run divides the filter and the key bindings when none
+    // of them needs the whole table, then merges the partitions' key groups
+    // (#3697).
+    let divided = run.divides(|step| match step {
+        Step::Filter(owner) => owner == template,
+        Step::Row(binding) => bindings.contains(&binding),
+        _ => false,
+    });
+    // Finish the entire source filter before any key conversion can fail,
+    // a divided filter one partition after another.
+    let records = run.partition_runs(divided && filter.is_some(), rows, Some);
     let mut retained = Vec::new();
     reserved(retained.try_reserve_exact(rows))?;
-    for row in 0..rows {
-        if let Some(filter) = filter {
-            let crate::dataset::resolved::Op::Predicate(predicate) = &plan.expr(filter.expr).op
-            else {
-                unreachable!("a filter holds its predicate")
-            };
-            let truth = super::predicates::row_truth(predicate, table, row, |_| ValueRef::Missing)
-                .map_err(|error| {
-                    Box::new(ExecutionError::Predicate {
-                        source_row: row,
-                        error: *error,
-                    })
-                })?;
-            if truth != crate::expression::Truth::True {
-                continue;
+    for (number, range) in records.into_iter().enumerate() {
+        run.next_partition(number)?;
+        for row in range {
+            if let Some(filter) = filter {
+                let crate::dataset::resolved::Op::Predicate(predicate) = &plan.expr(filter.expr).op
+                else {
+                    unreachable!("a filter holds its predicate")
+                };
+                let truth =
+                    super::predicates::row_truth(predicate, table, row, |_| ValueRef::Missing)
+                        .map_err(|error| {
+                            Box::new(ExecutionError::Predicate {
+                                source_row: row,
+                                error: *error,
+                            })
+                        })?;
+                if truth != crate::expression::Truth::True {
+                    continue;
+                }
             }
+            retained.push(row);
         }
-        retained.push(row);
     }
     // One probe row per source record, so a probe's position is its record.
     let mut probes = Frame::new(frame.width());
@@ -70,40 +84,64 @@ pub(super) fn construct<'a, E>(
         .iter()
         .map(|&binding| run.local_column(region, plan.binding(binding).column))
         .collect();
-    let footprint = Footprint::Cells {
-        columns: &key_columns,
-        rows: &retained,
-    };
-    run.run_unit(
-        &mut probes,
-        footprint,
-        callbacks,
-        |run, probes, row_mode| {
-            let unit_rows: Vec<usize> = retained.clone();
-            if row_mode {
-                for &row in &unit_rows {
+    // The retained records of one partition after another, each a unit of
+    // its own; undivided, all of them are one unit.
+    let units = run.partition_runs(divided, retained.len(), |position| Some(retained[position]));
+    for (number, range) in units.iter().enumerate() {
+        run.next_partition(number)?;
+        let unit_rows = &retained[range.clone()];
+        let footprint = Footprint::Cells {
+            columns: &key_columns,
+            rows: unit_rows,
+        };
+        run.run_unit(
+            &mut probes,
+            footprint,
+            callbacks,
+            |run, probes, row_mode| {
+                if row_mode {
+                    for &row in unit_rows {
+                        for &binding in &bindings {
+                            complete(run, probes, binding, table, secondary, &[row])?;
+                        }
+                    }
+                } else {
                     for &binding in &bindings {
-                        complete(run, probes, binding, table, secondary, &[row])?;
+                        complete(run, probes, binding, table, secondary, unit_rows)?;
                     }
                 }
-            } else {
-                for &binding in &bindings {
-                    complete(run, probes, binding, table, secondary, &unit_rows)?;
-                }
-            }
-            Ok(())
-        },
-    )?;
+                Ok(())
+            },
+        )?;
+    }
     run.poll(Step::KeyGrain)?;
     let keys: Vec<usize> = plan
         .keys()
         .iter()
         .map(|&key| run.local_column(region, key))
         .collect();
-    // Partition the retained records by their keys, in first-occurrence order.
-    let partitions = super::group::partition(retained.len(), keys.len(), |position, key| {
-        probes.get(retained[position], keys[key])
-    })
+    let value = |position: usize, key: usize| probes.get(retained[position], keys[key]);
+    // Partition the retained records by their keys, in first-occurrence
+    // order. A divided run groups each partition's records, then merges the
+    // partitions' key groups (#3697).
+    let partitions = if divided {
+        let mut parts: Vec<Vec<Vec<usize>>> = Vec::new();
+        for range in &units {
+            let local = super::group::partition(range.len(), keys.len(), |item, key| {
+                value(range.start + item, key)
+            })
+            .map_err(|_| Box::new(ExecutionError::Grouping(GroupingError::Allocation)))?;
+            parts.push(
+                local
+                    .iter()
+                    .map(|members| members.iter().map(|&item| range.start + item).collect())
+                    .collect(),
+            );
+        }
+        super::group::merge(&parts, keys.len(), value)
+    } else {
+        super::group::partition(retained.len(), keys.len(), value)
+    }
     .map_err(|_| Box::new(ExecutionError::Grouping(GroupingError::Allocation)))?;
     let mut groups: Vec<Vec<usize>> = Vec::new();
     reserved(groups.try_reserve_exact(partitions.len()))?;

@@ -23,7 +23,7 @@ use crate::ast::{
     DocumentRef, EmptyString, Expr, ExprId, ExprKind, FileRef, FormalExpression, Header, Input,
     InputSource, Intermediate, KeyDecl, Literal, Meta, Method, Model, ModelKind, Named, Origin,
     Output, PageRef, PathBase, Paths, Profile, RowCount, Rows, Segment, Severity, Span, Spec,
-    SubmissionMetadata, Surface, Template, Text, UniqueCheck, ValueLevel, WhereClause, Written,
+    SubmissionMetadata, Template, Text, UniqueCheck, ValueLevel, WhereClause, Written,
 };
 use crate::schema::{Document, DocumentNode as N};
 use crate::value::ColumnType;
@@ -53,18 +53,13 @@ impl Lowered {
     }
 }
 
-/// Lower a resolved specification that declares version `1.minor`. Without
-/// positions every span is [`Span::UNKNOWN`]. The 1.0 front end enters here
-/// from [`crate::front_end::v1::spec::lower`].
-pub(crate) fn lower_specification(
-    d: &Document,
-    positions: Option<&Positions>,
-    minor: u32,
-) -> Lowered {
+/// Lower a resolved specification. Without positions every span is
+/// [`Span::UNKNOWN`]. The 1.0 front end enters here from
+/// [`crate::front_end::v1::spec::lower`].
+pub(crate) fn lower_specification(d: &Document, positions: Option<&Positions>) -> Lowered {
     let mut lower = Lower {
         d,
         positions,
-        minor,
         paths: Paths::new(),
         exprs: Vec::new(),
     };
@@ -83,8 +78,6 @@ pub(crate) fn lower_specification(
 pub(super) struct Lower<'d> {
     d: &'d Document,
     positions: Option<&'d Positions>,
-    /// The minor number of the version the specification declares.
-    minor: u32,
     paths: Paths,
     exprs: Vec<Expr>,
 }
@@ -303,7 +296,6 @@ impl<'d> Lower<'d> {
         // (P-VER-1).
         let version = self.required_text(meta, root, "yamaa");
         let header = Header {
-            surface: Surface::V1 { minor: self.minor },
             meta: version.meta,
             version,
         };

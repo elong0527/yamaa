@@ -44,13 +44,13 @@ the held bytes.
 | read-odm | The two reader documents (the adapters' `odm` fixtures), all 30 columns and cells, archive member selection, the authored sources two refusals read, and each refusal's one issue row and error text (`{source}` stands for the source path the test gave) |
 | parquet-containment | A Parquet file that makes the native decoder panic, its issue row, and a readable file with its saved CSV |
 | plan-reuse | One specification run A, B, A on one object with exact output CSV and issue rows; a changed specification's output; a changed function default's output |
-| lint | One specification with layout, authoring and suppression findings: its exact `lint()` rows, the text the proved fixes write, the rows that remain, and two refusals; and a layer that restates its parent's row template without one derivation, with its `partial_restatement` row, written from the style guide, which `fix` leaves |
+| lint | One specification with layout, authoring and suppression findings: its exact `lint()` rows, the text the proved fixes write, the rows that remain, and three refusals, a named file written for 0.5 among them; and a layer that restates its parent's row template without one derivation, with its `partial_restatement` row, written from the style guide, which `fix` leaves |
 | selftest | The bundled cases in list order, the cases table's columns, the status vocabulary, and the report's lines and the layout of its information line |
 | schema | The four file types, each JSON Schema's dialect, title and `$ref`, the canonical order of its top-level keys, and two refusals with their error text and issue rows |
 | info | The engine information's fields in order, the host vocabulary, and a shipped build's language versions and features |
 | printing | A study's files, and the status and printed lines of each result: a check, a failed check, a project check, a run, a failed run, a project run and each of its members, a submission, and a lazy specification and project; `{path}` stands for the path the test gave and `{root}` for its study directory, with forward slashes |
 | issue-locations | One case for each rule of P-ISSUE-1 (`docs/design/interface-1.0/api.md`, "Issue locations"): the files a case writes, its call, and its first issue's condition, first spec path, file, line and column, counted by hand in those files |
-| project-parity | Project cases with their complete expected issue rows: the files a case writes, its call (a member of a project run, a specification the project names, or a submission) and every issue row; rows and files that depend on the host language are given by language, `{root}` stands for the case's directory and `{version}` for the installed yamaa version |
+| project-parity | Project cases with their complete expected issue rows: the files a case writes, its call (a project check, a member of a project run, a specification the project names, or a submission) and every issue row; rows and files that depend on the host language are given by language, `{root}` stands for the case's directory and `{version}` for the installed yamaa version |
 | compact-yaml | A specification with a block and a flow input, the block, compact, flow and explicit-key verification forms with their one output and saved CSV, failed row-count bounds, malformed closers, and raw NULs with their `invalid_yaml` context (#2196, #3125) |
 | longitudinal-capacity | The 50,000-row, 100-column profile: its column names, its value rule (the row index for the key, then an offset plus the row and column index modulo a prime), the size its CSV must exceed, and its source and output formats |
 | column-ceilings | The 1,024 admitted and 1,025 refused widths of each boundary, the compiler-limit and parent-occurrence issue rows, the repaired capacity's remaining error, the inheritance depth that builds and the wide inherited cases' rows by column index modulo 3 |
@@ -100,18 +100,20 @@ three.
 
 `project-parity` pairs the installed Python and R project parity suites,
 which compare whole issue rows as `diagnostic-parity` does, for calls that
-need a project: a member of a project run, whose `unlinked_producer` and
-`producer_not_completed` findings name the listed specification they belong
-to and the document they come from (PROJECT-7), the run of a specification
-the project names, and a submission, whose `duplicate_dataset_entry`
-refuses a section that lists two specifications of one saved artifact
-(DEFINE-5). A case whose files or rows depend on the host language gives
-them by language: a function file that implements only the other host
-refuses the call with the running host's language (FUNC-1), and each host
-verifies only its own lock (FUNC-3). The function files name
-standard-library callables (`operator.pos`, `base::identity`), which no lock
-pins and which the R check environment has, so neither host installs a
-project package for these cases. `{root}` stands for the case's directory,
+need a project: a project check, whose `resource_path_missing` findings name
+each listed function or codelist file that does not exist at the field that
+lists it, with the path as written (FILE-11), a member of a project run,
+whose `unlinked_producer` and `producer_not_completed` findings name the
+listed specification they belong to and the document they come from
+(PROJECT-7), the run of a specification the project names, and a
+submission, whose `duplicate_dataset_entry` refuses a section that lists two
+specifications of one saved artifact (DEFINE-5). A case whose files or rows
+depend on the host language gives them by language: a function file that
+implements only the other host refuses the call with the running host's
+language (FUNC-1), and each host verifies only its own lock (FUNC-3). The
+function files name standard-library callables (`operator.pos`,
+`base::identity`), which no lock pins and which the R check environment
+has, so neither host installs a project package for these cases. `{root}` stands for the case's directory,
 resolved, with forward slashes, and `{version}` for the installed yamaa
 version. The rows were written from those cards, the message templates of
 `yaml/conditions.yaml` and the issue locations of P-ISSUE-1 before the

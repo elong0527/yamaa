@@ -18,8 +18,8 @@
 \title{A project file, read only when a method runs}
 \description{
 Holds the path of a \code{project.yaml}: the study's specifications, codelists,
-submission metadata and per-language environment files. Nothing is read until
-a method runs.
+submission metadata, function files and per-language locks. Nothing is read
+until a method runs.
 }
 \usage{
 yamaa_project(path)

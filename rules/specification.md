@@ -272,8 +272,7 @@ Fails: `non_ascii_source`.
 Evidence: `rust/crates/yamaa-adapters/tests/file_workflow.rs::original_decode_diagnostics_remain_bounded_and_owned`, `rust/crates/yamaa-core/tests/support/diagnostic/yaml_source.rs`, `rust/crates/yamaa/tests/issue_locations.rs::a_parent_the_reader_refuses_locates_its_issue_in_that_parent`.
 
 For example, the YAML double-quoted escape `"\u00E9"` denotes the
-one-character string U+00E9. The environment files a project file declaring
-`schema_version` links are held to the same boundary.
+one-character string U+00E9.
 
 The repository holding the language keeps the same boundary: its conformance
 documents, rules, documentation and implementation source are ASCII, and they

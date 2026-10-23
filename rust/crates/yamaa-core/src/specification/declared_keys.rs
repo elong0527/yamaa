@@ -71,7 +71,7 @@ fn lowered(tree: Tree) -> ast::Spec {
 }
 
 fn prepare(tree: Tree) -> Result<PreparedSpecification, PrepareError> {
-    PreparedSpecification::from_tree(lowered(tree), Vec::new(), None, None, None, None)
+    PreparedSpecification::from_tree(lowered(tree), Vec::new(), None, None, None)
 }
 
 fn schema(fields: &[(&str, ColumnType)]) -> TableSchema {

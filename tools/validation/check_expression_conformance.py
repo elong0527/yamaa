@@ -4,10 +4,12 @@
 one text of the closed grammar in one context, over a small table, and gives
 either the value of each row or group or the one issue its run reports. The
 check reads the document as YAML 1.1 and as YAML 1.2, which must agree, checks
-its structure, and checks that its cases cover every function and reducer of
-the grammar's closed lists, every operator and literal keyword its
-productions write, the three truth values of NOT, AND and OR, and the
-refusals of FORMULA-13 and FORMULA-27 in each context. It then runs every
+its structure and that each case's text writes every function, reducer,
+operator and literal keyword its `covers` names, and checks that its cases
+cover every function and reducer of the grammar's closed lists, every
+operator and literal keyword its productions write, the three truth values of
+NOT, AND and OR, and the refusals of FORMULA-13 and FORMULA-27 in each
+context. It then runs every
 case through the installed engine, the development package `make setup`
 builds, as a specification that reads the case's table and derives one
 column from its text, and compares each value exactly, or the issue's phase,
@@ -117,6 +119,20 @@ REFUSALS = (
     ("aggregate", "prohibited_function", "FORMULA-13"),
     ("aggregate", "prohibited_construct", "FORMULA-27"),
 )
+# A text's tokens, as the grammar's `string`, `number` and `name` productions
+# and its operator terminals spell them. Any other character is a symbol of
+# its own, which writes nothing a case covers.
+TOKEN = re.compile(
+    r"\s+"
+    r"|(?P<string>'(?:[^']|'')*')"
+    r"|(?P<number>[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)"
+    r"|(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+    r"|(?P<symbol><=|>=|<>|\S)"
+)
+# The reserved words that write an operator, so that a sign after one is not
+# the binary operator. The other reserved words, NULL, TRUE and FALSE, end an
+# operand, as an identifier does.
+OPERATOR_WORDS = {"AND", "BETWEEN", "IN", "IS", "LIKE", "NOT", "OR"}
 
 
 def load(root=ROOT):
@@ -148,6 +164,87 @@ def grammar_names(grammar):
         operators.extend(names)
     vocabulary = grammar["vocabulary"]
     return list(vocabulary["function"]), list(vocabulary["reducer"]), operators
+
+
+def tokens(text):
+    """A text's tokens as (kind, spelling) pairs, each name in upper case,
+    since a function, reducer or keyword is spelled in any case."""
+    found = []
+    for match in TOKEN.finditer(text):
+        kind = match.lastgroup
+        if kind is not None:
+            spelling = match.group(kind)
+            found.append((kind, spelling.upper() if kind == "name" else spelling))
+    return found
+
+
+def written(text):
+    """The functions, reducers, operators and literal keywords a text writes,
+    by the names `covers` gives them.
+
+    The grammar decides which construct a token belongs to: a string's
+    content writes nothing; a NOT before IN, BETWEEN or LIKE, or after IS,
+    belongs to that operator, and the AND after a BETWEEN to the range; a sign
+    after an operand is the binary operator, and otherwise belongs to the
+    number it precedes or is a unary sign; the star of `COUNT(R.*)` multiplies
+    nothing; and DATE, DATETIME and ESCAPE, which are not reserved, write
+    themselves only before a string. A name before a parenthesis is a call.
+    """
+    found = tokens(text)
+    nothing = ("", "")
+    names = set()
+    ranges = 0
+    for index, (kind, spelling) in enumerate(found):
+        before = found[index - 1] if index else nothing
+        after = found[index + 1] if index + 1 < len(found) else nothing
+        if kind == "name":
+            if spelling in ("IN", "BETWEEN", "LIKE"):
+                negated = before == ("name", "NOT")
+                names.add(f"NOT {spelling}" if negated else spelling)
+                ranges += spelling == "BETWEEN"
+            elif spelling == "NOT":
+                compound = after in {
+                    ("name", word) for word in ("IN", "BETWEEN", "LIKE")
+                }
+                if not compound and before != ("name", "IS"):
+                    names.add("NOT")
+            elif spelling == "NULL":
+                if before == ("name", "IS"):
+                    names.add("IS NULL")
+                elif before == ("name", "NOT") and found[index - 2 : index - 1] == [
+                    ("name", "IS")
+                ]:
+                    names.add("IS NOT NULL")
+                else:
+                    names.add("NULL")
+            elif spelling == "AND":
+                if ranges:
+                    ranges -= 1
+                else:
+                    names.add("AND")
+            elif spelling in ("OR", "TRUE", "FALSE"):
+                names.add(spelling)
+            elif spelling in ("DATE", "DATETIME", "ESCAPE"):
+                if after[0] == "string":
+                    names.add(spelling)
+            elif after == ("symbol", "("):
+                names.add(spelling)
+        elif spelling in ("+", "-"):
+            operand = (
+                before[0] in ("number", "string")
+                or before == ("symbol", ")")
+                or (before[0] == "name" and before[1] not in OPERATOR_WORDS)
+            )
+            if operand:
+                names.add(spelling)
+            elif after[0] != "number":
+                names.add(f"unary {spelling}")
+        elif spelling == "*":
+            if before != ("symbol", "."):
+                names.add(spelling)
+        elif spelling in ("=", "<>", "<", "<=", ">", ">=", "/"):
+            names.add(spelling)
+    return names
 
 
 def rule_ids(root):
@@ -388,6 +485,13 @@ def check(document, root=ROOT):
             errors.append(f"{label}: covers must be a non-empty list")
         elif set(covers) - vocabulary:
             errors.append(f"{label}: unknown covers {sorted(set(covers) - vocabulary)}")
+        elif isinstance(case.get("text"), str):
+            # The coverage below counts these names, so each must be in the text.
+            unwritten = sorted(set(covers) - TOPICS - written(case["text"]))
+            if unwritten:
+                errors.append(
+                    f"{label}: covers {unwritten}, which its text does not write"
+                )
         errors.extend(case_errors(case, label, conditions, rules))
     if errors:
         return errors

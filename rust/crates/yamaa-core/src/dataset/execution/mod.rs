@@ -42,6 +42,18 @@ pub enum ExecutionEvent {
     },
 }
 
+/// How a run divides its driver input (#3697): into consecutive partitions
+/// of `rows` records each, the last holding the rest. Each partition-safe
+/// unit of the schedule runs over one partition at a time, and the run
+/// combines only the state the partition inventory marks combinable. A
+/// step that needs the whole table refuses the run at admission, unless
+/// `whole_table_fallback` runs it over the whole input instead.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Partitioning {
+    pub rows: std::num::NonZeroUsize,
+    pub whole_table_fallback: bool,
+}
+
 /// Fixed boundary failures remain distinct from normative language conditions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Resource {
@@ -295,9 +307,16 @@ pub enum ExecutionError<E> {
     VerificationFailures(Vec<CheckRecord>),
     OutputGrouping(GroupingError<Infallible>),
     /// The run was cancelled (#2822): its probe answered true at a
-    /// checkpoint of the schedule or before a batch of project-function
-    /// calls. The attempt keeps no output and no evidence.
+    /// checkpoint of the schedule, between two partitions of a unit, or
+    /// before a batch of project-function calls. The attempt keeps no output
+    /// and no evidence.
     Cancelled,
+    /// A partitioned run without the whole-table fallback was refused at
+    /// admission (#3697): the step at `path`, the first in the schedule,
+    /// needs the whole table, so the run cannot divide it.
+    PartitionGlobal {
+        path: String,
+    },
 }
 
 impl<E: std::fmt::Debug> std::fmt::Display for ExecutionError<E> {

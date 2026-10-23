@@ -1,8 +1,7 @@
 # SAS Transport
 
 This file is a profile: it is optional, and it applies only to a build whose
-selected submission section of a project file sets `transport: xpt`
-(`datasets: xpt` in a project file that declares `schema_version`). Such a
+selected submission section of a project file sets `transport: xpt`. Such a
 build writes one SAS Transport version 5 file per composed dataset in the
 public record layout SAS documents as TS-140, carrying the published dataset
 and the names, labels and formats the [Define-XML](define-xml.md) document is
@@ -26,7 +25,7 @@ the files publish before the document under
 
 Evidence: `sdtm-dm-xpt`, `adam-adsl-xpt`, `negative-transport-display-decimals`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_section_keeps_to_its_own_surface_spellings`, `rust/crates/yamaa-adapters/tests/submission_transport.rs::every_define_benchmark_matches_its_independent_truth_in_both_hosts`.
 
-A project file that declares `schema_version` writes `datasets: xpt`. Read as [JSON-5](dataset-json.md#json-5) reads them, the rows carry no display
+Read as [JSON-5](dataset-json.md#json-5) reads them, the rows carry no display
 precision: a composed specification declares no `output.decimals`, whose
 rounded text the file would otherwise carry as the submitted numbers, and a
 numeric variable's display is its format under [XPT-9](#xpt-9).

@@ -1,11 +1,11 @@
 //! One original environment, entry and linked producing specifications under one
 //! native capture scope. Preparation accepts no activation, data or publication port.
 use crate::{
+    document::Closures,
     file_entry::RejectedEntry,
     file_preparation::{FileSpecification, Rejected},
     file_project,
     file_resources::Resources,
-    project_source::ProjectSchemas,
 };
 use std::sync::Arc;
 use yamaa_core::project_function::Language;
@@ -38,13 +38,13 @@ pub enum Error {
     Entry(Box<RejectedEntry>),
 }
 /// Even an early root decode or metadata transport failure retains the original
-/// raw captures and the project schema capabilities. No diagnostic refusal
-/// consumes it.
+/// raw captures and the closures the project was read with. No diagnostic
+/// refusal consumes it.
 pub struct RejectedEnvironment {
     error: file_project::Error,
     entry: Option<String>,
     environment: Option<String>,
-    project_schemas: ProjectSchemas,
+    closures: Closures,
     resources: Resources,
 }
 impl RejectedEnvironment {
@@ -60,8 +60,8 @@ impl RejectedEnvironment {
     pub fn environment(&self) -> Option<&str> {
         self.environment.as_deref()
     }
-    pub fn project_schemas(&self) -> &ProjectSchemas {
-        &self.project_schemas
+    pub fn closures(&self) -> &Closures {
+        &self.closures
     }
     pub fn captured_sources(&self) -> impl Iterator<Item = (String, &[u8])> {
         self.resources.captured_sources()
@@ -102,7 +102,7 @@ struct Configured {
     resources: Resources,
     entry: String,
     environment: Option<String>,
-    project_schemas: ProjectSchemas,
+    closures: Closures,
 }
 /// The refusal of the caller's own path `given`.
 fn caller(given: &str, error: crate::file_resources::Error) -> Error {
@@ -115,8 +115,8 @@ fn configure(specification: &str, environment: Option<&str>) -> Result<Configure
     let (mut resources, entry) = crate::file_configuration::resources(specification)
         .map_err(|crate::file_configuration::Error::Path(error)| caller(specification, error))?;
     // Public caller paths retain the established absolute-path policy. This is
-    // a lexical fact; the first environment file is opened only after admission.
-    let project_schemas = crate::shipped_schema::capture_project().map_err(Error::Schema)?;
+    // a lexical fact; the project file is opened only after admission.
+    let closures = Closures::shipped().map_err(Error::Schema)?;
     let environment = environment
         .map(|given| {
             crate::project_application::environment_path(given)
@@ -130,7 +130,7 @@ fn configure(specification: &str, environment: Option<&str>) -> Result<Configure
         resources,
         entry,
         environment,
-        project_schemas,
+        closures,
     })
 }
 
@@ -156,7 +156,7 @@ pub fn capture_project(
             resources: Resources::with_resolver(resolver, project),
             entry: project.to_owned(),
             environment: Some(project.to_owned()),
-            project_schemas: crate::shipped_schema::capture_project().map_err(Error::Schema)?,
+            closures: Closures::shipped().map_err(Error::Schema)?,
         },
         None => configure(project, Some(project))?,
     };
@@ -168,7 +168,7 @@ pub fn capture_project(
             .as_deref()
             .map(|resolved| (project, resolved)),
         host,
-        request.project_schemas,
+        request.closures,
     )?;
     Ok(CapturedProject {
         resources,
@@ -226,7 +226,7 @@ pub fn select_request(
         &request.entry,
         given.environment.zip(request.environment.as_deref()),
         host,
-        request.project_schemas,
+        request.closures,
     )
     .map_err(SelectionError::Preparation)?;
     compile(resources, given.specification, &request.entry, environment)
@@ -239,14 +239,14 @@ pub fn select_with_resolver(
     host: Option<Language>,
     resolver: Arc<dyn crate::host_resources::Resolver>,
 ) -> Result<Selected, SelectionError> {
-    let project_schemas = crate::shipped_schema::capture_project()
-        .map_err(|error| SelectionError::Preparation(Error::Schema(error)))?;
+    let closures =
+        Closures::shipped().map_err(|error| SelectionError::Preparation(Error::Schema(error)))?;
     select_with_optional_resources(
         Resources::with_resolver(resolver, request.specification),
         request.specification,
         request.environment,
         host,
-        project_schemas,
+        closures,
     )
 }
 
@@ -269,15 +269,9 @@ pub fn select_with_resources(
     entry: &str,
     environment: &str,
     host: Language,
-    project_schemas: ProjectSchemas,
+    closures: Closures,
 ) -> Result<Selected, SelectionError> {
-    select_with_optional_resources(
-        resources,
-        entry,
-        Some(environment),
-        Some(host),
-        project_schemas,
-    )
+    select_with_optional_resources(resources, entry, Some(environment), Some(host), closures)
 }
 
 pub fn select_with_optional_resources(
@@ -285,14 +279,14 @@ pub fn select_with_optional_resources(
     entry: &str,
     environment: Option<&str>,
     host: Option<Language>,
-    project_schemas: ProjectSchemas,
+    closures: Closures,
 ) -> Result<Selected, SelectionError> {
     let (resources, environment) = capture_environment(
         resources,
         entry,
         environment.map(|environment| (environment, environment)),
         host,
-        project_schemas,
+        closures,
     )
     .map_err(SelectionError::Preparation)?;
     compile(resources, entry, entry, environment)
@@ -306,7 +300,7 @@ fn capture_environment(
     entry: &str,
     environment: Option<(&str, &str)>,
     host: Option<Language>,
-    project_schemas: ProjectSchemas,
+    closures: Closures,
 ) -> Result<(Resources, crate::project_source::OwnedEnvironment), Error> {
     let owned_entry = entry.to_owned();
     let Some((given, environment)) = environment else {
@@ -315,19 +309,14 @@ fn capture_environment(
             crate::project_source::OwnedEnvironment::without_environment(host),
         ));
     };
-    match file_project::capture_environment(
-        &mut resources,
-        environment,
-        host,
-        project_schemas.clone(),
-    ) {
+    match file_project::capture_environment(&mut resources, environment, host, closures.clone()) {
         Ok(environment) => Ok((resources, environment)),
         Err(file_project::Error::Resource(error)) => Err(caller(given, error)),
         Err(error) => Err(Error::Environment(Box::new(RejectedEnvironment {
             error,
             entry: Some(owned_entry),
             environment: Some(environment.to_owned()),
-            project_schemas,
+            closures,
             resources,
         }))),
     }

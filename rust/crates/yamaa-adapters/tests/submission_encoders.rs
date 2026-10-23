@@ -125,11 +125,7 @@ mod submission_encoders {
                 })
                 .collect();
             let section = &declared.sections[0];
-            let required = composition::Required::admit(
-                declared.study.as_ref(),
-                section,
-                project.header.surface,
-            )?;
+            let required = composition::Required::admit(declared.study.as_ref(), section)?;
             composition::compose(required, catalogue, &inputs, &[], "1.0", created)
         }
         pub(crate) fn one(
@@ -543,12 +539,8 @@ mod submission_encoders {
             let project = v1::project::project(&project(), None).unwrap();
             let declared = project.submission.unwrap();
             let section = &declared.sections[0];
-            let required = submission_composition::Required::admit(
-                declared.study.as_ref(),
-                section,
-                project.header.surface,
-            )
-            .unwrap();
+            let required =
+                submission_composition::Required::admit(declared.study.as_ref(), section).unwrap();
             let tree = v1::spec::lower(document, None).into_spec();
             submission_composition::compose(
                 required,

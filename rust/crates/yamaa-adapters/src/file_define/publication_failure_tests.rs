@@ -153,7 +153,7 @@ fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dic
     const SPEC: &str = "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}]\n";
     for changed in [
         "project.yaml",
-        "python/environment.yaml",
+        "python/uv.lock",
         "spec.yaml",
         "base.yaml",
         "dict.yaml",
@@ -167,13 +167,13 @@ fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dic
         let directory = crate::canonical_path::canonicalize(&directory).unwrap();
         fs::write(
             directory.join("project.yaml"),
-            b"schema_version: '1.0'\nenvironments: {python: python/environment.yaml}\n",
+            b"yamaa: '1.0'\ntype: project\nenvironments: {python: {lock: python/uv.lock}}\n",
         )
         .unwrap();
         fs::create_dir(directory.join("python")).unwrap();
         fs::write(
-            directory.join("python/environment.yaml"),
-            b"schema_version: '1.0'\n",
+            directory.join("python/uv.lock"),
+            b"version = 1\npackage = []\n",
         )
         .unwrap();
         let spec = match changed {
@@ -224,7 +224,7 @@ fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dic
         ));
         let (field, written) = match changed {
             "project.yaml" => ("environment", environment_written.as_str()),
-            "python/environment.yaml" => ("environments.python", "python/environment.yaml"),
+            "python/uv.lock" => ("environments.python.lock", "python/uv.lock"),
             "spec.yaml" => ("sdtm.specs[0]", "spec.yaml"),
             "base.yaml" => ("parent", "base.yaml"),
             "dict.yaml" => ("columns.ID.derivation.mapping.dict", "dict.yaml"),

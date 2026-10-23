@@ -301,7 +301,6 @@ impl Reads {
                 host: self.host,
                 root: environment.root(),
                 project: environment.project()?,
-                environment_file: environment.environment_file(),
                 lock: environment.lock(),
                 captures: environment.captures(),
             },
@@ -330,16 +329,15 @@ impl Reads {
         };
         self.resources = Some(resources);
         self.environment_written = written.into();
-        let schema = crate::shipped_schema::capture_project()
+        let closures = crate::document::Closures::shipped()
             .map_err(|error| Failure::Project(project_application::Error::Schema(error)))?;
         let host = self.host;
         let environment =
-            file_project::capture_environment(self.resources_mut(), &entry, host, schema).map_err(
-                |error| match error {
+            file_project::capture_environment(self.resources_mut(), &entry, host, closures)
+                .map_err(|error| match error {
                     file_project::Error::Resource(error) => unreadable(&error),
                     error => Failure::Project(project_application::Error::Project(error)),
-                },
-            )?;
+                })?;
         let environment = std::sync::Arc::new(environment);
         self.environment = Some(std::sync::Arc::clone(&environment));
         Ok(environment)
@@ -359,15 +357,13 @@ impl Reads {
         declaring: &str,
         written: &str,
     ) -> Result<std::sync::Arc<PreparedDocument>, Failure> {
-        // A 1.0 project reads the header of a specification it lists at the
+        // A project reads the header of a specification it lists at the
         // listing, as reading the project does (SCHEMA-2).
         let versioned = self
             .environment
             .as_ref()
             .and_then(|environment| environment.project())
-            .is_some_and(|project| {
-                matches!(project.header.surface, yamaa_core::ast::Surface::V1 { .. })
-            });
+            .is_some();
         if let Some(identity) = versioned
             .then(|| self.resources().resolve_from(declaring, written).ok())
             .flatten()

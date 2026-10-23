@@ -13,9 +13,7 @@ mod declaration {
         use std::fs;
         use std::path::{Component, Path, PathBuf};
 
-        use yamaa_adapters::document::{
-            self, Closures, Decoded, PreparedSpecification, SpecificationError,
-        };
+        use yamaa_adapters::document::{self, Closures, PreparedSpecification, SpecificationError};
         use yamaa_adapters::resolved_artifact::{self, model::specification_value};
 
         use yamaa_adapters::specification_source::{Error, Source};
@@ -133,10 +131,8 @@ mod declaration {
             };
             let closures = Closures::shipped().unwrap();
             match document::decode(source, FileType::Spec, Some(LANGUAGE_VERSION), &closures) {
-                Ok(Decoded::Versioned(document)) => {
-                    document.prepare_specification(identity.into(), &mut Files)
-                }
-                other => panic!("{identity}: {other:?}"),
+                Ok(document) => document.prepare_specification(identity.into(), &mut Files),
+                Err(error) => panic!("{identity}: {error:?}"),
             }
         }
 

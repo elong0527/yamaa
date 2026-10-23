@@ -1127,14 +1127,13 @@ fn an_engine_without_functions_runs_every_build_that_calls_no_project_function()
     assert_eq!(runs.status(), Status::Succeeded);
     assert_eq!(runs.names(), ["DM", "AE", "ADSL"]);
 
-    // A 0.5 project and environment file, kept as 0.5 wrote them until
-    // environment files go, listing a 1.0 specification; the next test is
-    // their 1.0 counterpart.
+    // A project whose function file defines the function a listed
+    // specification calls.
     let study = Study::new();
     study.write("raw.csv", "ID,V\n1,2\n");
     study.write(
-        "environment.yaml",
-        "schema_version: '1.0'\nfunctions:\n  double:\n    function: pkg.double\n    description: Double the value.\n    params: [{name: x, type: int}]\n    returns: int\n    tests:\n      - {id: normal, covers: [normal], args: {x: 1}, result: 2}\n      - {id: zero, covers: [boundary], args: {x: 0}, result: 0}\n      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+        "functions/double.yaml",
+        "yamaa: \"1.0\"\ntype: function\nname: double\ndescription: Double the value.\nparams: [{name: x, type: int}]\nreturns: int\nimplementations: {python: pkg.double}\ntests:\n  - {id: normal, covers: [normal], args: {x: 1}, result: 2}\n  - {id: zero, covers: [boundary], args: {x: 0}, result: 0}\n  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
     );
     study.write(
         "one.yaml",
@@ -1142,7 +1141,7 @@ fn an_engine_without_functions_runs_every_build_that_calls_no_project_function()
     );
     study.write(
         "project.yaml",
-        "schema_version: '1.0'\nenvironments: {python: environment.yaml}\nadam: {specs: [one.yaml]}\n",
+        "yamaa: \"1.0\"\ntype: project\nfunctions: [functions/double.yaml]\nadam: {specs: [one.yaml]}\n",
     );
     let calls = bare
         .spec_run(&study.path("one.yaml"), Some(&study.project()), &token)
@@ -1183,21 +1182,6 @@ fn an_engine_without_functions_runs_every_build_that_calls_no_project_function()
         ),
         (study.path("one.yaml"), Some((8, 42))),
         "the refusal's location"
-    );
-    // An engine that claims no host language reads no 0.5 environment file,
-    // so it knows no function the project declares and refuses the call while
-    // the specification compiles (#3030 section 2.10).
-    let neutral = Engine::new(EngineOptions::neutral("cli".into(), String::new()));
-    let check = neutral
-        .spec_check(&study.path("one.yaml"), Some(&study.project()), &token)
-        .unwrap();
-    let found = rows(&check.issues());
-    assert_eq!(found.len(), 1, "{found:?}");
-    assert_eq!(found[0].condition, "unsupported_operation");
-    assert_eq!(found[0].spec_paths, ["columns.W.derivation.function.name"]);
-    assert_eq!(
-        found[0].context.get("operation"),
-        Some(&text("environment"))
     );
 }
 

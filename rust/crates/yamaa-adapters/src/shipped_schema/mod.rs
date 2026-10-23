@@ -1,8 +1,7 @@
 //! Package-owned schema closures; no directory search or caller-provided schema.
 //! The package ships the 1.0 closure of each file type (`yaml/v1/`), which a
 //! document's header selects (SCHEMA-2), and that type's JSON Schema
-//! ([`json_schema`]); and, until the 0.5 project route goes (P2-13d), the 0.5
-//! project and environment closures that route reads.
+//! ([`json_schema`]).
 //!
 //! Each closure is fixed when the package is built, so the process admits it
 //! once, on first use, and every later check, compilation and run shares that
@@ -15,38 +14,6 @@ use yamaa_core::resolver::Resolver;
 mod data;
 mod json;
 pub use json::json_schema;
-
-/// Admit the separately versioned environment root with its exact shared module.
-pub fn capture_environment() -> Result<Arc<CapturedSchema>, Error> {
-    static ADMITTED: OnceLock<Arc<CapturedSchema>> = OnceLock::new();
-    once(&ADMITTED, || {
-        admit_root(data::ENVIRONMENT_MODULES, "environment_class")
-    })
-}
-
-/// Admit both separately versioned project roots: the project file with its
-/// codelist sources, and the environment file it links with its functions.
-///
-/// Every public call prepares its project with these schemas, so they decide
-/// whether a public call reads a 1.0 project file and the function files,
-/// codelist files and lock it names. The engine reads 1.0 files (#3030 D76):
-/// a project file that declares the 1.x header is read with the shipped 1.0
-/// closures, by an engine that reads `yamaa_core::language::LANGUAGE_VERSION`.
-/// The specifications a project lists are read by the specification route,
-/// each by the header it declares.
-pub fn capture_project() -> Result<crate::project_source::ProjectSchemas, Error> {
-    static ADMITTED: OnceLock<Arc<CapturedSchema>> = OnceLock::new();
-    Ok(crate::project_source::ProjectSchemas {
-        project: once(&ADMITTED, || {
-            admit_root(data::PROJECT_MODULES, "project_class")
-        })?,
-        environment: capture_environment()?,
-        versioned: Some((
-            crate::document::Closures::shipped()?,
-            yamaa_core::language::LANGUAGE_VERSION,
-        )),
-    })
-}
 
 /// Admit the 1.0 closure of one file type (`yaml/v1/`): its entry module and
 /// every module it includes, with the type's root class (SCHEMA-2).
@@ -127,13 +94,6 @@ mod tests {
 
     #[test]
     fn each_shipped_closure_is_admitted_once_and_shared_across_threads() {
-        let environment = capture_environment().unwrap();
-        let project = capture_project().unwrap();
-        assert!(Arc::ptr_eq(&project.environment, &environment));
-        assert!(Arc::ptr_eq(
-            &project.project,
-            &capture_project().unwrap().project
-        ));
         let spec = yamaa_core::language::FileType::Spec;
         let shared = std::thread::spawn(move || capture_versioned(spec).unwrap())
             .join()
@@ -151,15 +111,23 @@ mod tests {
             );
             // The 1.0 bundle names the version its files declare.
             assert_eq!(versioned.structure().version(), "1.0");
-        }
-        // The shared closure is the one a fresh admission captures.
-        let fresh = admit_root(data::ENVIRONMENT_MODULES, "environment_class").unwrap();
-        assert_eq!(fresh.sources().len(), environment.sources().len());
-        for (fresh, kept) in fresh.sources().iter().zip(environment.sources()) {
-            assert_eq!(
-                (&fresh.identity, &fresh.bytes),
-                (&kept.identity, &kept.bytes)
-            );
+            // The shared closure is the one a fresh admission captures.
+            let (_, names) = data::V1_CLOSURES
+                .iter()
+                .find(|(name, _)| *name == file_type.name())
+                .unwrap();
+            let modules = names
+                .iter()
+                .map(|name| *data::V1_MODULES.iter().find(|(m, _)| m == name).unwrap())
+                .collect::<Vec<_>>();
+            let fresh = admit_root(&modules, file_type.root_class()).unwrap();
+            assert_eq!(fresh.sources().len(), versioned.sources().len());
+            for (fresh, kept) in fresh.sources().iter().zip(versioned.sources()) {
+                assert_eq!(
+                    (&fresh.identity, &fresh.bytes),
+                    (&kept.identity, &kept.bytes)
+                );
+            }
         }
     }
 }

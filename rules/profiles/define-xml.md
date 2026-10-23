@@ -177,9 +177,7 @@ generated identifier stays `STD.<name>` ([DEFINE-9](#define-9)). A guide's
 
 [SUB-3](submission.md#sub-3) checks the bound guide against the model the
 specification declares, which a 1.0 section's listing makes the section's,
-so a guide this rule admits belongs to it. A project file that declares
-`schema_version` writes one guide, as `standard`, which composition does not
-check against the section's model.
+so a guide this rule admits belongs to it.
 
 <a id="define-7"></a>
 
@@ -829,8 +827,6 @@ A project can therefore list its specifications and run them before its
 submission metadata is ready ([PROJECT-3](project.md#project-3)). An empty
 `standards` list leaves the section without the guide
 [DEFINE-6](#define-6) requires, and fails at `<section>.standards` as an
-omitted one does. A project file that declares `schema_version` writes the
-section's one guide as `standard`, reported at `sdtm.standard`. A project
-submission refuses a selected section that the project does not declare
+omitted one does. A project submission refuses a selected section that the project does not declare
 before any Define-XML generation, with `unknown_section`
 ([PROJECT-14](project.md#project-14)).

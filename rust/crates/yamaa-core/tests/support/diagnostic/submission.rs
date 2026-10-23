@@ -168,7 +168,7 @@ pub(crate) fn compose_study(
 ) -> Result<Study, Vec<Finding>> {
     let project = project.document();
     let lowered = yamaa_core::front_end::v1::project::project(&project, None).unwrap();
-    let (declared, surface) = (lowered.submission.unwrap(), lowered.header.surface);
+    let declared = lowered.submission.unwrap();
     let docs: Vec<_> = docs.into_iter().map(Tree::document).collect();
     let trees: Vec<_> = docs
         .iter()
@@ -188,7 +188,7 @@ pub(crate) fn compose_study(
         })
         .collect();
     let section = &declared.sections[0];
-    let required = composition::Required::admit(declared.study.as_ref(), section, surface)?;
+    let required = composition::Required::admit(declared.study.as_ref(), section)?;
     composition::compose(required, catalogue, &inputs, &others, installed, created)
 }
 pub(crate) fn one(

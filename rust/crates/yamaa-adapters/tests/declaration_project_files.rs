@@ -4,22 +4,20 @@
 //!
 //! A 1.0 project lists its function files and holds each host language's
 //! lock; a function file names its function and the callable of each host it
-//! implements; a codelist file holds one codelist source. Each lowers into the
-//! roots a 0.5 project, environment and codelist file lower into, and a
-//! project prepares through them, on every public route (#3030 D76).
+//! implements; a codelist file holds one codelist source. Each lowers into its
+//! root of `yamaa_core::ast::project`, and a project prepares through them, on
+//! every public route (#3030 D76).
 mod declaration {
     mod project_files {
         use crate::support::Edit as _;
-        use std::fmt::Debug;
         use std::fs;
-        use std::path::{Component, Path, PathBuf};
+        use std::path::{Path, PathBuf};
 
-        use yamaa_adapters::document::{self, AdmittedDocument, Closures, Decoded};
+        use yamaa_adapters::document::{self, AdmittedDocument, Closures};
         use yamaa_adapters::project_source::{self, Failure, Kind};
-        use yamaa_adapters::shipped_schema;
-        use yamaa_adapters::specification_source::{CapturedDocument, Error, Source};
-        use yamaa_core::ast::{FileId, FileRef, Function, FunctionSource, Project, Span, Surface};
-        use yamaa_core::front_end::{lowering, v0_5, v1};
+        use yamaa_adapters::specification_source::{Error, Source};
+        use yamaa_core::ast::{FileId, FileRef, Span};
+        use yamaa_core::front_end::{lowering, v1};
         use yamaa_core::json::Value;
         use yamaa_core::language::{FileType, LANGUAGE_VERSION};
         use yamaa_core::project_function::Language;
@@ -43,13 +41,10 @@ mod declaration {
         /// reads 1.0 files admits it.
         fn admit(path: &Path, expected: FileType) -> AdmittedDocument {
             let closures = Closures::shipped().unwrap();
-            let Decoded::Versioned(document) =
-                document::decode(source(path), expected, Some(LANGUAGE_VERSION), &closures)
-                    .unwrap()
-            else {
-                panic!("{} declares the 1.x header", path.display())
-            };
-            document.admit().unwrap()
+            document::decode(source(path), expected, Some(LANGUAGE_VERSION), &closures)
+                .unwrap_or_else(|error| panic!("{}: {error:?}", path.display()))
+                .admit()
+                .unwrap()
         }
 
         /// The written position of each node of an admitted 1.0 file.
@@ -75,195 +70,39 @@ mod declaration {
             }
         }
 
-        /// A 0.5 project file, structurally prepared as a public call does.
-        fn legacy_project(path: &Path) -> CapturedDocument {
-            shipped_schema::capture_project()
-                .unwrap()
-                .project
-                .prepare_structural(source(path))
-                .unwrap()
-        }
-
-        fn legacy_environment(path: &Path) -> CapturedDocument {
-            shipped_schema::capture_environment()
-                .unwrap()
-                .prepare_structural(source(path))
-                .unwrap()
-        }
-
-        /// A value's declarations as text: its pretty debug form without the
-        /// metas and path arenas, which differ only by position and spelling.
-        fn declarations(value: &impl Debug) -> String {
-            let text = format!("{value:#?}");
-            let mut kept = Vec::new();
-            let mut skipping = None;
-            for line in text.lines() {
-                let field = line.trim_start();
-                let indent = line.len() - field.len();
-                if let Some(depth) = skipping {
-                    if indent == depth && field.starts_with('}') {
-                        skipping = None;
-                    }
-                    continue;
-                }
-                if field.starts_with("meta: Meta {") || field.starts_with("paths: Paths {") {
-                    skipping = Some(indent);
-                    continue;
-                }
-                kept.push(line);
-            }
-            kept.join("\n")
-        }
-
-        /// `path` with its `.` and `..` segments resolved lexically.
-        fn normal(path: &Path) -> PathBuf {
-            let mut normal = PathBuf::new();
-            for component in path.components() {
-                match component {
-                    Component::ParentDir => {
-                        normal.pop();
-                    }
-                    Component::CurDir => {}
-                    other => normal.push(other),
-                }
-            }
-            normal
-        }
-
-        /// `written`, resolved from the directory of `declaring`, as a path
-        /// relative to the directory `project` is in.
-        fn resolved(project: &Path, declaring: &Path, written: &str) -> PathBuf {
-            normal(&declaring.parent().unwrap().join(written))
-                .strip_prefix(normal(project.parent().unwrap()))
-                .unwrap()
-                .to_path_buf()
-        }
-
-        /// The 0.5 project at `legacy`, lowered with the environment file it
-        /// links for `host`, when it links one.
-        fn legacy_root(legacy: &Path, host: Language) -> (Project, Option<PathBuf>) {
-            let captured = legacy_project(legacy);
-            let mut project =
-                v0_5::project::project(&captured.normalized().document, None).unwrap();
-            let linked = project
-                .environment(host)
-                .and_then(|environment| environment.file.as_ref())
-                .map(|file| legacy.parent().unwrap().join(&file.text));
-            if let Some(path) = &linked {
-                let environment = legacy_environment(path);
-                v0_5::project::environment(
-                    &environment.normalized().document,
-                    None,
-                    host,
-                    &mut project,
+        /// The converter's output for two benchmarks, which its tests checked
+        /// it reproduced: one with a function both hosts implement and an R
+        /// lock only, and one with inline codelists, a study and a section.
+        /// Each lowers with the written position of every node.
+        #[test]
+        fn the_converted_project_files_lower_with_their_written_positions() {
+            let lower = |path: &Path| {
+                let admitted = admit(path, FileType::Project);
+                let project = v1::project::project(
+                    &admitted.normalized().document,
+                    Some(&positions(&admitted)),
                 )
                 .unwrap();
-            }
-            (project, linked)
-        }
-
-        /// The converted project at `converted` lowers to the roots its 0.5
-        /// source at `legacy` lowers to, for either host, apart from spans and
-        /// renamed spellings: the header, each lock's spelling relative to its
-        /// new declaring file, the environment files D8 removes, and the
-        /// functions they declared, which are now function files naming each
-        /// host's callable. Returns the function files the project lists.
-        fn compare(legacy: &Path, converted: &Path) -> Vec<PathBuf> {
-            let admitted = admit(converted, FileType::Project);
-            let project =
-                v1::project::project(&admitted.normalized().document, Some(&positions(&admitted)))
-                    .unwrap();
-            assert_eq!(project.header.surface, Surface::V1 { minor: 0 });
-            assert!(project.header.meta.span.is_known());
+                assert_eq!(project.header.version.text, "1.0");
+                assert!(project.header.meta.span.is_known());
+                project
+            };
+            let converted =
+                repository("docs/design/interface-1.0/examples/adam-adsl-bmi/project.yaml");
+            let project = lower(&converted);
+            // The project lists its function file and holds the R lock alone.
             let files = project
                 .functions
                 .iter()
                 .flatten()
-                .map(|declaration| {
-                    assert_eq!(declaration.key, None);
-                    let FunctionSource::File(written) = &declaration.source else {
-                        panic!("a 1.0 project lists function files")
-                    };
-                    converted.parent().unwrap().join(&written.text)
-                })
+                .map(|declaration| converted.parent().unwrap().join(&declaration.file.text))
                 .collect::<Vec<_>>();
-            let functions = files
-                .iter()
-                .map(|path| {
-                    let admitted = admit(path, FileType::Function);
-                    v1::project::function(&admitted.normalized().document, None).unwrap()
-                })
-                .collect::<Vec<_>>();
-            for host in [Language::Python, Language::R] {
-                let (old, linked) = legacy_root(legacy, host);
-                assert_eq!(project.header.version.text, old.header.version.text);
-                assert_eq!(
-                    declarations(&project.codelists),
-                    declarations(&old.codelists)
-                );
-                assert_eq!(
-                    declarations(&project.submission),
-                    declarations(&old.submission)
-                );
-                // A lock moves from the environment file to the project
-                // file, respelled from there; a host without one has no entry.
-                let lock = |project: &Project, declaring: &Path, root: &Path| {
-                    project
-                        .environment(host)
-                        .and_then(|environment| environment.lock.as_ref())
-                        .map(|lock| resolved(root, declaring, &lock.text))
-                };
-                assert_eq!(
-                    lock(&project, converted, converted),
-                    linked
-                        .as_deref()
-                        .and_then(|linked| lock(&old, linked, legacy)),
-                    "{host:?}"
-                );
-                assert!(project
-                    .environments
-                    .iter()
-                    .all(|environment| environment.file.is_none() && environment.lock.is_some()));
-                // Each definition the host's environment file declares is
-                // the function file of its name, holding the host's callable.
-                let definitions = old
-                    .functions
-                    .iter()
-                    .flatten()
-                    .map(|declaration| match &declaration.source {
-                        FunctionSource::Inline(definition) => definition.as_ref().clone(),
-                        FunctionSource::File(_) => panic!("benchmarks define functions inline"),
-                    })
-                    .collect::<Vec<Function>>();
-                assert_eq!(definitions.len(), functions.len());
-                for (definition, file) in definitions.iter().zip(&functions) {
-                    // The comparison keeps every declaration.
-                    assert!(declarations(definition).contains(&definition.description.text));
-                    let mut file = file.clone();
-                    assert!(file.header.is_some());
-                    file.header = None;
-                    file.implementations
-                        .retain(|implementation| implementation.language == host);
-                    assert_eq!(declarations(&file), declarations(definition), "{host:?}");
-                }
-            }
-            files
-        }
-
-        #[test]
-        fn the_converted_project_files_lower_to_the_roots_of_their_sources() {
-            // The converter's output for two benchmarks, which its tests
-            // checked it reproduced: one with a
-            // function both hosts implement and an R lock only, and one with
-            // inline codelists, a study and a section. Their 0.5 sources are
-            // frozen as they were written before the benchmarks moved to 1.0.
-            let files = compare(
-                &repository(
-                    "rust/crates/yamaa-adapters/tests/fixtures/legacy/adam-adsl-bmi/project.yaml",
-                ),
-                &repository("docs/design/interface-1.0/examples/adam-adsl-bmi/project.yaml"),
-            );
             assert_eq!(files.len(), 1);
+            assert!(project.environment(Language::Python).is_none());
+            assert!(project
+                .environment(Language::R)
+                .and_then(|environment| environment.lock.as_ref())
+                .is_some_and(|lock| lock.meta.span.is_known()));
             let bmi = admit(&files[0], FileType::Function);
             let function =
                 v1::project::function(&bmi.normalized().document, Some(&positions(&bmi))).unwrap();
@@ -284,11 +123,14 @@ mod declaration {
                     format!("implementations.{}", implementation.language.key())
                 );
             }
-            assert!(compare(
-                &repository("rust/crates/yamaa-adapters/tests/fixtures/legacy/sdtm-dm-metadata/project.yaml"),
-                &repository("docs/design/interface-1.0/examples/sdtm-dm-metadata/project.yaml"),
-            )
-            .is_empty());
+            let project = lower(&repository(
+                "docs/design/interface-1.0/examples/sdtm-dm-metadata/project.yaml",
+            ));
+            assert!(project.functions.is_none());
+            assert!(!project.codelists.is_empty());
+            let declarations = project.submission.as_ref().unwrap();
+            assert!(declarations.study.is_some());
+            assert!(!declarations.sections.is_empty());
         }
 
         /// A temporary study directory.
@@ -375,9 +217,7 @@ mod declaration {
             files: &mut Files,
         ) -> Result<project_source::PreparedEnvironment, Failure<std::io::Error>> {
             project_source::prepare(
-                shipped_schema::capture_project()
-                    .unwrap()
-                    .reading(Closures::shipped().unwrap(), LANGUAGE_VERSION),
+                Closures::shipped().unwrap(),
                 study.source("project.yaml"),
                 host,
                 files,
@@ -430,7 +270,6 @@ mod declaration {
                         .collect::<Vec<_>>(),
                     read
                 );
-                assert!(prepared.environment_file.is_none());
                 assert_eq!(prepared.lock.is_some(), host == Language::R);
                 assert_eq!(prepared.origins.functions, ["bmi"]);
                 assert_eq!(prepared.origins.function_files, [0]);
@@ -450,33 +289,17 @@ mod declaration {
             }
         }
 
-        /// A codelist source written as a file: header-less in 0.5, and
-        /// under its own header in 1.0 (P-TYPE-1). No benchmark writes one.
+        /// A codelist source as a codelist file writes it, without its header
+        /// (P-TYPE-1). No benchmark writes one.
         const CODELISTS: &str = "standard: {name: CDISC/NCI, publishing_set: SDTM, version: '2024-03-29'}\ncodelists:\n  - id: SEX\n    name: Sex\n    alias: C66731\n    format_name: $SEX\n    items:\n      - {value: F, decode: Female, alias: C16576}\n      - {value: M, decode: Male, alias: C20197}\n  - id: AGEGR\n    name: Age Group\n    data_type: integer\n    items: [{value: 1, decode: Young, rank: 1}, {value: 2, decode: Old, rank: 2}]\n  - id: MEDDRA\n    name: Adverse Event Dictionary\n    external: {dictionary: MedDRA, version: '26.0'}\n";
 
         #[test]
-        fn a_codelist_file_lowers_to_the_source_its_0_5_spelling_does() {
+        fn a_project_reads_a_codelist_file_it_lists_relative_to_itself() {
             let study = converted_study();
-            study.write("ct/legacy.yaml", CODELISTS.as_bytes());
             study.write(
                 "ct/sdtm.yaml",
                 format!("yamaa: \"1.0\"\ntype: codelists\n{CODELISTS}").as_bytes(),
             );
-            let legacy = shipped_schema::capture_project()
-                .unwrap()
-                .project
-                .prepare_named_class(study.source("ct/legacy.yaml"), "codelist_source_class")
-                .unwrap();
-            let legacy = v0_5::project::codelists(&legacy.normalized().document, None).unwrap();
-            let admitted = admit(&study.path("ct/sdtm.yaml"), FileType::Codelists);
-            let mut file = v1::project::codelists(
-                &admitted.normalized().document,
-                Some(&positions(&admitted)),
-            )
-            .unwrap();
-            assert!(file.header.take().is_some());
-            assert_eq!(declarations(&file), declarations(&legacy));
-            assert!(declarations(&legacy).contains("MedDRA"));
             // A 1.0 project lists the file, relative to the project file.
             let project = fs::read_to_string(study.path("project.yaml")).unwrap();
             study.write(
@@ -584,9 +407,9 @@ mod declaration {
         #[test]
         fn a_listed_function_file_without_the_1_0_header_fails_in_that_file() {
             let study = converted_study();
-            // A 0.5 definition, without a header, where a function file
-            // belongs: its header is malformed, so the finding is in that
-            // file, at its missing `yamaa` (SCHEMA-2).
+            // A definition without a header where a function file belongs:
+            // its header is malformed, so the finding is in that file, at its
+            // missing `yamaa` (SCHEMA-2).
             let bmi = fs::read_to_string(study.path("functions/bmi.yaml")).unwrap();
             let body = bmi
                 .lines()
@@ -788,8 +611,7 @@ mod declaration {
             project_function_diagnostics::HostDetails,
             project_lock::{Finding, Reason},
             project_report::Classified,
-            project_source::{Origin, ProjectSchemas},
-            shipped_schema,
+            project_source::Origin,
             specification_report::{self, Identity},
             specification_run::BoundaryFailure,
         };
@@ -799,7 +621,7 @@ mod declaration {
         use yamaa_core::function_signature::{LogicalSignature, ProjectFunctionIdentity};
         use yamaa_core::host_functions::{HostFunctions, Lock};
         use yamaa_core::json::Value;
-        use yamaa_core::language::{FileType, LANGUAGE_VERSION};
+        use yamaa_core::language::FileType;
         use yamaa_core::project_activation::Failure;
         use yamaa_core::project_environment::LockKind;
         use yamaa_core::project_function::Language;
@@ -812,11 +634,9 @@ mod declaration {
         /// project supplies.
         const DOMAIN: &str = "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\noutput: {path: output.csv, columns: [ID, VALUE]}\n";
 
-        /// The shipped project schemas, which read 1.x files.
-        fn reading() -> ProjectSchemas {
-            shipped_schema::capture_project()
-                .unwrap()
-                .reading(Closures::shipped().unwrap(), LANGUAGE_VERSION)
+        /// The shipped 1.0 closures, which public calls read files with.
+        fn reading() -> Closures {
+            Closures::shipped().unwrap()
         }
 
         /// A 1.0 project with one function file, a lock for each host and a
@@ -862,7 +682,7 @@ mod declaration {
             }
             fn prepare(
                 &self,
-                schemas: ProjectSchemas,
+                schemas: Closures,
                 host: Language,
             ) -> Result<FileSpecification, file_project::Error> {
                 file_project::prepare(
@@ -924,22 +744,15 @@ mod declaration {
         #[test]
         fn public_calls_read_a_1_0_project_and_only_the_files_it_names() {
             let study = Study::new();
-            // The shipped schemas read 1.x files (D76), as `reading` does.
-            let shipped = shipped_schema::capture_project().unwrap();
-            let Some((closures, reads)) = &shipped.versioned else {
-                panic!("public calls read 1.x files")
-            };
-            assert_eq!(*reads, LANGUAGE_VERSION);
+            // The shipped closures are admitted once and shared (D76).
             assert!(Arc::ptr_eq(
-                closures.get(FileType::Project),
+                reading().get(FileType::Project),
                 Closures::shipped().unwrap().get(FileType::Project)
             ));
             // The public route reads the project, the host's lock, its
             // function file and its codelist file, and only those (PROJECT-2).
             for (host, lock) in [(Language::Python, "uv.lock"), (Language::R, "renv.lock")] {
-                let project = study
-                    .prepare(shipped_schema::capture_project().unwrap(), host)
-                    .unwrap();
+                let project = study.prepare(reading(), host).unwrap();
                 assert!(project.run().check_diagnostics().is_empty());
                 // The entry, the project file, the lock, the function file
                 // and the codelist file.
@@ -965,8 +778,7 @@ mod declaration {
                 );
                 let origin = captured.function_origin(0).unwrap();
                 assert_eq!(origin.source, study.identity("functions/id.yaml"));
-                assert_eq!(origin.declaration.to_string(), "functions[0]");
-                assert!(origin.external);
+                assert_eq!(origin.declaration(), "functions[0]");
             }
             // The other host's lock is never read.
             fs::remove_file(study.0.join("renv.lock")).unwrap();
@@ -1023,8 +835,8 @@ mod declaration {
                     json!({"path": "functions/id.yaml"}),
                 )]
             );
-            // A file that is read but is no YAML fails as the 0.5 path
-            // reports it, in that file, with the project file and the listing.
+            // A file that is read but is no YAML fails in that file, with the
+            // project file and the listing.
             let study = Study::new();
             study.write("functions/id.yaml", "[unclosed\n");
             let issues = study.issues(Language::Python);
@@ -1196,6 +1008,21 @@ mod declaration {
                     json!({"source": function, "type": "codelists", "expected": "function"}),
                 )]
             );
+            // A file written in language 0.5, such as an environment file,
+            // declares `schema_version`, which the engine does not read.
+            study.write(
+                "functions/id.yaml",
+                "schema_version: '1.0'\nlock: uv.lock\n",
+            );
+            assert_eq!(
+                rows(&study.issues(Language::Python)),
+                [row(
+                    "unsupported_language_version",
+                    "SCHEMA-2",
+                    "functions[0]",
+                    json!({"source": function, "version": "0.5", "language_versions": ["1.0"]}),
+                )]
+            );
             // A file without the header is a finding in that file.
             study.write(
                 "functions/id.yaml",
@@ -1218,10 +1045,10 @@ mod declaration {
             }
         }
 
-        /// CT-12 holds on the 1.0 surface as on the 0.5 one: a codelist's
-        /// `format_name` begins with `$` exactly when the codelist is `text`,
-        /// whether the project file declares the source inline or lists a
-        /// codelist file, and the failure is reported where it is written.
+        /// CT-12: a codelist's `format_name` begins with `$` exactly when the
+        /// codelist is `text`, whether the project file declares the source
+        /// inline or lists a codelist file, and the failure is reported where
+        /// it is written.
         #[test]
         fn a_format_name_whose_dollar_sign_disagrees_with_its_data_type_fails_where_written() {
             let study = Study::new();
