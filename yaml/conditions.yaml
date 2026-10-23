@@ -14,6 +14,14 @@ version: "1.0"
 # `, `, and an object as canonical JSON. Every cause of a condition records
 # each key its message names. Messages are not frozen: programs match on
 # condition and rule, never on message.
+#
+# A condition's history goes with it, from the `conditions` section of
+# tools/migrate/renames.yaml for 1.0.0: `renamed_from` gives the name it had
+# before a release renamed it, and `retired` below lists each condition a
+# release retired, with that release as `retired_in`. With them, the
+# catalogue that `conditions()` returns names every condition a program
+# written for an earlier release may match, and this file at a release's tag
+# is that release's catalogue.
 
 conditions:
   aggregate_identifier_not_grouped:
@@ -147,9 +155,11 @@ conditions:
   function_file_invalid:
     phases: [validation]
     message: "a function file or lock cannot be admitted ({reason})"
+    renamed_from: project_environment_invalid
   function_implementation_missing:
     phases: [validation]
     message: "project function {function} has no implementation for {language}"
+    renamed_from: project_environment_missing
   incomparable_range_types:
     phases: [validation]
     message: "a range value of type {value_type} cannot be compared with its bounds"
@@ -538,6 +548,7 @@ conditions:
   standard_model_mismatch:
     phases: [validation]
     message: "{value} is outside the {model} model of section {section}"
+    renamed_from: unknown_standard_family
   submission_data_type_not_admitted:
     phases: [validation]
     message: "column {column} of type {declared_type} cannot be submitted as data type {data_type}"
@@ -647,6 +658,7 @@ conditions:
   unsupported_language_version:
     phases: [validation]
     message: "this engine does not read language version {version}"
+    renamed_from: schema_version_mismatch
   unsupported_operation:
     phases: [planning]
     message: "{operation} is not supported by this engine"
@@ -686,3 +698,21 @@ conditions:
   zero_offset:
     phases: [validation]
     message: "row_value takes a nonzero offset, not {offset}"
+
+# The conditions a release retired, from the rename table's removals: no
+# implementation raises them, so no card, cause or benchmark names them.
+retired:
+  bare_derivation_scalar:
+    retired_in: "1.0.0"
+  day_not_permitted:
+    retired_in: "1.0.0"
+  day_required:
+    retired_in: "1.0.0"
+  model_contract_mismatch:
+    retired_in: "1.0.0"
+  month_not_permitted:
+    retired_in: "1.0.0"
+  month_required:
+    retired_in: "1.0.0"
+  window_order_by_forbidden:
+    retired_in: "1.0.0"
