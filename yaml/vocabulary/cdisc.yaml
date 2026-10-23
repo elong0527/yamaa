@@ -2,7 +2,9 @@
 # against: models (SUB-3), dataset classes and subclasses (SUB-4), standard
 # names (DEFINE-6, CT-2) and statuses (DEFINE-13), publishing sets (CT-2),
 # origin types and sources (SUB-14), column roles (SUB-9), core designations
-# (SUB-10), submission data types (SUB-6) and where comparators (SUB-12).
+# (SUB-10), submission data types (SUB-6), method types (SUB-21), page
+# reference types (SUB-22), document contexts (DEFINE-4) and where
+# comparators (SUB-12).
 #
 # `version` is the newest language version whose values this file lists, and
 # each value's `since` is the version that admitted it. A vocabulary grows
@@ -10,15 +12,20 @@
 #
 # Each vocabulary names the schema type that spells it (`type`), or the class
 # field that lists its values (`field`, written class.field), in the schema
-# files in yaml/, which must list exactly its values. One that names a
-# Define-XML `enumeration` must equal that simple type of the Define-XML
-# schema bundled at rust/tests/schemas/define/2.1/define-enumerations.xsd,
-# whose release `source` names.
-# `python -m tools.validation.check_cdisc_vocabulary` checks both.
+# files in yaml/, which must list exactly its values in its order. One that
+# names a Define-XML `enumeration` must hold exactly the values of that simple
+# type of the Define-XML schema bundled at
+# rust/tests/schemas/define/2.1/define-enumerations.xsd, whose release
+# `source` names; that schema lists them alphabetically, so their order is
+# this file's. `python -m tools.validation.check_cdisc_vocabulary` checks
+# both.
 #
-# The tables of SUB-3, SUB-9, SUB-10, SUB-15, SUB-26 and JSON-10 list these
-# values too; `python -m tools.validation.check_cdisc_tables` keeps them to
-# this file.
+# `python -m tools.packaging.generate_cdisc_vocabulary --write` writes the
+# engine's enum of each vocabulary from this file, in its order. The tables
+# of SUB-3, SUB-6, SUB-9, SUB-10, SUB-15, SUB-26 and JSON-10 list these
+# values too, and so do lists in rule cards, pages and tools;
+# `python -m tools.validation.check_cdisc_tables` keeps the tables to this
+# file and `python -m tools.validation.check_cdisc_copies` the lists.
 version: "1.0"
 source:
   define_xml: "2.1.11"
@@ -156,6 +163,28 @@ vocabularies:
       - {value: durationDatetime, since: "1.0"}
       - {value: intervalDatetime, since: "1.0"}
       - {value: URI, since: "1.0"}
+  # The kind of algorithm a method describes (SUB-21): the two of the
+  # MethodType of ODM 1.3.2 that Define-XML 2.1 section 5.3.14 admits.
+  method_type:
+    type: method_type
+    values:
+      - {value: Computation, since: "1.0"}
+      - {value: Imputation, since: "1.0"}
+  # Whether a page reference's refs are page numbers or named destinations
+  # (SUB-22).
+  page_reference_type:
+    field: page_reference_class.type
+    enumeration: PDFPageType
+    values:
+      - {value: PhysicalRef, since: "1.0"}
+      - {value: NamedDestination, since: "1.0"}
+  # Whether a Define-XML document is used in a submission (DEFINE-4).
+  context:
+    field: submission_section_class.context
+    enumeration: ODMContext
+    values:
+      - {value: Submission, since: "1.0"}
+      - {value: Other, since: "1.0"}
   # The comparator a where condition states; a bare list of values is EQ or
   # IN. Within the Comparator of ODM 1.3.2.
   comparator:

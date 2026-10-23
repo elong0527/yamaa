@@ -3,6 +3,7 @@
 mod schema {
     mod specification_submission_document {
         use yamaa_core::{
+            cdisc_vocabulary::{Core, DataType, MethodType, OriginSource, OriginType, PageType},
             schema::{Document, DocumentNode as N},
             specification_submission_document::{self as submission, *},
         };
@@ -348,7 +349,7 @@ mod schema {
                 sub.significant_digits.as_ref().unwrap().value,
                 "-18446744073709551616000000"
             );
-            assert_eq!(sub.core.as_ref().unwrap().value, Core::Conditional);
+            assert_eq!(sub.core.as_ref().unwrap().value, Core::Cond);
             assert!(sub.mandatory.as_ref().unwrap().value);
             assert_eq!(sub.role.as_ref().unwrap().value, "Record Qualifier");
             assert_eq!(sub.data_type.as_ref().unwrap().value, DataType::Text);
@@ -366,7 +367,7 @@ mod schema {
             };
             assert_eq!(first.fields[0].field, FieldName::Pages);
             let pages = first.pages.as_ref().unwrap();
-            assert_eq!(pages.kind.value, PageType::Physical);
+            assert_eq!(pages.kind.value, PageType::PhysicalRef);
             assert_eq!(pages.refs.value, "2-4");
             assert_eq!(pages.title.as_ref().unwrap().value, "Collection pages");
             let DocumentReference::Plain(second) = &origin.documents.value[1] else {
@@ -376,7 +377,10 @@ mod schema {
             let DocumentReference::Class(third) = &origin.documents.value[2] else {
                 panic!("third class")
             };
-            assert_eq!(third.pages.as_ref().unwrap().kind.value, PageType::Named);
+            assert_eq!(
+                third.pages.as_ref().unwrap().kind.value,
+                PageType::NamedDestination
+            );
             let Method::Class(method) = sub.method.as_ref().unwrap() else {
                 panic!("method class")
             };
@@ -763,7 +767,7 @@ mod schema {
                     .as_ref()
                     .unwrap()
                     .value,
-                Core::Required
+                Core::Req
             );
             let mut a = Arena::default();
             let core = a.text("wrong");
@@ -1145,9 +1149,8 @@ mod schema {
         }
         #[test]
         fn thirty_domains_with_two_hundred_fifty_columns_keep_complete_ordered_metadata() {
-            use yamaa_core::specification_submission_document::{
-                ColumnType, Core, OriginSource, OriginType,
-            };
+            use yamaa_core::cdisc_vocabulary::{Core, OriginSource, OriginType};
+            use yamaa_core::specification_submission_document::ColumnType;
             let documents: Vec<_> = (0..30).map(|index| specification(index, 250, 0)).collect();
             let study = compose(&documents).unwrap();
             assert_eq!(study.datasets().len(), 30);
@@ -1161,7 +1164,7 @@ mod schema {
                     assert_eq!(declared.column_type.value, ColumnType::String);
                     assert_eq!(declared.label.as_ref().unwrap().value, "Independent column");
                     let metadata = declared.submission.as_ref().unwrap();
-                    assert_eq!(metadata.core.as_ref().unwrap().value, Core::Expected);
+                    assert_eq!(metadata.core.as_ref().unwrap().value, Core::Exp);
                     assert_eq!(metadata.length.as_ref().unwrap().value, "1");
                     let origin = metadata.origins.first().unwrap();
                     assert_eq!(origin.kind.value, OriginType::Assigned);
@@ -1177,6 +1180,7 @@ mod schema {
         //! tree, and every closed-shape refusal keeps its exact document nodes.
         use yamaa_core::{
             ast,
+            cdisc_vocabulary::{DefineContext, GuideStatus},
             front_end::{
                 lowering::sections::{self, Cause},
                 v1::project::{project as lower_project, sections},
@@ -1413,7 +1417,7 @@ mod schema {
             let standard = &send.standards[0];
             assert_eq!(standard.name.text, "SENDIG-DART");
             assert_eq!(standard.version.text, "3.4");
-            assert_eq!(standard.status, ast::GuideStatus::Final);
+            assert_eq!(standard.status, GuideStatus::Final);
             assert_eq!(path(&project, standard.name.meta), "send.standards[0].name");
             assert_eq!(
                 send.specs
@@ -1427,7 +1431,7 @@ mod schema {
             assert!(send.documents.is_empty());
             // An absent transport writes only the Define-XML document.
             assert!(send.transport.is_none());
-            assert_eq!(send.context, ast::DefineContext::Submission);
+            assert_eq!(send.context, DefineContext::Submission);
             assert_eq!(send.xml_lang.text, "en");
             assert_eq!(path(&project, send.xml_lang.meta), "send.xml_lang");
             assert!(
@@ -1439,7 +1443,7 @@ mod schema {
             let adam = &owned.sections[1];
             assert_eq!(adam.standards[0].name.text, "ADaMIG-MD");
             assert_eq!(adam.transport, Some(ast::Transport::DatasetJson));
-            assert_eq!(adam.context, ast::DefineContext::Other);
+            assert_eq!(adam.context, DefineContext::Other);
             assert_eq!(adam.xml_lang.text, "fr-CA");
             assert_eq!(adam.file_oid.as_ref().unwrap().text, "FILE.analysis-1");
             let metadata = adam.metadata_version.as_ref().unwrap();
@@ -1550,7 +1554,7 @@ mod schema {
             let s = &owned.sections[0];
             assert!(s.documents.is_empty() && s.specs.is_empty());
             assert_eq!(s.transport, Some(ast::Transport::DatasetJson));
-            assert_eq!(s.context, ast::DefineContext::Submission);
+            assert_eq!(s.context, DefineContext::Submission);
             assert_eq!(s.xml_lang.text, "en");
         }
         fn invalid() -> Document {
@@ -1850,7 +1854,7 @@ mod schema {
             let input = a.finish(root);
             let owned = sections(&input).unwrap();
             let standard = &owned.sections[0].standards[0];
-            assert_eq!(standard.status, ast::GuideStatus::Draft);
+            assert_eq!(standard.status, GuideStatus::Draft);
             assert_eq!(standard.version.text, "1.3");
             assert!(owned.sections[0]
                 .metadata_version
@@ -1905,7 +1909,7 @@ mod schema {
                 );
                 assert!(s.standards.is_empty() && s.define.is_none() && s.transport.is_none());
                 assert!(s.documents.is_empty());
-                assert_eq!(s.context, ast::DefineContext::Submission);
+                assert_eq!(s.context, DefineContext::Submission);
                 assert_eq!(s.xml_lang.text, "en");
                 // Only Define-XML composition requires the study, guide and target.
                 let Err(findings) = Required::admit(owned.study.as_ref(), s) else {
@@ -2183,6 +2187,7 @@ mod schema {
         //! `tests/submission_encoders.rs`. The specification is a 1.0 file (D4)
         //! of the `SDTM` model (D25) that a 1.0 project's `sdtm` section lists.
         use yamaa_core::{
+            cdisc_vocabulary,
             front_end::v1,
             project_terminology::Catalogue,
             schema::{Document, DocumentNode as N},
@@ -2523,7 +2528,7 @@ mod schema {
             let merged = value.column().declaration().submission.as_ref().unwrap();
             assert_eq!(
                 merged.core.as_ref().unwrap().value,
-                declarations::Core::Expected
+                cdisc_vocabulary::Core::Exp
             );
             assert_eq!(merged.length.as_ref().unwrap().value, "8");
             assert!(merged.value_level.is_empty());
@@ -2536,7 +2541,7 @@ mod schema {
                     .as_ref()
                     .unwrap()
                     .value,
-                declarations::OriginSource::Vendor
+                cdisc_vocabulary::OriginSource::Vendor
             );
         }
         #[test]

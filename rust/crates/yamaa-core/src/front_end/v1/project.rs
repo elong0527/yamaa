@@ -289,7 +289,8 @@ pub fn codelists(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{CodelistSource, DefineContext, GuideStatus, Transport};
+    use crate::ast::{CodelistSource, Transport};
+    use crate::cdisc_vocabulary::{DefineContext, GuideStatus};
     use crate::test_document::Tree;
     use crate::value::Value;
 
