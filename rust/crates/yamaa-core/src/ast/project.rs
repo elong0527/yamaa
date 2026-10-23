@@ -12,6 +12,7 @@
 //! as these files always have.
 
 use super::{Header, Meta, Named, Paths, Text};
+use crate::cdisc_vocabulary::{DefineContext, GuideStatus};
 use crate::project_environment::Submission;
 use crate::project_function::Language;
 use crate::value::{ColumnType, Value, ValueType};
@@ -269,6 +270,7 @@ pub struct Section {
     /// The transport file written for each composed dataset (JSON-1,
     /// XPT-1).
     pub transport: Option<Transport>,
+    /// `def:Context` of the generated document (DEFINE-4).
     pub context: DefineContext,
     /// The language of generated translated text; `en` when omitted.
     pub xml_lang: Text,
@@ -282,23 +284,6 @@ pub struct Section {
     pub meta: Meta,
 }
 
-/// Every standard name Define-XML 2.1 publishes, in its order: the closed
-/// vocabulary of an implementation guide's and a terminology source's name,
-/// which `yaml/vocabulary/cdisc.yaml` holds (DEFINE-6, CT-2).
-pub const STANDARD_NAMES: &[&str] = &[
-    "ADaMIG",
-    "ADaMIG-MD",
-    "BIMO",
-    "CDISC/NCI",
-    "SDTMIG",
-    "SDTMIG-AP",
-    "SDTMIG-MD",
-    "SENDIG",
-    "SENDIG-AR",
-    "SENDIG-DART",
-    "SENDIG-GENETOX",
-];
-
 /// An implementation guide. Its name is a closed CDISC vocabulary, which
 /// stays text (P-VOC-1).
 #[derive(Clone, Debug, PartialEq)]
@@ -307,32 +292,6 @@ pub struct ImplementationGuide {
     pub version: Text,
     pub status: GuideStatus,
     pub meta: Meta,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum GuideStatus {
-    Draft,
-    Final,
-    /// P-STD-1.
-    Provisional,
-}
-
-impl GuideStatus {
-    /// The status as Define-XML writes it.
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Draft => "Draft",
-            Self::Final => "Final",
-            Self::Provisional => "Provisional",
-        }
-    }
-}
-
-/// `def:Context` of the generated document (DEFINE-4).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DefineContext {
-    Submission,
-    Other,
 }
 
 /// The one transport file a section writes for each composed dataset.

@@ -39,7 +39,7 @@ replay the same parser vectors.
 | [benchmarks/](../benchmarks/README.md) | Specifications, inputs, and expected outcomes |
 | [conformance/](conformance/) | Shared language fixtures: the portable regex contract, and the evaluation set of the expression language |
 | [grammar/](grammar/README.md) | Closed grammars and parser vectors |
-| [vocabulary/cdisc.yaml](vocabulary/cdisc.yaml) | Closed CDISC vocabularies: models, dataset classes and subclasses, standard names and statuses, publishing sets, origin types and sources, column roles, core designations, submission data types, where comparators |
+| [vocabulary/cdisc.yaml](vocabulary/cdisc.yaml) | Closed CDISC vocabularies: models, dataset classes and subclasses, standard names and statuses, publishing sets, origin types and sources, column roles, core designations, submission data types, method types, page reference types, document contexts, where comparators |
 
 ## The 1.0 schema
 
@@ -182,24 +182,27 @@ rule, grammar, or fixture:
   evaluates.
 - Change a closed CDISC vocabulary in `vocabulary/cdisc.yaml` first, giving
   each added value the language version that admits it, then the schema
-  type or class field the vocabulary names, the engine's list, and each rule
-  card table that lists it: those of
+  type or class field the vocabulary names, and each rule card table that
+  lists it: those of
   [SUB-3](../rules/profiles/submission.md#sub-3),
   [SUB-9](../rules/profiles/submission.md#sub-9),
   [SUB-10](../rules/profiles/submission.md#sub-10),
   [SUB-15](../rules/profiles/submission.md#sub-15),
   [SUB-26](../rules/profiles/submission.md#sub-26) and
   [JSON-10](../rules/profiles/dataset-json.md#json-10).
+  Then regenerate the engine's enums with `uv run --project python
+  --no-sync python -m tools.packaging.generate_cdisc_vocabulary --write`:
+  each vocabulary is an enum of core with a variant for each value, so an
+  exhaustive match in the engine does not compile until it places an added
+  value, and `make quick` refuses stale enums.
   `python -m tools.validation.check_cdisc_vocabulary` keeps each list that
-  names a Define-XML enumeration equal to that enumeration in the Define-XML
-  schema bundled with the engine, and each schema type or field equal to its
-  list. `python -m tools.validation.check_cdisc_tables` keeps those tables to
-  the file: each value they list is one of its values, and each value of a
-  vocabulary they divide among their rows sits in one row, unless the check
-  names it as belonging in none, as it does `BIMO`. Rust tests compare the
-  engine's own lists with the file for every vocabulary but the where
-  comparators, for which the engine keeps no list. A vocabulary only grows:
-  no value is removed in 1.x.
+  names a Define-XML enumeration to the values of that enumeration in the
+  Define-XML schema bundled with the engine, and each schema type or field
+  equal to its list. `python -m tools.validation.check_cdisc_tables` keeps
+  those tables to the file: each value they list is one of its values, and
+  each value of a vocabulary they divide among their rows sits in one row,
+  unless the check names it as belonging in none, as it does `BIMO`. A
+  vocabulary only grows: no value is removed in 1.x.
 - Keep repository-authored source ASCII-only. Spell non-ASCII characters by
   code point in rules, documentation, schemas, specifications, and tests;
   literal Unicode belongs only in input and expected-output data fixtures.

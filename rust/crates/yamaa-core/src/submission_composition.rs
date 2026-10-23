@@ -1,6 +1,7 @@
 //! Shared submission composition over admitted metadata. No study or host ports.
 use crate::{
     application_issue as issue, ast,
+    cdisc_vocabulary::{Core, DataType, DefineContext, ModelKind, OriginSource, OriginType},
     diagnostic::{ConditionCode, Definition},
     project_environment::Submission,
     project_terminology as ct,
@@ -98,7 +99,7 @@ pub struct Input<'a> {
 #[derive(Clone, Debug)]
 pub struct Column {
     pub(crate) declaration: spec::Column,
-    pub(crate) data_type: spec::DataType,
+    pub(crate) data_type: DataType,
     /// The document's `Length`: declared, fixed by the family, or measured
     /// from the published values when a transport is requested (SUB-24).
     pub(crate) length: Option<String>,
@@ -119,7 +120,7 @@ pub struct Column {
 #[derive(Clone, Debug)]
 pub struct OriginDefinition {
     pub(crate) declaration: spec::OriginMetadata,
-    pub(crate) source: Option<spec::OriginSource>,
+    pub(crate) source: Option<OriginSource>,
     pub(crate) documents: Vec<spec::DocumentReference>,
 }
 impl OriginDefinition {
@@ -127,7 +128,7 @@ impl OriginDefinition {
         &self.declaration
     }
     /// The origin's source, when its type takes one (SUB-15).
-    pub fn source(&self) -> Option<spec::OriginSource> {
+    pub fn source(&self) -> Option<OriginSource> {
         self.source
     }
     /// The origin's document references.
@@ -288,7 +289,7 @@ impl Column {
         &self.declaration
     }
     /// The resolved submission data type.
-    pub fn data_type(&self) -> spec::DataType {
+    pub fn data_type(&self) -> DataType {
         self.data_type
     }
     /// The document's `Length`: declared, fixed by the family, or measured
@@ -370,11 +371,11 @@ pub fn family_name(family: Submission) -> &'static str {
     }
 }
 /// The model whose specifications a section lists (SUB-3).
-pub fn section_model(family: Submission) -> ast::ModelKind {
+pub fn section_model(family: Submission) -> ModelKind {
     match family {
-        Submission::Sdtm => ast::ModelKind::Sdtm,
-        Submission::Adam => ast::ModelKind::Adam,
-        Submission::Send => ast::ModelKind::Send,
+        Submission::Sdtm => ModelKind::Sdtm,
+        Submission::Adam => ModelKind::ADaM,
+        Submission::Send => ModelKind::Send,
     }
 }
 /// A dataset name `SASDatasetName` and a transport member carry:
@@ -538,7 +539,7 @@ fn tree_column<'t>(tree: &'t ast::Spec, name: &str) -> Option<&'t ast::Column> {
 fn refuting(
     tree: &ast::Spec,
     derivations: &[ast::ExprId],
-    kind: spec::OriginType,
+    kind: OriginType,
     reads: &Reads,
 ) -> Option<origin::DerivationKind> {
     derivations
@@ -586,8 +587,7 @@ const COLUMN_NAME: &str = "^[A-Z][A-Z0-9_]{0,7}$";
 /// Names and labels meet the transport limits under `Submission`, and under
 /// `xpt` in every context (DEFINE-4, DEFINE-22, XPT-5).
 fn transport_limits(section: &ast::Section) -> bool {
-    section.context == ast::DefineContext::Submission
-        || section.transport == Some(ast::Transport::Xpt)
+    section.context == DefineContext::Submission || section.transport == Some(ast::Transport::Xpt)
 }
 fn name_finding(path: &str, name: &str, pattern: &str) -> Finding {
     let mut finding = Finding::cause(ConditionCode::SubmissionSasName, path, name);
@@ -751,7 +751,7 @@ impl ColumnAdmission<'_> {
         if core.is_none_or(|core| !core.admitted_by(model))
             || (section.family == Submission::Adam && metadata.mandatory.is_none())
             || (section.family != Submission::Adam
-                && core == Some(spec::Core::Required)
+                && core == Some(Core::Req)
                 && metadata.mandatory.as_ref().is_some_and(|m| !m.value))
         {
             findings.push(Finding::cause(
@@ -790,7 +790,7 @@ impl ColumnAdmission<'_> {
         if metadata
             .origins
             .iter()
-            .any(|declared| declared.kind.value == spec::OriginType::Derived)
+            .any(|declared| declared.kind.value == OriginType::Derived)
             && metadata.method.is_none()
         {
             findings.push(Finding::cause(
@@ -950,13 +950,11 @@ impl ColumnAdmission<'_> {
         }
         let description = declared.description.as_ref().map(|d| d.value.as_str());
         let predecessor = description
-            .filter(|_| kind == spec::OriginType::Predecessor)
+            .filter(|_| kind == OriginType::Predecessor)
             .and_then(origin::predecessor);
         if matches!(
             kind,
-            spec::OriginType::Other
-                | spec::OriginType::Predecessor
-                | spec::OriginType::NotAvailable
+            OriginType::Other | OriginType::Predecessor | OriginType::NotAvailable
         ) && description.is_none()
         {
             findings.push(Finding::cause(
@@ -964,7 +962,7 @@ impl ColumnAdmission<'_> {
                 at,
                 name,
             ));
-        } else if kind == spec::OriginType::Predecessor && predecessor.is_none() {
+        } else if kind == OriginType::Predecessor && predecessor.is_none() {
             // SUB-16: a Predecessor description names `<dataset>.<column>`.
             let mut finding = Finding::cause(
                 ConditionCode::SubmissionOriginDescription,
@@ -1016,15 +1014,15 @@ impl ColumnAdmission<'_> {
             findings.push(finding);
         }
         let mut refs = declared.documents.value.clone();
-        if kind == spec::OriginType::Collected
+        if kind == OriginType::Collected
             && matches!(
                 source,
-                Some(spec::OriginSource::Investigator | spec::OriginSource::Subject)
+                Some(OriginSource::Investigator | OriginSource::Subject)
             )
         {
             // SUB-17: under `Submission` the reference says where in the form
             // the value was collected; only `Other` derives a page-less one.
-            let submission = section.context == ast::DefineContext::Submission;
+            let submission = section.context == DefineContext::Submission;
             if acrfs.len() != 1 {
                 findings.push(Finding::cause(
                     ConditionCode::SubmissionAnnotatedCrfMissing,
@@ -1059,8 +1057,8 @@ impl ColumnAdmission<'_> {
         OriginDefinition {
             declaration: declared.clone(),
             // SUB-15: an ADaM source is derived, never declared.
-            source: if section.family == Submission::Adam && kind != spec::OriginType::Predecessor {
-                Some(spec::OriginSource::Sponsor)
+            source: if section.family == Submission::Adam && kind != OriginType::Predecessor {
+                Some(OriginSource::Sponsor)
             } else {
                 source
             },
@@ -1072,7 +1070,7 @@ impl ColumnAdmission<'_> {
         &self,
         column: &spec::Column,
         metadata: &spec::ColumnSubmission,
-        data_type: spec::DataType,
+        data_type: DataType,
         column_path: &str,
         name: &str,
         findings: &mut Vec<Finding>,
@@ -1120,7 +1118,7 @@ impl ColumnAdmission<'_> {
             });
         let needs_length = matches!(
             data_type,
-            spec::DataType::Text | spec::DataType::Integer | spec::DataType::Float
+            DataType::Text | DataType::Integer | DataType::Float
         );
         if needs_length && length.is_none() {
             findings.push(Finding::cause(
@@ -1161,9 +1159,9 @@ impl ColumnAdmission<'_> {
                 name,
             ));
         }
-        if (data_type == spec::DataType::Float) != metadata.significant_digits.is_some() {
+        if (data_type == DataType::Float) != metadata.significant_digits.is_some() {
             findings.push(Finding::cause(
-                if data_type == spec::DataType::Float {
+                if data_type == DataType::Float {
                     ConditionCode::SubmissionLengthMissing
                 } else {
                     ConditionCode::SubmissionLengthNotApplicable
@@ -1469,7 +1467,7 @@ fn predecessor_labels(
     };
     let mut checked = BTreeSet::new();
     for metadata in origins {
-        if metadata.kind.value != spec::OriginType::Predecessor {
+        if metadata.kind.value != OriginType::Predecessor {
             continue;
         }
         let Some(predecessor) = metadata
@@ -2191,7 +2189,7 @@ pub fn compose(
             }
             // DEFINE-4: a sponsor-extended item has no NCI code, so only the
             // published items carry one (CT-6 refuses an alias on the others).
-            if section.context == ast::DefineContext::Submission
+            if section.context == DefineContext::Submission
                 && source
                     .standard
                     .as_ref()
@@ -2269,7 +2267,7 @@ mod tests {
             define: None,
             documents: Vec::new(),
             transport: None,
-            context: ast::DefineContext::Submission,
+            context: DefineContext::Submission,
             xml_lang: text("en"),
             file_oid: None,
             metadata_version: None,
