@@ -870,6 +870,7 @@ mod declaration {
             assert_eq!(
                 Value::Object(finding.context.into_iter().collect()),
                 json!({"source": study.path("base.yaml"), "entry": study.path("spec.yaml"),
+                    "declaring_source": study.path("spec.yaml"),
                     "version": "1.2", "language_versions": ["1.0"]})
             );
             // Every layer of a chain declares the same type.
@@ -881,6 +882,7 @@ mod declaration {
             assert_eq!(
                 Value::Object(finding.context.into_iter().collect()),
                 json!({"source": study.path("base.yaml"), "entry": study.path("spec.yaml"),
+                    "declaring_source": study.path("spec.yaml"),
                     "type": "project", "expected": "spec"})
             );
             // A parent that declares `schema_version` is written in language
@@ -896,6 +898,7 @@ mod declaration {
             assert_eq!(
                 Value::Object(finding.context.into_iter().collect()),
                 json!({"source": study.path("base.yaml"), "entry": study.path("spec.yaml"),
+                    "declaring_source": study.path("spec.yaml"),
                     "version": "0.5", "language_versions": ["1.0"]})
             );
             // A parent without the 1.x header and a malformed header fail in
@@ -1321,6 +1324,7 @@ mod declaration {
                 assert_eq!(
                     Value::Object(finding.context.into_iter().collect()),
                     json!({"source": base, "entry": study.path("spec.yaml"),
+                        "declaring_source": study.path("spec.yaml"),
                         "version": "0.5", "language_versions": ["1.0"]})
                 );
                 // As the file a referencing field names, at that field.

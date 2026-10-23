@@ -1708,31 +1708,44 @@ mod preparation {
                 ("yamaa", text("1.0")),
                 ("type", text("project")),
             ]));
-            let mut port = Port::default().with("first", None).holding("f", fragment);
-            let error = run(including(None, &["first", "f"]), &mut port).unwrap_err();
-            assert_eq!(
-                error,
-                Error::Header {
-                    source: "f".into(),
-                    entry: "entry".into(),
-                    mismatch: HeaderMismatch::FileType {
-                        file_type: "project".into()
+            // The entry includes the fragment, or the entry's parent does:
+            // the finding names the layer that writes the include entry.
+            for (input, declaring) in [
+                (including(None, &["first", "f"]), "entry"),
+                (layer(Some("base")), "base"),
+            ] {
+                let mut port = Port::default()
+                    .with("first", None)
+                    .holding("base", including(None, &["first", "f"]))
+                    .holding("f", fragment.clone());
+                let error = run(input, &mut port).unwrap_err();
+                assert_eq!(
+                    error,
+                    Error::Header {
+                        source: "f".into(),
+                        entry: "entry".into(),
+                        mismatch: HeaderMismatch::FileType {
+                            file_type: "project".into()
+                        },
+                        named: Named::Include(1),
+                        declaring: Some(declaring.into()),
                     },
-                    named: Named::Include(1),
-                }
-            );
-            check(
-                &error,
-                "unexpected_file_type",
-                "LAYER-4",
-                "include[1]",
-                &[
-                    ("source", "f"),
-                    ("entry", "entry"),
-                    ("type", "project"),
-                    ("expected", "spec"),
-                ],
-            );
+                    "{declaring}"
+                );
+                check(
+                    &error,
+                    "unexpected_file_type",
+                    "LAYER-4",
+                    "include[1]",
+                    &[
+                        ("source", "f"),
+                        ("entry", "entry"),
+                        ("declaring_source", declaring),
+                        ("type", "project"),
+                        ("expected", "spec"),
+                    ],
+                );
+            }
         }
     }
     mod inheritance_capture {

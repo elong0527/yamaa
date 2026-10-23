@@ -23,7 +23,9 @@
 //! An indexed row or intermediate (`rows[1]`) is the item
 //! of the resolved specification at that position, found in each layer by
 //! its `id`. Among roots the deepest node wins too; on a tie, the root the
-//! issue's `source` names, and then the root held first. A project path that
+//! issue's `declaring_source` names, the layer that writes the `parent` or
+//! `include` entry naming a refused layer, then the root its `source` names,
+//! and then the root held first. A project path that
 //! reaches a file the project lists continues in that file's root
 //! (`sdtm.specs[0].columns.SEX.label`). The location is the key of a mapping
 //! member or the first character of a list item, one-based. A path that names
@@ -631,10 +633,16 @@ impl Locator {
             _ => None,
         };
         let source = text("source");
+        // The layer that writes the field naming the file `source` names,
+        // which the entry or another layer may write too.
+        let declaring = text("declaring_source");
         // A missing field the issue names, which its path ends with.
         let missing = text("field");
         let mut order = (0..self.roots.len()).collect::<Vec<_>>();
-        order.sort_by_key(|&root| Some(self.roots[root].identity.as_str()) != source);
+        order.sort_by_key(|&root| {
+            let identity = Some(self.roots[root].identity.as_str());
+            (identity != declaring, identity != source)
+        });
         let mut best: Option<(usize, Written)> = None;
         for (rank, &root) in order.iter().enumerate() {
             let walk = self.walk(root, &steps, &mut vec![root]);
@@ -975,26 +983,41 @@ mod tests {
             "domain: DM\nparent: spec.yaml\n",
             &[],
         );
-        assert_eq!(
-            at(&locator, "parent"),
-            Some(("/study/spec.yaml".to_owned(), 1, 1))
-        );
-        let named = issue(
-            "parent",
-            [(
-                "source".to_owned(),
-                Value::String("/study/base.yaml".into()),
-            )]
-            .into(),
-        );
-        assert_eq!(
-            locator.locate(&named),
-            Some(Location {
-                file: "/study/base.yaml".into(),
-                line: 2,
-                column: 1
-            })
-        );
+        // Both files write `parent`: without a name the file held first wins,
+        // then the file `source` names, and over it the file that writes the
+        // field naming that file, `declaring_source`.
+        for (names, file, line, label) in [
+            (&[][..], "/study/spec.yaml", 1, "no name"),
+            (
+                &[("source", "/study/base.yaml")][..],
+                "/study/base.yaml",
+                2,
+                "source",
+            ),
+            (
+                &[
+                    ("source", "/study/spec.yaml"),
+                    ("declaring_source", "/study/base.yaml"),
+                ][..],
+                "/study/base.yaml",
+                2,
+                "declaring_source over source",
+            ),
+        ] {
+            let context = names
+                .iter()
+                .map(|&(key, value)| (key.to_owned(), Value::String(value.into())))
+                .collect();
+            assert_eq!(
+                locator.locate(&issue("parent", context)),
+                Some(Location {
+                    file: file.into(),
+                    line,
+                    column: 1
+                }),
+                "{label}"
+            );
+        }
     }
 
     #[test]

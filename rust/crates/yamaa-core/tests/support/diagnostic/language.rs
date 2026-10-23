@@ -257,7 +257,8 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         ],
     );
 
-    // A parent layer: at the child's `parent` (LAYER-4).
+    // A parent layer: at the child's `parent`, naming the child that writes it
+    // (LAYER-4).
     let reads = vec!["1.0".to_string()];
     let finding = F::LanguageVersion {
         source: "base",
@@ -265,6 +266,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         version: "1.3",
         reads: &reads,
         named: Named::Parent,
+        declaring: Some("child"),
     }
     .diagnostic()
     .unwrap();
@@ -277,6 +279,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         &[
             ("source", text("base")),
             ("entry", text("entry")),
+            ("declaring_source", text("child")),
             ("version", text("1.3")),
             ("language_versions", texts(&["1.0"])),
         ],
@@ -286,6 +289,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         entry: "entry",
         file_type: "project",
         named: Named::Parent,
+        declaring: Some("child"),
     }
     .diagnostic()
     .unwrap();
@@ -298,6 +302,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         &[
             ("source", text("base")),
             ("entry", text("entry")),
+            ("declaring_source", text("child")),
             ("type", text("project")),
             ("expected", text("spec")),
         ],
@@ -311,6 +316,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 version: "1.3",
                 reads: &reads,
                 named: Named::Entry,
+                declaring: None,
             },
             "yamaa",
             "unsupported_language_version",
@@ -321,6 +327,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 entry: "entry",
                 file_type: "project",
                 named: Named::Entry,
+                declaring: None,
             },
             "type",
             "unexpected_file_type",

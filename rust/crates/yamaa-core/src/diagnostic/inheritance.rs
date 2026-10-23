@@ -53,26 +53,49 @@ pub enum InheritanceFinding<'a> {
     },
     /// A layer declares a language version the engine does not read (SCHEMA-2,
     /// LAYER-4): reported at the entry's `yamaa`, or at the `parent` or
-    /// `include` entry naming it.
+    /// `include` entry naming it, which the layer `declaring` writes.
     LanguageVersion {
         source: &'a str,
         entry: &'a str,
         version: &'a str,
         reads: &'a [String],
         named: Named,
+        declaring: Option<&'a str>,
     },
     /// A layer declares a type other than `spec` (SCHEMA-2, LAYER-4): reported
-    /// at the entry's `type`, or at the `parent` or `include` entry naming it.
+    /// at the entry's `type`, or at the `parent` or `include` entry naming it,
+    /// which the layer `declaring` writes.
     FileType {
         source: &'a str,
         entry: &'a str,
         file_type: &'a str,
         named: Named,
+        declaring: Option<&'a str>,
     },
 }
 
 fn text(value: &str) -> JsonValue {
     JsonValue::String(value.into())
+}
+
+/// The `parent` or `include[i]` that names a refused layer, with the layer
+/// that writes it recorded as `declaring_source`, which locates the issue in
+/// that layer (P-ISSUE-1); none for the entry, which no field names. A field
+/// without the layer that writes it, or the entry with one, has no semantic
+/// projection.
+fn naming_field(
+    context: &mut super::Context,
+    named: Named,
+    declaring: Option<&str>,
+) -> Result<Option<String>, ProjectionError> {
+    match (named.field(), declaring) {
+        (None, None) => Ok(None),
+        (Some(field), Some(declaring)) => {
+            context.insert("declaring_source".into(), text(declaring));
+            Ok(Some(field))
+        }
+        _ => Err(ProjectionError::InvalidContext),
+    }
 }
 
 impl InheritanceFinding<'_> {
@@ -159,11 +182,12 @@ impl InheritanceFinding<'_> {
                 version,
                 reads,
                 named,
+                declaring,
             } => {
                 context.insert("source".into(), text(source));
                 context.insert("entry".into(), text(entry));
                 crate::language::version_context(&mut context, version, reads);
-                match named.field() {
+                match naming_field(&mut context, named, declaring)? {
                     None => (C::HeaderLanguageVersion, "yamaa".into()),
                     Some(field) => (C::InheritanceParentLanguageVersion, field),
                 }
@@ -173,6 +197,7 @@ impl InheritanceFinding<'_> {
                 entry,
                 file_type,
                 named,
+                declaring,
             } => {
                 context.insert("source".into(), text(source));
                 context.insert("entry".into(), text(entry));
@@ -181,7 +206,7 @@ impl InheritanceFinding<'_> {
                     file_type,
                     crate::language::FileType::Spec,
                 );
-                match named.field() {
+                match naming_field(&mut context, named, declaring)? {
                     None => (C::HeaderFileType, "type".into()),
                     Some(field) => (C::InheritanceParentFileType, field),
                 }
