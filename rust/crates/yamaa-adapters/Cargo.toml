@@ -31,7 +31,8 @@ serde_json = { version = "1.0.145", features = ["raw_value"] }
 # project that embeds the facade by git or path, which a workspace [patch]
 # does not (#2929). Published releases through 0.2.2 lack the fix (#2583).
 yamaa-saphyr-parser = { version = "=0.2.1", path = "../../vendor/saphyr-parser", default-features = false, optional = true }
-num-bigint = { version = "0.5.1", default-features = false, optional = true }
+# YAML integer scalars, with yamaa-core's num-bigint release.
+num-bigint = { version = "0.4.8", default-features = false, optional = true }
 
 # Arrow and Parquet 55.2.0 are the newest releases that build with Rust 1.82;
 # 56 needs 1.84 and 57 needs 1.85.
@@ -44,13 +45,15 @@ flatbuffers = { version = "=25.12.19", default-features = false }
 # backend, which flate2 prefers to the rust_backend (miniz_oxide) named below.
 parquet = { version = "=55.2.0", default-features = false, features = ["arrow", "snap", "brotli", "flate2", "lz4", "zstd"], optional = true }
 # Direct page admission bounds decompression before the general source reader.
-# These storage dependencies stay at the adapter boundary.
+# These storage dependencies stay at the adapter boundary. base64, lz4_flex and
+# zstd stay in the 0.22, 0.11 and 0.13 series that Parquet 55.2.0 requires, so
+# the engine builds one copy of each (#3696).
 bytes = { version = "1.12.1", optional = true }
-base64 = { version = "0.23.1", optional = true }
+base64 = { version = "0.22.1", optional = true }
 brotli = { version = "8.0.4", default-features = false, features = ["std"], optional = true }
 flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"], optional = true }
-lz4_flex = { version = "0.13.1", optional = true }
-zstd = { version = "0.14.0", default-features = false, optional = true }
+lz4_flex = { version = "0.11.6", optional = true }
+zstd = { version = "0.13.3", default-features = false, optional = true }
 snap = { version = "1.1.2", optional = true }
 # ODM XML tokenizing only; the adapter adds namespace, reference and
 # well-formedness checks. Default features off: no encoding_rs or serde.

@@ -459,7 +459,8 @@ whose graph holds Arrow 55.2.0 builds the engine unchanged. Other Arrow and
 Parquet releases are unsupported: the adapter's version-specific APIs, confined
 to `storage_api.rs`, are adapted and qualified for 55.2.0 only. Broadening that range requires separate adapter and
 installed-host qualification first. The direct storage codec floors are brotli
-8.0.4 and lz4_flex 0.13.1. Portable libm remains exactly 0.2.16. The reviewed
+8.0.4, lz4_flex 0.11.6, zstd 0.13.3 and base64 0.22.1. Portable libm remains
+exactly 0.2.16. The reviewed
 saphyr-parser 0.2.1 with its compact-flow fix is vendored as
 `yamaa-saphyr-parser`, which `yamaa-adapters` depends on by path. It is
 therefore part of every graph that builds the engine, including a project that
@@ -469,15 +470,13 @@ outside workspace (#2929). The Python
 binding builds with PyO3 0.27, the newest release that builds with Rust 1.82;
 the lock and the minimum dependency graph select 0.27.2.
 
-The engine deliberately links two versions of four crates, because yamaa's
-direct floors differ from Parquet 55.2.0's: lz4_flex 0.13 beside Parquet's
-0.11, zstd 0.14 beside 0.13, base64 0.23 beside 0.22, and num-bigint 0.5
-beside the 0.4 that Parquet and arrow-buffer use. Aligning them would lower
-yamaa's floors or move Parquet off its exact pin. Both zstd copies, through
-zstd-safe 7 and 8, build one `zstd-sys`, so the engine links a single zstd
-library. The other duplicate versions that `cargo tree -d` lists add no second
-linked copy: syn serves procedural macros, and the extra getrandom version
-serves a procedural macro too.
+The engine links one version of each crate. yamaa's own requirements on
+lz4_flex, zstd, base64 and num-bigint stay in the series that Parquet 55.2.0
+and the num crate of the Arrow crates require (0.11, 0.13, 0.22 and 0.4), so
+each resolves to the release that Parquet uses (#3696). num-bigint's floor,
+0.4.8, carries the division fix that 0.4.7 lacks. The duplicate versions that
+`cargo tree -d` still lists add no second linked copy: syn serves procedural
+macros, and the extra getrandom version serves a procedural macro too.
 
 Parquet 55 turns on flate2's zlib-rs backend whenever it reads GZIP pages, and
 flate2 then prefers it to the rust_backend (miniz_oxide) that yamaa names, so
@@ -1196,7 +1195,7 @@ owns decoding behavior.
   templates that need it and column-phase for the rest, and a candidate a
   template filter suppresses never reads a lookup it does not need.
 - Pin Arrow and Parquet to exactly 55.2.0, the newest release that builds
-  with the minimum Rust (#3111), with brotli 8.0.4 and lz4_flex 0.13.1
+  with the minimum Rust (#3111), with brotli 8.0.4 and lz4_flex 0.11.6
   floors, so embedders on Arrow 55.2.0 build the engine unchanged. The 55.2.0
   writer's type-defined column orders keep the Python Polars floor at 1.35.2,
   with no vendored Parquet writer.
