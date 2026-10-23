@@ -31,8 +31,9 @@ within the specification.
 
 A repeated entry fails as `duplicate_identifier` and an entry naming an
 undeclared column as `undeclared_column`, at the entry, `output.columns[<i>]`,
-naming the column in `column`. A submission that composes the specification
-refuses them the same way, at the entry under the specification's listing,
+naming the column in `column`, and a repeated one in `identifier` too. A
+submission that composes the specification refuses them the same way, at the
+entry under the specification's listing,
 `<section>.specs[<n>].output.columns[<i>]`
 ([DEFINE-7](profiles/define-xml.md#define-7)).
 
