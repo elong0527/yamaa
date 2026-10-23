@@ -38,6 +38,7 @@ pub mod producer_contract;
 pub mod project_scope;
 pub mod reference_binding;
 pub mod reference_scope;
+pub mod resolver;
 pub mod resource;
 pub mod result_type;
 pub mod run_report;

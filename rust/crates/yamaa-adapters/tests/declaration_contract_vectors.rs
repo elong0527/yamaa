@@ -985,11 +985,11 @@ mod declaration {
         use yamaa_adapters::json;
         use yamaa_adapters::{
             shipped_schema, specification_diagnostics,
-            specification_source::{
-                CapturedSchema, InheritanceError, InheritancePort, Source, SourceFailure,
-            },
+            specification_source::{CapturedSchema, InheritanceError, Source, SourceFailure},
         };
         use yamaa_core::json::Value;
+        use yamaa_core::resolver::{Captured, Failure, Name, Resolver};
+        use yamaa_core::resource::ResourceFailure;
         use yamaa_core::{inheritance as graph, inheritance_preparation as lifecycle};
         const VALID:&str="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n";
 
@@ -1094,34 +1094,40 @@ mod declaration {
             failure: Option<Payload>,
             fail_at: usize,
         }
-        impl InheritancePort for Host {
+        impl Resolver for Host {
             type Error = Payload;
-            fn canonicalize(
-                &mut self,
-                declaring: &str,
-                written: &str,
-            ) -> Result<graph::Source, graph::SourceError<Payload>> {
+            fn inspect(&mut self, name: Name<'_>) -> Result<graph::Source, Payload> {
+                let Name::Written {
+                    declaring, written, ..
+                } = name
+                else {
+                    panic!("unexpected request {name:?}")
+                };
                 self.calls.push(format!("resolve:{declaring}:{written}"));
                 if self.calls.len() == self.fail_at {
-                    return Err(graph::SourceError::Raised(self.failure.take().unwrap()));
+                    return Err(self.failure.take().unwrap());
                 }
                 Ok(graph::Source {
                     identity: written.into(),
                     display_path: format!("display/{written}"),
                 })
             }
-            fn capture(
-                &mut self,
-                source: &graph::Source,
-            ) -> Result<Vec<u8>, graph::SourceError<Payload>> {
+            fn capture(&mut self, name: Name<'_>) -> Result<Captured, Payload> {
+                let Name::Located { source, .. } = name else {
+                    panic!("unexpected request {name:?}")
+                };
                 self.calls.push(format!("capture:{}", source.identity));
                 if self.calls.len() == self.fail_at {
-                    return Err(graph::SourceError::Raised(self.failure.take().unwrap()));
+                    return Err(self.failure.take().unwrap());
                 }
-                Ok(self
+                let bytes = self
                     .bytes
                     .remove(&source.identity)
-                    .expect("no duplicate capture"))
+                    .expect("no duplicate capture");
+                Ok(Captured::resource(bytes.into(), true))
+            }
+            fn failure(&self, _: Name<'_>, _: &Payload) -> Option<Failure> {
+                None
             }
             fn rebase(
                 &mut self,
@@ -1390,37 +1396,43 @@ mod declaration {
         struct Files {
             events: Vec<Event>,
         }
-        impl InheritancePort for Files {
+        impl Resolver for Files {
             type Error = std::io::Error;
-            fn canonicalize(
-                &mut self,
-                declaring: &str,
-                written: &str,
-            ) -> Result<graph::Source, graph::SourceError<Self::Error>> {
+            fn inspect(&mut self, name: Name<'_>) -> Result<graph::Source, Self::Error> {
+                let Name::Written {
+                    declaring, written, ..
+                } = name
+                else {
+                    panic!("unexpected request {name:?}")
+                };
                 self.events
                     .push(Event::Resolve(declaring.into(), written.into()));
                 let candidate = std::path::Path::new(declaring)
                     .parent()
                     .unwrap()
                     .join(written);
-                let identity = candidate
-                    .canonicalize()
-                    .map_err(|_| graph::SourceError::Unavailable)?;
+                let identity = candidate.canonicalize()?;
                 Ok(graph::Source {
                     identity: identity.to_str().unwrap().into(),
                     display_path: candidate.to_str().unwrap().into(),
                 })
             }
-            fn capture(
-                &mut self,
-                source: &graph::Source,
-            ) -> Result<Vec<u8>, graph::SourceError<Self::Error>> {
+            fn capture(&mut self, name: Name<'_>) -> Result<Captured, Self::Error> {
+                let Name::Located { source, .. } = name else {
+                    panic!("unexpected request {name:?}")
+                };
                 self.events.push(Event::Capture(
                     source.identity.clone(),
                     source.display_path.clone(),
                 ));
-                let bytes = std::fs::read(&source.identity).map_err(graph::SourceError::Raised)?;
-                Ok(bytes)
+                let bytes = std::fs::read(&source.identity)?;
+                Ok(Captured::resource(bytes.into(), true))
+            }
+            /// A file that cannot be located is missing; a read error stays
+            /// the host's own.
+            fn failure(&self, name: Name<'_>, _: &Self::Error) -> Option<Failure> {
+                matches!(name, Name::Written { .. })
+                    .then_some(Failure::Resource(ResourceFailure::Missing))
             }
             fn rebase(
                 &mut self,
@@ -1944,13 +1956,15 @@ mod declaration {
         #[test]
         fn a_written_alias_keeps_its_canonical_arena_and_complete_authored_model() {
             struct Aliases(Host);
-            impl InheritancePort for Aliases {
+            impl Resolver for Aliases {
                 type Error = Payload;
-                fn canonicalize(
-                    &mut self,
-                    declaring: &str,
-                    written: &str,
-                ) -> Result<graph::Source, graph::SourceError<Self::Error>> {
+                fn inspect(&mut self, name: Name<'_>) -> Result<graph::Source, Self::Error> {
+                    let Name::Written {
+                        declaring, written, ..
+                    } = name
+                    else {
+                        panic!("unexpected request {name:?}")
+                    };
                     self.0.calls.push(format!("resolve:{declaring}:{written}"));
                     assert!(["base.yaml", "alias.yaml"].contains(&written));
                     Ok(graph::Source {
@@ -1958,11 +1972,11 @@ mod declaration {
                         display_path: format!("written/{written}"),
                     })
                 }
-                fn capture(
-                    &mut self,
-                    source: &graph::Source,
-                ) -> Result<Vec<u8>, graph::SourceError<Self::Error>> {
-                    self.0.capture(source)
+                fn capture(&mut self, name: Name<'_>) -> Result<Captured, Self::Error> {
+                    self.0.capture(name)
+                }
+                fn failure(&self, name: Name<'_>, error: &Self::Error) -> Option<Failure> {
+                    self.0.failure(name, error)
                 }
                 fn rebase(
                     &mut self,
@@ -1974,7 +1988,8 @@ mod declaration {
                 }
             }
             let original = yamaa_adapters::json_wire::encode(&json!({"schema_version":"1.0","domain":"OUT","keys":["ID"],"input":{"DM":"data.csv"},"base":"DM","output":{"path":"out.csv","columns":["ID"]},"columns":[{"name":"ID","type":"str","derivation":"DM.ID"}]})).into_bytes();
-            let pointer = original.as_ptr();
+            // The parent's bytes are copied out of the resolver's snapshot.
+            let held = original.clone();
             let entry = b"schema_version: '1.0'\nparent: alias.yaml\n".to_vec();
             let mut host = Aliases(Host {
                 bytes: [("canonical/base.yaml".into(), original)]
@@ -2000,7 +2015,7 @@ mod declaration {
                 ]
             );
             assert_eq!(prepared.parents().len(), 1);
-            assert_eq!(prepared.parents()[0].source().bytes.as_ptr(), pointer);
+            assert_eq!(prepared.parents()[0].source().bytes, held);
             let inherited = prepared.inheritance().unwrap();
             assert_eq!(
                 inherited
@@ -2394,13 +2409,12 @@ mod declaration {
         use yamaa_adapters::json;
         use yamaa_adapters::{
             specification_diagnostics::capture_failure,
-            specification_source::{
-                CapturedSchema, Error, InheritanceError, InheritancePort, Source,
-            },
+            specification_source::{CapturedSchema, Error, InheritanceError, Source},
             yaml_decode::{decode_yaml, DecodeFailure},
         };
-        use yamaa_core::inheritance::{Source as Identity, SourceError};
+        use yamaa_core::inheritance::Source as Identity;
         use yamaa_core::json::Value;
+        use yamaa_core::resolver::{Captured, Failure, Name, Resolver};
         use yamaa_core::schema::{DocumentNode as N, NormalizationError, SchemaSource};
 
         const SCHEMA: &str = "version: '1.0'\nroot_class:\n  - schema_version: {type: str}\n  - domain: {type: [str, int], default: DEFAULT}\n  - input: {type: dict}\n  - keys: {type: 'list[str]'}\n  - output: {type: dict}\n  - columns: {type: 'list[column_class]'}\n  - windows: {type: 'dict[str, window_spec]'}\ncolumn_class:\n  - name: {type: str}\n  - type: {type: str}\n  - derivation: {type: handled_expression_class}\nhandled_expression_class:\n  - value: {type: expression}\nexpression: {registry: expressions}\nexpressions:\n  row_number:\n    - window: {type: window_selection}\nwindow_selection: {type: [str, window_spec]}\nwindow_spec:\n  - group_by: {type: 'list[str]'}\n  - order_by: {type: 'list[order_term]'}\norder_term:\n  - variable: {type: str}\n";
@@ -2425,17 +2439,16 @@ mod declaration {
             crate::support::findings(capture_failure(error))
         }
         struct NoParents;
-        impl InheritancePort for NoParents {
+        impl Resolver for NoParents {
             type Error = std::rc::Rc<usize>;
-            fn canonicalize(
-                &mut self,
-                _: &str,
-                _: &str,
-            ) -> Result<Identity, SourceError<Self::Error>> {
+            fn inspect(&mut self, _: Name<'_>) -> Result<Identity, Self::Error> {
                 panic!("standalone path must not canonicalize")
             }
-            fn capture(&mut self, _: &Identity) -> Result<Vec<u8>, SourceError<Self::Error>> {
+            fn capture(&mut self, _: Name<'_>) -> Result<Captured, Self::Error> {
                 panic!("standalone path must not capture")
+            }
+            fn failure(&self, _: Name<'_>, _: &Self::Error) -> Option<Failure> {
+                None
             }
             fn rebase(
                 &mut self,

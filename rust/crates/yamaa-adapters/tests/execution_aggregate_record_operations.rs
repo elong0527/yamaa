@@ -1889,9 +1889,10 @@ S1,002,2024-06
         use std::{fs, path::PathBuf};
         use yamaa_adapters::{
             shipped_schema,
-            specification_source::{InheritancePort, PreparedDocument, Source},
+            specification_source::{PreparedDocument, Source},
         };
-        use yamaa_core::inheritance::{Source as Identity, SourceError};
+        use yamaa_core::inheritance::Source as Identity;
+        use yamaa_core::resolver::{Captured, Failure, Name, Resolver};
         use yamaa_core::{
             bound_expression::{Binding, Read},
             dataset::{
@@ -1909,13 +1910,12 @@ S1,002,2024-06
             reads: Vec<String>,
             unsupported: bool,
         }
-        impl InheritancePort for Parents {
+        impl Resolver for Parents {
             type Error = ();
-            fn canonicalize(
-                &mut self,
-                _: &str,
-                written: &str,
-            ) -> Result<Identity, SourceError<()>> {
+            fn inspect(&mut self, name: Name<'_>) -> Result<Identity, ()> {
+                let Name::Written { written, .. } = name else {
+                    panic!("unexpected request {name:?}")
+                };
                 assert!(
                     written.ends_with(".yaml"),
                     "preparation acquired study authority"
@@ -1925,7 +1925,10 @@ S1,002,2024-06
                     display_path: written.into(),
                 })
             }
-            fn capture(&mut self, source: &Identity) -> Result<Vec<u8>, SourceError<()>> {
+            fn capture(&mut self, name: Name<'_>) -> Result<Captured, ()> {
+                let Name::Located { source, .. } = name else {
+                    panic!("unexpected request {name:?}")
+                };
                 assert!(
                     source.identity.ends_with(".yaml"),
                     "compiler read study data"
@@ -1938,7 +1941,10 @@ S1,002,2024-06
                         .edit("input/lb.csv", "input/lb.xlsx")
                         .into_bytes();
                 }
-                Ok(bytes)
+                Ok(Captured::resource(bytes.into(), true))
+            }
+            fn failure(&self, _: Name<'_>, _: &()) -> Option<Failure> {
+                None
             }
             fn rebase(&mut self, _: &Identity, _: &Identity, written: &str) -> Result<String, ()> {
                 Ok(written.into())

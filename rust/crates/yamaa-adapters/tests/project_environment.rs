@@ -9,12 +9,11 @@ mod project {
         use yamaa_adapters::json;
         use yamaa_adapters::{
             project_environment_diagnostics::{self as diagnostic, Error as ProjectionError},
-            project_source::{
-                self, CaptureFailure, Failure, Kind, Origin, ProjectCapturePort, Reply, Request,
-            },
+            project_source::{self, CaptureFailure, Failure, Kind, Origin},
             specification_source::Source,
         };
         use yamaa_core::json::Value;
+        use yamaa_core::resolver::{self, Captured, File, Located, Name, Resolver};
         use yamaa_core::{project_environment::LockKind, project_function::Language};
         /// The project names its Python environment file, which declares the lock
         /// and the external function file.
@@ -32,6 +31,8 @@ mod project {
             lock_kind: LockKind,
             wide: bool,
             same_identity: bool,
+            /// The bytes of the file last located.
+            held: Vec<u8>,
         }
         impl Port {
             fn new(error: Opaque) -> Self {
@@ -42,6 +43,7 @@ mod project {
                     lock_kind: LockKind::Uv,
                     wide: false,
                     same_identity: false,
+                    held: vec![],
                 }
             }
         }
@@ -51,22 +53,24 @@ mod project {
                 bytes: text.as_bytes().to_vec(),
             }
         }
-        impl ProjectCapturePort for Port {
-            type Error = Opaque;
-            fn capture(&mut self, request: Request<'_>) -> Result<Reply, Self::Error> {
-                self.trace.push((request.kind, request.written.into()));
-                if request.written == "missing.yaml" {
+        impl Port {
+            /// The held source the double serves for the file a project names.
+            fn answer(
+                &mut self,
+                kind: Kind,
+                _declaring: &str,
+                written: &str,
+            ) -> Result<Source, Opaque> {
+                self.trace.push((kind, written.into()));
+                if written == "missing.yaml" {
                     return Err(self.error.take().unwrap());
                 }
-                Ok(match request.kind {
-                    Kind::Environment => {
-                        Reply::Document(source("held/environment.yaml", &self.environment))
+                Ok(match kind {
+                    Kind::Environment => source("held/environment.yaml", &self.environment),
+                    Kind::Lock => {
+                        source("held/uv.lock", crate::support::ports::lock(self.lock_kind))
                     }
-                    Kind::Lock => Reply::Lock {
-                        source: source("held/uv.lock", "version = 1\n"),
-                        kind: self.lock_kind,
-                    },
-                    Kind::Function => Reply::Document(source(
+                    Kind::Function => source(
                         // The same spelling as the declaring environment file
                         // still names the separately captured function file.
                         if self.same_identity {
@@ -79,16 +83,48 @@ mod project {
                         } else {
                             "function: project.constant\ndescription: Constant\nparams: []\nreturns: int\ntests: [{id: ordinary, covers: [normal, boundary], args: {}, result: true}]\n"
                         },
-                    )),
-                    Kind::Codelist => Reply::Document(source(
+                    ),
+                    Kind::Codelist => source(
                         "held/ct.yaml",
                         if self.wide {
                             "codelists: [{id: SEX, name: Sex, data_type: integer, items: [{value: 123456789012345678901234567890}]}]\n"
                         } else {
                             "codelists: [{id: SEX, name: Sex, items: [{value: true}]}]\n"
                         },
-                    )),
+                    ),
                 })
+            }
+        }
+        /// A file is served when it is located; its capture reads the bytes served.
+        impl Resolver for Port {
+            type Error = Opaque;
+            fn inspect(&mut self, name: Name<'_>) -> Result<Located, Self::Error> {
+                let Name::Written {
+                    file: File::Project(kind),
+                    declaring,
+                    written,
+                } = name
+                else {
+                    panic!("unexpected request {name:?}")
+                };
+                let source = self.answer(kind, declaring, written)?;
+                self.held = source.bytes;
+                Ok(Located {
+                    display_path: source.identity.clone(),
+                    identity: source.identity,
+                })
+            }
+            fn capture(&mut self, _: Name<'_>) -> Result<Captured, Self::Error> {
+                Ok(Captured::resource(
+                    std::mem::take(&mut self.held).into(),
+                    true,
+                ))
+            }
+            fn failure(&self, _: Name<'_>, _: &Self::Error) -> Option<resolver::Failure> {
+                None
+            }
+            fn rebase(&mut self, _: &Located, _: &Located, _: &str) -> Result<String, Self::Error> {
+                panic!("a project file is never rebased")
             }
         }
         fn rejected(
@@ -311,11 +347,25 @@ mod project {
             struct RefusingPort {
                 reads: usize,
             }
-            impl ProjectCapturePort for RefusingPort {
+            impl Resolver for RefusingPort {
                 type Error = ResourceError;
-                fn capture(&mut self, _: Request<'_>) -> Result<Reply, Self::Error> {
+                fn inspect(&mut self, _: Name<'_>) -> Result<Located, Self::Error> {
                     self.reads += 1;
                     Err(ResourceError::Missing)
+                }
+                fn capture(&mut self, _: Name<'_>) -> Result<Captured, Self::Error> {
+                    unreachable!("a file no inspection located is never captured")
+                }
+                fn failure(&self, _: Name<'_>, _: &Self::Error) -> Option<resolver::Failure> {
+                    None
+                }
+                fn rebase(
+                    &mut self,
+                    _: &Located,
+                    _: &Located,
+                    _: &str,
+                ) -> Result<String, Self::Error> {
+                    unreachable!("a project file is never rebased")
                 }
             }
             let mut port = RefusingPort { reads: 0 };
@@ -385,15 +435,33 @@ mod project {
             struct MissingPort {
                 trace: Vec<(Kind, String, String)>,
             }
-            impl ProjectCapturePort for MissingPort {
+            impl Resolver for MissingPort {
                 type Error = ResourceError;
-                fn capture(&mut self, request: Request<'_>) -> Result<Reply, Self::Error> {
-                    self.trace.push((
-                        request.kind,
-                        request.declaring_source.into(),
-                        request.written.into(),
-                    ));
+                fn inspect(&mut self, name: Name<'_>) -> Result<Located, Self::Error> {
+                    let Name::Written {
+                        file: File::Project(kind),
+                        declaring,
+                        written,
+                    } = name
+                    else {
+                        panic!("unexpected request {name:?}")
+                    };
+                    self.trace.push((kind, declaring.into(), written.into()));
                     Err(ResourceError::Missing)
+                }
+                fn capture(&mut self, _: Name<'_>) -> Result<Captured, Self::Error> {
+                    unreachable!("a file no inspection located is never captured")
+                }
+                fn failure(&self, _: Name<'_>, _: &Self::Error) -> Option<resolver::Failure> {
+                    None
+                }
+                fn rebase(
+                    &mut self,
+                    _: &Located,
+                    _: &Located,
+                    _: &str,
+                ) -> Result<String, Self::Error> {
+                    unreachable!("a project file is never rebased")
                 }
             }
             let mut port = MissingPort { trace: vec![] };
@@ -1061,48 +1129,85 @@ mod project {
         use yamaa_adapters::{
             project_lock::{Finding, Reason},
             project_lock_diagnostics::{issues, Error},
-            project_source::{self, CapturedEnvironment, Kind, ProjectCapturePort, Reply, Request},
+            project_source::{self, CapturedEnvironment, Kind},
             specification_source::Source,
         };
-        use yamaa_core::{project_environment::LockKind, project_function::Language};
+        use yamaa_core::project_function::Language;
+        use yamaa_core::resolver::{self, Captured, File, Located, Name, Resolver};
 
         struct Capture {
             environments: usize,
             locks: usize,
             lock: bool,
+            /// The bytes of the file last located.
+            held: Vec<u8>,
         }
-        impl ProjectCapturePort for Capture {
-            type Error = std::convert::Infallible;
-            fn capture(&mut self, request: Request<'_>) -> Result<Reply, Self::Error> {
-                match request.kind {
+        impl Capture {
+            /// The held source the double serves for the file a project names.
+            fn answer(
+                &mut self,
+                kind: Kind,
+                declaring: &str,
+                written: &str,
+            ) -> Result<Source, std::convert::Infallible> {
+                match kind {
                     Kind::Environment => {
-                        assert_eq!(request.declaring_source, "study/project.yaml");
-                        assert_eq!(request.written, "environment.yaml");
+                        assert_eq!(declaring, "study/project.yaml");
+                        assert_eq!(written, "environment.yaml");
                         self.environments += 1;
-                        Ok(Reply::Document(Source {
+                        Ok(Source {
                             identity: "study/environment.yaml".into(),
                             bytes: if self.lock {
                                 b"schema_version: '1.0'\nlock: ../uv.lock\n".to_vec()
                             } else {
                                 b"schema_version: '1.0'\n".to_vec()
                             },
-                        }))
+                        })
                     }
                     Kind::Lock => {
                         // The environment file writes the lock path; it resolves there.
-                        assert_eq!(request.declaring_source, "study/environment.yaml");
-                        assert_eq!(request.written, "../uv.lock");
+                        assert_eq!(declaring, "study/environment.yaml");
+                        assert_eq!(written, "../uv.lock");
                         self.locks += 1;
-                        Ok(Reply::Lock {
-                            source: Source {
-                                identity: "held/uv.lock".into(),
-                                bytes: b"version = 1\n".to_vec(),
-                            },
-                            kind: LockKind::Uv,
+                        Ok(Source {
+                            identity: "held/uv.lock".into(),
+                            bytes: crate::support::ports::UV_LOCK.as_bytes().to_vec(),
                         })
                     }
                     kind => panic!("unexpected {kind:?} capture"),
                 }
+            }
+        }
+        /// A file is served when it is located; its capture reads the bytes served.
+        impl Resolver for Capture {
+            type Error = std::convert::Infallible;
+            fn inspect(&mut self, name: Name<'_>) -> Result<Located, Self::Error> {
+                let Name::Written {
+                    file: File::Project(kind),
+                    declaring,
+                    written,
+                } = name
+                else {
+                    panic!("unexpected request {name:?}")
+                };
+                let source = self.answer(kind, declaring, written)?;
+                self.held = source.bytes;
+                Ok(Located {
+                    display_path: source.identity.clone(),
+                    identity: source.identity,
+                })
+            }
+            fn capture(&mut self, _: Name<'_>) -> Result<Captured, Self::Error> {
+                Ok(Captured::resource(
+                    std::mem::take(&mut self.held).into(),
+                    true,
+                ))
+            }
+            fn failure(&self, _: Name<'_>, _: &Self::Error) -> Option<resolver::Failure> {
+                None
+            }
+            fn rebase(&mut self, _: &Located, _: &Located, _: &str) -> Result<String, Self::Error> {
+                panic!("a project file is never rebased")
             }
         }
         fn prepare(project: &str, lock: bool) -> (CapturedEnvironment, Capture) {
@@ -1110,6 +1215,7 @@ mod project {
                 environments: 0,
                 locks: 0,
                 lock,
+                held: vec![],
             };
             let source = Source {
                 identity: "study/project.yaml".into(),

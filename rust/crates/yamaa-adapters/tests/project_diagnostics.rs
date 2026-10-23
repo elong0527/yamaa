@@ -7,11 +7,10 @@ mod project {
         use std::sync::Arc;
         use yamaa_adapters::{
             shipped_schema,
-            specification_source::{
-                link_metadata, InheritancePort, LinkedSpecification, PreparedDocument, Source,
-            },
+            specification_source::{link_metadata, LinkedSpecification, PreparedDocument, Source},
         };
-        use yamaa_core::inheritance::{Source as FileIdentity, SourceError};
+        use yamaa_core::inheritance::Source as FileIdentity;
+        use yamaa_core::resolver::{Captured, Failure, Name, Resolver};
         use yamaa_core::{
             producer_contract::Links, specification::PrepareError, value::ColumnType,
         };
@@ -93,13 +92,15 @@ mod project {
             text: Vec<u8>,
             calls: Vec<String>,
         }
-        impl InheritancePort for Parent {
+        impl Resolver for Parent {
             type Error = ();
-            fn canonicalize(
-                &mut self,
-                declaring: &str,
-                written: &str,
-            ) -> Result<FileIdentity, SourceError<()>> {
+            fn inspect(&mut self, name: Name<'_>) -> Result<FileIdentity, ()> {
+                let Name::Written {
+                    declaring, written, ..
+                } = name
+                else {
+                    panic!("unexpected request {name:?}")
+                };
                 self.calls
                     .push(format!("canonicalize:{declaring}:{written}"));
                 assert_eq!(written, "parent.yaml");
@@ -113,9 +114,15 @@ mod project {
                     display_path: "parent.yaml".into(),
                 })
             }
-            fn capture(&mut self, source: &FileIdentity) -> Result<Vec<u8>, SourceError<()>> {
+            fn capture(&mut self, name: Name<'_>) -> Result<Captured, ()> {
+                let Name::Located { source, .. } = name else {
+                    panic!("unexpected request {name:?}")
+                };
                 self.calls.push(format!("capture:{}", source.identity));
-                Ok(self.text.clone())
+                Ok(Captured::resource(self.text.clone().into(), true))
+            }
+            fn failure(&self, _: Name<'_>, _: &()) -> Option<Failure> {
+                None
             }
             fn rebase(
                 &mut self,
@@ -775,13 +782,12 @@ mod project {
         use std::rc::Rc;
         use yamaa_adapters::{
             project_environment_diagnostics::{admission, Error as ProjectionError},
-            project_source::{
-                self, CaptureFailure, Failure, Kind, Origin, ProjectCapturePort, Reply, Request,
-            },
+            project_source::{self, CaptureFailure, Failure, Kind, Origin},
             specification_source::Source,
         };
         use yamaa_core::json::Value;
-        use yamaa_core::{project_environment::LockKind, project_function::Language};
+        use yamaa_core::project_function::Language;
+        use yamaa_core::resolver::{self, Captured, File, Located, Name, Resolver};
         /// The caller-supplied project file and the environment file it links.
         const PROJECT: &str = "study/project.yaml";
         const ENVIRONMENT: &str = "study/environment.yaml";
@@ -808,6 +814,8 @@ mod project {
             reads: usize,
             wide: bool,
             shape: bool,
+            /// The bytes of the file last located.
+            held: Vec<u8>,
         }
         fn port(environment: &str) -> Port {
             Port {
@@ -817,32 +825,70 @@ mod project {
                 reads: 0,
                 wide: false,
                 shape: false,
+                held: vec![],
             }
         }
-        impl ProjectCapturePort for Port {
-            type Error = Rc<()>;
-            fn capture(&mut self, request: Request<'_>) -> Result<Reply, Rc<()>> {
+        impl Port {
+            /// The held source the double serves for the file a project names.
+            fn answer(
+                &mut self,
+                kind: Kind,
+                declaring: &str,
+                written: &str,
+            ) -> Result<Source, Rc<()>> {
                 self.reads += 1;
                 // Project paths resolve from the project file; the lock and
                 // function paths an environment file writes resolve from it.
-                let declaring = match request.kind {
+                let from = match kind {
                     Kind::Environment | Kind::Codelist => PROJECT,
                     Kind::Lock | Kind::Function => ENVIRONMENT,
                 };
-                assert_eq!(request.declaring_source, declaring, "{:?}", request.kind);
-                if request.written == "bad.yaml" {
+                assert_eq!(declaring, from, "{kind:?}");
+                if written == "bad.yaml" {
                     return Err(Rc::clone(&self.payload));
                 }
-                Ok(match request.kind {
-            Kind::Environment => Reply::Document(source(ENVIRONMENT, &self.environment)),
-            Kind::Lock => Reply::Lock { source:source("held/uv.lock","version = 1\n"),kind:LockKind::Uv },
-            Kind::Function if self.shape => Reply::Document(source("held/function.yaml", "function: project.constant\ndescription: Constant\nparams: []\nreturns: int\ntests: []\ncontract_version: '1'\nbinding: {call: project.constant}\n")),
-            Kind::Codelist if self.shape => Reply::Document(source("held/ct.yaml", "codelists: [{id: SEX, name: Sex, items: [{value: F}]}]\nlegacy: true\n")),
-            Kind::Function if self.wide => Reply::Document(source("held/function.yaml", "function: project.constant\ndescription: Constant\nparams: []\nreturns: int\ntests: [{id: ordinary, covers: [normal, boundary], args: {}, result: 123456789012345678901234567890}]\n")),
-            Kind::Codelist if self.wide => Reply::Document(source("held/ct.yaml", "codelists: [{id: SEX, name: Sex, data_type: integer, items: [{value: 123456789012345678901234567890}]}]\n")),
-            Kind::Function => Reply::Document(source(if self.same_identity { ENVIRONMENT } else { "held/function.yaml" }, "function: project.constant\ndescription: Constant\nparams: []\nreturns: int\ntests: [{id: ordinary, covers: [normal, boundary], args: {}, result: true}]\n")),
-            Kind::Codelist => Reply::Document(source("held/ct.yaml","codelists: [{id: SEX, name: Sex, items: [{value: true}]}]\n")),
+                Ok(match kind {
+            Kind::Environment => source(ENVIRONMENT, &self.environment),
+            Kind::Lock => source("held/uv.lock", crate::support::ports::UV_LOCK),
+            Kind::Function if self.shape => source("held/function.yaml", "function: project.constant\ndescription: Constant\nparams: []\nreturns: int\ntests: []\ncontract_version: '1'\nbinding: {call: project.constant}\n"),
+            Kind::Codelist if self.shape => source("held/ct.yaml", "codelists: [{id: SEX, name: Sex, items: [{value: F}]}]\nlegacy: true\n"),
+            Kind::Function if self.wide => source("held/function.yaml", "function: project.constant\ndescription: Constant\nparams: []\nreturns: int\ntests: [{id: ordinary, covers: [normal, boundary], args: {}, result: 123456789012345678901234567890}]\n"),
+            Kind::Codelist if self.wide => source("held/ct.yaml", "codelists: [{id: SEX, name: Sex, data_type: integer, items: [{value: 123456789012345678901234567890}]}]\n"),
+            Kind::Function => source(if self.same_identity { ENVIRONMENT } else { "held/function.yaml" }, "function: project.constant\ndescription: Constant\nparams: []\nreturns: int\ntests: [{id: ordinary, covers: [normal, boundary], args: {}, result: true}]\n"),
+            Kind::Codelist => source("held/ct.yaml","codelists: [{id: SEX, name: Sex, items: [{value: true}]}]\n"),
         })
+            }
+        }
+        /// A file is served when it is located; its capture reads the bytes served.
+        impl Resolver for Port {
+            type Error = Rc<()>;
+            fn inspect(&mut self, name: Name<'_>) -> Result<Located, Self::Error> {
+                let Name::Written {
+                    file: File::Project(kind),
+                    declaring,
+                    written,
+                } = name
+                else {
+                    panic!("unexpected request {name:?}")
+                };
+                let source = self.answer(kind, declaring, written)?;
+                self.held = source.bytes;
+                Ok(Located {
+                    display_path: source.identity.clone(),
+                    identity: source.identity,
+                })
+            }
+            fn capture(&mut self, _: Name<'_>) -> Result<Captured, Self::Error> {
+                Ok(Captured::resource(
+                    std::mem::take(&mut self.held).into(),
+                    true,
+                ))
+            }
+            fn failure(&self, _: Name<'_>, _: &Self::Error) -> Option<resolver::Failure> {
+                None
+            }
+            fn rebase(&mut self, _: &Located, _: &Located, _: &str) -> Result<String, Self::Error> {
+                panic!("a project file is never rebased")
             }
         }
         fn rejected(

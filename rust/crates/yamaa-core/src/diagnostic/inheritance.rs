@@ -18,7 +18,7 @@ pub enum InheritanceFinding<'a> {
     /// The layer `source` lies on the network share `parent_root` and writes
     /// `path` relative to itself, while the entry lies below `entry_root`: no
     /// written path names that location from the entry (LAYER-10, FILE-4).
-    /// The resource port names both roots; only it knows how an identity is
+    /// The resolver port names both roots; only it knows how an identity is
     /// rooted.
     ParentOnAnotherShare {
         source: &'a str,

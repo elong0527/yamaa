@@ -322,29 +322,37 @@ mod declaration {
         }
 
         struct ParentSource(Vec<u8>);
-        impl yamaa_adapters::specification_source::InheritancePort for ParentSource {
+        impl yamaa_core::resolver::Resolver for ParentSource {
             type Error = ();
-            fn canonicalize(
+            fn inspect(
                 &mut self,
-                _: &str,
-                _: &str,
-            ) -> Result<yamaa_core::inheritance::Source, yamaa_core::inheritance::SourceError<()>>
-            {
-                Ok(yamaa_core::inheritance::Source {
+                _: yamaa_core::resolver::Name<'_>,
+            ) -> Result<yamaa_core::resolver::Located, ()> {
+                Ok(yamaa_core::resolver::Located {
                     identity: "parent.yaml".into(),
                     display_path: "parent.yaml".into(),
                 })
             }
             fn capture(
                 &mut self,
-                _: &yamaa_core::inheritance::Source,
-            ) -> Result<Vec<u8>, yamaa_core::inheritance::SourceError<()>> {
-                Ok(self.0.clone())
+                _: yamaa_core::resolver::Name<'_>,
+            ) -> Result<yamaa_core::resolver::Captured, ()> {
+                Ok(yamaa_core::resolver::Captured::resource(
+                    self.0.clone().into(),
+                    true,
+                ))
+            }
+            fn failure(
+                &self,
+                _: yamaa_core::resolver::Name<'_>,
+                _: &(),
+            ) -> Option<yamaa_core::resolver::Failure> {
+                None
             }
             fn rebase(
                 &mut self,
-                _: &yamaa_core::inheritance::Source,
-                _: &yamaa_core::inheritance::Source,
+                _: &yamaa_core::resolver::Located,
+                _: &yamaa_core::resolver::Located,
                 written: &str,
             ) -> Result<String, ()> {
                 Ok(written.into())

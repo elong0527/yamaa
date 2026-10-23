@@ -12,14 +12,16 @@ use std::path::Path;
 use yamaa_adapters::document::{
     self, Closures, Decoded, PreparedSpecification, SpecificationError,
 };
-use yamaa_adapters::specification_source::{Error, InheritancePort, Source};
+use yamaa_adapters::specification_source::{Error, Source};
 use yamaa_core::ast::{
     Comparator, ExprId, ExprKind, JoinKey, KeyDecl, Literal, ModelKind, Profile, Spec, Surface,
 };
 use yamaa_core::diagnostic::ConditionCode;
 use yamaa_core::expression::Context;
-use yamaa_core::inheritance::{Source as GraphSource, SourceError};
+use yamaa_core::inheritance::Source as GraphSource;
 use yamaa_core::language::{FileType, LANGUAGE_VERSION};
+use yamaa_core::resolver::{Captured, Failure, Name, Resolver};
+use yamaa_core::resource::ResourceFailure;
 use yamaa_core::schema::SchemaContext as C;
 
 /// A study directory of written files, removed when dropped.
@@ -40,17 +42,18 @@ impl Study {
 
 /// Parents resolve beside their declaring file; paths stay as written.
 struct Files;
-impl InheritancePort for Files {
+impl Resolver for Files {
     type Error = std::io::Error;
-    fn canonicalize(
-        &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<GraphSource, SourceError<Self::Error>> {
+    fn inspect(&mut self, name: Name<'_>) -> Result<GraphSource, Self::Error> {
+        let Name::Written {
+            declaring, written, ..
+        } = name
+        else {
+            panic!("unexpected request {name:?}")
+        };
         let candidate = Path::new(declaring).parent().unwrap().join(written);
         let identity = candidate
-            .canonicalize()
-            .map_err(|_| SourceError::Unavailable)?
+            .canonicalize()?
             .to_str()
             .unwrap()
             .replace('\\', "/");
@@ -59,8 +62,16 @@ impl InheritancePort for Files {
             identity,
         })
     }
-    fn capture(&mut self, source: &GraphSource) -> Result<Vec<u8>, SourceError<Self::Error>> {
-        fs::read(&source.identity).map_err(SourceError::Raised)
+    fn capture(&mut self, name: Name<'_>) -> Result<Captured, Self::Error> {
+        let Name::Located { source, .. } = name else {
+            panic!("unexpected request {name:?}")
+        };
+        Ok(Captured::resource(fs::read(&source.identity)?.into(), true))
+    }
+    /// A file that cannot be located is missing; a read error stays the
+    /// host's own.
+    fn failure(&self, name: Name<'_>, _: &Self::Error) -> Option<Failure> {
+        matches!(name, Name::Written { .. }).then_some(Failure::Resource(ResourceFailure::Missing))
     }
     fn rebase(
         &mut self,

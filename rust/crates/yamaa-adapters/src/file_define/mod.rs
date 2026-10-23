@@ -599,7 +599,6 @@ fn issues(failure: &Failure) -> Vec<Diagnostic> {
                 E::InvalidRoot => R::InvalidRoot,
                 E::InvalidBase => R::InvalidBase,
                 E::InvalidPath | E::WrittenForm(_) => R::InvalidPath,
-                E::InvalidLock => R::InvalidLock,
                 E::OutsideRoots => R::OutsideRoots,
                 E::Symlink => R::Symlink,
                 E::Changed => R::Changed,

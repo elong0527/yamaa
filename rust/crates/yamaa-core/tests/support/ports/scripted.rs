@@ -3,16 +3,20 @@ use super::*;
 use function_invocation::Argument;
 use function_invocation::FunctionPort;
 use function_invocation::HostError;
-use run::{SourceDecoder, SpecificationSourcePort};
+use run::SourceDecoder;
 use std::{collections::VecDeque, sync::Arc};
 use yamaa_core::function_signature::InvocationPlan;
 use yamaa_core::function_signature::ProjectInvocationPlan;
+use yamaa_core::project_environment::LockKind;
+use yamaa_core::resolver::{Captured, Failure, File, Located, Name, Resolver};
 
+/// One file a project names: its request, and the held source the resolver
+/// locates and captures for it, or the error it fails with when located.
 pub struct MetadataCaptureStep<E> {
     pub kind: metadata::Kind,
     pub declaring_source: String,
     pub written: String,
-    pub outcome: Result<metadata::Reply, E>,
+    pub outcome: Result<metadata::Source, E>,
 }
 pub struct ScriptedMetadata<E> {
     pub steps: VecDeque<MetadataCaptureStep<E>>,
@@ -28,25 +32,53 @@ impl<E> ScriptedMetadata<E> {
         }
     }
 }
-impl<E> metadata::ProjectCapturePort for ScriptedMetadata<E> {
+/// Each file is one step, logged once when it is located: a failed step
+/// fails the inspection, and a located one is captured next.
+impl<E> Resolver for ScriptedMetadata<E> {
     type Error = E;
+    fn inspect(&mut self, name: Name<'_>) -> Result<Located, E> {
+        let Name::Written {
+            file: File::Project(kind),
+            declaring,
+            written,
+        } = name
+        else {
+            panic!("unexpected metadata request {name:?}")
+        };
+        self.log.record(Event::MetadataCapture {
+            kind,
+            declaring_source: declaring.into(),
+            written: written.into(),
+        });
+        let step = self.steps.front().expect("unexpected metadata capture");
+        assert_eq!(step.kind, kind, "metadata kind");
+        assert_eq!(step.declaring_source, declaring, "declaring source");
+        assert_eq!(step.written, written, "authored path");
+        match &step.outcome {
+            Ok(source) => Ok(Located {
+                identity: source.identity.clone(),
+                display_path: source.identity.clone(),
+            }),
+            Err(_) => Err(self.steps.pop_front().unwrap().outcome.err().unwrap()),
+        }
+    }
+    fn capture(&mut self, name: Name<'_>) -> Result<Captured, E> {
+        let step = self.steps.pop_front().expect("unexpected metadata capture");
+        assert!(
+            matches!(name, Name::Written { written, .. } if written == step.written),
+            "a capture follows its own inspection"
+        );
+        let source = step.outcome.ok().expect("a located file");
+        Ok(Captured::resource(Arc::from(source.bytes), true))
+    }
+    fn failure(&self, _: Name<'_>, _: &E) -> Option<Failure> {
+        None
+    }
     fn is_interrupt(&self, error: &E) -> bool {
         (self.interrupt_if)(error)
     }
-    fn capture(&mut self, request: metadata::Request<'_>) -> Result<metadata::Reply, E> {
-        self.log.record(Event::MetadataCapture {
-            kind: request.kind,
-            declaring_source: request.declaring_source.into(),
-            written: request.written.into(),
-        });
-        let step = self.steps.pop_front().expect("unexpected metadata capture");
-        assert_eq!(step.kind, request.kind, "metadata kind");
-        assert_eq!(
-            step.declaring_source, request.declaring_source,
-            "declaring source"
-        );
-        assert_eq!(step.written, request.written, "authored path");
-        step.outcome
+    fn rebase(&mut self, _: &Located, _: &Located, _: &str) -> Result<String, E> {
+        panic!("a project file is never rebased")
     }
 }
 
@@ -98,6 +130,15 @@ impl<E> metadata::ProjectDecodePort for ScriptedMetadataDecoder<E> {
     fn source(document: &MetadataDocument) -> &metadata::Source {
         &document.source
     }
+    /// The scripted lock syntax: held bytes `uv` are a uv lock and `renv` an
+    /// renv lock; any other bytes are no lock.
+    fn lock(&mut self, source: &metadata::Source) -> Option<LockKind> {
+        match source.bytes.as_slice() {
+            b"uv" => Some(LockKind::Uv),
+            b"renv" => Some(LockKind::Renv),
+            _ => None,
+        }
+    }
 }
 
 pub struct InspectionStep<E> {
@@ -106,14 +147,14 @@ pub struct InspectionStep<E> {
 }
 pub struct CaptureStep<E> {
     pub source: SourceDeclaration,
-    pub new_snapshots: usize,
+    /// Whether the capture takes a new snapshot.
+    pub created: bool,
     pub outcome: Result<Arc<[u8]>, E>,
 }
 pub struct ScriptedSource<E> {
     pub inspections: VecDeque<InspectionStep<E>>,
     pub captures: VecDeque<CaptureStep<E>>,
     log: EventLog,
-    reads: usize,
 }
 impl<E> ScriptedSource<E> {
     pub fn new(log: EventLog) -> Self {
@@ -121,33 +162,30 @@ impl<E> ScriptedSource<E> {
             inspections: VecDeque::new(),
             captures: VecDeque::new(),
             log,
-            reads: 0,
         }
     }
 }
-impl<E> SpecificationSourcePort for ScriptedSource<E> {
+impl<E> Resolver for ScriptedSource<E> {
     type Error = E;
-    fn resource_failure(&self, _error: &E) -> Option<yamaa_core::resource::ResourceFailure> {
-        None
-    }
-    fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), E> {
+    fn inspect(&mut self, name: Name<'_>) -> Result<Located, E> {
+        let Name::Input(source) = name else {
+            panic!("unexpected source request {name:?}")
+        };
         self.log.record(Event::Inspect(source.clone()));
         let step = self
             .inspections
             .pop_front()
             .expect("unexpected source inspection");
         assert_eq!(&step.source, source, "inspection declaration");
-        step.outcome
+        step.outcome.map(|()| Located {
+            identity: source.path.clone(),
+            display_path: source.path.clone(),
+        })
     }
-    fn capture_reads(&self) -> usize {
-        self.reads
-    }
-    fn capture(
-        &mut self,
-        source: &SourceDeclaration,
-        origin: &mut Option<run::SourceOrigin>,
-    ) -> Result<Arc<[u8]>, E> {
-        *origin = Some(run::SourceOrigin::Resource);
+    fn capture(&mut self, name: Name<'_>) -> Result<Captured, E> {
+        let Name::Input(source) = name else {
+            panic!("unexpected source request {name:?}")
+        };
         self.log.record(Event::Capture {
             source: source.clone(),
         });
@@ -156,11 +194,14 @@ impl<E> SpecificationSourcePort for ScriptedSource<E> {
             .pop_front()
             .expect("unexpected source capture");
         assert_eq!(&step.source, source, "capture declaration");
-        self.reads = self
-            .reads
-            .checked_add(step.new_snapshots)
-            .expect("fixture snapshot counter");
         step.outcome
+            .map(|bytes| Captured::resource(bytes, step.created))
+    }
+    fn failure(&self, _: Name<'_>, _: &E) -> Option<Failure> {
+        None
+    }
+    fn rebase(&mut self, _: &Located, _: &Located, _: &str) -> Result<String, E> {
+        panic!("an input is never rebased")
     }
 }
 

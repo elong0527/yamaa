@@ -5,7 +5,8 @@ use crate::{
     domain::{self, CheckedSpecification},
     host_functions::{HostFunctions, Lock},
     project_activation::{self, Bindings, Failure},
-    specification_run::{CapturedAttempt, PortError, SourceDecoder, SpecificationSourcePort},
+    resolver::Resolver,
+    specification_run::{CapturedAttempt, PortError, SourceDecoder},
 };
 use crate::{
     project_environment::ExecutionEnvironment,
@@ -44,7 +45,7 @@ impl CheckedProject<'_> {
     /// `lock` holds the bytes of the declared lock, captured with the project,
     /// and is empty when it declares none.
     #[allow(clippy::too_many_arguments)]
-    pub fn build_into<A: HostFunctions, P: SpecificationSourcePort, D: SourceDecoder>(
+    pub fn build_into<A: HostFunctions, P: Resolver, D: SourceDecoder>(
         &self,
         functions: &mut A,
         lock: &[u8],
@@ -141,7 +142,7 @@ impl CheckedOwnedProject {
     }
     /// [`CheckedProject::build_into`] over the owned environment.
     #[allow(clippy::too_many_arguments)]
-    pub fn build_into<A: HostFunctions, P: SpecificationSourcePort, D: SourceDecoder>(
+    pub fn build_into<A: HostFunctions, P: Resolver, D: SourceDecoder>(
         &self,
         functions: &mut A,
         lock: &[u8],
@@ -164,7 +165,7 @@ impl CheckedOwnedProject {
         )
     }
 }
-fn build<A: HostFunctions, P: SpecificationSourcePort, D: SourceDecoder>(
+fn build<A: HostFunctions, P: Resolver, D: SourceDecoder>(
     (checked, environment): (&CheckedSpecification, &ExecutionEnvironment),
     (activation, lock_bytes): (&mut A, &[u8]),
     source: &mut P,

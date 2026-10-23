@@ -1,7 +1,7 @@
 //! Project only retained static admission, restoring each captured source origin.
 //! Capture failures and opaque host payloads remain in the rejected environment.
 use crate::{
-    project_source::{CaptureFailure, Origin, RejectedEnvironment, SourceFailure},
+    project_source::{CaptureFailure, Origin, RejectedEnvironment},
     specification_source::{
         CapturedDocument, CapturedFindings, CapturedSchema, Error as SourceError, RefusedHeader,
     },
@@ -269,9 +269,13 @@ fn read_issue(
         E::OutsideRoots => "outside_roots",
         E::Symlink => "symbolic_link",
         E::Changed => "content_changed",
-        E::InvalidLock => "invalid_packaging_lock",
         E::Limit(bound) => return Err(resource_limit(*bound, declaration)),
     };
+    Ok(environment_issue(cause, entry, written, declaration))
+}
+/// A 0.5 project's file that cannot be read for `cause`: the project
+/// environment is invalid at the field that names it.
+fn environment_issue(cause: &str, entry: &str, written: &str, declaration: &str) -> Diagnostic {
     let mut diagnostic = Diagnostic {
         code: yamaa_core::diagnostic::ConditionCode::ProjectEnvironmentInvalid,
         spec_paths: vec![declaration.into()],
@@ -287,7 +291,7 @@ fn read_issue(
     ] {
         diagnostic.context.insert(key.into(), value.into());
     }
-    Ok(diagnostic)
+    diagnostic
 }
 
 fn decode_issues(
@@ -354,7 +358,7 @@ pub(crate) fn capture_sources(
             CaptureFailure::Port(error) | CaptureFailure::Interrupted(error)
                 if versioned(rejected) =>
             {
-                rows.push(declared_read_issue(rejected, source, error, &declaration)?);
+                rows.push(declared_read_issue(&source.written, error, &declaration)?);
             }
             CaptureFailure::Port(error) | CaptureFailure::Interrupted(error) => {
                 rows.push(read_issue(error, entry, &source.written, &declaration)?);
@@ -366,7 +370,21 @@ pub(crate) fn capture_sources(
                 rows.extend(decode_issues(error, entry, &source.written, &declaration)?)
             }
             CaptureFailure::Limit(bound) => return Err(resource_limit(*bound, &declaration)),
-            CaptureFailure::Protocol => return Err(Error::Projection),
+            // A lock that is no packaging lock fails as the project's function
+            // files do in 1.0 (FUNC-3), and as an invalid environment in 0.5.
+            CaptureFailure::Lock if versioned(rejected) => {
+                rows.push(core::invalid_packaging_lock(
+                    rejected.host.ok_or(Error::InvalidOrigin)?,
+                    entry,
+                    &source.written,
+                ));
+            }
+            CaptureFailure::Lock => rows.push(environment_issue(
+                "invalid_packaging_lock",
+                entry,
+                &source.written,
+                &declaration,
+            )),
             CaptureFailure::Scalar { .. } => unreachable!("handled scalar finding"),
         }
     }
@@ -377,26 +395,17 @@ pub(crate) fn capture_sources(
 /// FILE-11's conditions at that field with the path as written, as a schema
 /// link or a changed held file reports it; a bound keeps its resource refusal,
 /// and any other host failure refuses the whole preparation with the opaque
-/// resource refusal (FUNC-2). A lock that is no packaging lock fails as the
-/// project's function files do (FUNC-3).
+/// resource refusal (FUNC-2).
 fn declared_read_issue(
-    rejected: &RejectedEnvironment<crate::file_resources::Error>,
-    source: &SourceFailure<crate::file_resources::Error>,
+    written: &str,
     error: &crate::file_resources::Error,
     declaration: &str,
 ) -> Result<Diagnostic, Error> {
     use crate::file_resources::Error as E;
     match error {
         E::Limit(bound) => Err(resource_limit(*bound, declaration)),
-        E::InvalidLock if source.origin == Origin::Lock => Ok(core::invalid_packaging_lock(
-            rejected.host.ok_or(Error::InvalidOrigin)?,
-            &rejected.root.source().identity,
-            &source.written,
-        )),
-        // Only a lock is classified as one.
-        E::InvalidLock => Err(Error::Projection),
         error => match crate::file_resources::resource_failure(error) {
-            Some(failure) => Ok(failure.field_diagnostic(declaration, &source.written)),
+            Some(failure) => Ok(failure.field_diagnostic(declaration, written)),
             None => Err(Error::Resource(crate::file_application::resource_fault(
                 error,
             ))),
@@ -475,14 +484,36 @@ mod tests {
     use crate::{file_resources, project_source, specification_source::Source};
     use yamaa_core::{limits::Limits, project_function::Language};
 
+    /// A resolver that finds no file the project names.
     struct Missing;
-    impl project_source::ProjectCapturePort for Missing {
+    impl yamaa_core::resolver::Resolver for Missing {
         type Error = file_resources::Error;
+        fn inspect(
+            &mut self,
+            _: yamaa_core::resolver::Name<'_>,
+        ) -> Result<yamaa_core::resolver::Located, Self::Error> {
+            Err(file_resources::Error::Missing)
+        }
         fn capture(
             &mut self,
-            _: project_source::Request<'_>,
-        ) -> Result<project_source::Reply, Self::Error> {
-            Err(file_resources::Error::Missing)
+            _: yamaa_core::resolver::Name<'_>,
+        ) -> Result<yamaa_core::resolver::Captured, Self::Error> {
+            unreachable!("a file no inspection located is never captured")
+        }
+        fn failure(
+            &self,
+            _: yamaa_core::resolver::Name<'_>,
+            _: &Self::Error,
+        ) -> Option<yamaa_core::resolver::Failure> {
+            None
+        }
+        fn rebase(
+            &mut self,
+            _: &yamaa_core::resolver::Located,
+            _: &yamaa_core::resolver::Located,
+            _: &str,
+        ) -> Result<String, Self::Error> {
+            unreachable!("a project file is never rebased")
         }
     }
 

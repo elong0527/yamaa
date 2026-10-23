@@ -13,30 +13,22 @@ pub fn without_environment(
     crate::project_environment::ExecutionEnvironment::without_project(host)
 }
 
-/// Native quota and snapshot observations; these methods neither decode nor
-/// activate code, read study data, or publish artifacts.
-pub trait MetadataAdmissionPort {
-    type Error;
-    fn verify_metadata(&mut self) -> Result<(), (String, Self::Error)>;
-}
-
-/// Every build YAML resource uses the same native reader and original error
+/// Every build YAML resource uses the same resolver and original error
 /// carrier. Existing document and environment applications own parsing and
-/// dependency traversal; the reader owns physical capture and alias equality.
+/// dependency traversal; the resolver owns physical capture and alias equality.
 ///
-/// Root metadata follows the same resolve/capture/copy order as original
-/// file preparation. Relative dependency requests retain their declaring file.
-fn capture_root<R>(
-    reader: &mut R,
+/// Root metadata follows the same resolve/capture order as original file
+/// preparation. Relative dependency requests retain their declaring file.
+fn capture_root<R: crate::resolver::Resolver>(
+    resolver: &mut R,
     written: &str,
-) -> Result<crate::project_preparation::Source, <R as MetadataAdmissionPort>::Error>
-where
-    R: MetadataAdmissionPort
-        + crate::file_preparation::NativePort<Error = <R as MetadataAdmissionPort>::Error>
-        + crate::project_preparation::ProjectCapturePort<Error = <R as MetadataAdmissionPort>::Error>,
-{
-    let identity = crate::file_preparation::NativePort::resolve_entry(reader, None, written)?;
-    let bytes = crate::file_preparation::NativePort::capture_entry(reader, None, written)?;
+) -> Result<crate::project_preparation::Source, R::Error> {
+    let entry = crate::resolver::Name::Entry {
+        declaring: None,
+        written,
+    };
+    let identity = resolver.inspect(entry)?.identity;
+    let bytes = resolver.capture(entry)?.bytes.to_vec();
     Ok(crate::project_preparation::Source { identity, bytes })
 }
 
@@ -55,44 +47,27 @@ pub(crate) type EnvironmentPreparation<R, D> = Result<
         <D as crate::project_preparation::ProjectDecodePort>::Document,
     >,
     EnvironmentFailure<
-        <R as MetadataAdmissionPort>::Error,
+        <R as crate::resolver::Resolver>::Error,
         <D as crate::project_preparation::ProjectDecodePort>::Document,
         <D as crate::project_preparation::ProjectDecodePort>::Error,
     >,
 >;
 
-/// Compose the shared native reader and structural metadata codec with the
-/// existing environment application. No activation, study, output or publisher
-/// port is accepted at this boundary.
-pub fn prepare_environment<R, D: crate::project_preparation::ProjectDecodePort>(
-    reader: &mut R,
+/// Compose the resolver and structural metadata codec with the existing
+/// environment application. No activation, study, output or publisher port
+/// is accepted at this boundary.
+pub fn prepare_environment<
+    R: crate::resolver::Resolver,
+    D: crate::project_preparation::ProjectDecodePort,
+>(
+    resolver: &mut R,
     decoder: &mut D,
     written: &str,
     host: Option<crate::project_function::Language>,
-) -> EnvironmentPreparation<R, D>
-where
-    R: MetadataAdmissionPort
-        + crate::file_preparation::NativePort<Error = <R as MetadataAdmissionPort>::Error>
-        + crate::project_preparation::ProjectCapturePort<Error = <R as MetadataAdmissionPort>::Error>,
-{
-    let source = capture_root(reader, written).map_err(EnvironmentFailure::Resource)?;
-    crate::project_preparation::prepare(decoder, source, host, reader)
+) -> EnvironmentPreparation<R, D> {
+    let source = capture_root(resolver, written).map_err(EnvironmentFailure::Resource)?;
+    crate::project_preparation::prepare(decoder, source, host, resolver)
         .map_err(EnvironmentFailure::Preparation)
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum SelectionFailure<E> {
-    #[error("build snapshot: identity={identity:?}, error={error:?}")]
-    Snapshot { identity: String, error: E },
-}
-
-/// Complete admission and whole original-input inspection precede selection.
-/// Opaque refusal and changed-snapshot payloads retain their original identity.
-pub fn verify_entry<P: MetadataAdmissionPort>(
-    port: &mut P,
-) -> Result<(), SelectionFailure<P::Error>> {
-    port.verify_metadata()
-        .map_err(|(identity, error)| SelectionFailure::Snapshot { identity, error })
 }
 
 /// The Preparation half of a build: metadata capture, admission and

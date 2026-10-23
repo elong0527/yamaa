@@ -17,7 +17,8 @@ mod project {
             dataset::ExecutionError,
             domain,
             function_invocation::{Argument, FailureKind, FunctionPort, HostError},
-            specification_run::{CapturedAttempt, SourceDecoder, SpecificationSourcePort},
+            resolver::{Captured, Failure, Located, Name, Resolver},
+            specification_run::{CapturedAttempt, SourceDecoder},
         };
         use yamaa_core::{
             function_signature::{InvocationPlan, ProjectInvocationPlan},
@@ -65,36 +66,38 @@ mod project {
             reads: usize,
             requested: bool,
         }
-        impl SpecificationSourcePort for Port {
-            fn resource_failure(
-                &self,
-                _error: &Self::Error,
-            ) -> Option<yamaa_core::resource::ResourceFailure> {
-                None
-            }
-
+        impl Resolver for Port {
             type Error = Payload;
-            fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), Payload> {
+            fn inspect(&mut self, name: Name<'_>) -> Result<Located, Payload> {
+                let Name::Input(source) = name else {
+                    panic!("unexpected request {name:?}")
+                };
                 assert_eq!(source.path, "input.csv");
                 self.trace.borrow_mut().push("inspect");
-                Ok(())
+                Ok(Located {
+                    identity: source.path.clone(),
+                    display_path: source.path.clone(),
+                })
             }
-            fn capture_reads(&self) -> usize {
-                self.reads
-            }
-            fn capture(
-                &mut self,
-                source: &SourceDeclaration,
-                origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-            ) -> Result<Arc<[u8]>, Payload> {
+            fn capture(&mut self, name: Name<'_>) -> Result<Captured, Payload> {
+                let Name::Input(source) = name else {
+                    panic!("unexpected request {name:?}")
+                };
                 assert_eq!(source.path, "input.csv");
-                *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
                 self.trace.borrow_mut().push("capture");
-                if !self.requested {
+                // The first capture takes the snapshot; later ones reuse it.
+                let created = !self.requested;
+                if created {
                     self.reads += 1;
                     self.requested = true;
                 }
-                Ok(Arc::clone(&self.held))
+                Ok(Captured::resource(Arc::clone(&self.held), created))
+            }
+            fn failure(&self, _: Name<'_>, _: &Payload) -> Option<Failure> {
+                None
+            }
+            fn rebase(&mut self, _: &Located, _: &Located, _: &str) -> Result<String, Payload> {
+                panic!("an input is never rebased")
             }
         }
         struct Table {

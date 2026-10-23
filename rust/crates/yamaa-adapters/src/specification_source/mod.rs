@@ -8,7 +8,8 @@ use yamaa_core::schema::{
 };
 use yamaa_core::schema_capture::{self as capture, RootSelection};
 mod inheritance;
-pub use inheritance::{CapturedParent, InheritanceError, InheritancePort, SourceFailure};
+pub use inheritance::{CapturedParent, InheritanceError, SourceFailure};
+use yamaa_core::resolver::Resolver;
 
 /// The engine-owned identity and byte snapshot shared with metadata preparation.
 pub use yamaa_core::project_preparation::Source;
@@ -395,7 +396,7 @@ impl CapturedSchema {
     /// with the 1.0 closures the package ships whatever this closure is
     /// (SCHEMA-2, #3030 D76); every other entry is read by this closure under
     /// the rules at the `yamaa-v0.5.0` tag (D75).
-    pub fn prepare_document<P: InheritancePort>(
+    pub fn prepare_document<P: Resolver>(
         self: &Arc<Self>,
         source: Source,
         display_path: String,
@@ -601,7 +602,7 @@ impl Dictionaries {
 /// with the 1.0 closures the package ships, by an engine that reads
 /// [`yamaa_core::language::LANGUAGE_VERSION`] (#3030 D76): its layers are read
 /// and composed, and the dictionary files it names are read.
-pub(crate) fn prepare_versioned<P: InheritancePort>(
+pub(crate) fn prepare_versioned<P: Resolver>(
     source: Source,
     display_path: String,
     port: &mut P,
@@ -612,7 +613,7 @@ pub(crate) fn prepare_versioned<P: InheritancePort>(
 /// [`prepare_versioned`] for a producer that a copy entry copies from while
 /// the specifications and layers `resolving` names, entry first, are being
 /// resolved (SPEC-9).
-pub(crate) fn prepare_versioned_within<P: InheritancePort>(
+pub(crate) fn prepare_versioned_within<P: Resolver>(
     source: Source,
     display_path: String,
     port: &mut P,
@@ -824,7 +825,7 @@ impl PreparedDocument {
             _ => self.model(),
         }
     }
-    fn prepare_dictionaries<P: InheritancePort>(
+    fn prepare_dictionaries<P: Resolver>(
         mut self,
         port: &mut P,
     ) -> Result<Self, InheritanceError<P::Error>> {

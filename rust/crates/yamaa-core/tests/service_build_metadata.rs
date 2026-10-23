@@ -1,52 +1,6 @@
-//! Service contracts: build metadata, build ports, Define-XML service, domain
-//! entry and specification ODM.
+//! Service contracts: build ports, Define-XML service, domain entry and
+//! specification ODM.
 mod service {
-    mod build_metadata {
-        //! Independent original-entry and admission-order controls for the shared Build boundary.
-        use std::rc::Rc;
-        use yamaa_core::build::{self, MetadataAdmissionPort, SelectionFailure};
-
-        struct Original(Rc<usize>);
-        #[derive(Default)]
-        struct Port {
-            events: Vec<&'static str>,
-            changed: Option<Original>,
-        }
-        impl MetadataAdmissionPort for Port {
-            type Error = Original;
-
-            fn verify_metadata(&mut self) -> Result<(), (String, Original)> {
-                self.events.push("verify original snapshots");
-                self.changed
-                    .take()
-                    .map_or(Ok(()), |error| Err(("original/spec.yaml".into(), error)))
-            }
-        }
-
-        #[test]
-        fn admitted_entry_verifies_original_snapshots_once_without_study_authority() {
-            let mut port = Port::default();
-            assert!(build::verify_entry(&mut port).is_ok());
-            assert_eq!(port.events, ["verify original snapshots"]);
-        }
-
-        #[test]
-        fn snapshot_refusal_moves_the_original_error() {
-            let original = Rc::new(23);
-            let mut port = Port {
-                changed: Some(Original(Rc::clone(&original))),
-                ..Default::default()
-            };
-            match build::verify_entry(&mut port) {
-                Err(SelectionFailure::Snapshot { identity, error }) => {
-                    assert_eq!(identity, "original/spec.yaml");
-                    assert!(Rc::ptr_eq(&original, &error.0));
-                }
-                _ => panic!("retained changed snapshot"),
-            }
-            assert_eq!(port.events, ["verify original snapshots"]);
-        }
-    }
     mod build_ports {
         //! End-to-end shared request effects with the production metadata, activation
         //! and execution services and private native scripted ports.
@@ -57,7 +11,6 @@ mod service {
         use support::{call, specification, Tree};
         use yamaa_core::{
             application_observer::Scope,
-            build::{self, MetadataAdmissionPort},
             domain_entry::{self, Request},
             function_invocation::{Argument, HostError},
             host_functions::{HostFunctions, Lock},
@@ -68,7 +21,7 @@ mod service {
         };
         use yamaa_core::{
             function_signature::{LogicalSignature, ProjectFunctionIdentity},
-            project_environment::{ExecutionEnvironment, LockKind},
+            project_environment::ExecutionEnvironment,
             project_function::Language,
             schema::{Document, DocumentNode as N},
             specification::PrepareError,
@@ -214,7 +167,7 @@ mod service {
                 });
                 self.source.captures.push_back(CaptureStep {
                     source: source.clone(),
-                    new_snapshots: 1,
+                    created: true,
                     outcome: if matches!(self.scenario, Scenario::Capture) {
                         Err(Opaque)
                     } else {
@@ -256,14 +209,6 @@ mod service {
                     .map(|execution| execution.dataset.rows().to_vec()))
             }
         }
-        impl MetadataAdmissionPort for Application {
-            type Error = Failure;
-
-            fn verify_metadata(&mut self) -> Result<(), (String, Failure)> {
-                self.log.record(Event::Observation("verify metadata"));
-                Ok(())
-            }
-        }
         impl Application {
             fn capture(&mut self, request: Request<'_>) -> Result<Entry, Failure> {
                 assert_eq!(request.environment, Some("project.yaml"));
@@ -292,19 +237,17 @@ mod service {
                     kind: metadata::Kind::Lock,
                     declaring_source: source.identity.clone(),
                     written: "uv.lock".into(),
-                    outcome: Ok(metadata::Reply::Lock {
-                        source: metadata::Source {
-                            identity: "/study/uv.lock".into(),
-                            bytes: b"lock".to_vec(),
-                        },
-                        kind: LockKind::Uv,
+                    // The scripted decoder reads held bytes `uv` as a uv lock.
+                    outcome: Ok(metadata::Source {
+                        identity: "/study/uv.lock".into(),
+                        bytes: b"uv".to_vec(),
                     }),
                 });
                 port.steps.push_back(MetadataCaptureStep {
                     kind: metadata::Kind::Function,
                     declaring_source: source.identity.clone(),
                     written: "functions/constant.yaml".into(),
-                    outcome: Ok(metadata::Reply::Document(file.clone())),
+                    outcome: Ok(file.clone()),
                 });
                 let environment =
                     metadata::prepare(&mut decoder, source, Some(Language::Python), &mut port)
@@ -318,7 +261,8 @@ mod service {
                     call("constant", vec![])
                 };
                 let model = specification(vec![("VALUE", "int", expression)]);
-                build::verify_entry(self).unwrap_or_else(|_| panic!("fixture metadata admission"));
+                // The entry's metadata snapshots are verified before selection.
+                self.log.record(Event::Observation("verify metadata"));
                 Ok(Entry { model, environment })
             }
             fn compile(&mut self, entry: Entry) -> Result<CheckedOwnedProject, Failure> {
@@ -527,7 +471,6 @@ mod service {
                 (R::InvalidRoot, "resource_root"),
                 (R::InvalidBase, "resource_base"),
                 (R::InvalidPath, "resource_path"),
-                (R::InvalidLock, "invalid_packaging_lock"),
                 (R::OutsideRoots, "resource_outside_roots"),
                 (R::Symlink, "resource_link"),
             ] {
@@ -678,7 +621,6 @@ mod service {
         use std::{cell::RefCell, rc::Rc};
         use yamaa_core::{
             application_observer::Scope,
-            build::{self, MetadataAdmissionPort},
             domain_entry::{self, Request},
         };
 
@@ -722,14 +664,6 @@ mod service {
                 self.enter("report")
             }
         }
-        impl MetadataAdmissionPort for Fake {
-            type Error = Original;
-
-            fn verify_metadata(&mut self) -> Result<(), (String, Original)> {
-                self.enter("snapshot verification")
-                    .map_err(|e| ("spec.yaml".into(), e))
-            }
-        }
         impl Fake {
             fn capture(&mut self, request: Request<'_>) -> Result<Entry, Original> {
                 assert_eq!(request.specification, "spec.yaml");
@@ -739,9 +673,7 @@ mod service {
                     self.enter("environment")?;
                 }
                 self.enter("entry")?;
-                build::verify_entry(self).map_err(|error| match error {
-                    build::SelectionFailure::Snapshot { error, .. } => error,
-                })?;
+                self.enter("snapshot verification")?;
                 Ok(Entry)
             }
             /// One route with or without an environment: capture, then compile.
@@ -931,9 +863,9 @@ mod service {
         use std::{cell::RefCell, rc::Rc, sync::Arc};
         use yamaa_core::{
             dataset::ExecutionError,
+            resolver::{Captured, Failure, Located, Name, Resolver},
             specification_run::{
                 self as run, CapturedAttempt, PortError, RunError, SourceDecoder, SourceIssue,
-                SpecificationSourcePort,
             },
         };
         use yamaa_core::{
@@ -1023,32 +955,32 @@ mod service {
             trace: Trace,
             reads: usize,
         }
-        impl SpecificationSourcePort for Port {
-            fn resource_failure(
-                &self,
-                _error: &Self::Error,
-            ) -> Option<yamaa_core::resource::ResourceFailure> {
-                None
-            }
-            fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
-                Ok(())
-            }
-
+        impl Resolver for Port {
             type Error = Original;
-            fn capture_reads(&self) -> usize {
-                self.reads
+            fn inspect(&mut self, name: Name<'_>) -> Result<Located, Original> {
+                let Name::Input(source) = name else {
+                    panic!("unexpected request {name:?}")
+                };
+                Ok(Located {
+                    identity: source.path.clone(),
+                    display_path: source.path.clone(),
+                })
             }
-            fn capture(
-                &mut self,
-                source: &SourceDeclaration,
-                origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-            ) -> Result<Arc<[u8]>, Original> {
-                *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            fn capture(&mut self, name: Name<'_>) -> Result<Captured, Original> {
+                let Name::Input(source) = name else {
+                    panic!("unexpected request {name:?}")
+                };
                 self.trace
                     .borrow_mut()
                     .push(format!("capture:{}", source.name));
                 self.reads += 1;
-                Ok(Arc::from(b"held".as_slice()))
+                Ok(Captured::resource(Arc::from(b"held".as_slice()), true))
+            }
+            fn failure(&self, _: Name<'_>, _: &Original) -> Option<Failure> {
+                None
+            }
+            fn rebase(&mut self, _: &Located, _: &Located, _: &str) -> Result<String, Original> {
+                panic!("an input is never rebased")
             }
         }
         struct Decoder {

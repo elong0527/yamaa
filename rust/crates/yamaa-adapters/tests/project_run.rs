@@ -6,14 +6,14 @@ mod project {
         use crate::support::project_schemas as schemas;
         use std::{collections::BTreeMap, convert::Infallible, path::PathBuf, sync::Arc};
         use yamaa_adapters::{
-            project_source::{self, OwnedEnvironment, ProjectCapturePort, Reply, Request},
+            project_source::{self, OwnedEnvironment},
             specification_report::Identity,
             specification_run::PreparedRun,
             specification_source::Source,
         };
         use yamaa_core::application_observer::Scope;
-        use yamaa_core::specification_run::SpecificationSourcePort;
-        use yamaa_core::{project_function::Language, specification::SourceDeclaration};
+        use yamaa_core::project_function::Language;
+        use yamaa_core::resolver::{Captured, Failure, Located, Name, Resolver};
         fn source(identity: &str, bytes: &[u8]) -> Source {
             Source {
                 identity: identity.into(),
@@ -21,9 +21,18 @@ mod project {
             }
         }
         struct NoCapture;
-        impl ProjectCapturePort for NoCapture {
+        impl Resolver for NoCapture {
             type Error = Infallible;
-            fn capture(&mut self, _: Request<'_>) -> Result<Reply, Infallible> {
+            fn inspect(&mut self, _: Name<'_>) -> Result<Located, Infallible> {
+                panic!("inline project has no resource authority")
+            }
+            fn capture(&mut self, _: Name<'_>) -> Result<Captured, Infallible> {
+                panic!("inline project has no resource authority")
+            }
+            fn failure(&self, _: Name<'_>, error: &Infallible) -> Option<Failure> {
+                match *error {}
+            }
+            fn rebase(&mut self, _: &Located, _: &Located, _: &str) -> Result<String, Infallible> {
                 panic!("inline project has no resource authority")
             }
         }
@@ -45,26 +54,35 @@ mod project {
             root: PathBuf,
             cached: BTreeMap<String, Arc<[u8]>>,
         }
-        impl SpecificationSourcePort for Study {
-            fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
-                Ok(())
-            }
-            fn resource_failure(
-                &self,
-                _error: &Self::Error,
-            ) -> Option<yamaa_core::resource::ResourceFailure> {
-                None
-            }
-            type Error = Infallible;
-            fn capture_reads(&self) -> usize {
+        impl Study {
+            /// How many files the run read.
+            fn reads(&self) -> usize {
                 self.cached.len()
+            }
+        }
+        use yamaa_core::resolver;
+        impl resolver::Resolver for Study {
+            type Error = Infallible;
+            fn inspect(
+                &mut self,
+                name: resolver::Name<'_>,
+            ) -> Result<resolver::Located, Self::Error> {
+                let resolver::Name::Input(source) = name else {
+                    panic!("unexpected request {name:?}")
+                };
+                Ok(resolver::Located {
+                    identity: source.path.clone(),
+                    display_path: source.path.clone(),
+                })
             }
             fn capture(
                 &mut self,
-                declaration: &SourceDeclaration,
-                origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-            ) -> Result<Arc<[u8]>, Infallible> {
-                *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+                name: resolver::Name<'_>,
+            ) -> Result<resolver::Captured, Self::Error> {
+                let resolver::Name::Input(declaration) = name else {
+                    panic!("unexpected request {name:?}")
+                };
+                let before = self.cached.len();
                 let bytes = self
                     .cached
                     .entry(declaration.path.clone())
@@ -73,7 +91,21 @@ mod project {
                             .unwrap()
                             .into()
                     });
-                Ok(Arc::clone(bytes))
+                Ok(resolver::Captured::resource(
+                    Arc::clone(bytes),
+                    self.cached.len() != before,
+                ))
+            }
+            fn failure(&self, _: resolver::Name<'_>, _: &Self::Error) -> Option<resolver::Failure> {
+                None
+            }
+            fn rebase(
+                &mut self,
+                _: &resolver::Located,
+                _: &resolver::Located,
+                _: &str,
+            ) -> Result<String, Self::Error> {
+                panic!("an input is never rebased")
             }
         }
         fn id(example: &str) -> Identity<'_> {
@@ -130,7 +162,7 @@ mod project {
                     &[],
                 )
                 .unwrap();
-                let reads = study.capture_reads();
+                let reads = study.reads();
                 let mut observed = result.observations();
                 assert_eq!(
                     observed
@@ -159,7 +191,7 @@ mod project {
                     assert_eq!(result.output(), None);
                 }
                 assert_eq!(observed, expected, "{example}");
-                assert_eq!(study.capture_reads(), reads);
+                assert_eq!(study.reads(), reads);
             }
         }
 
@@ -229,9 +261,16 @@ mod project {
                 captures: usize,
                 inspections: usize,
             }
-            impl SpecificationSourcePort for Resources {
+            use yamaa_core::resolver;
+            impl resolver::Resolver for Resources {
                 type Error = Failure;
-                fn inspect(&mut self, _: &SourceDeclaration) -> Result<(), Failure> {
+                fn inspect(
+                    &mut self,
+                    name: resolver::Name<'_>,
+                ) -> Result<resolver::Located, Self::Error> {
+                    let resolver::Name::Input(source) = name else {
+                        panic!("unexpected request {name:?}")
+                    };
                     self.inspections += 1;
                     if self.inspect {
                         Err(Failure {
@@ -239,30 +278,41 @@ mod project {
                             classified: self.classified,
                         })
                     } else {
-                        Ok(())
+                        Ok(resolver::Located {
+                            identity: source.path.clone(),
+                            display_path: source.path.clone(),
+                        })
                     }
-                }
-                fn resource_failure(
-                    &self,
-                    failure: &Failure,
-                ) -> Option<yamaa_core::resource::ResourceFailure> {
-                    failure
-                        .classified
-                        .then_some(yamaa_core::resource::ResourceFailure::Missing)
-                }
-                fn capture_reads(&self) -> usize {
-                    self.captures
                 }
                 fn capture(
                     &mut self,
-                    _: &SourceDeclaration,
-                    origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-                ) -> Result<Arc<[u8]>, Failure> {
-                    *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+                    name: resolver::Name<'_>,
+                ) -> Result<resolver::Captured, Self::Error> {
+                    let resolver::Name::Input(_) = name else {
+                        panic!("unexpected request {name:?}")
+                    };
                     Err(Failure {
                         original: std::rc::Rc::clone(&self.original),
                         classified: self.classified,
                     })
+                }
+                fn failure(
+                    &self,
+                    _: resolver::Name<'_>,
+                    failure: &Self::Error,
+                ) -> Option<resolver::Failure> {
+                    failure
+                        .classified
+                        .then_some(yamaa_core::resource::ResourceFailure::Missing)
+                        .map(resolver::Failure::Resource)
+                }
+                fn rebase(
+                    &mut self,
+                    _: &resolver::Located,
+                    _: &resolver::Located,
+                    _: &str,
+                ) -> Result<String, Self::Error> {
+                    panic!("an input is never rebased")
                 }
             }
             let raw="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: absent.csv}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}]\noutput: {path: output.csv, columns: [ID]}\n";
@@ -377,23 +427,22 @@ mod project {
         use crate::support::Edit as _;
         use std::{cell::RefCell, rc::Rc, sync::Arc};
         use yamaa_adapters::{
-            project_source::{self, Kind, OwnedEnvironment, ProjectCapturePort, Reply, Request},
+            project_source::{self, Kind, OwnedEnvironment},
             specification_run::{BoundaryFailure, PreparedRun},
             specification_source::{PreparedDocument, Source},
         };
         use yamaa_core::application_observer::Scope;
+        use yamaa_core::resolver::{Captured, File, Located, Name, Resolver};
         use yamaa_core::{
             dataset::ExecutionError,
             function_invocation::{Argument, FailureKind, HostError},
             host_functions::{HostFunctions, Lock},
             project_activation::{Failure, LockObservation, TestOutcome},
-            specification_run::{PortError, SpecificationSourcePort},
+            specification_run::PortError,
         };
         use yamaa_core::{
             function_signature::{LogicalSignature, ProjectFunctionIdentity},
-            project_environment::LockKind,
             project_function::Language,
-            specification::SourceDeclaration,
             table::{TableAccess, ValueRef},
             value::Value,
         };
@@ -435,29 +484,66 @@ functions:
       - {id: missing-weight, covers: ['short-circuit-missing:weight'], args: {weight: null, own: 1}, result: null}
       - {id: missing-own, covers: ['short-circuit-missing:own'], args: {weight: 1, own: null}, result: null}
 "#;
-        struct EnvironmentCapture;
-        impl ProjectCapturePort for EnvironmentCapture {
-            type Error = std::convert::Infallible;
-            fn capture(&mut self, request: Request<'_>) -> Result<Reply, Self::Error> {
-                match request.kind {
+        #[derive(Default)]
+        struct EnvironmentCapture {
+            held: Vec<u8>,
+        }
+        impl EnvironmentCapture {
+            /// The held source the double serves for the file a project names.
+            fn answer(
+                &mut self,
+                kind: Kind,
+                declaring: &str,
+                written: &str,
+            ) -> Result<Source, std::convert::Infallible> {
+                match kind {
                     Kind::Environment => {
-                        assert_eq!(request.declaring_source, "study/project.yaml");
-                        assert_eq!(request.written, "environment.yaml");
-                        Ok(Reply::Document(source(
-                            "study/environment.yaml",
-                            ENVIRONMENT,
-                        )))
+                        assert_eq!(declaring, "study/project.yaml");
+                        assert_eq!(written, "environment.yaml");
+                        Ok(source("study/environment.yaml", ENVIRONMENT))
                     }
                     Kind::Lock => {
-                        assert_eq!(request.declaring_source, "study/environment.yaml");
-                        assert_eq!(request.written, "../uv.lock");
-                        Ok(Reply::Lock {
-                            source: source("held/uv.lock", b"version = 1\n"),
-                            kind: LockKind::Uv,
-                        })
+                        assert_eq!(declaring, "study/environment.yaml");
+                        assert_eq!(written, "../uv.lock");
+                        Ok(source(
+                            "held/uv.lock",
+                            crate::support::ports::UV_LOCK.as_bytes(),
+                        ))
                     }
                     kind => panic!("unexpected {kind:?} capture"),
                 }
+            }
+        }
+        /// A file is served when it is located; its capture reads the bytes served.
+        impl Resolver for EnvironmentCapture {
+            type Error = std::convert::Infallible;
+            fn inspect(&mut self, name: Name<'_>) -> Result<Located, Self::Error> {
+                let Name::Written {
+                    file: File::Project(kind),
+                    declaring,
+                    written,
+                } = name
+                else {
+                    panic!("unexpected request {name:?}")
+                };
+                let source = self.answer(kind, declaring, written)?;
+                self.held = source.bytes;
+                Ok(Located {
+                    display_path: source.identity.clone(),
+                    identity: source.identity,
+                })
+            }
+            fn capture(&mut self, _: Name<'_>) -> Result<Captured, Self::Error> {
+                Ok(Captured::resource(
+                    std::mem::take(&mut self.held).into(),
+                    true,
+                ))
+            }
+            fn failure(&self, _: Name<'_>, _: &Self::Error) -> Option<resolver::Failure> {
+                None
+            }
+            fn rebase(&mut self, _: &Located, _: &Located, _: &str) -> Result<String, Self::Error> {
+                panic!("a project file is never rebased")
             }
         }
         fn environment() -> OwnedEnvironment {
@@ -468,7 +554,7 @@ functions:
                     b"schema_version: '1.0'\nenvironments: {python: environment.yaml}\n",
                 ),
                 Language::Python,
-                &mut EnvironmentCapture,
+                &mut EnvironmentCapture::default(),
             )
             .unwrap()
             .into_owned()
@@ -616,32 +702,55 @@ functions:
             captured: bool,
             inspections: usize,
         }
-        impl SpecificationSourcePort for Study {
-            fn resource_failure(
-                &self,
-                _error: &Self::Error,
-            ) -> Option<yamaa_core::resource::ResourceFailure> {
-                None
+        impl Study {
+            /// How many files the run read.
+            fn reads(&self) -> usize {
+                usize::from(self.captured)
             }
+        }
+        use yamaa_core::resolver;
+        impl resolver::Resolver for Study {
             type Error = std::convert::Infallible;
-            fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), Self::Error> {
+            fn inspect(
+                &mut self,
+                name: resolver::Name<'_>,
+            ) -> Result<resolver::Located, Self::Error> {
+                let resolver::Name::Input(source) = name else {
+                    panic!("unexpected request {name:?}")
+                };
                 assert_eq!(source.path, "input.csv");
                 self.trace.borrow_mut().push("inspect");
                 self.inspections += 1;
-                Ok(())
-            }
-            fn capture_reads(&self) -> usize {
-                usize::from(self.captured)
+                Ok(resolver::Located {
+                    identity: source.path.clone(),
+                    display_path: source.path.clone(),
+                })
             }
             fn capture(
                 &mut self,
-                _: &SourceDeclaration,
-                origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-            ) -> Result<Arc<[u8]>, Self::Error> {
-                *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+                name: resolver::Name<'_>,
+            ) -> Result<resolver::Captured, Self::Error> {
+                let resolver::Name::Input(_) = name else {
+                    panic!("unexpected request {name:?}")
+                };
+                let before = usize::from(self.captured);
                 self.trace.borrow_mut().push("capture");
                 self.captured = true;
-                Ok(Arc::clone(&self.bytes))
+                Ok(resolver::Captured::resource(
+                    Arc::clone(&self.bytes),
+                    usize::from(self.captured) != before,
+                ))
+            }
+            fn failure(&self, _: resolver::Name<'_>, _: &Self::Error) -> Option<resolver::Failure> {
+                None
+            }
+            fn rebase(
+                &mut self,
+                _: &resolver::Located,
+                _: &resolver::Located,
+                _: &str,
+            ) -> Result<String, Self::Error> {
+                panic!("an input is never rebased")
             }
         }
         fn ports() -> (Activation, Study) {
@@ -781,7 +890,7 @@ functions:
                 &*activation.trace.borrow(),
                 &once.into_iter().chain(once).collect::<Vec<_>>()
             );
-            assert_eq!(study.capture_reads(), 1);
+            assert_eq!(study.reads(), 1);
         }
 
         #[test]
@@ -980,7 +1089,7 @@ functions:
                 assert!(attempt.dataset.sources.is_empty());
                 assert!(matches!(attempt.dataset.result, Err(PortError::Incomplete)));
                 assert_eq!(study.inspections, 0);
-                assert_eq!(study.capture_reads(), 0);
+                assert_eq!(study.reads(), 0);
                 if matches!(mode, Mode::CaseFailure | Mode::CaseInterrupt) {
                     assert_eq!(attempt.activation.tests[0].actual, Some(Value::Int(7)));
                     assert_eq!(attempt.activation.tests[0].outcome, TestOutcome::Passed);
@@ -1077,7 +1186,7 @@ functions:
             });
             assert_eq!(visited, 1);
             assert!(yamaa_adapters::project_attempt::execution(&attempt).is_none());
-            assert_eq!(study.capture_reads(), 1);
+            assert_eq!(study.reads(), 1);
             assert_eq!(
                 &*activation.trace.borrow(),
                 &["lock", "bind", "case", "case", "inspect", "capture", "live"]
@@ -1087,10 +1196,24 @@ functions:
         #[test]
         fn project_without_the_host_environment_reports_each_project_call_as_missing() {
             struct OtherHost;
-            impl ProjectCapturePort for OtherHost {
+            impl Resolver for OtherHost {
                 type Error = std::convert::Infallible;
-                fn capture(&mut self, request: Request<'_>) -> Result<Reply, Self::Error> {
-                    panic!("the other host's {} link is never opened", request.written)
+                fn inspect(&mut self, name: Name<'_>) -> Result<Located, Self::Error> {
+                    panic!("the other host's link is never opened: {name:?}")
+                }
+                fn capture(&mut self, _: Name<'_>) -> Result<Captured, Self::Error> {
+                    panic!("the other host's link is never opened")
+                }
+                fn failure(&self, _: Name<'_>, error: &Self::Error) -> Option<resolver::Failure> {
+                    match *error {}
+                }
+                fn rebase(
+                    &mut self,
+                    _: &Located,
+                    _: &Located,
+                    _: &str,
+                ) -> Result<String, Self::Error> {
+                    panic!("the other host's link is never opened")
                 }
             }
             let environment = || {
@@ -1155,7 +1278,7 @@ functions:
             let (mut host, mut study) = ports();
             let mut attempt = run.execute_with_ports(&mut host, &mut study, Scope::default());
             let trace = host.trace.borrow().clone();
-            let reads = study.capture_reads();
+            let reads = study.reads();
             assert!(activation(&run, &attempt.activation).is_ok());
             attempt.activation.tests.swap(0, 1);
             assert_eq!(
@@ -1163,7 +1286,7 @@ functions:
                 Err(Error::InvalidObservation)
             );
             assert_eq!(*host.trace.borrow(), trace);
-            assert_eq!(study.capture_reads(), reads);
+            assert_eq!(study.reads(), reads);
         }
 
         #[test]
@@ -1174,7 +1297,7 @@ functions:
             let (mut host, mut study) = ports();
             let mut attempt = run.execute_with_ports(&mut host, &mut study, Scope::default());
             let trace = host.trace.borrow().clone();
-            let reads = study.capture_reads();
+            let reads = study.reads();
             let bindings = attempt.activation.bindings.clone();
             for (binding_observations, actual) in [(true, 1025), (false, 65_537)] {
                 if binding_observations {
@@ -1208,7 +1331,7 @@ functions:
                 ));
             }
             assert_eq!(*host.trace.borrow(), trace);
-            assert_eq!(study.capture_reads(), reads);
+            assert_eq!(study.reads(), reads);
         }
 
         fn report_identity() -> yamaa_adapters::specification_report::Identity<'static> {
@@ -1273,7 +1396,7 @@ functions:
             assert_eq!(saved["artifacts"][0]["row_count"], 1);
             assert_eq!(result.observations(), report);
             assert_eq!(*activation.trace.borrow(), trace);
-            assert_eq!(study.capture_reads(), 1);
+            assert_eq!(study.reads(), 1);
             assert_eq!(
                 attempt.dataset.sources[0]
                     .snapshot
@@ -1357,7 +1480,7 @@ functions:
                 }
                 assert_eq!(*activation.trace.borrow(), trace);
                 assert_eq!(
-                    study.capture_reads(),
+                    study.reads(),
                     usize::from(matches!(mode, Mode::LiveFailure))
                 );
             }
@@ -1415,7 +1538,7 @@ functions:
                     ))
                 ));
             }
-            assert_eq!(study.capture_reads(), 0);
+            assert_eq!(study.reads(), 0);
             assert_eq!(*activation.trace.borrow(), ["lock", "bind"]);
         }
 
@@ -1451,7 +1574,7 @@ functions:
                     ))
                 ));
                 assert_eq!(*activation.trace.borrow(), trace);
-                assert_eq!(study.capture_reads(), 1);
+                assert_eq!(study.reads(), 1);
                 assert!(attempt.dataset.result.as_ref().unwrap().result.is_ok());
             }
         }
@@ -1517,7 +1640,7 @@ functions:
             );
             assert_eq!(result.observations()["activation"]["lock"], "rejected");
             assert_eq!(*activation.trace.borrow(), ["lock"]);
-            assert_eq!(study.capture_reads(), 0);
+            assert_eq!(study.reads(), 0);
             assert!(Rc::ptr_eq(&original.original, &activation.original));
             assert!(matches!(
                 yamaa_adapters::specification_report::build_result(
@@ -1566,7 +1689,7 @@ functions:
             );
             assert_eq!(result.output(), None);
             assert!(result.files().is_empty());
-            assert_eq!(study.capture_reads(), 0);
+            assert_eq!(study.reads(), 0);
             assert_eq!(*activation.trace.borrow(), ["lock", "bind", "case", "case"]);
         }
 
@@ -1658,7 +1781,7 @@ functions:
                 attempt.boundary,
                 Err(BoundaryFailure::Activation(Failure::Lock(_)))
             ));
-            assert_eq!(study.capture_reads(), 0);
+            assert_eq!(study.reads(), 0);
         }
 
         #[test]
@@ -1667,34 +1790,54 @@ functions:
                 trace: Trace,
                 reads: usize,
             }
-            impl SpecificationSourcePort for TwoSources {
-                fn resource_failure(
-                    &self,
-                    _error: &Self::Error,
-                ) -> Option<yamaa_core::resource::ResourceFailure> {
-                    None
-                }
+            use yamaa_core::resolver;
+            impl resolver::Resolver for TwoSources {
                 type Error = std::convert::Infallible;
-                fn inspect(&mut self, _: &SourceDeclaration) -> Result<(), Self::Error> {
+                fn inspect(
+                    &mut self,
+                    name: resolver::Name<'_>,
+                ) -> Result<resolver::Located, Self::Error> {
+                    let resolver::Name::Input(source) = name else {
+                        panic!("unexpected request {name:?}")
+                    };
                     self.trace.borrow_mut().push("inspect");
-                    Ok(())
-                }
-                fn capture_reads(&self) -> usize {
-                    self.reads
+                    Ok(resolver::Located {
+                        identity: source.path.clone(),
+                        display_path: source.path.clone(),
+                    })
                 }
                 fn capture(
                     &mut self,
-                    source: &SourceDeclaration,
-                    origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-                ) -> Result<Arc<[u8]>, Self::Error> {
-                    *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+                    name: resolver::Name<'_>,
+                ) -> Result<resolver::Captured, Self::Error> {
+                    let resolver::Name::Input(source) = name else {
+                        panic!("unexpected request {name:?}")
+                    };
                     self.reads += 1;
                     self.trace.borrow_mut().push("capture");
-                    Ok(Arc::from(match source.name.as_str() {
-                        "SRC" => b"ID,N\n1,10\n2,20\n3,30\n".as_slice(),
-                        "B" => b"ID,N\n2,40\n1,50\n".as_slice(),
-                        _ => panic!("known source"),
-                    }))
+                    Ok(resolver::Captured::resource(
+                        Arc::from(match source.name.as_str() {
+                            "SRC" => b"ID,N\n1,10\n2,20\n3,30\n".as_slice(),
+                            "B" => b"ID,N\n2,40\n1,50\n".as_slice(),
+                            _ => panic!("known source"),
+                        }),
+                        true,
+                    ))
+                }
+                fn failure(
+                    &self,
+                    _: resolver::Name<'_>,
+                    _: &Self::Error,
+                ) -> Option<resolver::Failure> {
+                    None
+                }
+                fn rebase(
+                    &mut self,
+                    _: &resolver::Located,
+                    _: &resolver::Located,
+                    _: &str,
+                ) -> Result<String, Self::Error> {
+                    panic!("an input is never rebased")
                 }
             }
             for (driver, other, expected, live) in [
@@ -1757,31 +1900,51 @@ functions:
                 trace: Trace,
                 reads: usize,
             }
-            impl SpecificationSourcePort for Unordered {
-                fn resource_failure(
-                    &self,
-                    _error: &Self::Error,
-                ) -> Option<yamaa_core::resource::ResourceFailure> {
-                    None
-                }
+            use yamaa_core::resolver;
+            impl resolver::Resolver for Unordered {
                 type Error = std::convert::Infallible;
-                fn inspect(&mut self, _: &SourceDeclaration) -> Result<(), Self::Error> {
+                fn inspect(
+                    &mut self,
+                    name: resolver::Name<'_>,
+                ) -> Result<resolver::Located, Self::Error> {
+                    let resolver::Name::Input(source) = name else {
+                        panic!("unexpected request {name:?}")
+                    };
                     self.trace.borrow_mut().push("inspect");
-                    Ok(())
-                }
-                fn capture_reads(&self) -> usize {
-                    self.reads
+                    Ok(resolver::Located {
+                        identity: source.path.clone(),
+                        display_path: source.path.clone(),
+                    })
                 }
                 fn capture(
                     &mut self,
-                    _: &SourceDeclaration,
-                    origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-                ) -> Result<Arc<[u8]>, Self::Error> {
-                    *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+                    name: resolver::Name<'_>,
+                ) -> Result<resolver::Captured, Self::Error> {
+                    let resolver::Name::Input(_) = name else {
+                        panic!("unexpected request {name:?}")
+                    };
                     self.reads += 1;
                     self.trace.borrow_mut().push("capture");
                     // Stored out of key order, so row order and key order differ.
-                    Ok(Arc::from(b"ID,N\n3,30\n1,10\n2,20\n".as_slice()))
+                    Ok(resolver::Captured::resource(
+                        Arc::from(b"ID,N\n3,30\n1,10\n2,20\n".as_slice()),
+                        true,
+                    ))
+                }
+                fn failure(
+                    &self,
+                    _: resolver::Name<'_>,
+                    _: &Self::Error,
+                ) -> Option<resolver::Failure> {
+                    None
+                }
+                fn rebase(
+                    &mut self,
+                    _: &resolver::Located,
+                    _: &resolver::Located,
+                    _: &str,
+                ) -> Result<String, Self::Error> {
+                    panic!("an input is never rebased")
                 }
             }
             let head = "schema_version: '1.0'\ndomain: TEST\ninput:\n  SRC: {path: a.csv, types: {ID: int, N: int}}\nbase: SRC\nkeys: [ID]\n";

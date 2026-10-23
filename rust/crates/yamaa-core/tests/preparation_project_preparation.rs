@@ -165,7 +165,8 @@ mod preparation {
             /// Script the root decode and every capture in request order: the
             /// host's lock (0), the function files (1, 2) and the codelist
             /// file (3), each requested from the project file (D8). The lock
-            /// is a uv lock, and each function file implements only Python.
+            /// is a uv lock, unless `malformed` names it, and each function
+            /// file implements only Python.
             fn script(
                 &mut self,
                 failing: &[usize],
@@ -214,15 +215,18 @@ mod preparation {
                         payloads.push(error.0.as_ptr() as usize);
                         Err(error)
                     } else {
-                        let captured = source(identity, raw);
-                        Ok(if (kind == Kind::Lock) != (malformed == Some(index)) {
-                            Reply::Lock {
-                                source: captured,
-                                kind: LockKind::Uv,
-                            }
+                        // The scripted decoder reads held bytes `uv` as a uv
+                        // lock; any other held lock is in no lock syntax.
+                        assert!(
+                            malformed.is_none_or(|at| at == 0),
+                            "only a lock is malformed"
+                        );
+                        let raw = if malformed == Some(index) {
+                            b"no lock".as_slice()
                         } else {
-                            Reply::Document(captured)
-                        })
+                            raw
+                        };
+                        Ok(source(identity, raw))
                     };
                     self.port.steps.push_back(MetadataCaptureStep {
                         kind,
@@ -230,7 +234,7 @@ mod preparation {
                         written: written.into(),
                         outcome,
                     });
-                    if kind != Kind::Lock && !failed && malformed != Some(index) {
+                    if kind != Kind::Lock && !failed {
                         let (target, document) = match kind {
                             Kind::Function => (
                                 DecodeTarget::FunctionFile,
@@ -346,10 +350,8 @@ mod preparation {
                 self.port.interrupt_if = |error| error.0.as_ref() == "interrupt";
                 let project = self.source.identity.clone();
                 let (linked, held) = self.linked();
-                let unlinked = self.environment_rejected
-                    || failing.contains(&0)
-                    || decoding == Some(0)
-                    || malformed == Some(0);
+                let unlinked =
+                    self.environment_rejected || failing.contains(&0) || decoding == Some(0);
                 let mut payloads = vec![];
                 for (index, (kind, declaring, written, identity, raw)) in [
                     (
@@ -407,15 +409,18 @@ mod preparation {
                         payloads.push(error.0.as_ptr() as usize);
                         Err(error)
                     } else {
-                        let captured = source(identity, raw);
-                        Ok(if (kind == Kind::Lock) != (malformed == Some(index)) {
-                            Reply::Lock {
-                                source: captured,
-                                kind: LockKind::Uv,
-                            }
+                        // The scripted decoder reads held bytes `uv` as a uv
+                        // lock; any other held lock is in no lock syntax.
+                        assert!(
+                            malformed.is_none_or(|at| at == 1),
+                            "only a lock is malformed"
+                        );
+                        let raw = if malformed == Some(index) {
+                            b"no lock".as_slice()
                         } else {
-                            Reply::Document(captured)
-                        })
+                            raw
+                        };
+                        Ok(source(identity, raw))
                     };
                     self.port.steps.push_back(MetadataCaptureStep {
                         kind,
@@ -423,7 +428,7 @@ mod preparation {
                         written: written.into(),
                         outcome,
                     });
-                    if kind != Kind::Lock && !failed && malformed != Some(index) {
+                    if kind != Kind::Lock && !failed {
                         let (target, document) = match kind {
                             Kind::Environment => {
                                 (DecodeTarget::Environment, self.environment.clone())
@@ -492,12 +497,12 @@ mod preparation {
                     .unwrap()
                     .nodes()
                     .as_ptr();
-                let Reply::Lock { source: lock, .. } =
-                    fixture.port.steps[0].outcome.as_ref().unwrap()
-                else {
-                    panic!()
-                };
-                let lock_bytes = lock.bytes.as_ptr();
+                let lock_bytes = fixture.port.steps[0]
+                    .outcome
+                    .as_ref()
+                    .unwrap()
+                    .bytes
+                    .clone();
                 let log = fixture.log.clone();
                 let prepared = fixture.run().unwrap();
                 assert_eq!(effects(&log), full_effects());
@@ -507,10 +512,8 @@ mod preparation {
                     prepared.captures[0].document.document.nodes().as_ptr(),
                     function_nodes
                 );
-                assert_eq!(
-                    prepared.lock.as_ref().unwrap().source.bytes.as_ptr(),
-                    lock_bytes
-                );
+                // The lock's bytes are copied out of the resolver's snapshot.
+                assert_eq!(prepared.lock.as_ref().unwrap().source.bytes, lock_bytes);
                 assert_eq!(prepared.origins.functions, ["first", "last"]);
                 assert_eq!(prepared.origins.function_files, [0, 1]);
                 assert_eq!(prepared.origins.codelists, [0, 1]);
@@ -964,27 +967,20 @@ mod preparation {
         }
 
         #[test]
-        fn native_reply_kind_refusals_collect_without_decoding_the_wrong_kind() {
-            for index in 0..4 {
-                let mut fixture = Fixture::new();
-                fixture.script(&[], None, None, Some(index));
-                let log = fixture.log.clone();
-                let Err(Failure::Rejected(rejected)) = fixture.run() else {
-                    panic!()
-                };
-                assert_eq!(rejected.sources.len(), 1);
-                assert!(matches!(
-                    rejected.sources[0].error,
-                    CaptureFailure::Protocol
-                ));
-                assert!(rejected.admission.is_none());
-                let mut expected = full_effects();
-                // A lock reply has no document decode to skip.
-                if index > 0 {
-                    expected.remove([3, 5, 7][index - 1]);
-                }
-                assert_eq!(effects(&log), expected);
-            }
+        fn a_lock_in_no_lock_syntax_collects_without_admitting_a_lock() {
+            let mut fixture = Fixture::new();
+            fixture.script(&[], None, None, Some(0));
+            let log = fixture.log.clone();
+            let Err(Failure::Rejected(rejected)) = fixture.run() else {
+                panic!()
+            };
+            assert_eq!(rejected.sources.len(), 1);
+            assert_eq!(rejected.sources[0].origin, Origin::Lock);
+            assert!(matches!(rejected.sources[0].error, CaptureFailure::Lock));
+            assert!(rejected.lock.is_none());
+            assert!(rejected.admission.is_none());
+            // The lock decodes no document, so every later file is read.
+            assert_eq!(effects(&log), full_effects());
         }
 
         #[test]
@@ -1160,10 +1156,10 @@ mod preparation {
         {
             let mut fixture = Fixture::new();
             fixture.script(&[], None, None, None);
-            fixture.port.steps[0].outcome = Ok(Reply::Lock {
-                source: source("/held/python/uv.lock", &vec![b' '; Limits::SPEC_BYTES + 1]),
-                kind: LockKind::Uv,
-            });
+            fixture.port.steps[0].outcome = Ok(source(
+                "/held/python/uv.lock",
+                &vec![b' '; Limits::SPEC_BYTES + 1],
+            ));
             let log = fixture.log.clone();
             let Err(Failure::Rejected(rejected)) = fixture.run() else {
                 panic!("oversized dependency must reject the environment")
@@ -1263,10 +1259,15 @@ mod preparation {
                     kind: Kind::Lock,
                     declaring_source: "/author/project.yaml".into(),
                     written: lock.into(),
-                    outcome: Ok(Reply::Lock {
-                        source: source(&held(lock), b"held lock"),
-                        kind,
-                    }),
+                    // The scripted decoder reads held bytes `uv` and `renv` as
+                    // locks of those tools.
+                    outcome: Ok(source(
+                        &held(lock),
+                        match kind {
+                            LockKind::Uv => b"uv",
+                            LockKind::Renv => b"renv",
+                        },
+                    )),
                 });
                 // Every listed file is read, whichever hosts it implements.
                 for (written, file) in [
@@ -1288,7 +1289,7 @@ mod preparation {
                         kind: Kind::Function,
                         declaring_source: "/author/project.yaml".into(),
                         written: written.into(),
-                        outcome: Ok(Reply::Document(captured.clone())),
+                        outcome: Ok(captured.clone()),
                     });
                     decoder.steps.push_back(MetadataDecodeStep {
                         source: captured,
@@ -1301,7 +1302,7 @@ mod preparation {
                     kind: Kind::Codelist,
                     declaring_source: "/author/project.yaml".into(),
                     written: "ct.yaml".into(),
-                    outcome: Ok(Reply::Document(terminology.clone())),
+                    outcome: Ok(terminology.clone()),
                 });
                 decoder.steps.push_back(MetadataDecodeStep {
                     source: terminology,
@@ -1398,7 +1399,7 @@ mod preparation {
                     kind: Kind::Function,
                     declaring_source: "/author/project.yaml".into(),
                     written: written.into(),
-                    outcome: Ok(Reply::Document(captured.clone())),
+                    outcome: Ok(captured.clone()),
                 });
                 decoder.steps.push_back(MetadataDecodeStep {
                     source: captured,
@@ -1411,7 +1412,7 @@ mod preparation {
                 kind: Kind::Codelist,
                 declaring_source: "/author/project.yaml".into(),
                 written: "ct.yaml".into(),
-                outcome: Ok(Reply::Document(terminology.clone())),
+                outcome: Ok(terminology.clone()),
             });
             decoder.steps.push_back(MetadataDecodeStep {
                 source: terminology,
@@ -1514,7 +1515,7 @@ mod preparation {
                 kind: Kind::Function,
                 declaring_source: "/author/project.yaml".into(),
                 written: "functions/both.yaml".into(),
-                outcome: Ok(Reply::Document(wide.clone())),
+                outcome: Ok(wide.clone()),
             });
             decoder.steps.push_back(MetadataDecodeStep {
                 source: wide,

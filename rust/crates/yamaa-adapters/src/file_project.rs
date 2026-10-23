@@ -68,8 +68,8 @@ pub fn prepare(
 /// lock and every function file it lists (D8); and the codelist files of
 /// either. An engine that claims no host language (`host` is none) reads no
 /// environment file and no lock. Static workflow preparation reuses this
-/// transfer without introducing a second capture or any activation or
-/// study-source port.
+/// transfer without introducing a second capture, any activation or any
+/// study read.
 ///
 /// `schemas` decide whether a 1.0 project is read
 /// ([`project_source::ProjectSchemas::versioned`]): public calls pass the
@@ -80,9 +80,8 @@ pub(crate) fn capture_environment(
     host: Option<Language>,
     schemas: project_source::ProjectSchemas,
 ) -> Result<project_source::OwnedEnvironment, Error> {
-    let mut reader = crate::file_metadata::Reader { resources };
     let prepared = match yamaa_core::build::prepare_environment(
-        &mut reader,
+        resources,
         &mut project_source::Decoder(schemas),
         written,
         host,

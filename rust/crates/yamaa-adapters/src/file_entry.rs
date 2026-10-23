@@ -160,14 +160,11 @@ pub(crate) fn capture(
         let links =
             file_preparation::capture_links(&mut resources, root, Some(&schema), &mut origin)
                 .map_err(Error::Document)?;
-        yamaa_core::build::verify_entry(&mut crate::file_metadata::Reader {
-            resources: &mut resources,
-        })
-        .map_err(|error| match error {
-            yamaa_core::build::SelectionFailure::Snapshot { identity, error } => {
-                Error::Snapshot { identity, error }
-            }
-        })?;
+        // Complete admission and the whole input inspection precede
+        // selection: every metadata snapshot is verified unchanged.
+        resources
+            .verify_captured()
+            .map_err(|(identity, error)| Error::Snapshot { identity, error })?;
         Ok(links)
     })();
     match result {

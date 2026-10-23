@@ -1,4 +1,4 @@
-//! Physical metadata codec port for the native study-inventory application.
+//! The study inventory: the specifications a project's sections list.
 use crate::{
     file_preparation,
     file_resources::Resources,
@@ -7,41 +7,26 @@ use crate::{
 };
 use std::sync::Arc;
 use yamaa_core::submission_inventory as service;
-struct Native<'a> {
-    resources: &'a mut Resources,
-    schema: Arc<CapturedSchema>,
-}
-impl service::Ports for Native<'_> {
-    type Specification = PreparedDocument;
-    type Error = file_preparation::Error;
-    fn capture(&mut self, declaring: &str, written: &str) -> Result<PreparedDocument, Self::Error> {
-        file_preparation::prepare_document_from(
-            self.resources,
-            Some(declaring),
-            written,
-            Some(Arc::clone(&self.schema)),
-        )
-    }
-    fn document(specification: &PreparedDocument) -> &yamaa_core::schema::Document {
-        specification.document()
-    }
-    fn identity(specification: &PreparedDocument) -> &str {
-        &specification.source().identity
-    }
-}
+/// The specifications a project's sections list, each prepared as its own
+/// entry from the project file `root`, with the study's dataset names.
 fn capture(
     resources: &mut Resources,
     schema: &Arc<CapturedSchema>,
     root: &crate::specification_source::CapturedDocument,
     project: &yamaa_core::ast::Project,
 ) -> Result<service::Captured<PreparedDocument>, file_preparation::Error> {
+    let declaring = &root.source().identity;
     service::capture(
         project,
-        &root.source().identity,
-        &mut Native {
-            resources,
-            schema: Arc::clone(schema),
+        |written| {
+            file_preparation::prepare_document_from(
+                resources,
+                Some(declaring),
+                written,
+                Some(Arc::clone(schema)),
+            )
         },
+        PreparedDocument::document,
     )
     .map_err(|error| match error {
         service::Error::Port { error, .. } => error,

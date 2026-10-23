@@ -1,5 +1,5 @@
 //! Execute prepared YAML specifications over captured schema and typed snapshots.
-//! Source ports supply snapshots; publication belongs to the public Save service.
+//! The resolver port supplies snapshots; publication belongs to the public Save service.
 //!
 //! [`PreparedRun`] is the one prepared specification: alone, it carries an
 //! empty environment, and with a project it carries the project's admitted
@@ -45,9 +45,7 @@ pub enum Error {
     Bind(BindError),
     Execution(DatasetError),
 }
-pub use yamaa_core::specification_run::{
-    InspectionFailure, PortError, SourceRead, SpecificationSourcePort,
-};
+pub use yamaa_core::specification_run::{InspectionFailure, PortError, SourceRead};
 /// One captured source of an attempt: the exact owned snapshot used for
 /// execution; reporting never reopens or reparses data.
 pub type CapturedSource<E> = application::CapturedSource<Snapshot<E>>;
@@ -221,7 +219,7 @@ impl PreparedRun {
     /// reused here. A specification that calls no project function never
     /// enters `functions`, the build's host-functions port; the empty port
     /// refuses one that does before it binds anything or reads any input.
-    pub fn execute_with_ports<A: HostFunctions, P: SpecificationSourcePort>(
+    pub fn execute_with_ports<A: HostFunctions, P: yamaa_core::resolver::Resolver>(
         &self,
         functions: &mut A,
         source: &mut P,

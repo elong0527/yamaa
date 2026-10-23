@@ -1,76 +1,13 @@
-//! Native entry preparation and success-only alias acceptance through typed ports.
-//! Physical identities, snapshots, path policy and resource limits belong to the port.
+//! Entry preparation and success-only alias acceptance through the resolver
+//! port. Physical identities, snapshots, path policy and resource limits
+//! belong to the resolver.
 use crate::{diagnostic::Diagnostic, resource::ResourceFailure};
 use crate::{
-    inheritance::{Source as Identity, SourceError},
-    inheritance_capture::InheritanceCapturePort,
     project_preparation::Source,
+    resolver::{Captured, Failure, File, Located, Name, Resolver},
 };
 use std::collections::BTreeMap;
 
-pub trait NativePort {
-    type Error;
-    fn resolve_entry(
-        &mut self,
-        declaring: Option<&str>,
-        written: &str,
-    ) -> Result<String, Self::Error>;
-    /// Capture and admit the existing owned preparation copy, without resetting policy.
-    fn capture_entry(
-        &mut self,
-        declaring: Option<&str>,
-        written: &str,
-    ) -> Result<Vec<u8>, Self::Error>;
-    fn canonicalize(
-        &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<Identity, SourceError<Self::Error>>;
-    fn capture_parent(
-        &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<Vec<u8>, SourceError<Self::Error>>;
-    fn canonicalize_resource(
-        &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<Identity, SourceError<Self::Error>> {
-        self.canonicalize(declaring, written)
-    }
-    fn capture_resource(
-        &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<Vec<u8>, SourceError<Self::Error>> {
-        self.capture_parent(declaring, written)
-    }
-    fn resource_failure(&self, _error: &Self::Error) -> Option<crate::resource::ResourceFailure> {
-        None
-    }
-    fn rebase(
-        &mut self,
-        layer: &Identity,
-        entry: &Identity,
-        written: &str,
-    ) -> Result<String, Self::Error>;
-    /// The finding for a rebase the port refused because of where the layer
-    /// lies, such as a layer on a network share the entry is not on
-    /// (LAYER-10), or None when the refusal stays opaque.
-    fn rebase_failure(
-        &self,
-        _error: &Self::Error,
-        _layer: &Identity,
-        _entry: &Identity,
-        _written: &str,
-    ) -> Option<Diagnostic> {
-        None
-    }
-    /// Verify the spelling against held bytes; this performs no preparation copy.
-    fn accept_alias(&mut self, declaring: &str, written: &str) -> Result<(), Self::Error>;
-    fn select_entry_base(&mut self, identity: &str) -> Result<(), Self::Error>;
-    fn missing_alias() -> Self::Error;
-}
 /// The exact immutable retained first-capture catalog, not a replayed iterator.
 pub trait PreparedView {
     type Parent;
@@ -97,11 +34,11 @@ pub trait PreparedView {
 pub trait DocumentPort<E> {
     type Prepared: PreparedView;
     type Error;
-    fn prepare<P: InheritanceCapturePort<Error = E>>(
+    fn prepare<P: Resolver<Error = E>>(
         &mut self,
         source: Source,
         display_path: String,
-        capture: &mut P,
+        resolver: &mut P,
     ) -> Result<Self::Prepared, Self::Error>;
 }
 #[derive(Debug, thiserror::Error)]
@@ -125,23 +62,29 @@ pub enum Error<E, X> {
         diagnostic: Box<Diagnostic>,
     },
 }
+/// The resolver a document prepares through: it keeps every spelling that
+/// located a metadata file, so a located file is captured by the name that
+/// located it, and every spelling is captured again once the document
+/// prepares.
 struct AliasCache<'a, P> {
     port: &'a mut P,
     paths: BTreeMap<String, Vec<(String, String)>>,
-    /// The finding the port classified for the last failed parent capture or
+    /// The finding the port classified for the last failed parent request or
     /// layer rebase; a failed preparation reports it beside its own error.
     parent_failure: Option<Diagnostic>,
 }
-impl<P: NativePort> AliasCache<'_, P> {
+impl<P: Resolver> AliasCache<'_, P> {
     /// A `parent` the port refused as written (FILE-5), found to reach a
     /// symbolic link (FILE-8) or found changed (FILE-10) fails with that
     /// condition at `parent`, naming the path as written; any other refusal
     /// stays the port's own error.
-    fn parent_error(port: &P, written: &str, error: &SourceError<P::Error>) -> Option<Diagnostic> {
-        let SourceError::Raised(error) = error else {
-            return None;
-        };
-        match port.resource_failure(error)? {
+    fn parent_error(
+        port: &P,
+        name: Name<'_>,
+        written: &str,
+        error: &P::Error,
+    ) -> Option<Diagnostic> {
+        match port.failure(name, error)?.resource()? {
             failure @ (ResourceFailure::UriScheme
             | ResourceFailure::Backslash
             | ResourceFailure::EmptySegment
@@ -150,7 +93,7 @@ impl<P: NativePort> AliasCache<'_, P> {
             _ => None,
         }
     }
-    fn remember(&mut self, source: &Identity, declaring: &str, written: &str) {
+    fn remember(&mut self, source: &Located, declaring: &str, written: &str) {
         let present = self
             .paths
             .get(&source.identity)
@@ -163,83 +106,99 @@ impl<P: NativePort> AliasCache<'_, P> {
         }
     }
 }
-impl<P: NativePort> InheritanceCapturePort for AliasCache<'_, P> {
+impl<P: Resolver> Resolver for AliasCache<'_, P> {
     type Error = P::Error;
-    fn canonicalize(
-        &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<Identity, SourceError<Self::Error>> {
-        let source = self
-            .port
-            .canonicalize(declaring, written)
-            .inspect_err(|error| {
-                self.parent_failure = Self::parent_error(self.port, written, error);
-            })?;
-        self.remember(&source, declaring, written);
-        Ok(source)
-    }
-    fn capture(&mut self, source: &Identity) -> Result<Vec<u8>, SourceError<Self::Error>> {
-        let (declaring, written) = self
-            .paths
-            .get(&source.identity)
-            .and_then(|paths| paths.first())
-            .ok_or_else(|| SourceError::Raised(P::missing_alias()))?;
-        let result = self.port.capture_parent(declaring, written);
-        if let Err(error) = &result {
-            self.parent_failure = Self::parent_error(self.port, written, error);
+    fn inspect(&mut self, name: Name<'_>) -> Result<Located, P::Error> {
+        let located = self.port.inspect(name);
+        if let Name::Written {
+            file,
+            declaring,
+            written,
+        } = name
+        {
+            match &located {
+                Ok(source) => self.remember(source, declaring, written),
+                Err(error) if file == File::Parent => {
+                    self.parent_failure = Self::parent_error(self.port, name, written, error);
+                }
+                Err(_) => {}
+            }
         }
-        result
+        located
     }
-    fn canonicalize_resource(
-        &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<Identity, SourceError<P::Error>> {
-        let source = self.port.canonicalize_resource(declaring, written)?;
-        self.remember(&source, declaring, written);
-        Ok(source)
-    }
-    fn capture_resource(&mut self, source: &Identity) -> Result<Vec<u8>, SourceError<P::Error>> {
-        let (declaring, written) = self
+    /// A located file is captured by the first spelling that located it; one
+    /// this cache never located goes to the port as it is.
+    fn capture(&mut self, name: Name<'_>) -> Result<Captured, P::Error> {
+        let Name::Located { file, source } = name else {
+            return self.port.capture(name);
+        };
+        let Some((declaring, written)) = self
             .paths
             .get(&source.identity)
             .and_then(|paths| paths.first())
-            .ok_or_else(|| SourceError::Raised(P::missing_alias()))?;
-        self.port.capture_resource(declaring, written)
+            .cloned()
+        else {
+            return self.port.capture(name);
+        };
+        let written_name = Name::Written {
+            file,
+            declaring: &declaring,
+            written: &written,
+        };
+        let captured = self.port.capture(written_name);
+        if let (File::Parent, Err(error)) = (file, &captured) {
+            self.parent_failure = Self::parent_error(self.port, written_name, &written, error);
+        }
+        captured
     }
-    fn resource_failure(&self, error: &P::Error) -> Option<crate::resource::ResourceFailure> {
-        self.port.resource_failure(error)
+    fn failure(&self, name: Name<'_>, error: &P::Error) -> Option<Failure> {
+        self.port.failure(name, error)
+    }
+    fn is_interrupt(&self, error: &P::Error) -> bool {
+        self.port.is_interrupt(error)
     }
     fn rebase(
         &mut self,
-        layer: &Identity,
-        entry: &Identity,
+        layer: &Located,
+        entry: &Located,
         written: &str,
-    ) -> Result<String, Self::Error> {
+    ) -> Result<String, P::Error> {
         self.port
             .rebase(layer, entry, written)
             .inspect_err(|error| {
                 self.parent_failure = self.port.rebase_failure(error, layer, entry, written);
             })
     }
+    fn rebase_failure(
+        &self,
+        error: &P::Error,
+        layer: &Located,
+        entry: &Located,
+        written: &str,
+    ) -> Option<Diagnostic> {
+        self.port.rebase_failure(error, layer, entry, written)
+    }
 }
 pub type PreparationResult<P, D> = Result<
-    <D as DocumentPort<<P as NativePort>::Error>>::Prepared,
-    Error<<P as NativePort>::Error, <D as DocumentPort<<P as NativePort>::Error>>::Error>,
+    <D as DocumentPort<<P as Resolver>::Error>>::Prepared,
+    Error<<P as Resolver>::Error, <D as DocumentPort<<P as Resolver>::Error>>::Error>,
 >;
 
-/// Resolve/capture/copy precede schema selection and document preparation. Only
-/// semantic success replays every distinct alias, including its first capture,
-/// before selecting the original entry base. Errors move unchanged and stop effects.
-pub fn prepare<P: NativePort, D: DocumentPort<P::Error>>(
+/// Resolve and capture precede schema selection and document preparation.
+/// Only semantic success captures every distinct alias again, including its
+/// first capture. Errors move unchanged and stop effects. The caller selects
+/// the prepared entry as its scope's base.
+pub fn prepare<P: Resolver, D: DocumentPort<P::Error>>(
     port: &mut P,
     documents: &mut D,
     declaring: Option<&str>,
     written: &str,
 ) -> PreparationResult<P, D> {
+    let entry = Name::Entry { declaring, written };
     let entry_error = |port: &P, error| {
-        if port.resource_failure(&error) == Some(ResourceFailure::ContentChanged) {
+        if port.failure(entry, &error).and_then(Failure::resource)
+            == Some(ResourceFailure::ContentChanged)
+        {
             Error::ResourceFinding {
                 error,
                 diagnostic: Box::new(
@@ -251,11 +210,14 @@ pub fn prepare<P: NativePort, D: DocumentPort<P::Error>>(
         }
     };
     let identity = port
-        .resolve_entry(declaring, written)
-        .map_err(|error| entry_error(port, error))?;
+        .inspect(entry)
+        .map_err(|error| entry_error(port, error))?
+        .identity;
     let bytes = port
-        .capture_entry(declaring, written)
-        .map_err(|error| entry_error(port, error))?;
+        .capture(entry)
+        .map_err(|error| entry_error(port, error))?
+        .bytes
+        .to_vec();
     let source = Source {
         identity: identity.clone(),
         bytes,
@@ -265,7 +227,7 @@ pub fn prepare<P: NativePort, D: DocumentPort<P::Error>>(
         paths: BTreeMap::new(),
         parent_failure: None,
     };
-    let mut document = match documents.prepare(source, identity.clone(), &mut aliases) {
+    let mut document = match documents.prepare(source, identity, &mut aliases) {
         Ok(document) => document,
         Err(error) => {
             return Err(match aliases.parent_failure {
@@ -283,16 +245,33 @@ pub fn prepare<P: NativePort, D: DocumentPort<P::Error>>(
         .map(D::Prepared::parent_source)
         .chain(document.resources())
     {
-        let paths = aliases
-            .paths
-            .get(&source.identity)
-            .ok_or_else(|| Error::Resource(P::missing_alias()))?;
+        let Some(paths) = aliases.paths.get(&source.identity) else {
+            // Every file a document holds was located through this cache;
+            // one it never located is captured as the port captures it.
+            let located = Located {
+                identity: source.identity.clone(),
+                display_path: source.identity.clone(),
+            };
+            aliases
+                .port
+                .capture(Name::Located {
+                    file: File::Resource,
+                    source: &located,
+                })
+                .map_err(Error::Resource)?;
+            continue;
+        };
         for (declaring, written) in paths {
-            let result = aliases.port.accept_alias(declaring, written);
-            if let Err(error) = result {
+            let name = Name::Written {
+                file: File::Resource,
+                declaring,
+                written,
+            };
+            if let Err(error) = aliases.port.capture(name) {
                 if let Some(diagnostic) = aliases
                     .port
-                    .resource_failure(&error)
+                    .failure(name, &error)
+                    .and_then(Failure::resource)
                     .filter(|failure| *failure == ResourceFailure::ContentChanged)
                     .and_then(|failure| document.resource_diagnostic(declaring, written, failure))
                 {
@@ -305,10 +284,6 @@ pub fn prepare<P: NativePort, D: DocumentPort<P::Error>>(
             }
         }
     }
-    aliases
-        .port
-        .select_entry_base(&identity)
-        .map_err(Error::Resource)?;
     document.retain_resource_aliases(aliases.paths);
     Ok(document)
 }

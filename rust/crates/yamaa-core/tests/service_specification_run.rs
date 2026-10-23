@@ -5,10 +5,8 @@ mod service {
         use std::{cell::RefCell, rc::Rc, sync::Arc};
         use yamaa_core::{
             dataset::ExecutionError,
-            specification_run::{
-                self as run, CapturedAttempt, PortError, RunError, SourceDecoder,
-                SpecificationSourcePort,
-            },
+            resolver::{Captured, Failure, Located, Name, Origin, Resolver},
+            specification_run::{self as run, CapturedAttempt, PortError, RunError, SourceDecoder},
         };
         use yamaa_core::{
             schema::Document,
@@ -88,42 +86,43 @@ mod service {
             requests: usize,
             reads: usize,
             fail: bool,
-            regress: bool,
             payload: Rc<()>,
         }
-        impl SpecificationSourcePort for Port {
-            fn resource_failure(
-                &self,
-                _error: &Self::Error,
-            ) -> Option<yamaa_core::resource::ResourceFailure> {
-                None
+        /// The input's place, as an inspection reports it.
+        fn located(name: Name<'_>) -> Located {
+            let Name::Input(source) = name else {
+                panic!("unexpected request {name:?}")
+            };
+            Located {
+                identity: source.path.clone(),
+                display_path: source.path.clone(),
             }
-            fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
-                Ok(())
-            }
-
+        }
+        impl Resolver for Port {
             type Error = Payload;
-            fn capture_reads(&self) -> usize {
-                self.reads
+            fn inspect(&mut self, name: Name<'_>) -> Result<Located, Payload> {
+                Ok(located(name))
             }
-            fn capture(
-                &mut self,
-                source: &SourceDeclaration,
-                origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-            ) -> Result<Arc<[u8]>, Payload> {
-                *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+            fn capture(&mut self, name: Name<'_>) -> Result<Captured, Payload> {
+                let Name::Input(source) = name else {
+                    panic!("unexpected request {name:?}")
+                };
                 self.trace.borrow_mut().push("capture");
                 assert_eq!(source.path, "input.csv");
                 self.requests += 1;
-                if self.regress {
-                    self.reads -= 1;
-                } else if self.requests == 1 {
-                    self.reads += 1;
-                }
+                // The first capture takes the snapshot; later ones reuse it.
+                let created = self.requests == 1;
+                self.reads += usize::from(created);
                 if self.fail {
                     return Err(Payload(Rc::clone(&self.payload)));
                 }
-                Ok(Arc::clone(&self.snapshot))
+                Ok(Captured::resource(Arc::clone(&self.snapshot), created))
+            }
+            fn failure(&self, _: Name<'_>, _: &Payload) -> Option<Failure> {
+                None
+            }
+            fn rebase(&mut self, _: &Located, _: &Located, _: &str) -> Result<String, Payload> {
+                panic!("an input is never rebased")
             }
         }
         struct Table {
@@ -198,7 +197,6 @@ mod service {
                     requests: 0,
                     reads: 0,
                     fail: false,
-                    regress: false,
                     payload: Rc::clone(&payload),
                 },
                 Decoder {
@@ -380,10 +378,7 @@ mod service {
                     ),
                 );
                 assert_eq!(attempt.sources[0].read.snapshots_created, Some(created));
-                assert_eq!(
-                    attempt.sources[0].read.origin,
-                    Some(run::SourceOrigin::Resource)
-                );
+                assert_eq!(attempt.sources[0].read.origin, Some(Origin::Resource));
                 assert!(Arc::ptr_eq(
                     attempt.sources[0].snapshot.as_ref().unwrap(),
                     &port.snapshot
@@ -415,10 +410,7 @@ mod service {
                     &yamaa_core::application_observer::Noop,
                 ),
             );
-            assert_eq!(
-                attempt.sources[0].read.origin,
-                Some(run::SourceOrigin::Resource)
-            );
+            assert_eq!(attempt.sources[0].read.origin, Some(Origin::Resource));
             let result = std::mem::replace(&mut attempt.result, Err(PortError::Incomplete));
             let Err(PortError::Capture(Payload(payload))) = result else {
                 panic!("capture error")
@@ -474,29 +466,6 @@ mod service {
                 ["capture", "decode", "schema", "schema"]
             );
         }
-        #[test]
-        fn regressing_capture_reads_preserve_the_snapshot_and_precede_decoding() {
-            let prepared = prepare(&document("ID + 1", "input.csv")).unwrap();
-            let (mut port, mut decoder) = fixtures();
-            let mut attempt = CapturedAttempt::new(prepared.source());
-            port.regress = true;
-            port.reads = 1;
-            run::execute_into(
-                &prepared,
-                &mut port,
-                &mut decoder,
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                &mut attempt,
-                yamaa_core::application_observer::Scope::new(
-                    &yamaa_core::application_observer::Noop,
-                ),
-            );
-            assert!(matches!(attempt.result, Err(PortError::CaptureAccounting)));
-            assert_eq!(attempt.sources[0].read.snapshots_created, None);
-            assert!(attempt.sources[0].snapshot.is_some() && attempt.sources[0].table.is_none());
-            assert_eq!(*decoder.trace.borrow(), ["capture"]);
-        }
-
         #[test]
         fn runtime_errors_and_panic_boundaries_keep_the_observed_source() {
             let prepared = prepare(&document("ID + 1", "input.csv")).unwrap();
@@ -570,37 +539,35 @@ mod service {
                 fail: Option<String>,
                 payload: Rc<()>,
             }
-            impl SpecificationSourcePort for Capture {
-                fn resource_failure(
-                    &self,
-                    _error: &Self::Error,
-                ) -> Option<yamaa_core::resource::ResourceFailure> {
-                    None
-                }
-                fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
-                    Ok(())
-                }
-
+            impl Resolver for Capture {
                 type Error = Payload;
-                fn capture_reads(&self) -> usize {
-                    self.reads
+                fn inspect(&mut self, name: Name<'_>) -> Result<Located, Payload> {
+                    Ok(located(name))
                 }
-                fn capture(
-                    &mut self,
-                    source: &SourceDeclaration,
-                    origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-                ) -> Result<Arc<[u8]>, Payload> {
-                    *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+                fn capture(&mut self, name: Name<'_>) -> Result<Captured, Payload> {
+                    let Name::Input(source) = name else {
+                        panic!("unexpected request {name:?}")
+                    };
                     self.trace.borrow_mut().push("capture");
                     self.requests.push(source.name.clone());
                     if self.fail.as_deref() == Some(source.name.as_str()) {
                         return Err(Payload(Rc::clone(&self.payload)));
                     }
-                    if !self.seen.contains(&source.name) {
+                    let created = !self.seen.contains(&source.name);
+                    if created {
                         self.seen.push(source.name.clone());
                         self.reads += 1;
                     }
-                    Ok(Arc::from(b"held snapshot".as_slice()))
+                    Ok(Captured::resource(
+                        Arc::from(b"held snapshot".as_slice()),
+                        created,
+                    ))
+                }
+                fn failure(&self, _: Name<'_>, _: &Payload) -> Option<Failure> {
+                    None
+                }
+                fn rebase(&mut self, _: &Located, _: &Located, _: &str) -> Result<String, Payload> {
+                    panic!("an input is never rebased")
                 }
             }
             #[derive(Debug)]
@@ -678,18 +645,17 @@ mod service {
                 capture: Capture,
                 inspected: Vec<String>,
                 failures: Vec<(String, Option<yamaa_core::resource::ResourceFailure>)>,
-                counter_change: bool,
                 panic_at: Option<String>,
             }
-            impl SpecificationSourcePort for Inspection {
+            impl Resolver for Inspection {
                 type Error = InspectError;
-                fn resource_failure(
-                    &self,
-                    error: &InspectError,
-                ) -> Option<yamaa_core::resource::ResourceFailure> {
-                    error.cause
+                fn failure(&self, _: Name<'_>, error: &InspectError) -> Option<Failure> {
+                    error.cause.map(Failure::Resource)
                 }
-                fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), InspectError> {
+                fn inspect(&mut self, name: Name<'_>) -> Result<Located, InspectError> {
+                    let Name::Input(source) = name else {
+                        panic!("unexpected request {name:?}")
+                    };
                     self.capture.trace.borrow_mut().push("inspect");
                     self.inspected.push(source.name.clone());
                     assert_ne!(
@@ -697,9 +663,6 @@ mod service {
                         Some(source.name.as_str()),
                         "injected inspection interruption"
                     );
-                    if self.counter_change {
-                        self.capture.reads += 1;
-                    }
                     if let Some((_, cause)) =
                         self.failures.iter().find(|(name, _)| name == &source.name)
                     {
@@ -708,23 +671,21 @@ mod service {
                             payload: Rc::clone(&self.capture.payload),
                         });
                     }
-                    Ok(())
+                    Ok(located(name))
                 }
-                fn capture_reads(&self) -> usize {
-                    self.capture.capture_reads()
+                fn capture(&mut self, name: Name<'_>) -> Result<Captured, InspectError> {
+                    self.capture.capture(name).map_err(|error| InspectError {
+                        cause: None,
+                        payload: error.0,
+                    })
                 }
-                fn capture(
+                fn rebase(
                     &mut self,
-                    source: &SourceDeclaration,
-                    origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-                ) -> Result<Arc<[u8]>, InspectError> {
-                    *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
-                    self.capture
-                        .capture(source, origin)
-                        .map_err(|error| InspectError {
-                            cause: None,
-                            payload: error.0,
-                        })
+                    _: &Located,
+                    _: &Located,
+                    _: &str,
+                ) -> Result<String, InspectError> {
+                    panic!("an input is never rebased")
                 }
             }
             fn inspection() -> (Inspection, Decode) {
@@ -734,7 +695,6 @@ mod service {
                         capture,
                         inspected: vec![],
                         failures: vec![],
-                        counter_change: false,
                         panic_at: None,
                     },
                     decoder,
@@ -870,27 +830,6 @@ mod service {
                 assert_eq!(port.inspected, ["SRC", "SECOND"]);
                 assert!(attempt.sources.is_empty() && port.capture.requests.is_empty());
                 assert_eq!(port.capture.reads, 0);
-            }
-            #[test]
-            fn inspecting_cannot_increment_capture_accounting() {
-                let prepared = prepared();
-                let (mut port, mut decoder) = inspection();
-                port.counter_change = true;
-                let mut attempt = CapturedAttempt::new(prepared.source());
-                run::execute_into(
-                    &prepared,
-                    &mut port,
-                    &mut decoder,
-                    &mut yamaa_core::function_invocation::NoFunctions::new(),
-                    &mut attempt,
-                    yamaa_core::application_observer::Scope::new(
-                        &yamaa_core::application_observer::Noop,
-                    ),
-                );
-                assert!(matches!(attempt.result, Err(PortError::CaptureAccounting)));
-                assert_eq!(port.inspected, ["SRC"]);
-                assert!(attempt.sources.is_empty() && port.capture.requests.is_empty());
-                assert_eq!(*decoder.trace.borrow(), ["inspect"]);
             }
             #[test]
             fn inspection_panic_retains_an_incomplete_attempt_without_inventing_reads() {
@@ -1219,7 +1158,7 @@ mod service {
         use crate::support::document::Tree;
         use std::rc::Rc;
         use yamaa_core::schema::{Document, DocumentNode as N};
-        use yamaa_core::submission_inventory::{self as service, Ports};
+        use yamaa_core::submission_inventory as service;
         fn domain(name: &str) -> Document {
             Document::new(
                 vec![
@@ -1252,7 +1191,6 @@ mod service {
         }
         struct Captured {
             document: Document,
-            identity: String,
         }
         #[derive(Debug)]
         struct Original(Rc<()>);
@@ -1261,9 +1199,9 @@ mod service {
             fail: bool,
             original: Rc<()>,
         }
-        impl Ports for Metadata {
-            type Specification = Captured;
-            type Error = Original;
+        impl Metadata {
+            /// Capture the specification `written` from the project file
+            /// `declaring`, as the caller's capture does.
             fn capture(&mut self, declaring: &str, written: &str) -> Result<Captured, Original> {
                 self.calls.push((declaring.into(), written.into()));
                 if self.fail && self.calls.len() == 2 {
@@ -1271,14 +1209,7 @@ mod service {
                 }
                 Ok(Captured {
                     document: domain(if self.calls.len() == 1 { "DM" } else { "ADSL" }),
-                    identity: format!("{declaring}/{written}"),
                 })
-            }
-            fn document(captured: &Captured) -> &Document {
-                &captured.document
-            }
-            fn identity(captured: &Captured) -> &str {
-                &captured.identity
             }
         }
         #[test]
@@ -1290,7 +1221,12 @@ mod service {
             };
             // A section's specifications resolve from the project file
             // (PROJECT-4).
-            let held = service::capture(&project(), "original/project.yaml", &mut port).unwrap();
+            let held = service::capture(
+                &project(),
+                |written| port.capture("original/project.yaml", written),
+                |captured| &captured.document,
+            )
+            .unwrap();
             assert_eq!(held.inventory.names(), ["ADSL", "DM"]);
             assert_eq!(held.specifications.len(), 2);
             assert_eq!(
@@ -1309,9 +1245,11 @@ mod service {
                 fail: true,
                 original: Rc::clone(&original),
             };
-            let Err(service::Error::Port { written, error }) =
-                service::capture(&project(), "project.yaml", &mut port)
-            else {
+            let Err(service::Error::Port { written, error }) = service::capture(
+                &project(),
+                |written| port.capture("project.yaml", written),
+                |captured| &captured.document,
+            ) else {
                 panic!("original capture failure")
             };
             assert_eq!(written, "second.yaml");

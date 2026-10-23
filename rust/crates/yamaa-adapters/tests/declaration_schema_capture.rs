@@ -398,20 +398,29 @@ mod declaration {
 
         use yamaa_adapters::{
             shipped_schema,
-            specification_source::{Error, InheritanceError, InheritancePort, Source},
+            specification_source::{Error, InheritanceError, Source},
         };
-        use yamaa_core::inheritance::{Source as Identity, SourceError};
+        use yamaa_core::inheritance::Source as Identity;
+        use yamaa_core::resolver::{Captured, Failure, Name, Resolver};
 
         struct NoParents;
-        impl InheritancePort for NoParents {
+        impl Resolver for NoParents {
             type Error = ();
-            fn canonicalize(&mut self, _: &str, _: &str) -> Result<Identity, SourceError<()>> {
+            fn inspect(&mut self, _: Name<'_>) -> Result<Identity, Self::Error> {
                 panic!("entry rejection or standalone preparation must not resolve a parent")
             }
-            fn capture(&mut self, _: &Identity) -> Result<Vec<u8>, SourceError<()>> {
+            fn capture(&mut self, _: Name<'_>) -> Result<Captured, Self::Error> {
                 panic!("entry rejection or standalone preparation must not read a parent")
             }
-            fn rebase(&mut self, _: &Identity, _: &Identity, _: &str) -> Result<String, ()> {
+            fn failure(&self, _: Name<'_>, _: &Self::Error) -> Option<Failure> {
+                None
+            }
+            fn rebase(
+                &mut self,
+                _: &Identity,
+                _: &Identity,
+                _: &str,
+            ) -> Result<String, Self::Error> {
                 panic!("entry rejection or standalone preparation must not rebase a parent")
             }
         }
@@ -727,22 +736,27 @@ mod declaration {
             raw: Vec<u8>,
             reads: usize,
         }
-        impl InheritancePort for ParentSource {
+        impl Resolver for ParentSource {
             type Error = ();
-            fn canonicalize(
-                &mut self,
-                declaring: &str,
-                written: &str,
-            ) -> Result<Identity, SourceError<()>> {
+            fn inspect(&mut self, name: Name<'_>) -> Result<Identity, ()> {
+                let Name::Written {
+                    declaring, written, ..
+                } = name
+                else {
+                    panic!("unexpected request {name:?}")
+                };
                 assert_eq!((declaring, written), ("entry.yaml", "parent.yaml"));
                 Ok(Identity {
                     identity: "parent.yaml".into(),
                     display_path: "parent.yaml".into(),
                 })
             }
-            fn capture(&mut self, _: &Identity) -> Result<Vec<u8>, SourceError<()>> {
+            fn capture(&mut self, _: Name<'_>) -> Result<Captured, ()> {
                 self.reads += 1;
-                Ok(self.raw.clone())
+                Ok(Captured::resource(self.raw.clone().into(), true))
+            }
+            fn failure(&self, _: Name<'_>, _: &()) -> Option<Failure> {
+                None
             }
             fn rebase(&mut self, _: &Identity, _: &Identity, written: &str) -> Result<String, ()> {
                 Ok(written.into())
@@ -844,13 +858,12 @@ mod declaration {
         use yamaa_adapters::json;
         use yamaa_adapters::{
             specification_diagnostics::capture_failure,
-            specification_source::{
-                CapturedSchema, Error, InheritanceError, InheritancePort, Source,
-            },
+            specification_source::{CapturedSchema, Error, InheritanceError, Source},
             yaml_decode::{decode_yaml, DecodeFailure},
         };
-        use yamaa_core::inheritance::{Source as Identity, SourceError};
+        use yamaa_core::inheritance::Source as Identity;
         use yamaa_core::json::Value;
+        use yamaa_core::resolver::{Captured, Failure, Name, Resolver};
         use yamaa_core::schema::{DocumentNode as N, NormalizationError, SchemaSource};
 
         const SCHEMA: &str = "version: '1.0'\nroot_class:\n  - schema_version: {type: str}\n  - domain: {type: [str, int], default: DEFAULT}\n  - input: {type: dict}\n  - keys: {type: 'list[str]'}\n  - output: {type: dict}\n  - columns: {type: 'list[column_class]'}\n  - windows: {type: 'dict[str, window_spec]'}\ncolumn_class:\n  - name: {type: str}\n  - type: {type: str}\n  - derivation: {type: handled_expression_class}\nhandled_expression_class:\n  - value: {type: expression}\nexpression: {registry: expressions}\nexpressions:\n  row_number:\n    - window: {type: window_selection}\nwindow_selection: {type: [str, window_spec]}\nwindow_spec:\n  - group_by: {type: 'list[str]'}\n  - order_by: {type: 'list[order_term]'}\norder_term:\n  - variable: {type: str}\n";
@@ -875,17 +888,16 @@ mod declaration {
             crate::support::findings(capture_failure(error))
         }
         struct NoParents;
-        impl InheritancePort for NoParents {
+        impl Resolver for NoParents {
             type Error = std::rc::Rc<usize>;
-            fn canonicalize(
-                &mut self,
-                _: &str,
-                _: &str,
-            ) -> Result<Identity, SourceError<Self::Error>> {
+            fn inspect(&mut self, _: Name<'_>) -> Result<Identity, Self::Error> {
                 panic!("standalone path must not canonicalize")
             }
-            fn capture(&mut self, _: &Identity) -> Result<Vec<u8>, SourceError<Self::Error>> {
+            fn capture(&mut self, _: Name<'_>) -> Result<Captured, Self::Error> {
                 panic!("standalone path must not capture")
+            }
+            fn failure(&self, _: Name<'_>, _: &Self::Error) -> Option<Failure> {
+                None
             }
             fn rebase(
                 &mut self,
@@ -2240,16 +2252,14 @@ mod declaration {
         use yamaa_adapters::json;
         use yamaa_adapters::{
             project_environment_diagnostics as diagnostics,
-            project_source::{
-                self, CaptureFailure, Failure, Kind, Origin, ProjectCapturePort, Reply, Request,
-            },
+            project_source::{self, CaptureFailure, Failure, Kind, Origin},
             specification_source::{Error, Source},
             yaml_decode::{decode_yaml, DecodeFailure},
         };
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::json::Value;
+        use yamaa_core::resolver::{self, Captured, File, Located, Name, Resolver};
         use yamaa_core::{
-            project_environment::LockKind,
             project_function::Language,
             schema::{Document, DocumentNode as N, SchemaSource},
         };
@@ -2311,45 +2321,71 @@ mod declaration {
             value: Box<str>,
             _thread: Rc<()>,
         }
+        /// The files a project names, served in request order: each is
+        /// served when it is located, and its capture reads the bytes served.
         struct Metadata {
-            pending: Vec<(Kind, String, Result<Reply, Opaque>)>,
+            pending: Vec<(Kind, String, Result<Source, Opaque>)>,
             trace: Vec<(Kind, String)>,
+            held: Vec<u8>,
         }
         impl Metadata {
-            fn new(pending: Vec<(Kind, &str, Result<Reply, Opaque>)>) -> Self {
+            fn new(pending: Vec<(Kind, &str, Result<Source, Opaque>)>) -> Self {
                 Self {
                     pending: pending
                         .into_iter()
                         .map(|(kind, path, reply)| (kind, path.into(), reply))
                         .collect(),
                     trace: vec![],
+                    held: vec![],
                 }
             }
         }
-        impl ProjectCapturePort for Metadata {
+        impl Resolver for Metadata {
             type Error = Opaque;
-            fn capture(&mut self, request: Request<'_>) -> Result<Reply, Opaque> {
-                self.trace.push((request.kind, request.written.into()));
-                let (kind, path, reply) = self.pending.remove(0);
-                assert_eq!(kind, request.kind);
-                assert_eq!(path, request.written);
+            fn inspect(&mut self, name: Name<'_>) -> Result<Located, Opaque> {
+                let Name::Written {
+                    file: File::Project(kind),
+                    declaring,
+                    written,
+                } = name
+                else {
+                    panic!("unexpected request {name:?}")
+                };
+                self.trace.push((kind, written.into()));
+                let (expected, path, reply) = self.pending.remove(0);
+                assert_eq!(expected, kind);
+                assert_eq!(path, written);
                 // Each path resolves from the file that writes it.
-                let declaring = match request.kind {
+                let from = match kind {
                     Kind::Environment | Kind::Codelist => PROJECT,
                     Kind::Lock | Kind::Function => ENVIRONMENT,
                 };
-                assert_eq!(request.declaring_source, declaring);
-                reply
+                assert_eq!(declaring, from);
+                let source = reply?;
+                self.held = source.bytes;
+                Ok(Located {
+                    display_path: source.identity.clone(),
+                    identity: source.identity,
+                })
+            }
+            fn capture(&mut self, _: Name<'_>) -> Result<Captured, Opaque> {
+                Ok(Captured::resource(
+                    std::mem::take(&mut self.held).into(),
+                    true,
+                ))
+            }
+            fn failure(&self, _: Name<'_>, _: &Opaque) -> Option<resolver::Failure> {
+                None
+            }
+            fn rebase(&mut self, _: &Located, _: &Located, _: &str) -> Result<String, Opaque> {
+                panic!("a project file is never rebased")
             }
         }
-        fn lock() -> Reply {
-            Reply::Lock {
-                source: source("held/uv.lock", "version = 1\n"),
-                kind: LockKind::Uv,
-            }
+        fn lock() -> Source {
+            source("held/uv.lock", crate::support::ports::UV_LOCK)
         }
-        fn document(name: &str, text: &str) -> Reply {
-            Reply::Document(source(name, text))
+        fn document(name: &str, text: &str) -> Source {
+            source(name, text)
         }
 
         #[test]
@@ -2382,11 +2418,7 @@ mod declaration {
             let bytes = failed.bytes.as_ptr();
             let identity = failed.identity.as_ptr();
             let mut port = Metadata::new(vec![
-                (
-                    Kind::Environment,
-                    "environment.yaml",
-                    Ok(Reply::Document(failed)),
-                ),
+                (Kind::Environment, "environment.yaml", Ok(failed)),
                 (
                     Kind::Codelist,
                     "ct.yaml",
@@ -2449,28 +2481,19 @@ mod declaration {
             let entry = source(PROJECT, root);
             let root_bytes = entry.bytes.as_ptr();
             let root_identity = entry.identity.as_ptr();
+            // A file the resolver serves keeps its identity's allocation; its
+            // bytes are copied out of the resolver's snapshot.
             let file = source(ENVIRONMENT, linked);
-            let file_bytes = file.bytes.as_ptr();
             let file_identity = file.identity.as_ptr();
             let function = source("held/function.yaml", FUNCTION);
-            let function_pointer = function.bytes.as_ptr();
             let function_identity = function.identity.as_ptr();
             let codelist = source("held/ct.yaml", CODELIST);
-            let ct_pointer = codelist.bytes.as_ptr();
             let ct_identity = codelist.identity.as_ptr();
             let mut port = Metadata::new(vec![
-                (
-                    Kind::Environment,
-                    "environment.yaml",
-                    Ok(Reply::Document(file)),
-                ),
+                (Kind::Environment, "environment.yaml", Ok(file)),
                 (Kind::Lock, "uv.lock", Ok(lock())),
-                (
-                    Kind::Function,
-                    "functions/constant.yaml",
-                    Ok(Reply::Document(function)),
-                ),
-                (Kind::Codelist, "ct/sex.yaml", Ok(Reply::Document(codelist))),
+                (Kind::Function, "functions/constant.yaml", Ok(function)),
+                (Kind::Codelist, "ct/sex.yaml", Ok(codelist)),
             ]);
             let prepared =
                 project_source::prepare(schemas.clone(), entry, Language::Python, &mut port)
@@ -2480,16 +2503,16 @@ mod declaration {
             original_locations(&prepared.root, root);
             assert!(Arc::ptr_eq(prepared.root.schema(), &schemas.project));
             let file = prepared.environment_file.as_ref().unwrap();
-            assert_eq!(file.source().bytes.as_ptr(), file_bytes);
+            assert_eq!(file.source().bytes, linked.as_bytes());
             assert_eq!(file.source().identity.as_ptr(), file_identity);
             original_locations(file, linked);
             assert!(Arc::ptr_eq(file.schema(), &schemas.environment));
             assert_eq!(prepared.captures.len(), 2);
             let function = &prepared.captures[0].document;
             let codelist = &prepared.captures[1].document;
-            assert_eq!(function.source().bytes.as_ptr(), function_pointer);
+            assert_eq!(function.source().bytes, FUNCTION.as_bytes());
             assert_eq!(function.source().identity.as_ptr(), function_identity);
-            assert_eq!(codelist.source().bytes.as_ptr(), ct_pointer);
+            assert_eq!(codelist.source().bytes, CODELIST.as_bytes());
             assert_eq!(codelist.source().identity.as_ptr(), ct_identity);
             original_locations(function, FUNCTION);
             original_locations(codelist, CODELIST);
@@ -2569,7 +2592,7 @@ mod declaration {
                     Ok(document(ENVIRONMENT, linked)),
                 ),
                 (Kind::Lock, "uv.lock", Ok(lock())),
-                (Kind::Function, "bad.yaml", Ok(Reply::Document(failed))),
+                (Kind::Function, "bad.yaml", Ok(failed)),
                 (
                     Kind::Function,
                     "good.yaml",
@@ -2760,8 +2783,9 @@ mod declaration {
         fn live_codelist_class_failure_keeps_full_raw_source_report_and_later_capture() {
             let root = "schema_version: '1.0'\nenvironments: {python: environment.yaml}\ncodelists: [bad.yaml, good.yaml]\n";
             let bad = CODELIST.to_owned() + "retired: value\n";
+            // The file keeps its identity's allocation; its bytes are copied
+            // out of the resolver's snapshot.
             let failed = source("held/bad-ct.yaml", &bad);
-            let bytes = failed.bytes.as_ptr();
             let identity = failed.identity.as_ptr();
             let schemas = candidate_schemas();
             let mut port = Metadata::new(vec![
@@ -2774,7 +2798,7 @@ mod declaration {
                     )),
                 ),
                 (Kind::Lock, "uv.lock", Ok(lock())),
-                (Kind::Codelist, "bad.yaml", Ok(Reply::Document(failed))),
+                (Kind::Codelist, "bad.yaml", Ok(failed)),
                 (
                     Kind::Codelist,
                     "good.yaml",
@@ -2808,7 +2832,7 @@ mod declaration {
             else {
                 panic!()
             };
-            assert_eq!(captured.source().bytes.as_ptr(), bytes);
+            assert_eq!(captured.source().bytes, bad.as_bytes());
             assert_eq!(captured.source().identity.as_ptr(), identity);
             assert!(std::ptr::eq(captured.schema(), schemas.project.as_ref()));
             assert_eq!(
@@ -2828,12 +2852,13 @@ mod declaration {
         use crate::support::Edit as _;
         use std::{convert::Infallible, path::PathBuf};
         use yamaa_adapters::{
-            project_source::{self, Kind, ProjectCapturePort, Reply, Request},
+            project_source::{self, Kind},
             shipped_schema, specification_check,
             specification_run::PreparedRun,
             specification_source::Source,
         };
-        use yamaa_core::{project_environment::LockKind, project_function::Language};
+        use yamaa_core::project_function::Language;
+        use yamaa_core::resolver::{Captured, Failure, File, Located, Name, Resolver};
 
         /// Serves the function files and the R lock the benchmark project
         /// names (D8); every path resolves from the project file.
@@ -2842,35 +2867,71 @@ mod declaration {
             project: String,
             functions: usize,
             locks: usize,
+            /// The bytes of the file last located.
+            held: Vec<u8>,
         }
-        impl ProjectCapturePort for DeclaredProject {
-            type Error = Infallible;
-            fn capture(&mut self, request: Request<'_>) -> Result<Reply, Self::Error> {
-                assert_eq!(request.declaring_source, self.project);
-                match request.kind {
+        impl DeclaredProject {
+            /// The held source the double serves for the file a project names.
+            fn answer(
+                &mut self,
+                kind: Kind,
+                declaring: &str,
+                written: &str,
+            ) -> Result<Source, Infallible> {
+                assert_eq!(declaring, self.project);
+                match kind {
                     Kind::Function => {
                         self.functions += 1;
-                        Ok(Reply::Document(Source {
-                            identity: self.project.edit("project.yaml", request.written),
-                            bytes: std::fs::read(self.case.join(request.written)).unwrap(),
-                        }))
+                        Ok(Source {
+                            identity: self.project.edit("project.yaml", written),
+                            bytes: std::fs::read(self.case.join(written)).unwrap(),
+                        })
                     }
                     // The R host reads only its own lock; the Python lock stays unopened.
                     Kind::Lock => {
-                        assert_eq!(request.written, "r/renv.lock");
+                        assert_eq!(written, "r/renv.lock");
                         self.locks += 1;
                         // Static admission borrows only the declared lock format. This authored
                         // codec fixture grants no installed-package or verification evidence.
-                        Ok(Reply::Lock {
-                            source: Source {
-                                identity: "typed-fixture/renv.lock".into(),
-                                bytes: b"{}".to_vec(),
-                            },
-                            kind: LockKind::Renv,
+                        Ok(Source {
+                            identity: "typed-fixture/renv.lock".into(),
+                            bytes: crate::support::ports::RENV_LOCK.as_bytes().to_vec(),
                         })
                     }
                     kind => panic!("unexpected {kind:?} capture"),
                 }
+            }
+        }
+        /// A file is served when it is located; its capture reads the bytes served.
+        impl Resolver for DeclaredProject {
+            type Error = Infallible;
+            fn inspect(&mut self, name: Name<'_>) -> Result<Located, Self::Error> {
+                let Name::Written {
+                    file: File::Project(kind),
+                    declaring,
+                    written,
+                } = name
+                else {
+                    panic!("unexpected request {name:?}")
+                };
+                let source = self.answer(kind, declaring, written)?;
+                self.held = source.bytes;
+                Ok(Located {
+                    display_path: source.identity.clone(),
+                    identity: source.identity,
+                })
+            }
+            fn capture(&mut self, _: Name<'_>) -> Result<Captured, Self::Error> {
+                Ok(Captured::resource(
+                    std::mem::take(&mut self.held).into(),
+                    true,
+                ))
+            }
+            fn failure(&self, _: Name<'_>, _: &Self::Error) -> Option<Failure> {
+                None
+            }
+            fn rebase(&mut self, _: &Located, _: &Located, _: &str) -> Result<String, Self::Error> {
+                panic!("a project file is never rebased")
             }
         }
 
@@ -2882,6 +2943,7 @@ mod declaration {
                 project: format!("benchmarks/{name}/project.yaml"),
                 functions: 0,
                 locks: 0,
+                held: vec![],
             };
             let environment = project_source::prepare(
                 shipped_schema::capture_project().unwrap(),

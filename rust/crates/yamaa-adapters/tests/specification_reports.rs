@@ -142,30 +142,45 @@ mod execution {
                     Ok(written.into())
                 }
             }
-            impl yamaa_adapters::specification_source::InheritancePort for Host {
+            impl yamaa_core::resolver::Resolver for Host {
                 type Error = &'static str;
-                fn canonicalize(
+                fn inspect(
                     &mut self,
-                    declaring: &str,
-                    written: &str,
-                ) -> Result<graph::Source, graph::SourceError<Self::Error>> {
-                    graph::InheritanceSourcePort::canonicalize(self, declaring, written)
+                    name: yamaa_core::resolver::Name<'_>,
+                ) -> Result<graph::Source, &'static str> {
+                    let yamaa_core::resolver::Name::Written { written, .. } = name else {
+                        panic!("unexpected request {name:?}")
+                    };
+                    self.resolutions.push(written.into());
+                    Ok(graph::Source {
+                        identity: written.into(),
+                        display_path: written.into(),
+                    })
                 }
                 fn capture(
                     &mut self,
-                    source: &graph::Source,
-                ) -> Result<Vec<u8>, graph::SourceError<Self::Error>> {
+                    name: yamaa_core::resolver::Name<'_>,
+                ) -> Result<yamaa_core::resolver::Captured, &'static str> {
+                    let yamaa_core::resolver::Name::Located { source, .. } = name else {
+                        panic!("unexpected request {name:?}")
+                    };
                     self.reads.push(source.identity.clone());
                     let bytes = std::fs::read(self.root.join(&source.identity)).unwrap();
-
-                    Ok(bytes)
+                    Ok(yamaa_core::resolver::Captured::resource(bytes.into(), true))
+                }
+                fn failure(
+                    &self,
+                    _: yamaa_core::resolver::Name<'_>,
+                    _: &&'static str,
+                ) -> Option<yamaa_core::resolver::Failure> {
+                    None
                 }
                 fn rebase(
                     &mut self,
                     layer: &graph::Source,
                     entry: &graph::Source,
                     written: &str,
-                ) -> Result<String, Self::Error> {
+                ) -> Result<String, &'static str> {
                     lifecycle::PathPort::rebase(self, layer, entry, written)
                 }
             }
@@ -334,32 +349,50 @@ mod execution {
                 bytes: Arc<[u8]>,
                 reads: usize,
             }
-            impl yamaa_adapters::specification_run::SpecificationSourcePort for Data {
+            use yamaa_core::resolver;
+            impl resolver::Resolver for Data {
+                type Error = ();
                 fn inspect(
                     &mut self,
-                    _source: &yamaa_core::specification::SourceDeclaration,
-                ) -> Result<(), Self::Error> {
-                    Ok(())
-                }
-                fn resource_failure(
-                    &self,
-                    _error: &Self::Error,
-                ) -> Option<yamaa_core::resource::ResourceFailure> {
-                    None
-                }
-                type Error = ();
-                fn capture_reads(&self) -> usize {
-                    self.reads
+                    name: resolver::Name<'_>,
+                ) -> Result<resolver::Located, Self::Error> {
+                    let resolver::Name::Input(source) = name else {
+                        panic!("unexpected request {name:?}")
+                    };
+                    Ok(resolver::Located {
+                        identity: source.path.clone(),
+                        display_path: source.path.clone(),
+                    })
                 }
                 fn capture(
                     &mut self,
-                    source: &yamaa_core::specification::SourceDeclaration,
-                    origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-                ) -> Result<Arc<[u8]>, ()> {
-                    *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+                    name: resolver::Name<'_>,
+                ) -> Result<resolver::Captured, Self::Error> {
+                    let resolver::Name::Input(source) = name else {
+                        panic!("unexpected request {name:?}")
+                    };
+                    let before = self.reads;
                     assert_eq!((&*source.name, &*source.path), ("LB", "input/lb.csv"));
                     self.reads = 1;
-                    Ok(self.bytes.clone())
+                    Ok(resolver::Captured::resource(
+                        self.bytes.clone(),
+                        self.reads != before,
+                    ))
+                }
+                fn failure(
+                    &self,
+                    _: resolver::Name<'_>,
+                    _: &Self::Error,
+                ) -> Option<resolver::Failure> {
+                    None
+                }
+                fn rebase(
+                    &mut self,
+                    _: &resolver::Located,
+                    _: &resolver::Located,
+                    _: &str,
+                ) -> Result<String, Self::Error> {
+                    panic!("an input is never rebased")
                 }
             }
             let mut data = Data {
@@ -414,10 +447,9 @@ mod execution {
             use yamaa_adapters::json;
             use yamaa_adapters::{
                 specification_report::{self, Identity},
-                specification_run::{PortError, PreparedRun, SpecificationSourcePort},
+                specification_run::{PortError, PreparedRun},
             };
             use yamaa_core::resource::ResourceFailure;
-            use yamaa_core::specification::SourceDeclaration;
             struct Payload {
                 cause: Option<ResourceFailure>,
                 identity: Arc<()>,
@@ -431,23 +463,29 @@ mod execution {
                 cause: Option<ResourceFailure>,
                 identity: Arc<()>,
             }
-            impl SpecificationSourcePort for Port {
-                fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
-                    Ok(())
-                }
+            use yamaa_core::resolver;
+            impl resolver::Resolver for Port {
                 type Error = Payload;
-                fn resource_failure(&self, error: &Payload) -> Option<ResourceFailure> {
-                    error.cause
-                }
-                fn capture_reads(&self) -> usize {
-                    self.reads
+                fn inspect(
+                    &mut self,
+                    name: resolver::Name<'_>,
+                ) -> Result<resolver::Located, Self::Error> {
+                    let resolver::Name::Input(source) = name else {
+                        panic!("unexpected request {name:?}")
+                    };
+                    Ok(resolver::Located {
+                        identity: source.path.clone(),
+                        display_path: source.path.clone(),
+                    })
                 }
                 fn capture(
                     &mut self,
-                    source: &SourceDeclaration,
-                    origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-                ) -> Result<Arc<[u8]>, Payload> {
-                    *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+                    name: resolver::Name<'_>,
+                ) -> Result<resolver::Captured, Self::Error> {
+                    let resolver::Name::Input(source) = name else {
+                        panic!("unexpected request {name:?}")
+                    };
+                    let before = self.reads;
                     let index = self.calls.len();
                     self.calls.push(source.name.clone());
                     if index == self.fail_at {
@@ -458,7 +496,25 @@ mod execution {
                     }
                     assert_eq!(source.name, "DM");
                     self.reads += usize::from(!self.cached);
-                    Ok(Arc::clone(&self.bytes))
+                    Ok(resolver::Captured::resource(
+                        Arc::clone(&self.bytes),
+                        self.reads != before,
+                    ))
+                }
+                fn failure(
+                    &self,
+                    _: resolver::Name<'_>,
+                    error: &Self::Error,
+                ) -> Option<resolver::Failure> {
+                    error.cause.map(resolver::Failure::Resource)
+                }
+                fn rebase(
+                    &mut self,
+                    _: &resolver::Located,
+                    _: &resolver::Located,
+                    _: &str,
+                ) -> Result<String, Self::Error> {
+                    panic!("an input is never rebased")
                 }
             }
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
@@ -602,32 +658,34 @@ mod execution {
         fn resource_findings_use_written_inherited_paths_not_rebased_locations() {
             use yamaa_adapters::{
                 specification_report::{self, Identity},
-                specification_run::{PreparedRun, SpecificationSourcePort},
-                specification_source::{InheritancePort, Source},
+                specification_run::PreparedRun,
+                specification_source::Source,
             };
+            use yamaa_core::inheritance::Source as FileIdentity;
             use yamaa_core::resource::ResourceFailure;
-            use yamaa_core::{
-                inheritance::{Source as FileIdentity, SourceError},
-                specification::SourceDeclaration,
-            };
             struct Files {
                 parent: Vec<u8>,
             }
-            impl InheritancePort for Files {
+            impl resolver::Resolver for Files {
                 type Error = ();
-                fn canonicalize(
-                    &mut self,
-                    _: &str,
-                    written: &str,
-                ) -> Result<FileIdentity, SourceError<()>> {
+                fn inspect(&mut self, name: resolver::Name<'_>) -> Result<FileIdentity, ()> {
+                    let resolver::Name::Written { written, .. } = name else {
+                        panic!("unexpected request {name:?}")
+                    };
                     assert_eq!(written, "parent.yaml");
                     Ok(FileIdentity {
                         identity: written.into(),
                         display_path: written.into(),
                     })
                 }
-                fn capture(&mut self, _: &FileIdentity) -> Result<Vec<u8>, SourceError<()>> {
-                    Ok(self.parent.clone())
+                fn capture(&mut self, _: resolver::Name<'_>) -> Result<resolver::Captured, ()> {
+                    Ok(resolver::Captured::resource(
+                        self.parent.clone().into(),
+                        true,
+                    ))
+                }
+                fn failure(&self, _: resolver::Name<'_>, _: &()) -> Option<resolver::Failure> {
+                    None
                 }
                 fn rebase(
                     &mut self,
@@ -643,24 +701,44 @@ mod execution {
                 }
             }
             struct Missing;
-            impl SpecificationSourcePort for Missing {
-                fn inspect(&mut self, _source: &SourceDeclaration) -> Result<(), Self::Error> {
-                    Ok(())
-                }
+            use yamaa_core::resolver;
+            impl resolver::Resolver for Missing {
                 type Error = ();
-                fn resource_failure(&self, _: &()) -> Option<ResourceFailure> {
-                    Some(ResourceFailure::Missing)
-                }
-                fn capture_reads(&self) -> usize {
-                    0
+                fn inspect(
+                    &mut self,
+                    name: resolver::Name<'_>,
+                ) -> Result<resolver::Located, Self::Error> {
+                    let resolver::Name::Input(source) = name else {
+                        panic!("unexpected request {name:?}")
+                    };
+                    Ok(resolver::Located {
+                        identity: source.path.clone(),
+                        display_path: source.path.clone(),
+                    })
                 }
                 fn capture(
                     &mut self,
-                    _: &SourceDeclaration,
-                    origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-                ) -> Result<Arc<[u8]>, ()> {
-                    *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+                    name: resolver::Name<'_>,
+                ) -> Result<resolver::Captured, Self::Error> {
+                    let resolver::Name::Input(_) = name else {
+                        panic!("unexpected request {name:?}")
+                    };
                     Err(())
+                }
+                fn failure(
+                    &self,
+                    _: resolver::Name<'_>,
+                    _: &Self::Error,
+                ) -> Option<resolver::Failure> {
+                    Some(resolver::Failure::Resource(ResourceFailure::Missing))
+                }
+                fn rebase(
+                    &mut self,
+                    _: &resolver::Located,
+                    _: &resolver::Located,
+                    _: &str,
+                ) -> Result<String, Self::Error> {
+                    panic!("an input is never rebased")
                 }
             }
             for declaration in [
@@ -741,38 +819,57 @@ mod execution {
         fn metadata_inspection_reports_all_known_failures_before_any_study_read() {
             use yamaa_adapters::{
                 specification_report::{self, Identity},
-                specification_run::{PortError, PreparedRun, SpecificationSourcePort},
+                specification_run::{PortError, PreparedRun},
             };
             use yamaa_core::resource::ResourceFailure;
-            use yamaa_core::specification::SourceDeclaration;
             struct Port {
                 failures: yamaa_core::json::Value,
                 inspected: Vec<String>,
             }
-            impl SpecificationSourcePort for Port {
+            use yamaa_core::resolver;
+            impl resolver::Resolver for Port {
                 type Error = ResourceFailure;
-                fn resource_failure(&self, error: &ResourceFailure) -> Option<ResourceFailure> {
-                    Some(*error)
-                }
-                fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), ResourceFailure> {
+                fn inspect(
+                    &mut self,
+                    name: resolver::Name<'_>,
+                ) -> Result<resolver::Located, Self::Error> {
+                    let resolver::Name::Input(source) = name else {
+                        panic!("unexpected request {name:?}")
+                    };
                     self.inspected.push(source.name.clone());
                     match self.failures[&source.name].as_str() {
                         Some("missing") => Err(ResourceFailure::Missing),
                         Some("not_regular_file") => Err(ResourceFailure::NotRegularFile),
-                        None => Ok(()),
+                        None => Ok(resolver::Located {
+                            identity: source.path.clone(),
+                            display_path: source.path.clone(),
+                        }),
                         _ => panic!("unknown independent inspection cause"),
                     }
                 }
-                fn capture_reads(&self) -> usize {
-                    0
-                }
                 fn capture(
                     &mut self,
-                    _: &SourceDeclaration,
-                    origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
-                ) -> Result<Arc<[u8]>, ResourceFailure> {
-                    *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+                    name: resolver::Name<'_>,
+                ) -> Result<resolver::Captured, Self::Error> {
+                    let resolver::Name::Input(_) = name else {
+                        panic!("unexpected request {name:?}")
+                    };
                     panic!("metadata failure reached study capture");
+                }
+                fn failure(
+                    &self,
+                    _: resolver::Name<'_>,
+                    error: &Self::Error,
+                ) -> Option<resolver::Failure> {
+                    Some(resolver::Failure::Resource(*error))
+                }
+                fn rebase(
+                    &mut self,
+                    _: &resolver::Located,
+                    _: &resolver::Located,
+                    _: &str,
+                ) -> Result<String, Self::Error> {
+                    panic!("an input is never rebased")
                 }
             }
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");

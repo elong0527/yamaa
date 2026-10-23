@@ -8,19 +8,17 @@ struct MetadataOpaque(Box<str>);
 
 #[test]
 fn shared_metadata_capture_fake_consumes_owned_outcomes_once_and_logs_before_failure() {
-    use metadata::ProjectCapturePort;
+    use yamaa_core::resolver::{File, Name, Resolver};
     let log = EventLog::default();
     let mut port = ScriptedMetadata::new(log.clone());
     port.interrupt_if = |e: &MetadataOpaque| e.0.as_ref() == "interrupt";
-    let bytes = b"held".to_vec();
-    let snapshot = bytes.as_ptr();
     let error = MetadataOpaque("interrupt".into());
     let address = error.0.as_ptr();
     for outcome in [
-        Ok(metadata::Reply::Document(metadata::Source {
+        Ok(metadata::Source {
             identity: "held.yaml".into(),
-            bytes,
-        })),
+            bytes: b"held".to_vec(),
+        }),
         Err(error),
     ] {
         port.steps.push_back(MetadataCaptureStep {
@@ -30,23 +28,19 @@ fn shared_metadata_capture_fake_consumes_owned_outcomes_once_and_logs_before_fai
             outcome,
         });
     }
-    let request = || metadata::Request {
-        kind: metadata::Kind::Function,
-        declaring_source: "environment.yaml",
+    let name = Name::Written {
+        file: File::Project(metadata::Kind::Function),
+        declaring: "environment.yaml",
         written: "function.yaml",
     };
-    let metadata::Reply::Document(source) = port.capture(request()).unwrap() else {
-        panic!()
-    };
-    assert_eq!(source.bytes.as_ptr(), snapshot);
-    let error = port.capture(request()).unwrap_err();
+    assert_eq!(port.inspect(name).unwrap().identity, "held.yaml");
+    assert_eq!(port.capture(name).unwrap().bytes.as_ref(), b"held");
+    let error = port.inspect(name).unwrap_err();
     assert_eq!(error.0.as_ptr(), address);
     assert!(port.is_interrupt(&error));
     assert!(port.steps.is_empty());
     assert_eq!(log.events().len(), 2);
-    assert!(
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| port.capture(request()))).is_err()
-    );
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| port.inspect(name))).is_err());
     assert_eq!(log.events().len(), 3);
 }
 
@@ -205,7 +199,7 @@ mod boundary {
         });
         source.captures.push_back(CaptureStep {
             source: declaration.clone(),
-            new_snapshots: usize::from(outcome.is_ok()),
+            created: outcome.is_ok(),
             outcome,
         });
         source

@@ -1,39 +1,14 @@
-//! Capture, decode, bind and execute a prepared specification through native ports.
-//! Filesystem access, codecs and host exception containment belong to adapters.
+//! Capture, decode, bind and execute a prepared specification through the
+//! resolver port. Filesystem access, codecs and host exception containment
+//! belong to adapters.
 use crate::dataset::{self, ExecutionAttempt};
 use crate::{
+    resolver::{Failure, Name, Origin, Resolver},
     resource::ResourceFailure,
     specification::{BindError, PreparedSpecification, SourceDeclaration, SourceInterpretation},
     table::TableAccess,
 };
 use std::{sync::Arc, vec};
-
-/// Capture authority for a declared source. Bound allocation before returning,
-/// hold immutable bytes and compare cached snapshots on bytes, never a digest.
-pub trait SpecificationSourcePort {
-    type Error;
-    /// Optional immutable native table, owned independently of host handles.
-    /// The decoder admits its schema/values through the same binding lifecycle.
-    fn owned_table(
-        &self,
-        _source: &SourceDeclaration,
-    ) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
-        None
-    }
-    /// Opt in only for known resource causes. Opaque host errors retain their
-    /// identity and are not converted by inspecting their text or class name.
-    fn resource_failure(&self, error: &Self::Error) -> Option<ResourceFailure>;
-    /// Inspect location and file kind without reading study bytes or creating a
-    /// snapshot.
-    fn inspect(&mut self, source: &SourceDeclaration) -> Result<(), Self::Error>;
-    fn capture_reads(&self) -> usize;
-    /// Mark the entered acquisition branch before crossing the source boundary.
-    fn capture(
-        &mut self,
-        source: &SourceDeclaration,
-        origin: &mut Option<SourceOrigin>,
-    ) -> Result<Arc<[u8]>, Self::Error>;
-}
 
 /// Decode one captured source with its declared logical types. The returned table
 /// owns its storage and must not retain borrowed input or temporary host buffers.
@@ -154,23 +129,15 @@ fn ingestion_failure<E>(error: Box<dataset::ExecutionError<E>>) -> ExecutionAtte
     }
 }
 
-/// The acquisition actually entered, separate from snapshot creation counts.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SourceOrigin {
-    Resource,
-    /// Bytes the caller already built and holds, such as an artifact an
-    /// earlier specification of a project run produced.
-    Generated,
-}
-
 #[derive(Debug)]
 pub struct SourceRead {
     pub source: SourceDeclaration,
     /// None means routing stopped before the acquisition was entered.
-    pub origin: Option<SourceOrigin>,
+    pub origin: Option<Origin>,
     pub captured: bool,
     pub failure: Option<ResourceFailure>,
-    /// A regressing counter is a boundary failure, never an invented zero.
+    /// The snapshots the capture created: none when it was never entered or
+    /// an unwound host boundary stopped it, and zero for a failed capture.
     pub snapshots_created: Option<usize>,
 }
 
@@ -185,8 +152,6 @@ pub enum PortError<C, D> {
     Inspect(Vec<InspectionFailure<C>>),
     #[error("specification run run: {0:?}")]
     Run(RunError<D>),
-    #[error("specification run capture accounting")]
-    CaptureAccounting,
 }
 
 #[derive(Debug)]
@@ -331,21 +296,21 @@ pub fn execute_bytes<D: SourceDecoder>(
 
 /// Fill caller-owned observations so panic containment retains the entered prefix.
 /// The supplied function port is already activated; this service never activates it.
-pub fn execute_into<P: SpecificationSourcePort, D: SourceDecoder>(
+pub fn execute_into<R: Resolver, D: SourceDecoder>(
     prepared: &PreparedSpecification,
-    port: &mut P,
+    resolver: &mut R,
     decoder: &mut D,
     functions: &mut dyn crate::function_invocation::FunctionPort<
         Error = <D::Table as TableAccess>::Error,
     >,
-    attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
+    attempt: &mut CapturedAttempt<R::Error, D::Error, D::Table>,
     scope: crate::application_observer::Scope<'_>,
 ) {
     scope.phase(crate::application_observer::Phase::Input);
     let input_finished = std::cell::Cell::new(false);
     execute_inner_into(
         prepared,
-        port,
+        resolver,
         decoder,
         functions,
         attempt,
@@ -361,14 +326,14 @@ pub fn execute_into<P: SpecificationSourcePort, D: SourceDecoder>(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn execute_inner_into<P: SpecificationSourcePort, D: SourceDecoder>(
+fn execute_inner_into<R: Resolver, D: SourceDecoder>(
     prepared: &PreparedSpecification,
-    port: &mut P,
+    resolver: &mut R,
     decoder: &mut D,
     functions: &mut dyn crate::function_invocation::FunctionPort<
         Error = <D::Table as TableAccess>::Error,
     >,
-    attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
+    attempt: &mut CapturedAttempt<R::Error, D::Error, D::Table>,
     (scope, input_finished): (
         crate::application_observer::Scope<'_>,
         &std::cell::Cell<bool>,
@@ -391,14 +356,10 @@ fn execute_inner_into<P: SpecificationSourcePort, D: SourceDecoder>(
     }
     let mut inspections = Vec::new();
     for declaration in prepared.sources() {
-        let before = port.capture_reads();
-        let inspected = port.inspect(declaration);
-        if port.capture_reads() != before {
-            attempt.result = Err(PortError::CaptureAccounting);
-            return;
-        }
-        if let Err(error) = inspected {
-            let failure = port.resource_failure(&error);
+        if let Err(error) = resolver.inspect(Name::Input(declaration)) {
+            let failure = resolver
+                .failure(Name::Input(declaration), &error)
+                .and_then(Failure::resource);
             inspections.push(InspectionFailure {
                 source: declaration.clone(),
                 failure,
@@ -423,26 +384,28 @@ fn execute_inner_into<P: SpecificationSourcePort, D: SourceDecoder>(
         // a truthful incomplete observation without discarding earlier sources.
         attempt.sources.push(CapturedSource::new(declaration));
         let observed = attempt.sources.last_mut().expect("requested source");
-        let before = port.capture_reads();
-        let captured = port.capture(declaration, &mut observed.read.origin);
+        // A capture enters the resource unless it returns bytes the caller
+        // holds, which never fail: mark the entry first, so a failure or an
+        // unwound host boundary keeps a truthful observation.
+        observed.read.origin = Some(Origin::Resource);
+        let captured = resolver.capture(Name::Input(declaration));
         observed.read.captured = captured.is_ok();
-        observed.read.snapshots_created = port.capture_reads().checked_sub(before);
-        match captured {
-            Ok(bytes) => observed.snapshot = Some(bytes),
+        let owned = match captured {
+            Ok(captured) => {
+                observed.read.origin = Some(captured.origin);
+                observed.read.snapshots_created = Some(usize::from(captured.created));
+                observed.snapshot = Some(captured.bytes);
+                captured.table
+            }
             Err(error) => {
-                observed.read.failure = port.resource_failure(&error);
-                attempt.result = Err(if observed.read.snapshots_created.is_none() {
-                    PortError::CaptureAccounting
-                } else {
-                    PortError::Capture(error)
-                });
+                observed.read.snapshots_created = Some(0);
+                observed.read.failure = resolver
+                    .failure(Name::Input(declaration), &error)
+                    .and_then(Failure::resource);
+                attempt.result = Err(PortError::Capture(error));
                 return;
             }
-        }
-        if observed.read.snapshots_created.is_none() || observed.read.origin.is_none() {
-            attempt.result = Err(PortError::CaptureAccounting);
-            return;
-        }
+        };
         let bytes = observed.snapshot.as_deref().expect("captured source");
         if let Err(error) = crate::limits::Limits::source_bytes(bytes.len()) {
             attempt.result = Err(PortError::Run(RunError::Boundary {
@@ -451,7 +414,6 @@ fn execute_inner_into<P: SpecificationSourcePort, D: SourceDecoder>(
             }));
             return;
         }
-        let owned = port.owned_table(declaration);
         let interpretation = prepared
             .source_interpretation(index)
             .expect("admitted source interpretation");

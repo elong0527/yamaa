@@ -1,158 +1,29 @@
-//! One descriptor-backed reader for build metadata and original document aliases.
-//! Parsing, semantic admission and route selection remain in the engine.
-use crate::{
-    file_resources::{Error as ResourceError, Resources},
-    project_source::{Kind, ProjectCapturePort, Reply, Request},
-    specification_source::Source,
-};
-use yamaa_core::inheritance::{Source as Identity, SourceError};
+//! The lexical path rules of the resolver port over one scope: the path a
+//! finding shows for a metadata file, and the respelling of a layer's paths
+//! from the entry (LAYER-10). Nothing here inspects or opens a file.
+use crate::file_resources::Error as ResourceError;
+use yamaa_core::resolver::Located;
 
-pub(crate) struct Reader<'a> {
-    pub(crate) resources: &'a mut Resources,
+/// The path a finding shows for the file `written` names from the file
+/// `declaring`: the written path when it is rooted, else the declaring
+/// file's directory joined with it. Lexical: a declaring identity that names
+/// no rooted file has none.
+pub(crate) fn display_path(declaring: &str, written: &str) -> Result<String, ResourceError> {
+    Ok(if is_absolute_spelling(written) {
+        written.to_owned()
+    } else {
+        format!("{}/{written}", directory(declaring)?)
+    })
 }
-impl Reader<'_> {
-    fn resource_identity(
-        &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<Identity, ResourceError> {
-        let identity = self.resources.resolve_from(declaring, written)?;
-        let display_path = if is_absolute_spelling(written) {
-            written.to_owned()
-        } else {
-            format!("{}/{written}", directory(declaring)?)
-        };
-        Ok(Identity {
-            identity,
-            display_path,
-        })
-    }
+/// [`rebase`], refused as the resolver port refuses it: an identity that
+/// names no rooted file is an invalid path, and a location on a network share
+/// the entry is not on is outside the roots it reaches.
+pub(crate) fn rebased(layer: &str, entry: &str, written: &str) -> Result<String, ResourceError> {
+    rebase(layer, entry, written).map_err(|unwritten| match unwritten {
+        Unwritten::Unrooted => ResourceError::InvalidPath,
+        Unwritten::Share { .. } => ResourceError::OutsideRoots,
+    })
 }
-fn available(error: ResourceError) -> SourceError<ResourceError> {
-    match error {
-        ResourceError::Missing | ResourceError::Unreadable | ResourceError::NotRegularFile => {
-            SourceError::Unavailable
-        }
-        error => SourceError::Raised(error),
-    }
-}
-impl yamaa_core::file_preparation::NativePort for Reader<'_> {
-    type Error = ResourceError;
-    fn resolve_entry(
-        &mut self,
-        declaring: Option<&str>,
-        written: &str,
-    ) -> Result<String, ResourceError> {
-        match declaring {
-            Some(declaring) => self.resources.resolve_from(declaring, written),
-            None => self.resources.resolve(written),
-        }
-    }
-    fn capture_entry(
-        &mut self,
-        declaring: Option<&str>,
-        written: &str,
-    ) -> Result<Vec<u8>, ResourceError> {
-        let (bytes, _) = match declaring {
-            Some(declaring) => self.resources.capture_metadata_from(declaring, written),
-            None => self.resources.capture_metadata(written),
-        }?;
-        Ok(bytes.to_vec())
-    }
-    /// A `parent` path. Its written form is judged before any resolver is
-    /// asked for it (FILE-4, FILE-5, LAYER-2), as schema admission judges
-    /// every other declared path: a backslash, an empty segment or a trailing
-    /// separator, which a network share's `//server/share` root also writes,
-    /// is refused as written whichever resolver serves the layers.
-    fn canonicalize(
-        &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<Identity, SourceError<ResourceError>> {
-        if let Some(failure) = yamaa_core::resource::written_path_failure(written) {
-            return Err(SourceError::Raised(ResourceError::WrittenForm(failure)));
-        }
-        self.resource_identity(declaring, written)
-            .map_err(available)
-    }
-    fn canonicalize_resource(
-        &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<Identity, SourceError<ResourceError>> {
-        self.resource_identity(declaring, written)
-            .map_err(SourceError::Raised)
-    }
-    fn capture_resource(
-        &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<Vec<u8>, SourceError<ResourceError>> {
-        self.resources
-            .capture_metadata_from(declaring, written)
-            .map(|(bytes, _)| bytes.to_vec())
-            .map_err(SourceError::Raised)
-    }
-    fn resource_failure(
-        &self,
-        error: &ResourceError,
-    ) -> Option<yamaa_core::resource::ResourceFailure> {
-        use yamaa_core::resource::ResourceFailure;
-        match error {
-            ResourceError::Missing => Some(ResourceFailure::Missing),
-            ResourceError::NotRegularFile => Some(ResourceFailure::NotRegularFile),
-            ResourceError::Symlink => Some(ResourceFailure::Symlink),
-            ResourceError::WrittenForm(failure) => Some(*failure),
-            ResourceError::Changed => Some(ResourceFailure::ContentChanged),
-            _ => None,
-        }
-    }
-
-    fn capture_parent(
-        &mut self,
-        declaring: &str,
-        written: &str,
-    ) -> Result<Vec<u8>, SourceError<ResourceError>> {
-        self.resources
-            .capture_metadata_from(declaring, written)
-            .map(|(bytes, _)| bytes.to_vec())
-            .map_err(available)
-    }
-    fn rebase(
-        &mut self,
-        layer: &Identity,
-        entry: &Identity,
-        written: &str,
-    ) -> Result<String, ResourceError> {
-        rebase(&layer.identity, &entry.identity, written).map_err(|unwritten| match unwritten {
-            Unwritten::Unrooted => ResourceError::InvalidPath,
-            Unwritten::Share { .. } => ResourceError::OutsideRoots,
-        })
-    }
-    /// The rebase is lexical, so its refusal is derived again, with both
-    /// roots, from the same identities.
-    fn rebase_failure(
-        &self,
-        _error: &ResourceError,
-        layer: &Identity,
-        entry: &Identity,
-        written: &str,
-    ) -> Option<yamaa_core::diagnostic::Diagnostic> {
-        share_refusal(layer, entry, written)
-    }
-    fn accept_alias(&mut self, declaring: &str, written: &str) -> Result<(), ResourceError> {
-        self.resources
-            .capture_metadata_from(declaring, written)
-            .map(|_| ())
-    }
-    fn select_entry_base(&mut self, identity: &str) -> Result<(), ResourceError> {
-        self.resources.select_entry_base(identity)
-    }
-    fn missing_alias() -> ResourceError {
-        ResourceError::InvalidPath
-    }
-}
-
 fn directory(identity: &str) -> Result<&str, ResourceError> {
     identity
         .rsplit_once('/')
@@ -270,9 +141,9 @@ fn root_name(root: &str) -> String {
 /// a network share the entry is not on (LAYER-10): it names the layer, the
 /// path as the layer wrote it, and the roots of the layer and of the entry.
 /// Every other rebase, written or refused, has none.
-fn share_refusal(
-    layer: &Identity,
-    entry: &Identity,
+pub(crate) fn share_refusal(
+    layer: &Located,
+    entry: &Located,
     written: &str,
 ) -> Option<yamaa_core::diagnostic::Diagnostic> {
     let Err(Unwritten::Share {
@@ -304,38 +175,6 @@ fn same_directory(left: &[String], right: &[String]) -> bool {
             .iter()
             .zip(&right[1..])
             .all(|(left, right)| crate::file_resources::same_location(left, right))
-}
-
-impl ProjectCapturePort for Reader<'_> {
-    type Error = ResourceError;
-    fn capture(&mut self, request: Request<'_>) -> Result<Reply, Self::Error> {
-        let identity = self
-            .resources
-            .resolve_from(request.declaring_source, request.written)?;
-        let (bytes, _) = self
-            .resources
-            .capture_metadata_from(request.declaring_source, request.written)?;
-        let source = Source {
-            identity,
-            bytes: bytes.to_vec(),
-        };
-        Ok(match request.kind {
-            Kind::Lock => Reply::Lock {
-                kind: crate::project_lock::kind(&source.bytes)
-                    .map_err(|_| ResourceError::InvalidLock)?,
-                source,
-            },
-            Kind::Environment | Kind::Function | Kind::Codelist => Reply::Document(source),
-        })
-    }
-}
-
-impl yamaa_core::build::MetadataAdmissionPort for Reader<'_> {
-    type Error = ResourceError;
-
-    fn verify_metadata(&mut self) -> Result<(), (String, Self::Error)> {
-        self.resources.verify_captured()
-    }
 }
 
 #[cfg(test)]
@@ -573,7 +412,7 @@ mod spelling_tests {
     #[test]
     fn a_layer_on_another_share_is_refused_with_its_path_and_both_roots() {
         use yamaa_core::{diagnostic::ConditionCode, json::Value};
-        let source = |identity: &str| Identity {
+        let source = |identity: &str| Located {
             identity: identity.into(),
             display_path: identity.into(),
         };
