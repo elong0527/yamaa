@@ -1081,23 +1081,20 @@ fn facts() -> &'static Facts {
 ///
 /// As [`negotiate`] asks of `request`.
 unsafe fn requested(request: *const abi::Request) -> Requested {
-    // SAFETY: the caller's contract; each read lies within the request's
-    // size, and this version's lists are read only when the size covers them.
+    // SAFETY: the caller's contract; each field is read through the raw
+    // pointer within the request's size, and the whole request is borrowed
+    // only when its size covers this version's lists.
     unsafe {
-        let Some(header) = request
-            .as_ref()
-            .filter(|request| request.size as usize >= offset_of!(abi::Request, required))
-        else {
+        if request.is_null() || ((*request).size as usize) < offset_of!(abi::Request, required) {
             return Requested::Other;
-        };
-        let mut fields = vec![(
-            "version".to_owned(),
-            Requested::Integer(header.version.into()),
-        )];
-        if header.version == BOUNDARY_VERSION && header.size as usize >= size_of::<abi::Request>() {
+        }
+        let (size, version) = ((*request).size as usize, (*request).version);
+        let mut fields = vec![("version".to_owned(), Requested::Integer(version.into()))];
+        if version == BOUNDARY_VERSION && size >= size_of::<abi::Request>() {
+            let request = &*request;
             for (name, items, len) in [
-                ("required", header.required, header.required_len),
-                ("optional", header.optional, header.optional_len),
+                ("required", request.required, request.required_len),
+                ("optional", request.optional, request.optional_len),
             ] {
                 let identifiers = match list(items, len, name) {
                     Ok(items) => Requested::List(
