@@ -73,9 +73,7 @@ def fixture_bytes(value):
 
 def without_layer(context):
     """A finding's context without the layer a refused layer names. A schema
-    finding in a 1.x specification names the files the run loaded, `source`
-    and `entry` together, as an inherited 0.5 finding does; a standalone 0.5
-    specification's finding names none (#3422)."""
+    finding names the files the run loaded, `source` and `entry` together."""
     if "entry" in context:
         context = {k: v for k, v in context.items() if k not in ("entry", "source")}
     return context
@@ -543,28 +541,12 @@ class ParquetOriginalOutput(unittest.TestCase):
         # Every specification is pruned after composition: keep the input live
         # via base so the ingest failure is still exercised instead of being
         # pruned away with an unused input.
-        source = {
-            "schema_version": "1.0",
-            "domain": "TEST",
-            "base": "SRC",
-            "input": {"SRC": "input.parquet"},
-            "keys": ["ID"],
-            "columns": [
-                {"name": "ID", "type": "int", "derivation": {"compute": {"expr": "1"}}}
-            ],
-            "output": {"path": "output.csv", "columns": ["ID"]},
-        }
-        # The same specification on the 1.0 surface, as the converter writes
-        # it: each refusal keeps its condition, rule, path and context.
-        surfaces = {
-            "0.5": source,
-            "1.0": (
-                b'yamaa: "1.0"\ntype: spec\ndomain: TEST\nbase: SRC\n'
-                b"input: {SRC: input.parquet}\nkeys: [ID]\n"
-                b'columns:\n  - {name: ID, type: int, derivation: "1"}\n'
-                b"output: {path: output.csv, columns: [ID]}\n"
-            ),
-        }
+        entry = (
+            b'yamaa: "1.0"\ntype: spec\ndomain: TEST\nbase: SRC\n'
+            b"input: {SRC: input.parquet}\nkeys: [ID]\n"
+            b'columns:\n  - {name: ID, type: int, derivation: "1"}\n'
+            b"output: {path: output.csv, columns: [ID]}\n"
+        )
         for name, condition, rule, context in (
             ("utf8", "source_parquet_invalid", "PARQUET-5", {}),
             (
@@ -632,30 +614,27 @@ class ParquetOriginalOutput(unittest.TestCase):
                 )
             ),
         ):
-            for surface, entry in surfaces.items():
-                with self.subTest(case=name, surface=surface):
-                    result = self.build(
-                        entry, {"input.parquet": ROOT / "pq" / (name + ".parquet")}
-                    )
-                    diagnostics = [
-                        {
-                            "phase": "ingest",
-                            "condition": condition,
-                            "rule": rule,
-                            "spec_paths": ["input.SRC.path"],
-                            "context": dict(
-                                dataset="SRC", path="input.parquet", **context
-                            ),
-                        }
-                    ]
-                    self.assertEqual(
-                        self.observe(result),
-                        self.failed_report(diagnostics, ["input.parquet"]),
-                    )
-                    self.assertIsNone(result.output)
-                    with self.assertRaises(yamaa.Error):
-                        result.save()
-                    self.assertFalse((self.root / "output.csv").exists())
+            with self.subTest(case=name):
+                result = self.build(
+                    entry, {"input.parquet": ROOT / "pq" / (name + ".parquet")}
+                )
+                diagnostics = [
+                    {
+                        "phase": "ingest",
+                        "condition": condition,
+                        "rule": rule,
+                        "spec_paths": ["input.SRC.path"],
+                        "context": dict(dataset="SRC", path="input.parquet", **context),
+                    }
+                ]
+                self.assertEqual(
+                    self.observe(result),
+                    self.failed_report(diagnostics, ["input.parquet"]),
+                )
+                self.assertIsNone(result.output)
+                with self.assertRaises(yamaa.Error):
+                    result.save()
+                self.assertFalse((self.root / "output.csv").exists())
 
     def test_original_build_saves_parquet_with_independent_logical_readback(self):
         name = "adam-adlb-ordered-sum"
@@ -945,18 +924,15 @@ class PublicDomains(unittest.TestCase):
                     self.assertIsNone(result.output)
                 observations = result._native.observations()
                 if observations is not None:
-                    # A 1.x file counts the intermediate's absence under
-                    # `absent`, a 0.5 file under `no_match` (D202); each case
-                    # names the count it reaches.
-                    handler = "absent" if "absent_count" in case else "no_match"
+                    # An intermediate's absence counts under `absent` (D202).
                     counts = json.loads(observations)["handler_counts"]
                     self.assertEqual(
                         sum(
                             item["count"]
                             for item in counts
-                            if item["handler"] == handler
+                            if item["handler"] == "absent"
                         ),
-                        case[f"{handler}_count"],
+                        case["absent_count"],
                     )
 
     def test_public_temporal_arithmetic_conformance(self):
@@ -1620,9 +1596,9 @@ columns:
                     entry = work / "spec.yaml"
                     if cohort == "flags":
                         # A witness is staged from its capture. A benchmark
-                        # runs as it is written, in either language, whose
-                        # findings and handlers are the same (#3422) but for
-                        # an intermediate's absence, `absent` in 1.0 (D202).
+                        # runs as it is written, in 1.0, whose findings and
+                        # handlers are those of its 0.5 capture (#3422) but
+                        # for an intermediate's absence, `absent` (D202).
                         self.assertEqual(
                             entry.read_text(encoding="utf-8"), case["specification"]
                         )
@@ -1647,8 +1623,8 @@ columns:
                             result = yamaa.spec(entry).run()
                             found = issues(result)
                             if schema_failure:
-                                # A 1.x specification's schema finding names
-                                # the files this run loaded; a 0.5 one none.
+                                # A schema finding names the files this run
+                                # loaded.
                                 for finding in found:
                                     finding["context"].pop("source", None)
                                     finding["context"].pop("entry", None)
@@ -2701,42 +2677,10 @@ columns:
                 (root / "result.csv").read_bytes(),
                 b"ID,A,B\n1,first,\n2,skip,skip\n3,,\n",
             )
-            # 0.5 only, until #3447 deletes the 0.5 path: a 0.5 `absent`
-            # answers a variable the lookup does not hold, and a donor without
-            # a record is the intermediate's own `no_match` (D67).
-            legacy = TRUTH["lookup_fallback_0_5_yaml"]
-            for variable, expected, count in (
-                ("P.A", b"ID,A,B\n1,first,\n2,skip,skip\n3,,\n", 0),
-                ("P.ABSENT", TRUTH["fallback_lookup_csv"].encode("utf-8"), 2),
-            ):
-                entry.write_text(
-                    legacy.replace(
-                        "then: P.A",
-                        f"then: {{source: {{variable: {variable}, absent: fallback}}}}",
-                    )
-                )
-                admitted = yamaa.spec(entry).run()
-                self.assertEqual(admitted.issues.to_polars().rows(), [])
-                admitted.save()
-                self.assertEqual((root / "result.csv").read_bytes(), expected)
-                handlers = json.loads(admitted._native.observations())["handler_counts"]
-                self.assertEqual(
-                    next(
-                        row
-                        for row in handlers
-                        if row["spec_path"]
-                        == "columns.A.derivation.case[0].then.source.absent"
-                    ),
-                    {
-                        "spec_path": "columns.A.derivation.case[0].then.source.absent",
-                        "handler": "absent",
-                        "count": count,
-                    },
-                )
-            # On a 1.x file the intermediate answers the donor without a
-            # record, and its answer counts under `absent` at the read, the
-            # binding's own row (D202); a variable the lookup does not hold
-            # fails (D67, LOOKUP-11).
+            # The intermediate answers the donor without a record, and its
+            # answer counts under `absent` at the read, the binding's own row
+            # (D202); a variable the lookup does not hold fails (D67,
+            # LOOKUP-11).
             entry.write_text(
                 body.replace(
                     "then: P.A", "then: {source: {variable: P.A, absent: fallback}}"

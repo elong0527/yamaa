@@ -19,6 +19,7 @@ mod info;
 mod issue_locations;
 mod language_header;
 mod lint;
+mod lint_inheritance;
 mod memory;
 mod memory_route;
 mod odm_input;

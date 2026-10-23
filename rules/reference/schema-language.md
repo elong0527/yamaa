@@ -22,7 +22,7 @@ matching `schema_[a-z0-9_]+.yaml`, resolved relative to the including file.
 The complete transitive bundle is loaded before names resolve, and every
 document in a bundle declares the same version.
 
-Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_registry_entries_and_closed_include_names_are_rejected`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::include_and_field_reuse_cycles_do_not_become_recursive_aliases`, `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::shipped_closure_retains_every_authoritative_byte_and_admits_without_a_directory`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::the_root_is_read_before_a_closure_is_chosen`, `rust/crates/yamaa-adapters/tests/declaration_v1_schema.rs::every_file_type_closure_is_admitted_with_valid_defaults_and_kinds`, `tools/tests/test_schema_v1.py`.
+Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_registry_entries_and_closed_include_names_are_rejected`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::include_and_field_reuse_cycles_do_not_become_recursive_aliases`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::the_root_is_read_before_a_closure_is_chosen`, `rust/crates/yamaa-adapters/tests/declaration_v1_schema.rs::every_file_type_closure_is_admitted_with_valid_defaults_and_kinds`, `tools/tests/test_schema_v1.py`.
 
 A document may be included by several entry points; declaration uniqueness
 applies within each loaded bundle. Absolute paths, parent traversal, URLs,
@@ -34,8 +34,8 @@ version.
 
 Until Phase 2 of [#3030](https://github.com/elong0527/yamaa/issues/3030)
 removes the 0.5 schema, the 1.0 bundles sit in `yaml/v1/`, beside the 0.5
-bundles in `yaml/` (`schema.yaml`, `schema_project.yaml` and
-`schema_environment.yaml`) that govern a file declaring `schema_version`
+bundles in `yaml/`, of which `schema_project.yaml` and
+`schema_environment.yaml` govern a project file declaring `schema_version`
 ([Rules](../README.md)); `yaml/v1/` then moves up. A 1.0 schema document also
 declares `kind` on its named value types and may declare `since` on a class
 field ([SCHEMA-11](#schema-11)).
@@ -53,8 +53,8 @@ one. A file declaring a version the engine does not read fails as
 `unsupported_language_version`, and one whose `type` its call or referencing
 field does not expect fails as `unexpected_file_type`.
 
-Fails: `unsupported_language_version`, `unexpected_file_type`, `unknown_field`, `value_not_permitted`, `schema_version_mismatch`.
-Evidence: `negative-version-mismatch`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::the_calling_function_refuses_an_unread_version_or_another_type`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_referencing_field_checks_the_file_it_names`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_file_whose_header_the_engine_does_not_read_fails_at_the_field_that_lists_it`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_1_0_schema_link_refuses_a_producer_it_does_not_read_at_the_link`, `rust/crates/yamaa/tests/issue_locations.rs::a_linked_producer_s_header_finding_locates_in_the_producer`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_1_0_project_refuses_a_listed_specification_it_does_not_read_at_its_listing`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_document_is_admitted_at_the_version_it_declares`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_yamaa_beside_schema_version_routes_to_the_0_5_path_wherever_it_is_read`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_public_check_reads_a_1_0_specification_and_refuses_a_newer_one`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_0_5_project_reads_its_files_under_the_0_5_rules`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_0_5_schema_link_reads_a_1_0_producer_by_its_header`, `rust/crates/yamaa/tests/language_header.rs`, `rust/crates/yamaa/tests/file_type.rs::a_file_that_declares_schema_version_has_no_type`, `rust/crates/yamaa/tests/file_type.rs::a_1_x_header_is_refused_as_a_call_reading_its_type_refuses_it`, `rust/crates/yamaa/tests/schema.rs::any_other_text_is_refused_as_an_unexpected_file_type`, `rust/crates/yamaa-core/src/language.rs::a_1_x_document_declares_its_type_and_a_0_5_document_none`, `rust/crates/yamaa-core/tests/schema_validation.rs::version_precedes_field_findings_and_classes_keep_schema_then_input_order`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::entry_version_finding_precedes_parent_and_study_authority`.
+Fails: `unsupported_language_version`, `unexpected_file_type`, `unknown_field`, `value_not_permitted`.
+Evidence: `negative-version-mismatch`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::the_calling_function_refuses_an_unread_version_or_another_type`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_referencing_field_checks_the_file_it_names`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_file_whose_header_the_engine_does_not_read_fails_at_the_field_that_lists_it`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_1_0_schema_link_refuses_a_producer_it_does_not_read_at_the_link`, `rust/crates/yamaa/tests/issue_locations.rs::a_linked_producer_s_header_finding_locates_in_the_producer`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_1_0_project_refuses_a_listed_specification_it_does_not_read_at_its_listing`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_document_is_admitted_at_the_version_it_declares`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_public_check_reads_a_1_0_specification_and_refuses_a_newer_one`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_public_check_refuses_a_specification_that_declares_schema_version`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_schema_version_root_is_refused_as_language_0_5_wherever_it_is_read`, `rust/tests/host-fixtures/cases.json::check_refuses_a_specification_in_language_0_5`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_0_5_project_reads_its_files_under_the_0_5_rules`, `rust/crates/yamaa/tests/language_header.rs`, `rust/crates/yamaa/tests/file_type.rs::a_file_that_declares_schema_version_has_no_type`, `rust/crates/yamaa/tests/file_type.rs::a_1_x_header_is_refused_as_a_call_reading_its_type_refuses_it`, `rust/crates/yamaa/tests/schema.rs::any_other_text_is_refused_as_an_unexpected_file_type`, `rust/crates/yamaa-core/src/language.rs::a_1_x_document_declares_its_type_and_a_0_5_document_none`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::entry_version_finding_precedes_parent_and_study_authority`.
 
 The header is read before the file is checked against any schema: `yamaa`
 first, then `type`. A version is written `1.N`, with `N` a decimal number
@@ -75,15 +75,19 @@ does not expect, is reported at that field; a malformed header is reported in
 the named file. A dictionary file that `mapping.dict` names carries no header,
 like a data file.
 
-A file that declares `schema_version`, or no `yamaa`, is read under the rules
-at the `yamaa-v0.5.0` tag ([Rules](../README.md)), where a version other than
-the bundle's fails as `schema_version_mismatch`, and a `yamaa` beside
-`schema_version` is an unknown field. Such a file reads its parent layer, and
-a project of that language its environment files and codelist files, under
-the same rules, so a file there that declares `yamaa` fails as that language
-reads it: without `schema_version`, and with `yamaa` an unknown field. A file
-a call names, a specification a project lists and a producing specification
-an input's `schema` names are each read by the header they declare.
+A file that declares `schema_version` is written in language version 0.5,
+which no engine of language version 1.M reads. A specification that declares
+it fails as `unsupported_language_version`, naming version `0.5`, wherever
+it is read: at its own `schema_version` when a call names it, and at the
+field that names it when a `parent`, a project's section `specs` or an
+input's `schema` reads it, with or without `yamaa` beside it. Until Phase 2
+removes the 0.5 project path, a project file that declares `schema_version`,
+or no `yamaa`, is read under the rules at the `yamaa-v0.5.0` tag
+([Rules](../README.md)), with its environment files and codelist files,
+except that the version it declares is not checked; a `yamaa` beside
+`schema_version` there is an unknown field, and a file there that declares
+`yamaa` fails as that language reads it. A specification such a project
+lists is read by the header it declares.
 
 A call that reads only the type a file declares, as the command line does
 before it chooses what to run, reads the 1.x header alone. There a file that
@@ -199,7 +203,7 @@ across the complete bundle. A value matching a registry-backed type is a
 one-entry mapping whose key exists in the referenced registry and whose value
 matches that entry's payload shape.
 
-Fails: `invalid_operation_count`, `unknown_operation`, `model_contract_mismatch`.
+Fails: `invalid_operation_count`, `unknown_operation`.
 Evidence: `negative-literal-structure`, `rust/crates/yamaa-core/tests/schema_validation.rs::registry_and_bare_derivation_diagnostics_preserve_paths_and_context`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_registry_entries_and_closed_include_names_are_rejected`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_reused_fields_and_unknown_types_preserve_stage_order`.
 
 ```yaml
@@ -213,8 +217,7 @@ Registry declaration order has no meaning. An unreferenced registry, an empty
 registry, an unknown registry reference or a duplicate registry entry is an
 error. A registry-backed value with zero or multiple keywords fails with
 `invalid_operation_count`, and one with an unknown keyword with
-`unknown_operation`. Final normalized model admission reports
-`model_contract_mismatch` for operation cardinality.
+`unknown_operation`.
 
 <a id="schema-8"></a>
 
@@ -343,10 +346,7 @@ The check runs on the document each author wrote: a standalone specification,
 and each inheritance layer before composition. A composed, pruned or resolved
 document holds the canonical class of every shorthand and is validated
 without this check. The lint reports a written long form as the finding
-`redundant_long_form`, and `lint --fix` writes its shorthand. A file that
-declares `schema_version` is read under the rules at the `yamaa-v0.5.0` tag,
-where a bare string derivation is the source shorthand of EXPR-5 and a written
-`{source: X}` restates it.
+`redundant_long_form`, and `lint --fix` writes its shorthand.
 
 ## Descriptors
 
@@ -386,15 +386,14 @@ When several constraints are present, all must pass. Defaults belong in the
 schema, not only in prose. A value that fails its type or a constraint fails
 validation, retaining the rejected value's declaring path and complete reason.
 
-Fails: `invalid_field_type`, `value_not_permitted`, `pattern_mismatch`, `minimum_length`, `invalid_size`, `model_contract_mismatch`.
+Fails: `invalid_field_type`, `value_not_permitted`, `pattern_mismatch`, `minimum_length`, `invalid_size`.
 Evidence: `negative-str-case-unknown`, `negative-str-pad-width`, `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::captured_structural_projection_preserves_complete_ordered_constraint_outcome_and_authority`.
 
 A value of the wrong type fails with `invalid_field_type`, a value outside
 `values` with `value_not_permitted`, a string that does not satisfy `pattern`
 with `pattern_mismatch`, a string shorter than `min_length` with
 `minimum_length`, and a list or mapping of the wrong `size` with
-`invalid_size`. Final normalized model admission reports
-`model_contract_mismatch` for these causes.
+`invalid_size`.
 
 <a id="schema-13"></a>
 
@@ -403,13 +402,11 @@ with `pattern_mismatch`, a string shorter than `min_length` with
 A value of a class carries every field its class declares required and no
 field the class does not declare. An undeclared or missing class field fails.
 
-Fails: `unknown_field`, `missing_required_field`, `model_contract_mismatch`.
-Evidence: `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::custom_versionless_class_preserves_ordered_required_type_and_unknown_findings`, `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::final_model_findings_retain_no_pass_document_and_move_original_source`, `rust/crates/yamaa-core/tests/schema_validation.rs::version_precedes_field_findings_and_classes_keep_schema_then_input_order`.
+Fails: `unknown_field`, `missing_required_field`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::custom_versionless_class_preserves_ordered_required_type_and_unknown_findings`, `rust/crates/yamaa-core/tests/schema_validation.rs::classes_keep_schema_then_input_order_in_a_complete_document`.
 
 Schema findings report an undeclared field as `unknown_field` and a missing
-required field as `missing_required_field`. Final normalized model admission
-reports `model_contract_mismatch` for the same undeclared or missing-field
-causes.
+required field as `missing_required_field`.
 
 <a id="schema-14"></a>
 
@@ -421,7 +418,7 @@ them. The bundle writes a class field descriptor in flow form without a
 `description`, and in block form with a `description`; this is a convention
 of how the bundle is written, not a validation requirement.
 
-Evidence: `rust/crates/yamaa-adapters/src/yaml_decode/tests.rs::compact_flow_pairs_keep_nested_mapping_entries`, `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::shipped_closure_retains_every_authoritative_byte_and_admits_without_a_directory`.
+Evidence: `rust/crates/yamaa-adapters/src/yaml_decode/tests.rs::compact_flow_pairs_keep_nested_mapping_entries`, `rust/crates/yamaa-adapters/tests/declaration_v1_schema.rs::every_file_type_closure_is_admitted_with_valid_defaults_and_kinds`.
 
 ```yaml
 example_class:

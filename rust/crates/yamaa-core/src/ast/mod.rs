@@ -1,16 +1,16 @@
-//! The typed specification tree that every front end lowers into, and the
+//! The typed specification tree that the front end lowers into, and the
 //! roots of a project's own files ([`project`]).
 //!
-//! Each surface has its own front end under [`crate::front_end`], and both
-//! lower into these nodes through the construct lowering they share
-//! ([`crate::front_end::lowering`]). Every analysis reads them through the
+//! A specification is read in 1.0 only: [`crate::front_end::v1::spec`]
+//! lowers it into these nodes through the construct lowering in
+//! [`crate::front_end::lowering`]. Every analysis reads them through the
 //! one traversal in [`traversal`] and types them with the one result-type
 //! table, [`result_type`]. There is no IO here and there are no YAML types:
 //! positions arrive as plain numbers.
 //!
 //! Every node carries a [`Meta`]: its structured spec path, which one
-//! renderer writes in either notation, and the position of the deepest
-//! written node in the layer whose value took effect (P-ISSUE-1).
+//! renderer writes in the notation of P-CLR-2, and the position of the
+//! deepest written node in the layer whose value took effect (P-ISSUE-1).
 
 mod expr;
 mod path;
@@ -21,10 +21,10 @@ mod types;
 pub use expr::{
     Aggregate, Arm, Between, Binding, CallShape, Closed, DayRule, Dictionary, Direction, Expr,
     ExprId, ExprKind, FlagPart, Formula, Handlers, Keep, Literal, Name, Nulls, OdmRead, Operand,
-    OrderTerm, Precision, RankMethod, ScalarOp, Slot, SourceRead, TemporalType, TextCase, TimeRule,
-    TimeUnit, Window, WindowFunction,
+    OrderTerm, RankMethod, ScalarOp, Slot, SourceRead, TemporalType, TextCase, TimeRule, TimeUnit,
+    Window, WindowFunction,
 };
-pub use path::{Notation, PathId, Paths, Segment};
+pub use path::{PathId, Paths, Segment};
 pub use project::{
     Codelist, CodelistDeclaration, CodelistItem, CodelistSource, CodelistType, Codelists,
     DefineContext, DocumentKind, ExternalDictionary, Function, FunctionDeclaration, FunctionSource,
@@ -111,8 +111,7 @@ pub struct Text {
 
 /// A written value outside an expression: a handler, a flag value, a
 /// dictionary entry, a check bound. Omitted is `None` where the field is
-/// optional; `{literal: null}` today and YAML null in 1.0 are both
-/// [`Literal::Missing`].
+/// optional; YAML null is [`Literal::Missing`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct Constant {
     pub value: Literal,
@@ -133,71 +132,19 @@ pub enum File {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Header {
     pub surface: Surface,
-    /// Today's `schema_version`; in 1.0 the chain's version (P-VER-1).
+    /// The version the file declares: a 1.x file's `yamaa`, which a resolved
+    /// specification writes as its chain's version (P-VER-1), or a 0.5
+    /// project file's `schema_version`.
     pub version: Text,
     pub meta: Meta,
 }
 
+/// The surface a file is written in. A specification is read in 1.x only;
+/// `V0_5` is the surface of a 0.5 project file, whose route goes in P2-13d.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Surface {
     V0_5,
     V1 { minor: u32 },
-}
-
-impl Surface {
-    /// Whether a source binding's or a lookup's `absent` also answers a
-    /// variable that does not exist where it is read, as COLUMN-11 at the
-    /// `yamaa-v0.5.0` tag says. In 1.0 `absent` answers only a lookup that
-    /// finds no record, and a variable that does not exist fails under
-    /// NAME-3 (D67).
-    pub fn absent_answers_unknown_variable(self) -> bool {
-        matches!(self, Self::V0_5)
-    }
-    /// Whether a lookup that declares no `key` infers the applicable output
-    /// keys at binding, as LOOKUP-1 and LOOKUP-5 at the `yamaa-v0.5.0` tag
-    /// say. In 1.0 an implicit join and a qualified aggregate without `key`
-    /// match on the input's declared `key`, and every named intermediate but
-    /// a row template's driver declares its own (D23, D63).
-    pub fn infers_join_keys(self) -> bool {
-        matches!(self, Self::V0_5)
-    }
-    /// Whether each form of a `variable` field that names a current-row
-    /// value has one meaning, as 1.0 gives it (#2934, #3414): in a row's
-    /// read a bare name is an output column (NAME-3), a driver-qualified name
-    /// reads the row's driver record and a lookup-qualified name that
-    /// lookup's column for the row (LOOKUP-9); in a donor read a bare or
-    /// donor-qualified name reads the donor record (LOOKUP-16); and an
-    /// aggregate's key refusals report at its `key` (LOOKUP-5). A 0.5 file
-    /// keeps the meanings at the `yamaa-v0.5.0` tag (D75), where a named
-    /// intermediate's bare `between.value` that no column takes reads a field
-    /// of the driver's record.
-    pub fn one_meaning_per_form(self) -> bool {
-        matches!(self, Self::V1 { .. })
-    }
-    /// The run report's handler for a named intermediate's absence answer,
-    /// counted at each read's path (LOOKUP-14): in 1.0 `absent`, the name the
-    /// answer is written under (P-HND-1), as an implicit join's absence is
-    /// counted (D202); in a 0.5 file `no_match`, as at the `yamaa-v0.5.0` tag
-    /// (D75).
-    pub fn intermediate_absence(self) -> crate::numeric_lifecycle::HandlerKind {
-        use crate::numeric_lifecycle::HandlerKind;
-        match self {
-            Self::V0_5 => HandlerKind::NoMatch,
-            Self::V1 { .. } => HandlerKind::Absent,
-        }
-    }
-    /// The condition an `absent` handler answers, whose rule the run report's
-    /// `absent` rows cite (CHECK-24): in 1.0 `unmatched_key`, since `absent`
-    /// answers only a lookup without a candidate, as LOOKUP-24 states (D67,
-    /// D204); in a 0.5 file `unknown_field`, the unknown-name rule of NAME-3,
-    /// as at the `yamaa-v0.5.0` tag (D75).
-    pub fn absent_condition(self) -> crate::diagnostic::ConditionCode {
-        use crate::diagnostic::ConditionCode;
-        match self {
-            Self::V0_5 => ConditionCode::SourceUnknownReference,
-            Self::V1 { .. } => ConditionCode::LookupUnmatchedKey,
-        }
-    }
 }
 
 /// `model: SDTM | SEND | ADaM` (P-MODEL-1); no 0.5 form.
@@ -254,21 +201,13 @@ impl Spec {
     pub fn expr(&self, id: ExprId) -> &Expr {
         &self.exprs[id.index()]
     }
-    /// Write a node's path in `notation`.
-    pub fn render(&self, path: PathId, notation: Notation) -> String {
-        self.paths.render(path, notation)
-    }
-    /// The notation this spec's diagnostics cite paths in: today's for a
-    /// 0.5 file, P-CLR-2's for a 1.0 file.
-    pub fn notation(&self) -> Notation {
-        match self.header.surface {
-            Surface::V0_5 => Notation::V0_5,
-            Surface::V1 { .. } => Notation::V1,
-        }
+    /// Write a node's path in the notation of P-CLR-2.
+    pub fn render(&self, path: PathId) -> String {
+        self.paths.render(path)
     }
     /// A node's path as this spec's diagnostics cite it.
     pub fn cite(&self, meta: Meta) -> String {
-        self.render(meta.path, self.notation())
+        self.render(meta.path)
     }
     /// Whether the intermediate `name` drives a row template (ROW-2).
     pub fn drives_rows(&self, name: &str) -> bool {
@@ -279,13 +218,10 @@ impl Spec {
                 .is_some_and(|driver| driver.name == name)
         })
     }
-    /// Whether the intermediate `item` lacks the `key` it requires: on a 1.0
-    /// tree, it declares none and drives no row template (LOOKUP-3, ROW-2;
-    /// D23, D63). A 0.5 lookup without `key` infers it.
+    /// Whether the intermediate `item` lacks the `key` it requires: it
+    /// declares none and drives no row template (LOOKUP-3, ROW-2; D23, D63).
     pub fn lacks_key(&self, item: &Intermediate) -> bool {
-        !self.header.surface.infers_join_keys()
-            && item.key.is_none()
-            && !self.drives_rows(&item.id.name)
+        item.key.is_none() && !self.drives_rows(&item.id.name)
     }
     /// The input `name`'s declared `key`, if it declares one (P-JOIN-1).
     pub fn input_key(&self, name: &str) -> Option<&[Named]> {
@@ -294,7 +230,7 @@ impl Spec {
             .rfind(|input| input.name.name == name)
             .and_then(|input| match &input.key {
                 KeyDecl::Declared(columns) => Some(columns.as_slice()),
-                KeyDecl::Inferred | KeyDecl::Undeclared => None,
+                KeyDecl::Undeclared => None,
             })
     }
     /// Whether the intermediate `item` matches its input on exactly the
@@ -369,8 +305,6 @@ pub enum EmptyString {
 #[derive(Clone, Debug, PartialEq)]
 pub enum KeyDecl {
     Declared(Vec<Named>),
-    /// 0.5 only: implicit joins infer the applicable keys at binding.
-    Inferred,
     Undeclared,
 }
 
@@ -404,9 +338,8 @@ pub struct Intermediate {
     pub order_by: Vec<OrderTerm>,
     pub keep: Option<Keep>,
     pub columns: Option<Vec<Named>>,
-    /// The answer when the lookup selects no record: `no_match` in 0.5,
-    /// `absent` in 1.0 (P-HND-1). Which absence it answers is the surface's
-    /// ([`Surface::absent_answers_unknown_variable`], D67).
+    /// `absent`, the answer when the lookup selects no record (P-HND-1); it
+    /// answers no variable that does not exist where it is read (D67).
     pub absent: Option<Constant>,
     pub require_match: bool,
     pub bindings: Vec<Binding>,
@@ -428,10 +361,8 @@ pub enum JoinKey {
         pairs: Vec<(Named, ExprId)>,
         meta: Meta,
     },
-    /// The input's declared key (P-KEY-1); no 0.5 form.
+    /// The input's declared key (P-KEY-1).
     FromInput,
-    /// 0.5 only: the keys are inferred at binding.
-    Applicable,
 }
 
 #[derive(Clone, Debug, PartialEq)]

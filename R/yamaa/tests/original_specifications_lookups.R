@@ -128,26 +128,12 @@ local({
   expect_lookup_run(run_spec(entry),directory,charToRaw("ID,A,B\n1,first,\n2,skip,skip\n3,,\n"),
     "[{\"spec_path\":\"columns.A.derivation.case[0].then.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.A.derivation.case[0].then.source.absent\",\"handler\":\"absent\",\"count\":1},{\"spec_path\":\"columns.B.derivation.case[0].then.source.multiple_matches\",\"handler\":\"multiple_matches\",\"count\":1},{\"spec_path\":\"columns.B.derivation.case[0].then.source.absent\",\"handler\":\"absent\",\"count\":1}]",
     "a nested case intermediate source")
-  # 0.5 only, until #3447 deletes the 0.5 path: a 0.5 `absent` answers a
-  # variable the lookup does not hold, and a donor without a record is the
-  # intermediate's own `no_match` (D67).
-  legacy <- host_truth[["lookup_fallback_0_5_yaml"]]
-  for (variable in c("P.A", "P.ABSENT")) {
-    writeBin(charToRaw(sub("then: P.A",paste0("then: {source: {variable: ",variable,", absent: fallback}}"),legacy,fixed=TRUE)),entry)
-    admitted <- run_spec(entry)
-    expected <- if (variable == "P.A") "ID,A,B\n1,first,\n2,skip,skip\n3,,\n" else host_truth[["fallback_lookup_csv"]]
-    count <- if (variable == "P.A") "0" else "2"
-    label <- paste("an absent fallback for",variable)
-    expect_lookup_run(admitted,directory,charToRaw(expected),NULL,label)
-    handler <- paste0('{"count":',count,',"handler":"absent","spec_path":"columns.A.derivation.case[0].then.source.absent"}')
-    stopifnot_case(label,"the absent handler is counted"=grepl(handler,domain_observations(admitted),fixed=TRUE))
-  }
-  # On a 1.x file the intermediate answers the donor without a record, and its
-  # answer counts under `absent` at the read, the binding's own row (D202); a
+  # The intermediate answers the donor without a record, and its answer
+  # counts under `absent` at the read, the binding's own row (D202); a
   # variable the lookup does not hold fails (D67, LOOKUP-11).
   writeBin(charToRaw(sub("then: P.A","then: {source: {variable: P.A, absent: fallback}}",body,fixed=TRUE)),entry)
   admitted <- run_spec(entry)
-  label <- "an absent fallback for P.A in a 1.x file"
+  label <- "an absent fallback for P.A"
   expect_lookup_run(admitted,directory,charToRaw("ID,A,B\n1,first,\n2,skip,skip\n3,,\n"),NULL,label)
   stopifnot_case(label,"the intermediate's answer counts at the binding's absent row"=grepl(
     '{"count":1,"handler":"absent","spec_path":"columns.A.derivation.case[0].then.source.absent"}',
@@ -156,7 +142,7 @@ local({
   refused <- run_spec(entry)
   check_issue_frame(refused$issues,list(phase="validation",condition="unknown_field",rule="LOOKUP-11",
     spec_paths=list("columns.A.derivation.case[0].then.source"),context='{"identifier":"P.ABSENT"}'),
-    "an absent fallback for a variable the lookup does not hold in a 1.x file")
+    "an absent fallback for a variable the lookup does not hold")
   stopifnot("a refused run has no output"=is.null(refused$output))
   cat("nested case intermediate source shares lazy kept selection and complete handler accounting without Python\n")
 })

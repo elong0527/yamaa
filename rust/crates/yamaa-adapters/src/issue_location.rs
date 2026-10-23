@@ -377,47 +377,24 @@ impl Locator {
     /// normalized for composition, the latest first, and its resolved document.
     pub(crate) fn specification(&mut self, document: &PreparedDocument) -> usize {
         let entry = document.source().identity.as_str();
+        let specification = document.specification();
+        let resolved = specification.resolved();
         // The layers in contribution order, the root ancestor first.
-        let (resolved, contributed): (&Document, Vec<(&str, Option<NormalizedDocument>)>) =
-            if let Some(versioned) = document.versioned() {
+        let contributed: Vec<(&str, Option<NormalizedDocument>)> = specification
+            .layers()
+            .iter()
+            .map(|layer| {
                 (
-                    versioned.resolved(),
-                    versioned
-                        .layers()
-                        .iter()
-                        .map(|layer| {
-                            (
-                                layer.source.identity.as_str(),
-                                document
-                                    .schema()
-                                    .structure()
-                                    .at_version(layer.version)
-                                    .normalize_versioned_layer(&layer.document)
-                                    .ok(),
-                            )
-                        })
-                        .collect(),
+                    layer.source.identity.as_str(),
+                    document
+                        .schema()
+                        .structure()
+                        .at_version(layer.version)
+                        .normalize_versioned_layer(&layer.document)
+                        .ok(),
                 )
-            } else if let Some(inherited) = document.inheritance() {
-                (
-                    inherited.model().document(),
-                    inherited
-                        .layers()
-                        .iter()
-                        .map(|layer| {
-                            (
-                                layer.source.identity.as_str(),
-                                Some(NormalizedDocument {
-                                    document: layer.document.clone(),
-                                    origins: layer.origins.clone(),
-                                }),
-                            )
-                        })
-                        .collect(),
-                )
-            } else {
-                (document.model().document(), vec![(entry, None)])
-            };
+            })
+            .collect();
         let decoded = |identity: &str| -> Option<&DecodedYaml> {
             if identity == entry {
                 return Some(document.raw());
@@ -451,14 +428,8 @@ impl Locator {
             .collect();
         self.specified = true;
         let root = self.root(entry, layers, Some(resolved.clone()), fields);
-        let provenance = if let Some(versioned) = document.versioned() {
-            versioned.provenance()
-        } else if let Some(inherited) = document.inheritance() {
-            inherited.provenance()
-        } else {
-            &[]
-        };
-        self.roots[root].provenance = provenance
+        self.roots[root].provenance = specification
+            .provenance()
             .iter()
             .map(|origin| (steps(&origin.path), origin.layer))
             .collect();
@@ -554,9 +525,9 @@ impl Locator {
         });
     }
 
-    /// `steps` as a specification's layers write them: an indexed row or
-    /// intermediate, as 0.5 paths name one by its position in the resolved
-    /// specification, by the `id` it declares.
+    /// `steps` as a specification's layers write them: a row or intermediate
+    /// that a path names by its position in the resolved specification, by
+    /// the `id` it declares.
     fn written_steps(&self, root: usize, steps: &[Step]) -> Vec<Step> {
         let mut written = steps.to_vec();
         let Some(resolved) = &self.roots[root].resolved else {

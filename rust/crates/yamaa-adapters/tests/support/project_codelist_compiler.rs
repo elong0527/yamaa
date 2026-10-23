@@ -27,36 +27,12 @@ pub fn spec(
     rows: bool,
     extra: Option<&str>,
 ) -> Document {
-    tree(identifier, kind, allowed, rows, extra, false).document()
-}
-/// The specification tree; `legacy` writes it in 0.5: its header, one
-/// `origin` and the 0.5 spelling of a read.
-fn tree(
-    identifier: &str,
-    kind: &str,
-    allowed: Option<&str>,
-    rows: bool,
-    extra: Option<&str>,
-    legacy: bool,
-) -> Tree {
-    let read = |name: &str| {
-        let value = if legacy {
-            m(vec![("source", m(vec![("variable", t(name))]))])
-        } else {
-            t(name)
-        };
-        m(vec![("value", value)])
-    };
+    let read = |name: &str| m(vec![("value", t(name))]);
     let origin = m(vec![("type", t("Assigned"))]);
-    let mut submission = vec![("codelist", t(identifier))];
-    if legacy {
-        submission.push(("origin", origin));
-    } else {
-        submission.push(("origins", Tree::List(vec![origin])));
-    }
-    if extra == Some("role") {
-        submission.push(("role", t("Result Qualifier")));
-    }
+    let submission = vec![
+        ("codelist", t(identifier)),
+        ("origins", Tree::List(vec![origin])),
+    ];
     let mut code = vec![
         ("name", t("CODE")),
         ("type", t(kind)),
@@ -75,15 +51,11 @@ fn tree(
             )])]),
         ));
     }
-    let mut fields = if legacy {
-        vec![("schema_version", t("1.0"))]
-    } else {
-        vec![
-            ("yamaa", t("1.0")),
-            ("type", t("spec")),
-            ("model", t("ADaM")),
-        ]
-    };
+    let mut fields = vec![
+        ("yamaa", t("1.0")),
+        ("type", t("spec")),
+        ("model", t("ADaM")),
+    ];
     fields.extend([
         ("domain", t("TEST")),
         ("input", m(vec![("SRC", m(vec![("path", t("input.csv"))]))])),
@@ -124,19 +96,16 @@ fn tree(
     if extra == Some("root_metadata") {
         fields.push(("metadata", m(vec![("has_no_data", t("true"))])));
     }
-    m(fields)
+    m(fields).document()
 }
 /// The admitted metadata of a 1.0 project with one `SEX` codelist file
 /// holding the value `F`.
 pub fn environment(extensible: bool) -> ExecutionEnvironment {
-    admit(Surface::V1 { minor: 0 }, Some(Language::Python), extensible)
-}
-fn admit(surface: Surface, language: Option<Language>, extensible: bool) -> ExecutionEnvironment {
     Environment::admit(
         Some(Language::Python),
         Draft {
-            surface,
-            language,
+            surface: Surface::V1 { minor: 0 },
+            language: Some(Language::Python),
             lock: None,
             functions: None,
             codelists: vec![Source {
@@ -180,29 +149,4 @@ pub fn schema() -> TableSchema {
         },
     ])
     .unwrap()
-}
-/// The 0.5 specification and project of the families that keep them until
-/// the 0.5 path is deleted (#3447, #3448).
-#[allow(dead_code)]
-pub mod v0_5 {
-    use yamaa_core::{
-        ast::Surface, project_environment::ExecutionEnvironment, schema::SpecificationDocument,
-    };
-
-    pub fn spec(
-        identifier: &str,
-        kind: &str,
-        allowed: Option<&str>,
-        rows: bool,
-        extra: Option<&str>,
-    ) -> SpecificationDocument {
-        let tree = super::tree(identifier, kind, allowed, rows, extra, true);
-        SpecificationDocument::admit(tree.document())
-            .unwrap()
-            .unwrap()
-    }
-    /// A 0.5 project that links no environment file and holds the codelist.
-    pub fn environment(extensible: bool) -> ExecutionEnvironment {
-        super::admit(Surface::V0_5, None, extensible)
-    }
 }

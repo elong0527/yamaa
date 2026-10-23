@@ -7,10 +7,7 @@ mod descriptor;
 mod diagnostic_projection;
 mod dictionary_resources;
 mod document;
-mod layer_admission;
-mod layer_materialization;
 mod layers;
-mod model;
 mod normalization;
 mod path_render;
 mod printable_data;
@@ -41,9 +38,7 @@ pub(crate) use document::canonical_integer;
 pub use document::{
     Document, DocumentError, DocumentKind, DocumentNode, DocumentResource, ScalarKey,
 };
-pub use layer_materialization::LayerCompositionError;
 pub use layers::{ComposedLayers, LayerNodeOrigin, LayerProvenance};
-pub use model::SpecificationDocument;
 pub use normalization::{
     NormalizationError, NormalizationResource, NormalizedDocument, SchemaOrigin, SchemaSource,
 };

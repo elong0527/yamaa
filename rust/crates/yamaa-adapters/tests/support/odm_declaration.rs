@@ -28,12 +28,14 @@ use yamaa_core::{
 };
 
 pub fn observe(source: &str, headers: &[Vec<String>]) -> Value {
-    let document = match shipped_schema::capture()
-        .expect("captured shipped schema")
-        .prepare_standalone(Source {
+    let document = match shipped_schema::prepare(
+        Source {
             identity: "fixture.yaml".into(),
             bytes: source.as_bytes().into(),
-        }) {
+        },
+        "fixture.yaml".into(),
+        &mut crate::support::specification_run::EntryOnly,
+    ) {
         Ok(document) => document,
         Err(error) => {
             return json!({"status":"structural_refusal", "error":format!("{error:?}"), "fields":odm_source::FIELDS})

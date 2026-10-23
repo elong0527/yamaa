@@ -14,18 +14,13 @@ mod project {
         use yamaa_core::{
             producer_contract::Links, specification::PrepareError, value::ColumnType,
         };
-        const PRODUCER:&str="schema_version: '1.0'\ndomain: PROD\nkeys: [ID]\ninput: {RAW: never-read.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: VALUE, type: float, label: Reported value, derivation: RAW.VALUE}\noutput: {path: './produced.csv', columns: [ID, VALUE]}\n";
-        const CONSUMER:&str="schema_version: '1.0'\ndomain: CONS\nkeys: [ID]\ninput: {SRC: {path: './produced.csv', schema: nested/producer.yaml}}\ncolumns: [{name: ID, type: int, label: ID, derivation: SRC.ID}]\noutput: {path: consumer.csv, columns: [ID]}\n";
+        const PRODUCER:&str="yamaa: '1.0'\ntype: spec\ndomain: PROD\nkeys: [ID]\ninput: {RAW: never-read.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: VALUE, type: float, label: Reported value, derivation: RAW.VALUE}\noutput: {path: './produced.csv', columns: [ID, VALUE]}\n";
+        const CONSUMER:&str="yamaa: '1.0'\ntype: spec\ndomain: CONS\nkeys: [ID]\ninput: {SRC: {path: './produced.csv', schema: nested/producer.yaml}}\ncolumns: [{name: ID, type: int, label: ID, derivation: SRC.ID}]\noutput: {path: consumer.csv, columns: [ID]}\n";
         fn standalone(identity: &str, text: &str) -> Arc<PreparedDocument> {
-            Arc::new(
-                shipped_schema::capture()
-                    .unwrap()
-                    .prepare_standalone(Source {
-                        identity: identity.into(),
-                        bytes: text.as_bytes().to_vec(),
-                    })
-                    .unwrap(),
-            )
+            Arc::new(crate::support::specification_run::prepare_as(
+                identity,
+                text.as_bytes(),
+            ))
         }
         fn linked(document: Arc<PreparedDocument>) -> LinkedSpecification {
             LinkedSpecification {
@@ -39,8 +34,9 @@ mod project {
             links: &[LinkedSpecification],
         ) -> Result<yamaa_core::domain::CheckedSpecification, PrepareError> {
             let metadata = link_metadata(consumer, links);
-            yamaa_core::domain::check_linked(
-                consumer.model(),
+            yamaa_core::domain::check_tree_linked(
+                consumer.tree().clone(),
+                consumer.document(),
                 None,
                 Links {
                     consumer: &consumer.source().identity,
@@ -157,18 +153,15 @@ mod project {
         }
         #[test]
         fn inherited_link_and_artifact_paths_keep_independent_authored_layers() {
-            let entry="schema_version: '1.0'\nparent: parent.yaml\ndomain: CONS\nkeys: [ID]\ninput: {SRC: './child.csv'}\ncolumns: [{name: ID, type: int, label: ID, derivation: SRC.ID}]\noutput: {path: consumer.csv, columns: [ID]}\n";
+            let entry="yamaa: '1.0'\ntype: spec\nparent: parent.yaml\ndomain: CONS\nkeys: [ID]\ninput: {SRC: './child.csv'}\ncolumns: [{name: ID, type: int, label: ID, derivation: SRC.ID}]\noutput: {path: consumer.csv, columns: [ID]}\n";
             let parent =
-        "schema_version: '1.0'\ninput: {SRC: {path: parent.csv, schema: '../producer.yaml'}}\n";
+        "yamaa: '1.0'\ntype: spec\ninput: {SRC: {path: parent.csv, schema: '../producer.yaml'}}\n";
             let (consumer, consumer_port) = inherited("/consumer.yaml", entry, parent);
             let producer_entry = PRODUCER
-                .edit(
-                    "schema_version: '1.0'",
-                    "schema_version: '1.0'\nparent: parent.yaml",
-                )
+                .edit("type: spec", "type: spec\nparent: parent.yaml")
                 .edit("output: {path: './produced.csv', columns: [ID, VALUE]}", "");
             let producer_parent =
-                "schema_version: '1.0'\noutput: {path: '../stored.csv', columns: [ID, VALUE]}\n";
+                "yamaa: '1.0'\ntype: spec\noutput: {path: '../stored.csv', columns: [ID, VALUE]}\n";
             let (producer, producer_port) =
                 inherited("/producer.yaml", &producer_entry, producer_parent);
             let before = (consumer_port.calls.clone(), producer_port.calls.clone());
@@ -189,19 +182,6 @@ mod project {
                 producer_parent.as_bytes()
             );
             assert_eq!(before, (consumer_port.calls, producer_port.calls));
-        }
-        #[test]
-        fn explicit_null_schema_is_an_absent_link() {
-            // Null clears (LAYER-9): an explicit-null schema is absent, so the
-            // input is an ordinary schema-less source.
-            let null = CONSUMER.edit("schema: nested/producer.yaml", "schema: null");
-            assert!(shipped_schema::capture()
-                .unwrap()
-                .prepare_standalone(Source {
-                    identity: "/consumer.yaml".into(),
-                    bytes: null.into_bytes(),
-                })
-                .is_ok());
         }
     }
 

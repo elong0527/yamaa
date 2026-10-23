@@ -253,10 +253,8 @@ mod schema {
                 resolved::{Op, OperandRole},
                 ResolvedPlan,
             },
-            schema::{Document, DocumentNode as N, SpecificationDocument},
-            specification::{
-                BindError, BindFinding, PreflightFinding, PrepareError, PreparedSpecification,
-            },
+            schema::{Document, DocumentNode as N},
+            specification::{BindError, BindFinding, PreflightFinding, PrepareError},
             value::{ColumnType, Value},
         };
 
@@ -350,63 +348,6 @@ mod schema {
                 fields.push(("rows", rows));
             }
             Tree::map(fields)
-        }
-        /// A 0.5 specification whose `VALUE` derives `operation` over
-        /// `payload`, for the 0.5-only test below, which #3447 deletes.
-        fn legacy_operation_document(operation: &str, payload: Tree) -> SpecificationDocument {
-            let column = |name, op, field, value| {
-                Tree::map(vec![
-                    ("name", Tree::text(name)),
-                    ("type", Tree::text("int")),
-                    (
-                        "derivation",
-                        Tree::map(vec![(
-                            "value",
-                            Tree::map(vec![(op, Tree::map(vec![(field, Tree::text(value))]))]),
-                        )]),
-                    ),
-                ])
-            };
-            let wrapper = vec![("value", Tree::map(vec![(operation, payload)]))];
-            let input_path = "input.csv";
-            let fields = vec![
-                ("schema_version", Tree::text("1.0")),
-                ("domain", Tree::text("TEST")),
-                (
-                    "input",
-                    Tree::map(vec![(
-                        "SRC",
-                        Tree::map(vec![("path", Tree::text(input_path))]),
-                    )]),
-                ),
-                ("keys", Tree::List(vec![Tree::text("ID")])),
-                (
-                    "columns",
-                    Tree::List(vec![
-                        column("ID", "source", "variable", "SRC.ID"),
-                        Tree::map(vec![
-                            ("name", Tree::text("VALUE")),
-                            ("type", Tree::text("int")),
-                            ("derivation", Tree::map(wrapper)),
-                        ]),
-                    ]),
-                ),
-                (
-                    "output",
-                    Tree::map(vec![
-                        ("path", Tree::text("result.csv")),
-                        (
-                            "columns",
-                            Tree::List(vec![Tree::text("ID"), Tree::text("VALUE")]),
-                        ),
-                    ]),
-                ),
-            ];
-            let tree = Tree::map(fields);
-            let mut nodes = Vec::new();
-            let root = tree.append(&mut nodes);
-            let document = Document::new(nodes, root).unwrap();
-            SpecificationDocument::admit(document).unwrap().unwrap()
         }
 
         #[test]
@@ -1261,7 +1202,6 @@ mod schema {
                 let binding = resolved::operands(&plan, case, OperandRole::Branch)[0];
                 let Op::SourceBinding {
                     absent,
-                    variable_absent,
                     path: bound_path,
                     ..
                 } = resolved::op(&plan, binding)
@@ -1269,7 +1209,6 @@ mod schema {
                     panic!("source options lost")
                 };
                 assert_eq!(bound_path, "columns.VALUE.derivation.case[0].then.source");
-                assert!(!variable_absent);
                 if absent_handler {
                     assert_eq!(absent, &Some(Value::Int(7)));
                 } else {
@@ -1280,36 +1219,6 @@ mod schema {
                     );
                 }
             }
-        }
-
-        /// 0.5-only until #3447: a 1.0 tree refuses an unknown variable
-        /// instead of answering `absent` (D67, D102).
-        #[test]
-        fn unqualified_key_source_absence_is_an_admitted_key_expression() {
-            let document = legacy_operation_document(
-                "source",
-                Tree::map(vec![
-                    ("variable", Tree::text("SOME_NAME")),
-                    ("absent", Tree::Scalar(N::Integer("7".into()))),
-                ]),
-            );
-            let raw = document.document();
-            let mut nodes = raw.nodes().to_vec();
-            let N::Sequence(keys) = &nodes[raw.field(raw.root(), "keys").unwrap()] else {
-                panic!("key sequence");
-            };
-            let key = keys[0];
-            nodes[key] = N::Text("VALUE".into());
-            let document = SpecificationDocument::admit(Document::new(nodes, raw.root()).unwrap())
-                .unwrap()
-                .unwrap();
-            let prepared = PreparedSpecification::prepare(&document).unwrap();
-            let plan = prepared.bind(&source()).unwrap();
-            let binding = resolved::row(&plan, 0)[0].expr;
-            let source = resolved::operands(&plan, binding, OperandRole::Value)[0];
-            assert!(matches!(resolved::op(&plan, binding),
-        Op::SourceBinding { absent: Some(Value::Int(7)), variable_absent: true, .. }
-        if matches!(resolved::op(&plan, source), Op::Literal(Value::Missing))));
         }
 
         #[test]
@@ -1705,79 +1614,6 @@ mod schema {
             // the same aggregate still binds (and so can execute).
             let prepared = prepare(&document_for("SRC.ID")).unwrap();
             prepared.bind(&donor).unwrap();
-        }
-    }
-    mod specification_model {
-        //! The 0.5 normalized model contract, which only the 0.5 path reads
-        //! (#2844 decision 5): 0.5-only until #3447 deletes it.
-        use yamaa_core::schema::{Document, DocumentNode as N, SpecificationDocument};
-
-        fn document() -> Document {
-            let mut nodes = Vec::new();
-            let mut fields = Vec::new();
-            for (name, value) in [
-                ("schema_version", N::Text("1.0".into())),
-                ("domain", N::Text("X".into())),
-                ("input", N::Mapping(vec![])),
-                ("keys", N::Sequence(vec![])),
-                ("columns", N::Sequence(vec![])),
-            ] {
-                let key = nodes.len();
-                nodes.push(N::Text(name.into()));
-                let value_id = nodes.len();
-                nodes.push(value);
-                fields.push((key, value_id));
-            }
-            let path = nodes.len();
-            nodes.push(N::Text("path".into()));
-            let value = nodes.len();
-            nodes.push(N::Text("output.csv".into()));
-            let columns = nodes.len();
-            nodes.push(N::Text("columns".into()));
-            let empty = nodes.len();
-            nodes.push(N::Sequence(vec![]));
-            let output = nodes.len();
-            nodes.push(N::Mapping(vec![(path, value), (columns, empty)]));
-            let key = nodes.len();
-            nodes.push(N::Text("output".into()));
-            fields.push((key, output));
-            let root = nodes.len();
-            nodes.push(N::Mapping(fields));
-            Document::new(nodes, root).unwrap()
-        }
-
-        #[test]
-        fn admitted_model_owns_unchanged_occurrences_without_claiming_execution() {
-            let document = document();
-            let expected = document.clone();
-            let model = SpecificationDocument::admit(document).unwrap().unwrap();
-            assert_eq!(model.document(), &expected);
-            assert_eq!(
-                model.document().field(model.document().root(), "base"),
-                None
-            );
-        }
-
-        #[test]
-        fn invalid_models_keep_all_authored_findings_without_a_partial_model() {
-            let empty = Document::new(vec![N::Mapping(vec![])], 0).unwrap();
-            let findings = SpecificationDocument::admit(empty).unwrap().unwrap_err();
-            assert!(!findings.is_empty());
-            assert!(findings.iter().all(|finding| !finding.path.is_empty()));
-            assert!(SpecificationDocument::admit(document()).unwrap().is_ok());
-        }
-
-        #[test]
-        fn independent_admissions_preserve_the_same_occurrences() {
-            let input = document();
-            let first = SpecificationDocument::admit(input.clone())
-                .unwrap()
-                .unwrap();
-            let second = SpecificationDocument::admit(input.clone())
-                .unwrap()
-                .unwrap();
-            assert_eq!(first.document(), &input);
-            assert_eq!(second.document(), &input);
         }
     }
 }

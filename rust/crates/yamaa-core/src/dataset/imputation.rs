@@ -71,11 +71,10 @@ pub fn completion_policy(
     target: TemporalType,
     month: Option<&str>,
     day: Option<DayDeclaration<'_>>,
-    minimum: Precision,
     time: Option<TimeRule>,
     path: &str,
 ) -> Result<Completion, DatePolicyError> {
-    completion_policy_findings(target, month, day, minimum, time, path)?.map_err(|findings| {
+    completion_policy_findings(target, month, day, time, path)?.map_err(|findings| {
         DatePolicyError::Diagnostic(
             findings
                 .into_iter()
@@ -86,12 +85,15 @@ pub fn completion_policy(
 }
 
 /// Retain independent written month and day findings in declaration order.
-/// The type-dependent `time` field is checked where the operation is read.
+/// The rules imply the coarsest collected precision `impute` completes
+/// (TIME-8): a year alone with `month` and `day`, a year and month with `day`
+/// alone, and a whole date with neither; `month` without `day` completes no
+/// date and is refused (TIME-10). The type-dependent `time` field is checked
+/// where the operation is read.
 pub(crate) fn completion_policy_findings(
     target: TemporalType,
     month: Option<&str>,
     day: Option<DayDeclaration<'_>>,
-    minimum: Precision,
     time: Option<TimeRule>,
     path: &str,
 ) -> Result<Result<Completion, std::vec::Vec<Diagnostic>>, DatePolicyError> {
@@ -105,7 +107,6 @@ pub(crate) fn completion_policy_findings(
             && digits.bytes().all(|b| b.is_ascii_digit())
     }
     if path.is_empty()
-        || !matches!(minimum, Precision::Year | Precision::Month | Precision::Day)
         || (target == TemporalType::DateTime) != time.is_some()
         || month.is_some_and(|value| !canonical_integer(value))
         || matches!(day, Some(DayDeclaration::Number(value)) if !canonical_integer(value))
@@ -130,52 +131,36 @@ pub(crate) fn completion_policy_findings(
             operand_route: None,
         }
     }
-    let month = match (minimum, month) {
-        (Precision::Year, None) => Err(error(
-            C::ImputationMonthRequired,
-            &format!("{path}.month"),
-            vec![("minimum_source_precision", V::String("year".into()))],
-        )),
-        (Precision::Year, Some(value)) => value
-            .parse::<u8>()
-            .ok()
-            .filter(|n| (1..=12).contains(n))
-            .map(Some)
-            .ok_or_else(|| {
-                error(
-                    C::ImputationMonthRange,
-                    &format!("{path}.month"),
-                    vec![("month", number(value))],
-                )
-            }),
-        (_, Some(value)) => Err(error(
-            C::ImputationMonthNotPermitted,
-            &format!("{path}.month"),
-            vec![("month", number(value))],
-        )),
-        (_, None) => Ok(None),
+    let minimum = match (month, day) {
+        (Some(_), _) => Precision::Year,
+        (None, Some(_)) => Precision::Month,
+        (None, None) => Precision::Day,
     };
-    let day = match (minimum, day) {
-        (Precision::Day, None) => Ok(None),
-        (Precision::Day, Some(value)) => Err(error(
-            C::ImputationDayNotPermitted,
-            &format!("{path}.day"),
-            vec![(
-                "day",
-                match value {
-                    DayDeclaration::Number(value) => number(value),
-                    DayDeclaration::Position(value) => V::String(value.into()),
-                },
-            )],
+    let month = month
+        .map(|value| {
+            value
+                .parse::<u8>()
+                .ok()
+                .filter(|n| (1..=12).contains(n))
+                .ok_or_else(|| {
+                    error(
+                        C::ImputationMonthRange,
+                        &format!("{path}.month"),
+                        vec![("month", number(value))],
+                    )
+                })
+        })
+        .transpose();
+    let day = match day {
+        None if minimum == Precision::Year => Err(error(
+            C::ImputeMonthWithoutDay,
+            path,
+            vec![("field", V::String("day".into()))],
         )),
-        (_, None) => Err(error(
-            C::ImputationDayRequired,
-            &format!("{path}.day"),
-            vec![("minimum_source_precision", V::String(minimum.word().into()))],
-        )),
-        (_, Some(DayDeclaration::Position("first"))) => Ok(Some(DayRule::First)),
-        (_, Some(DayDeclaration::Position("last"))) => Ok(Some(DayRule::Last)),
-        (_, Some(DayDeclaration::Position(value))) => Err(error(
+        None => Ok(None),
+        Some(DayDeclaration::Position("first")) => Ok(Some(DayRule::First)),
+        Some(DayDeclaration::Position("last")) => Ok(Some(DayRule::Last)),
+        Some(DayDeclaration::Position(value)) => Err(error(
             C::ImputationDayRule,
             &format!("{path}.day"),
             vec![
@@ -186,7 +171,7 @@ pub(crate) fn completion_policy_findings(
                 ),
             ],
         )),
-        (_, Some(DayDeclaration::Number(value))) => value
+        Some(DayDeclaration::Number(value)) => value
             .parse::<u8>()
             .ok()
             .filter(|n| (1..=31).contains(n))

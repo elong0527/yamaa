@@ -1,4 +1,5 @@
-"""Installed yamaa.lint: the P-LINT-2 table, fixes and refusals.
+"""Installed yamaa.lint: the P-LINT-2 table, fixes, a partial restatement of
+an inherited mapping, which reads the parent layer, and refusals.
 
 The lint's complete suite is native (the adapters' lint tests); this checks
 what the installed host returns for the shared truth, which R reads too.
@@ -36,7 +37,7 @@ class Lint(unittest.TestCase):
         self.path = self.root / TRUTH["file_name"]
         self.path.write_bytes(TRUTH["specification_yaml"].encode("utf-8"))
 
-    def check_table(self, table, rows):
+    def check_table(self, table, rows, path=None):
         self.assertIsInstance(table, yamaa.Table)
         self.assertEqual(table.column_names, TRUTH["columns"])
         table = table.to_polars()
@@ -44,7 +45,7 @@ class Lint(unittest.TestCase):
             table.dtypes,
             [pl.String, pl.Int64, pl.Int64, pl.String, pl.String, pl.String],
         )
-        absolute = os.path.abspath(self.path).replace(os.sep, "/")
+        absolute = os.path.abspath(path or self.path).replace(os.sep, "/")
         self.assertEqual(table["file"].to_list(), [absolute] * len(rows))
         self.assertEqual(table.drop("file").to_dicts(), expected(rows))
 
@@ -59,6 +60,18 @@ class Lint(unittest.TestCase):
         self.check_table(yamaa.lint([self.path], fix=True), TRUTH["fixed_rows"])
         self.assertEqual(self.path.read_bytes().decode("utf-8"), TRUTH["fixed_yaml"])
         self.check_table(yamaa.lint(self.path), TRUTH["fixed_rows"])
+
+    def test_a_partial_restatement_is_reported_and_fix_leaves_it(self):
+        case = TRUTH["partial_restatement"]
+        for name, text in case["files"].items():
+            (self.root / name).write_bytes(text.encode("utf-8"))
+        path = self.root / case["file_name"]
+        for fix in (False, True):
+            with self.subTest(fix=fix):
+                self.check_table(yamaa.lint(path, fix=fix), case["rows"], path)
+                self.assertEqual(
+                    path.read_bytes().decode("utf-8"), case["files"][case["file_name"]]
+                )
 
     def test_a_clean_table_keeps_its_columns(self):
         self.path.write_bytes(b"")

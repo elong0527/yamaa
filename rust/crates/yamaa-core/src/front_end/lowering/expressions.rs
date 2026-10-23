@@ -1,24 +1,21 @@
-//! Expression lowering: every 0.5 operation, and every 1.0 expression, to
-//! its node.
+//! Expression lowering: every expression to its node.
 //!
-//! An operation lowers at its written site, `<container>.<operation>`,
-//! the path today's compiler cites; a normalized `value` wrapper adds no
-//! segment. Each operation reads its own fields before it lowers any child,
-//! so a payload outside the language becomes one
-//! [`ExprKind::Unsupported`] node without orphaned children.
+//! An operation lowers at its written site, `<container>.<operation>`; a
+//! normalized `value` wrapper adds no segment. Each operation reads its own
+//! fields before it lowers any child, so a payload outside the language
+//! becomes one [`ExprKind::Unsupported`] node without orphaned children.
 //!
-//! A 1.0 expression field holds text in the closed grammar or a YAML scalar
-//! instead of `literal`, `compute` and the string form of `source` (D18,
-//! D31); each lowers to the node its 0.5 spelling lowers to, at the
-//! expression field itself, except that a reference in a derivation keeps
-//! the canonical `source` binding and its path (RFC 2.4).
+//! An expression field holds text in the closed grammar, a YAML scalar or
+//! one operation (D18, D31). Text and scalars lower at the expression field
+//! itself, except that a reference in a derivation keeps the canonical
+//! `source` binding and its path (RFC 2.4).
 
 use super::{column_type, keyword, Lower};
 use crate::ast::{
     Aggregate, Arm, Between, Binding, Closed, DayRule, Derivation, Dictionary, Direction, ExprId,
     ExprKind, FlagPart, Formula, Handlers, JoinKey, Keep, Literal, Meta, Name, Nulls, OdmRead,
-    Operand, OrderTerm, Precision, RankMethod, Role, ScalarOp, Segment, Slot, SourceRead,
-    TemporalType, Text, TextCase, TimeRule, TimeUnit, Window, WindowFunction,
+    Operand, OrderTerm, RankMethod, Role, ScalarOp, Segment, Slot, SourceRead, TemporalType, Text,
+    TextCase, TimeRule, TimeUnit, Window, WindowFunction,
 };
 use crate::expression::{compile, CompiledExpression, Context, NodeKind, TemporalKind};
 use crate::schema::DocumentNode as N;
@@ -34,7 +31,7 @@ const SOURCE: Fields = &[("source", Slot::Source, true)];
 pub(super) enum Placement {
     /// A derivation, a `derivations` entry, a handled wrapper's `value` or a
     /// case result: a bare reference is the canonical `source` binding, at
-    /// `<field>.source` as 0.5 writes it.
+    /// `<field>.source`.
     Derivation,
     /// A key match value or a function argument: a reference is read at
     /// the field itself.
@@ -42,27 +39,20 @@ pub(super) enum Placement {
 }
 
 impl Lower<'_> {
-    /// Lower the expression written at `at`: an operation mapping, or a
-    /// bare name (a case result or key value outside normalization). In 1.0
-    /// it is also text in the closed grammar or a YAML scalar.
+    /// Lower the expression written at `at`: text in the closed grammar, a
+    /// YAML scalar or an operation mapping.
     pub(super) fn expression(&mut self, value: usize, at: Meta) -> ExprId {
         self.placed(value, at, Placement::Derivation)
     }
 
     /// [`Lower::expression`], with the reference path `placement` gives.
     pub(super) fn placed(&mut self, value: usize, at: Meta, placement: Placement) -> ExprId {
-        if self.v1() {
-            match self.node(value) {
-                N::Text(_) => return self.text_expression(value, at, placement),
-                N::Null | N::Boolean(_) | N::Integer(_) | N::Float(_) => {
-                    let here = self.written_at(at, value);
-                    return self.push(ExprKind::Literal(self.literal(value)), here);
-                }
-                _ => {}
-            }
-        }
         match self.node(value) {
-            N::Text(name) => self.push(ExprKind::Ref(Name(name.clone())), at),
+            N::Text(_) => self.text_expression(value, at, placement),
+            N::Null | N::Boolean(_) | N::Integer(_) | N::Float(_) => {
+                let here = self.written_at(at, value);
+                self.push(ExprKind::Literal(self.literal(value)), here)
+            }
             N::Mapping(entries) if entries.len() == 1 => {
                 let (key, payload) = entries[0];
                 let Some(operation) = self.text(key) else {
@@ -80,7 +70,6 @@ impl Lower<'_> {
 
     fn operation(&mut self, op: &str, p: usize, site: Meta) -> Option<ExprId> {
         Some(match op {
-            "literal" => self.push(ExprKind::Literal(self.literal(p)), site),
             "source" => self.source(p, site)?,
             "first_available" => {
                 let sources = self.field(p, "sources")?;
@@ -104,12 +93,6 @@ impl Lower<'_> {
             }
             "case" => self.case(p, site)?,
             "flag" => self.flag(p, site)?,
-            "compute" => {
-                let text = self.field(p, "expr").filter(|&n| self.text(n).is_some())?;
-                let text_meta = self.meta(site, Segment::Field("expr"), Some(text));
-                let path = self.render(site);
-                self.formula(Context::Compute, text, (site, text_meta), &path)
-            }
             "aggregate" => self.aggregate(p, site)?,
             "odm" => self.odm(p, site)?,
             "function" => self.call(p, site)?,
@@ -147,11 +130,10 @@ impl Lower<'_> {
         self.formula(Context::Predicate, node, (meta, meta), &path)
     }
 
-    /// Text in a 1.0 expression field (D18). Text holding only a name is a
+    /// Text in an expression field (D18). Text holding only a name is a
     /// reference and text holding only a literal is that literal (FORMULA-9,
-    /// EXPR-4), as `source` and `literal` lower in 0.5; other text is a
-    /// formula in the derivation context (FORMULA-27). The text is compiled
-    /// once, at the expression field.
+    /// EXPR-4); other text is a formula in the derivation context
+    /// (FORMULA-27). The text is compiled once, at the expression field.
     fn text_expression(&mut self, node: usize, at: Meta, placement: Placement) -> ExprId {
         let text = self.text(node).unwrap_or_default();
         let here = self.written_at(at, node);
@@ -487,32 +469,21 @@ impl Lower<'_> {
                 ScalarOp::Diff {
                     kind: temporal()?,
                     unit: unit("unit")?,
-                    // 0.5 spells endpoint inclusion `bounds`, 1.0 `closed`
-                    // (P-ORD-2); both default to the end only.
-                    closed: match (self.v1(), text(if self.v1() { "closed" } else { "bounds" })) {
-                        (_, None) | (false, Some("exclusive")) | (true, Some("right")) => {
-                            Closed::Right
-                        }
-                        (false, Some("inclusive")) | (true, Some("both")) => Closed::Both,
-                        (false, Some("between")) | (true, Some("neither")) => Closed::Neither,
-                        (_, Some(_)) => return None,
+                    // Endpoint inclusion defaults to the end only (P-ORD-2).
+                    closed: match text("closed") {
+                        None | Some("right") => Closed::Right,
+                        Some("both") => Closed::Both,
+                        Some("neither") => Closed::Neither,
+                        Some(_) => return None,
                     },
                 },
                 &[("start", Slot::Start, true), ("end", Slot::End, true)],
             ),
-            // The date `study_day` counts is `date` in 0.5 and `source` in 1.0
-            // (P-OP-1).
-            "study_day" if self.v1() => (
-                ScalarOp::StudyDay,
-                &[
-                    ("source", Slot::Source, true),
-                    ("reference", Slot::Reference, true),
-                ],
-            ),
+            // `study_day` counts the date `source` names (P-OP-1).
             "study_day" => (
                 ScalarOp::StudyDay,
                 &[
-                    ("date", Slot::Source, true),
+                    ("source", Slot::Source, true),
                     ("reference", Slot::Reference, true),
                 ],
             ),
@@ -561,13 +532,6 @@ impl Lower<'_> {
                         Some(N::Integer(day)) => Some(DayRule::Day(day.clone())),
                         Some(N::Text(rule)) if rule == "first" => Some(DayRule::First),
                         Some(N::Text(rule)) if rule == "last" => Some(DayRule::Last),
-                        Some(_) => return None,
-                    },
-                    minimum_source_precision: match text("minimum_source_precision") {
-                        None => None,
-                        Some("year") => Some(Precision::Year),
-                        Some("month") => Some(Precision::Month),
-                        Some("day") => Some(Precision::Day),
                         Some(_) => return None,
                     },
                     time: match text("time") {
@@ -779,17 +743,10 @@ impl Lower<'_> {
             Some((breaks, labels)) => ScalarOp::Cut {
                 breaks,
                 labels,
-                // 0.5 writes `right: true`, 1.0 `closed: right` (P-ORD-2);
-                // both default to left-closed intervals.
-                closed: if self.v1() {
-                    match self.text_of(p, "closed") {
-                        Some("right") => Closed::Right,
-                        _ => Closed::Left,
-                    }
-                } else if self.boolean(p, "right", false) {
-                    Closed::Right
-                } else {
-                    Closed::Left
+                // Intervals are left-closed unless `closed: right` (P-ORD-2).
+                closed: match self.text_of(p, "closed") {
+                    Some("right") => Closed::Right,
+                    _ => Closed::Left,
                 },
             },
             None => ScalarOp::Mapping {
@@ -870,9 +827,9 @@ impl Lower<'_> {
                 },
                 vec![("source", Slot::Source, required("source")?)],
             ),
-            // 1.0 names the analysis value `source` and the date it is
-            // compared with `reference` (P-OP-2, P-OP-3).
-            "baseline_flag" if self.v1() => (
+            // The analysis value is `source` and the date it is compared with
+            // `reference` (P-OP-2, P-OP-3).
+            "baseline_flag" => (
                 WindowFunction::BaselineFlag {
                     inclusive: self.boolean(p, "inclusive", true),
                     window_order_by: Vec::new(),
@@ -880,21 +837,6 @@ impl Lower<'_> {
                 vec![
                     ("source", Slot::Source, required("source")?),
                     ("reference", Slot::Reference, required("reference")?),
-                    ("date", Slot::Source, required("date")?),
-                ],
-            ),
-            "baseline_flag" => (
-                WindowFunction::BaselineFlag {
-                    inclusive: self.boolean(p, "inclusive", true),
-                    window_order_by: Vec::new(),
-                },
-                vec![
-                    ("value", Slot::Source, required("value")?),
-                    (
-                        "reference_date",
-                        Slot::Reference,
-                        required("reference_date")?,
-                    ),
                     ("date", Slot::Source, required("date")?),
                 ],
             ),
@@ -927,24 +869,21 @@ impl Lower<'_> {
         }
         // The baseline orders eligible rows by the date and then the
         // tie-break terms (P-ORD-1); every other window by its own terms.
-        // 1.0 writes the tie-break terms after the date in `window.order_by`,
-        // which defaults to the date alone; a declared order that does not
-        // start with the date ascending stays written, for its refusal
-        // (WINDOW-5).
+        // The tie-break terms follow the date in `window.order_by`, which
+        // defaults to the date alone; a declared order that does not start
+        // with the date ascending stays written, for its refusal (WINDOW-5).
         let declared = match (date, window) {
-            (Some((date, _)), Some((node, _))) if self.v1() => {
-                self.field(node, "order_by").map(|list| {
-                    let head = self.items(list).first().is_some_and(|&term| {
-                        let variable = match self.text(term) {
-                            Some(_) => Some(term),
-                            None => self.field(term, "variable"),
-                        };
-                        variable.and_then(|n| self.text(n)) == self.text(date)
-                            && !matches!(self.text_of(term, "direction"), Some("desc"))
-                    });
-                    (list, head)
-                })
-            }
+            (Some((date, _)), Some((node, _))) => self.field(node, "order_by").map(|list| {
+                let head = self.items(list).first().is_some_and(|&term| {
+                    let variable = match self.text(term) {
+                        Some(_) => Some(term),
+                        None => self.field(term, "variable"),
+                    };
+                    variable.and_then(|n| self.text(n)) == self.text(date)
+                        && !matches!(self.text_of(term, "direction"), Some("desc"))
+                });
+                (list, head)
+            }),
             _ => None,
         };
         let order_by = match date {
@@ -955,13 +894,9 @@ impl Lower<'_> {
                     nulls: None,
                     meta,
                 }];
-                match (declared, window) {
-                    (Some((list, true)), Some((_, window_meta))) => {
-                        let list_meta =
-                            self.meta(window_meta, Segment::Field("order_by"), Some(list));
-                        order_by.extend(self.terms_after(list, list_meta, 1));
-                    }
-                    _ => order_by.extend(self.order_by(p, "tie_break", site)),
+                if let (Some((list, true)), Some((_, window_meta))) = (declared, window) {
+                    let list_meta = self.meta(window_meta, Segment::Field("order_by"), Some(list));
+                    order_by.extend(self.terms_after(list, list_meta, 1));
                 }
                 order_by
             }
@@ -1028,22 +963,15 @@ impl Lower<'_> {
             }
             None => Vec::new(),
         };
-        // Per-record bindings: 0.5's `derive` list, 1.0's `derivations` map
-        // keyed by name (P-BIND-1).
-        let derive = self.field(p, if self.v1() { "derivations" } else { "derive" });
+        // Per-record bindings: the `derivations` map keyed by name
+        // (P-BIND-1).
+        let derive = self.field(p, "derivations");
         let mut bindings = Vec::new();
         if let Some(list) = derive {
-            if self.v1() {
-                let map_meta = self.meta(site, Segment::Field("derivations"), Some(list));
-                for &(key, entry) in self.entries(list) {
-                    if let Some(name) = self.text(key) {
-                        bindings.push(self.aggregate_derivation(name, entry, map_meta));
-                    }
-                }
-            } else {
-                let list_meta = self.meta(site, Segment::Field("derive"), Some(list));
-                for (index, &item) in self.items(list).iter().enumerate() {
-                    bindings.push(self.aggregate_binding(item, index, list_meta));
+            let map_meta = self.meta(site, Segment::Field("derivations"), Some(list));
+            for &(key, entry) in self.entries(list) {
+                if let Some(name) = self.text(key) {
+                    bindings.push(self.aggregate_derivation(name, entry, map_meta));
                 }
             }
         }
@@ -1069,14 +997,9 @@ impl Lower<'_> {
                 }
                 _ => true,
             };
-        // A keyless qualified aggregate infers its keys in 0.5 and matches on
-        // the input's declared `key` in 1.0 (P-KEY-1).
-        let keyless = if self.v1() {
-            JoinKey::FromInput
-        } else {
-            JoinKey::Applicable
-        };
-        let key = key.or_else(|| qualified.then_some(keyless));
+        // A keyless qualified aggregate matches on the input's declared `key`
+        // (P-KEY-1).
+        let key = key.or_else(|| qualified.then_some(JoinKey::FromInput));
         Some(self.fill(
             id,
             ExprKind::Aggregate(Aggregate {
@@ -1086,49 +1009,13 @@ impl Lower<'_> {
                 group_by,
                 bindings,
                 expr,
-                written: self.written(p, &[if self.v1() { "derivations" } else { "derive" }]),
+                written: self.written(p, &["derivations"]),
             }),
         ))
     }
 
-    /// One `aggregate.derive` entry: `{name, type, derivation}` (P-BIND-1).
-    fn aggregate_binding(&mut self, item: usize, index: usize, list: Meta) -> Binding {
-        let meta = self.meta(list, Segment::Index(index as u32), Some(item));
-        let name = self.text_of(item, "name").unwrap_or_default();
-        let name_meta = match self.field(item, "name") {
-            Some(node) => self.meta(meta, Segment::Field("name"), Some(node)),
-            None => meta,
-        };
-        let derivation = match self.field(item, "derivation") {
-            Some(node) => {
-                let derivation_meta = self.meta(meta, Segment::Field("derivation"), Some(node));
-                if self.d.field(node, "value").is_some() {
-                    self.derivation(node, derivation_meta)
-                } else {
-                    let expr = self.expression(node, derivation_meta);
-                    Derivation {
-                        expr,
-                        unconvertible: None,
-                        meta: derivation_meta,
-                    }
-                }
-            }
-            None => Derivation {
-                expr: self.push(ExprKind::Unsupported("derive".into()), meta),
-                unconvertible: None,
-                meta,
-            },
-        };
-        Binding {
-            name: self.named_at(name, name_meta),
-            declared: self.text_of(item, "type").and_then(column_type),
-            derivation,
-            meta,
-        }
-    }
-
-    /// One 1.0 `aggregate.derivations` entry: `NAME: {type, derivation}`
-    /// (P-BIND-1), the binding a 0.5 `derive` entry declares.
+    /// One `aggregate.derivations` entry: `NAME: {type, derivation}`
+    /// (P-BIND-1).
     fn aggregate_derivation(&mut self, name: &str, entry: usize, map: Meta) -> Binding {
         let meta = self.meta(map, Segment::Key(name.into()), Some(entry));
         let derivation = match self.d.field(entry, "derivation") {
@@ -1201,15 +1088,10 @@ impl Lower<'_> {
                 };
                 let meta = self.meta(list_meta, Segment::Key(argument.into()), Some(value));
                 let expr = match self.node(value) {
-                    // A 1.0 argument is one leaf of the grammar: a name, quoted
+                    // An argument is one leaf of the grammar: a name, quoted
                     // text or a temporal literal (FUNC-6). Other text lowers
-                    // to the formula it is, which the 1.0 front end refuses.
-                    N::Text(_) if self.v1() => self.placed(value, meta, Placement::Value),
-                    N::Text(_) => self.reference(value, meta),
-                    N::Mapping(_) => {
-                        let literal = self.argument_literal(value);
-                        self.push(ExprKind::Literal(literal), meta)
-                    }
+                    // to the formula it is, which the front end refuses.
+                    N::Text(_) => self.placed(value, meta, Placement::Value),
                     _ => self.push(ExprKind::Literal(self.literal(value)), meta),
                 };
                 args.push((self.named_at(argument, meta), expr));
@@ -1234,20 +1116,6 @@ impl Lower<'_> {
                 shape,
             },
         ))
-    }
-
-    /// A tagged argument: `{literal: TEXT | null}`, `{date: TEXT}` or `{datetime: TEXT}`.
-    fn argument_literal(&self, node: usize) -> Literal {
-        let &[(key, value)] = self.entries(node) else {
-            return Literal::Unsupported;
-        };
-        match (self.text(key), self.node(value)) {
-            (Some("literal"), N::Null) => Literal::Missing,
-            (Some("literal"), N::Text(text)) => Literal::Text(text.clone()),
-            (Some("date"), N::Text(text)) => Literal::Date(text.clone()),
-            (Some("datetime"), N::Text(text)) => Literal::DateTime(text.clone()),
-            _ => Literal::Unsupported,
-        }
     }
 }
 

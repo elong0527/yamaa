@@ -186,7 +186,6 @@ impl Project {
         let crate::file_workflow::CapturedProject {
             mut resources,
             environment,
-            schema,
         } = crate::file_workflow::capture_project(project, host, resolver).map_err(|error| {
             (
                 crate::project_application::workflow_rejection(&error),
@@ -220,8 +219,8 @@ impl Project {
             }
         }
         // A 1.0 project reads the header of each specification it lists at
-        // the listing (SCHEMA-2); a 0.5 project keeps the rules at the
-        // `yamaa-v0.5.0` tag (D75).
+        // the listing (SCHEMA-2); a 0.5 project, whose route goes in P2-13d,
+        // leaves a listed file's refusal to that file's own check or build.
         let versioned = environment.project().is_some_and(|project| {
             matches!(project.header.surface, yamaa_core::ast::Surface::V1 { .. })
         });
@@ -230,7 +229,6 @@ impl Project {
             .map(|(section, index, written)| {
                 read_listing(
                     &mut resources,
-                    &schema,
                     &identity,
                     versioned,
                     section,
@@ -509,7 +507,6 @@ impl Project {
 /// as a listed function or codelist file's is.
 fn read_listing(
     resources: &mut Resources,
-    schema: &Arc<crate::specification_source::CapturedSchema>,
     project: &str,
     versioned: bool,
     section: Submission,
@@ -556,26 +553,22 @@ fn read_listing(
         listed.failure = vec![refused];
         return (listed, None);
     }
-    let document = match crate::file_preparation::prepare_document_from(
-        resources,
-        Some(project),
-        written,
-        Some(Arc::clone(schema)),
-    ) {
-        Ok(document) => document,
-        // A listed file the walk cannot reach is the listing's own finding.
-        Err(crate::file_preparation::Error::Resource(
-            error @ (ResourceError::Missing
-            | ResourceError::NotRegularFile
-            | ResourceError::Symlink),
-        )) => {
-            listed.failure = listing_failure(&listed.listing(), written, &error);
-            return (listed, None);
-        }
-        // A specification that cannot be prepared otherwise has no name or
-        // links here; its own check or build reports why.
-        Err(_) => return (listed, None),
-    };
+    let document =
+        match crate::file_preparation::prepare_document_from(resources, Some(project), written) {
+            Ok(document) => document,
+            // A listed file the walk cannot reach is the listing's own finding.
+            Err(crate::file_preparation::Error::Resource(
+                error @ (ResourceError::Missing
+                | ResourceError::NotRegularFile
+                | ResourceError::Symlink),
+            )) => {
+                listed.failure = listing_failure(&listed.listing(), written, &error);
+                return (listed, None);
+            }
+            // A specification that cannot be prepared otherwise has no name or
+            // links here; its own check or build reports why.
+            Err(_) => return (listed, None),
+        };
     let locate = |resources: &Resources, origin: yamaa_core::resource::WrittenPath<'_>| {
         resources
             .location_from(origin.base_source, origin.written)

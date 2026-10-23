@@ -181,10 +181,7 @@ Evidence: `negative-date-diff-units`, `adam-adsl-crossover-periods`, `adam-adtte
 
 `right` is the default, and `diff` takes no `left`. The failure names the
 offending `closed` value and the permitted value `right`. Like every
-validation failure, no handler answers it and no artifact is accepted. A file
-that declares `schema_version` is read under the rules at the `yamaa-v0.5.0`
-tag, where the field is `bounds`, with the values `exclusive`, `inclusive` and
-`between`.
+validation failure, no handler answers it and no artifact is accepted.
 
 <a id="time-6"></a>
 
@@ -317,10 +314,7 @@ month receives the day and a year alone gives missing; with neither only the
 time of a datetime is supplied, and any source coarser than a day gives
 missing. A source a rule does not reach is neither a missing source nor
 invalid text, so it invokes neither answer of [TIME-13](#time-13). Which rules
-may be declared together is fixed by [TIME-10](#time-10). A file that declares
-`schema_version` is read under the rules at the `yamaa-v0.5.0` tag, where
-`minimum_source_precision`, default `year`, is the coarsest collected
-precision completed.
+may be declared together is fixed by [TIME-10](#time-10).
 
 With `type: date`, `month: 6` and `day: first`, `1975` completes to
 `1975-06-01` with collected precision `year`, and `2025-03-04T08:30` gives
@@ -386,7 +380,7 @@ literal to range-check. Any other `day` token is neither a number nor a
 position and is rejected where the specification is read, before any data is
 seen.
 
-Fails: `missing_required_field`, `month_out_of_range`, `value_not_permitted`, `invalid_calendar_date`, `month_required`, `month_not_permitted`, `day_required`, `day_not_permitted`.
+Fails: `missing_required_field`, `month_out_of_range`, `value_not_permitted`, `invalid_calendar_date`.
 Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_month_rule_without_a_day_rule_fails_at_the_impute`, `rust/crates/yamaa-core/tests/support/diagnostic/front_end.rs`, `negative-impute-bad-month`, `negative-impute-bad-day`, `negative-impute-day-rule`, `rust/crates/yamaa-core/tests/support/diagnostic/temporal_imputation.rs`.
 
 A `month` without `day` fails as `missing_required_field` at the `impute`,
@@ -398,14 +392,6 @@ as a numeric `day` of 31 in April, fails with `invalid_calendar_date` in the
 `impute` phase. A `day` token that is neither a number nor a declared position
 fails with `value_not_permitted`. The `time` rule follows the declared type
 ([TIME-1](#time-1)).
-
-A file that declares `schema_version` is read under the rules at the
-`yamaa-v0.5.0` tag, where `month` is declared exactly when
-`minimum_source_precision` is `year` and `day` exactly when it is `year` or
-`month`: an absent required `month` fails with `month_required`, a `month`
-beside a minimum of `month` or `day` with `month_not_permitted`, an absent
-required `day` with `day_required`, and a `day` beside a minimum of `day` with
-`day_not_permitted`.
 
 <a id="time-13"></a>
 

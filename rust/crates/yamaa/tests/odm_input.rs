@@ -347,26 +347,3 @@ fn an_xml_input_declares_no_types() {
         );
     }
 }
-
-#[test]
-fn a_0_5_file_keeps_refusing_an_xml_input() {
-    let study = Study::new();
-    study.write(
-        "spec.yaml",
-        DEMOGRAPHICS
-            .replace("yamaa: \"1.0\"\ntype: spec\n", "schema_version: '1.0'\n")
-            .replace("{odm: ODM.IT.SEX}", "ODM.Value")
-            .replace("{odm: ODM.IT.AGE}", "ODM.Value"),
-    );
-    let found = issues(
-        &engine()
-            .spec_check(&study.path("spec.yaml"), None, &CancellationToken::new())
-            .unwrap()
-            .issues(),
-    );
-    let [issue] = found.as_slice() else {
-        panic!("one issue: {found:?}")
-    };
-    assert_eq!(issue.condition, "source_profile_unknown");
-    assert_eq!(issue.paths, ["input.ODM.path"]);
-}

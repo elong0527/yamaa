@@ -21,10 +21,11 @@ CONTRACTS = {
     "string-template": "text",
 }
 CONTEXTS = ("predicate", "compute", "aggregate", "derivation")
-# The contexts a public specification field reads: every one, since the
-# engine reads 1.0 files (#3030 D76), whose expression fields hold the
-# derivation context's text (FORMULA-27).
-PUBLIC_CONTEXTS = CONTEXTS
+# The contexts a public specification field reads: a predicate field, an
+# aggregate's text and an expression field, which holds the derivation
+# context's text (FORMULA-27). The engine reads only 1.0 specifications, so
+# no public field reads the `compute` context; the typed core replay reads it.
+PUBLIC_CONTEXTS = ("predicate", "aggregate", "derivation")
 
 
 def documents(root=REPOSITORY):
@@ -146,50 +147,35 @@ def specification(contract, case):
     # reads SRC, so declare it as the driver with base to keep it live.
     # Otherwise the unread input is discarded, the implicit driver is gone and
     # driver_unavailable replaces the grammar decision under test.
-    spec = {
-        "schema_version": "1.0",
-        "domain": "GRAMMAR",
-        "keys": ["ID"],
-        "input": {"SRC": "input.csv"},
-        "base": "SRC",
-        "columns": [{"name": "ID", "type": "str", "derivation": {"literal": "one"}}],
-        "output": {"path": "unwritten.csv", "columns": ["ID", "RESULT"]},
-    }
     field = contract if contract == "string-template" else case["context"]
-    if field == "derivation":
-        # Derivation text is a 1.0 expression field (FORMULA-27, D18).
-        return {
-            "yamaa": "1.0",
-            "type": "spec",
-            "domain": "GRAMMAR",
-            "keys": ["ID"],
-            "input": {"SRC": "input.csv"},
-            "base": "SRC",
-            "columns": [
-                {"name": "ID", "type": "str", "derivation": "'one'"},
-                {"name": "RESULT", "type": "float", "derivation": case["text"]},
-            ],
-            "output": {"path": "unwritten.csv", "columns": ["ID", "RESULT"]},
-        }
     column = {
         "name": "RESULT",
         "type": "str" if field in {"predicate", "string-template"} else "float",
     }
-    if field == "predicate":
+    if field == "derivation":
+        # Derivation text is an expression field (FORMULA-27, D18).
+        column["derivation"] = case["text"]
+    elif field == "predicate":
         column["derivation"] = {
             "case": [
-                {"when": case["text"], "then": {"literal": "yes"}},
-                {"otherwise": {"literal": "no"}},
+                {"when": case["text"], "then": "'yes'"},
+                {"otherwise": "'no'"},
             ]
         }
-    elif field == "compute":
-        column["derivation"] = {"compute": {"expr": case["text"]}}
     else:
         # A formula or template alone is written as its shorthand.
         key = {"aggregate": "aggregate", "string-template": "str_template"}[field]
         column["derivation"] = {key: case["text"]}
-    spec["columns"].append(column)
-    return spec
+    return {
+        "yamaa": "1.0",
+        "type": "spec",
+        "domain": "GRAMMAR",
+        "keys": ["ID"],
+        "input": {"SRC": "input.csv"},
+        "base": "SRC",
+        "columns": [{"name": "ID", "type": "str", "derivation": "'one'"}, column],
+        "output": {"path": "unwritten.csv", "columns": ["ID", "RESULT"]},
+    }
 
 
 def stage(destination, root=REPOSITORY):
@@ -219,8 +205,9 @@ def stage(destination, root=REPOSITORY):
                 encoding="utf-8",
             )
             condition = case.get("condition", "")
-            # A 0.5 expression field's schema refuses empty text (SCHEMA-12)
-            # before parsing; a 1.0 expression field's text reaches the grammar.
+            # A predicate or aggregate field's schema refuses empty text
+            # (SCHEMA-12) before parsing; an expression field's text reaches
+            # the grammar.
             public_condition = (
                 "minimum_length"
                 if not case["text"]

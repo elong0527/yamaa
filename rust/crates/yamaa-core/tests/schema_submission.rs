@@ -954,9 +954,11 @@ mod schema {
         }
     }
     mod submission_composition {
-        //! Independent metadata arenas exercise complete multi-domain composition.
+        //! Independent metadata arenas exercise complete multi-domain composition
+        //! of 1.0 specifications (D4) of the `SDTM` model (D25) under a 1.0
+        //! project's `sdtm` section.
         use yamaa_core::{
-            front_end::v0_5::sections::sections,
+            front_end::v1,
             project_terminology::Catalogue,
             schema::{Document, DocumentNode as N},
             submission_composition::{self, Input},
@@ -991,8 +993,13 @@ mod schema {
                 Document::new(self.0, root).unwrap()
             }
         }
+        /// The 1.0 header of a file of `kind`.
+        fn header(a: &mut Arena, kind: &str) -> Vec<(&'static str, usize)> {
+            vec![("yamaa", a.text("1.0")), ("type", a.text(kind))]
+        }
         fn project(count: usize) -> Document {
             let mut a = Arena::default();
+            let mut fields = header(&mut a, "project");
             let study = a.texts(&[
                 ("id", "STUDY01"),
                 ("name", "Independent admission study"),
@@ -1000,21 +1007,25 @@ mod schema {
                 ("protocol_name", "PROTOCOL01"),
             ]);
             let standard = a.texts(&[("name", "SDTMIG"), ("version", "3.4"), ("status", "Final")]);
+            let standards = a.node(N::Sequence(vec![standard]));
             let entries = (0..count)
                 .map(|index| a.text(&format!("d{index}.yaml")))
                 .collect();
             let specs = a.node(N::Sequence(entries));
             let define = a.text("define.xml");
             let section = a.map(vec![
-                ("standard", standard),
+                ("standards", standards),
                 ("specs", specs),
                 ("define", define),
             ]);
-            let root = a.map(vec![("study", study), ("sdtm", section)]);
+            fields.extend([("study", study), ("sdtm", section)]);
+            let root = a.map(fields);
             a.finish(root)
         }
         fn specification(index: usize, count: usize, row_count: usize) -> Document {
             let mut a = Arena::default();
+            let mut fields = header(&mut a, "spec");
+            fields.push(("model", a.text("SDTM")));
             let domain = a.text(&format!("D{index}"));
             let label = a.text("Independent dataset");
             let class = a.text("SPECIAL PURPOSE");
@@ -1034,12 +1045,16 @@ mod schema {
                 let name = a.text(&name);
                 let kind = a.text("str");
                 let label = a.text("Independent column");
-                let derivation = a.texts(&[("literal", "X")]);
+                let derivation = a.text("'X'");
                 let origin = a.texts(&[("type", "Assigned"), ("source", "Sponsor")]);
+                let origins = a.node(N::Sequence(vec![origin]));
                 let core = a.text("Exp");
                 let length = a.node(N::Integer("1".into()));
-                let submission =
-                    a.map(vec![("core", core), ("length", length), ("origin", origin)]);
+                let submission = a.map(vec![
+                    ("core", core),
+                    ("length", length),
+                    ("origins", origins),
+                ]);
                 columns.push(a.map(vec![
                     ("name", name),
                     ("type", kind),
@@ -1053,32 +1068,34 @@ mod schema {
             let path = a.text(&format!("d{index}.csv"));
             let output = a.map(vec![("path", path), ("columns", names)]);
             let mut rows = Vec::new();
-            for _ in 0..row_count {
+            for row in 0..row_count {
+                let id = a.text(&format!("r{row}"));
                 let entries = (0..count)
                     .map(|column| {
                         let name = a.text(&format!("V{column:04}"));
-                        let value = a.texts(&[("literal", "X")]);
+                        let value = a.text("'X'");
                         (name, value)
                     })
                     .collect();
                 let derivations = a.node(N::Mapping(entries));
-                rows.push(a.map(vec![("derivations", derivations)]));
+                rows.push(a.map(vec![("id", id), ("derivations", derivations)]));
             }
             let rows = a.node(N::Sequence(rows));
-            let root = a.map(vec![
+            fields.extend([
                 ("domain", domain),
                 ("submission", dataset),
                 ("output", output),
                 ("columns", columns),
                 ("rows", rows),
             ]);
+            let root = a.map(fields);
             a.finish(root)
         }
         fn compose(
             documents: &[Document],
         ) -> Result<submission_composition::Study, Vec<submission_composition::Finding>> {
-            let project = project(documents.len());
-            let declared = sections(&project).unwrap();
+            let project = v1::project::project(&project(documents.len()), None).unwrap();
+            let declared = project.submission.unwrap();
             let sources: Vec<_> = (0..documents.len())
                 .map(|index| format!("d{index}.yaml"))
                 .collect();
@@ -1087,7 +1104,7 @@ mod schema {
                 .collect();
             let trees: Vec<_> = documents
                 .iter()
-                .map(crate::support::submission_tree)
+                .map(|document| v1::spec::lower(document, None).into_spec())
                 .collect();
             let inputs: Vec<_> = documents
                 .iter()
@@ -1104,7 +1121,7 @@ mod schema {
             let required = submission_composition::Required::admit(
                 declared.study.as_ref(),
                 section,
-                yamaa_core::ast::Surface::V0_5,
+                project.header.surface,
             )?;
             submission_composition::compose(
                 required,
@@ -1117,7 +1134,7 @@ mod schema {
         }
         #[test]
         fn thirty_domains_with_fifteen_hundred_nodes_admit_complete_column_and_row_scans() {
-            let documents: Vec<_> = (0..30).map(|index| specification(index, 30, 6)).collect();
+            let documents: Vec<_> = (0..30).map(|index| specification(index, 30, 12)).collect();
             assert!(documents
                 .iter()
                 .all(|document| (1400..1800).contains(&document.nodes().len())));
@@ -1159,13 +1176,13 @@ mod schema {
     }
     mod submission_document {
         //! The study and sections a 0.5 project lowers into its root
-        //! (`front_end::v0_5::sections`): complete declarations lower to the
+        //! (`front_end::v0_5::project::sections`): complete declarations lower to the
         //! tree, and every closed-shape refusal keeps its exact document nodes.
         use yamaa_core::{
-            ast::{self, Notation},
+            ast,
             front_end::{
                 lowering::sections::{self, Cause},
-                v0_5::{project::project as lower_project, sections::sections},
+                v0_5::project::{project as lower_project, sections},
             },
             project_environment::Submission,
             schema::{Document, DocumentNode as N},
@@ -1347,7 +1364,7 @@ mod schema {
         }
         /// A node's path in a project root, in today's notation.
         fn path(project: &ast::Project, meta: ast::Meta) -> String {
-            project.paths.render(meta.path, Notation::V0_5)
+            project.paths.render(meta.path)
         }
         #[test]
         fn complete_declarations_lower_in_authored_order_with_their_paths() {
@@ -2031,7 +2048,7 @@ mod schema {
                     (document.title.meta, "title"),
                 ] {
                     assert_eq!(
-                        project.paths.render(meta.path, Notation::V0_5),
+                        project.paths.render(meta.path),
                         format!("adam.documents[{index}].{field}")
                     );
                 }
@@ -2062,7 +2079,7 @@ mod schema {
                 let field = section.source_system_version.as_ref().unwrap();
                 assert_eq!(field.text, "1.0");
                 assert_eq!(
-                    project.paths.render(field.meta.path, Notation::V0_5),
+                    project.paths.render(field.meta.path),
                     format!("{family}.source_system_version")
                 );
             }
@@ -2134,9 +2151,10 @@ mod schema {
     mod submission_values {
         //! Independently authored normalized metadata; no generator supplies expectations.
         //! The Define-XML these entries render is checked in yamaa-adapters'
-        //! `tests/submission_encoders.rs`.
+        //! `tests/submission_encoders.rs`. The specification is a 1.0 file (D4)
+        //! of the `SDTM` model (D25) that a 1.0 project's `sdtm` section lists.
         use yamaa_core::{
-            front_end::v0_5::sections::sections,
+            front_end::v1,
             project_terminology::Catalogue,
             schema::{Document, DocumentNode as N},
             specification_submission_document as declarations,
@@ -2178,6 +2196,8 @@ mod schema {
         }
         fn project() -> Document {
             let mut a = Arena::default();
+            let yamaa = a.text("1.0");
+            let kind = a.text("project");
             let study = a.texts(&[
                 ("id", "VLSTUDY"),
                 ("name", "Value metadata study"),
@@ -2185,17 +2205,23 @@ mod schema {
                 ("protocol_name", "VLPROTOCOL"),
             ]);
             let standard = a.texts(&[("name", "SDTMIG"), ("version", "3.4"), ("status", "Final")]);
+            let standards = a.node(N::Sequence(vec![standard]));
             let filename = a.text("spec.yaml");
             let specs = a.node(N::Sequence(vec![filename]));
             let define = a.text("define.xml");
             let version = a.text("1.0");
             let section = a.map(vec![
-                ("standard", standard),
+                ("standards", standards),
                 ("specs", specs),
                 ("define", define),
                 ("source_system_version", version),
             ]);
-            let root = a.map(vec![("study", study), ("sdtm", section)]);
+            let root = a.map(vec![
+                ("yamaa", yamaa),
+                ("type", kind),
+                ("study", study),
+                ("sdtm", section),
+            ]);
             a.finish(root)
         }
         /// One entry of `LBORRESU`, in the order the case lists them: its id,
@@ -2272,6 +2298,9 @@ mod schema {
         }
         fn specification(case: &str) -> Document {
             let mut a = Arena::default();
+            let yamaa = a.text("1.0");
+            let kind = a.text("spec");
+            let model = a.text("SDTM");
             let domain = a.text("LB");
             let label = a.text("Laboratory tests");
             let class = a.text("FINDINGS");
@@ -2302,13 +2331,10 @@ mod schema {
                 });
                 let mut fields = vec![("name", name_node), ("type", kind), ("label", label)];
                 let literal = match name {
-                    "LBORRESU" => Some(a.texts(&[("literal", "mg/dL")])),
-                    "LBSPEC" => Some(a.texts(&[("literal", "SERUM")])),
-                    "LBNAM" => Some(a.texts(&[("literal", "CENTRAL")])),
-                    "LBSEQ" => {
-                        let one = a.node(N::Integer("1".into()));
-                        Some(a.map(vec![("literal", one)]))
-                    }
+                    "LBORRESU" => Some(a.text("'mg/dL'")),
+                    "LBSPEC" => Some(a.text("'SERUM'")),
+                    "LBNAM" => Some(a.text("'CENTRAL'")),
+                    "LBSEQ" => Some(a.node(N::Integer("1".into()))),
                     _ => None,
                 };
                 if let Some(literal) = literal {
@@ -2321,9 +2347,10 @@ mod schema {
                     continue;
                 }
                 let origin = a.texts(&[("type", "Assigned"), ("source", "Sponsor")]);
+                let origins = a.node(N::Sequence(vec![origin]));
                 let core = a.text("Exp");
                 let length = a.node(N::Integer("8".into()));
-                let mut metadata = vec![("core", core), ("length", length), ("origin", origin)];
+                let mut metadata = vec![("core", core), ("length", length), ("origins", origins)];
                 // The test codes bind the project's LBTESTCD codelist.
                 if name == "LBTESTCD" && case.starts_with("codelist") {
                     let codelist = a.text("LBTESTCD");
@@ -2360,11 +2387,12 @@ mod schema {
                             written.source
                         };
                         let origin = a.texts(&[("type", origin_type), ("source", source)]);
+                        let origins = a.node(N::Sequence(vec![origin]));
                         let method = a.text("Units assigned from the supplied test metadata");
                         let fields = vec![
                             ("id", id),
                             ("where", clause),
-                            ("origin", origin),
+                            ("origins", origins),
                             ("method", method),
                         ];
                         entries.push(a.map(fields));
@@ -2387,7 +2415,7 @@ mod schema {
                 ("albumin", "ALB"),
             ] {
                 let id = a.text(id);
-                let literal = a.texts(&[("literal", code)]);
+                let literal = a.text(&format!("'{code}'"));
                 // The normalized handler form keeps the literal readable.
                 let literal = if case == "normalized where column" {
                     let unconvertible = a.node(N::Null);
@@ -2400,6 +2428,9 @@ mod schema {
             }
             let rows = a.node(N::Sequence(rows));
             let root = a.map(vec![
+                ("yamaa", yamaa),
+                ("type", kind),
+                ("model", model),
                 ("domain", domain),
                 ("submission", dataset),
                 ("columns", columns),
@@ -2415,15 +2446,15 @@ mod schema {
             document: &Document,
             catalogue: &Catalogue,
         ) -> Result<Study, Vec<submission_composition::Finding>> {
-            let project = project();
-            let declared = sections(&project).unwrap();
+            let project = v1::project::project(&project(), None).unwrap();
+            let declared = project.submission.unwrap();
             let section = &declared.sections[0];
             let required = submission_composition::Required::admit(
                 declared.study.as_ref(),
                 section,
-                yamaa_core::ast::Surface::V0_5,
+                project.header.surface,
             )?;
-            let tree = crate::support::submission_tree(document);
+            let tree = v1::spec::lower(document, None).into_spec();
             submission_composition::compose(
                 required,
                 catalogue,
@@ -2605,7 +2636,7 @@ mod schema {
                     "invalid source",
                     "origin_source_not_admitted",
                     "SUB-15",
-                    format!("{entry}.CREAT.origin"),
+                    format!("{entry}.CREAT.origins[0]"),
                     None,
                 ),
             ] {

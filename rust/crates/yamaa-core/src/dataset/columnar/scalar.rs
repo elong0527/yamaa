@@ -47,13 +47,7 @@ pub(super) fn finish<E>(
         let owned_value = owned(value);
         match convert(&owned_value, kind) {
             Ok(converted) => values.push_value(converted),
-            Err(error) => {
-                let recovered = recover(run, cx, binding, error, row);
-                match recovered {
-                    Ok(value) => values.push_value(value),
-                    Err(failure) => return Err(absent_context(run, binding, failure)),
-                }
-            }
+            Err(error) => values.push_value(recover(run, cx, binding, error, row)?),
         }
     }
     Ok(values)
@@ -106,44 +100,6 @@ fn recover<E>(
             identity: run.failure_identity(cx, row),
         })
     })
-}
-
-/// COLUMN-10 retains the reached binding handler and completed-result context
-/// when an absent variable's literal fails conversion.
-fn absent_context<E>(run: &Run<'_, '_, E>, binding: BindingId, failure: Fail<E>) -> Fail<E> {
-    let plan = run.plan;
-    let expr = plan.binding(binding).expr;
-    if let Op::SourceBinding {
-        variable_absent: true,
-        variable,
-        path,
-        ..
-    } = &plan.expr(expr).op
-    {
-        if let ExecutionError::Conversion {
-            error,
-            path: result_path,
-            identity,
-            ..
-        } = &*failure
-        {
-            let mut diagnostic = error.clone().into_diagnostic(result_path.clone());
-            diagnostic.spec_paths.push(format!("{path}.absent"));
-            diagnostic.context.insert(
-                "variable".into(),
-                crate::json::Value::String(variable.clone()),
-            );
-            diagnostic.context.insert(
-                "handler".into(),
-                crate::json::Value::String("absent".into()),
-            );
-            return Box::new(ExecutionError::SemanticDiagnostic {
-                diagnostic,
-                identity: identity.clone(),
-            });
-        }
-    }
-    failure
 }
 
 /// The node's operand of the value role at a position.

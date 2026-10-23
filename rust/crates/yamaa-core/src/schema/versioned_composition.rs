@@ -55,7 +55,6 @@ impl SchemaStructure {
         layers: &[NormalizedDocument],
     ) -> Result<ComposedLayers, VersionedCompositionError> {
         let (mut document, mut origins) = layers::empty()?;
-        let mut diagnostics = Vec::new();
         for (layer, input) in layers.iter().enumerate() {
             (document, origins) = Clearing {
                 schema: self,
@@ -64,26 +63,15 @@ impl SchemaStructure {
                 origins: &origins,
             }
             .apply(layer, &input.document)?;
-            (document, origins) = layers::compose_step(
-                self,
-                NullPolicy::Value,
-                &mut diagnostics,
-                (&document, &origins),
-                (layer, &input.document),
-            )?;
+            (document, origins) =
+                layers::compose_step(self, (&document, &origins), (layer, &input.document))?;
         }
         let shorthand = origins
             .iter()
             .map(|&origin| shorthand_key(layers, origin))
             .collect::<Vec<_>>();
         let transparent = |key: usize| shorthand[key];
-        Ok(layers::finish(
-            document,
-            origins,
-            diagnostics,
-            NullPolicy::Value,
-            &transparent,
-        )?)
+        Ok(layers::finish(document, origins, &transparent)?)
     }
 }
 

@@ -259,12 +259,7 @@ impl Run<'_> {
             let present = items.iter().find(|(key, _)| matches!(&site.input.nodes()[*key], N::Text(name) if *name == field.name));
             if let Some(&(key, value)) = present {
                 if self.nulls.clears() && matches!(site.input.nodes()[value], N::Null) {
-                    // A null field is absent; a layer keeps it as its clear marker.
-                    if self.nulls == NullPolicy::Clear {
-                        let key = self.copy(site.child(key))?;
-                        let value = self.copy(site.child(value))?;
-                        result.push((key, value));
-                    }
+                    // A null field is absent.
                     continue;
                 }
                 let key = self.copy(site.child(key))?;
@@ -597,36 +592,8 @@ impl SchemaStructure {
         &self,
         input: &Document,
     ) -> Result<NormalizedDocument, NormalizationError> {
-        self.normalize_document_mode(input, false, NullPolicy::Value)
-    }
-    /// Normalize a specification, dropping every null field and mapping entry (LAYER-9).
-    pub fn normalize_specification(
-        &self,
-        input: &Document,
-    ) -> Result<NormalizedDocument, NormalizationError> {
-        self.normalize_document_mode(input, false, NullPolicy::Absent)
-    }
-    /// Normalize the final composed specification with resolved-output citation ownership.
-    pub fn normalize_resolved_document(
-        &self,
-        input: &Document,
-    ) -> Result<NormalizedDocument, NormalizationError> {
-        self.normalize_document_mode(input, true, NullPolicy::Absent)
-    }
-    fn normalize_document_mode(
-        &self,
-        input: &Document,
-        resolved_output: bool,
-        nulls: NullPolicy,
-    ) -> Result<NormalizedDocument, NormalizationError> {
         self.normalization_defaults()?;
-        let findings = if resolved_output {
-            self.validate_resolved_document(input)?
-        } else if nulls.clears() {
-            self.validate_specification(input)?
-        } else {
-            self.validate_document(input)?
-        };
+        let findings = self.validate_document(input)?;
         if !findings.is_empty() {
             return Err(NormalizationError::Invalid(findings));
         }
@@ -646,7 +613,7 @@ impl SchemaStructure {
             origins: Vec::new(),
             active: Vec::new(),
             next_scope: 0,
-            nulls,
+            nulls: NullPolicy::Value,
             surface: Surface::Legacy,
         };
         let root = run.class(&self.root_class().fields, site)?;
@@ -698,26 +665,6 @@ impl SchemaStructure {
             NullPolicy::Value,
             true,
             Surface::Versioned,
-        )
-    }
-    /// Normalize a descriptor value of a canonical document, such as a composed
-    /// member, whose long forms restate shorthand an earlier pass expanded.
-    pub(super) fn normalize_canonical_descriptor(
-        &self,
-        descriptor: usize,
-        input: &Document,
-        value: usize,
-        fragment: bool,
-        nulls: NullPolicy,
-    ) -> Result<NormalizedDocument, NormalizationError> {
-        self.normalize_descriptor_mode(
-            descriptor,
-            input,
-            value,
-            fragment,
-            nulls,
-            false,
-            Surface::Legacy,
         )
     }
     #[allow(clippy::too_many_arguments)]

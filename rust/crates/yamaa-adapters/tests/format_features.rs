@@ -77,7 +77,8 @@ fn yaml_capability_is_explicit_at_document_admission() {
             yaml_decode::decode_yaml(b"x: 1\nx: 2\n"),
             Err(yaml_decode::DecodeFailure::InvalidYaml { .. })
         ));
-        yamaa_adapters::shipped_schema::capture().unwrap();
+        yamaa_adapters::shipped_schema::capture_versioned(yamaa_core::language::FileType::Spec)
+            .unwrap();
     }
     #[cfg(not(feature = "yaml"))]
     {
@@ -85,7 +86,9 @@ fn yaml_capability_is_explicit_at_document_admission() {
             yaml_decode::decode_yaml(b"key: value\n"),
             Err(yaml_decode::DecodeFailure::Unavailable)
         ));
-        let error = yamaa_adapters::shipped_schema::capture().unwrap_err();
+        let error =
+            yamaa_adapters::shipped_schema::capture_versioned(yamaa_core::language::FileType::Spec)
+                .unwrap_err();
         assert!(matches!(
             error,
             yamaa_adapters::specification_source::Error::Decode {

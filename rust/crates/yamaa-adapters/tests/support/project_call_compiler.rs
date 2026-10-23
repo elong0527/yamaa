@@ -99,30 +99,14 @@ pub fn specification_with_verifications(
     verifications: Vec<Tree>,
     report: Option<&str>,
 ) -> Document {
-    tree(columns, rows, verifications, report, false).document()
-}
-/// The specification tree; `legacy` writes the 0.5 header and the 0.5
-/// spelling of the `ID` column's read.
-fn tree(
-    columns: Vec<(&str, &str, Tree)>,
-    rows: Vec<Tree>,
-    verifications: Vec<Tree>,
-    report: Option<&str>,
-    legacy: bool,
-) -> Tree {
     let mut projection = vec![Tree::text("ID")];
-    let read = if legacy {
-        Tree::map(vec![(
-            "source",
-            Tree::map(vec![("variable", Tree::text("SRC.ID"))]),
-        )])
-    } else {
-        Tree::text("SRC.ID")
-    };
     let mut declarations = vec![Tree::map(vec![
         ("name", Tree::text("ID")),
         ("type", Tree::text("int")),
-        ("derivation", Tree::map(vec![("value", read)])),
+        (
+            "derivation",
+            Tree::map(vec![("value", Tree::text("SRC.ID"))]),
+        ),
     ])];
     for (name, kind, value) in columns {
         projection.push(Tree::text(name));
@@ -139,11 +123,7 @@ fn tree(
     if let Some(path) = report {
         output.push(("report", Tree::text(path)));
     }
-    let mut fields = if legacy {
-        vec![("schema_version", Tree::text("1.0"))]
-    } else {
-        vec![("yamaa", Tree::text("1.0")), ("type", Tree::text("spec"))]
-    };
+    let mut fields = vec![("yamaa", Tree::text("1.0")), ("type", Tree::text("spec"))];
     fields.extend([
         ("domain", Tree::text("TEST")),
         (
@@ -163,26 +143,5 @@ fn tree(
     if !verifications.is_empty() {
         fields.push(("verifications", Tree::List(verifications)));
     }
-    Tree::map(fields)
-}
-/// The 0.5 specifications of the families that keep their 0.5 documents
-/// until the 0.5 path is deleted (#3447): the same tree under the 0.5
-/// header, admitted as the 0.5 model; the columns given are written in 0.5.
-#[allow(dead_code)]
-pub mod v0_5 {
-    use super::Tree;
-    use yamaa_core::schema::SpecificationDocument;
-
-    pub fn specification(columns: Vec<(&str, &str, Tree)>) -> SpecificationDocument {
-        specification_with_rows(columns, Vec::new())
-    }
-    pub fn specification_with_rows(
-        columns: Vec<(&str, &str, Tree)>,
-        rows: Vec<Tree>,
-    ) -> SpecificationDocument {
-        let tree = super::tree(columns, rows, Vec::new(), None, true);
-        SpecificationDocument::admit(tree.document())
-            .unwrap()
-            .unwrap()
-    }
+    Tree::map(fields).document()
 }

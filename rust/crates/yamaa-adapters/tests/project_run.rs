@@ -145,7 +145,6 @@ mod project {
                 let case = benchmarks.join(example);
                 // Each benchmark in the language it is written in (#3422).
                 let document = crate::support::specification_run::prepare(
-                    &schemas::domain_schema(),
                     &std::fs::read(case.join("spec.yaml")).unwrap(),
                 );
                 let run = PreparedRun::prepare_with_environment(document, environment("")).unwrap();
@@ -197,10 +196,9 @@ mod project {
 
         #[test]
         fn full_codelist_values_and_keys_survive_failed_output_and_repeated_reporting() {
-            let raw="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: CODE, type: str, derivation: SRC.CODE, submission: {codelist: SEX, origin: {type: Assigned}}}\noutput: {path: output.csv, columns: [ID, CODE]}\n";
-            let document = schemas::domain_schema()
-                .prepare_standalone(source("spec.yaml", raw.as_bytes()))
-                .unwrap();
+            let raw="yamaa: '1.0'\ntype: spec\nmodel: ADaM\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: CODE, type: str, derivation: SRC.CODE, submission: {codelist: SEX, origins: [{type: Assigned}]}}\noutput: {path: output.csv, columns: [ID, CODE]}\n";
+            let document =
+                crate::support::specification_run::prepare_as("spec.yaml", raw.as_bytes());
             let run=PreparedRun::prepare_with_environment(document,environment("codelists:\n  - codelists: [{id: SEX, name: Sex, data_type: text, items: [{value: F}, {value: M}]}]\n")).unwrap();
             let mut study = Study {
                 root: PathBuf::new(),
@@ -315,10 +313,9 @@ mod project {
                     panic!("an input is never rebased")
                 }
             }
-            let raw="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: absent.csv}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}]\noutput: {path: output.csv, columns: [ID]}\n";
-            let document = schemas::domain_schema()
-                .prepare_standalone(source("spec.yaml", raw.as_bytes()))
-                .unwrap();
+            let raw="yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: absent.csv}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}]\noutput: {path: output.csv, columns: [ID]}\n";
+            let document =
+                crate::support::specification_run::prepare_as("spec.yaml", raw.as_bytes());
             let run = PreparedRun::prepare_with_environment(document, environment("")).unwrap();
             for inspect in [false, true] {
                 for classified in [false, true] {
@@ -379,10 +376,9 @@ mod project {
 
         #[test]
         fn completed_codelist_check_survives_a_later_verification_declaration_failure() {
-            let raw="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: CODE, type: str, derivation: SRC.CODE, submission: {codelist: SEX, origin: {type: Assigned}}}\n  - {name: LATE, type: str, derivation: SRC.CODE, verifications: [{matches: {pattern: '('}}]}\noutput: {path: output.csv, columns: [ID, CODE]}\n";
-            let document = schemas::domain_schema()
-                .prepare_standalone(source("spec.yaml", raw.as_bytes()))
-                .unwrap();
+            let raw="yamaa: '1.0'\ntype: spec\nmodel: ADaM\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: CODE, type: str, derivation: SRC.CODE, submission: {codelist: SEX, origins: [{type: Assigned}]}}\n  - {name: LATE, type: str, derivation: SRC.CODE, verifications: [{matches: {pattern: '('}}]}\noutput: {path: output.csv, columns: [ID, CODE]}\n";
+            let document =
+                crate::support::specification_run::prepare_as("spec.yaml", raw.as_bytes());
             let run=PreparedRun::prepare_with_environment(document,environment("codelists:\n  - codelists: [{id: SEX, name: Sex, data_type: text, items: [{value: F}, {value: M}]}]\n")).unwrap();
             let mut study = Study {
                 root: PathBuf::new(),
@@ -560,17 +556,14 @@ functions:
             .into_owned()
         }
         fn document(function: Option<&str>) -> PreparedDocument {
-            let schema = schemas::domain_schema();
             let derivation = function.map_or_else(
                 || "SRC.ID".into(),
                 |name| format!("{{function: {{name: {name}, args: {{x: SRC.ID}}}}}}"),
             );
             let bytes = format!(
-        "schema_version: '1.0'\ndomain: TEST\ninput: {{SRC: {{path: input.csv, types: {{ID: int}}}}}}\nkeys: [ID]\ncolumns:\n  - {{name: ID, type: int, derivation: SRC.ID}}\n  - {{name: VALUE, type: int, derivation: {derivation}}}\noutput: {{path: output.csv, columns: [ID, VALUE]}}\n"
+        "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {{SRC: {{path: input.csv, types: {{ID: int}}}}}}\nkeys: [ID]\ncolumns:\n  - {{name: ID, type: int, derivation: SRC.ID}}\n  - {{name: VALUE, type: int, derivation: {derivation}}}\noutput: {{path: output.csv, columns: [ID, VALUE]}}\n"
     );
-            schema
-                .prepare_standalone(source("study/domain.yaml", bytes.as_bytes()))
-                .unwrap()
+            crate::support::specification_run::prepare_as("study/domain.yaml", bytes.as_bytes())
         }
 
         #[derive(Debug, PartialEq)]
@@ -904,11 +897,12 @@ functions:
                         ""
                     };
                     let raw = format!(
-                "schema_version: '1.0'\ndomain: TEST\ninput: {{SRC: {{path: input.csv, types: {{ID: int}}}}}}\nkeys: [ID]\n{rows}columns:\n  - {{name: ID, type: int, derivation: SRC.ID}}\n  - name: VALUE\n    type: int\n    derivation:\n      aggregate:\n        derive:\n          - {{name: BASE, type: int, derivation: SRC.ID}}\n          - {{name: V, type: int, derivation: {{function: {{name: id, args: {{x: {argument}}}}}}}}}\n        expr: SUM(V)\noutput: {{path: output.csv, columns: [ID, VALUE]}}\n"
+                "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {{SRC: {{path: input.csv, key: [ID], types: {{ID: int}}}}}}\nkeys: [ID]\n{rows}columns:\n  - {{name: ID, type: int, derivation: SRC.ID}}\n  - name: VALUE\n    type: int\n    derivation:\n      aggregate:\n        derivations:\n          BASE: {{type: int, derivation: SRC.ID}}\n          V: {{type: int, derivation: {{function: {{name: id, args: {{x: {argument}}}}}}}}}\n        expr: SUM(V)\noutput: {{path: output.csv, columns: [ID, VALUE]}}\n"
             );
-                    let document = schemas::domain_schema()
-                        .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
-                        .unwrap();
+                    let document = crate::support::specification_run::prepare_as(
+                        "study/domain.yaml",
+                        raw.as_bytes(),
+                    );
                     let run = PreparedRun::prepare_with_environment(document, environment())
                         .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
                     assert_eq!(run.compiled().called_functions(), [1]);
@@ -941,10 +935,9 @@ functions:
 
         #[test]
         fn aggregate_callback_reads_the_kept_current_row_instead_of_each_donor_record() {
-            let raw = "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int, N: int}}}\nkeys: [ID]\nintermediates:\n  - {id: CAP, dataset: SRC, key: {ID: ID}, order_by: [SRC.N], keep: first}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: int\n    derivation:\n      aggregate:\n        derive:\n          - {name: BASE, type: int, derivation: SRC.N}\n          - {name: V, type: int, derivation: {function: {name: id, args: {x: CAP.N}}}}\n        expr: SUM(V)\noutput: {path: output.csv, columns: [ID, VALUE]}\n";
-            let document = schemas::domain_schema()
-                .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
-                .unwrap();
+            let raw = "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, key: [ID], types: {ID: int, N: int}}}\nkeys: [ID]\nintermediates:\n  - {id: CAP, dataset: SRC, key: {ID: ID}, order_by: [SRC.N], keep: first}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: int\n    derivation:\n      aggregate:\n        derivations:\n          BASE: {type: int, derivation: SRC.N}\n          V: {type: int, derivation: {function: {name: id, args: {x: CAP.N}}}}\n        expr: SUM(V)\noutput: {path: output.csv, columns: [ID, VALUE]}\n";
+            let document =
+                crate::support::specification_run::prepare_as("study/domain.yaml", raw.as_bytes());
             let run = PreparedRun::prepare_with_environment(document, environment())
                 .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
             let (mut activation, mut study) = ports();
@@ -965,12 +958,10 @@ functions:
                     vec![Value::Int(2), Value::Int(40)]
                 ]
             );
-            let document = schemas::domain_schema()
-                .prepare_standalone(source(
-                    "study/domain.yaml",
-                    raw.edit(", order_by: [SRC.N], keep: first", "").as_bytes(),
-                ))
-                .unwrap();
+            let document = crate::support::specification_run::prepare_as(
+                "study/domain.yaml",
+                raw.edit(", order_by: [SRC.N], keep: first", "").as_bytes(),
+            );
             let Err(rejected) = PreparedRun::prepare_with_environment(document, environment())
             else {
                 panic!("kept scalar read required");
@@ -987,10 +978,9 @@ functions:
 
         #[test]
         fn aggregate_callback_uses_original_current_source_types_when_donor_types_differ() {
-            let raw = "schema_version: '1.0'\ndomain: TEST\ninput:\n  SRC: {path: input.csv, types: {ID: int, N: int}}\n  B: {path: input.csv, types: {ID: int, N: str}}\nbase: SRC\nkeys: [ID, N]\nintermediates:\n  - {id: CAP, dataset: SRC, key: {N: SRC.N}, order_by: [SRC.ID], keep: first}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - name: VALUE\n    type: int\n    derivation:\n      aggregate:\n        key: {ID: ID}\n        derive:\n          - {name: BASE, type: int, derivation: B.N}\n          - {name: V, type: int, derivation: {function: {name: id, args: {x: CAP.N}}}}\n        expr: SUM(V)\noutput: {path: output.csv, columns: [ID, N, VALUE]}\n";
-            let document = schemas::domain_schema()
-                .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
-                .unwrap();
+            let raw = "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput:\n  SRC: {path: input.csv, types: {ID: int, N: int}}\n  B: {path: input.csv, types: {ID: int, N: str}}\nbase: SRC\nkeys: [ID, N]\nintermediates:\n  - {id: CAP, dataset: SRC, key: {N: SRC.N}, order_by: [SRC.ID], keep: first}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - name: VALUE\n    type: int\n    derivation:\n      aggregate:\n        key: {ID: ID}\n        derivations:\n          BASE: {type: int, derivation: B.N}\n          V: {type: int, derivation: {function: {name: id, args: {x: CAP.N}}}}\n        expr: SUM(V)\noutput: {path: output.csv, columns: [ID, N, VALUE]}\n";
+            let document =
+                crate::support::specification_run::prepare_as("study/domain.yaml", raw.as_bytes());
             let run = PreparedRun::prepare_with_environment(document, environment())
                 .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
             let (mut activation, mut study) = ports();
@@ -1238,10 +1228,9 @@ functions:
             assert!(attempt.dataset.result.unwrap().result.is_ok());
             assert_eq!(&*activation.trace.borrow(), &["inspect", "capture"]);
             // Each call names the absent environment, whatever function it names.
-            let raw = "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\n  - {name: OTHER, type: int, derivation: {function: {name: absent, args: {x: SRC.ID}}}}\noutput: {path: output.csv, columns: [ID, VALUE, OTHER]}\n";
-            let document = schemas::domain_schema()
-                .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
-                .unwrap();
+            let raw = "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\n  - {name: OTHER, type: int, derivation: {function: {name: absent, args: {x: SRC.ID}}}}\noutput: {path: output.csv, columns: [ID, VALUE, OTHER]}\n";
+            let document =
+                crate::support::specification_run::prepare_as("study/domain.yaml", raw.as_bytes());
             let Err(rejected) = PreparedRun::prepare_with_environment(document, environment())
             else {
                 panic!("project calls without a host environment cannot execute")
@@ -1861,10 +1850,11 @@ functions:
                     vec![20, 10],
                 ),
             ] {
-                let raw = format!("schema_version: '1.0'\ndomain: TEST\ninput:\n  SRC: {{path: a.csv, types: {{ID: int, N: int}}}}\n  B: {{path: b.csv, types: {{ID: int, N: int}}}}\nbase: SRC\nkeys: [ID]\ncolumns:\n  - {{name: ID, type: int}}\n  - {{name: VALUE, type: int}}\nrows:\n  - id: records\n    dataset: {driver}\n    derivations:\n      ID: {driver}.ID\n      VALUE: {{function: {{name: id, args: {{x: {other}.N}}}}}}\noutput: {{path: output.csv, columns: [ID, VALUE]}}\n");
-                let document = schemas::domain_schema()
-                    .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
-                    .unwrap();
+                let raw = format!("yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput:\n  SRC: {{path: a.csv, key: [ID], types: {{ID: int, N: int}}}}\n  B: {{path: b.csv, key: [ID], types: {{ID: int, N: int}}}}\nbase: SRC\nkeys: [ID]\ncolumns:\n  - {{name: ID, type: int}}\n  - {{name: VALUE, type: int}}\nrows:\n  - id: records\n    dataset: {driver}\n    derivations:\n      ID: {driver}.ID\n      VALUE: {{function: {{name: id, args: {{x: {other}.N}}}}}}\noutput: {{path: output.csv, columns: [ID, VALUE]}}\n");
+                let document = crate::support::specification_run::prepare_as(
+                    "study/domain.yaml",
+                    raw.as_bytes(),
+                );
                 let run = PreparedRun::prepare_with_environment(document, environment())
                     .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
                 let (mut activation, _) = ports();
@@ -1947,7 +1937,7 @@ functions:
                     panic!("an input is never rebased")
                 }
             }
-            let head = "schema_version: '1.0'\ndomain: TEST\ninput:\n  SRC: {path: a.csv, types: {ID: int, N: int}}\nbase: SRC\nkeys: [ID]\n";
+            let head = "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput:\n  SRC: {path: a.csv, types: {ID: int, N: int}}\nbase: SRC\nkeys: [ID]\n";
             // A row template whose window stage calls `id` on each row's rank
             // by N. `TEMPLATE` is the template's grain and filter, and `N`
             // the derivation of N.
@@ -2003,9 +1993,10 @@ functions:
                 ),
             ];
             for (raw, expected, calls) in cases {
-                let document = schemas::domain_schema()
-                    .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
-                    .unwrap();
+                let document = crate::support::specification_run::prepare_as(
+                    "study/domain.yaml",
+                    raw.as_bytes(),
+                );
                 let run = PreparedRun::prepare_with_environment(document, environment())
                     .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
                 let (mut activation, _) = ports();
@@ -2036,10 +2027,11 @@ functions:
                     } else {
                         ""
                     };
-                    let raw = format!("schema_version: '1.0'\ndomain: TEST\ninput: {{SRC: {{path: input.csv, types: {{ID: int}}}}}}\nkeys: [ID]\n{rows}intermediates:\n  - id: DON\n    dataset: SRC\n    key: [ID]\n    order_by: [SRC.ID]\n    keep: first\n    derivations:\n      BASE: SRC.ID\n      V: {{function: {{name: id, args: {{x: {argument}}}}}}}\ncolumns:\n  - {{name: ID, type: int, derivation: SRC.ID}}\n  - {{name: VALUE, type: int, derivation: DON.V}}\noutput: {{path: output.csv, columns: [ID, VALUE]}}\n");
-                    let document = schemas::domain_schema()
-                        .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
-                        .unwrap();
+                    let raw = format!("yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {{SRC: {{path: input.csv, types: {{ID: int}}}}}}\nkeys: [ID]\n{rows}intermediates:\n  - id: DON\n    dataset: SRC\n    key: [ID]\n    order_by: [SRC.ID]\n    keep: first\n    derivations:\n      BASE: SRC.ID\n      V: {{function: {{name: id, args: {{x: {argument}}}}}}}\ncolumns:\n  - {{name: ID, type: int, derivation: SRC.ID}}\n  - {{name: VALUE, type: int, derivation: DON.V}}\noutput: {{path: output.csv, columns: [ID, VALUE]}}\n");
+                    let document = crate::support::specification_run::prepare_as(
+                        "study/domain.yaml",
+                        raw.as_bytes(),
+                    );
                     let run = PreparedRun::prepare_with_environment(document, environment())
                         .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
                     assert_eq!(run.compiled().called_functions(), [1]);
@@ -2070,10 +2062,9 @@ functions:
 
         #[test]
         fn intermediate_callback_selects_for_donor_record_and_keeps_selected_field_types() {
-            let raw = "schema_version: '1.0'\ndomain: TEST\ninput:\n  SRC: {path: input.csv, types: {ID: int, N: int}}\n  B: {path: input.csv, types: {ID: int, N: str}}\nbase: SRC\nkeys: [ID, N]\nintermediates:\n  - {id: CAP, dataset: SRC, key: [ID], order_by: [SRC.N], keep: first}\n  - id: DON\n    dataset: B\n    key: {ID: ID}\n    order_by: [B.ID]\n    keep: first\n    derivations:\n      V: {function: {name: id, args: {x: CAP.N}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: VALUE, type: int, derivation: DON.V}\noutput: {path: output.csv, columns: [ID, N, VALUE]}\n";
-            let document = schemas::domain_schema()
-                .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
-                .unwrap();
+            let raw = "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput:\n  SRC: {path: input.csv, types: {ID: int, N: int}}\n  B: {path: input.csv, types: {ID: int, N: str}}\nbase: SRC\nkeys: [ID, N]\nintermediates:\n  - {id: CAP, dataset: SRC, key: [ID], order_by: [SRC.N], keep: first}\n  - id: DON\n    dataset: B\n    key: {ID: ID}\n    order_by: [B.ID]\n    keep: first\n    derivations:\n      V: {function: {name: id, args: {x: CAP.N}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: VALUE, type: int, derivation: DON.V}\noutput: {path: output.csv, columns: [ID, N, VALUE]}\n";
+            let document =
+                crate::support::specification_run::prepare_as("study/domain.yaml", raw.as_bytes());
             let run = PreparedRun::prepare_with_environment(document, environment())
                 .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
             let (mut activation, mut study) = ports();
@@ -2102,10 +2093,9 @@ functions:
         /// its own N.
         #[test]
         fn intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field() {
-            let raw = "schema_version: '1.0'\ndomain: TEST\ninput:\n  SRC: {path: input.csv, types: {ID: int, N: int}}\n  B: {path: input.csv, types: {ID: int, N: int}}\nbase: SRC\nkeys: [ID, N]\nintermediates:\n  - {id: CAP, dataset: SRC, key: [ID], order_by: [SRC.N], keep: first}\n  - id: DON\n    dataset: B\n    key: {ID: ID, N: N}\n    derivations:\n      V: {function: {name: pair, args: {weight: CAP.N, own: B.N}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: VALUE, type: int, derivation: DON.V}\noutput: {path: output.csv, columns: [ID, N, VALUE]}\n";
-            let document = schemas::domain_schema()
-                .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
-                .unwrap();
+            let raw = "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput:\n  SRC: {path: input.csv, types: {ID: int, N: int}}\n  B: {path: input.csv, types: {ID: int, N: int}}\nbase: SRC\nkeys: [ID, N]\nintermediates:\n  - {id: CAP, dataset: SRC, key: [ID], order_by: [SRC.N], keep: first}\n  - id: DON\n    dataset: B\n    key: {ID: ID, N: N}\n    derivations:\n      V: {function: {name: pair, args: {weight: CAP.N, own: B.N}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: VALUE, type: int, derivation: DON.V}\noutput: {path: output.csv, columns: [ID, N, VALUE]}\n";
+            let document =
+                crate::support::specification_run::prepare_as("study/domain.yaml", raw.as_bytes());
             let run = PreparedRun::prepare_with_environment(document, environment())
                 .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
             let (mut activation, mut study) = ports();
@@ -2134,10 +2124,9 @@ functions:
         /// (EXPR-14), so an intermediate exposing it drives rows (ROW-2).
         #[test]
         fn callback_derived_fields_expose_their_declared_result_type_to_row_drivers() {
-            let raw = "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\nintermediates:\n  - id: DON\n    dataset: SRC\n    derivations:\n      V: {function: {name: id, args: {x: SRC.ID}}}\ncolumns:\n  - {name: ID, type: int}\n  - {name: VALUE, type: int}\nrows:\n  - id: records\n    dataset: DON\n    derivations: {ID: DON.ID, VALUE: DON.V}\noutput: {path: output.csv, columns: [ID, VALUE]}\n";
-            let document = schemas::domain_schema()
-                .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
-                .unwrap();
+            let raw = "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\nintermediates:\n  - id: DON\n    dataset: SRC\n    derivations:\n      V: {function: {name: id, args: {x: SRC.ID}}}\ncolumns:\n  - {name: ID, type: int}\n  - {name: VALUE, type: int}\nrows:\n  - id: records\n    dataset: DON\n    derivations: {ID: DON.ID, VALUE: DON.V}\noutput: {path: output.csv, columns: [ID, VALUE]}\n";
+            let document =
+                crate::support::specification_run::prepare_as("study/domain.yaml", raw.as_bytes());
             let run = PreparedRun::prepare_with_environment(document, environment())
                 .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
             let (mut activation, mut study) = ports();

@@ -59,19 +59,12 @@ impl Error {
     /// A finding in the 1.x header of a file a referencing field names, which
     /// that file's preparation reports as its entry's, names the file as
     /// `source` and `entry`, as a finding further into it does (SCHEMA-2).
-    /// A file that declares `schema_version` keeps its findings as at the
-    /// `yamaa-v0.5.0` tag (D75).
     fn named_header(mut self) -> Self {
         if let Self::Preparation(InheritanceError::Entry(
             crate::specification_source::Error::Findings(captured),
         )) = &mut self
         {
-            if captured
-                .document()
-                .is_some_and(yamaa_core::language::declares_header)
-            {
-                captured.name_file();
-            }
+            captured.name_file();
         }
         self
     }
@@ -130,8 +123,8 @@ impl Rejected {
 impl FileSpecification {
     /// Prepare a specification alone from `resources`, without a project.
     pub fn prepare(mut resources: Resources, written: &str) -> Result<Self, Error> {
-        let document = prepare_document(&mut resources, written, None)?;
-        let links = capture_links(&mut resources, &document, None, &mut None)?;
+        let document = prepare_document(&mut resources, written)?;
+        let links = capture_links(&mut resources, &document, &mut None)?;
         let environment = crate::project_source::OwnedEnvironment::without_environment(Some(
             yamaa_core::project_function::Language::Python,
         ));
@@ -286,14 +279,13 @@ impl FileSpecification {
     }
 }
 
-/// Retain one native capture/inheritance path for ordinary and project models.
-/// An explicit candidate closure does not replace the package-owned public schema.
+/// Retain one native capture/inheritance path for ordinary and project
+/// specifications, read with the package-owned 1.0 closures.
 pub(crate) fn prepare_document(
     resources: &mut Resources,
     written: &str,
-    schema: Option<Arc<crate::specification_source::CapturedSchema>>,
 ) -> Result<crate::specification_source::PreparedDocument, Error> {
-    prepare_document_from(resources, None, written, schema)
+    prepare_document_from(resources, None, written)
 }
 
 /// Recursive metadata uses the original declaring identity and written spelling.
@@ -302,28 +294,22 @@ pub(crate) fn prepare_document_from(
     resources: &mut Resources,
     declaring: Option<&str>,
     written: &str,
-    schema: Option<Arc<crate::specification_source::CapturedSchema>>,
 ) -> Result<crate::specification_source::PreparedDocument, Error> {
     use yamaa_core::file_preparation::{self as application, Error as Failure};
-    let document = application::prepare(
-        &mut *resources,
-        &mut Documents { schema },
-        declaring,
-        written,
-    )
-    .map_err(|error| match error {
-        // Only an entry no file declares is the caller's own; a producer a
-        // `schema` link names was resolved from its declaring file first.
-        Failure::Entry(error) if declaring.is_none() => Error::Entry(error),
-        Failure::Entry(error) | Failure::Resource(error) => Error::Resource(error),
-        Failure::Preparation(error) => Error::Preparation(error),
-        Failure::ResourceFinding { error, diagnostic } => {
-            Error::ResourceFinding { error, diagnostic }
-        }
-        Failure::PreparationFinding { error, diagnostic } => {
-            Error::PreparationFinding { error, diagnostic }
-        }
-    })?;
+    let document = application::prepare(&mut *resources, &mut Documents, declaring, written)
+        .map_err(|error| match error {
+            // Only an entry no file declares is the caller's own; a producer a
+            // `schema` link names was resolved from its declaring file first.
+            Failure::Entry(error) if declaring.is_none() => Error::Entry(error),
+            Failure::Entry(error) | Failure::Resource(error) => Error::Resource(error),
+            Failure::Preparation(error) => Error::Preparation(error),
+            Failure::ResourceFinding { error, diagnostic } => {
+                Error::ResourceFinding { error, diagnostic }
+            }
+            Failure::PreparationFinding { error, diagnostic } => {
+                Error::PreparationFinding { error, diagnostic }
+            }
+        })?;
     // Data the entry declares reads from the identity its resolver gave it.
     resources
         .select_entry_base(&document.source().identity)
@@ -334,11 +320,11 @@ pub(crate) fn prepare_document_from(
 /// The refusal at `field` of the specification it names, `written` from
 /// `declaring` and resolved as `identity`, read before that file is prepared
 /// (SCHEMA-2), as a 1.0 project reads a function or codelist file it lists:
-/// a 1.x header that declares a version the engine does not read, or a type
-/// other than `spec`, is refused at the field, naming the file as `source`.
-/// A file that declares `schema_version` keeps the 0.5 path (D75); a
-/// malformed header is a finding in the file, and a file that cannot be read
-/// or decoded fails as before, each when the file is prepared.
+/// a header that declares a version the engine does not read, including a
+/// `schema_version` file of language 0.5, or a type other than `spec`, is
+/// refused at the field, naming the file as `source`. A malformed header is a
+/// finding in the file, and a file that cannot be read or decoded fails as
+/// before, each when the file is prepared.
 pub(crate) fn refused_header(
     resources: &mut Resources,
     declaring: &str,
@@ -351,10 +337,9 @@ pub(crate) fn refused_header(
     };
     let (bytes, _) = resources.capture_metadata_from(declaring, written).ok()?;
     let document = crate::yaml_decode::decode_yaml(&bytes).ok()?.document;
-    if !language::declares_header(&document) {
-        return None;
-    }
-    let fault @ (HeaderFault::Version { .. } | HeaderFault::FileType { .. }) =
+    let fault @ (HeaderFault::Legacy { .. }
+    | HeaderFault::Version { .. }
+    | HeaderFault::FileType { .. }) =
         language::read_header(&document, Some(LANGUAGE_VERSION), FileType::Spec).err()?
     else {
         return None;
@@ -383,7 +368,7 @@ fn link_resource(error: ResourceError, field: &str, written: &str) -> Error {
 }
 
 /// Read each producing specification a `schema` link names once, as a validated
-/// specification document; aliases share the one prepared document. A 1.x
+/// specification document; aliases share the one prepared document. The
 /// consumer checks the producer's header at its link before the producer is
 /// prepared ([`refused_header`], SCHEMA-2). A linked
 /// producer's own links are not followed: a link supplies only the stored
@@ -392,7 +377,6 @@ fn link_resource(error: ResourceError, field: &str, written: &str) -> Error {
 pub(crate) fn capture_links(
     resources: &mut Resources,
     document: &crate::specification_source::PreparedDocument,
-    schema: Option<&Arc<crate::specification_source::CapturedSchema>>,
     origin: &mut Option<String>,
 ) -> Result<Vec<crate::specification_source::LinkedSpecification>, Error> {
     use crate::specification_source::LinkedSpecification;
@@ -440,18 +424,14 @@ pub(crate) fn capture_links(
                 .map_err(|error| link_resource(error, &field, link.written))?;
             Some(known)
         } else {
-            if let Some(refused) = document.versioned().and_then(|_| {
+            if let Some(refused) =
                 refused_header(resources, link.base_source, link.written, &identity, &field)
-            }) {
+            {
                 return Err(Error::Reference(Box::new(refused)));
             }
-            let prepared = prepare_document_from(
-                resources,
-                Some(link.base_source),
-                link.written,
-                schema.cloned(),
-            )
-            .map_err(|error| error.entry_field(&field, link.written).named_header())?;
+            let prepared =
+                prepare_document_from(resources, Some(link.base_source), link.written)
+                    .map_err(|error| error.entry_field(&field, link.written).named_header())?;
             prepared_any = true;
             if prepared.source().identity != identity {
                 return Err(Error::resource_at(
@@ -517,11 +497,11 @@ mod profile_inspection_tests {
         ));
         fs::create_dir_all(root.join("parent/input")).unwrap();
         fs::create_dir(root.join("entry")).unwrap();
-        let source = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input/unknown}\noutput: {path: output.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n";
+        let source = "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input/unknown}\noutput: {path: output.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n";
         fs::write(root.join("parent/base.yaml"), source).unwrap();
         fs::write(
             root.join("entry/root.yaml"),
-            "schema_version: '1.0'\nparent: ../parent/base.yaml\n",
+            "yamaa: '1.0'\ntype: spec\nparent: ../parent/base.yaml\n",
         )
         .unwrap();
         let root = crate::canonical_path::canonicalize(root).unwrap();
@@ -551,7 +531,7 @@ mod profile_inspection_tests {
                 &[],
             )
             .unwrap();
-            let document = prepare_document(&mut resources, "root.yaml", None).unwrap();
+            let document = prepare_document(&mut resources, "root.yaml").unwrap();
             let reads = resources.capture_reads();
             assert_eq!(reads, 2);
             let Err(rejected) = PreparedRun::prepare_with_profile_inspection(
@@ -591,9 +571,7 @@ mod profile_inspection_tests {
     }
 }
 
-struct Documents {
-    schema: Option<Arc<crate::specification_source::CapturedSchema>>,
-}
+struct Documents;
 impl yamaa_core::file_preparation::DocumentPort<ResourceError> for Documents {
     type Prepared = crate::specification_source::PreparedDocument;
     type Error = InheritanceError<ResourceError>;
@@ -603,10 +581,7 @@ impl yamaa_core::file_preparation::DocumentPort<ResourceError> for Documents {
         display: String,
         port: &mut P,
     ) -> Result<Self::Prepared, Self::Error> {
-        match &self.schema {
-            Some(schema) => schema.prepare_document(source, display, port),
-            None => crate::shipped_schema::prepare(source, display, port),
-        }
+        crate::shipped_schema::prepare(source, display, port)
     }
 }
 #[cfg(all(test, feature = "yaml"))]
@@ -633,8 +608,8 @@ mod declaring_origin_tests {
             Self(crate::canonical_path::canonicalize(root).unwrap())
         }
         fn check(&self) {
-            let parent = "schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
-            let child = "schema_version: '1.0'\nparent: './base.yaml'\ndomain: PRODUCER\n";
+            let parent = "yamaa: '1.0'\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+            let child = "yamaa: '1.0'\ntype: spec\nparent: './base.yaml'\ndomain: PRODUCER\n";
             fs::write(self.0.join("entry/root.yaml"), b"declaring metadata").unwrap();
             fs::write(self.0.join("producer/base.yaml"), parent).unwrap();
             fs::write(self.0.join("producer/child.yaml"), child).unwrap();
@@ -645,13 +620,9 @@ mod declaring_origin_tests {
             )
             .unwrap();
             let declaring = resources.resolve("root.yaml").unwrap();
-            let document = prepare_document_from(
-                &mut resources,
-                Some(&declaring),
-                "../producer/child.yaml",
-                None,
-            )
-            .unwrap();
+            let document =
+                prepare_document_from(&mut resources, Some(&declaring), "../producer/child.yaml")
+                    .unwrap();
             assert_eq!(document.source().bytes, child.as_bytes());
             assert_eq!(document.parents().len(), 1);
             assert_eq!(document.parents()[0].source().bytes, parent.as_bytes());
@@ -693,8 +664,8 @@ mod dispatch_policy_tests {
         sync::atomic::{AtomicUsize, Ordering},
     };
     static NEXT: AtomicUsize = AtomicUsize::new(0);
-    const PARENT: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n";
-    const ROOT: &str = "schema_version: '1.0'\nparent: ../parent/base.yaml\n";
+    const PARENT: &str = "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n";
+    const ROOT: &str = "yamaa: '1.0'\ntype: spec\nparent: ../parent/base.yaml\n";
     struct Study(PathBuf);
     impl Study {
         fn new(root: &str) -> Self {
@@ -724,8 +695,7 @@ mod dispatch_policy_tests {
     fn native_success_replays_aliases_from_the_same_retained_snapshots() {
         let study = Study::new(ROOT);
         let mut resources = study.resources();
-        let document =
-            prepare_document_from(&mut resources, None, "entry/root.yaml", None).unwrap();
+        let document = prepare_document_from(&mut resources, None, "entry/root.yaml").unwrap();
         assert_eq!(document.parents().len(), 1);
         assert_eq!(resources.snapshot_count(), 2);
         assert_eq!(resources.capture_reads(), 2);
@@ -751,7 +721,7 @@ mod dispatch_policy_tests {
         let mut resources = study.resources();
         let original = resources.resolve("root.yaml").unwrap();
         assert!(matches!(
-            prepare_document_from(&mut resources, None, "entry/root.yaml", None),
+            prepare_document_from(&mut resources, None, "entry/root.yaml"),
             Err(Error::Preparation(_))
         ));
         assert_eq!(resources.capture_reads(), 1);
@@ -788,7 +758,7 @@ mod dispatch_policy_tests {
         let original = resources.capture_metadata("entry/root.yaml").unwrap().0;
         fs::write(study.0.join("entry/root.yaml"), b"invalid replacement").unwrap();
         let Err(Error::ResourceFinding { error, diagnostic }) =
-            prepare_document_from(&mut resources, None, "entry/root.yaml", None)
+            prepare_document_from(&mut resources, None, "entry/root.yaml")
         else {
             panic!("changed entry retains its original native error");
         };
@@ -810,12 +780,12 @@ mod dispatch_policy_tests {
             .0;
         fs::write(study.0.join("parent/base.yaml"), b"invalid replacement").unwrap();
         let Err(Error::PreparationFinding { error, diagnostic }) =
-            prepare_document_from(&mut resources, None, "entry/root.yaml", None)
+            prepare_document_from(&mut resources, None, "entry/root.yaml")
         else {
             panic!("changed parent capture retains original preparation");
         };
-        assert!(matches!(error, InheritanceError::Preparation { error, .. }
-        if matches!(*error, yamaa_core::inheritance_preparation::Error::Traversal(
+        assert!(matches!(error, InheritanceError::Versioned { error, .. }
+        if matches!(*error, crate::document::SpecificationError::Traversal(
             yamaa_core::inheritance::Error::Host(crate::specification_source::SourceFailure::Host(ResourceError::Changed))
         ))));
         assert_content_change(&diagnostic, "parent", "../parent/base.yaml");
@@ -827,7 +797,7 @@ mod dispatch_policy_tests {
     }
     #[test]
     fn changed_dictionary_capture_uses_exact_declaring_expression_without_replacement() {
-        let root = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns: [{name: ID, type: str, derivation: {mapping: {source: SRC.ID, dict: dict.yaml}}}]\n";
+        let root = "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns: [{name: ID, type: str, derivation: {mapping: {source: SRC.ID, dict: dict.yaml}}}]\n";
         let study = Study::new(root);
         fs::write(study.0.join("entry/dict.yaml"), b"A: answer\n").unwrap();
         let mut resources = study.resources();
@@ -838,7 +808,7 @@ mod dispatch_policy_tests {
             .0;
         fs::write(study.0.join("entry/dict.yaml"), b"B: replaced\n").unwrap();
         let Err(Error::Preparation(error)) =
-            prepare_document_from(&mut resources, None, "entry/root.yaml", None)
+            prepare_document_from(&mut resources, None, "entry/root.yaml")
         else {
             panic!("changed dictionary keeps original preparation error");
         };
@@ -885,7 +855,7 @@ mod dispatch_policy_tests {
     }
     #[test]
     fn changed_dictionary_after_semantic_success_is_original_failure() {
-        let root="schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns: [{name: ID, type: str, derivation: {mapping: {source: SRC.ID, dict: dict.yaml}}}]\n";
+        let root="yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns: [{name: ID, type: str, derivation: {mapping: {source: SRC.ID, dict: dict.yaml}}}]\n";
         let study = Study::new(root);
         fs::write(study.0.join("entry/dict.yaml"), b"A: answer\n").unwrap();
         let mut resources = study.resources();

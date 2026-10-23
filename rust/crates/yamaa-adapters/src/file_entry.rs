@@ -5,9 +5,8 @@ use crate::{
     file_preparation,
     file_resources::{Error as ResourceError, Resources},
     project_source::{CapturedEnvironment, OwnedEnvironment},
-    specification_source::{CapturedSchema, LinkedSpecification, PreparedDocument},
+    specification_source::{LinkedSpecification, PreparedDocument},
 };
-use std::sync::Arc;
 
 #[derive(Debug)]
 pub enum Error {
@@ -36,7 +35,6 @@ pub struct RejectedEntry {
     entry: String,
     origin: Option<Origin>,
     document: Option<PreparedDocument>,
-    schema: Arc<CapturedSchema>,
     environment: CapturedEnvironment,
     resources: Resources,
 }
@@ -58,9 +56,6 @@ impl RejectedEntry {
     /// The prepared entry document, when preparation reached it.
     pub fn document(&self) -> Option<&PreparedDocument> {
         self.document.as_ref()
-    }
-    pub fn schema(&self) -> &Arc<CapturedSchema> {
-        &self.schema
     }
     pub fn environment(&self) -> &CapturedEnvironment {
         &self.environment
@@ -127,39 +122,32 @@ pub(crate) fn capture(
     given: &str,
     written: &str,
     mut environment: OwnedEnvironment,
-    schema: Arc<CapturedSchema>,
 ) -> Result<CapturedEntry, Box<RejectedEntry>> {
     let written = written.to_owned();
     let mut document = None;
     let mut origin: Option<String> = None;
     let result = (|| {
         document = Some(
-            file_preparation::prepare_document_from(
-                &mut resources,
-                None,
-                &written,
-                Some(Arc::clone(&schema)),
-            )
-            .map_err(|error| match error {
-                file_preparation::Error::Entry(error) => Error::Caller {
-                    path: given.to_owned(),
-                    error,
+            file_preparation::prepare_document_from(&mut resources, None, &written).map_err(
+                |error| match error {
+                    file_preparation::Error::Entry(error) => Error::Caller {
+                        path: given.to_owned(),
+                        error,
+                    },
+                    error => Error::Document(error),
                 },
-                error => Error::Document(error),
-            })?,
+            )?,
         );
         let root = document.as_ref().expect("captured entry");
         crate::file_inventory::prepare(
             &mut resources,
-            &schema,
             &mut environment,
             yamaa_core::submission_inventory::requested(root.document()),
             &root.source().identity,
         )
         .map_err(Error::Document)?;
-        let links =
-            file_preparation::capture_links(&mut resources, root, Some(&schema), &mut origin)
-                .map_err(Error::Document)?;
+        let links = file_preparation::capture_links(&mut resources, root, &mut origin)
+            .map_err(Error::Document)?;
         // Complete admission and the whole input inspection precede
         // selection: every metadata snapshot is verified unchanged.
         resources
@@ -182,7 +170,6 @@ pub(crate) fn capture(
                 entry: written,
                 origin: origin.map(|dataset| Origin { dataset }),
                 document,
-                schema,
                 environment,
                 resources,
             }))
@@ -211,7 +198,6 @@ mod inventory_rejection_tests {
                 entry: "spec.yaml".into(),
                 origin: None,
                 document: None,
-                schema: crate::shipped_schema::capture().unwrap(),
                 environment,
                 resources: Resources::for_entry(&base).unwrap(),
             })),

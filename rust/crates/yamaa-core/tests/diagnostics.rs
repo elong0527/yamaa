@@ -467,7 +467,6 @@ mod diagnostics {
             reached.extend(preflight::self_reached());
             reached.extend(preflight::intermediate_reached());
             reached.extend(preflight::namespace_reached());
-            reached.extend(binding::intermediate_key_reached());
             reached.extend(binding::key_record_reached());
             reached.extend(intermediate_ranges::reached());
             reached.extend(intermediate_ranges::match_phase_reached());
@@ -489,7 +488,6 @@ mod diagnostics {
             reached.extend(binding::source_filter_reached());
             reached.extend(binding::source_match_reached());
             reached.extend(binding::source_range_reached());
-            reached.extend(binding::implicit_source_reached());
             reached.extend(binding::verification_reached());
             reached.extend(binding::verification_declarations_reached());
             let result = yamaa_core::dataset_checks::not_missing(&[

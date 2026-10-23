@@ -57,11 +57,6 @@ and a grouped-row aggregate are not lookups: they reduce the constructed output
 rows of a partition or the current input group, which their `filter` narrows
 ([LOOKUP-8](#lookup-8)), and declare no `between` ([LOOKUP-19](#lookup-19)).
 
-A file that declares `schema_version` is read under the rules at the
-`yamaa-v0.5.0` tag, where an implicit join, and a named intermediate or a
-qualified aggregate without `key`, match on the applicable output keys
-([LOOKUP-5](#lookup-5)), and an intermediate answers absence with `no_match`.
-
 <a id="lookup-9"></a>
 
 ### LOOKUP-9. Match keeps the records whose keys equal the current row's match values and whose bounds hold its range value
@@ -166,15 +161,6 @@ driver's own record, an output column or a named intermediate has no implicit
 join to narrow, and `between` there fails as `prohibited_construct` at the
 field. A `between` on an unqualified or grouped-row aggregate, which matches
 no relation, fails as `invalid_aggregate_context` ([LOOKUP-18](#lookup-18)).
-
-A file that declares `schema_version` is read under the rules at the
-`yamaa-v0.5.0` tag, where a named intermediate's bare `between.value` that no
-column takes reads the field of that name of the record that builds the rows
-of the first row template, or of `base`; a value that no row holds fails only
-once its bounds bind; a named intermediate's value qualified by an
-intermediate that builds a reading row reads that intermediate as a keyed
-lookup; and a source binding's `incomparable_range_types` names no
-variable.
 
 <a id="lookup-8"></a>
 
@@ -388,9 +374,8 @@ Neither failure renames the other's fields. Handler accounting follows
 report: a `keep` that chose among surviving records counts one
 `multiple_matches` handling, and an absence that a named intermediate answers,
 declared or by default, or a record an implicit join does not find counts one
-`absent` handling at the read's path ([LOOKUP-24](#lookup-24)). A file that
-declares `schema_version` counts an intermediate's answer as one `no_match`
-handling, as at the `yamaa-v0.5.0` tag. An `unmatched_key` from an implicit
+`absent` handling at the read's path ([LOOKUP-24](#lookup-24)). An
+`unmatched_key` from an implicit
 join names `intermediate(<dataset>)` as its intermediate, as an implicit
 join's multiple match does.
 
@@ -495,17 +480,6 @@ A grouped-row aggregate reads its own input group and declares no key pairs:
 the group is the match, and a `key` there fails as `invalid_aggregate_context`
 ([LOOKUP-19](#lookup-19)).
 
-A file that declares `schema_version` is read under the rules at the
-`yamaa-v0.5.0` tag, where an input declares no `key`, and an implicit join,
-and a named intermediate or qualified aggregate without `key`, pair the
-applicable keys: the output `keys`, in output-key order, that the lookup's
-relation also carries, each paired with the current row's same-named value.
-With no applicable key the lookup fails as `no_applicable_keys`, reporting the
-dataset and the output keys with a hint. A qualified aggregate's key refusals
-are reported at its `expr`, or at the `filter` that names its relation when
-its reduction names no field, and a column the relation does not have stops
-the pair before its match value is read.
-
 <a id="lookup-6"></a>
 
 ### LOOKUP-6. A key match value may be an expression whose static result type is checked before matching
@@ -590,12 +564,6 @@ and gives missing for a row with no match, counted at its path except in a
 predicate ([LOOKUP-24](#lookup-24)). `require_match: true` on the input covers
 every one of these reads.
 
-A file that declares `schema_version` is read under the rules at the
-`yamaa-v0.5.0` tag, where the implicit join matches on the applicable keys:
-the output `keys`, in output-key order, that the input also stores, each
-matched against the current row's same-named value; with none, the read
-fails as `no_applicable_keys` ([LOOKUP-5](#lookup-5)).
-
 <a id="lookup-2"></a>
 
 ### LOOKUP-2. Row construction reads another dataset through the same join, using only values available before column derivation
@@ -626,9 +594,7 @@ the row template ([ROW-4](rows.md#row-4)). A key the group does not
 carry varies within the group and names no single match value, and fails as
 `ungrouped_driver_field` ([ROW-5](rows.md#row-5)). A key no
 input record carries fails as `unknown_field`
-([NAME-3](names.md#name-3)), in either mode. A file that declares
-`schema_version` is read under the rules at the `yamaa-v0.5.0` tag, where the
-join matches on the applicable keys instead ([LOOKUP-1](#lookup-1)).
+([NAME-3](names.md#name-3)), in either mode.
 
 A `between` value has the same availability as a match value
 ([LOOKUP-9](#lookup-9)): during ungrouped row construction it reads a field of
@@ -702,11 +668,6 @@ intermediates:
     keep: last
 ```
 
-A file that declares `schema_version` is read under the rules at the
-`yamaa-v0.5.0` tag, where `key` is optional: an omitted `key` is the
-applicable keys ([LOOKUP-5](#lookup-5)), and with no applicable key the
-intermediate fails as `no_applicable_keys`.
-
 <a id="lookup-4"></a>
 
 ### LOOKUP-4. A named intermediate must narrow, derive or reshape its dataset
@@ -756,11 +717,6 @@ intermediates:
 An implicit join to `CODING` also needs matching key types. When the
 output's `CMSEQ` is numeric but `CODING.CMSEQ` is stored as text, declare
 `CODING.CMSEQ` as `int` on input before reading `CODING.DRUG_RECORD_NO`.
-
-A file that declares `schema_version` is read under the rules at the
-`yamaa-v0.5.0` tag, where an intermediate that declares nothing beyond `id`
-and `dataset`, with or without `no_match: {literal: null}`, only renames its
-input.
 
 <a id="lookup-7"></a>
 
@@ -1187,11 +1143,6 @@ intermediates:
 
 Each laboratory record reads its own supplemental endpoint qualifier, and the
 window ranks the records of each subject and test on it.
-
-A file that declares `schema_version` is read under the rules at the
-`yamaa-v0.5.0` tag, where the other intermediate's bare `between.value` that
-no output column takes is a field of the driver's record
-([LOOKUP-9](#lookup-9)).
 
 <a id="lookup-17"></a>
 

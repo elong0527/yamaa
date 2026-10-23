@@ -13,8 +13,7 @@
 //! a source binding's type refusal names its variable (LOOKUP-9). `check` reports
 //! each refusal as `run` does, in `run`'s order and in both hosts, the later
 //! read of a lookup its own key refused included; it leaves out only what the
-//! declarations cannot decide, such as a field a relation does not store. A
-//! 0.5 file keeps the rules at the `yamaa-v0.5.0` tag (D75).
+//! declarations cannot decide, such as a field a relation does not store.
 use crate::support::scratch::Scratch;
 use std::fs;
 use yamaa_adapters::{file_application, specification_report::Identity};
@@ -389,32 +388,6 @@ fn a_bare_range_value_reads_an_output_column_alone() {
     }
 }
 
-/// On the 0.5 surface a named intermediate's bare range value that no column
-/// takes still reads the field of the driver's record, as at the
-/// `yamaa-v0.5.0` tag (D75).
-#[test]
-fn a_0_5_bare_range_value_still_reads_the_driver_s_field() {
-    let specification = "schema_version: \"1.0\"\n\
-        domain: OUT\n\
-        keys: [STUDYID, USUBJID, SEQ]\n\
-        input:\n\
-        \x20 CLINIC: {path: clinic.csv, types: {SEQ: int, DAY: int}}\n\
-        \x20 WIN: {path: win.csv, types: {LO: int, HI: int}}\n\
-        base: CLINIC\n\
-        output: {path: out.csv, columns: [STUDYID, USUBJID, SEQ, W]}\n\
-        intermediates:\n\
-        \x20 - {id: WI, dataset: WIN, key: [STUDYID], between: {value: DAY, lower: LO, upper: HI}}\n\
-        columns:\n\
-        \x20 - {name: STUDYID, type: str, derivation: CLINIC.STUDYID}\n\
-        \x20 - {name: USUBJID, type: str, derivation: CLINIC.USUBJID}\n\
-        \x20 - {name: SEQ, type: int, derivation: CLINIC.SEQ}\n\
-        \x20 - {name: W, type: str, derivation: WI.NAME}\n";
-    assert_eq!(
-        Fixture::new(specification).saved(),
-        "STUDYID,USUBJID,SEQ,W\nS,S-1,1,EARLY\nS,S-1,2,LATE\n"
-    );
-}
-
 /// A key match value reads what the current row holds: never a lookup's
 /// column, a `SELF` field, a name nothing declares or a bare name that no
 /// column takes (LOOKUP-5, LOOKUP-11). The pair refuses it, at `key` for a
@@ -497,7 +470,7 @@ fn a_key_match_value_never_reads_a_lookup() {
 /// do (LOOKUP-5): a key column the relation does not store, and a pair whose
 /// types cannot compare, at `key`; a match value that reads no current-row
 /// value at its pair, `key.<column>`, as a row context that lacks the record
-/// it reads does. On the 0.5 surface they stay at the aggregate's expression.
+/// it reads does.
 #[test]
 fn a_written_aggregate_key_reports_its_refusals_at_key() {
     let aggregate = |key: &str| format!("{{aggregate: {{expr: 'MAX(CAL.CALDY)', key: {key}}}}}");
@@ -559,23 +532,6 @@ fn a_written_aggregate_key_reports_its_refusals_at_key() {
         ],
         &[unknown(&at("key"), "CAL.DAY")],
     );
-    // A 0.5 key keeps the aggregate's expression path.
-    let specification = "schema_version: \"1.0\"\n\
-        domain: OUT\n\
-        keys: [STUDYID, USUBJID, SEQ]\n\
-        input:\n\
-        \x20 CLINIC: {path: clinic.csv, types: {SEQ: int, DAY: int}}\n\
-        \x20 CAL: {path: cal.csv, types: {CALDY: int}}\n\
-        base: CLINIC\n\
-        output: {path: out.csv, columns: [STUDYID, USUBJID, SEQ, W]}\n\
-        columns:\n\
-        \x20 - {name: STUDYID, type: str, derivation: CLINIC.STUDYID}\n\
-        \x20 - {name: USUBJID, type: str, derivation: CLINIC.USUBJID}\n\
-        \x20 - {name: SEQ, type: int, derivation: CLINIC.SEQ}\n\
-        \x20 - {name: W, type: int, derivation: {aggregate: {expr: 'MAX(CAL.CALDY)', key: {SID: DAY}}}}\n";
-    let fixture = Fixture::new(specification);
-    let (_, built) = fixture.issues(Language::Python);
-    assert_eq!(built, [unknown(&at("expr"), "DAY")], "{specification}");
 }
 
 /// A 1.0 specification built from CLINIC's records whose W is D.WNAME, read
@@ -791,7 +747,7 @@ fn a_range_value_never_reads_the_intermediate_that_builds_its_row() {
 
 /// A range whose value and bounds cannot compare names the source binding's
 /// variable, as each other refusal of its range does; an aggregate's names no
-/// owner (LOOKUP-9). On the 0.5 surface a source binding's names none.
+/// owner (LOOKUP-9).
 #[test]
 fn a_source_binding_s_range_types_refusal_names_its_variable() {
     let types = |path: &str, variable: Option<&str>| {
@@ -835,59 +791,6 @@ fn a_source_binding_s_range_types_refusal_names_its_variable() {
         ),
     ] {
         assert_issues(&specification, &[expected], &[]);
-    }
-}
-
-/// On the 0.5 surface a donor read keeps the rules at the `yamaa-v0.5.0` tag
-/// (D75): a bare range value that no column takes is a field of the driver's
-/// record, which REF's REFDAY is not, and a source binding's type refusal
-/// names no variable.
-#[test]
-fn a_0_5_donor_read_and_range_type_keep_the_0_5_rules() {
-    let header = "schema_version: \"1.0\"\n\
-        domain: OUT\n\
-        keys: [STUDYID, USUBJID, SEQ]\n\
-        input:\n\
-        \x20 CLINIC: {path: clinic.csv, types: {SEQ: int, DAY: int}}\n\
-        \x20 REF: {path: ref.csv, types: {REFDAY: int}}\n\
-        \x20 WIN: {path: win.csv, types: {LO: int, HI: int}}\n\
-        base: CLINIC\n\
-        output: {path: out.csv, columns: [STUDYID, USUBJID, SEQ, W]}\n";
-    let columns = "  - {name: STUDYID, type: str, derivation: CLINIC.STUDYID}\n\
-        \x20 - {name: USUBJID, type: str, derivation: CLINIC.USUBJID}\n\
-        \x20 - {name: SEQ, type: int, derivation: CLINIC.SEQ}\n";
-    for (specification, expected) in [
-        (
-            format!(
-                "{header}intermediates:\n\
-                 \x20 - {{id: WI, dataset: WIN, key: [STUDYID], between: {{value: REFDAY, lower: LO, upper: HI}}}}\n\
-                 \x20 - {{id: D, dataset: REF, key: [STUDYID, USUBJID], derivations: {{WNAME: WI.NAME}}}}\n\
-                 columns:\n{columns}\
-                 \x20 - {{name: W, type: str, derivation: D.WNAME}}\n"
-            ),
-            issue(
-                "unknown_field",
-                "LOOKUP-9",
-                "intermediates[0].between.value",
-                yamaa_adapters::json!({"identifier": "REFDAY", "intermediate": "WI"}),
-            ),
-        ),
-        (
-            format!(
-                "{header}columns:\n{columns}\
-                 \x20 - {{name: W, type: str, derivation: {{source: {{variable: WIN.NAME, between: {{value: STUDYID, lower: LO, upper: HI}}}}}}}}\n"
-            ),
-            issue(
-                "incomparable_range_types",
-                "LOOKUP-9",
-                "columns.W.derivation.source.between",
-                yamaa_adapters::json!({"value_type": "str", "lower_type": "int", "upper_type": "int"}),
-            ),
-        ),
-    ] {
-        let fixture = Fixture::new(&specification);
-        let (_, built) = fixture.issues(Language::Python);
-        assert_eq!(built, [expected], "{specification}");
     }
 }
 

@@ -5,9 +5,9 @@ use crate::{
     specification_source::{InheritanceError, SourceFailure},
 };
 use yamaa_core::application_issue::{Fault, Step};
+use yamaa_core::inheritance as graph;
 use yamaa_core::json::Value;
 use yamaa_core::schema::{Document, NormalizationError, SchemaStructure};
-use yamaa_core::{inheritance as graph, inheritance_preparation::Error as E};
 
 fn rejected(code: Fault) -> Rejection {
     fault(Step::Inheritance, code)
@@ -60,11 +60,6 @@ fn traversal_outcome<E>(schema: &SchemaStructure, error: graph::Error<E>) -> Res
             error.limit,
             error.actual,
         ),
-        // An unsupported control field reports the projection fault of the
-        // preparation stage it has always reported.
-        graph::Error::UnsupportedControlField { .. } => {
-            fault(Step::Prepare, Fault::IssueProjection)
-        }
         graph::Error::Layer {
             source,
             entry,
@@ -147,7 +142,7 @@ fn dictionary_failure_ref<'a, T>(
     })
 }
 
-/// The refusal of a traversal of either language's layers (LAYER-2, LAYER-4).
+/// The refusal of a traversal of a specification's layers (LAYER-2, LAYER-4).
 fn traversal<'a, T>(
     schema: &SchemaStructure,
     error: &'a graph::Error<SourceFailure<T>>,
@@ -174,12 +169,6 @@ fn traversal<'a, T>(
             Ok(None) => {
                 let error: graph::Error<()> = match error {
                     graph::Error::Resource(error) => graph::Error::Resource(*error),
-                    graph::Error::UnsupportedControlField { source, field } => {
-                        graph::Error::UnsupportedControlField {
-                            source: source.clone(),
-                            field,
-                        }
-                    }
                     // Classified findings were handled above. A contradictory
                     // cycle carrier remains a transport refusal.
                     _ => graph::Error::InvalidIdentity,
@@ -238,50 +227,15 @@ fn versioned_failure_ref<'a, T>(
 /// and opaque resource payload beside the complete projected findings. Source
 /// provenance is resolved here; no host interprets context occurrence IDs.
 pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<Rejection, &T> {
-    let (schema, error) = match error {
-        InheritanceError::Entry(error) => return Ok(capture_failure(error)),
-        InheritanceError::Dictionary { document, error } => {
-            return dictionary_failure_ref(document, error)
-        }
-        InheritanceError::Preparation { schema, error, .. } => (schema.structure(), error.as_ref()),
+    match error {
+        InheritanceError::Entry(error) => Ok(capture_failure(error)),
+        InheritanceError::Dictionary { document, error } => dictionary_failure_ref(document, error),
         InheritanceError::Versioned {
             schema,
             entry,
             error,
-        } => return versioned_failure_ref(schema.structure(), entry, error),
-    };
-    Ok(match error {
-        E::Path(error) => match error {
-            SourceFailure::Host(error) => return Err(error),
-            SourceFailure::Admission(error) => capture_failure(error),
-        },
-        E::Traversal(error) => return traversal(schema, error),
-        E::ParentRequired => rejected(Fault::ParentRequired),
-        E::Document(error) => {
-            errors::document(*error, Step::Prepare).unwrap_or_else(|_| rejected(Fault::Document))
-        }
-        E::Normalize(failure) => {
-            normalized(schema, failure.input.as_ref(), failure.error.clone(), &[])
-        }
-        E::Validation(error) => errors::validation(*error, Step::Prepare)
-            .unwrap_or_else(|_| rejected(Fault::ValidationPolicy)),
-        E::Dependencies(error) => {
-            errors::inheritance_dependencies(error.as_ref().clone(), Step::Prepare)
-                .unwrap_or_else(|_| rejected(Fault::DependencyPolicy))
-        }
-        E::Model(findings) => normalized(
-            schema,
-            None,
-            NormalizationError::Invalid(findings.clone()),
-            &[],
-        ),
-        E::Composition(error) => normalized(
-            schema,
-            error.context_document.as_ref(),
-            error.error.clone(),
-            &[],
-        ),
-    })
+        } => versioned_failure_ref(schema.structure(), entry, error),
+    }
 }
 
 #[cfg(test)]

@@ -48,10 +48,7 @@ A project file that declares `schema_version` declares `environments`,
 `codelists`, `study` and the sections instead, and is read under the rules at
 the `yamaa-v0.5.0` tag ([Rules](../README.md)): one that does not validate
 against `schema_project.yaml` fails with `project_environment_invalid`
-([FUNC-2](functions.md#func-2)). A specification that declares
-`schema_version`, checked or run without a project file, reads no codelist
-binding and names no declared function in a call
-([FUNC-4](functions.md#func-4)).
+([FUNC-2](functions.md#func-2)).
 
 <a id="project-2"></a>
 

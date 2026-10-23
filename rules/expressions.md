@@ -177,7 +177,7 @@ quoted text such as `'DM'` is a literal, and a YAML number, Boolean or null
 is a literal. A forgotten quote therefore fails validation as an unknown
 name. A value field holds a constant, and its bare text is text.
 
-Fails: `unknown_field`, `bare_derivation_scalar`, `redundant_long_form`.
+Fails: `unknown_field`, `redundant_long_form`.
 Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::text_holding_one_literal_lowers_to_it_and_other_text_to_a_formula`, `schema-shorthand`, `schema-expressions`, `rust/crates/yamaa-core/tests/schema_validation.rs::bare_derivation_strings_are_source_references_never_calls`, `rust/crates/yamaa-core/tests/schema_validation.rs::registry_and_bare_derivation_diagnostics_preserve_paths_and_context`.
 
 Text in an expression field is one expression in the derivation context of
@@ -207,13 +207,6 @@ holds a constant, in which bare text is text and YAML null is missing
 ([COLUMN-10](columns.md#column-10)). The specification reader uses YAML 1.2
 core, so only `true`/`false` spellings, numbers and null parse as non-strings;
 quote text that YAML would otherwise parse as one.
-
-A file that declares `schema_version` is read under the rules at the
-`yamaa-v0.5.0` tag, where a bare string derivation or case result is the
-source shorthand `{source: <string>}`: a string that names no variable fails as
-`pattern_mismatch`, a non-string scalar derivation fails as
-`bare_derivation_scalar`, and a written `{source: X}` restates the shorthand
-and fails as `redundant_long_form`.
 
 <a id="expr-6"></a>
 
@@ -372,6 +365,4 @@ The source may be a filtered source carrying the variable with its range,
 filter, selection or absent value ([LOOKUP-1](lookup.md#lookup-1)). Breaks compare
 mathematical values exactly under [VALUE-19](values.md#value-19).
 Without `missing`, a missing source gives missing, the default substitution of
-[COLUMN-10](columns.md#column-10). A file that declares `schema_version` is
-read under the rules at the `yamaa-v0.5.0` tag, where `right: true` makes the
-intervals right-closed.
+[COLUMN-10](columns.md#column-10).

@@ -100,7 +100,7 @@ fn correspond(document: &Document, values: &Values) -> Option<Vec<usize>> {
 
 /// Typed equality across two documents: text with text, integers by value,
 /// floats by value, and collections member by member.
-fn same(first: &Values, a: usize, second: &Values, b: usize) -> bool {
+pub(super) fn same(first: &Values, a: usize, second: &Values, b: usize) -> bool {
     match (&first.nodes()[a], &second.nodes()[b]) {
         (N::Sequence(x), N::Sequence(y)) => {
             x.len() == y.len() && x.iter().zip(y).all(|(&a, &b)| same(first, a, second, b))

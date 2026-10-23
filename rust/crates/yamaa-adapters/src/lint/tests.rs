@@ -91,7 +91,7 @@ fn packed() -> String {
     )
 }
 
-/// CANONICAL written in 0.5, for the 0.5-only tests that #3447 deletes.
+/// CANONICAL written in 0.5, for the 0.5-only tests that #3685 deletes.
 fn legacy() -> String {
     CANONICAL
         .replacen(
@@ -823,7 +823,7 @@ fn a_long_block_scalar_at_the_end_is_left_to_its_author() {
 #[test]
 fn the_block_form_of_a_literal_is_not_a_finding() {
     // `literal_form` retires with `{literal: X}` in 1.0; the lint names no
-    // spelling of a literal. 0.5-only until #3447.
+    // spelling of a literal. 0.5-only until #3685.
     for block in [
         "    derivation:\n      literal: DM\n",
         "    derivation:\n      literal: [1, 2]\n",
@@ -840,7 +840,7 @@ fn the_block_form_of_a_literal_is_not_a_finding() {
 #[test]
 fn source_spellings_are_left_to_the_language() {
     // The language itself refuses {source: X} where the bare string is the
-    // shorthand, so the lint names no source spelling. 0.5-only until #3447.
+    // shorthand, so the lint names no source spelling. 0.5-only until #3685.
     for (from, to) in [
         (
             "    derivation: DM.USUBJID\n",
@@ -2371,7 +2371,7 @@ fn internal_and_inherited_columns_need_no_label() {
     );
     assert!(!names(&inherited).contains(&"missing_label"));
     // A 0.5 null parent names no parent: the standalone file owns its labels.
-    // 0.5-only until #3447: a 1.0 layer without a parent omits the field
+    // 0.5-only until #3685: a 1.0 layer without a parent omits the field
     // (LAYER-2).
     let standalone = MISSING_LABEL.replace(
         "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL",

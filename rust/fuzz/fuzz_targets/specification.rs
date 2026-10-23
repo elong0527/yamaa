@@ -2,14 +2,15 @@
 //! normalization, inheritance and compilation with its static checks. Each
 //! input is an entry specification that a host would check, prepared through
 //! the same shipped-schema entry as the host route. The engine admits the
-//! shipped schema closure once per process, so every execution spends its
-//! time on the input.
+//! shipped 1.0 specification closure once per process, so every execution
+//! spends its time on the input.
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
 use yamaa_adapters::{
     shipped_schema, specification_run::PreparedRun, specification_source::Source,
 };
+use yamaa_core::language::FileType;
 use yamaa_core::resolver::{Captured, Failure, Located, Name, Resolver};
 use yamaa_core::resource::ResourceFailure;
 
@@ -37,7 +38,8 @@ fuzz_target!(
     init: {
         // Admit the closure before the first input, and stop the run if it
         // cannot be: every input would then be refused before it is read.
-        shipped_schema::capture().expect("the shipped schema closure admits");
+        shipped_schema::capture_versioned(FileType::Spec)
+            .expect("the shipped specification closure admits");
     },
     |data: &[u8]| {
         let source = Source {

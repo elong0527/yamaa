@@ -1,11 +1,11 @@
-//! Inheritance application lifecycle over captured documents and explicit path authority.
-use crate::inheritance::{self, InheritanceSourcePort, Layer, Source, VersionedChain};
-use crate::resolution::{self, Failure, Order};
+//! The resolution of a 1.x chain over captured documents and explicit path
+//! authority ([`prepare_versioned`]).
+use crate::inheritance::{InheritanceSourcePort, Source, VersionedChain};
+use crate::resolution::{self, Order};
 use crate::schema::{
     shorthand_key, written_path, CompositionOrigin, Document, DocumentError, DocumentNode as N,
-    LayerCompositionError, LayerNodeOrigin, LayerProvenance, NormalizationError, SchemaDiagnostic,
-    SchemaOrigin, SchemaSource, SchemaStructure, SpecPath, SpecificationDocument, ValidationError,
-    VersionedCompositionError, WindowReference,
+    LayerNodeOrigin, LayerProvenance, NormalizationError, SchemaDiagnostic, SchemaOrigin,
+    SchemaSource, SchemaStructure, SpecPath, VersionedCompositionError,
 };
 use std::collections::BTreeMap;
 
@@ -37,28 +37,6 @@ pub trait PathPort: InheritanceSourcePort {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum Error<E> {
-    #[error("inheritance preparation parent required")]
-    ParentRequired,
-    #[error("inheritance preparation traversal: {0:?}")]
-    Traversal(inheritance::Error<E>),
-    #[error("inheritance preparation path: {0:?}")]
-    Path(E),
-    #[error("inheritance preparation document: {0:?}")]
-    Document(DocumentError),
-    #[error("inheritance preparation composition: {0:?}")]
-    Composition(LayerCompositionError),
-    #[error("inheritance preparation normalize: {0:?}")]
-    Normalize(Box<FailureContext<NormalizationError>>),
-    #[error("inheritance preparation dependencies: {0:?}")]
-    Dependencies(Box<resolution::Error>),
-    #[error("inheritance preparation validation: {0:?}")]
-    Validation(ValidationError),
-    #[error("inheritance preparation model: {0:?}")]
-    Model(Vec<SchemaDiagnostic>),
-}
-
 /// Failed passes retain the arena addressed by semantic context references.
 /// Policy/internal failures need no arena copy and never become language findings.
 #[derive(Debug)]
@@ -67,72 +45,6 @@ pub struct FailureContext<E> {
     pub input: Option<Document>,
     pub provenance: Vec<LayerProvenance>,
     pub sources: Vec<String>,
-}
-fn normalization_context(
-    error: NormalizationError,
-    input: Document,
-    provenance: &[LayerProvenance],
-    layers: &[Layer],
-) -> Box<FailureContext<NormalizationError>> {
-    let retained = matches!(&error, NormalizationError::Invalid(_)).then_some(input);
-    Box::new(FailureContext {
-        error,
-        input: retained,
-        provenance: provenance.to_vec(),
-        sources: layers
-            .iter()
-            .map(|layer| layer.source.identity.clone())
-            .collect(),
-    })
-}
-
-/// Retain each contribution and the pre-normalization document addressed by final origins.
-/// Written logical provenance still addresses the retained postorder layer list.
-#[derive(Debug)]
-pub struct PreparedInheritance {
-    model: SpecificationDocument,
-    layers: Vec<Layer>,
-    provenance: Vec<LayerProvenance>,
-    normalization_input: Document,
-    origins: Vec<SchemaOrigin>,
-    original_origins: Vec<LayerNodeOrigin>,
-    windows: Vec<WindowReference>,
-}
-impl PreparedInheritance {
-    pub fn model(&self) -> &SpecificationDocument {
-        &self.model
-    }
-    pub fn layers(&self) -> &[Layer] {
-        &self.layers
-    }
-    pub fn provenance(&self) -> &[LayerProvenance] {
-        &self.provenance
-    }
-    pub fn normalization_input(&self) -> &Document {
-        &self.normalization_input
-    }
-    pub fn origins(&self) -> &[SchemaOrigin] {
-        &self.origins
-    }
-    /// Every final occurrence retains its original raw-layer or schema-default
-    /// origin across materialization, window expansion, pruning and normalization.
-    /// Diagnostic origins above continue to address the retained final-pass input.
-    pub fn original_origins(&self) -> &[LayerNodeOrigin] {
-        &self.original_origins
-    }
-    pub fn windows(&self) -> &[WindowReference] {
-        &self.windows
-    }
-}
-
-fn rebase<P: PathPort>(
-    layer: &mut Layer,
-    entry: &Source,
-    input_bases: &BTreeMap<String, bool>,
-    port: &mut P,
-) -> Result<(), Error<P::Error>> {
-    layer.document = rebased(&layer.document, &layer.source, entry, input_bases, port)?;
-    Ok(())
 }
 
 /// The layer at `source`, its relative paths respelled from the entry
@@ -189,15 +101,6 @@ enum Rebase<E> {
     Document(DocumentError),
 }
 
-impl<E> From<Rebase<E>> for Error<E> {
-    fn from(error: Rebase<E>) -> Self {
-        match error {
-            Rebase::Path(error) => Self::Path(error),
-            Rebase::Document(error) => Self::Document(error),
-        }
-    }
-}
-
 /// Record the explicit `relative_to` each input of a layer writes: whether it
 /// selects the entry's directory (FILE-2).
 fn record_input_bases(document: &Document, bases: &mut BTreeMap<String, bool>) {
@@ -218,77 +121,6 @@ fn record_input_bases(document: &Document, bases: &mut BTreeMap<String, bool>) {
             );
         }
     }
-}
-
-/// Traverse once, compose, then resolve the composition in dependency order.
-/// No table reads, function activation or output publication occur during this lifecycle.
-pub fn prepare<P: PathPort>(
-    schema: &SchemaStructure,
-    entry: Source,
-    entry_document: Document,
-    port: &mut P,
-) -> Result<PreparedInheritance, Error<P::Error>> {
-    if !inheritance::declares_parent(&entry_document) {
-        return Err(Error::ParentRequired);
-    }
-    let mut layers = inheritance::traverse(schema, entry.clone(), entry_document, port)
-        .map_err(Error::Traversal)?;
-    // Input members merge field by field. Select the final explicit base
-    // before rebasing any contributing path, including a path whose base is
-    // overridden or cleared by a later layer independently from its spelling.
-    let mut input_bases = BTreeMap::new();
-    for layer in &layers {
-        record_input_bases(&layer.document, &mut input_bases);
-    }
-    for layer in &mut layers {
-        rebase(layer, &entry, &input_bases, port)?;
-    }
-    let contributions = layers
-        .iter()
-        .map(|layer| layer.document.clone())
-        .collect::<Vec<_>>();
-    let composed = schema
-        .compose_layers(&contributions)
-        .map_err(Error::Composition)?;
-    let composed_origins = composed
-        .node_origins
-        .iter()
-        .map(|&original| {
-            let Some(layer) = original.layer else {
-                return original;
-            };
-            let mut origin = layers[layer].origins[original.origin.node];
-            origin.generated |= original.origin.generated;
-            LayerNodeOrigin {
-                layer: matches!(origin.source, SchemaSource::Input).then_some(layer),
-                origin,
-            }
-        })
-        .collect::<Vec<_>>();
-    let provenance = composed.provenance;
-    let resolved = resolution::resolve(
-        schema,
-        composed.document,
-        &composed_origins,
-        Order::Dependencies,
-    )
-    .map_err(|failure| match failure {
-        Failure::Normalize { error, input } => {
-            Error::Normalize(normalization_context(error, input, &provenance, &layers))
-        }
-        Failure::Prune(error) => Error::Dependencies(Box::new(error)),
-        Failure::Validation(error) => Error::Validation(error),
-        Failure::Model(findings) => Error::Model(findings),
-    })?;
-    Ok(PreparedInheritance {
-        model: resolved.model,
-        layers,
-        provenance,
-        normalization_input: resolved.pruned,
-        origins: resolved.origins,
-        original_origins: resolved.traced,
-        windows: resolved.windows,
-    })
 }
 
 /// The resolved specification of a 1.x chain: its layers composed root
@@ -383,7 +215,7 @@ fn clear_input_bases(document: &Document, bases: &mut BTreeMap<String, bool>) {
     }
 }
 
-/// Resolve a 1.x chain that [`inheritance::traverse_versioned`] admitted
+/// Resolve a 1.x chain that [`crate::inheritance::traverse_versioned`] admitted
 /// against `schema`, the 1.0 specification closure. Each layer is normalized
 /// at the version it declares, and its copy entries replaced by the columns
 /// they declare, read from the producers their inputs link (SPEC-9); its
@@ -411,9 +243,9 @@ pub fn prepare_versioned<P: PathPort>(
     }
     crate::copy_expansion::expand(schema, chain, &mut normalized, port)?;
     let entry = &chain.layers.last().expect("a chain holds its entry").source;
-    // As in a 0.5 chain, the final base of each input is selected before any
-    // contributing path is respelled; a cleared `relative_to` selects the
-    // declaring layer again.
+    // The final base of each input is selected before any contributing path
+    // is respelled; a cleared `relative_to` selects the declaring layer
+    // again.
     let mut input_bases = BTreeMap::new();
     for layer in &normalized {
         clear_input_bases(&layer.document, &mut input_bases);
@@ -500,8 +332,7 @@ pub fn prepare_versioned<P: PathPort>(
     let failed = |error: NormalizationError, document: Document, shorthand: &[bool]| {
         normalize_failure(error, document, shorthand, &composed.provenance, chain)
     };
-    // The resolution lifecycle a 0.5 chain takes (`resolution::resolve`):
-    // named windows expand, keeping unknown references for pruning; the
+    // Named windows expand, keeping unknown references for pruning; the
     // declarations no root reaches are pruned, and a layered specification's
     // columns are ordered by dependency (LAYER-11, LAYER-13); requiredness and
     // defaults apply to what survives (LAYER-7, LAYER-12); and the strict
@@ -608,42 +439,4 @@ fn normalize_failure<E>(
             .map(|layer| layer.source.identity.clone())
             .collect(),
     }))
-}
-
-/// Borrow original contributor identities for human attribution only. Diagnostic
-/// facts and portable public context remain unchanged. Ownership of both the
-/// composed path index and layer identities stays with the rejected preparation.
-pub fn diagnostic_origins<E>(error: &Error<E>) -> Vec<(&str, &str)> {
-    fn origins<'a, T>(
-        context: &'a FailureContext<T>,
-        findings: &'a [SchemaDiagnostic],
-    ) -> Vec<(&'a str, &'a str)> {
-        findings
-            .iter()
-            .filter_map(|finding| {
-                let contribution = context
-                    .provenance
-                    .iter()
-                    .filter(|origin| {
-                        finding.path == origin.path
-                            || finding
-                                .path
-                                .strip_prefix(&origin.path)
-                                .is_some_and(|suffix| suffix.starts_with(['.', '[']))
-                    })
-                    .max_by_key(|origin| origin.path.len())?;
-                Some((
-                    finding.path.as_str(),
-                    context.sources.get(contribution.layer)?.as_str(),
-                ))
-            })
-            .collect()
-    }
-    match error {
-        Error::Normalize(context) => match &context.error {
-            NormalizationError::Invalid(findings) => origins(context, findings),
-            _ => Vec::new(),
-        },
-        _ => Vec::new(),
-    }
 }

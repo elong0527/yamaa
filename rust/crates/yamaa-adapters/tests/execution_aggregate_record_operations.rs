@@ -596,31 +596,11 @@ S1,002,2024-06
             }
         }
 
-        /// The duplicate half keeps a 0.5 document: a 1.0 `derivations` map
-        /// cannot repeat a name, since a YAML mapping refuses a repeated key.
+        /// A binding that reads a later binding is refused (P-BIND-1); a 1.0
+        /// `derivations` map cannot repeat a name, since a YAML mapping refuses
+        /// a repeated key.
         #[test]
-        fn original_aggregate_bindings_reject_duplicates_and_forward_references() {
-            let binding = "- name: QSNUM\n  type: float\n  derivation: QS.QSORRES";
-            let fixture = original_derive_fixture(
-                &format!("{binding}\n{binding}"),
-                "SUM(QSNUM)",
-                ORIGINAL_QS,
-            );
-            let path = fixture.0.join("spec.yaml");
-            let legacy = fs::read_to_string(&path)
-                .unwrap()
-                .edit("yamaa: \"1.0\"\ntype: spec\n", "schema_version: \"1.0\"\n")
-                .edit("        derivations:\n", "        derive:\n")
-                .edit(
-                    "QS.QSTESTCD = 'PF01'\"\n",
-                    "QS.QSTESTCD = 'PF01'\"\n    derivations: {}\n",
-                );
-            fs::write(&path, legacy).unwrap();
-            let issues = original_derive_issues(&fixture);
-            assert_eq!(issues[0].condition(), "invalid_derive_step");
-            let context = yamaa_core::json::Value::Object(issues[0].context.clone());
-            assert!(context["reason"].as_str().unwrap().contains("unique"));
-
+        fn original_aggregate_bindings_reject_forward_references() {
             let fixture = original_derive_fixture(
                 "DOUBLED:\n  type: float\n  derivation: QSNUM\nQSNUM:\n  type: float\n  derivation: QS.QSORRES",
                 "SUM(DOUBLED)",

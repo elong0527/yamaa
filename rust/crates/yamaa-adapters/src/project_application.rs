@@ -33,7 +33,6 @@ pub fn prepare(
         &entry,
         &environment,
         host,
-        crate::shipped_schema::capture().map_err(Error::Schema)?,
         crate::shipped_schema::capture_project().map_err(Error::Schema)?,
     )
     .map_err(Error::Project)
@@ -350,8 +349,7 @@ fn inheritance_issues<'a>(
     use crate::specification_source::{Error as S, InheritanceError as I, SourceFailure};
     use crate::yaml_decode::DecodeFailure;
     use yamaa_core::{
-        dictionary_preparation::Cause, inheritance::Error as G,
-        inheritance_preparation::Error as E, resolution::Error as D,
+        dictionary_preparation::Cause, inheritance::Error as G, resolution::Error as D,
         schema::NormalizationError as N,
     };
     // Text the YAML reader refuses, in the entry or in a parent layer, is a
@@ -377,27 +375,6 @@ fn inheritance_issues<'a>(
                 ..
             }
         ),
-        I::Preparation { error, .. } => match error.as_ref() {
-            E::Traversal(
-                G::Unavailable { .. }
-                | G::InvalidParent { .. }
-                | G::Cycle { .. }
-                | G::Version { .. }
-                | G::Header { .. },
-            ) => true,
-            E::Traversal(G::Host(SourceFailure::Admission(S::Decode { error, .. }))) => {
-                refused(error)
-            }
-            E::Traversal(G::Layer {
-                error: N::Invalid(_),
-                ..
-            }) => true,
-            E::Normalize(failure) => matches!(&failure.error, N::Invalid(_)),
-            E::Model(_) => true,
-            E::Composition(failure) => matches!(&failure.error, N::Invalid(_)),
-            E::Dependencies(error) => matches!(**error, D::Invalid(_)),
-            _ => false,
-        },
         I::Versioned { error, .. } => {
             use crate::document::{ProducerFailure as P, SpecificationError as V};
             match error.as_ref() {
@@ -419,7 +396,6 @@ fn inheritance_issues<'a>(
                     G::Unavailable { .. }
                     | G::InvalidParent { .. }
                     | G::Cycle { .. }
-                    | G::Version { .. }
                     | G::Header { .. },
                 ) => true,
                 V::Traversal(G::Layer {
@@ -577,12 +553,23 @@ mod resource_tests {
     #[test]
     fn layered_validation_depth_refusal_keeps_its_preparation_outcome_on_both_routes() {
         use yamaa_core::schema::ValidationError;
-        let error = crate::specification_source::InheritanceError::<crate::file_resources::Error>::Preparation {
-            schema: crate::shipped_schema::capture().unwrap(),
-            error: Box::new(yamaa_core::inheritance_preparation::Error::Validation(
-                ValidationError::Depth { limit: 128 },
+        // A parent layer whose validation exceeds the semantic depth.
+        let error = crate::specification_source::InheritanceError::<crate::file_resources::Error>::Versioned {
+            schema: crate::shipped_schema::capture_versioned(yamaa_core::language::FileType::Spec)
+                .unwrap(),
+            entry: "entry.yaml".into(),
+            error: Box::new(crate::document::SpecificationError::Traversal(
+                yamaa_core::inheritance::Error::Layer {
+                    source: "parent.yaml".into(),
+                    entry: "entry.yaml".into(),
+                    input: crate::yaml_decode::decode_yaml(b"yamaa: '1.0'\n")
+                        .unwrap()
+                        .document,
+                    error: yamaa_core::schema::NormalizationError::Validation(
+                        ValidationError::Depth { limit: 128 },
+                    ),
+                },
             )),
-            captured_parents: Vec::new(),
         };
         let rejection = crate::specification_diagnostics::inheritance_failure_ref(&error).unwrap();
         assert!(matches!(rejection, Rejection::Limit(_)));

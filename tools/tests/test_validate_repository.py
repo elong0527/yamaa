@@ -305,7 +305,7 @@ class TestConditionRegistry(unittest.TestCase):
         conditions = changed["conditions"]
         del conditions["unknown_window"]["message"]
         conditions["window_order_by_required"]["message"] = "Needs an order_by."
-        conditions["window_order_by_forbidden"]["message"] = "{operation} takes {{no}"
+        conditions["value_not_permitted"]["message"] = "{operation} takes {{no}"
         conditions["zero_offset"]["message"] = "an offset of {Offset}  is zero\n"
         conditions["xpt_last_row_blank"]["severity"] = "error"
 
@@ -318,7 +318,7 @@ class TestConditionRegistry(unittest.TestCase):
             errors,
             [
                 f"{label}.unknown_window.message: expected non-empty text",
-                f"{label}.window_order_by_forbidden.message: expected "
+                f"{label}.value_not_permitted.message: expected "
                 "`{key}` placeholders and doubled literal braces",
                 f"{label}.window_order_by_required.message: expected a "
                 "lower-case start or a placeholder",

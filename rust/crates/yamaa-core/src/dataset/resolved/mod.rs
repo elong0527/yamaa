@@ -348,7 +348,6 @@ pub enum Op {
     StrPad(StringPad),
     SourceBinding {
         absent: Option<Value>,
-        variable_absent: bool,
         variable: String,
         path: String,
     },

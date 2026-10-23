@@ -519,9 +519,7 @@ condition only on a violated check. A handler answers the condition its
 operation raises without it, and its `RULE` is the rule that condition cites:
 `unconvertible` cites the conversion rule of [VALUE-3](values.md#value-3) and
 `absent` the absence rule of [LOOKUP-24](lookup.md#lookup-24), whose
-`unmatched_key` a read that requires a match raises instead. A file that
-declares `schema_version` cites the unknown-name rule of
-[NAME-3](names.md#name-3) for `absent`, as at the `yamaa-v0.5.0` tag. `RULE`
+`unmatched_key` a read that requires a match raises instead. `RULE`
 is missing for a handler whose operation raises no condition without it, such
 as a `missing` handler of `mapping`, `cut` or `str_case`, for a default
 substitution and an `impute` `fallback`, which answer no condition, and

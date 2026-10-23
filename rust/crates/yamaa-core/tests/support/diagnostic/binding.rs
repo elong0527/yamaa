@@ -9,7 +9,7 @@ pub(crate) use yamaa_core::{
     diagnostic::{ConditionCode, Context, Diagnostic},
     reference_binding::{Catalog, Dataset, Field},
     reference_scope::{self, Phase, Reach, Scope},
-    schema::{Document, DocumentNode as N, SpecificationDocument},
+    schema::{Document, DocumentNode as N},
     specification::{
         BindError, BindFinding, PrepareError, PreparedSpecification, SourceDeclaration,
         SourceProfile,
@@ -62,32 +62,12 @@ pub(crate) fn column(name: &str, derivation: Option<T>) -> T {
     T::map(fields)
 }
 pub(crate) fn compile(value: T, rows: Option<T>) -> PreparedSpecification {
-    prepare(&tree(value, rows, false).document()).unwrap()
+    prepare(&tree(value, rows).document()).unwrap()
 }
-/// [`compile`] for a cause only 0.5 reaches, which keeps its 0.5 document
-/// until #3447 deletes the 0.5 path and retires the cause.
-pub(crate) fn compile_v0_5(value: T) -> PreparedSpecification {
-    legacy(tree(value, None, true)).unwrap()
-}
-/// Prepare the 0.5 specification `tree`.
-pub(crate) fn legacy(tree: T) -> Result<PreparedSpecification, PrepareError> {
-    let model = SpecificationDocument::admit(tree.document())
-        .unwrap()
-        .unwrap();
-    PreparedSpecification::prepare(&model)
-}
-/// The specification [`compile`] prepares; `legacy` writes it in 0.5.
-fn tree(value: T, rows: Option<T>, legacy: bool) -> T {
-    let read = if legacy {
-        op("source", "variable", "SRC.ID")
-    } else {
-        expression("SRC.ID")
-    };
-    let mut fields = if legacy {
-        vec![("schema_version", T::text("1.0"))]
-    } else {
-        header()
-    };
+/// The specification [`compile`] prepares.
+fn tree(value: T, rows: Option<T>) -> T {
+    let read = expression("SRC.ID");
+    let mut fields = header();
     fields.extend([
         ("domain", T::text("TEST")),
         ("base", T::text("SRC")),
@@ -435,12 +415,8 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
 pub(crate) fn window_reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
     let source = source();
-    // `legacy` marks the cause only 0.5 reaches, `window_order_by_forbidden`:
-    // a 1.0 `baseline_flag` admits `window.order_by` (D58, D101), and #3447
-    // retires the cause with its 0.5 document.
-    for (legacy, operation, payload, condition, rule, suffix, values) in [
+    for (operation, payload, condition, rule, suffix, values) in [
         (
-            false,
             "row_value",
             T::map(vec![
                 ("source", T::text("ID")),
@@ -456,7 +432,6 @@ pub(crate) fn window_reached() -> BTreeSet<ConditionCode> {
             vec![("offset", V::from(0))],
         ),
         (
-            false,
             "rank",
             T::map(vec![]),
             "window_order_by_required",
@@ -465,24 +440,6 @@ pub(crate) fn window_reached() -> BTreeSet<ConditionCode> {
             vec![("operation", text("rank"))],
         ),
         (
-            true,
-            "baseline_flag",
-            T::map(vec![
-                ("date", T::text("ID")),
-                ("reference_date", T::text("ID")),
-                ("value", T::text("ID")),
-                (
-                    "window",
-                    T::map(vec![("order_by", T::List(vec![T::text("ID")]))]),
-                ),
-            ]),
-            "window_order_by_forbidden",
-            "WINDOW-5",
-            ".window.order_by",
-            vec![("operation", text("baseline_flag"))],
-        ),
-        (
-            false,
             "row_number",
             T::map(vec![(
                 "window",
@@ -498,11 +455,7 @@ pub(crate) fn window_reached() -> BTreeSet<ConditionCode> {
         ),
     ] {
         let value = T::map(vec![("value", T::map(vec![(operation, payload)]))]);
-        let prepared = if legacy {
-            compile_v0_5(value)
-        } else {
-            compile(value, None)
-        };
+        let prepared = compile(value, None);
         let found = failures(&prepared);
         assert_eq!(found.len(), 1);
         let BindFinding::Window(window) = &found[0] else {
@@ -1159,165 +1112,6 @@ pub fn verification_declarations_reached() -> BTreeSet<ConditionCode> {
         assert_eq!(prepared.source().path, "source.csv");
     }
     reached
-}
-
-/// Inferred source keys share the causes of every other lookup (LOOKUP-25).
-/// Only 0.5 infers keys (D23): the document stays 0.5 until #3447 deletes
-/// key inference.
-pub(crate) fn implicit_source_reached() -> BTreeSet<ConditionCode> {
-    let tree = T::map(vec![
-        ("schema_version", T::text("1.0")),
-        ("domain", T::text("TEST")),
-        ("base", T::text("SRC")),
-        (
-            "input",
-            T::map(vec![
-                ("SRC", T::map(vec![("path", T::text("source.csv"))])),
-                ("DONOR", T::map(vec![("path", T::text("donor.csv"))])),
-            ]),
-        ),
-        ("keys", T::List(vec![T::text("ID")])),
-        (
-            "columns",
-            T::List(vec![
-                column("ID", Some(op("source", "variable", "SRC.ID"))),
-                column("VALUE", Some(op("source", "variable", "DONOR.V"))),
-            ]),
-        ),
-        (
-            "output",
-            T::map(vec![
-                ("path", T::text("result.csv")),
-                ("columns", T::List(vec![T::text("ID"), T::text("VALUE")])),
-            ]),
-        ),
-    ]);
-    let prepared = legacy(tree).unwrap();
-    let driver = TableSchema::new(vec![Column {
-        name: "ID".into(),
-        kind: ColumnType::Int,
-    }])
-    .unwrap();
-    let mut reached = BTreeSet::new();
-    for (name, kind, condition, rule, context) in [
-        (
-            "OTHER",
-            ColumnType::Int,
-            "no_applicable_keys",
-            "LOOKUP-5",
-            vec![
-                ("dataset", text("DONOR")),
-                ("keys", V::Array(vec![text("ID")])),
-                ("hint", text("declare a named intermediate with its `key`")),
-            ],
-        ),
-        (
-            "ID",
-            ColumnType::Str,
-            "incompatible_input_type",
-            "LOOKUP-9",
-            vec![
-                ("source", text("ID")),
-                ("expected", text("int")),
-                ("actual", text("str")),
-            ],
-        ),
-    ] {
-        let donor = TableSchema::new(vec![
-            Column {
-                name: name.into(),
-                kind,
-            },
-            Column {
-                name: "V".into(),
-                kind: ColumnType::Int,
-            },
-        ])
-        .unwrap();
-        let Err(BindError::Invalid(findings)) = prepared.bind_sources(&[&driver, &donor]) else {
-            panic!("inferred key admission");
-        };
-        assert_eq!(findings.len(), 1);
-        reached.insert(check(
-            findings[0]
-                .diagnostics(prepared.source())
-                .unwrap()
-                .remove(0),
-            condition,
-            Some(rule),
-            &["columns.VALUE.derivation.source"],
-            context,
-        ));
-    }
-    reached
-}
-
-/// Omitted named keys share the inference service and the one no-applicable-keys cause.
-/// Only 0.5 infers keys (D23): the document stays 0.5 until #3447 deletes
-/// key inference.
-pub(crate) fn intermediate_key_reached() -> BTreeSet<ConditionCode> {
-    let tree = T::map(vec![
-        ("schema_version", T::text("1.0")),
-        ("domain", T::text("TEST")),
-        ("base", T::text("SRC")),
-        (
-            "input",
-            T::map(vec![
-                ("SRC", T::map(vec![("path", T::text("source.csv"))])),
-                ("DONOR", T::map(vec![("path", T::text("donor.csv"))])),
-            ]),
-        ),
-        ("keys", T::List(vec![T::text("ID")])),
-        (
-            "intermediates",
-            T::List(vec![T::map(vec![
-                ("id", T::text("P")),
-                ("dataset", T::text("DONOR")),
-                ("require_match", T::boolean(true)),
-            ])]),
-        ),
-        (
-            "columns",
-            T::List(vec![column("ID", Some(op("source", "variable", "SRC.ID")))]),
-        ),
-        (
-            "output",
-            T::map(vec![
-                ("path", T::text("result.csv")),
-                ("columns", T::List(vec![T::text("ID")])),
-            ]),
-        ),
-    ]);
-    let prepared = legacy(tree).unwrap();
-    let driver = TableSchema::new(vec![Column {
-        name: "ID".into(),
-        kind: ColumnType::Int,
-    }])
-    .unwrap();
-    let donor = TableSchema::new(vec![Column {
-        name: "OTHER".into(),
-        kind: ColumnType::Int,
-    }])
-    .unwrap();
-    let Err(BindError::Invalid(findings)) = prepared.bind_sources(&[&driver, &donor]) else {
-        panic!("named inference failure");
-    };
-    assert_eq!(findings.len(), 1);
-    [check(
-        findings[0]
-            .diagnostics(prepared.source())
-            .unwrap()
-            .remove(0),
-        "no_applicable_keys",
-        Some("LOOKUP-5"),
-        &["intermediates[0]"],
-        vec![
-            ("dataset", text("DONOR")),
-            ("keys", V::Array(vec![text("ID")])),
-            ("hint", text("declare the `key` explicitly")),
-        ],
-    )]
-    .into()
 }
 
 /// Without row templates, a key computed by an aggregate reads every record

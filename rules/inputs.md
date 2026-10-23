@@ -21,7 +21,7 @@ unknown extension falls back to a default: it fails during validation, before
 any byte is read.
 
 Fails: `source_profile_unknown`.
-Evidence: `negative-source-unknown-format`, `schema-parquet`, `sdtm-dm-odm-snapshot`, `negative-odm-transactional`, `negative-odm-no-clinical-data`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`, `rust/crates/yamaa/tests/odm_input.rs::nothing_is_sniffed_so_an_archive_named_xml_is_refused_as_xml`, `rust/crates/yamaa/tests/odm_input.rs::a_0_5_file_keeps_refusing_an_xml_input`.
+Evidence: `negative-source-unknown-format`, `schema-parquet`, `sdtm-dm-odm-snapshot`, `negative-odm-transactional`, `negative-odm-no-clinical-data`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`, `rust/crates/yamaa/tests/odm_input.rs::nothing_is_sniffed_so_an_archive_named_xml_is_refused_as_xml`.
 
 The extension selects the profile under
 [OUTPUT-5](output.md#output-5); a study that stores `DM.CSV`

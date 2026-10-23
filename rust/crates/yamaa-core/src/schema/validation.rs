@@ -96,8 +96,6 @@ pub enum SchemaContext {
     Boolean(bool),
     /// A decoded value rejected by a schema descriptor or value constraint.
     ValueKind(DocumentKind),
-    /// A decoded collection or member rejected by inheritance layer admission.
-    LayerKind(DocumentKind),
     Count(usize),
     Null,
     InputValue(usize),
@@ -151,9 +149,6 @@ pub enum NullPolicy {
     /// drops the field. A keyed member itself, a list item and a registry payload
     /// such as `literal: null` are values, never clears.
     Absent,
-    /// As `Absent`, except normalization keeps each null as the clear marker a
-    /// composed layer applies to the value it inherits.
-    Clear,
 }
 impl NullPolicy {
     pub(super) fn clears(self) -> bool {
@@ -161,10 +156,9 @@ impl NullPolicy {
     }
 }
 
-/// The language a document is written in (#3030 D75). Two rules belong to the
+/// The language a document is written in (#3030 D75). One rule belongs to the
 /// 0.5 language alone: a bare string in a derivation or case result is the
-/// source shorthand (EXPR-5 at the `yamaa-v0.5.0` tag), and a bare derivation
-/// scalar is refused with a hint to write `{literal: ...}`. A 1.x document's
+/// source shorthand (EXPR-5 at the `yamaa-v0.5.0` tag). A 1.x document's
 /// expression fields hold the closed grammar's text instead, and its findings
 /// write the spec path notation: a key that is not a bare segment is quoted
 /// (P-CLR-1, P-CLR-2).
@@ -264,7 +258,6 @@ pub(super) fn matches_member(
         schema,
         input,
         active: active.to_vec(),
-        resolved_output: false,
         nulls,
         written: false,
         surface: Surface::Legacy,
@@ -425,7 +418,6 @@ struct Run<'a> {
     schema: &'a SchemaStructure,
     input: &'a Document,
     active: Vec<(usize, usize)>,
-    resolved_output: bool,
     nulls: NullPolicy,
     /// The input is the document as its author wrote it, where a long form
     /// that only restates its shorthand fails (SCHEMA-15). A canonical document
@@ -646,11 +638,7 @@ impl Run<'_> {
                 {
                     diagnostics.push(self.diagnostic(
                         site.child(site.value, &path),
-                        if self.resolved_output && site.path.is_empty() && field.name == "output" {
-                            ConditionCode::SchemaResolvedOutputRequired
-                        } else {
-                            ConditionCode::SchemaMissingRequiredField
-                        },
+                        ConditionCode::SchemaMissingRequiredField,
                         vec![
                             ("field", Self::text(&field.name)),
                             ("class", Self::text(name)),
@@ -1125,13 +1113,6 @@ impl Run<'_> {
                 SchemaAliasKind::Descriptor(descriptor) => {
                     let members = schema.descriptors()[descriptor].descriptor.members();
                     let diagnostics = self.union(members, Some(name), site.deeper())?;
-                    if self.surface == Surface::Legacy
-                        && matches!(name, "derivation" | "untyped_intermediate_derivation")
-                        && !diagnostics.is_empty()
-                        && !matches!(self.input.nodes()[site.value], N::Text(_) | N::Mapping(_))
-                    {
-                        return Ok(vec![self.diagnostic(site,ConditionCode::SchemaBareDerivationScalar,vec![("actual",SchemaContext::ValueKind(self.input.nodes()[site.value].kind())),("hint",Self::text("a bare derivation must be a string column reference such as ADSL.AGE; write a fixed value as {literal: ...}"))])]);
-                    }
                     if !diagnostics.is_empty() {
                         let mut matching = false;
                         for member in members {
@@ -1365,7 +1346,6 @@ impl SchemaStructure {
             schema: self,
             input,
             active: Vec::new(),
-            resolved_output: false,
             nulls: NullPolicy::Value,
             written,
             surface,
@@ -1386,42 +1366,17 @@ impl SchemaStructure {
             },
         )
     }
-    /// Validate a raw document, checking its version before every other authored field.
+    /// Validate a raw document as its author wrote it against the root class.
     pub fn validate_document(
         &self,
         input: &Document,
-    ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
-        self.validate_document_mode(input, false, NullPolicy::Value)
-    }
-    /// Validate a specification, in which a null field or mapping entry is absent.
-    pub fn validate_specification(
-        &self,
-        input: &Document,
-    ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
-        self.validate_document_mode(input, false, NullPolicy::Absent)
-    }
-    /// Final inheritance validation assigns the resolved-output rule to an output
-    /// to which no contribution survived. Other required fields retain schema ownership.
-    pub fn validate_resolved_document(
-        &self,
-        input: &Document,
-    ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
-        self.validate_document_mode(input, true, NullPolicy::Absent)
-    }
-    fn validate_document_mode(
-        &self,
-        input: &Document,
-        resolved_output: bool,
-        nulls: NullPolicy,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         let mut run = Run {
             schema: self,
             input,
             active: Vec::new(),
-            resolved_output,
-            nulls,
-            // A resolved document is the canonical result of normalization.
-            written: !resolved_output,
+            nulls: NullPolicy::Value,
+            written: true,
             surface: Surface::Legacy,
             sites: None,
         };
@@ -1437,30 +1392,6 @@ impl SchemaStructure {
         };
         if !matches!(&input.nodes()[input.root()],N::Mapping(items) if !items.is_empty()) {
             return run.invalid(site, &self.root_class().name);
-        }
-        let version = run.field(site.value, "schema_version")?;
-        if !version
-            .is_some_and(|id| matches!(&input.nodes()[id],N::Text(value) if value==self.version()))
-        {
-            let mut context = vec![("expected", Run::text(self.version()))];
-            match version {
-                None => context.push(("actual", SchemaContext::Null)),
-                Some(id) => match &input.nodes()[id] {
-                    N::Mapping(_) | N::Sequence(_) => context.push((
-                        "actual_type",
-                        SchemaContext::ValueKind(input.nodes()[id].kind()),
-                    )),
-                    _ => context.push(("actual", SchemaContext::InputValue(id))),
-                },
-            };
-            return Ok(vec![run.diagnostic(
-                Site {
-                    path: "schema_version",
-                    ..site
-                },
-                ConditionCode::SchemaVersionMismatch,
-                context,
-            )]);
         }
         run.class(
             &self.root_class().fields,
@@ -1548,7 +1479,6 @@ impl SchemaStructure {
             schema: self,
             input,
             active: Vec::new(),
-            resolved_output: false,
             nulls: NullPolicy::Value,
             written: true,
             surface: Surface::Versioned,
@@ -1581,7 +1511,6 @@ impl SchemaStructure {
             schema: self,
             input,
             active: Vec::new(),
-            resolved_output: false,
             nulls: NullPolicy::Value,
             written: true,
             surface: Surface::Versioned,
@@ -1644,7 +1573,6 @@ impl SchemaStructure {
             schema: self,
             input,
             active: Vec::new(),
-            resolved_output: false,
             nulls,
             written,
             surface,

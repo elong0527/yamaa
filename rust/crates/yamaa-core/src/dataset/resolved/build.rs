@@ -847,7 +847,6 @@ impl<'p> Builder<'p> {
             E::SourceBinding {
                 source,
                 absent,
-                variable_absent,
                 selection_declared,
                 variable,
                 path: binding,
@@ -855,7 +854,6 @@ impl<'p> Builder<'p> {
                 node.kind = ExprKind::SourceBinding;
                 node.op = Op::SourceBinding {
                     absent: absent.clone(),
-                    variable_absent: *variable_absent,
                     variable: variable.clone(),
                     path: binding.clone(),
                 };
@@ -1107,8 +1105,8 @@ impl<'p> Builder<'p> {
     }
 
     /// A named read counts its own `multiple_matches` and absence at the
-    /// reading path: `absent` on a 1.x tree, as an implicit join read counts
-    /// its absence, and `no_match` on a 0.5 tree.
+    /// reading path, its absence under the intermediate's absence handler,
+    /// as an implicit join read counts its absence.
     fn observed(
         &mut self,
         node: &mut Node,

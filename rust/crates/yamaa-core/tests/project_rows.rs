@@ -6,21 +6,18 @@ mod project {
         //! Execute compiler-selected row/default calls without a host-authored plan.
         use crate::support::project_call_compiler as support;
         use std::cell::RefCell;
-        // The 0.5 document this family keeps until #3447 (#3435).
-        use support::{call, function, v0_5::specification_with_rows, Tree};
+        use support::{call, environment, specification_with_rows, Tree};
         use yamaa_core::function_invocation::{Argument, FunctionPort, HostError};
         use yamaa_core::{
             function_signature::{InvocationPlan, ProjectInvocationPlan},
             schema::DocumentNode as N,
-            specification::PreparedSpecification,
             table::{CellError, Column, TableAccess, TableSchema, ValueRef},
             value::{ColumnType, Value},
         };
+        /// An integer written as a YAML scalar, which a 1.0 expression field
+        /// reads as a literal (D18).
         fn literal(value: i64) -> Tree {
-            Tree::map(vec![(
-                "literal",
-                Tree::Scalar(N::Integer(value.to_string())),
-            )])
+            Tree::Scalar(N::Integer(value.to_string()))
         }
         fn template(id: &str, key: Tree, second: bool) -> Tree {
             let mut derivations =
@@ -98,22 +95,13 @@ mod project {
                     ("D", "int", literal(0)),
                 ],
                 vec![
-                    template(
-                        "first",
-                        Tree::map(vec![(
-                            "source",
-                            Tree::map(vec![("variable", Tree::text("SRC.ID"))]),
-                        )]),
-                        false,
-                    ),
+                    template("first", Tree::text("SRC.ID"), false),
                     template("second", literal(2), true),
                 ],
             );
-            let prepared = PreparedSpecification::prepare_with_project(
-                &spec,
-                &[function("unused"), function("id")],
-            )
-            .unwrap();
+            let prepared =
+                crate::support::specification::prepare_in(&spec, &environment(&["unused", "id"]))
+                    .unwrap();
             let table = Table {
                 schema: TableSchema::new(vec![Column {
                     name: "ID".into(),

@@ -158,7 +158,7 @@ separate documents, and each document carries the controlled-terminology
 standards cited by its bound codelists' sources.
 
 Fails: `standard_model_mismatch`, `duplicate_identifier`.
-Evidence: `sdtm-dm-metadata`, `schema-section-standards`, `negative-section-standard-model`, `negative-section-standard-repeated`, `rust/crates/yamaa/tests/language_header.rs::a_section_lists_only_specifications_of_its_model`, `rust/crates/yamaa/tests/language_header.rs::a_dataset_binds_the_section_standard_it_selects`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_names_a_1_0_section_s_guides_by_their_place_in_standards`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_requires_a_1_0_section_s_standards_by_their_1_0_name`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SectionStandardModel`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SectionStandardDuplicate`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionStandardFamily`, `rust/crates/yamaa-core/tests/schema_submission.rs::every_shipped_guide_spelling_is_closed_metadata_not_family_composition`.
+Evidence: `sdtm-dm-metadata`, `schema-section-standards`, `negative-section-standard-model`, `negative-section-standard-repeated`, `rust/crates/yamaa/tests/language_header.rs::a_section_lists_only_specifications_of_its_model`, `rust/crates/yamaa/tests/language_header.rs::a_dataset_binds_the_section_standard_it_selects`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_names_a_1_0_section_s_guides_by_their_place_in_standards`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_requires_a_1_0_section_s_standards_by_their_1_0_name`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SectionStandardModel`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SectionStandardDuplicate`, `rust/crates/yamaa-core/tests/schema_submission.rs::every_shipped_guide_spelling_is_closed_metadata_not_family_composition`.
 
 Composition checks every entry of the list. A guide outside the section's
 model fails with `standard_model_mismatch` at `<section>.standards[<i>].name`,
@@ -178,8 +178,8 @@ generated identifier stays `STD.<name>` ([DEFINE-9](#define-9)). A guide's
 [SUB-3](submission.md#sub-3) checks the bound guide against the model the
 specification declares, which a 1.0 section's listing makes the section's,
 so a guide this rule admits belongs to it. A project file that declares
-`schema_version` writes one guide, as `standard`, and SUB-3 refuses one
-outside the section's family at `<section>.standard.name`.
+`schema_version` writes one guide, as `standard`, which composition does not
+check against the section's model.
 
 <a id="define-7"></a>
 
@@ -228,8 +228,7 @@ exactly. `unknown_standard` is reported at
 declaration order, in `standards`. Names are unique within a section
 ([DEFINE-6](#define-6)), so a selection is never ambiguous. A specification
 checked or run alone selects nothing, so its `submission.standard` is
-resolved only here, and a specification that declares `schema_version`
-declares none. The rules that depend on the model are checked on the
+resolved only here. The rules that depend on the model are checked on the
 specification alone ([SUB-23](submission.md#sub-23)), and again here under
 the section's model.
 

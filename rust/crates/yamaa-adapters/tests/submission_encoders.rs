@@ -10,92 +10,21 @@ mod submission_encoders {
         use std::convert::Infallible;
         use yamaa_core::{
             project_terminology as ct,
-            schema::{Document, DocumentNode as N},
             submission_composition::{self as composition, Finding, Input, Study},
             table::{CellError, Column, TableAccess, TableSchema, ValueRef},
             value::{ColumnType, Value},
         };
-
-        /// The tree composition reads for a submission test document: the
-        /// document as a normalized 0.5 model holds it, each column's and row
-        /// template's derivation in its handled class (`{value: ...}`),
-        /// lowered once.
-        pub(crate) fn submission_tree(document: &Document) -> yamaa_core::ast::Spec {
-            /// Where a copied node sits.
-            #[derive(Clone, Copy, PartialEq)]
-            enum At {
-                Root,
-                Columns,
-                Column,
-                Rows,
-                Row,
-                RowDerivations,
-                Other,
-            }
-            fn copy(document: &Document, node: usize, at: At, nodes: &mut Vec<N>) -> usize {
-                let copied = match &document.nodes()[node] {
-                    N::Sequence(items) => {
-                        let inner = match at {
-                            At::Columns => At::Column,
-                            At::Rows => At::Row,
-                            _ => At::Other,
-                        };
-                        N::Sequence(
-                            items
-                                .iter()
-                                .map(|&item| copy(document, item, inner, nodes))
-                                .collect(),
-                        )
-                    }
-                    N::Mapping(entries) => {
-                        let mut copied = Vec::with_capacity(entries.len());
-                        for &(key, value) in entries {
-                            let name = match &document.nodes()[key] {
-                                N::Text(text) => text.as_str(),
-                                _ => "",
-                            };
-                            let (inner, wrapped) = match (at, name) {
-                                (At::Root, "columns") => (At::Columns, false),
-                                (At::Root, "rows") => (At::Rows, false),
-                                (At::Row, "derivations") => (At::RowDerivations, false),
-                                (At::Column, "derivation") | (At::RowDerivations, _) => {
-                                    (At::Other, document.field(value, "value").is_none())
-                                }
-                                _ => (At::Other, false),
-                            };
-                            let key = copy(document, key, At::Other, nodes);
-                            let mut value = copy(document, value, inner, nodes);
-                            if wrapped {
-                                let field = nodes.len();
-                                nodes.push(N::Text("value".into()));
-                                nodes.push(N::Mapping(vec![(field, value)]));
-                                value = nodes.len() - 1;
-                            }
-                            copied.push((key, value));
-                        }
-                        N::Mapping(copied)
-                    }
-                    other => other.clone(),
-                };
-                nodes.push(copied);
-                nodes.len() - 1
-            }
-            let mut nodes = Vec::new();
-            let root = copy(document, document.root(), At::Root, &mut nodes);
-            let normalized = Document::new(nodes, root).unwrap();
-            yamaa_core::front_end::v0_5::lower_document(&normalized, None).into_spec()
-        }
 
         pub(crate) fn metadata() -> Tree {
             Tree::map(vec![
                 ("core", Tree::text("Exp")),
                 ("length", Tree::integer("8")),
                 (
-                    "origin",
-                    Tree::map(vec![
+                    "origins",
+                    Tree::list(vec![Tree::map(vec![
                         ("type", Tree::text("Assigned")),
                         ("source", Tree::text("Sponsor")),
-                    ]),
+                    ])]),
                 ),
             ])
         }
@@ -104,12 +33,17 @@ mod submission_encoders {
                 ("name", Tree::text(name)),
                 ("type", Tree::text("str")),
                 ("label", Tree::text("Independent column")),
-                ("derivation", Tree::map(vec![("literal", Tree::text("X"))])),
+                ("derivation", Tree::text("'X'")),
                 ("submission", metadata()),
             ])
         }
+        /// A 1.0 specification (D4) of the `SDTM` model (D25), which the
+        /// `sdtm` section lists.
         pub(crate) fn specification() -> Tree {
             Tree::map(vec![
+                ("yamaa", Tree::text("1.0")),
+                ("type", Tree::text("spec")),
+                ("model", Tree::text("SDTM")),
                 ("domain", Tree::text("D0")),
                 ("keys", Tree::list(vec![Tree::text("VALUE")])),
                 (
@@ -131,8 +65,12 @@ mod submission_encoders {
                 ),
             ])
         }
+        /// A 1.0 project (D4) whose `sdtm` section lists `d0.yaml` under its
+        /// `standards` (D16).
         pub(crate) fn project() -> Tree {
             Tree::map(vec![
+                ("yamaa", Tree::text("1.0")),
+                ("type", Tree::text("project")),
                 (
                     "study",
                     Tree::map(vec![
@@ -146,12 +84,12 @@ mod submission_encoders {
                     "sdtm",
                     Tree::map(vec![
                         (
-                            "standard",
-                            Tree::map(vec![
+                            "standards",
+                            Tree::list(vec![Tree::map(vec![
                                 ("name", Tree::text("SDTMIG")),
                                 ("version", Tree::text("3.4")),
                                 ("status", Tree::text("Final")),
-                            ]),
+                            ])]),
                         ),
                         ("context", Tree::text("Other")),
                         ("define", Tree::text("define.xml")),
@@ -167,10 +105,14 @@ mod submission_encoders {
             catalogue: &ct::Catalogue,
             created: &str,
         ) -> Result<Study, Vec<Finding>> {
-            let project = project.document();
-            let declared = yamaa_core::front_end::v0_5::sections::sections(&project).unwrap();
+            let project =
+                yamaa_core::front_end::v1::project::project(&project.document(), None).unwrap();
+            let declared = project.submission.unwrap();
             let docs: Vec<_> = docs.into_iter().map(Tree::document).collect();
-            let trees: Vec<_> = docs.iter().map(submission_tree).collect();
+            let trees: Vec<_> = docs
+                .iter()
+                .map(|document| yamaa_core::front_end::v1::spec::lower(document, None).into_spec())
+                .collect();
             let inputs: Vec<_> = docs
                 .iter()
                 .zip(&trees)
@@ -186,7 +128,7 @@ mod submission_encoders {
             let required = composition::Required::admit(
                 declared.study.as_ref(),
                 section,
-                yamaa_core::ast::Surface::V0_5,
+                project.header.surface,
             )?;
             composition::compose(required, catalogue, &inputs, &[], "1.0", created)
         }
@@ -368,9 +310,8 @@ mod submission_encoders {
     /// value list per column, its ordered item and where-clause references,
     /// and identifiers that survive reordering.
     mod value_level {
-        use super::fixture::submission_tree;
         use yamaa_core::{
-            front_end::v0_5::sections::sections,
+            front_end::v1,
             project_terminology::Catalogue,
             schema::{Document, DocumentNode as N},
             submission_composition::{self, Input, Study},
@@ -411,6 +352,8 @@ mod submission_encoders {
         }
         fn project() -> Document {
             let mut a = Arena::default();
+            let yamaa = a.text("1.0");
+            let kind = a.text("project");
             let study = a.texts(&[
                 ("id", "VLSTUDY"),
                 ("name", "Value metadata study"),
@@ -418,17 +361,23 @@ mod submission_encoders {
                 ("protocol_name", "VLPROTOCOL"),
             ]);
             let standard = a.texts(&[("name", "SDTMIG"), ("version", "3.4"), ("status", "Final")]);
+            let standards = a.node(N::Sequence(vec![standard]));
             let filename = a.text("spec.yaml");
             let specs = a.node(N::Sequence(vec![filename]));
             let define = a.text("define.xml");
             let version = a.text("1.0");
             let section = a.map(vec![
-                ("standard", standard),
+                ("standards", standards),
                 ("specs", specs),
                 ("define", define),
                 ("source_system_version", version),
             ]);
-            let root = a.map(vec![("study", study), ("sdtm", section)]);
+            let root = a.map(vec![
+                ("yamaa", yamaa),
+                ("type", kind),
+                ("study", study),
+                ("sdtm", section),
+            ]);
             a.finish(root)
         }
         /// One entry of `LBORRESU`, in the order the case lists them: its id,
@@ -469,6 +418,9 @@ mod submission_encoders {
         }
         fn specification(case: &str) -> Document {
             let mut a = Arena::default();
+            let yamaa = a.text("1.0");
+            let kind = a.text("spec");
+            let model = a.text("SDTM");
             let domain = a.text("LB");
             let label = a.text("Laboratory tests");
             let class = a.text("FINDINGS");
@@ -499,13 +451,10 @@ mod submission_encoders {
                 });
                 let mut fields = vec![("name", name_node), ("type", kind), ("label", label)];
                 let literal = match name {
-                    "LBORRESU" => Some(a.texts(&[("literal", "mg/dL")])),
-                    "LBSPEC" => Some(a.texts(&[("literal", "SERUM")])),
-                    "LBNAM" => Some(a.texts(&[("literal", "CENTRAL")])),
-                    "LBSEQ" => {
-                        let one = a.node(N::Integer("1".into()));
-                        Some(a.map(vec![("literal", one)]))
-                    }
+                    "LBORRESU" => Some(a.text("'mg/dL'")),
+                    "LBSPEC" => Some(a.text("'SERUM'")),
+                    "LBNAM" => Some(a.text("'CENTRAL'")),
+                    "LBSEQ" => Some(a.node(N::Integer("1".into()))),
                     _ => None,
                 };
                 if let Some(literal) = literal {
@@ -518,9 +467,10 @@ mod submission_encoders {
                     continue;
                 }
                 let origin = a.texts(&[("type", "Assigned"), ("source", "Sponsor")]);
+                let origins = a.node(N::Sequence(vec![origin]));
                 let core = a.text("Exp");
                 let length = a.node(N::Integer("8".into()));
-                let mut metadata = vec![("core", core), ("length", length), ("origin", origin)];
+                let mut metadata = vec![("core", core), ("length", length), ("origins", origins)];
                 if name == "LBORRESU" {
                     let mut entries = Vec::new();
                     for written in written(case) {
@@ -532,11 +482,12 @@ mod submission_encoders {
                             .collect();
                         let clause = a.map(terms);
                         let origin = a.texts(&[("type", "Assigned"), ("source", written.source)]);
+                        let origins = a.node(N::Sequence(vec![origin]));
                         let method = a.text("Units assigned from the supplied test metadata");
                         let mut fields = vec![
                             ("id", id),
                             ("where", clause),
-                            ("origin", origin),
+                            ("origins", origins),
                             ("method", method),
                         ];
                         if matches!(
@@ -570,13 +521,16 @@ mod submission_encoders {
                 ("albumin", "ALB"),
             ] {
                 let id = a.text(id);
-                let literal = a.texts(&[("literal", code)]);
+                let literal = a.text(&format!("'{code}'"));
                 let literal = a.map(vec![("value", literal)]);
                 let derivations = a.map(vec![("LBTESTCD", literal)]);
                 rows.push(a.map(vec![("id", id), ("derivations", derivations)]));
             }
             let rows = a.node(N::Sequence(rows));
             let root = a.map(vec![
+                ("yamaa", yamaa),
+                ("type", kind),
+                ("model", model),
                 ("domain", domain),
                 ("submission", dataset),
                 ("columns", columns),
@@ -586,16 +540,16 @@ mod submission_encoders {
             a.finish(root)
         }
         fn compose(document: &Document) -> Study {
-            let project = project();
-            let declared = sections(&project).unwrap();
+            let project = v1::project::project(&project(), None).unwrap();
+            let declared = project.submission.unwrap();
             let section = &declared.sections[0];
             let required = submission_composition::Required::admit(
                 declared.study.as_ref(),
                 section,
-                yamaa_core::ast::Surface::V0_5,
+                project.header.surface,
             )
             .unwrap();
-            let tree = submission_tree(document);
+            let tree = v1::spec::lower(document, None).into_spec();
             submission_composition::compose(
                 required,
                 &Catalogue::admit(vec![]).unwrap(),
@@ -737,7 +691,7 @@ mod submission_encoders {
         fn a_blank_last_row_or_a_file_past_five_billion_bytes_is_refused_before_writing() {
             let empty = ct::Catalogue::admit(vec![]).unwrap();
             let mut project = project();
-            project.set(&["sdtm", "datasets"], Tree::text("xpt"));
+            project.set(&["sdtm", "transport"], Tree::text("xpt"));
             let mut measured = one(project, specification(), &empty).unwrap();
             let held = rows(
                 ColumnType::Str,

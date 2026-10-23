@@ -37,9 +37,8 @@
 //!   source's range value no value of the row (LOOKUP-9).
 //!
 //! Binding keeps what the declarations alone cannot decide: a field an
-//! input no producer links does not store, a lookup whose keys are inferred
-//! from the captured schemas or that another lookup's derivations read, and
-//! the output keys a 0.5 implicit join matches on.
+//! input no producer links does not store, and a lookup that another
+//! lookup's derivations read.
 
 use super::*;
 use crate::ast::Scope;
@@ -199,14 +198,12 @@ impl<'a> Reads<'a> {
         self.input(owner) && !self.record(owner)
     }
 
-    /// A read at `path` of the input `owner` through its implicit join. On a
-    /// 1.0 tree the join matches on the input's declared `key`, so an input
-    /// that declares none fails at each read (LOOKUP-5, D111), and so does
-    /// one whose key column binding cannot pair ([`super::declared_key`]): in
-    /// a row template with its driver's field, in the column phase with an
-    /// output column. The output keys a 0.5 join matches on, only its
-    /// captured schema decides. True when it binds, as far as the
-    /// declarations decide.
+    /// A read at `path` of the input `owner` through its implicit join. The
+    /// join matches on the input's declared `key`, so an input that declares
+    /// none fails at each read (LOOKUP-5, D111), and so does one whose key
+    /// column binding cannot pair ([`super::declared_key`]): in a row
+    /// template with its driver's field, in the column phase with an output
+    /// column. True when it binds, as far as the declarations decide.
     fn join(&self, path: &str, owner: &str, findings: &mut Vec<BindFinding>) -> bool {
         if super::keyless(self.spec, owner) {
             findings.push(super::undeclared_key(path, owner));
@@ -495,7 +492,7 @@ impl<'a> Reads<'a> {
                     ));
                 }
                 Some(_) => types(findings),
-                // On a 1.0 tree a bare value is an output column alone.
+                // A bare value is an output column alone.
                 None if self.output(value).is_none() => {
                     findings.extend(super::declared::join_range(spec, e));
                 }
@@ -659,7 +656,7 @@ impl<'a> Reads<'a> {
             });
             return false;
         }
-        if item.key.is_none() && !spec.header.surface.infers_join_keys() {
+        if item.key.is_none() {
             findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
                 crate::diagnostic::lookup::key_required(&format!(
                     "{}.key",

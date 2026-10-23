@@ -106,8 +106,8 @@ requiredness is checked on the resolved specification, but unknown fields and
 invalid values fail in the layer that writes them. Two members of one keyed
 collection in one layer must not share an identifier.
 
-Fails: `unsupported_language_version`, `unexpected_file_type`, `duplicate_identifier`, `schema_version_mismatch`.
-Evidence: `negative-version-mismatch`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_layer_is_admitted_at_its_own_version_and_the_chain_needs_the_newest`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_parent_naming_an_unread_version_or_another_type_fails_at_parent`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_layer_is_a_fragment_and_a_single_layer_is_complete`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_0_5_chain_reads_a_1_x_parent_under_the_0_5_rules`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_keyed_list_member_carries_its_identity_in_the_layer_that_writes_it`.
+Fails: `unsupported_language_version`, `unexpected_file_type`, `duplicate_identifier`.
+Evidence: `negative-version-mismatch`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_layer_is_admitted_at_its_own_version_and_the_chain_needs_the_newest`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_parent_naming_an_unread_version_or_another_type_fails_at_parent`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_layer_is_a_fragment_and_a_single_layer_is_complete`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_schema_version_root_is_refused_as_language_0_5_wherever_it_is_read`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_keyed_list_member_carries_its_identity_in_the_layer_that_writes_it`.
 
 Requiredness is deferred for every root field and at every depth inside a
 member of `input`, `intermediates`, `columns`, `rows` and `windows`. An entry
@@ -204,6 +204,31 @@ expression, add one field type to an inherited `input` dataset, or add one
 derivation to an inherited row template; a derivation naming a different
 keyword replaces the inherited expression whole.
 
+A layer that restates an inherited mapping merges with it all the same, so an
+entry the layer leaves out comes back from its parent. Clearing the mapping
+in the same layer replaces it instead ([LAYER-9](#layer-9)):
+
+```yaml
+yamaa: "1.0"
+type: spec
+parent: scores-base.yaml
+clear:
+  - rows.scores.derivations
+
+rows:
+  - id: scores
+    derivations:
+      USUBJID: SC.USUBJID
+      VISIT: SC.VISIT
+      AVAL: SC.SCORE
+```
+
+Without the `clear` entry, the `scores` template keeps every other derivation
+`scores-base.yaml` gives it, such as one for `NOTE`, and the lint reports the
+restatement as `partial_restatement`. A named window composes the same way,
+and since `clear` never names the window itself, a layer clears each setting
+it leaves out by that setting's path ([LAYER-8](#layer-8)).
+
 <a id="layer-7"></a>
 
 ### LAYER-7. Requiredness and defaults apply to the composed member, never to one contribution
@@ -230,7 +255,7 @@ definition of an inherited name merges with it under [LAYER-6](#layer-6), so a
 layer can change one setting, such as `order_by`, and keep the others. Every
 reference, inherited or not, uses the final composed definition.
 
-Evidence: `rust/crates/yamaa-adapters/tests/declaration_contract_vectors.rs::complete_window_model_merges_parent_definition_with_child_fields_and_schema_defaults`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_named_window_composes_by_name_and_every_reference_uses_the_final_definition`.
 
 A window name is not a variable or dataset dependency. A setting the composed
 definition omits takes its ordinary window meaning. A layer clears the
@@ -251,7 +276,7 @@ takes it again. A path that names nothing the layer inherits, a required or
 identity field, `yamaa`, `type` or a keyed member fails as `invalid_clear`.
 
 Fails: `invalid_clear`.
-Evidence: `schema-inheritance-clear`, `negative-property-clear`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_clear_removes_what_the_layer_inherits_before_its_own_fields_compose`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_clear_that_names_what_it_cannot_clear_fails_at_its_entry`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_clear_list_is_spec_paths_none_covering_another`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::yaml_null_is_the_missing_value_and_never_removes_anything`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::yaml_null_is_refused_outside_value_and_expression_fields`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::the_converted_schema_inheritance_clear_resolves_as_its_source`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::the_converted_negative_property_clear_fails_as_its_source_at_clear_0`, `rust/crates/yamaa-core/src/schema/spec_path.rs::a_clear_path_names_keys_by_segment_or_quoted_text`.
+Evidence: `schema-inheritance-clear`, `negative-property-clear`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_clear_removes_what_the_layer_inherits_before_its_own_fields_compose`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_clear_that_names_what_it_cannot_clear_fails_at_its_entry`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_clear_list_is_spec_paths_none_covering_another`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::yaml_null_is_the_missing_value_and_never_removes_anything`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::yaml_null_is_refused_outside_value_and_expression_fields`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::the_converted_negative_property_clear_fails_as_its_source_at_clear_0`, `rust/crates/yamaa-core/src/schema/spec_path.rs::a_clear_path_names_keys_by_segment_or_quoted_text`.
 
 `clear` is a root field, written after `parent`, that lists spec paths:
 
@@ -360,12 +385,13 @@ a pruned declaration is discarded with it. A failure is reported under the rule
 that owns it, naming the entry specification and the contributing file and
 field of each implicated value.
 
-Fails: `missing_required_field`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_resolved_specification_to_which_no_layer_contributes_output_fails_at_output`.
 
 A declaration left out of `output.columns` remains as an internal column when a
 derivation or verification uses it. A resolved specification to which no layer
-contributed `output` fails as `missing_required_field` at `output`; an entry
-file that omits `output` is not itself an error.
+contributed `output` fails as `missing_required_field` at `output`
+([SCHEMA-13](reference/schema-language.md#schema-13)); an entry file that omits
+`output` is not itself an error.
 
 <a id="layer-13"></a>
 
