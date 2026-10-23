@@ -316,7 +316,8 @@ starts at 1.0.0 (#3030 D1).
   `rust/crates/yamaa/public-api.txt` lists them. The internal crates
   `yamaa-core`, `yamaa-adapters`, `yamaa-boundary` and `yamaa-engine` are
   not covered, nor are the native modules (`yamaa._native` and the R
-  package's registered routines) and the engine's C ABI, which are internal.
+  package's registered routines) and the engine's C ABI, which are internal
+  (#3679, #3702).
 - Saved artifacts: the bytes each profile writes (CSV, Parquet, SAS Transport
   version 5, Dataset-JSON 1.1, Define-XML 2.1 and the run report) for an
   admitted project and its inputs, on every supported platform. The Parquet
@@ -1161,24 +1162,30 @@ owns decoding behavior.
 
 ## Approved decisions
 
-- Export Python `spec`, `project`, `read_odm`, `Error` and `__version__`, and
-  R `yamaa_spec`, `yamaa_project` and `yamaa_read_odm` (#2967). A spec checks,
-  resolves and runs one specification; a project selects its listed
-  specifications by `domain` name, checks them all, runs one section or all
-  sections, and composes submissions. Only results write files, through
-  `save()`. `resolve()` returns the composed specification as a dict or named
-  list. Legacy IO/authoring extensions and `cdiscbuilder` are retired. The
-  style CLI remains private and native-backed.
+- Export Python `spec`, `project`, `read_odm`, `lint`, `schema`,
+  `conditions`, `info`, `selftest`, `Table`, `Error` and `__version__`, and R
+  `yamaa_spec`, `yamaa_project`, `yamaa_read_odm`, `yamaa_lint`,
+  `yamaa_schema`, `yamaa_conditions`, `yamaa_info` and `yamaa_selftest`
+  (#2967, #3700; #3030 D28, D40, D41, D149). A spec checks, resolves and runs
+  one specification; a project selects its listed specifications by `domain`
+  name, checks them all, runs one section or all sections, and composes
+  submissions. Only results write files, through `save()`. `resolve()` returns
+  the composed specification as a dict or named list. `lint()` and
+  `yamaa lint` replace the style command line, `python -m yamaa.style`, which
+  is gone with the Python package's `style` extra (#3176).
 - Keep wrong argument types as `TypeError` in Python; in R they are ordinary
   errors. `check()` and `run()` return specification, data and project
   problems as issue rows, missing specifications included, and never raise for
   them; `save()`, `resolve()` and an unknown specification name or section
   raise `yamaa.Error` or a `yamaa_error` condition carrying `issues`. Check
-  returns its findings without reading study data. The project file links each
-  host's environment file; no call takes an environment or a resource
-  resolver.
-- Return results as owned host tables: Polars DataFrames in Python and
-  data.frames in R. No host exposes Arrow views.
+  returns its findings without reading study data. Each project function is a
+  `type: function` file that the project lists under `functions`, and the
+  project's `environments` holds each host's lock (#3030 D8); no Python or R
+  call takes a function file, a lock or a resource resolver.
+- Return results as owned host tables: a `yamaa.Table` in Python, which needs
+  no other package and converts to Polars, pandas or PyArrow (#3030 D11,
+  D190), and a data frame in R, except a streamed run's output, which R gives
+  as an Arrow C stream (#3697).
 - Keep the Rust adapter features `yaml`, `parquet`, `readstat` and `odm`
   independent, all enabled by default; the Python and R packages enable all
   four.
@@ -1191,12 +1198,11 @@ owns decoding behavior.
   `spec_paths`, `file`, `line`, `column`, `message`, `context` as canonical
   JSON text, `source_span` and `operand_route` (#3030 D28). No host
   interprets conditions, and there are no separate diagnostic records.
-- Give each run one run report, written to `output.report`, in place of the
-  verification and warning logs (#2912).
+- Give each run one run report, written to `output.report` (#2912).
 - Resolve resources from their original declaring file by default; explicit
   input/output `relative_to: entry` selects each specification entry. Admit
   absolute and parent-relative local paths without project-root fallback. Preserve snapshots,
-  original failures, callback counts and log-first publication order. A `schema`
+  original failures, callback counts and report-first publication order. A `schema`
   link types a stored artifact from its producing specification and never runs
   it; callers build and save producers before their consumers.
 - Keep normative diagnostics registry-owned, including the reviewed
@@ -1232,8 +1238,10 @@ owns decoding behavior.
 - Build from Rust 1.82, the release that CRAN's two-year-old cargo rule
   allows on any submission date, with edition 2021 (#3111). Keeping 1.85 and
   holding the CRAN submission until 2027-02-20 was rejected.
-- Ship the reviewed vendored `saphyr-parser` compact-flow patch in every
-  supported graph; replacing it with a published parser is 0.5.0 work.
+- Ship `saphyr-parser` 0.2.1 with the reviewed compact-flow fix, vendored as
+  `yamaa-saphyr-parser`, in every supported graph. It stays vendored for
+  1.0.0; #3682 holds the upstream pull request and any later swap to a
+  published release (#3030 D229).
 - Keep Cargo dependency floors where the minimum dependency-graph lane tests
   them; the crates are not published.
 - Generate both hosts' binding declarations from
@@ -1243,14 +1251,11 @@ owns decoding behavior.
   reach the engine they link only through its client, over the engine's
   internal C ABI (D225 on #3030, #3702); an engine that loads separately
   from the host packages, for tests only, is later work (#3702).
-- The `yamaa` facade crate is the only supported Rust surface;
-  `yamaa-adapters` and `yamaa-core` are internal and may change in any
-  release.
-- Distribute 0.4.0 as GitHub release assets only. 0.5.0 was published as
-  GitHub release assets, and its Python packages were uploaded to PyPI from
-  them on 2026-10-20 (#3030 D177). From the 1.0.0 candidates, the owner
-  uploads each release's Python packages to PyPI from its GitHub release
-  assets (#3030 D13, D14, D57).
+- The `yamaa` facade crate is the only supported Rust surface; every other
+  crate is internal and may change in any release, as the
+  [stability contract](#stability-contract) says.
+- Publish each release as GitHub release assets; the owner uploads its Python
+  packages to PyPI from those assets (#3030 D13, D14, D57).
 - Publish release candidates as GitHub pre-releases from `yamaa-vX.Y.Z-rc.N`
   tags, with Python version `X.Y.ZrcN` and Cargo version `X.Y.Z-rc.N`. The R
   package keeps `X.Y.Z` through the candidates, and each candidate's release
@@ -1286,19 +1291,21 @@ its metadata-only authority. Reduce the refused size and rerun the operation.
 
 ## Resource limits
 
-The shared Rust engine behind every Python and R spec and project call uses one
+The shared Rust engine behind every Python, R and command-line call uses one
 fixed policy in `yamaa_core::limits::Limits`.
 Admission checks the physical file, table geometry, declaration shape or compiled
 regex at its owning boundary. There are no caller-selected profiles or
 cumulative byte, copy, traversal or work pools.
 
-`read_odm()` keeps its own archive-member, expanded-byte and XML-depth options
-in both hosts and reports a parser refusal as `yamaa.Error` in Python or a
-`yamaa_error` condition in R.
+`read_odm()` and `yamaa read-odm` keep their own archive-member,
+expanded-byte and XML-depth options. A parser refusal raises `yamaa.Error`
+in Python or a `yamaa_error` condition in R; `yamaa read-odm` prints the
+refusal and exits with status 1. With `--format json`, it reports `status`
+as `failed` and includes the refusal's `issues`.
 
 | Boundary | Fixed maximum |
 | --- | ---: |
-| Each specification, schema, project, environment, function, codelist or packaging-lock file | 8 MiB |
+| Each specification, schema, project, function, codelists or packaging-lock file | 8 MiB |
 | Each encoded study source file | 10 GiB |
 | Each saved output file | 10 GiB |
 | Rows in a decoded or materialized table | 10,000,000 |
@@ -1307,7 +1314,7 @@ in both hosts and reports a parser refusal as `yamaa.Error` in Python or a
 | Keys in one key or grouping declaration | 64 |
 | Inputs to one specification | 16 |
 | Operands in one source selection | 64 |
-| Parent occurrences in one inheritance traversal, including aliases | 8,192 |
+| Links followed in one composition, each `parent` and each `include` entry | 8,192 |
 | Compiled program of one regular expression | 10 MiB |
 | Findings in the final public issue collection | 10,000 |
 | YAML nesting depth | 64 |
@@ -1344,60 +1351,8 @@ Indexed and scanned lookups keep the same diagnostics and ordering.
 
 ## Migration
 
-### From 0.4.0
-
-The [0.5.0 release notes](releases/0.5.0.md#migration) list every change.
-The main ones:
-
-| Earlier spelling or behavior | Current form |
-| --- | --- |
-| Python `yamaa.domain(spec, environment=env)` and `yamaa.check(spec, environment=env)` | `yamaa.project("project.yaml").spec("DM").run()` and `.check()`, or `yamaa.spec(spec).run()` and `.check()` without a project. |
-| Python `yamaa.define(env, "sdtm", created=...)` | `yamaa.project("project.yaml").submission("sdtm", created=...)`. |
-| Python `DomainError` and `DefineError` | `yamaa.Error`, which carries `issues`. |
-| `save()` returns `True` | `save()` returns nothing and raises `yamaa.Error` when it cannot write. |
-| An environment file holds `language`, `codelists`, `study` and the `sdtm`, `adam` and `send` sections | A `project.yaml` holds `codelists`, `study` and the sections, and its `environments` names each language's environment file. The environment file keeps `schema_version`, `lock` and `functions`; the `environments` key states its language. |
-| A section requires `standard` and `define` | A section needs only `specs`; `study`, `standard` and `define` are required only to create submission files. |
-| `dataset_json: true` | `datasets: json`; `datasets: xpt` writes SAS Transport version 5 files instead. |
-| `output.verification_log` and `output.warning_log`, read as `verification_log` and `warning_log` | `output.report`, read as `report`: one run report per run, with a row for the run and for each input, row template, handler, output column and evaluated check. |
-| Lock pins yamaa 0.4.0 | Regenerate the project lock for 0.5.0 before using project functions; each applicable build checks the runtime version. |
-
-The `issues` table keeps its five columns and adds `source_span` and
-`operand_route` after them; `context` stays canonical JSON text.
-
-### From 0.3.0
-
-Make the 0.4.0 changes above as well as these:
-
-| Earlier spelling or behavior | Current form |
-| --- | --- |
-| Python `yamaa_domain`, `DomainRun` and `DomainRunError` | `yamaa.spec(spec).run()` and `yamaa.Error`. |
-| Python `generate_study_document` | `yamaa.project("project.yaml").submission(section)`. |
-| Python subpackages such as `yamaa.odm` | `yamaa.read_odm`; the subpackages are private. |
-| R `cdiscbuilder` package | The `yamaa` R package: `yamaa_spec`, `yamaa_project` and `yamaa_read_odm`. |
-| A dead declaration with an invalid reference fails a file without `parents` | The declaration is removed before validation and the file builds. To keep a declaration validated, name the column in `output.columns`, `keys` or `output.order_by`, or read it from a live derivation or verification. |
-| An input that no column reads is the implied driver | The input is removed too; name it in `base`. |
-| `parents: []` added only to enable pruning | Every specification is pruned; remove the line. Without a `parent`, declaration order is the resolved order, so a column that reads a column declared after it fails with `forward_reference` ([COLUMN-5](../rules/columns.md#column-5)). |
-| Rust code depending on `yamaa-adapters` or `yamaa-core` | Depend on the `yamaa` facade crate by path or git, as the [Rust guide](../rust/README.md#distribution) shows. Its default `yaml` feature brings the reviewed YAML parser with no other configuration; 0.4.0 itself also needs the `saphyr-parser` patch that its [release notes](releases/0.4.0.md) show. |
-| `datetime_precision` of minute text (`2025-03-04T08:30`) is `S`; `datetime_impute` with `time: last` gives `08:30:00`; hour text (`T08`) is invalid | `precision` with `type: datetime` gives `minute`, `impute` with `type: datetime`, `minimum_source_precision: day` and `time: last` gives `08:30:59`, and hour text is accepted (`hour`). A condition that tested `= 'S'` for a collected time tests `IN ('minute', 'second')`; a condition meaning "a time was collected" tests `IN ('hour', 'minute', 'second')` ([TIME-7](../rules/temporal.md#time-7)). |
-| Lock pins an earlier yamaa | Regenerate the project lock for the installed yamaa before using project functions; each applicable build checks the runtime version. |
-| A `between.value` qualified by an input that does not drive the row reads a wrong value with no message | It fails validation as `unknown_field`. Derive the value into a column, for example `AGE` from `DM.AGE`, and name that column. |
-| A `.sas7bdat` input that holds records deleted in place returns them as rows | Only its live records are read. It fails as `source_sas_invalid` with cause `deleted_records` when its count of deleted records and the records marked deleted disagree; rewrite such a dataset first, for example with `PROC COPY`. |
-
-### From 0.2.0 and earlier
-
-The 0.4.0 upgrade also includes language and environment changes made before
-0.3.0. Update old specifications and project locks together:
-
-| Earlier spelling or behavior | Current form |
-| --- | --- |
-| `implies: {when: W, then: T}` | `assert: {when: W, require: T}`; the implication semantics are preserved. |
-| `assert: {expr: P}` | `assert: {require: P}`. |
-| Function call with `contract_version` | Keep only `name` and `args`. |
-| Environment `version`, `runtime`, per-function contracts, bindings and external conformance files | Declare `schema_version`, the project `lock`, and function definitions with `function`, `description`, `params`, `returns` and inline `tests`; the project file's `environments` key states the language. Implementations are ordinary installed packages checked against that lock. |
-| Runner discovers a project environment | Name each language's environment file in the project file and open specifications through it: Python `yamaa.project("project.yaml").spec("DM")` or R `yamaa_project("project.yaml")$spec("DM")`. |
-| Data roots or `yamaa-project.yaml` | Relative resources resolve from the YAML file that declares them, including inherited layers. |
-| Symbolic link below the entry directory | Copy or hard-link the input; the resource policy refuses symbolic links. |
-
-The normative contracts are [verification](../rules/verification.md),
-[functions and project environments](../rules/profiles/functions.md) and
-[resources](../rules/reference/files.md).
+From 0.5.0, the [1.0.0 release notes](releases/1.0.0.md#the-break-from-050)
+state the break and link the rename table, which gives every changed
+spelling; there is no migration guide and no converter (#3030 D35). For an
+earlier release, see the notes of each release after it, such as the
+[0.5.0 notes](releases/0.5.0.md).
