@@ -216,28 +216,29 @@ impl FileSpecification {
     /// naming its declaration; see [`crate::file_application::verify_held`].
     pub fn verify_metadata(&self) -> Result<(), crate::file_application::Failure> {
         use crate::changed_metadata as changed;
+        let captured = self.run.captured_environment();
+        let held = changed::Held {
+            entry: &self.entry,
+            document: self.run.document(),
+            links: &self.links,
+            project: captured.project(),
+            inventory: captured.inventory_documents(),
+            environment: captured
+                .root_optional()
+                .zip(captured.project())
+                .zip(captured.written())
+                .map(|((root, project), written)| changed::Environment {
+                    written,
+                    host: self.run.environment().host(),
+                    root,
+                    project,
+                    environment_file: captured.environment_file(),
+                    lock: captured.lock(),
+                    captures: captured.captures(),
+                }),
+        };
         crate::file_application::verify_held(&self.resources, |identity, failure| {
-            let document = self.run.document();
-            let captured = self.run.captured_environment();
-            changed::specification("specification", &self.entry, document, identity, failure)
-                .or_else(|| changed::links(document, &self.links, identity, failure))
-                .or_else(|| {
-                    let root = captured.root_optional()?;
-                    let project = captured.project()?;
-                    changed::inventory(project, captured.inventory_documents(), identity, failure)
-                        .or_else(|| {
-                            let environment = changed::Environment {
-                                written: captured.written()?,
-                                host: self.run.environment().host(),
-                                root,
-                                project,
-                                environment_file: captured.environment_file(),
-                                lock: captured.lock(),
-                                captures: captured.captures(),
-                            };
-                            changed::environment(&environment, identity, failure)
-                        })
-                })
+            changed::declaration(&held, identity, failure)
         })
     }
     /// Bounded aliases of the held metadata bytes; no file access or replay.
