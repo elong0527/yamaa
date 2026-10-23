@@ -1,18 +1,21 @@
-//! The interface handshake of the R binding and the gate that every native
-//! routine passes (`rust/interface/README.md`, "Version and feature
-//! handshake").
+//! The interface handshake of the R binding, the gate that every native
+//! routine passes, and the census of the binding's live handles
+//! (`rust/interface/README.md`, "Version and feature handshake").
 //!
 //! The generated `.onLoad` calls `interface_handshake` before any other
 //! routine. Every other routine replies through `api_entry::reply`, which
 //! passes the gate first, so until a negotiation is accepted each one
 //! refuses with no issues.
-use crate::api_entry::answer;
+use crate::api_entry::{answer, reply};
 use crate::function_callback::text_at;
 use extendr_api::prelude::*;
-use yamaa_boundary::{EngineFacts, Gate, Outcome, Value, DEPTH};
+use yamaa_boundary::{Census, EngineFacts, Gate, Outcome, Value, DEPTH};
 
 /// The gate, which the first accepted handshake opens.
 static GATE: Gate = Gate::new();
+
+/// The binding's live native handles, by kind.
+pub(crate) static CENSUS: Census = Census::new();
 
 /// Refuse a native routine until the interface handshake succeeds.
 pub(crate) fn gate() -> std::result::Result<(), String> {
@@ -54,6 +57,26 @@ fn interface_handshake(request: Robj) -> List {
             ),
         };
         Ok(record.into_robj())
+    })
+}
+
+/// The live native handles by kind, in the census's order, as a named
+/// integer vector: the private accessor of the handle lifetime suites.
+#[extendr]
+fn live_handles() -> List {
+    reply(|| {
+        let counts = CENSUS.counts();
+        let mut census = r!(counts
+            .iter()
+            .map(|(_, count)| i32::try_from(*count).unwrap_or(i32::MAX))
+            .collect::<Vec<i32>>());
+        census
+            .set_attrib(
+                "names",
+                Strings::from_values(counts.iter().map(|(kind, _)| kind.as_str())),
+            )
+            .map_err(|_| "census names")?;
+        Ok(census)
     })
 }
 

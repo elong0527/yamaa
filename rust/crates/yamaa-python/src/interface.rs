@@ -1,6 +1,6 @@
-//! The interface handshake of the Python binding and the gate that every
-//! native function passes (`rust/interface/README.md`, "Version and feature
-//! handshake").
+//! The interface handshake of the Python binding, the gate that every native
+//! function passes, and the census of the binding's live handles
+//! (`rust/interface/README.md`, "Version and feature handshake").
 //!
 //! The generated `yamaa/__init__.py` calls `_interface_handshake` right after
 //! importing this module, before any other native call. Until a negotiation
@@ -12,10 +12,13 @@ use pyo3::{
     prelude::*,
     types::{PyBool, PyDict, PyInt, PyList, PyString, PyTuple},
 };
-use yamaa_boundary::{EngineFacts, Gate, Outcome, Value, DEPTH};
+use yamaa_boundary::{Census, EngineFacts, Gate, Outcome, Value, DEPTH};
 
 /// The gate, which the first accepted handshake opens.
 static GATE: Gate = Gate::new();
+
+/// The binding's live native handles, by kind.
+pub(crate) static CENSUS: Census = Census::new();
 
 /// Refuse a native call until the interface handshake succeeds, with the
 /// binding's ordinary boundary refusal, as a busy handle is refused.
@@ -54,6 +57,18 @@ pub fn _interface_handshake<'py>(
         }
     }
     Ok(record)
+}
+
+/// The live native handles by kind, in the census's order: the private
+/// accessor of the handle lifetime suites.
+#[pyfunction]
+pub fn _live_handles(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
+    gate()?;
+    let counts = PyDict::new(py);
+    for (kind, count) in CENSUS.counts() {
+        counts.set_item(kind.as_str(), count)?;
+    }
+    Ok(counts)
 }
 
 /// A request at `depth` below its mapping, as the boundary reads it, never

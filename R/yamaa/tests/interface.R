@@ -193,7 +193,8 @@ check_gate <- function() {
       lint = list(list(path), FALSE),
       schema = list(charToRaw("spec")),
       info = list(r_version),
-      selftest = list(r_version)))
+      selftest = list(r_version),
+      live_handles = list()))
   input <- file.path(work, "input.rds")
   output <- file.path(work, "output.rds")
   saveRDS(list(arguments = arguments,

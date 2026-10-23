@@ -3,4 +3,5 @@
 extendr_module! {
     mod interface;
     fn interface_handshake;
+    fn live_handles;
 }

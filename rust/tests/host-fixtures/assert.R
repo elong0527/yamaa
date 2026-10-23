@@ -143,6 +143,20 @@ expect_issue_rows <- function(frame, expected, label, columns = NULL) {
   }
 }
 
+# Copy negative-function-contract from the staged project-base directory
+# `projects` into the directory `root`, with its argument supplied, so that a
+# run calls the project function for each row; return the copy's directory.
+function_study <- function(projects, root) {
+  stopifnot("the project case is copied" =
+    file.copy(file.path(projects, "negative-function-contract"), root, recursive = TRUE))
+  case <- file.path(root, "negative-function-contract")
+  entry <- file.path(case, "spec.yaml")
+  source <- readBin(entry, "raw", n = file.info(entry)$size)
+  writeBin(charToRaw(sub("name: project_value", "name: project_value\n        args: {x: SOURCE.VALUE}",
+    rawToChar(source), fixed = TRUE)), entry)
+  case
+}
+
 # Run `code` with the yamaa namespace's binding `name` replaced by `value`,
 # and restore the original afterwards.
 with_binding <- function(name, value, code) {

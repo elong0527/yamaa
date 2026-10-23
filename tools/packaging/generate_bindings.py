@@ -142,6 +142,7 @@ _SCALAR_TYPES = {
     "context_object": "dict[str, object]",
     "row": "dict[str, object]",
     "handshake_record": "dict[str, object]",
+    "handle_census": "dict[str, int]",
 }
 _GENERIC_TYPES = {"optional", "list", "tuple"}
 _NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")

@@ -1,6 +1,6 @@
 //! The engine boundary that both host bindings cross: the interface version
-//! and feature handshake, its refusal envelope and the gate that every native
-//! call passes.
+//! and feature handshake, its refusal envelope, the gate that every native
+//! call passes, and the census of live native handles.
 //!
 //! `rust/interface/README.md` ("Version and feature handshake") is the
 //! contract. The generated Python or R layer of a host package sends one
@@ -35,7 +35,7 @@
 //! new boundary version, and an identifier is never reused with another
 //! meaning.
 use std::fmt;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 /// The boundary version, which the generated layers of both hosts request.
 /// It moves with any change to what crosses the boundary that an older side
@@ -384,3 +384,91 @@ impl fmt::Display for Closed {
 }
 
 impl std::error::Error for Closed {}
+
+/// The kinds of native handle that a census counts, in order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HandleKind {
+    /// A check's result.
+    Check,
+    /// A specification run.
+    Run,
+    /// A project run.
+    ProjectRun,
+    /// A submission.
+    Submission,
+    /// A selftest.
+    SelfTest,
+    /// The compiled plans that one lazy object keeps.
+    Plans,
+    /// A table, which only the Python binding hands out.
+    Table,
+}
+
+impl HandleKind {
+    /// Every kind, in the census's order.
+    pub const ALL: [HandleKind; 7] = [
+        HandleKind::Check,
+        HandleKind::Run,
+        HandleKind::ProjectRun,
+        HandleKind::Submission,
+        HandleKind::SelfTest,
+        HandleKind::Plans,
+        HandleKind::Table,
+    ];
+
+    /// The kind as the census names it.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            HandleKind::Check => "check",
+            HandleKind::Run => "run",
+            HandleKind::ProjectRun => "project_run",
+            HandleKind::Submission => "submission",
+            HandleKind::SelfTest => "selftest",
+            HandleKind::Plans => "plans",
+            HandleKind::Table => "table",
+        }
+    }
+}
+
+/// The live native handles of one binding, by kind: each handle holds a
+/// [`Live`] from its census while it lives. A binding keeps one in a
+/// `static`; the lifetime suites read it through the binding's private
+/// census accessor.
+#[derive(Debug, Default)]
+pub struct Census {
+    live: [AtomicUsize; HandleKind::ALL.len()],
+}
+
+impl Census {
+    /// A census with no live handle.
+    pub const fn new() -> Self {
+        Self {
+            live: [const { AtomicUsize::new(0) }; HandleKind::ALL.len()],
+        }
+    }
+
+    /// Count one live handle of `kind` until the returned [`Live`] drops.
+    #[must_use = "the handle counts only while its Live is held"]
+    pub fn hold(&'static self, kind: HandleKind) -> Live {
+        self.live[kind as usize].fetch_add(1, Ordering::Relaxed);
+        Live { census: self, kind }
+    }
+
+    /// The live handles of each kind, in the census's order.
+    pub fn counts(&self) -> [(HandleKind, usize); HandleKind::ALL.len()] {
+        HandleKind::ALL.map(|kind| (kind, self.live[kind as usize].load(Ordering::Relaxed)))
+    }
+}
+
+/// One live handle in its binding's census, counted until it drops.
+#[derive(Debug)]
+pub struct Live {
+    census: &'static Census,
+    kind: HandleKind,
+}
+
+impl Drop for Live {
+    fn drop(&mut self) {
+        self.census.live[self.kind as usize].fetch_sub(1, Ordering::Relaxed);
+    }
+}
