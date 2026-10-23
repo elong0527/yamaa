@@ -347,8 +347,8 @@ impl Streamed {
 }
 
 /// The result of a [`Streamed`] run, borrowed: it dereferences to the
-/// [`Run`], and holds the streamed run, as every other call on it finds it
-/// in use, until it is dropped.
+/// [`Run`]. While it lives, every other call on the streamed run refuses
+/// with the `busy` code of [`Error::Stream`].
 pub struct RunGuard<'a> {
     state: MutexGuard<'a, State>,
 }

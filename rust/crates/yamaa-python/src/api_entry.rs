@@ -57,7 +57,7 @@ pub(crate) fn refusal(streamed: &yamaa::Streamed, error: &Error) -> PyErr {
 /// A run built whole, or a streamed run (#3697), whose result is known once
 /// its output's stream ends.
 enum Held {
-    Built(Mutex<yamaa::Run>),
+    Built(Arc<Mutex<yamaa::Run>>),
     Streamed(Arc<yamaa::Streamed>),
 }
 
@@ -69,7 +69,7 @@ pub struct Run {
 
 impl Run {
     pub(crate) fn new(run: yamaa::Run) -> Self {
-        Self::held(Held::Built(Mutex::new(run)))
+        Self::held(Held::Built(Arc::new(Mutex::new(run))))
     }
 
     fn streamed(streamed: yamaa::Streamed) -> Self {
