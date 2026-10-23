@@ -891,6 +891,8 @@ impl DatasetPlan {
 
 #[cfg(test)]
 mod admission_boundaries;
+#[cfg(test)]
+mod partitioned_execution;
 
 mod execution;
 pub use execution::{

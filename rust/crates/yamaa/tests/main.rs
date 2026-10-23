@@ -13,6 +13,7 @@ mod cancellation;
 mod copy_entry;
 mod csv_byte_order_mark;
 mod diagnostic_records;
+mod end_states;
 mod file_type;
 mod info;
 mod issue_locations;

@@ -43,8 +43,9 @@ pub(super) fn construct<'a, E>(
         Step::Row(binding) => bindings.contains(&binding),
         _ => false,
     });
-    let records = run.partition_runs(divided, rows, Some);
-    // Finish the entire source filter before any key conversion can fail.
+    // Finish the entire source filter before any key conversion can fail,
+    // a divided filter one partition after another.
+    let records = run.partition_runs(divided && filter.is_some(), rows, Some);
     let mut retained = Vec::new();
     reserved(retained.try_reserve_exact(rows))?;
     for (number, range) in records.into_iter().enumerate() {
