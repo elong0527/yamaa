@@ -9,8 +9,9 @@
 //! end, and a reader treats a field past the writer's `size` as null. Kept in
 //! every boundary version, so that any two yamaa builds refuse each other
 //! cleanly, are the negotiation entry's signature, the [`Request`] header
-//! (`size`, `version`), the fixed part of [`Outcome`] (`size` to `reason`) and
-//! the check order of the crate documentation.
+//! (`size`, `version`), the fixed part of [`Outcome`] (`size` to `reason`),
+//! the [`Engine`] table's header (`size`, `version`) and the check order of
+//! the crate documentation.
 //!
 //! # Calls
 //!
