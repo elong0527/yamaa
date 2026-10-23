@@ -71,7 +71,6 @@ vocabulary! {
         HostResourceFailure => "host_resource_failure",
         InheritanceRequired => "inheritance_required",
         Internal => "internal",
-        InvalidPackagingLock => "invalid_packaging_lock",
         InvalidTarget => "invalid_target",
         Inventory => "inventory",
         IssueProjection => "issue_projection",

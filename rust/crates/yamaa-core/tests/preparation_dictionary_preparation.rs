@@ -875,7 +875,8 @@ mod preparation {
             for (name, parent) in [("b", Some("a")), ("a", Some("common")), ("common", None)] {
                 let document = layer(name, parent, false);
                 let bytes = name.as_bytes().to_vec();
-                held.push((name, document.nodes().as_ptr(), bytes.as_ptr()));
+                // A parent's bytes are copied out of the resolver's snapshot.
+                held.push((name, document.nodes().as_ptr(), bytes.clone()));
                 parents.documents.insert(
                     name.into(),
                     Raw {
@@ -917,7 +918,7 @@ mod preparation {
             for (parent, (name, nodes, bytes)) in prepared.parents.iter().zip(held) {
                 assert_eq!(parent.source().identity, name);
                 assert_eq!(parent.raw().document.nodes().as_ptr(), nodes);
-                assert_eq!(parent.source().bytes.as_ptr(), bytes);
+                assert_eq!(parent.source().bytes, bytes);
             }
             assert_eq!(entry.calls, 1);
             assert_eq!(parents.calls, ["b", "a", "common"]);
@@ -2561,9 +2562,11 @@ mod preparation {
                     .into_iter()
                     .map(|name| {
                         let d = &decoder.documents[name];
+                        // A parent's bytes are copied out of the resolver's
+                        // snapshot; its decoded arena keeps its allocation.
                         (
                             name,
-                            host.bytes[name].as_ptr(),
+                            host.bytes[name].clone(),
                             d.document.nodes().as_ptr(),
                             (&*d.marker) as *const u32,
                         )
@@ -2589,7 +2592,7 @@ mod preparation {
                 );
                 for (parent, (name, bytes, nodes, marker)) in prepared.parents.iter().zip(held) {
                     assert_eq!(parent.source().identity, name);
-                    assert_eq!(parent.source().bytes.as_ptr(), bytes);
+                    assert_eq!(parent.source().bytes, bytes);
                     assert_eq!(parent.raw().document.nodes().as_ptr(), nodes);
                     assert_eq!((&*parent.raw().marker) as *const u32, marker);
                 }
