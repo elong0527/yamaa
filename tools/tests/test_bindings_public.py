@@ -283,13 +283,18 @@ class RenderingTests(unittest.TestCase):
     def test_the_helper_import_names_the_helpers_used_and_wraps_when_long(self):
         text = self.public.render_python([])
         self.assertIn(
-            "from yamaa._support import __version__, _fspath, _fspaths, _Lazy\n", text
+            "from yamaa._support import __version__, _fspath, _fspaths, _Lazy, "
+            "_optional_fspath\n",
+            text,
         )
         # lint() alone converts a list of paths.
         candidate = copy.deepcopy(self.definition)
         candidate["public"]["functions"].remove(function(candidate, "lint"))
         short = public.Public(candidate).render_python([])
-        self.assertIn("from yamaa._support import __version__, _fspath, _Lazy\n", short)
+        self.assertIn(
+            "from yamaa._support import __version__, _fspath, _Lazy, _optional_fspath\n",
+            short,
+        )
         with patch.object(public, "_PY_WIDTH", 60):
             narrow = public.Public(self.definition).render_python([])
         self.assertIn(
@@ -311,7 +316,10 @@ class RenderingTests(unittest.TestCase):
         member(candidate, "Spec", "check").pop("raises")
         text = public.Public(candidate).render_python([])
         self.assertIn(
-            "return Check(_native._spec_check(self._path, self._project))", text
+            "return Check(\n"
+            "            _native._spec_check(self._path, self._project, _optional_fspath(parent))\n"
+            "        )",
+            text,
         )
 
     def test_a_python_only_class_is_the_native_class_exported_as_it_is(self):
@@ -635,7 +643,9 @@ class ValidationTests(unittest.TestCase):
             (
                 "returns _Check, not Run",
                 lambda d: member(d, "Spec", "run").update(
-                    calls="spec_check", args={}, keyword_only=[]
+                    calls="spec_check",
+                    args={"parent": "optional_path = None"},
+                    keyword_only=[],
                 ),
             ),
             # Members of one handle class call one native class.

@@ -152,7 +152,9 @@ format.yamaa_submission <- function(x, ...) {
   plans <- NULL
   object <- new.env(parent = emptyenv())
   object$.path <- path
-  object$check <- function() .check(.reply(.native_spec_check(path, project, .version())))
+  object$check <- function(parent = NULL) {
+    .check(.reply(.native_spec_check(path, project, .optional_text(parent, "parent"), .version())))
+  }
   object$resolve <- function() .reply(.native_spec_resolve(path, project, .version()))
   object$run <- function(stream = FALSE) {
     plans <<- .reply(.native_plans(plans))

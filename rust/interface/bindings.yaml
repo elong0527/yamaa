@@ -288,6 +288,7 @@ public:
   types:
     path: {python: "str or os.PathLike, unannotated", r: "character(1)"}
     path_list: {python: "a path or a list of paths, unannotated", r: "character()"}
+    optional_path: {python: "str or os.PathLike or None, unannotated", r: "character(1) or NULL"}
     text: {python: str, r: "character(1)"}
     optional_text: {python: "str | None", r: "character(1) or NULL"}
     count: {python: int, r: "numeric(1), a whole number"}
@@ -554,10 +555,13 @@ public:
       members:
         - name: check
           kind: method
+          args: {parent: optional_path = None}
           returns: Check
           raises: refusal
           calls: spec_check
-          doc: Report problems without reading study data or running project code.
+          doc: >-
+            Report problems without reading study data or running project code;
+            with `parent`, check this fragment as if the specification at that path were its parent.
         - name: resolve
           kind: method
           returns: tree
@@ -749,11 +753,16 @@ cli:
     # declares. A type the command does not take, at all or with the flags
     # given, is a usage error (exit status 2).
     - name: check
-      synopsis: yamaa check PATH [--spec NAME]
+      synopsis: yamaa check PATH [--spec NAME | --parent PATH]
       args:
         - {name: PATH, type: path, meaning: "a spec, or a project, as its type: header declares"}
       flags:
         - {name: --spec, value: NAME, valid_when: "PATH declares type: project", host: Project.spec(name)}
+        - name: --parent
+          value: PATH
+          meaning: the specification the fragment is checked on, as its parent
+          valid_when: "PATH declares type: spec, without --spec"
+          host: Spec.check(parent)
       operations: [spec_check, project_check, project_spec]
       text: the summary line, then each issue's line
       json_keys: [command, path, spec, status, issues]
@@ -980,7 +989,7 @@ python:
     - kind: function
       name: _spec_check
       rust: api_entry::_spec_check
-      args: {specification: text, project: "optional<text> = None"}
+      args: {specification: text, project: "optional<text> = None", parent: "optional<text> = None"}
       returns: _Check
     - kind: function
       name: _spec_summary
@@ -1086,7 +1095,7 @@ r:
     - module: api_entry
       source: rust/crates/yamaa-r/src/api_entry.rs
       functions:
-        - {name: spec_check, args: {specification: raw, project: robj, version: raw}, returns: r_reply}
+        - {name: spec_check, args: {specification: raw, project: robj, parent: robj, version: raw}, returns: r_reply}
         - {name: check_status, args: {handle: robj}, returns: r_reply}
         - {name: check_issues, args: {handle: robj}, returns: r_reply}
         - {name: check_summary, args: {handle: robj}, returns: r_reply}

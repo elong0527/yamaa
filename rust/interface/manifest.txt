@@ -142,9 +142,10 @@ cli.global_flags.--help: flag
 cli.exit_status.0: the command completed and succeeded: its status is succeeded and any save wrote everything, or resolve, schema, --version or --help printed its output
 cli.exit_status.1: the command completed with findings: a status of failed or skipped, a refused save, remaining lint findings, a failed selftest case, or a refusal that carries issues
 cli.exit_status.2: the command could not run as asked: a usage error, an argument the facade cannot take, a PATH whose declared type the command does not take, or a failed write to standard output; a file problem the engine reports as an issue exits 1
-cli.commands.check: yamaa check PATH [--spec NAME]
+cli.commands.check: yamaa check PATH [--spec NAME | --parent PATH]
 cli.commands.check.args[0]: PATH: path
 cli.commands.check.flags.--spec: NAME
+cli.commands.check.flags.--parent: PATH
 cli.commands.check.json_keys.command
 cli.commands.check.json_keys.path
 cli.commands.check.json_keys.spec
@@ -251,6 +252,7 @@ cli.json.info_keys.host_version
 cli.json.info_keys.platform
 public.types.path: python str or os.PathLike, unannotated; r character(1)
 public.types.path_list: python a path or a list of paths, unannotated; r character()
+public.types.optional_path: python str or os.PathLike or None, unannotated; r character(1) or NULL
 public.types.text: python str; r character(1)
 public.types.optional_text: python str | None; r character(1) or NULL
 public.types.count: python int; r numeric(1), a whole number
@@ -332,6 +334,7 @@ public.classes.Submission.save: method; returns paths_written; raises refusal
 public.classes.Submission.summary: printing; python __repr__; r print, format
 public.classes.Spec: python yamaa.Spec; r yamaa_spec
 public.classes.Spec.check: method; returns Check; raises refusal
+public.classes.Spec.check.args[0]: parent: optional_path = None
 public.classes.Spec.resolve: method; returns tree; raises refusal
 public.classes.Spec.run: method; returns Run; raises refusal
 public.classes.Spec.run.args[0]: stream: flag = false; keyword-only

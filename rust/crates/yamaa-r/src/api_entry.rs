@@ -288,18 +288,23 @@ fn summary_lines(summary: &yamaa::Summary) -> Robj {
     Strings::from_values(summary.lines().collect::<Vec<_>>()).into_robj()
 }
 
+/// The check of a specification, or, with `parent`, of a fragment composed on
+/// the specification `parent` names as its parent (#3694).
 #[extendr]
-fn spec_check(specification: Raw, project: Robj, version: Raw) -> List {
+fn spec_check(specification: Raw, project: Robj, parent: Robj, version: Raw) -> List {
     reply(|| {
         let project = optional_text(&project)?;
+        let parent = optional_text(&parent)?;
         let specification = text(&specification)?;
-        let check = engine(&version, None)?
-            .spec_check(
-                &specification,
-                project.as_deref(),
-                &crate::interrupt::token(),
-            )
-            .map_err(|error| from_error(Action::Read(&specification), &error))?;
+        let engine = engine(&version, None)?;
+        let token = crate::interrupt::token();
+        let check = match parent.as_deref() {
+            Some(parent) => {
+                engine.spec_check_on(&specification, project.as_deref(), parent, &token)
+            }
+            None => engine.spec_check(&specification, project.as_deref(), &token),
+        }
+        .map_err(|error| from_error(Action::Read(&specification), &error))?;
         store_check(check)
     })
 }

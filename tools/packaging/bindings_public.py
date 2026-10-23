@@ -48,6 +48,7 @@ _PUBLIC_KEYS = {"python", "types", "value_types", "functions", "classes", "error
 _PY_ANNOTATION = {
     "path": None,
     "path_list": None,
+    "optional_path": None,
     "text": "str",
     "optional_text": "str | None",
     "count": "int",
@@ -85,6 +86,7 @@ _VOCABULARY_TOKENS = {"status", "file_type"}
 _ARGUMENT_TOKENS = {
     "path",
     "path_list",
+    "optional_path",
     "text",
     "optional_text",
     "count",
@@ -93,16 +95,22 @@ _ARGUMENT_TOKENS = {
     "schema_request",
 }
 _DEFAULTS = {
+    "optional_path": {"None"},
     "optional_text": {"None"},
     "schema_request": {"None"},
     "flag": {"false", "true"},
     "count": None,  # a nonnegative integer
 }
 # Handwritten conversions the generated code calls.
-_PY_ARGUMENT = {"path": "_fspath", "path_list": "_fspaths"}
+_PY_ARGUMENT = {
+    "path": "_fspath",
+    "path_list": "_fspaths",
+    "optional_path": "_optional_fspath",
+}
 _R_ARGUMENT = {
     "path": ".text",
     "path_list": ".texts",
+    "optional_path": ".optional_text",
     "text": ".text",
     "optional_text": ".optional_text",
     "file_type": ".text",
@@ -1012,15 +1020,19 @@ class Public:
         for function in self.functions:
             body += ["", "", *self._py_function(function)]
         text = "\n".join(body)
-        # Import exactly the handwritten helpers the generated code uses.
+        # Import exactly the handwritten helpers the generated code uses, in
+        # the order ruff's import sorting gives them.
         helpers = [
             name
-            for name in ("_fspath", "_fspaths", "_Lazy")
+            for name in ("_fspath", "_fspaths", "_Lazy", "_optional_fspath")
             if re.search(rf"(?<![\w.]){name}\b", text)
         ]
         imported = ["__version__", *helpers]
         single = f"from yamaa._support import {', '.join(imported)}"
-        if len(single) > _PY_WIDTH:
+        # After the handshake an import carries its reason, which counts
+        # toward the width ruff wraps it at.
+        reason = "  # noqa: E402" if handshake else ""
+        if len(single) + len(reason) > _PY_WIDTH:
             # ruff format splits a long import one name per line.
             single = "\n".join(
                 [

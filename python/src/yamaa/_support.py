@@ -19,6 +19,7 @@ __all__ = [
     "__version__",
     "_fspath",
     "_fspaths",
+    "_optional_fspath",
     "_Lazy",
 ]
 
@@ -28,6 +29,11 @@ def _fspaths(paths) -> list[str]:
     if isinstance(paths, (str, PathLike)):
         return [_fspath(paths)]
     return [_fspath(path) for path in paths]
+
+
+def _optional_fspath(path) -> str | None:
+    """A path as a string, or None for no path."""
+    return None if path is None else _fspath(path)
 
 
 class _Lazy:

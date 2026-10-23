@@ -5,8 +5,8 @@
   .Call(wrap__core_version)
 }
 
-.native_spec_check <- function(specification, project, version) {
-  .Call(wrap__spec_check, specification, project, version)
+.native_spec_check <- function(specification, project, parent, version) {
+  .Call(wrap__spec_check, specification, project, parent, version)
 }
 
 .native_check_status <- function(handle) {

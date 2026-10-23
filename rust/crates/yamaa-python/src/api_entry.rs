@@ -202,14 +202,24 @@ impl Check {
     }
 }
 
+/// The check of a specification, or, with `parent`, of a fragment composed on
+/// the specification `parent` names as its parent (#3694).
 #[pyfunction]
-#[pyo3(signature=(specification, project=None))]
-pub fn _spec_check(py: Python<'_>, specification: &str, project: Option<&str>) -> PyResult<Check> {
+#[pyo3(signature=(specification, project=None, parent=None))]
+pub fn _spec_check(
+    py: Python<'_>,
+    specification: &str,
+    project: Option<&str>,
+    parent: Option<&str>,
+) -> PyResult<Check> {
     crate::interrupt::run(py, |token| {
-        engine(py)?
-            .spec_check(specification, project, token)
-            .map(Check::new)
-            .map_err(|error| raise_error(py, Action::Read(specification), error))
+        let engine = engine(py)?;
+        match parent {
+            Some(parent) => engine.spec_check_on(specification, project, parent, token),
+            None => engine.spec_check(specification, project, token),
+        }
+        .map(Check::new)
+        .map_err(|error| raise_error(py, Action::Read(specification), error))
     })
 }
 

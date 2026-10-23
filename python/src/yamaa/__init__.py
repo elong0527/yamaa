@@ -79,7 +79,13 @@ def _negotiate(native) -> None:
 _negotiate(_native)
 
 from yamaa._native import Table  # noqa: E402
-from yamaa._support import __version__, _fspath, _fspaths, _Lazy  # noqa: E402
+from yamaa._support import (  # noqa: E402
+    __version__,
+    _fspath,
+    _fspaths,
+    _Lazy,
+    _optional_fspath,
+)
 
 __all__ = [
     "Error",
@@ -280,9 +286,13 @@ class Spec(_Lazy):
         self._project = project
         self._plans = _native._plans()
 
-    def check(self) -> Check:
-        """Report problems without reading study data or running project code."""
-        return Check(_call(_native._spec_check, self._path, self._project))
+    def check(self, parent=None) -> Check:
+        """Report problems without reading study data or running project code; with `parent`, check this fragment as if the specification at that path were its parent."""
+        return Check(
+            _call(
+                _native._spec_check, self._path, self._project, _optional_fspath(parent)
+            )
+        )
 
     def resolve(self) -> dict:
         """The specification after its layers are composed."""

@@ -46,10 +46,16 @@ yamaa_spec(path)
 \value{
 An object with three methods:
 \describe{
-  \item{\code{$check()}}{A check: \code{$status} is \code{"failed"} when the
-    check found a problem, and \code{"succeeded"} otherwise, and the
-    \code{$issues} data frame lists the problems found without reading study
-    data or running project code.}
+  \item{\code{$check(parent = NULL)}}{A check: \code{$status} is
+    \code{"failed"} when the check found a problem, and \code{"succeeded"}
+    otherwise, and the \code{$issues} data frame lists the problems found
+    without reading study data or running project code. With \code{parent},
+    the path of another specification, the specification is checked as a
+    fragment whose parent is \code{parent}, as it would compose in a file
+    that names \code{parent} as its \code{parent}, includes the fragment and
+    writes nothing else; a specification that declares \code{parent} or
+    \code{include} is no fragment, and the call fails with a
+    \code{yamaa_error} condition.}
   \item{\code{$resolve()}}{The specification after its layers are composed, as
     a named list.}
   \item{\code{$run()}}{A run: \code{$status} is \code{"succeeded"} when the run
