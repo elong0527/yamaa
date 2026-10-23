@@ -47,7 +47,7 @@ other configuration.
 
 | Feature | Dependency edge and capability |
 | --- | --- |
-| `yaml` | Saphyr parser and adapter scalar decoding; admits specification, schema, environment and project-lock YAML bytes, and the files `lint` checks. |
+| `yaml` | Saphyr parser and adapter scalar decoding; admits specification, project, codelists, function and schema YAML bytes, and the files `lint` checks. |
 | `parquet` | Parquet source and artifact encoding, schema metadata, and Brotli, Gzip, LZ4, Snappy and Zstd codecs. Zstd builds native C through `zstd-sys` and `cc`. |
 | `readstat` | Bundled read-only C backend and direct `cc` build dependency for `.sas7bdat` and `.xpt` input. |
 | `odm` | The `quick-xml` tokenizer and the pure-Rust Gzip codec; reads CDISC ODM 1.3 and 2.0 XML clinical items from plain XML or plain/Gzip TAR files into the fixed clinical-item table, for `read_odm` and for a specification's `.xml` inputs. |

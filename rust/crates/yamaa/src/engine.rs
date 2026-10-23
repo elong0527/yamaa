@@ -64,10 +64,8 @@ impl EngineOptions {
     /// [`EngineOptions::with_functions`] are never called.
     /// Every function file a 1.0 project lists is still read and admitted,
     /// so a check or resolve of a specification that calls one runs as a
-    /// host's does; a 0.5 project's functions are declared in the environment
-    /// files such an engine does not read, so each call to one is refused
-    /// while the specification compiles. Every build that calls no project
-    /// function runs as a host runs it, with or without a project.
+    /// host's does. Every build that calls no project function runs as a
+    /// host runs it, with or without a project.
     pub fn neutral(runtime_name: String, runtime_version: String) -> Self {
         Self {
             resolver: None,

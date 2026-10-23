@@ -175,25 +175,19 @@ fn integer_tokens_beyond_sixty_four_bits_stay_exact_numbers() {
 
 /// `check` takes the host language from the engine options, never from the
 /// runtime name: an embedder may name its runtime anything (#2838). The
-/// project links only an R environment file, which declares a field no
-/// environment file has, so only an R engine opens it and reports the field,
-/// and a check and a run agree on it. The project and environment files stay
-/// as 0.5 wrote them until environment files go (#3030 D8).
+/// project holds only an R lock, which is no packaging lock, so only an R
+/// engine reads it and reports it at the field that holds it (FUNC-3,
+/// PROJECT-2), and a check and a run agree on it.
 #[test]
 fn check_takes_the_host_language_from_the_options_not_the_runtime_name() {
     const SPECIFICATION: &[u8] = b"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n";
-    const PROJECT: &[u8] = b"schema_version: '1.0'\nenvironments: {r: environment.yaml}\n";
-    const ENVIRONMENT: &[u8] = b"schema_version: '1.0'\nlanguage: r\n";
+    const PROJECT: &[u8] = b"yamaa: '1.0'\ntype: project\nenvironments: {r: {lock: renv.lock}}\n";
+    const LOCK: &[u8] = b"no packaging lock\n";
     for (host, opened) in [(HostLanguage::R, true), (HostLanguage::Python, false)] {
         let resolver = Arc::new(MemoryResolver::new());
         resolver.insert("/", "spec.yaml", "spec:1", Arc::from(SPECIFICATION));
         resolver.insert("/", "project.yaml", "project:1", Arc::from(PROJECT));
-        resolver.insert(
-            "/project.yaml",
-            "environment.yaml",
-            "environment:1",
-            Arc::from(ENVIRONMENT),
-        );
+        resolver.insert("/project.yaml", "renv.lock", "lock:1", Arc::from(LOCK));
         let engine = Engine::new(
             EngineOptions::new(host, "embedder".into(), "0".into()).with_resolver(resolver),
         );
@@ -209,7 +203,8 @@ fn check_takes_the_host_language_from_the_options_not_the_runtime_name() {
             .diagnostics();
         for (route, diagnostics) in [("check", &checked), ("run", &ran)] {
             let reported = diagnostics.iter().any(|diagnostic| {
-                diagnostic.code == "unknown_field" && diagnostic.spec_path == ["language"]
+                diagnostic.code == "function_file_invalid"
+                    && diagnostic.spec_path == ["environments.r.lock"]
             });
             assert_eq!(
                 reported,

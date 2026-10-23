@@ -36,8 +36,7 @@ fn function(run: &PreparedRun, selected: usize) -> Result<(&Function, &str), Err
     {
         return Err(Error::InvalidObservation);
     }
-    // The file that holds the definition: its 0.5 definition file, the 0.5
-    // environment file that declares it inline, or its 1.0 function file.
+    // The function file that holds the definition.
     let source = run
         .captured_environment()
         .function_origin(index)

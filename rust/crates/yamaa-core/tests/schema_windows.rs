@@ -27,7 +27,6 @@ mod schema {
                         (
                             "root_class",
                             V::List(vec![
-                                field("schema_version", "str"),
                                 field("windows", "dict[str, window_spec]"),
                                 field("columns", "list[column_class]"),
                                 field("metadata", "dict"),

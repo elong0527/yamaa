@@ -1,9 +1,9 @@
 #![cfg(feature = "yaml")]
 //! The 1.0 schema files in `yaml/v1/`, read with the engine's schema model.
 //!
-//! The package embeds the closure of each 1.0 file type beside the 0.5 ones,
-//! and the engine's bundle rules accept the notation the 1.0 files are written
-//! in, `kind` included (`yaml/README.md`). Each file type's closure is admitted
+//! The package embeds the closure of each 1.0 file type, and the engine's
+//! bundle rules accept the notation the 1.0 files are written in, `kind`
+//! included (`yaml/README.md`). Each file type's closure is admitted
 //! with valid defaults, and every converted example of the 1.0 interface RFC
 //! passes the document decoder: its header selects its closure, and it is
 //! admitted at the version it declares, a specification layer by layer.
@@ -11,7 +11,7 @@ mod declaration {
     mod v1_schema {
         use std::collections::BTreeSet;
         use std::path::{Path, PathBuf};
-        use yamaa_adapters::document::{self, check_references, Closures, Decoded};
+        use yamaa_adapters::document::{self, check_references, Closures};
         use yamaa_adapters::shipped_schema;
         use yamaa_adapters::specification_source::{Error, Source};
         use yamaa_adapters::yaml_decode::decode_yaml;
@@ -119,11 +119,11 @@ mod declaration {
                     identity: identity.clone(),
                     bytes: std::fs::read(path).unwrap(),
                 };
-                let Decoded::Versioned(document) =
-                    document::decode(source, file_type, Some(LANGUAGE_VERSION), &closures).unwrap()
-                else {
-                    panic!("{identity}: every example declares the 1.x header");
-                };
+                let document =
+                    document::decode(source, file_type, Some(LANGUAGE_VERSION), &closures)
+                        .unwrap_or_else(|error| {
+                            panic!("{identity}: every example declares the 1.x header: {error:?}")
+                        });
                 assert_eq!(document.header().version, LANGUAGE_VERSION);
                 // Every file an example's referencing fields name declares the
                 // type its field reads. No example selects `relative_to: entry`.
@@ -206,16 +206,13 @@ mod declaration {
                 ),
                 ("cm_per_m: 100", "cm_per_m: {date: 2024-01-01}"),
             ] {
-                let decoded = document::decode(
+                let document = document::decode(
                     edit(old, new),
                     FileType::Spec,
                     Some(LANGUAGE_VERSION),
                     &closures,
                 )
                 .unwrap();
-                let Decoded::Versioned(document) = decoded else {
-                    panic!("{new}: the 1.x header selects the 1.0 path: {decoded:?}");
-                };
                 assert!(
                     document
                         .prepare_specification("spec.yaml".into(), &mut Files)

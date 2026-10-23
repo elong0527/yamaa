@@ -27,26 +27,12 @@
 
 pub mod checks;
 
-use crate::language::LanguageVersion;
-use crate::schema::{Document, DocumentNode as N};
+use crate::schema::Document;
 
 pub use crate::front_end::lowering::{Lowered, Positions};
 
 /// Lower one resolved 1.0 specification. Without positions every span is
 /// [`crate::ast::Span::UNKNOWN`].
 pub fn lower(resolved: &Document, positions: Option<&Positions>) -> Lowered {
-    crate::front_end::lowering::lower_specification(resolved, positions, minor(resolved))
-}
-
-/// The minor number of the version a 1.x document's `yamaa` declares; a
-/// document that declares no version it can be read at lowers as 1.0, and
-/// its own validation reports the header.
-fn minor(document: &Document) -> u32 {
-    document
-        .field(document.root(), "yamaa")
-        .and_then(|node| match &document.nodes()[node] {
-            N::Text(version) => LanguageVersion::parse(version),
-            _ => None,
-        })
-        .map_or(0, LanguageVersion::minor)
+    crate::front_end::lowering::lower_specification(resolved, positions)
 }

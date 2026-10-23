@@ -1,13 +1,13 @@
 //! The decoder port's one implementation. A parent layer or a dictionary
 //! file decodes with the shared YAML reader, keeping the position of each
-//! node; a file a project names decodes and admits against the project's
-//! schemas; and an input's bytes decode by its profile (CSV, Parquet, SAS or
+//! node; a file a project names decodes and admits against the 1.0 closure
+//! of its type; and an input's bytes decode by its profile (CSV, Parquet, SAS or
 //! ODM) into a table that keeps a caller's opaque error. Snapshot cells
 //! remain infallible; the error type is only the engine's shared callback
 //! boundary. This grants no host access or activation authority.
 use crate::{
     arrow_table::ArrowTable,
-    project_source::ProjectSchemas,
+    document::Closures,
     specification_run::Error,
     specification_source::{self, CapturedDocument, Source},
     yaml_decode::{decode_yaml, DecodedYaml},
@@ -48,24 +48,24 @@ impl<E> TableAccess for Snapshot<E> {
     }
 }
 pub struct Decoder<E> {
-    /// The schemas a project's files admit against, or none until a project
-    /// file is first admitted against the shipped schemas.
-    schemas: Option<ProjectSchemas>,
+    /// The closures a project's files admit against, or none until a project
+    /// file is first admitted against the shipped closures.
+    closures: Option<Closures>,
     error: PhantomData<fn() -> E>,
 }
 impl<E> Default for Decoder<E> {
     fn default() -> Self {
         Self {
-            schemas: None,
+            closures: None,
             error: PhantomData,
         }
     }
 }
 impl<E> Decoder<E> {
-    /// A decoder that admits a project's files against `schemas`.
-    pub fn with_schemas(schemas: ProjectSchemas) -> Self {
+    /// A decoder that admits a project's files against `closures`.
+    pub fn with_closures(closures: Closures) -> Self {
         Self {
-            schemas: Some(schemas),
+            closures: Some(closures),
             error: PhantomData,
         }
     }
@@ -90,11 +90,11 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
         source: Source,
         target: DecodeTarget,
     ) -> Result<CapturedDocument, Self::DocumentError> {
-        let schemas = match &mut self.schemas {
-            Some(schemas) => schemas,
-            empty => empty.insert(crate::shipped_schema::capture_project()?),
+        let closures = match &mut self.closures {
+            Some(closures) => closures,
+            empty => empty.insert(Closures::shipped()?),
         };
-        schemas.admit(source, target)
+        crate::project_source::admit(closures, source, target)
     }
     fn admitted_document(admitted: &CapturedDocument) -> &yamaa_core::schema::Document {
         &admitted.normalized().document

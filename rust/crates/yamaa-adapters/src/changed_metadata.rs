@@ -7,23 +7,22 @@ use crate::{
     specification_source::{CapturedDocument, LinkedSpecification, PreparedDocument},
 };
 use yamaa_core::{
-    ast::{self, CodelistSource, FunctionSource},
+    ast::{self, CodelistSource},
     diagnostic::Diagnostic,
     project_function::Language,
     resource::ResourceFailure,
 };
 
-/// The project file, its lowered root and the environment documents it
-/// linked, as captured.
+/// The project file, its lowered root and the documents it names, as
+/// captured.
 pub(crate) struct Environment<'a> {
     /// The project file path as preparation was given it.
     pub(crate) written: &'a str,
     /// The host language, or none for an engine that claims no host language,
-    /// which holds no environment file or lock.
+    /// which holds no lock.
     pub(crate) host: Option<Language>,
     pub(crate) root: &'a CapturedDocument,
     pub(crate) project: &'a ast::Project,
-    pub(crate) environment_file: Option<&'a CapturedDocument>,
     pub(crate) lock: Option<&'a LockCapture>,
     pub(crate) captures: &'a [DocumentCapture],
 }
@@ -117,8 +116,8 @@ pub(crate) fn inventory(
         })
 }
 
-/// The environment's own documents: the project file, the environment file it
-/// links for the host, and the lock, functions and codelists they declare.
+/// The environment's own documents: the project file and the lock, function
+/// files and codelists it declares (D8).
 pub(crate) fn environment(
     environment: &Environment<'_>,
     identity: &str,
@@ -127,30 +126,14 @@ pub(crate) fn environment(
     if environment.root.source().identity == identity {
         return Some(failure.field_diagnostic("environment", environment.written));
     }
-    // A 0.5 project declares its environment link and codelists, and the
-    // linked environment file its lock and functions; a 1.0 project declares
-    // its lock, function files and codelists itself (D8).
     let project = environment.project;
-    let host = environment
-        .host
-        .and_then(|language| project.environment(language));
-    if environment
-        .environment_file
-        .is_some_and(|file| file.source().identity == identity)
-    {
-        let key = environment.host?.key();
-        let written = &host?.file.as_ref()?.text;
-        return Some(failure.field_diagnostic(&format!("environments.{key}"), written));
-    }
     if environment
         .lock
         .is_some_and(|lock| lock.source.identity == identity)
     {
-        let written = &host?.lock.as_ref()?.text;
-        let field = match project.header.surface {
-            ast::Surface::V0_5 => "lock".into(),
-            ast::Surface::V1 { .. } => format!("environments.{}.lock", environment.host?.key()),
-        };
+        let host = environment.host?;
+        let written = &project.environment(host)?.lock.as_ref()?.text;
+        let field = format!("environments.{}.lock", host.key());
         return Some(failure.field_diagnostic(&field, written));
     }
     let capture = environment
@@ -158,23 +141,8 @@ pub(crate) fn environment(
         .iter()
         .find(|capture| capture.document.source().identity == identity)?;
     match &capture.origin {
-        Origin::Function(name) => {
-            let declaration = project.functions.as_deref()?.iter().find(|declaration| {
-                declaration
-                    .key
-                    .as_ref()
-                    .is_some_and(|key| key.name == *name)
-            })?;
-            let FunctionSource::File(written) = &declaration.source else {
-                return None;
-            };
-            Some(failure.field_diagnostic(&format!("functions.{name}"), &written.text))
-        }
         Origin::FunctionFile(index) => {
-            let declaration = project.functions.as_deref()?.get(*index)?;
-            let FunctionSource::File(written) = &declaration.source else {
-                return None;
-            };
+            let written = &project.functions.as_deref()?.get(*index)?.file;
             Some(failure.field_diagnostic(&format!("functions[{index}]"), &written.text))
         }
         Origin::Codelist(index) => {
@@ -183,6 +151,6 @@ pub(crate) fn environment(
             };
             Some(failure.field_diagnostic(&format!("codelists[{index}]"), &written.text))
         }
-        Origin::Lock | Origin::Environment(_) => None,
+        Origin::Lock => None,
     }
 }

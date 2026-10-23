@@ -9,12 +9,10 @@
 use crate::support::Edit as _;
 use std::fs;
 use std::path::Path;
-use yamaa_adapters::document::{
-    self, Closures, Decoded, PreparedSpecification, SpecificationError,
-};
+use yamaa_adapters::document::{self, Closures, PreparedSpecification, SpecificationError};
 use yamaa_adapters::specification_source::{Error, Source};
 use yamaa_core::ast::{
-    Comparator, ExprId, ExprKind, JoinKey, KeyDecl, Literal, ModelKind, Profile, Spec, Surface,
+    Comparator, ExprId, ExprKind, JoinKey, KeyDecl, Literal, ModelKind, Profile, Spec,
 };
 use yamaa_core::diagnostic::ConditionCode;
 use yamaa_core::expression::Context;
@@ -96,8 +94,8 @@ fn prepare(
     };
     let closures = Closures::shipped().unwrap();
     match document::decode(source, FileType::Spec, Some(LANGUAGE_VERSION), &closures) {
-        Ok(Decoded::Versioned(document)) => document.prepare_specification(identity, &mut Files),
-        other => panic!("{entry}: {other:?}"),
+        Ok(document) => document.prepare_specification(identity, &mut Files),
+        Err(error) => panic!("{entry}: {error:?}"),
     }
 }
 
@@ -245,7 +243,7 @@ fn model_keys_and_profiles_lower_as_declared() {
              intermediates:\n  - {id: NAMES, dataset: ODM, key: [ID]}",
         ),
     );
-    assert_eq!(spec.header.surface, Surface::V1 { minor: 0 });
+    assert_eq!(spec.header.version.text, "1.0");
     assert_eq!(
         spec.model.as_ref().map(|model| model.kind),
         Some(ModelKind::Adam)

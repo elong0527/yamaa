@@ -208,7 +208,6 @@ fn changed(
                 host: environment.environment().host(),
                 root,
                 project,
-                environment_file: environment.environment_file(),
                 lock: environment.lock(),
                 captures: environment.captures(),
             }),

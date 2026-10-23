@@ -218,23 +218,12 @@ impl Project {
                 written.push((section, index, spec.text.clone()));
             }
         }
-        // A 1.0 project reads the header of each specification it lists at
-        // the listing (SCHEMA-2); a 0.5 project, whose route goes in P2-13d,
-        // leaves a listed file's refusal to that file's own check or build.
-        let versioned = environment.project().is_some_and(|project| {
-            matches!(project.header.surface, yamaa_core::ast::Surface::V1 { .. })
-        });
+        // A project reads the header of each specification it lists at the
+        // listing (SCHEMA-2).
         let (listed, documents): (Vec<_>, Vec<_>) = written
             .into_iter()
             .map(|(section, index, written)| {
-                read_listing(
-                    &mut resources,
-                    &identity,
-                    versioned,
-                    section,
-                    index,
-                    &written,
-                )
+                read_listing(&mut resources, &identity, section, index, &written)
             })
             .unzip();
         let listings = listed
@@ -508,7 +497,6 @@ impl Project {
 fn read_listing(
     resources: &mut Resources,
     project: &str,
-    versioned: bool,
     section: Submission,
     index: usize,
     written: &str,
@@ -535,19 +523,20 @@ fn read_listing(
             return (listed, None);
         }
     }
-    if let Some((identity, refused)) = versioned
-        .then(|| resources.resolve_from(project, written).ok())
-        .flatten()
-        .and_then(|identity| {
-            let refused = crate::file_preparation::refused_header(
-                resources,
-                project,
-                written,
-                &identity,
-                &listed.listing(),
-            )?;
-            Some((identity, refused))
-        })
+    if let Some((identity, refused)) =
+        resources
+            .resolve_from(project, written)
+            .ok()
+            .and_then(|identity| {
+                let refused = crate::file_preparation::refused_header(
+                    resources,
+                    project,
+                    written,
+                    &identity,
+                    &listed.listing(),
+                )?;
+                Some((identity, refused))
+            })
     {
         listed.identity = Some(identity);
         listed.failure = vec![refused];

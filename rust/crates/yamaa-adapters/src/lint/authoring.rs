@@ -351,15 +351,9 @@ fn reads_intermediate(value: &Data, intermediates: &BTreeSet<&str>) -> bool {
         })
 }
 
-/// True when `value` is a literal derivation, driver-independent: in a 1.x
-/// file quoted text, a YAML number or null (D18), and in a 0.5 file
-/// `{literal: X}`.
-fn is_literal(value: &Data, versioned: bool) -> bool {
-    if !versioned {
-        return value
-            .map()
-            .is_some_and(|entries| entries.len() == 1 && entries[0].0.text() == Some("literal"));
-    }
+/// True when `value` is a literal derivation, driver-independent: quoted
+/// text, a YAML number or null (D18).
+fn is_literal(value: &Data) -> bool {
     match value {
         Data::Null | Data::Integer(_) | Data::Float(_) => true,
         Data::Text(text) => yamaa_core::expression::parse(text).is_ok_and(|parsed| {
@@ -545,15 +539,11 @@ fn repeated_row_derivations(document: &Document, value: &Data) -> Vec<Departure>
         })
         .filter_map(|entry| entry.get("name").and_then(Data::text))
         .collect::<HashSet<_>>();
-    // In a 1.x file a read of a `SELF` intermediate is not row-local, and a
-    // read of an intermediate an input backs is (SPEC-6). A 0.5 file keeps
-    // the 0.5 reading, in which a read of any named intermediate uses a
-    // lookup.
+    // A read of a `SELF` intermediate is not row-local, and a read of an
+    // intermediate an input backs is (SPEC-6).
     let intermediates = entries(value, "intermediates")
         .into_iter()
-        .filter(|entry| {
-            !document.versioned || entry.get("dataset").and_then(Data::text) == Some("SELF")
-        })
+        .filter(|entry| entry.get("dataset").and_then(Data::text) == Some("SELF"))
         .filter_map(|entry| entry.get("id").and_then(Data::text))
         .collect::<BTreeSet<_>>();
     let blocked = blocked_columns(&columns, &intermediates);
@@ -609,7 +599,7 @@ fn repeated_row_derivations(document: &Document, value: &Data) -> Vec<Departure>
         }
         // Different drivers bind different records; only a literal is
         // driver-independent.
-        if !uniform_driver && !is_literal(derivation, document.versioned) {
+        if !uniform_driver && !is_literal(derivation) {
             continue;
         }
         if strings(derivation).into_iter().any(|text| {
@@ -636,26 +626,6 @@ fn repeated_row_derivations(document: &Document, value: &Data) -> Vec<Departure>
         ));
     }
     found
-}
-
-/// True when an explicit key states exactly the output keys.
-fn key_equals_output_keys(key: &Data, output_keys: &[&str]) -> bool {
-    let wanted = output_keys.iter().copied().collect::<HashSet<_>>();
-    if let Some(items) = key.list() {
-        let texts = items.iter().map(Data::text).collect::<Option<HashSet<_>>>();
-        return texts.is_some_and(|texts| texts == wanted);
-    }
-    if let Some(entries) = key.map() {
-        let names = entries
-            .iter()
-            .map(|(name, _)| name.text())
-            .collect::<Option<HashSet<_>>>();
-        return names.is_some_and(|names| names == wanted)
-            && entries
-                .iter()
-                .all(|(column, item)| item.text().is_some() && column.text() == item.text());
-    }
-    false
 }
 
 /// True when `key` is a mapping pairing exactly the columns `input_key`
@@ -694,15 +664,15 @@ const NARROWING: [&str; 7] = [
     "columns",
 ];
 
-/// `redundant_intermediate` in a 1.x file: a named intermediate equal to the
-/// implicit join to its input (LOOKUP-1, LOOKUP-4). An intermediate that
+/// `redundant_intermediate`: a named intermediate equal to the implicit join
+/// to its input (LOOKUP-1, LOOKUP-4). An intermediate that
 /// narrows nothing, answers absence with the join's missing (`absent`
 /// omitted or null), requires no match, and whose `key` pairs exactly the
 /// columns of its input's declared `key`, each with the same-named value,
 /// reads what `DATASET.COLUMN` already reads. A `key` written as that list
 /// fails validation as `rename_only_intermediate` instead, so only the
 /// mapping that spells the same pairs is reported.
-fn redundant_intermediates_1_0(document: &Document, value: &Data) -> Vec<Departure> {
+fn redundant_intermediates(document: &Document, value: &Data) -> Vec<Departure> {
     let mut found = Vec::new();
     for (index, entry) in indexed(value, "intermediates") {
         let (Some(identifier), Some(dataset)) = (
@@ -767,99 +737,6 @@ fn redundant_intermediates_1_0(document: &Document, value: &Data) -> Vec<Departu
     found
 }
 
-/// `redundant_intermediate`: a named intermediate equal to the implicit join.
-/// A simple intermediate with no filter, selection, custom key or handler
-/// that changes behavior reads what `DATASET.COLUMN` already reads; only an
-/// explicit key that restates the output keys is reported. A 1.x file reads
-/// it by its 1.0 meaning ([`redundant_intermediates_1_0`]).
-fn redundant_intermediates(document: &Document, value: &Data) -> Vec<Departure> {
-    if document.versioned {
-        return redundant_intermediates_1_0(document, value);
-    }
-    let mut found = Vec::new();
-    let Some(keys) = value
-        .get("keys")
-        .and_then(Data::list)
-        .and_then(|keys| keys.iter().map(Data::text).collect::<Option<Vec<_>>>())
-    else {
-        return found;
-    };
-    let Some(raw_intermediates) = value.get("intermediates").and_then(Data::list) else {
-        return found;
-    };
-    let required = value
-        .get("input")
-        .and_then(Data::map)
-        .map(|inputs| {
-            inputs
-                .iter()
-                .filter(|(_, declaration)| {
-                    declaration
-                        .get("require_match")
-                        .is_some_and(|flag| matches!(flag, Data::Boolean(true)))
-                })
-                .map(|(name, _)| name)
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-    for (index, entry) in indexed(value, "intermediates") {
-        let (Some(identifier), Some(dataset)) = (
-            entry.get("id").and_then(Data::text),
-            entry.get("dataset").and_then(Data::text),
-        ) else {
-            continue;
-        };
-        let dataset_value = Data::Text(dataset.to_owned());
-        if dataset == "SELF" || required.iter().any(|name| equal(name, &dataset_value)) {
-            continue;
-        }
-        if declares_any(entry, &NARROWING) {
-            continue;
-        }
-        let raw = raw_intermediates
-            .get(index)
-            .filter(|raw| raw.map().is_some());
-        let field = |name: &str| raw.and_then(|raw| raw.get(name));
-        // A required match fails where the join yields missing, and another
-        // literal answers there. Omitted, cleared by a bare null or
-        // `{literal: null}`, the answer is the join's missing value.
-        let cleared = Data::Map(vec![(Data::Text("literal".into()), Data::Null)]);
-        if field("require_match").is_some_and(|flag| matches!(flag, Data::Boolean(true)))
-            || field("no_match").is_some_and(|answer| !answer.is_null() && !equal(answer, &cleared))
-        {
-            continue;
-        }
-        // An omitted key is a rename that validation owns.
-        let Some(key) = entry.get("key").filter(|key| !key.is_null()) else {
-            continue;
-        };
-        if !key_equals_output_keys(key, &keys) {
-            continue;
-        }
-        if !strings(value)
-            .into_iter()
-            .any(|text| reads_qualified_name(text, identifier))
-        {
-            continue;
-        }
-        let Some((line, column, spec_path)) = entry_key(document, "intermediates", index, "id")
-        else {
-            continue;
-        };
-        found.push(Departure::new(
-            "redundant_intermediate",
-            line,
-            column,
-            spec_path,
-            format!(
-                "intermediate `{identifier}` reads exactly what the implicit \
-                 join to `{dataset}` reads; read `{dataset}` directly"
-            ),
-        ));
-    }
-    found
-}
-
 /// Every authoring departure in `document`; none when its root is not a mapping.
 pub(super) fn check(document: &Document) -> Vec<Departure> {
     let Some(root) = document.root else {
@@ -872,9 +749,7 @@ pub(super) fn check(document: &Document) -> Vec<Departure> {
     let mut found = missing_labels(document, &value);
     found.extend(repeated_row_derivations(document, &value));
     found.extend(redundant_intermediates(document, &value));
-    if document.versioned {
-        found.extend(unused_input_keys(document, &value));
-    }
+    found.extend(unused_input_keys(document, &value));
     sort(&mut found);
     found
 }

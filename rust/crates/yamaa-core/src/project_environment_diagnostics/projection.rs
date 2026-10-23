@@ -4,19 +4,16 @@
 //! and captured identities from one attempt. Matching identity strings or
 //! equal contents cannot establish that ownership. Origin checks validate the
 //! supplied retained relationships against the project root's declarations;
-//! they do not manufacture provenance or authorize source reads. A 0.5
-//! project file declares codelists and environment links, and the linked
-//! environment file declares the lock and functions. A 1.0 project file
-//! declares codelists, the lock and the function files, and each function
-//! file declares its own definition (D8). Each finding names the file that
-//! declares its subject.
+//! they do not manufacture provenance or authorize source reads. A project
+//! file declares codelists, the lock and the function files, and each
+//! function file declares its own definition (D8). Each finding names the
+//! file that declares its subject.
 use super::{finding_diagnostic, scalar_diagnostic, Error as CoreError, Project};
 use crate::json::Value as JsonValue;
 use crate::{
-    ast::{self, CodelistSource, FunctionSource, Surface},
+    ast::{self, CodelistSource},
     diagnostic::{ConditionCode, Diagnostic},
     project_environment::{Draft, Finding},
-    project_function::Finding as FunctionFinding,
     project_function_document::{Finding as ScalarFinding, Kind as ScalarKind},
     value::Value,
 };
@@ -36,36 +33,28 @@ impl From<CoreError> for Error {
     }
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Origin<'a> {
-    /// The environment file named by a 0.5 project's `environments` key.
-    Environment(&'a str),
-    /// A definition file a 0.5 environment file keys by this name.
-    Function(&'a str),
-    /// A function file a 1.0 project lists, by its index in `functions`.
+pub enum Origin {
+    /// A function file the project lists, by its index in `functions`.
     FunctionFile(usize),
     Codelist(usize),
 }
 /// One captured file and the declaration that names it.
 #[derive(Clone, Copy)]
 pub struct Capture<'a> {
-    pub origin: Origin<'a>,
+    pub origin: Origin,
     pub identity: &'a str,
 }
 /// Origin slices and captures are borrowed from the same retained attempt as
 /// `draft` and `project`. Admission retains borrowed descriptors in a
 /// collection, so an arbitrary input iterator is never replayed.
 pub struct Admission<'a, I> {
-    /// The project root, lowered with the environment file it links for the
-    /// host when that file lowered.
+    /// The project root.
     pub project: &'a ast::Project,
     /// The project file's identity.
     pub root: &'a str,
-    /// The identity of the environment file the project links for the host,
-    /// when captured.
-    pub environment: Option<&'a str>,
     pub draft: &'a Draft,
     pub function_origins: &'a [String],
-    /// For a 1.0 project, the index in `functions` of each definition's file.
+    /// The index in `functions` of each definition's file.
     pub function_files: &'a [usize],
     pub codelist_origins: &'a [usize],
     pub captures: I,
@@ -79,7 +68,6 @@ pub struct ScalarSource<'a> {
 pub struct AdmissionReport<'a> {
     project: &'a ast::Project,
     root: &'a str,
-    environment: Option<&'a str>,
     draft: &'a Draft,
     function_origins: &'a [String],
     function_files: &'a [usize],
@@ -89,12 +77,10 @@ pub struct AdmissionReport<'a> {
 }
 pub struct RootScalarReport<'a> {
     root: &'a str,
-    surface: Surface,
     findings: &'a [ScalarFinding],
 }
 pub struct ScalarSourcesReport<'a> {
     root: &'a str,
-    surface: Surface,
     sources: Vec<ScalarSource<'a>>,
 }
 
@@ -292,40 +278,16 @@ impl<'a> Project<'a> for Borrowed {
         d.field(key, FieldValue::Integer(text))
     }
 }
-/// The function declaration `name` keys, among those the environment file
-/// declares.
-fn function_declaration<'a>(
-    project: &'a ast::Project,
-    name: &str,
-) -> Result<&'a ast::FunctionDeclaration, Error> {
-    project
-        .functions
-        .as_deref()
-        .ok_or(Error::InvalidOrigin)?
-        .iter()
-        .find(|declaration| declaration.key.as_ref().is_some_and(|key| key.name == name))
-        .ok_or(Error::InvalidOrigin)
-}
 /// Whether the declaration `origin` names is written as a path, so names a
-/// file of its own. Functions are declared by the linked environment file;
-/// codelists and the environment link itself by the project file.
-fn declares_file(project: &ast::Project, origin: Origin<'_>) -> Result<bool, Error> {
+/// file of its own: every listed function is a function file, and a codelist
+/// source is a file or written in place.
+fn declares_file(project: &ast::Project, origin: Origin) -> Result<bool, Error> {
     match origin {
-        Origin::Environment(key) => project
-            .environments
-            .iter()
-            .find(|environment| environment.language.key() == key)
-            .map(|environment| environment.file.is_some())
-            .ok_or(Error::InvalidOrigin),
-        Origin::Function(name) => Ok(matches!(
-            function_declaration(project, name)?.source,
-            FunctionSource::File(_)
-        )),
         Origin::FunctionFile(index) => project
             .functions
             .as_deref()
             .and_then(|declarations| declarations.get(index))
-            .map(|declaration| matches!(declaration.source, FunctionSource::File(_)))
+            .map(|_| true)
             .ok_or(Error::InvalidOrigin),
         Origin::Codelist(index) => project
             .codelists
@@ -334,17 +296,9 @@ fn declares_file(project: &ast::Project, origin: Origin<'_>) -> Result<bool, Err
             .ok_or(Error::InvalidOrigin),
     }
 }
-fn declaration(origin: Origin<'_>) -> Result<Path<'_>, CoreError> {
+fn declaration<'a>(origin: Origin) -> Result<Path<'a>, CoreError> {
     let mut path = Path::new();
     match origin {
-        Origin::Environment(key) => {
-            path.text("environments.")?;
-            path.text(key)?;
-        }
-        Origin::Function(name) => {
-            path.text("functions.")?;
-            path.text(name)?;
-        }
         Origin::FunctionFile(index) => {
             path.text("functions")?;
             path.index(index)?;
@@ -356,12 +310,9 @@ fn declaration(origin: Origin<'_>) -> Result<Path<'_>, CoreError> {
     }
     Ok(path)
 }
-fn versioned(project: &ast::Project) -> bool {
-    matches!(project.header.surface, Surface::V1 { .. })
-}
 fn capture_for<'a, I: Iterator<Item = Capture<'a>> + Clone>(
     captures: &I,
-    origin: Origin<'a>,
+    origin: Origin,
 ) -> Option<Capture<'a>> {
     captures.clone().find(|capture| capture.origin == origin)
 }
@@ -369,7 +320,6 @@ fn validate_admission<'a, I: Iterator<Item = Capture<'a>> + Clone>(
     input: &Admission<'a, I>,
 ) -> Result<(), Error> {
     let functions = input.draft.functions.as_deref().unwrap_or(&[]);
-    let versioned = versioned(input.project);
     if input.function_origins.len() != functions.len()
         || input.codelist_origins.len() != input.draft.codelists.len()
         || input
@@ -377,8 +327,7 @@ fn validate_admission<'a, I: Iterator<Item = Capture<'a>> + Clone>(
             .iter()
             .zip(functions)
             .any(|(name, function)| *name != function.name.name)
-        || input.draft.surface != input.project.header.surface
-        || input.function_files.len() != if versioned { functions.len() } else { 0 }
+        || input.function_files.len() != functions.len()
     {
         return Err(Error::InvalidOrigin);
     }
@@ -395,49 +344,19 @@ fn validate_admission<'a, I: Iterator<Item = Capture<'a>> + Clone>(
             return Err(Error::InvalidOrigin);
         }
         let included = match capture.origin {
-            Origin::Function(name) => {
-                !versioned && input.function_origins.iter().any(|origin| origin == name)
-            }
             Origin::FunctionFile(index) => input.function_files.contains(&index),
             Origin::Codelist(index) => input.codelist_origins.contains(&index),
-            // The linked environment file is held separately from captures.
-            Origin::Environment(_) => false,
         };
         if !included {
             return Err(Error::InvalidOrigin);
         }
     }
-    if versioned {
-        // Every 1.0 definition is a listed function file, held in listing
-        // order; failed captures leave holes, never reordered files.
-        for (typed, &index) in input.function_files.iter().enumerate() {
-            if (typed > 0 && input.function_files[typed - 1] >= index)
-                || capture_for(&input.captures, Origin::FunctionFile(index)).is_none()
-            {
-                return Err(Error::InvalidOrigin);
-            }
-        }
-        return codelist_order(input);
-    }
-    let mut authored = match &input.project.functions {
-        Some(declarations) => declarations.iter(),
-        None if input.function_origins.is_empty() => [].iter(),
-        None => return Err(Error::InvalidOrigin),
-    };
-    for name in input.function_origins {
-        // Successful typed declarations are an ordered subsequence of authored
-        // declarations. Failed captures leave holes, never reordered identities.
-        let declaration = authored
-            .by_ref()
-            .find(|declaration| {
-                declaration
-                    .key
-                    .as_ref()
-                    .is_some_and(|key| key.name == *name)
-            })
-            .ok_or(Error::InvalidOrigin)?;
-        let external = capture_for(&input.captures, Origin::Function(name)).is_some();
-        if external != matches!(declaration.source, FunctionSource::File(_)) {
+    // Every definition is a listed function file, held in listing order;
+    // failed captures leave holes, never reordered files.
+    for (typed, &index) in input.function_files.iter().enumerate() {
+        if (typed > 0 && input.function_files[typed - 1] >= index)
+            || capture_for(&input.captures, Origin::FunctionFile(index)).is_none()
+        {
             return Err(Error::InvalidOrigin);
         }
     }
@@ -465,8 +384,7 @@ fn admission_record<'a, I: Iterator<Item = Capture<'a>> + Clone>(
 ) -> Result<Record<'a>, Error> {
     let mut record = finding_diagnostic(input.draft, finding, &mut Borrowed)?;
     let raw_path = record.path;
-    let environment = || input.environment.ok_or(Error::InvalidOrigin);
-    // A 1.0 function file declares its own definition, whose finding already
+    // A function file declares its own definition, whose finding already
     // names its path in that file.
     let function_file = |function: usize| -> Result<(&'a str, Path<'a>), Error> {
         let index = *input
@@ -477,47 +395,13 @@ fn admission_record<'a, I: Iterator<Item = Capture<'a>> + Clone>(
         let capture = capture_for(&input.captures, origin).ok_or(Error::InvalidOrigin)?;
         Ok((capture.identity, declaration(origin)?))
     };
-    let versioned = versioned(input.project);
     let (source, declaration) = match finding {
-        Finding::Function { function, .. } | Finding::DuplicateFunction { function }
-            if versioned =>
-        {
+        Finding::Function { function, .. } | Finding::DuplicateFunction { function } => {
             function_file(*function)?
         }
-        // A 1.0 lock is declared by the project file, at the field the
-        // finding already names.
-        Finding::LockKindMismatch { .. } if versioned => (input.root, raw_path),
-        Finding::Function { function, finding } => {
-            let name = input
-                .function_origins
-                .get(*function)
-                .ok_or(Error::InvalidOrigin)?;
-            let origin = Origin::Function(name);
-            let external = if matches!(finding, FunctionFinding::InvalidName) {
-                None
-            } else {
-                capture_for(&input.captures, origin)
-            };
-            if external.is_some() {
-                record.path = raw_path.tail(2);
-                // The authored `functions.<name>.` separator is omitted without
-                // inspecting or reparsing a rendered diagnostic path.
-                let Some(Piece::Text(first)) = record.path.pieces[0] else {
-                    return Err(Error::Core(CoreError::UnavailableShape));
-                };
-                let Some(relative) = first.strip_prefix('.') else {
-                    return Err(Error::Core(CoreError::UnavailableShape));
-                };
-                record.path.pieces[0] = Some(Piece::Text(relative));
-            }
-            (
-                match external {
-                    Some(capture) => capture.identity,
-                    None => environment()?,
-                },
-                declaration(origin)?,
-            )
-        }
+        // The lock is declared by the project file, at the field the finding
+        // already names.
+        Finding::LockKindMismatch { .. } => (input.root, raw_path),
         Finding::Codelist(finding) => {
             let index = *input
                 .codelist_origins
@@ -550,11 +434,6 @@ fn admission_record<'a, I: Iterator<Item = Capture<'a>> + Clone>(
                 declaration(origin)?,
             )
         }
-        // The lock and duplicate function names are declared by the linked
-        // environment file, at the field path the finding already names.
-        Finding::LockKindMismatch { .. } | Finding::DuplicateFunction { .. } => {
-            (environment()?, raw_path)
-        }
     };
     record.provenance(source, input.root, declaration)?;
     Ok(record)
@@ -569,7 +448,6 @@ pub fn admit_admission<'a, I: Iterator<Item = Capture<'a>>>(
     let input = Admission {
         project: input.project,
         root: input.root,
-        environment: input.environment,
         draft: input.draft,
         function_origins: input.function_origins,
         function_files: input.function_files,
@@ -583,7 +461,6 @@ pub fn admit_admission<'a, I: Iterator<Item = Capture<'a>>>(
     Ok(AdmissionReport {
         project: input.project,
         root: input.root,
-        environment: input.environment,
         draft: input.draft,
         function_origins: input.function_origins,
         function_files: input.function_files,
@@ -597,7 +474,6 @@ impl AdmissionReport<'_> {
         let input = Admission {
             project: self.project,
             root: self.root,
-            environment: self.environment,
             draft: self.draft,
             function_origins: self.function_origins,
             function_files: self.function_files,
@@ -615,29 +491,18 @@ impl AdmissionReport<'_> {
 const INT_MIN: &str = "-9223372036854775808";
 const INT_MAX: &str = "9223372036854775807";
 
-/// A scalar finding's record in a file of `surface` that `origin` names, or
-/// the project file itself. A 0.5 file's scalar fails as the project
-/// environment does. In 1.0 a function file's fails as its file does
-/// (FUNC-2), and a codelist source's integer outside the `int` range fails as
-/// any runtime literal does, with `integer_overflow` (VALUE-5); a codelist
-/// source holds no other scalar the engine cannot read.
-fn scalar_record<'a>(
-    finding: &'a ScalarFinding,
-    surface: Surface,
-    origin: Option<Origin<'_>>,
-) -> Result<Record<'a>, Error> {
-    match (surface, origin) {
-        (Surface::V0_5, _) => scalar_diagnostic(
-            finding,
-            ConditionCode::ProjectEnvironmentInvalid,
-            &mut Borrowed,
-        )
-        .map_err(Error::Core),
-        (Surface::V1 { .. }, Some(Origin::FunctionFile(_))) => {
+/// A scalar finding's record in the file `origin` names, or the project file
+/// itself. A function file's fails as its file does (FUNC-2), and a codelist
+/// source's integer outside the `int` range fails as any runtime literal
+/// does, with `integer_overflow` (VALUE-5); a codelist source holds no other
+/// scalar the engine cannot read.
+fn scalar_record(finding: &ScalarFinding, origin: Option<Origin>) -> Result<Record<'_>, Error> {
+    match origin {
+        Some(Origin::FunctionFile(_)) => {
             scalar_diagnostic(finding, ConditionCode::FunctionFileInvalid, &mut Borrowed)
                 .map_err(Error::Core)
         }
-        (Surface::V1 { .. }, Some(Origin::Codelist(_)) | None) => {
+        Some(Origin::Codelist(_)) | None => {
             let (ScalarKind::IntegerRange, Some(value)) = (finding.kind, finding.value.as_deref())
             else {
                 return Err(Error::Core(CoreError::UnavailableShape));
@@ -649,26 +514,20 @@ fn scalar_record<'a>(
             record.field("maximum", FieldValue::Integer(INT_MAX))?;
             Ok(record)
         }
-        (Surface::V1 { .. }, Some(_)) => Err(Error::InvalidOrigin),
     }
 }
-/// Failed inline scalars of a project file written in `surface` report
-/// against the project root itself.
+/// Failed inline scalars of a project file report against the project root
+/// itself.
 pub fn admit_root_scalars<'a>(
     root: &'a str,
-    surface: Surface,
     findings: &'a [ScalarFinding],
 ) -> Result<RootScalarReport<'a>, Error> {
     let mut declaration = Path::new();
     declaration.text("$")?;
     for finding in findings {
-        scalar_record(finding, surface, None)?.provenance(root, root, declaration)?;
+        scalar_record(finding, None)?.provenance(root, root, declaration)?;
     }
-    Ok(RootScalarReport {
-        root,
-        surface,
-        findings,
-    })
+    Ok(RootScalarReport { root, findings })
 }
 impl RootScalarReport<'_> {
     pub fn diagnostics(&self) -> Result<Vec<Diagnostic>, Error> {
@@ -676,7 +535,7 @@ impl RootScalarReport<'_> {
         declaration.text("$")?;
         let mut diagnostics = Vec::new();
         for finding in self.findings {
-            let mut record = scalar_record(finding, self.surface, None)?;
+            let mut record = scalar_record(finding, None)?;
             record.provenance(self.root, self.root, declaration)?;
             diagnostics.push(record.materialize());
         }
@@ -685,16 +544,13 @@ impl RootScalarReport<'_> {
 }
 /// Consume source descriptors once. Semantic and opaque capture aggregation is
 /// unchanged: this report includes scalar failures only, never replacing other
-/// original failed captures or deciding their later boundary projection. In
-/// 0.5 a failed function file is declared by the captured environment file,
-/// and a failed environment file or codelist file by the project file; in 1.0
-/// the project file declares every one.
+/// original failed captures or deciding their later boundary projection. The
+/// project file declares every failed file.
 pub fn admit_scalar_sources<'a, I: Iterator<Item = ScalarSource<'a>>>(
     project: &ast::Project,
     root: &'a str,
     sources: I,
 ) -> Result<ScalarSourcesReport<'a>, Error> {
-    let surface = project.header.surface;
     let sources: Vec<_> = sources.collect();
     for (index, source) in sources.iter().enumerate() {
         if sources[..index]
@@ -706,18 +562,14 @@ pub fn admit_scalar_sources<'a, I: Iterator<Item = ScalarSource<'a>>>(
         }
         let declaration = declaration(source.capture.origin)?;
         for finding in source.findings {
-            scalar_record(finding, surface, Some(source.capture.origin))?.provenance(
+            scalar_record(finding, Some(source.capture.origin))?.provenance(
                 source.capture.identity,
                 root,
                 declaration,
             )?;
         }
     }
-    Ok(ScalarSourcesReport {
-        root,
-        surface,
-        sources,
-    })
+    Ok(ScalarSourcesReport { root, sources })
 }
 impl ScalarSourcesReport<'_> {
     pub fn diagnostics(&self) -> Result<Vec<Diagnostic>, Error> {
@@ -725,7 +577,7 @@ impl ScalarSourcesReport<'_> {
         for source in self.sources.iter() {
             let declaration = declaration(source.capture.origin)?;
             for finding in source.findings {
-                let mut record = scalar_record(finding, self.surface, Some(source.capture.origin))?;
+                let mut record = scalar_record(finding, Some(source.capture.origin))?;
                 record.provenance(source.capture.identity, self.root, declaration)?;
                 diagnostics.push(record.materialize());
             }

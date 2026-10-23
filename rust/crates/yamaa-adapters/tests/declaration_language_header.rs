@@ -8,8 +8,7 @@
 //! `unsupported_language_version`. The 1.0 path reads the header before
 //! choosing a closure, admits each document at the version it declares and
 //! each specification layer at its own, and checks the file every
-//! referencing field names. A 0.5 project, whose route goes in P2-13d, reads
-//! its environment files and codelist files under its 0.5 closures (D75).
+//! referencing field names.
 mod declaration {
     mod language_header {
         use crate::support::Edit as _;
@@ -18,7 +17,7 @@ mod declaration {
 
         use std::sync::Arc;
         use yamaa_adapters::document::{
-            self, check_references, Closures, Decoded, ReferenceError, SpecificationError,
+            self, check_references, Closures, ReferenceError, SpecificationError,
         };
         use yamaa_adapters::json;
 
@@ -236,64 +235,48 @@ mod declaration {
             assert_eq!(issue.spec_paths, ["yamaa"]);
         }
 
+        /// The project file a call names is read by its own header (SCHEMA-2):
+        /// one that declares `schema_version` is written in language 0.5,
+        /// which the engine does not read, and one that declares neither
+        /// header declares no version. Each is a finding of the project file,
+        /// which names it as `source` and `entry`, at its root.
         #[test]
-        fn a_0_5_project_reads_its_files_under_the_0_5_rules() {
+        fn a_project_file_that_declares_schema_version_is_refused_as_language_0_5() {
             let study = Study::new();
             study.write("input.csv", "ID\n1\n");
             study.write("spec.yaml", SPEC);
-            // The project file a call names is read by its own header.
             study.write("project.yaml", "yamaa: \"1.0\"\ntype: project\n");
             assert_eq!(study.check("spec.yaml", Some("project.yaml")), []);
-            // A 0.5 project, whose route goes in P2-13d, reads the
-            // environment file it links and a codelist file it lists under
-            // its 0.5 closures (D75): a 1.x file there lacks the
-            // `schema_version` they require, and its `yamaa` and `type` are
-            // unknown.
-            study.write(
-                "project.yaml",
-                "schema_version: '1.0'\nenvironments: {python: python/environment.yaml}\n",
-            );
-            study.write("python/environment.yaml", "yamaa: \"1.0\"\n");
-            let issues = study.check("spec.yaml", Some("project.yaml"));
-            assert_eq!(
-                issues
-                    .iter()
-                    .map(|issue| (issue.condition(), issue.spec_paths.clone()))
-                    .collect::<Vec<_>>(),
-                [
-                    ("missing_required_field", vec!["schema_version".to_string()]),
-                    ("unknown_field", vec!["yamaa".to_string()]),
-                ]
-            );
-            for issue in &issues {
+            let project = study.path("project.yaml");
+            for (text, row) in [
+                (
+                    "schema_version: '1.0'\nenvironments: {python: python/environment.yaml}\n",
+                    header_row(
+                        "unsupported_language_version",
+                        "schema_version",
+                        json!({"version": "0.5", "language_versions": ["1.0"],
+                            "source": project, "entry": project, "environment_path": "$"}),
+                    ),
+                ),
+                (
+                    "environments: {python: {lock: uv.lock}}\n",
+                    (
+                        "validation",
+                        "missing_required_field",
+                        Some("SCHEMA-13"),
+                        vec!["yamaa".into()],
+                        json!({"field": "yamaa", "class": "project_class",
+                            "source": project, "entry": project, "environment_path": "$"}),
+                    ),
+                ),
+            ] {
+                study.write("project.yaml", text);
                 assert_eq!(
-                    issue.context["source"],
-                    study.path("python/environment.yaml")
+                    rows(&study.check("spec.yaml", Some("project.yaml"))),
+                    [row],
+                    "{text}"
                 );
-                assert_eq!(issue.context["environment_path"], "environments.python");
             }
-            study.write(
-                "project.yaml",
-                "schema_version: '1.0'\ncodelists: [ct.yaml]\n",
-            );
-            study.write(
-                "ct.yaml",
-                "yamaa: \"1.0\"\ntype: codelists\ncodelists: []\n",
-            );
-            let issues = study.check("spec.yaml", Some("project.yaml"));
-            let fields = issues
-                .iter()
-                .map(|issue| (issue.condition(), issue.context["field"].clone()))
-                .collect::<Vec<_>>();
-            assert_eq!(
-                fields,
-                [
-                    ("unknown_field", Value::String("yamaa".into())),
-                    ("unknown_field", Value::String("type".into())),
-                ]
-            );
-            assert_eq!(issues[0].context["source"], study.path("ct.yaml"));
-            assert_eq!(issues[0].context["environment_path"], "codelists[0]");
         }
 
         /// A 1.0 specification reads the header of the producer a `schema`
@@ -398,8 +381,7 @@ mod declaration {
         /// section reports it too. A listed specification that declares
         /// `schema_version` is written in language 0.5, which the engine does
         /// not read. A malformed header stays the specification's own
-        /// finding, and a 0.5 project, whose route goes in P2-13d, reads no
-        /// header at its listings.
+        /// finding.
         #[test]
         fn a_1_0_project_refuses_a_listed_specification_it_does_not_read_at_its_listing() {
             let study = Study::new();
@@ -416,10 +398,6 @@ mod declaration {
                  sdtm:\n  specs: [listed.yaml]\n\
                  \x20 standards: [{name: SDTMIG, version: \"3.4\", status: Final}]\n\
                  \x20 define: define.xml\n",
-            );
-            study.write(
-                "legacy-project.yaml",
-                "schema_version: '1.0'\nsdtm:\n  specs: [dm.yaml, listed.yaml]\n",
             );
             let listed = study.path("listed.yaml");
             for (text, condition, context) in [
@@ -460,24 +438,16 @@ mod declaration {
                     );
                 }
             }
-            // None of these fails at its listing.
-            for (project, text) in [
-                ("project.yaml", "yamaa: 1.0\ntype: spec\n"),
-                (
-                    "legacy-project.yaml",
-                    "yamaa: \"1.4\"\ntype: spec\nanything: [1, 2]\n",
-                ),
-            ] {
-                study.write("listed.yaml", text);
-                assert!(
-                    study
-                        .listings(Language::Python, project)
-                        .iter()
-                        .flatten()
-                        .all(Vec::is_empty),
-                    "{project}: {text}"
-                );
-            }
+            // A malformed header does not fail at its listing.
+            study.write("listed.yaml", "yamaa: 1.0\ntype: spec\n");
+            assert!(
+                study
+                    .listings(Language::Python, "project.yaml")
+                    .iter()
+                    .flatten()
+                    .all(Vec::is_empty),
+                "an unquoted version"
+            );
         }
 
         // -- The 1.0 path -------------------------------------------------------
@@ -550,8 +520,8 @@ mod declaration {
             closures: &Closures,
         ) -> document::VersionedDocument {
             match document::decode(source(identity, text), expected, Some(reads), closures) {
-                Ok(Decoded::Versioned(document)) => document,
-                other => panic!("{identity}: {other:?}"),
+                Ok(document) => document,
+                Err(error) => panic!("{identity}: {error:?}"),
             }
         }
 
@@ -581,22 +551,30 @@ mod declaration {
                     &closures,
                 )
             };
-            // A specification that declares `schema_version` is written in
-            // language 0.5, and one without `yamaa` declares no header: each
-            // is refused before a closure is chosen (SCHEMA-2).
-            assert_eq!(
-                findings(&decode(LEGACY, FileType::Spec).unwrap_err()),
-                [(
-                    ConditionCode::HeaderLanguageVersion,
-                    "schema_version".to_string(),
-                    vec![
-                        ("version", C::Text("0.5".into())),
-                        ("language_versions", C::TextList(vec!["1.0".into()])),
-                    ],
-                )]
-            );
-            for text in ["domain: TEST\n", "name: bmi\n"] {
-                let error = decode(text, FileType::Spec).unwrap_err();
+            // A file that declares `schema_version` is written in language
+            // 0.5, and one without `yamaa` declares no header: each is
+            // refused before a closure is chosen, whatever its type
+            // (SCHEMA-2).
+            for file_type in [FileType::Spec, FileType::Project] {
+                assert_eq!(
+                    findings(&decode(LEGACY, file_type).unwrap_err()),
+                    [(
+                        ConditionCode::HeaderLanguageVersion,
+                        "schema_version".to_string(),
+                        vec![
+                            ("version", C::Text("0.5".into())),
+                            ("language_versions", C::TextList(vec!["1.0".into()])),
+                        ],
+                    )],
+                    "{file_type:?}"
+                );
+            }
+            for (text, file_type) in [
+                ("domain: TEST\n", FileType::Spec),
+                ("name: bmi\n", FileType::Spec),
+                ("sdtm: {specs: [dm.yaml]}\n", FileType::Project),
+            ] {
+                let error = decode(text, file_type).unwrap_err();
                 assert_eq!(
                     findings(&error)
                         .iter()
@@ -606,12 +584,6 @@ mod declaration {
                     "{text}"
                 );
             }
-            // A project file without `yamaa` keeps the 0.5 project route,
-            // which goes in P2-13d.
-            assert!(matches!(
-                decode("schema_version: '1.0'\n", FileType::Project),
-                Ok(Decoded::Legacy { .. })
-            ));
             // `yamaa` and `type` select the 1.0 closure of the declared type.
             for (text, file_type) in [
                 (SPEC, FileType::Spec),

@@ -1,15 +1,11 @@
 //! The roots of a project's own files: the project file, a function file and
 //! a codelist file (#2844, design section 2).
 //!
-//! Each root owns the path arena of its file. A 0.5 project links one
-//! environment file per host language; the one its host reads is lowered
-//! into the host's project root: its lock into that language's entry of
-//! [`Project::environments`] and its definitions into
-//! [`Project::functions`]. A 1.0 project writes both itself: `functions`
-//! lists function files, each naming its own function with a callable for
-//! each host language, and `environments.<host>.lock` holds each host's lock
-//! (D8). An inline definition or codelist source is a root of its own, with
-//! its own arena, inside its declaration.
+//! Each root owns the path arena of its file. A project's `functions` lists
+//! function files, each naming its own function with a callable for each
+//! host language, and `environments.<host>.lock` holds each host's lock
+//! (D8). An inline codelist source is a root of its own, with its own arena,
+//! inside its declaration.
 //!
 //! Values are held as the engine reads them: a front end converts each
 //! written scalar of a definition or a codelist and reports one it cannot,
@@ -24,9 +20,8 @@ use crate::value::{ColumnType, Value, ValueType};
 #[derive(Clone, Debug, PartialEq)]
 pub struct Project {
     pub header: Header,
-    /// The project functions specifications may call (FUNC-1, FUNC-4); in
-    /// 0.5 those of the host's environment file. `None` when nothing
-    /// declares the field.
+    /// The function files of the project functions specifications may call
+    /// (FUNC-1, FUNC-4). `None` when the project does not write the field.
     pub functions: Option<Vec<FunctionDeclaration>>,
     /// The environment of each host language the project declares, by
     /// language key (PROJECT-2).
@@ -68,34 +63,19 @@ pub struct SubmissionRefused;
 #[derive(Clone, Debug, PartialEq)]
 pub struct HostEnvironment {
     pub language: Language,
-    /// 0.5: the environment file the language key names, relative to the
-    /// project file. Its lock and function paths resolve from that file. A
-    /// 1.0 project has no environment file.
-    pub file: Option<Text>,
     /// The packaging lock the installed called packages are verified
-    /// against (FUNC-3): in 1.0 `environments.<host>.lock`, relative to the
-    /// project file; in 0.5 the linked environment file's `lock`.
+    /// against (FUNC-3): `environments.<host>.lock`, relative to the project
+    /// file.
     pub lock: Option<Text>,
     pub meta: Meta,
 }
 
-/// One declared project function.
+/// One function file a project lists in `functions`, relative to the
+/// project file (D8). The file names its own function.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FunctionDeclaration {
-    /// The logical name a 0.5 environment file keys the definition by; a
-    /// function file, which a 1.0 project lists, names its own function.
-    pub key: Option<Named>,
-    pub source: FunctionSource,
+    pub file: Text,
     pub meta: Meta,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum FunctionSource {
-    /// A definition written in place, as a 0.5 environment file may.
-    Inline(Box<Function>),
-    /// A function file, relative to the file that declares it: the 0.5
-    /// environment file, or the 1.0 project file.
-    File(Text),
 }
 
 /// One declared codelist source.
@@ -113,12 +93,11 @@ pub enum CodelistSource {
     File(Text),
 }
 
-/// One project function (FUNC-4): a function file, or a definition written
-/// in a 0.5 environment file.
+/// One project function (FUNC-4): a function file.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Function {
-    /// A 1.0 function file's own header; a 0.5 definition has none.
-    pub header: Option<Header>,
+    /// The function file's own header.
+    pub header: Header,
     pub name: Named,
     pub description: Text,
     /// Closed and ordered (FUNC-5).
@@ -127,9 +106,8 @@ pub struct Function {
     pub may_return_missing: bool,
     /// Decimal places at which numeric test results are compared (FUNC-13).
     pub comparison_decimals: i64,
-    /// The callable each host language binds (FUNC-8): a 1.0 function file
-    /// writes one for `python`, `r` or both, and a 0.5 definition one, for
-    /// the language of the environment file declaring it.
+    /// The callable each host language binds (FUNC-8): a function file
+    /// writes one for `python`, `r` or both.
     pub implementations: Vec<Implementation>,
     /// Activation runs these before any study data is read (FUNC-11).
     pub tests: Vec<FunctionTest>,
@@ -180,8 +158,8 @@ pub struct FunctionTest {
 /// project file.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Codelists {
-    /// A 1.0 codelist file's own header; a source written in a project
-    /// file, and every 0.5 source, has none.
+    /// A codelist file's own header; a source written in a project file has
+    /// none.
     pub header: Option<Header>,
     /// The published terminology the codelists are drawn from; a source
     /// without one is sponsor-defined (CT-2).
@@ -281,15 +259,15 @@ pub struct Section {
     pub family: Submission,
     /// The ordered specifications; the only field a run needs.
     pub specs: Vec<Text>,
-    /// The implementation guides binding the datasets (DEFINE-6). 0.5
-    /// writes at most one, as `standard`.
+    /// The implementation guides binding the datasets (DEFINE-6), the first
+    /// the default (D16).
     pub standards: Vec<ImplementationGuide>,
     /// The Define-XML target, relative to the project file (DEFINE-2).
     pub define: Option<Text>,
     /// Supporting documents (DEFINE-13).
     pub documents: Vec<SupportingDocument>,
     /// The transport file written for each composed dataset (JSON-1,
-    /// XPT-1); 0.5 writes it as `datasets`.
+    /// XPT-1).
     pub transport: Option<Transport>,
     pub context: DefineContext,
     /// The language of generated translated text; `en` when omitted.
@@ -335,7 +313,7 @@ pub struct ImplementationGuide {
 pub enum GuideStatus {
     Draft,
     Final,
-    /// Admitted by a 1.0 project file only (P-STD-1); no 0.5 form.
+    /// P-STD-1.
     Provisional,
 }
 

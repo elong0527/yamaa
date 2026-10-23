@@ -31,7 +31,7 @@ fn optional(value: Option<String>) -> Option<Text> {
     value.map(|value| text(&value))
 }
 
-/// One project function, as an environment file of `language` writes it.
+/// One project function, as a function file writes it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Definition {
     pub name: String,
@@ -59,10 +59,14 @@ pub struct Case {
     pub result: Value,
 }
 impl Definition {
-    /// The definition root, with `function` the callable `language` binds.
+    /// The root of the function file defining this function, which names
+    /// `function` as the callable `language` binds and no other (D8).
     pub fn root(self, language: Language) -> ast::Function {
         ast::Function {
-            header: None,
+            header: ast::Header {
+                version: text("1.0"),
+                meta: meta(),
+            },
             name: named(&self.name),
             description: text(&self.description),
             params: self.params.into_iter().map(Parameter::root).collect(),
@@ -81,16 +85,11 @@ impl Definition {
 }
 
 impl Definition {
-    /// The root of a 1.0 function file defining this function, which names
+    /// The root of the function file defining this function, which names
     /// the callable of each host language it implements; `function` is
     /// unused.
     pub fn file(self, implementations: &[(Language, &str)]) -> ast::Function {
         let mut root = self.root(Language::Python);
-        root.header = Some(ast::Header {
-            surface: ast::Surface::V1 { minor: 0 },
-            version: text("1.0"),
-            meta: meta(),
-        });
         root.implementations = implementations
             .iter()
             .map(|&(language, callable)| ast::Implementation {

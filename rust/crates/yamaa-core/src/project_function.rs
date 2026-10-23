@@ -23,14 +23,12 @@ impl Language {
 }
 
 /// Authored indices survive admission and identify the exact rejected fields.
-/// `InvalidCallable` refuses a 0.5 definition's `function`; a 1.0 function
-/// file is refused when it names no callable at all (`MissingImplementation`,
-/// FUNC-4) or one that is not a callable of its language
-/// (`InvalidImplementation`, FUNC-8).
+/// A function file is refused when it names no callable at all
+/// (`MissingImplementation`, FUNC-4) or one that is not a callable of its
+/// language (`InvalidImplementation`, FUNC-8).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Finding {
     InvalidName,
-    InvalidCallable,
     MissingImplementation,
     InvalidImplementation(Language),
     EmptyDescription,
@@ -110,11 +108,10 @@ impl Function {
     pub fn name(&self) -> &str {
         &self.definition.name.name
     }
-    /// The callable this host binds. Admission refuses a 0.5 definition
-    /// without a valid one for its language; a 1.0 function file may name
-    /// none for this host, and a call to it then fails before any data is
-    /// read (FUNC-1). An engine that claims no host language binds none, so
-    /// the callable is empty.
+    /// The callable this host binds. A function file may name none for this
+    /// host, and a call to it then fails before any data is read (FUNC-1).
+    /// An engine that claims no host language binds none, so the callable is
+    /// empty.
     pub fn call(&self) -> &str {
         self.language
             .map_or("", |language| callable_of(language, &self.definition))
@@ -203,7 +200,7 @@ impl Function {
         findings
     }
     pub fn admit(language: Language, definition: ast::Function) -> Result<Self, Vec<Finding>> {
-        let findings = validate(Some(language), &definition);
+        let findings = validate(&definition);
         if findings.is_empty() {
             Ok(Self {
                 language: Some(language),
@@ -420,52 +417,30 @@ fn evidence(
     })
 }
 
-/// Whether a definition is a 1.0 function file, which declares its own header
-/// and names a callable for each host language it implements (D8).
-fn function_file(def: &ast::Function) -> bool {
-    matches!(
-        def.header,
-        Some(ast::Header {
-            surface: ast::Surface::V1 { .. },
-            ..
-        })
-    )
-}
-
 /// Report all independent static faults, followed by unsatisfied obligations in
 /// lexical tag order. Cases with invalid arguments/results cannot supply coverage.
 ///
-/// A 0.5 definition binds one callable, for `language`, the language its
-/// environment file's key states; without a language it has no valid
-/// callable, although an engine that claims no host language reads no
-/// environment file and so admits no 0.5 definition. A 1.0 function file is
-/// language-neutral: every callable it names must be one of its language,
-/// and each parameter name a name in every language it implements, whichever
-/// host runs the build (FUNC-4, FUNC-8).
-pub fn validate(language: Option<Language>, def: &ast::Function) -> Vec<Finding> {
+/// A function file is language-neutral: every callable it names must be one
+/// of its language, and each parameter name a name in every language it
+/// implements, whichever host runs the build (FUNC-4, FUNC-8).
+pub fn validate(def: &ast::Function) -> Vec<Finding> {
     let mut findings = Vec::new();
     if !identifier(&def.name.name) {
         findings.push(Finding::InvalidName);
     }
-    let languages: Vec<Language> = if function_file(def) {
-        if def.implementations.is_empty() {
-            findings.push(Finding::MissingImplementation);
+    if def.implementations.is_empty() {
+        findings.push(Finding::MissingImplementation);
+    }
+    for implementation in &def.implementations {
+        if !callable(implementation.language, &implementation.callable.text) {
+            findings.push(Finding::InvalidImplementation(implementation.language));
         }
-        for implementation in &def.implementations {
-            if !callable(implementation.language, &implementation.callable.text) {
-                findings.push(Finding::InvalidImplementation(implementation.language));
-            }
-        }
-        def.implementations
-            .iter()
-            .map(|implementation| implementation.language)
-            .collect()
-    } else {
-        if !language.is_some_and(|language| callable(language, callable_of(language, def))) {
-            findings.push(Finding::InvalidCallable);
-        }
-        language.into_iter().collect()
-    };
+    }
+    let languages: Vec<Language> = def
+        .implementations
+        .iter()
+        .map(|implementation| implementation.language)
+        .collect();
     if def.description.text.is_empty() {
         findings.push(Finding::EmptyDescription);
     }

@@ -466,7 +466,6 @@ fn lookup() -> Intermediate {
         range: None,
         columns: None,
         no_match: Some(Value::Missing),
-        absence: HandlerKind::NoMatch,
         require_match: false,
         unique: vec![],
         derivations: None,
@@ -576,7 +575,7 @@ fn registration_registers_every_site_up_front_in_expression_order() {
             ("columns.ALT.derivation.missing", H::Missing),
             ("columns.ALT.derivation.sources[0].missing", H::Missing),
             ("columns.CAT.derivation.missing", H::Missing),
-            ("columns.C4.derivation.no_match", H::NoMatch),
+            ("columns.C4.derivation.absent", H::Absent),
         ]
     );
     let up = resolved.binding(BindingId(1));
@@ -596,16 +595,13 @@ fn registration_registers_every_site_up_front_in_expression_order() {
     assert_eq!(info.partition, PartitionClass::Global);
 }
 
-/// A named read counts its absence whether or not the intermediate declares
-/// an answer, under the absence handler the plan gives the intermediate,
-/// `absent` for a specification's (D202) or any other the plan names. Only
-/// `require_match` removes the site, and only `keep` adds `multiple_matches`
-/// (LOOKUP-24, LOOKUP-10).
+/// A named read counts its absence under `absent` whether or not the
+/// intermediate declares an answer (D202). Only `require_match` removes the
+/// site, and only `keep` adds `multiple_matches` (LOOKUP-24, LOOKUP-10).
 #[test]
 fn a_named_read_has_an_absence_site_unless_it_requires_a_match() {
-    let sites = |absence: HandlerKind, no_match: Option<Value>, require_match: bool, keep: bool| {
+    let sites = |no_match: Option<Value>, require_match: bool, keep: bool| {
         let mut intermediate = lookup();
-        intermediate.absence = absence;
         intermediate.no_match = no_match;
         intermediate.require_match = require_match;
         intermediate.selection = keep.then(|| crate::dataset::SourceSelection {
@@ -657,31 +653,27 @@ fn a_named_read_has_an_absence_site_unless_it_requires_a_match() {
             HandlerKind::MultipleMatches,
         )
     };
-    for (handler, absence, path) in [
+    let answer = || {
         (
-            "absent",
+            "columns.C1.derivation.absent".to_string(),
             HandlerKind::Absent,
-            "columns.C1.derivation.absent",
-        ),
-        (
-            "no_match",
-            HandlerKind::NoMatch,
-            "columns.C1.derivation.no_match",
-        ),
-    ] {
-        let answer = || (path.to_string(), absence);
-        let declared = Some(Value::Missing);
-        assert_eq!(sites(absence, None, false, false), [answer()], "{handler}");
-        assert_eq!(
-            sites(absence, declared, false, false),
-            [answer()],
-            "{handler}"
-        );
-        assert_eq!(sites(absence, None, true, false), [], "{handler}");
-        let both = [multiple(), answer()];
-        assert_eq!(sites(absence, None, false, true), both, "{handler}");
-        assert_eq!(sites(absence, None, true, true), [multiple()], "{handler}");
-    }
+        )
+    };
+    let declared = Some(Value::Missing);
+    assert_eq!(sites(None, false, false), [answer()], "no answer");
+    assert_eq!(
+        sites(declared, false, false),
+        [answer()],
+        "a declared answer"
+    );
+    assert_eq!(sites(None, true, false), [], "require_match");
+    let both = [multiple(), answer()];
+    assert_eq!(sites(None, false, true), both, "keep");
+    assert_eq!(
+        sites(None, true, true),
+        [multiple()],
+        "keep and require_match"
+    );
 }
 
 /// A value-level `mandatory` or `data_type` check selects its rows by a where

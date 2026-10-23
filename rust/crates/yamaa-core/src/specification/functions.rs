@@ -12,17 +12,9 @@ use crate::{
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Cause {
     UnknownFunction,
-    /// The supplied project links no environment file for the host language.
-    UndeclaredEnvironment(crate::project_function::Language),
     /// The called function's file names no callable for the host language
     /// (FUNC-1).
     MissingImplementation(crate::project_function::Language),
-    /// The engine claims no host language, such as the command line's, so it
-    /// reads no 0.5 environment file and knows no function a 0.5 project
-    /// declares: the call is refused as `unsupported_operation` with
-    /// operation `environment`, as a run of a 1.0 project's call is
-    /// (#3030 section 2.10, D110, D123).
-    NoHostLanguage,
     /// A 1.x specification checked or run without a project file: no project
     /// supplies the function, so the call fails as `project_binding_missing`
     /// (CT-13).
@@ -82,17 +74,9 @@ impl FunctionFinding {
                 (C::RowDependencyPhaseBoundary, None)
             }
             Cause::UnknownFunction => (C::UnknownProjectFunction, None),
-            Cause::UndeclaredEnvironment(language) => {
-                context.insert("language".into(), text(language.key()));
-                (C::ProjectEnvironmentMissing, Some("undeclared"))
-            }
             Cause::MissingImplementation(language) => {
                 context.insert("language".into(), text(language.key()));
                 (C::FunctionImplementationMissing, None)
-            }
-            Cause::NoHostLanguage => {
-                context.insert("operation".into(), text("environment"));
-                (C::ApplicationUnsupported, None)
             }
             Cause::NoProject => {
                 context.insert("binding".into(), text("function"));
@@ -347,19 +331,17 @@ fn decode(
 pub(super) fn prepare(
     spec: &ast::Spec,
     functions: &[Function],
-    undeclared: Option<crate::project_environment::Undeclared>,
     projectless: bool,
 ) -> Result<Prepared, PrepareError> {
-    use crate::project_environment::Undeclared;
-    // Without a host environment no call names a declared function; the absent
-    // environment, not the function name, is the cause each call reports. A
-    // 1.x specification compiled without a project file reports the missing
-    // project the same way (CT-13); a 0.5 one keeps reporting the name.
-    let unknown = || match undeclared {
-        Some(Undeclared::Language(language)) => Cause::UndeclaredEnvironment(language),
-        Some(Undeclared::NoHostLanguage) => Cause::NoHostLanguage,
-        None if projectless => Cause::NoProject,
-        None => Cause::UnknownFunction,
+    // A specification compiled without a project file reports the missing
+    // project as the cause of each call to a function no project supplies
+    // (CT-13); with a project, the unknown name is the cause.
+    let unknown = || {
+        if projectless {
+            Cause::NoProject
+        } else {
+            Cause::UnknownFunction
+        }
     };
     let mut function_index = BTreeMap::new();
     for function in functions {

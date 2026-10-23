@@ -324,12 +324,8 @@ impl Application {
         // A run needs only a section's specifications. Submission composition
         // additionally requires the study and the section's guide and target,
         // and reports every one that is missing together.
-        let required = composition::Required::admit(
-            declarations.study.as_ref(),
-            declared,
-            environment.project.header.surface,
-        )
-        .map_err(Failure::Metadata)?;
+        let required = composition::Required::admit(declarations.study.as_ref(), declared)
+            .map_err(Failure::Metadata)?;
         let section = required.section;
         let define = required.define;
         let identity = environment.source;

@@ -275,8 +275,8 @@ pub(crate) type PlanKey = (String, Option<String>);
 /// path through a retargeted link, compiles anew (#3069). Its run-start check
 /// must then find every file it was compiled from unchanged: the
 /// specification, its layers, dictionaries and linked producing
-/// specifications, the project file, the environment file, and the lock,
-/// function definitions and codelists they declare. Otherwise the run
+/// specifications, the project file, and the lock, function files and
+/// codelist files it declares. Otherwise the run
 /// compiles again, exactly as a one-shot run does, and keeps the new plan; a
 /// refused compilation keeps nothing. Every run reads its inputs and activates
 /// the project functions afresh, so a reused run differs from a one-shot run

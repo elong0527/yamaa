@@ -3,9 +3,9 @@
 mod project {
     mod project_report {
         use crate::support::ports::NoFunctions;
-        use crate::support::project_schemas as schemas;
         use std::{collections::BTreeMap, convert::Infallible, path::PathBuf, sync::Arc};
         use yamaa_adapters::{
+            document::Closures,
             project_source::{self, OwnedEnvironment},
             specification_report::Identity,
             specification_run::PreparedRun,
@@ -39,10 +39,10 @@ mod project {
         /// A project with inline study metadata; these runs call no project function.
         fn environment(extra: &str) -> OwnedEnvironment {
             project_source::prepare(
-                schemas::project_schemas(),
+                Closures::shipped().unwrap(),
                 source(
                     "project.yaml",
-                    format!("schema_version: '1.0'\n{extra}").as_bytes(),
+                    format!("yamaa: '1.0'\ntype: project\n{extra}").as_bytes(),
                 ),
                 Language::Python,
                 &mut NoCapture,
@@ -419,10 +419,10 @@ mod project {
     }
 
     mod project_run {
-        use crate::support::project_schemas as schemas;
         use crate::support::Edit as _;
         use std::{cell::RefCell, rc::Rc, sync::Arc};
         use yamaa_adapters::{
+            document::Closures,
             project_source::{self, Kind, OwnedEnvironment},
             specification_run::{BoundaryFailure, PreparedRun},
             specification_source::{PreparedDocument, Source},
@@ -449,57 +449,80 @@ mod project {
                 bytes: bytes.to_vec(),
             }
         }
-        /// The Python environment file the project links; it declares the lock
-        /// and the inline functions, and its lock path resolves from it.
-        const ENVIRONMENT: &[u8] = br#"schema_version: '1.0'
-lock: ../uv.lock
-functions:
-  unused:
-    function: project.unused
-    description: Uncalled definition.
-    params: []
-    returns: int
-    tests: [{id: ordinary, covers: [normal, boundary], args: {}, result: 7}]
-  id:
-    function: project.id
-    description: Integer identity.
-    params: [{name: x, type: int}]
-    returns: int
-    tests:
-      - {id: ordinary, covers: [normal], args: {x: 7}, result: 7}
-      - {id: boundary, covers: [boundary], args: {x: -9223372036854775808}, result: -9223372036854775808}
-      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}
-  pair:
-    function: project.pair
-    description: Integer sum of a weight and an own value.
-    params: [{name: weight, type: int}, {name: own, type: int}]
-    returns: int
-    tests:
-      - {id: ordinary, covers: [normal], args: {weight: 7, own: 3}, result: 10}
-      - {id: boundary, covers: [boundary], args: {weight: 0, own: 0}, result: 0}
-      - {id: missing-weight, covers: ['short-circuit-missing:weight'], args: {weight: null, own: 1}, result: null}
-      - {id: missing-own, covers: ['short-circuit-missing:own'], args: {weight: 1, own: null}, result: null}
-"#;
+        /// The project lists three function files and holds the Python lock,
+        /// each path relative to the project file (D8).
+        const PROJECT: &[u8] = b"yamaa: '1.0'\ntype: project\nfunctions: [functions/unused.yaml, functions/id.yaml, functions/pair.yaml]\nenvironments: {python: {lock: ../uv.lock}}\n";
+        /// The function files the project lists, by the path it writes: each
+        /// defines one function with its Python callable (FUNC-4, FUNC-8).
+        const FUNCTIONS: [(&str, &str); 3] = [
+            (
+                "functions/unused.yaml",
+                r#"yamaa: '1.0'
+type: function
+name: unused
+description: Uncalled definition.
+params: []
+returns: int
+implementations: {python: project.unused}
+tests: [{id: ordinary, covers: [normal, boundary], args: {}, result: 7}]
+"#,
+            ),
+            (
+                "functions/id.yaml",
+                r#"yamaa: '1.0'
+type: function
+name: id
+description: Integer identity.
+params: [{name: x, type: int}]
+returns: int
+implementations: {python: project.id}
+tests:
+  - {id: ordinary, covers: [normal], args: {x: 7}, result: 7}
+  - {id: boundary, covers: [boundary], args: {x: -9223372036854775808}, result: -9223372036854775808}
+  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}
+"#,
+            ),
+            (
+                "functions/pair.yaml",
+                r#"yamaa: '1.0'
+type: function
+name: pair
+description: Integer sum of a weight and an own value.
+params: [{name: weight, type: int}, {name: own, type: int}]
+returns: int
+implementations: {python: project.pair}
+tests:
+  - {id: ordinary, covers: [normal], args: {weight: 7, own: 3}, result: 10}
+  - {id: boundary, covers: [boundary], args: {weight: 0, own: 0}, result: 0}
+  - {id: missing-weight, covers: ['short-circuit-missing:weight'], args: {weight: null, own: 1}, result: null}
+  - {id: missing-own, covers: ['short-circuit-missing:own'], args: {weight: 1, own: null}, result: null}
+"#,
+            ),
+        ];
         #[derive(Default)]
         struct EnvironmentCapture {
             held: Vec<u8>,
         }
         impl EnvironmentCapture {
-            /// The held source the double serves for the file a project names.
+            /// The held source the double serves for the file a project names:
+            /// a listed function file, or the lock. Every path resolves from
+            /// the project file (D8).
             fn answer(
                 &mut self,
                 kind: Kind,
                 declaring: &str,
                 written: &str,
             ) -> Result<Source, std::convert::Infallible> {
+                assert_eq!(declaring, "study/project.yaml");
                 match kind {
-                    Kind::Environment => {
-                        assert_eq!(declaring, "study/project.yaml");
-                        assert_eq!(written, "environment.yaml");
-                        Ok(source("study/environment.yaml", ENVIRONMENT))
+                    Kind::Function => {
+                        let (_, text) = FUNCTIONS
+                            .iter()
+                            .find(|(path, _)| *path == written)
+                            .unwrap_or_else(|| panic!("unexpected function file {written}"));
+                        Ok(source(&format!("study/{written}"), text.as_bytes()))
                     }
                     Kind::Lock => {
-                        assert_eq!(declaring, "study/environment.yaml");
                         assert_eq!(written, "../uv.lock");
                         Ok(source(
                             "held/uv.lock",
@@ -544,11 +567,8 @@ functions:
         }
         fn environment() -> OwnedEnvironment {
             project_source::prepare(
-                schemas::project_schemas(),
-                source(
-                    "study/project.yaml",
-                    b"schema_version: '1.0'\nenvironments: {python: environment.yaml}\n",
-                ),
+                Closures::shipped().unwrap(),
+                source("study/project.yaml", PROJECT),
                 Language::Python,
                 &mut EnvironmentCapture::default(),
             )
@@ -773,12 +793,8 @@ functions:
                 let environment = environment();
                 let document_bytes = document.source().bytes.as_ptr();
                 let root_bytes = environment.root().source().bytes.as_ptr();
-                let file_bytes = environment
-                    .environment_file()
-                    .unwrap()
-                    .source()
-                    .bytes
-                    .as_ptr();
+                // The function file that defines `id`, at `functions[1]`.
+                let file_bytes = environment.captures()[1].document.source().bytes.as_ptr();
                 let lock_bytes = environment.lock().unwrap().source.bytes.as_ptr();
                 let definition = environment.environment().functions()[1]
                     .definition()
@@ -800,7 +816,7 @@ functions:
                 assert_eq!(document.source().bytes.as_ptr(), document_bytes);
                 assert_eq!(captured.root().source().bytes.as_ptr(), root_bytes);
                 assert_eq!(
-                    captured.environment_file().unwrap().source().bytes.as_ptr(),
+                    captured.captures()[1].document.source().bytes.as_ptr(),
                     file_bytes
                 );
                 assert_eq!(captured.lock().unwrap().source.bytes.as_ptr(), lock_bytes);
@@ -851,7 +867,7 @@ functions:
                 );
                 assert_eq!(observed["tests"][2]["actual_retained"], true);
                 assert_eq!(observed["tests"][2]["invoked"], false);
-                assert_eq!(observed["tests"][0]["source"], "study/environment.yaml");
+                assert_eq!(observed["tests"][0]["source"], "study/functions/id.yaml");
                 assert_eq!(observed["tests"][0]["function"], "id");
                 assert_eq!(observed["tests"][0]["call"], "project.id");
                 assert_eq!(*activation.trace.borrow(), trace);
@@ -1183,16 +1199,19 @@ functions:
             );
         }
 
+        /// A project that holds only the other host's lock and lists no
+        /// function file: the host reads no lock (PROJECT-2), and a call
+        /// names a function no file defines (FUNC-4).
         #[test]
-        fn project_without_the_host_environment_reports_each_project_call_as_missing() {
+        fn project_without_the_host_lock_reads_no_lock_and_reports_each_project_call_as_unknown() {
             struct OtherHost;
             impl Resolver for OtherHost {
                 type Error = std::convert::Infallible;
                 fn inspect(&mut self, name: Name<'_>) -> Result<Located, Self::Error> {
-                    panic!("the other host's link is never opened: {name:?}")
+                    panic!("the other host's lock is never opened: {name:?}")
                 }
                 fn capture(&mut self, _: Name<'_>) -> Result<Captured, Self::Error> {
-                    panic!("the other host's link is never opened")
+                    panic!("the other host's lock is never opened")
                 }
                 fn failure(&self, _: Name<'_>, error: &Self::Error) -> Option<resolver::Failure> {
                     match *error {}
@@ -1203,15 +1222,15 @@ functions:
                     _: &Located,
                     _: &str,
                 ) -> Result<String, Self::Error> {
-                    panic!("the other host's link is never opened")
+                    panic!("the other host's lock is never opened")
                 }
             }
             let environment = || {
                 project_source::prepare(
-                    schemas::project_schemas(),
+                    Closures::shipped().unwrap(),
                     source(
                         "study/project.yaml",
-                        b"schema_version: '1.0'\nenvironments: {r: r/environment.yaml}\n",
+                        b"yamaa: '1.0'\ntype: project\nenvironments: {r: {lock: r/renv.lock}}\n",
                     ),
                     Language::Python,
                     &mut OtherHost,
@@ -1227,22 +1246,22 @@ functions:
             assert_eq!(attempt.activation.lock, LockObservation::NotRequested);
             assert!(attempt.dataset.result.unwrap().result.is_ok());
             assert_eq!(&*activation.trace.borrow(), &["inspect", "capture"]);
-            // Each call names the absent environment, whatever function it names.
+            // Each call names a function no file defines.
             let raw = "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\n  - {name: OTHER, type: int, derivation: {function: {name: absent, args: {x: SRC.ID}}}}\noutput: {path: output.csv, columns: [ID, VALUE, OTHER]}\n";
             let document =
                 crate::support::specification_run::prepare_as("study/domain.yaml", raw.as_bytes());
             let Err(rejected) = PreparedRun::prepare_with_environment(document, environment())
             else {
-                panic!("project calls without a host environment cannot execute")
+                panic!("project calls to functions no file defines cannot execute")
             };
-            let missing = |column: &str, function: &str| yamaa_adapters::json!({"phase": "validation", "condition": "project_environment_missing", "rule": "FUNC-1", "spec_paths": vec![format!("columns.{column}.derivation.function.name")], "context": {"function":function,"language":"python","cause":"undeclared"}});
+            let unknown = |column: &str, function: &str| yamaa_adapters::json!({"phase": "validation", "condition": "unknown_project_function", "rule": "FUNC-4", "spec_paths": vec![format!("columns.{column}.derivation.function.name")], "context": {"function":function}});
             assert_eq!(
                 crate::support::rows(
                     &yamaa_adapters::specification_check::rejected(&rejected).unwrap()
                 ),
-                [missing("VALUE", "id"), missing("OTHER", "absent")]
+                [unknown("VALUE", "id"), unknown("OTHER", "absent")]
             );
-            assert!(rejected.captured.environment_file().is_none());
+            assert!(rejected.captured.lock().is_none());
         }
 
         #[test]
@@ -1451,7 +1470,7 @@ functions:
                     assert_eq!(result.output(), None);
                     assert_eq!(result.issues().len(), 1);
                     let expected = if matches!(mode, Mode::BindFailure) {
-                        "project_environment_invalid"
+                        "function_file_invalid"
                     } else if matches!(mode, Mode::CaseFailure) {
                         "function_conformance_failed"
                     } else {
@@ -1600,10 +1619,13 @@ functions:
                 }],
             )
             .unwrap();
+            // The project file holds the lock at `environments.python.lock`
+            // (FUNC-3, D107).
             assert_eq!(result.issues()[0].condition(), "runtime_artifact_mismatch");
+            assert_eq!(result.issues()[0].spec_paths, ["environments.python.lock"]);
             assert_eq!(
                 yamaa_core::json::Value::Object(result.issues()[0].context.clone()),
-                yamaa_adapters::json!({"source":"study/environment.yaml","entry":"study/project.yaml","lock_source":"held/uv.lock","lock":"../uv.lock","package":"project","reason":"distribution_not_identified","expected":[],"actual":null})
+                yamaa_adapters::json!({"source":"study/project.yaml","entry":"study/project.yaml","lock_source":"held/uv.lock","lock":"../uv.lock","package":"project","reason":"distribution_not_identified","expected":[],"actual":null})
             );
             // A host exception while verifying the lock names no lock
             // finding: the lock failure stays the original opaque payload.
@@ -1657,14 +1679,15 @@ functions:
                 result.issues()[0].condition(),
                 "function_conformance_failed"
             );
-            assert_eq!(result.issues()[0].spec_paths, ["functions.id.tests[0]"]);
+            // The case is reported in the function file that defines it,
+            // which the project lists at `functions[1]` (FUNC-12, D107).
+            assert_eq!(result.issues()[0].spec_paths, ["tests[0]"]);
             let context = yamaa_core::json::Value::Object(result.issues()[0].context.clone());
             assert_eq!(context["expected"], 7);
             assert_eq!(context["actual"], 8);
-            // The linked environment file declares the inline definition.
-            assert_eq!(context["source"], "study/environment.yaml");
+            assert_eq!(context["source"], "study/functions/id.yaml");
             assert_eq!(context["entry"], "study/project.yaml");
-            assert_eq!(context["environment_path"], "functions.id");
+            assert_eq!(context["environment_path"], "functions[1]");
             assert_eq!(
                 result.observations()["activation"]["tests"]
                     .as_array()

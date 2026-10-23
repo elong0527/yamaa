@@ -9,7 +9,7 @@ mod file {
             file_resources::Resources,
             file_workflow::{self, Error},
             project_application::{preparation_issues, IssueError},
-            shipped_schema, specification_check,
+            specification_check,
         };
         use yamaa_core::application_observer::Scope;
         use yamaa_core::project_function::Language;
@@ -269,15 +269,11 @@ mod file {
         #[test]
         fn metadata_failures_name_each_written_dependency_and_cause_before_study_reads() {
             let study = Study::new();
-            // The environment file declares the lock and function; the project
-            // declares the codelist and links the environment file.
+            // The project declares the lock, the function file and the
+            // codelist file, each relative to itself (D8).
             study.write(
                 "project.yaml",
-                "schema_version: '1.0'\nenvironments: {python: environment.yaml}\ncodelists: [absent-codelists.yaml]\n",
-            );
-            study.write(
-                "environment.yaml",
-                "schema_version: '1.0'\nlock: missing.lock\nfunctions: {id: absent-function.yaml}\n",
+                "yamaa: '1.0'\ntype: project\nfunctions: [absent-function.yaml]\nenvironments: {python: {lock: missing.lock}}\ncodelists: [absent-codelists.yaml]\n",
             );
             let entry = study.path("root.yaml");
             let project = study.path("project.yaml");
@@ -288,22 +284,20 @@ mod file {
             else {
                 panic!("retained environment rejection")
             };
+            // A file the project names that does not exist fails at the
+            // field that names it, naming the path as written, as any file a
+            // run reads does (FUNC-2, FILE-7, FILE-11, #3030 D107).
             let expected = [
-                ("lock", "missing.lock"),
-                ("functions.id", "absent-function.yaml"),
+                ("environments.python.lock", "missing.lock"),
+                ("functions[0]", "absent-function.yaml"),
                 ("codelists[0]", "absent-codelists.yaml"),
-            ];
+            ]
+            .map(|(declaration, path)| {
+                yamaa_adapters::json!({"phase": "validation", "condition": "resource_path_missing",
+                    "rule": "FILE-7", "spec_paths": [declaration], "context": {"path": path}})
+            });
             let rows = preparation_issues(&error).unwrap();
-            assert_eq!(rows.len(), expected.len());
-            for (row, (declaration, path)) in rows.iter().zip(expected) {
-                assert_eq!(row.condition(), "project_environment_invalid");
-                assert_eq!(row.spec_paths, [declaration]);
-                let context = yamaa_core::json::Value::Object(row.context.clone());
-                assert_eq!(context["entry"], project);
-                assert_eq!(context["path"], path);
-                assert_eq!(context["cause"], "missing");
-                assert_eq!(context["environment_path"], declaration);
-            }
+            assert_eq!(crate::support::rows(&rows), expected);
             assert_eq!(
                 rows,
                 yamaa_adapters::project_application::check(&entry, &project, Language::Python),
@@ -311,7 +305,7 @@ mod file {
             let Error::Environment(owner) = &error else {
                 unreachable!()
             };
-            assert_eq!(owner.capture_reads(), 2); // project and environment file
+            assert_eq!(owner.capture_reads(), 1); // the project alone
             assert!(!study.0.join("root.yaml").exists());
 
             study.write("missing.lock", "invalid packaging lock");
@@ -332,175 +326,6 @@ mod file {
                 assert!(context["reason"].as_str().is_some());
                 assert!(context["line"].as_u64().is_some());
             }
-        }
-
-        #[test]
-        fn missing_or_invalid_linked_environment_files_report_the_project_key_that_names_them() {
-            let study = Study::new();
-            let entry = study.path("root.yaml");
-            let project = study.path("project.yaml");
-            study.write(
-                "project.yaml",
-                "schema_version: '1.0'\nenvironments: {python: python/environment.yaml, r: r/environment.yaml}\n",
-            );
-            // Each host opens only the file its own key names and reports it there.
-            for (host, key) in [(Language::Python, "python"), (Language::R, "r")] {
-                let declaration = format!("environments.{key}");
-                let expected = vec![
-                    yamaa_adapters::json!({"phase": "validation", "condition": "project_environment_invalid", "rule": "FUNC-2", "spec_paths": vec![declaration.clone()], "context": {
-                        "entry": project, "path": format!("{key}/environment.yaml"),
-                        "environment_path": declaration, "cause": "missing",
-                    }}),
-                ];
-                let file_workflow::SelectionError::Preparation(error) =
-                    file_workflow::select(&entry, &project, host).err().unwrap()
-                else {
-                    panic!("retained environment rejection")
-                };
-                assert_eq!(
-                    crate::support::rows(&preparation_issues(&error).unwrap()),
-                    expected
-                );
-                assert_eq!(
-                    crate::support::rows(&yamaa_adapters::project_application::check(
-                        &entry, &project, host
-                    )),
-                    expected
-                );
-                let Error::Environment(owner) = &error else {
-                    unreachable!()
-                };
-                assert_eq!(owner.capture_reads(), 1); // the project alone
-            }
-            // A present environment file decodes against the environment root,
-            // where language is no longer a field. Its schema finding names the
-            // environment file as source and the project as entry.
-            study.write(
-                "python/environment.yaml",
-                "schema_version: '1.0'\nlanguage: python\n",
-            );
-            let error = study.rejected();
-            let rows = preparation_issues(&error).unwrap();
-            assert_eq!(
-                crate::support::rows(&rows),
-                [
-                    yamaa_adapters::json!({"phase": "validation", "condition": "unknown_field", "rule": "SCHEMA-13", "spec_paths": ["language"], "context": {
-                        "class": "environment_class", "field": "language",
-                        "source": study.path("python/environment.yaml"), "entry": project,
-                        "environment_path": "environments.python",
-                    }})
-                ]
-            );
-            assert_eq!(
-                rows,
-                yamaa_adapters::project_application::check(&entry, &project, Language::Python)
-            );
-            let Error::Environment(owner) = &error else {
-                panic!("original environment owner")
-            };
-            assert_eq!(owner.capture_reads(), 2); // project and Python environment file
-            assert!(!study.0.join("root.yaml").exists());
-        }
-
-        #[test]
-        fn project_function_calls_without_a_host_environment_report_the_undeclared_environment() {
-            let study = Study::new();
-            // Environment files are 0.5's, so this project stays as 0.5 wrote
-            // it until the 0.5 project route goes (P2-13d).
-            study.write("project.yaml", "schema_version: '1.0'\n");
-            // Two live columns call the same project function.
-            study.write("root.yaml", "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {RAW: never-read.csv}\ncolumns:\n  - {name: ID, type: int, derivation: RAW.ID}\n  - {name: FIRST, type: str, derivation: {function: {name: lookup, args: {x: RAW.VALUE}}}}\n  - {name: SECOND, type: str, derivation: {function: {name: lookup, args: {x: RAW.ID}}}}\noutput: {path: never-written.csv, columns: [ID, FIRST, SECOND]}\n");
-            let entry = study.path("root.yaml");
-            let project = study.path("project.yaml");
-            let calls = [
-                "columns.FIRST.derivation.function.name",
-                "columns.SECOND.derivation.function.name",
-            ];
-            let rows = |condition: &str, rule: &str, context: yamaa_core::json::Value| {
-                calls
-                    .map(|path| yamaa_adapters::json!({"phase": "validation", "condition": condition, "rule": rule, "spec_paths": [path], "context": context.clone()}))
-                    .to_vec()
-            };
-            let undeclared = |language: &str| {
-                rows(
-                    "project_environment_missing",
-                    "FUNC-1",
-                    yamaa_adapters::json!({"function": "lookup", "language": language, "cause": "undeclared"}),
-                )
-            };
-            let unknown = rows(
-                "unknown_project_function",
-                "FUNC-4",
-                yamaa_adapters::json!({"function": "lookup"}),
-            );
-            // A project that links no environment file: each call names the
-            // missing environment for the host's own key.
-            for (host, language) in [(Language::Python, "python"), (Language::R, "r")] {
-                assert_eq!(
-                    crate::support::rows(&yamaa_adapters::project_application::check(
-                        &entry, &project, host
-                    )),
-                    undeclared(language)
-                );
-            }
-            // Linking only a Python environment that declares no functions: the
-            // Python host reports an unknown function, while the R host still has
-            // no environment and never opens the Python file.
-            study.write(
-                "project.yaml",
-                "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n",
-            );
-            study.write("environment.yaml", "schema_version: '1.0'\n");
-            assert_eq!(
-                crate::support::rows(&yamaa_adapters::project_application::check(
-                    &entry,
-                    &project,
-                    Language::Python
-                )),
-                unknown
-            );
-            assert_eq!(
-                crate::support::rows(&yamaa_adapters::project_application::check(
-                    &entry,
-                    &project,
-                    Language::R
-                )),
-                undeclared("r")
-            );
-            let Err(file_workflow::SelectionError::Compile(rejected)) =
-                file_workflow::select(&entry, &project, Language::R)
-            else {
-                panic!("ordinary compiler rejection")
-            };
-            assert_eq!(rejected.capture_reads(), 2); // project and entry only
-            assert!(rejected
-                .retained_sources()
-                .iter()
-                .all(|(identity, _)| !identity.ends_with("/environment.yaml")));
-            // Without any project each call binds nothing (CT-13).
-            assert_eq!(
-                crate::support::rows(&yamaa_adapters::file_application::check(
-                    Language::Python,
-                    yamaa_core::domain_entry::Request {
-                        specification: &entry,
-                        environment: None,
-                    },
-                    yamaa_adapters::specification_report::Identity {
-                        runtime: "test",
-                        runtime_version: "1",
-                        engine_version: "0.1.0",
-                        example: "test",
-                        specification: &entry,
-                        base_directory: ".",
-                    },
-                )),
-                rows(
-                    "project_binding_missing",
-                    "CT-13",
-                    yamaa_adapters::json!({"binding": "function", "function": "lookup"}),
-                )
-            );
-            assert!(!study.0.join("never-read.csv").exists());
         }
 
         #[test]
@@ -1074,14 +899,10 @@ mod file {
         fn supported_environment_and_original_inherited_schema_causes_are_complete() {
             let study = Study::new();
             // The environments key states the language; an renv lock under the
-            // python key is the environment finding that language still decides.
+            // python key is the finding that language still decides.
             study.write(
                 "project.yaml",
-                "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n",
-            );
-            study.write(
-                "environment.yaml",
-                "schema_version: '1.0'\nlock: renv.lock\n",
+                "yamaa: '1.0'\ntype: project\nenvironments: {python: {lock: renv.lock}}\n",
             );
             study.write("renv.lock", r#"{"R":{"Version":"4.6.1"},"Packages":{}}"#);
             study.write(
@@ -1090,22 +911,25 @@ mod file {
             );
             let error = study.rejected();
             let rows = preparation_issues(&error).unwrap();
+            // The project file holds the lock at `environments.python.lock`,
+            // where its finding is reported (FUNC-3).
             assert_eq!(rows.len(), 1);
-            assert_eq!(rows[0].condition(), "project_environment_invalid");
+            assert_eq!(rows[0].condition(), "function_file_invalid");
             assert_eq!(rows[0].rule(), Some("FUNC-2"));
-            assert_eq!(rows[0].spec_paths, ["lock"]);
+            assert_eq!(rows[0].spec_paths, ["environments.python.lock"]);
             assert_eq!(
                 yamaa_core::json::Value::Object(rows[0].context.clone()),
                 yamaa_adapters::json!({
                     "reason": "lock_kind_mismatch", "language": "python",
-                    "actual_lock_kind": "renv", "source": study.path("environment.yaml"),
-                    "entry": study.path("project.yaml"), "environment_path": "lock",
+                    "actual_lock_kind": "renv", "source": study.path("project.yaml"),
+                    "entry": study.path("project.yaml"),
+                    "environment_path": "environments.python.lock",
                 })
             );
             let Error::Environment(environment) = &error else {
                 panic!("environment");
             };
-            assert_eq!(environment.capture_reads(), 3); // project, environment and lock
+            assert_eq!(environment.capture_reads(), 2); // project and lock
             study.write("project.yaml", "yamaa: \"1.0\"\ntype: project\n");
             study.write(
                 "parent/base.yaml",
@@ -1412,7 +1236,7 @@ mod file {
                     "root.yaml",
                     "project.yaml",
                     Language::Python,
-                    shipped_schema::capture_project().unwrap(),
+                    yamaa_adapters::document::Closures::shipped().unwrap(),
                 )
             }
             fn selection_rejection(&self) -> file_workflow::SelectionError {
@@ -1451,7 +1275,7 @@ mod file {
                 "root.yaml",
                 "project.yaml",
                 Language::Python,
-                shipped_schema::capture_project().unwrap(),
+                yamaa_adapters::document::Closures::shipped().unwrap(),
             )
             .unwrap();
             let mut selected_scope = selected.run_scope(None);

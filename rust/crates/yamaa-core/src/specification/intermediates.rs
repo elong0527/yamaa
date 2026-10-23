@@ -488,7 +488,6 @@ fn bind_one(
         filter,
         selection: item.keep.map(|keep| SourceSelection { order_by, keep }),
         no_match: item.no_match.clone(),
-        absence: crate::numeric_lifecycle::HandlerKind::Absent,
         require_match: item.require_match,
         unique,
         derivations,
