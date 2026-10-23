@@ -36,11 +36,13 @@
 //! meaning.
 //!
 //! [`abi`] holds the engine's C ABI, which `rust/crates/yamaa-engine`
-//! implements and no package links yet.
+//! implements and no package links yet, and [`client`] the safe client over
+//! it.
 use std::fmt;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 pub mod abi;
+pub mod client;
 
 /// The boundary version, which the generated layers of both hosts request.
 /// It moves with any change to what crosses the boundary that an older side
