@@ -34,8 +34,13 @@
 //! identifiers are internal (#3030 D225): any release may change them with a
 //! new boundary version, and an identifier is never reused with another
 //! meaning.
+//!
+//! [`abi`] holds the engine's C ABI, which `rust/crates/yamaa-engine`
+//! implements and no package links yet.
 use std::fmt;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+pub mod abi;
 
 /// The boundary version, which the generated layers of both hosts request.
 /// It moves with any change to what crosses the boundary that an older side
@@ -220,6 +225,21 @@ impl EngineFacts {
                 .map(|version| version.as_ref().to_owned())
                 .collect(),
         }
+    }
+
+    /// Every identifier the engine supports, in the boundary's order.
+    pub fn supported(&self) -> &[String] {
+        &self.supported
+    }
+
+    /// The engine's release.
+    pub fn core_version(&self) -> &str {
+        &self.core_version
+    }
+
+    /// The language versions the engine reads.
+    pub fn language_versions(&self) -> &[String] {
+        &self.language_versions
     }
 
     fn supports(&self, identifier: &str) -> bool {
