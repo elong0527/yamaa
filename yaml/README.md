@@ -144,17 +144,25 @@ rule, grammar, or fixture:
 - Register a condition in `conditions.yaml` with its phases and its message:
   one plain clause that starts in lower case or with a placeholder and names
   only context keys every cause of the condition records (`{spec_path}` is the
-  first spec path). Then regenerate the table the engine renders messages from
-  with `uv run --project python --no-sync python -m
-  tools.packaging.generate_message_templates --write`. `make quick` refuses a
-  stale table, and the Rust test that reaches every registry cause fails when
-  a message names a key some cause does not record. Name the condition on the
+  first spec path). Then regenerate the tables that the engine renders
+  messages and the condition catalogue from with `uv run --project python
+  --no-sync python -m tools.packaging.generate_message_templates --write`.
+  `make quick` refuses a stale table, and the Rust test that reaches every
+  registry cause fails when a message names a key some cause does not
+  record. Name the condition on the
   `Fails` line of the card whose rule raises it: `tools.rules.check` refuses a
   registered condition that no card's `Fails` line names. Give it a parity
   case too, a negative benchmark or a case in `rust/tests/host-fixtures/`, or
   list it in `rust/tests/host-fixtures/unreached-conditions.yaml` with the
   reason: `tools.validation.check_diagnostics` refuses a registered condition
   with neither.
+- Keep a condition's history in `conditions.yaml`, which the catalogue that
+  `conditions()` returns reads. A release that renames a condition records
+  the former name as `renamed_from` of the registration that takes its place;
+  one that retires a condition moves it from `conditions` to `retired`, with
+  the release as `retired_in`. Then regenerate the tables as above.
+  `tools/tests/test_condition_history.py` keeps 1.0.0's history equal to the
+  `conditions` section of `tools/migrate/renames.yaml`.
 - Keep handler fields local to the expression or result stage that can use them;
   do not recreate a generic exception list.
 - Store each cohesive semantic area in one rule file under `rules/`.

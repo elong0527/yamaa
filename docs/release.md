@@ -298,7 +298,14 @@ starts at 1.0.0 (#3030 D1).
   each may report; the condition and the rule that an existing failure
   reports; a `context` key that a benchmark's expected `error.yaml` pins,
   with its value (#3030 D156); and the twelve columns of `issues` and the
-  fourteen of the run report, in order.
+  fourteen of the run report, in order. Each release's condition catalogue,
+  which `conditions()` returns, is also that release's committed
+  `yaml/conditions.yaml` at its tag, as each JSON Schema is: every condition
+  with its phases, message template and former name, and every condition a
+  release retired; for 1.0.0 it is
+  `https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v1.0.0/yaml/conditions.yaml`.
+  The rules that `conditions()` adds are those that the core registry's
+  causes cite (#3700).
 - Host functions and the command line: the frozen sections of
   `rust/interface/bindings.yaml`, as `rust/interface/manifest.txt` lists
   them. They hold the Python, R and command-line names; the arguments, with

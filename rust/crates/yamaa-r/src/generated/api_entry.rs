@@ -42,6 +42,7 @@ extendr_module! {
     fn submission_summary;
     fn lint;
     fn schema;
+    fn conditions;
     fn info;
     fn selftest;
     fn selftest_status;

@@ -32,6 +32,7 @@ def test_installed_package_exports_exactly_the_public_api() -> None:
         "Error",
         "Table",
         "__version__",
+        "conditions",
         "info",
         "lint",
         "project",
@@ -40,7 +41,16 @@ def test_installed_package_exports_exactly_the_public_api() -> None:
         "selftest",
         "spec",
     ]
-    for name in ("spec", "project", "read_odm", "lint", "schema", "info", "selftest"):
+    for name in (
+        "spec",
+        "project",
+        "read_odm",
+        "lint",
+        "schema",
+        "conditions",
+        "info",
+        "selftest",
+    ):
         assert callable(getattr(yamaa, name))
     assert yamaa.Table is yamaa._native.Table
     assert issubclass(yamaa.Error, Exception)

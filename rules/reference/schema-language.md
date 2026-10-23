@@ -49,7 +49,7 @@ one. A file declaring a version the engine does not read fails as
 field does not expect fails as `unexpected_file_type`.
 
 Fails: `unsupported_language_version`, `unexpected_file_type`, `unknown_field`, `value_not_permitted`.
-Evidence: `negative-version-mismatch`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::the_calling_function_refuses_an_unread_version_or_another_type`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_referencing_field_checks_the_file_it_names`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_file_whose_header_the_engine_does_not_read_fails_at_the_field_that_lists_it`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_1_0_schema_link_refuses_a_producer_it_does_not_read_at_the_link`, `rust/crates/yamaa/tests/issue_locations.rs::a_linked_producer_s_header_finding_locates_in_the_producer`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_1_0_project_refuses_a_listed_specification_it_does_not_read_at_its_listing`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_document_is_admitted_at_the_version_it_declares`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_public_check_reads_a_1_0_specification_and_refuses_a_newer_one`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_public_check_refuses_a_specification_that_declares_schema_version`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_schema_version_root_is_refused_as_language_0_5_wherever_it_is_read`, `rust/tests/host-fixtures/cases.json::check_refuses_a_specification_in_language_0_5`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_project_file_that_declares_schema_version_is_refused_as_language_0_5`, `rust/crates/yamaa-adapters/src/lint/tests.rs::a_named_file_that_declares_schema_version_refuses_the_call`, `rust/crates/yamaa/tests/language_header.rs`, `rust/crates/yamaa/tests/file_type.rs::a_file_that_declares_schema_version_has_no_type`, `rust/crates/yamaa/tests/file_type.rs::a_1_x_header_is_refused_as_a_call_reading_its_type_refuses_it`, `rust/crates/yamaa/tests/schema.rs::any_other_text_is_refused_as_an_unexpected_file_type`, `rust/crates/yamaa-core/src/language.rs::a_1_x_document_declares_its_type_and_a_0_5_document_none`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::entry_version_finding_precedes_parent_and_study_authority`.
+Evidence: `negative-version-mismatch`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::the_calling_function_refuses_an_unread_version_or_another_type`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_referencing_field_checks_the_file_it_names`, `rust/crates/yamaa-core/tests/preparation_dictionary_preparation.rs::a_fragment_with_an_unread_header_fails_at_the_include_entry_naming_it`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_file_whose_header_the_engine_does_not_read_fails_at_the_field_that_lists_it`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_1_0_schema_link_refuses_a_producer_it_does_not_read_at_the_link`, `rust/crates/yamaa/tests/issue_locations.rs::a_linked_producer_s_header_finding_locates_in_the_producer`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_1_0_project_refuses_a_listed_specification_it_does_not_read_at_its_listing`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_document_is_admitted_at_the_version_it_declares`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_public_check_reads_a_1_0_specification_and_refuses_a_newer_one`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_public_check_refuses_a_specification_that_declares_schema_version`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_schema_version_root_is_refused_as_language_0_5_wherever_it_is_read`, `rust/tests/host-fixtures/cases.json::check_refuses_a_specification_in_language_0_5`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_project_file_that_declares_schema_version_is_refused_as_language_0_5`, `rust/crates/yamaa-adapters/src/lint/tests.rs::a_named_file_that_declares_schema_version_refuses_the_call`, `rust/crates/yamaa/tests/language_header.rs`, `rust/crates/yamaa/tests/file_type.rs::a_file_that_declares_schema_version_has_no_type`, `rust/crates/yamaa/tests/file_type.rs::a_1_x_header_is_refused_as_a_call_reading_its_type_refuses_it`, `rust/crates/yamaa/tests/schema.rs::any_other_text_is_refused_as_an_unexpected_file_type`, `rust/crates/yamaa-core/src/language.rs::a_1_x_document_declares_its_type_and_a_0_5_document_none`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::entry_version_finding_precedes_parent_and_study_authority`.
 
 The header is read before the file is checked against any schema: `yamaa`
 first, then `type`. A version is written `1.N`, with `N` a decimal number
@@ -65,19 +65,20 @@ each layer of a specification is admitted at its own version
 A file a call reads reports these at its own `yamaa` or `type`. Each
 referencing field checks the header of the file it names: a project's
 `functions`, `codelists` and section `specs`, a specification's `parent` and
-an input's `schema`. A version the engine does not read, or a type the field
-does not expect, is reported at that field; a malformed header is reported in
-the named file. A dictionary file that `mapping.dict` names carries no header,
+`include` entries ([LAYER-4](../inheritance.md#layer-4)), and an input's
+`schema`. A version the engine does not read, or a type the field does not
+expect, is reported at that field; a malformed header is reported in the
+named file. A dictionary file that `mapping.dict` names carries no header,
 like a data file.
 
 A file that declares `schema_version` is written in language version 0.5,
 which no engine of language version 1.M reads. It fails as
 `unsupported_language_version`, naming version `0.5`, wherever it is read,
 with or without `yamaa` beside it: at its own `schema_version` when a call or
-the lint names it, and at the field that names it when a `parent`, a
-project's `functions`, `codelists` or section `specs`, or an input's `schema`
-reads it. A project file that declares it is refused before any file it
-names is read.
+the lint names it, and at the field that names it when a `parent`, an
+`include` entry, a project's `functions`, `codelists` or section `specs`, or
+an input's `schema` reads it. A project file that declares it is refused
+before any file it names is read.
 
 A call that reads only the type a file declares, as the command line does
 before it chooses what to run, reads the 1.x header alone. There a file that

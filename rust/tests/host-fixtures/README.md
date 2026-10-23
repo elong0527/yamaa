@@ -48,6 +48,7 @@ the held bytes.
 | selftest | The bundled cases in list order, the cases table's columns, the status vocabulary, and the report's lines and the layout of its information line |
 | schema | The four file types, each JSON Schema's dialect, title and `$ref`, the canonical order of its top-level keys, and two refusals with their error text and issue rows |
 | info | The engine information's fields in order, the host vocabulary, and a shipped build's language versions and features |
+| conditions | The condition catalogue's seven columns, every condition it names in name order, and one authored row of each shape: rules in card order, a condition whose issues cite no rule, and the four renames and seven retirements of 1.0.0 |
 | printing | A study's files, and the status and printed lines of each result: a check, a failed check, a project check, a run, a failed run, a project run and each of its members, a submission, and a lazy specification and project; `{path}` stands for the path the test gave and `{root}` for its study directory, with forward slashes |
 | issue-locations | One case for each rule of P-ISSUE-1 (`docs/design/interface-1.0/api.md`, "Issue locations"): the files a case writes, its call, and its first issue's condition, first spec path, file, line and column, counted by hand in those files |
 | include-fragments | One study whose entries compose a parent chain and an `include` list (LAYER-1 to LAYER-4): the files it writes, each check case's entry and complete issue rows, and the resolve case's layers, `parent` and `include` resources, resolved columns, the layer of each named value and the fields the resolved specification never holds; `{root}` stands for the study's directory |
@@ -192,6 +193,17 @@ with the committed files.
 fields are those of `records.info` in `rust/interface/bindings.yaml`, and its
 features and hosts that record's vocabularies, which a tools test checks. The
 `selftest` suites read it for a selftest's `info`, which `info()` equals.
+
+`conditions` pairs the installed Python and R `conditions()` suites (#3700);
+the facade's catalogue tests and the command line's parity family read it
+too. Its `names` are the keys of the `conditions` and `retired` sections of
+`yaml/conditions.yaml`, in name order. Each of its `rows` was written by hand
+from that file and the core registry: the phases and message template that a
+registration gives and its `renamed_from`, or a retired condition's
+`retired_in` with no phase, rule or message, and the card IDs that the
+registry's causes of the condition cite, in card order (by prefix, then
+number). A row is the list of its cells in the order of `columns`, so no row
+reads as a parity case, which is an object with a `condition` key.
 
 `printing` pairs the installed Python and R printing suites (#3030 D36,
 D37, P-PRINT-1). Its lines were written from the forms of
