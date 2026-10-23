@@ -17,7 +17,7 @@ applies.
 | `rules/`, `yaml/` | Normative contracts, diagnostics, schemas and grammar fixtures. |
 | `rust/crates/yamaa-core/` | Specification admission, expressions, dataset execution, project lifecycle, verification and submission metadata composition. |
 | `rust/crates/yamaa-adapters/` | Codecs, storage formats, physical IO and filesystem environment capture. |
-| `rust/crates/yamaa-boundary/` | The interface handshake of both host bindings, the gate every native call passes, the census of live native handles and the types of the engine's C ABI. |
+| `rust/crates/yamaa-boundary/` | The interface handshake of both host bindings, the gate every native call passes, the census of live native handles, and the types of the engine's C ABI with the safe client over them. |
 | `rust/crates/yamaa-engine/` | The engine's C ABI over the facade: its function table, handle table, callback adapters and Arrow stream export, which no package links yet. |
 | `rust/crates/yamaa-python/`, `rust/crates/yamaa-r/` | Host arguments, callbacks, scalar conversion and owned result views. |
 | `rust/crates/yamaa-cli/` | The `yamaa` command line: its arguments, exit statuses and printed output, over the facade alone, with the third-party notices and component inventory of its release archives. |
