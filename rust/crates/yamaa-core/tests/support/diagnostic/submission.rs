@@ -18,61 +18,34 @@ pub(crate) use yamaa_core::{
 
 /// A column's submission metadata, with its one origin (P-ORIGIN-1).
 pub(crate) fn metadata() -> Tree {
-    metadata_written(false)
-}
-/// [`metadata`]; `legacy` writes the 0.5 `origin`.
-fn metadata_written(legacy: bool) -> Tree {
-    let origin = Tree::map(vec![
-        ("type", Tree::text("Assigned")),
-        ("source", Tree::text("Sponsor")),
-    ]);
-    let origin = if legacy {
-        ("origin", origin)
-    } else {
-        ("origins", Tree::list(vec![origin]))
-    };
     Tree::map(vec![
         ("core", Tree::text("Exp")),
         ("length", Tree::integer("8")),
-        origin,
+        (
+            "origins",
+            Tree::list(vec![Tree::map(vec![
+                ("type", Tree::text("Assigned")),
+                ("source", Tree::text("Sponsor")),
+            ])]),
+        ),
     ])
 }
 pub(crate) fn column(name: &str) -> Tree {
-    column_written(name, false)
-}
-/// [`column`]; `legacy` writes it in 0.5.
-fn column_written(name: &str, legacy: bool) -> Tree {
-    let derivation = if legacy {
-        Tree::map(vec![("literal", Tree::text("X"))])
-    } else {
-        Tree::text("'X'")
-    };
     Tree::map(vec![
         ("name", Tree::text(name)),
         ("type", Tree::text("str")),
         ("label", Tree::text("Independent column")),
-        ("derivation", derivation),
-        ("submission", metadata_written(legacy)),
+        ("derivation", Tree::text("'X'")),
+        ("submission", metadata()),
     ])
 }
 /// A 1.0 specification (D4) of the `SDTM` model (D25), which the `sdtm`
 /// section lists.
 pub(crate) fn specification() -> Tree {
-    specification_written(false)
-}
-/// [`specification`]; `legacy` writes it in 0.5, which takes its model from
-/// the section that lists it.
-fn specification_written(legacy: bool) -> Tree {
-    let mut fields = if legacy {
-        vec![]
-    } else {
-        vec![
-            ("yamaa", Tree::text("1.0")),
-            ("type", Tree::text("spec")),
-            ("model", Tree::text("SDTM")),
-        ]
-    };
-    fields.extend([
+    Tree::map(vec![
+        ("yamaa", Tree::text("1.0")),
+        ("type", Tree::text("spec")),
+        ("model", Tree::text("SDTM")),
         ("domain", Tree::text("D0")),
         ("keys", Tree::list(vec![Tree::text("VALUE")])),
         (
@@ -84,7 +57,7 @@ fn specification_written(legacy: bool) -> Tree {
                 ("repeating", Tree::boolean(false)),
             ]),
         ),
-        ("columns", Tree::list(vec![column_written("VALUE", legacy)])),
+        ("columns", Tree::list(vec![column("VALUE")])),
         (
             "output",
             Tree::map(vec![
@@ -92,35 +65,19 @@ fn specification_written(legacy: bool) -> Tree {
                 ("columns", Tree::list(vec![Tree::text("VALUE")])),
             ]),
         ),
-    ]);
-    Tree::map(fields)
+    ])
 }
 /// A 1.0 project (D4) whose `sdtm` section lists `d0.yaml` under its
 /// `standards` (D16).
 pub(crate) fn project() -> Tree {
-    project_written(false)
-}
-/// [`project`]; `legacy` writes it in 0.5, with one `standard`.
-fn project_written(legacy: bool) -> Tree {
     let guide = Tree::map(vec![
         ("name", Tree::text("SDTMIG")),
         ("version", Tree::text("3.4")),
         ("status", Tree::text("Final")),
     ]);
-    let guide = if legacy {
-        ("standard", guide)
-    } else {
-        ("standards", Tree::list(vec![guide]))
-    };
-    let mut fields = if legacy {
-        vec![]
-    } else {
-        vec![
-            ("yamaa", Tree::text("1.0")),
-            ("type", Tree::text("project")),
-        ]
-    };
-    fields.extend([
+    Tree::map(vec![
+        ("yamaa", Tree::text("1.0")),
+        ("type", Tree::text("project")),
         (
             "study",
             Tree::map(vec![
@@ -133,14 +90,13 @@ fn project_written(legacy: bool) -> Tree {
         (
             "sdtm",
             Tree::map(vec![
-                guide,
+                ("standards", Tree::list(vec![guide])),
                 ("context", Tree::text("Other")),
                 ("define", Tree::text("define.xml")),
                 ("specs", Tree::list(vec![Tree::text("d0.yaml")])),
             ]),
         ),
-    ]);
-    Tree::map(fields)
+    ])
 }
 /// Move the project's `sdtm` section to `adam`, under the ADaM guide its
 /// specification's `model` names.
@@ -210,44 +166,13 @@ pub(crate) fn compose_study(
     installed: &str,
     created: &str,
 ) -> Result<Study, Vec<Finding>> {
-    compose_written(
-        project,
-        docs,
-        others,
-        catalogue,
-        (installed, created),
-        false,
-    )
-}
-/// [`compose_study`]; `legacy` reads the project and specifications in 0.5.
-fn compose_written(
-    project: Tree,
-    docs: Vec<Tree>,
-    others: Vec<Tree>,
-    catalogue: &ct::Catalogue,
-    (installed, created): (&str, &str),
-    legacy: bool,
-) -> Result<Study, Vec<Finding>> {
     let project = project.document();
-    let (declared, surface) = if legacy {
-        (
-            yamaa_core::front_end::v0_5::sections::sections(&project).unwrap(),
-            yamaa_core::ast::Surface::V0_5,
-        )
-    } else {
-        let lowered = yamaa_core::front_end::v1::project::project(&project, None).unwrap();
-        (lowered.submission.unwrap(), lowered.header.surface)
-    };
+    let lowered = yamaa_core::front_end::v1::project::project(&project, None).unwrap();
+    let (declared, surface) = (lowered.submission.unwrap(), lowered.header.surface);
     let docs: Vec<_> = docs.into_iter().map(Tree::document).collect();
     let trees: Vec<_> = docs
         .iter()
-        .map(|document| {
-            if legacy {
-                crate::support::submission_tree(document)
-            } else {
-                yamaa_core::front_end::v1::spec::lower(document, None).into_spec()
-            }
-        })
+        .map(|document| yamaa_core::front_end::v1::spec::lower(document, None).into_spec())
         .collect();
     let others: Vec<_> = others.into_iter().map(Tree::document).collect();
     let others: Vec<_> = others.iter().collect();
@@ -368,12 +293,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "SUB-10",
             3,
         ),
-        (
-            VerificationNotMissingRedundant,
-            "redundant_declaration",
-            "CHECK-5",
-            4,
-        ),
         (SubmissionAdamField, "value_not_permitted", "SUB-5", 5),
         (
             SubmissionOriginSource,
@@ -493,12 +412,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             27,
         ),
         (
-            SubmissionMandatoryRedundant,
-            "redundant_declaration",
-            "SUB-11",
-            28,
-        ),
-        (
             SubmissionDisplayFormatConflict,
             "value_not_permitted",
             "SUB-25",
@@ -523,14 +436,8 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             32,
         ),
     ] {
-        // Composition reads a `not_missing` check from the 0.5 long form
-        // `{not_missing: {}}`; a 1.0 file writes the bare keyword, which
-        // preparation reports as these two causes before composition
-        // (CHECK-5, SUB-11). Changes 4 and 28 keep their 0.5 documents
-        // until #3447.
-        let legacy = matches!(change, 4 | 28);
-        let mut project = project_written(legacy);
-        let mut spec = specification_written(legacy);
+        let mut project = project();
+        let mut spec = specification();
         let mut lists = empty.clone();
         let meta = ["columns", "0", "submission"];
         match change {
@@ -541,11 +448,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 *spec.at(&["domain"]) = Tree::text("LONGDOMAIN");
             }
             3 => spec.remove(&["columns", "0", "submission", "core"]),
-            // A key column is mandatory on every row; a `not_missing` restates it.
-            4 => spec.set(
-                &["columns", "0", "verifications"],
-                Tree::list(vec![Tree::map(vec![("not_missing", Tree::map(vec![]))])]),
-            ),
             5 => {
                 adam(&mut project, &mut spec);
                 *spec.at(&["submission", "class"]) = Tree::text("SUBJECT LEVEL ANALYSIS DATASET");
@@ -643,21 +545,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                     )])]),
                 );
             }
-            // A declared `mandatory: true` on a non-key column already requires
-            // every value; a `not_missing` beside it restates it.
-            28 => {
-                let mut extra = column_written("EXTRA", legacy);
-                extra
-                    .at(&["submission"])
-                    .set(&["mandatory"], Tree::boolean(true));
-                extra.set(
-                    &["verifications"],
-                    Tree::list(vec![Tree::map(vec![("not_missing", Tree::map(vec![]))])]),
-                );
-                *spec.at(&["columns"]) = Tree::list(vec![column_written("VALUE", legacy), extra]);
-                *spec.at(&["output", "columns"]) =
-                    Tree::list(vec![Tree::text("VALUE"), Tree::text("EXTRA")]);
-            }
             // An ADaM date travels as a SAS date with its one display format.
             29 => {
                 adam(&mut project, &mut spec);
@@ -706,13 +593,13 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             }
             _ => unreachable!(),
         }
-        let findings = compose_written(
+        let findings = compose_study(
             project,
             vec![spec],
             Vec::new(),
             &lists,
-            ("1.0", "2026-09-30T00:00:00"),
-            legacy,
+            "1.0",
+            "2026-09-30T00:00:00",
         )
         .unwrap_err();
         reached_finding(&mut reached, &findings, code, "validation", condition, rule);
@@ -752,6 +639,71 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             }
             assert_eq!(finding.context.len(), 5, "{:?}", finding.context);
         }
+    }
+    // A `not_missing` check that restates a column's resolved `mandatory` is
+    // refused when the specification is prepared, before composition: a key
+    // column is mandatory on every row (CHECK-5), and so is a column whose
+    // submission metadata declares `mandatory: true` (SUB-11). A check that
+    // declares no field is written as its bare keyword (P-HND-4).
+    let mut spec = specification();
+    spec.set(
+        &["input"],
+        Tree::map(vec![(
+            "SRC",
+            Tree::map(vec![("path", Tree::text("src.csv"))]),
+        )]),
+    );
+    let restated = || Tree::list(vec![Tree::text("not_missing")]);
+    spec.set(&["columns", "0", "verifications"], restated());
+    let mut extra = column("EXTRA");
+    extra
+        .at(&["submission"])
+        .set(&["mandatory"], Tree::boolean(true));
+    extra.set(&["verifications"], restated());
+    let Tree::List(columns) = spec.at(&["columns"]) else {
+        unreachable!("columns are a list")
+    };
+    columns.push(extra);
+    *spec.at(&["output", "columns"]) = Tree::list(vec![Tree::text("VALUE"), Tree::text("EXTRA")]);
+    let prepared = crate::support::specification::prepare(&spec.document());
+    let Err(yamaa_core::specification::PrepareError::Invalid(findings)) = prepared else {
+        panic!(
+            "a restated mandatory is refused when the specification is prepared: {:?}",
+            prepared.err()
+        )
+    };
+    for (code, rule, path, column, stated_by) in [
+        (
+            VerificationNotMissingRedundant,
+            "CHECK-5",
+            "columns.VALUE.verifications[0].not_missing",
+            "VALUE",
+            "keys[0]",
+        ),
+        (
+            SubmissionMandatoryRedundant,
+            "SUB-11",
+            "columns.EXTRA.verifications[0].not_missing",
+            "EXTRA",
+            "columns.EXTRA.submission.mandatory",
+        ),
+    ] {
+        let finding = findings
+            .iter()
+            .map(|finding| finding.diagnostic())
+            .find(|diagnostic| diagnostic.code == code)
+            .unwrap_or_else(|| panic!("missing {code:?}: {findings:?}"));
+        reached.insert(super::expect(
+            &finding,
+            "validation",
+            "redundant_declaration",
+            Some(rule),
+            &[path],
+            vec![
+                ("column", super::text(column)),
+                ("stated_by", super::text(stated_by)),
+            ],
+        ));
     }
     // DEFINE-4 and CT-6: under Submission every published item of a CDISC/NCI
     // list carries its NCI code, and a sponsor-extended item, which has none,
@@ -921,16 +873,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     ] {
         assert_eq!(findings[0].context[key], JsonValue::String(value.into()));
     }
-    // Change 0 reaches `unknown_standard_family`, which only a 0.5 project's
-    // one `standard` raises; it keeps its 0.5 documents until #3447 retires
-    // the cause (a 1.0 section's guides follow DEFINE-6).
     for (code, condition, rule, change) in [
-        (
-            SubmissionStandardFamily,
-            "unknown_standard_family",
-            "SUB-3",
-            0,
-        ),
         (
             SubmissionDefineExtension,
             "value_not_permitted",
@@ -969,13 +912,11 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         ),
         (SubmissionDefineName, "value_not_permitted", "DEFINE-2", 7),
     ] {
-        let legacy = change == 0;
-        let mut project = project_written(legacy);
-        let mut spec = specification_written(legacy);
+        let mut project = project();
+        let mut spec = specification();
         let mut lists = empty.clone();
         let mut docs = None;
         match change {
-            0 => *project.at(&["sdtm", "standard", "name"]) = Tree::text("ADaMIG"),
             1 => *project.at(&["sdtm", "define"]) = Tree::text("define.json"),
             2 => {}
             3 => project.set(
@@ -1009,13 +950,13 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             }
             _ => unreachable!(),
         }
-        let findings = compose_written(
+        let findings = compose_study(
             project,
             docs.unwrap_or_else(|| vec![spec]),
             Vec::new(),
             &lists,
-            (if change == 2 { "" } else { "1.0" }, "2026-09-30T00:00:00"),
-            legacy,
+            if change == 2 { "" } else { "1.0" },
+            "2026-09-30T00:00:00",
         )
         .unwrap_err();
         reached_finding(&mut reached, &findings, code, "validation", condition, rule);

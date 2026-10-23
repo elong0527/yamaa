@@ -1,6 +1,5 @@
 //! Build per-template stored-source metadata through the existing source-port ordering.
 use super::*;
-use crate::key_relation::Implied;
 pub(super) fn catalog_visible(
     output: &TableSchema,
     source: &TableSchema,
@@ -46,41 +45,33 @@ pub(super) fn catalog_visible(
     .map_err(BindError::Catalog)
 }
 /// What an implicit join to the input `relation`, or a qualified aggregate
-/// over it without `key`, matches on: on a 0.5 tree the applicable output
-/// keys, inferred from the fields the input stores; on a 1.0 tree the
-/// input's declared `key`, none when it declares none (LOOKUP-1, D23, D63).
-pub(super) fn implied<'a>(spec: &'a ast::Spec, relation: &str) -> Implied<'a> {
-    if spec.header.surface.infers_join_keys() {
-        return Implied::Applicable;
-    }
-    Implied::Declared(
-        spec.input_key(relation)
-            .unwrap_or_default()
-            .iter()
-            .map(|column| column.name.as_str())
-            .collect(),
-    )
+/// over it without `key`, matches on: the input's declared `key`, none when
+/// it declares none (LOOKUP-1, D23, D63).
+pub(super) fn declared_key<'a>(spec: &'a ast::Spec, relation: &str) -> Vec<&'a str> {
+    spec.input_key(relation)
+        .unwrap_or_default()
+        .iter()
+        .map(|column| column.name.as_str())
+        .collect()
 }
 
 /// The whole-dataset catalog: the primary record is current, and every other
-/// stored source joins through its implicit join's key ([`implied`]).
+/// stored source joins through its implicit join's key ([`declared_key`]).
 pub(super) fn joined_catalog(
     spec: &ast::Spec,
     output: &TableSchema,
     primary: &TableSchema,
     name: &str,
-    keys: &[usize],
     secondary: &[crate::dataset::SecondarySource],
 ) -> Result<Catalog, BindError> {
     let catalog = catalog_visible(output, primary, name, None)?;
-    extend_catalog(spec, catalog, primary, name, keys, secondary, name)
+    extend_catalog(spec, catalog, primary, name, secondary, name)
 }
 pub(super) fn extend_catalog(
     spec: &ast::Spec,
     catalog: Catalog,
     primary: &TableSchema,
     name: &str,
-    keys: &[usize],
     secondary: &[crate::dataset::SecondarySource],
     driver: &str,
 ) -> Result<Catalog, BindError> {
@@ -108,13 +99,11 @@ pub(super) fn extend_catalog(
                     name,
                     fields: &fields[index],
                 },
-                implied(spec, name),
+                declared_key(spec, name),
             )
         })
         .collect::<Vec<_>>();
-    catalog
-        .with_joined(&relations, keys)
-        .map_err(BindError::Catalog)
+    catalog.with_joined(&relations).map_err(BindError::Catalog)
 }
 pub(super) fn select<'a>(
     source: &'a TableSchema,

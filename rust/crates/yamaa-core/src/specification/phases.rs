@@ -259,7 +259,7 @@ impl<'a> Phases<'a> {
                 }
             }
             Some(JoinKey::FromInput) => {}
-            None | Some(JoinKey::Applicable) => {
+            None => {
                 out.extend(
                     self.spec
                         .keys

@@ -905,7 +905,6 @@ mod execution {
 
     mod declarative_case_intermediates {
         //! Complete case observations use the shared scalar source binder.
-        use crate::support::Edit as _;
         use std::{fs, path::Path};
         use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
@@ -1026,79 +1025,6 @@ columns:
                     {"spec_path":"columns.SRCSEQ.derivation.case[0].then.source.absent","handler":"absent","count":0}
                 ])
             );
-        }
-        /// [`BODY`] in the 0.5 language. A 0.5 file counts P's own absence
-        /// under `no_match`, apart from the binding's `absent`, and answers a
-        /// field P lacks with `absent`; a 1.0 file counts both absences under
-        /// one `absent` row (D202) and refuses the unknown field (D67, D102).
-        const BODY_0_5: &str = r#"schema_version: '1.0'
-domain: TEST
-base: SRC
-keys: [ID]
-input:
-  SRC: {path: src.csv, types: {ID: int}}
-  DONOR: {path: donor.csv, types: {ID: int, SEQ: int}}
-output: {path: result.csv, columns: [ID, A, B]}
-intermediates:
-  - id: P
-    dataset: DONOR
-    order_by: [DONOR.SEQ]
-    keep: first
-    no_match: {literal: null}
-columns:
-  - {name: ID, type: int, derivation: SRC.ID}
-  - {name: SELECT, type: str, derivation: SRC.SELECT}
-  - name: A
-    type: str
-    derivation:
-      case:
-        - when: "SELECT = 'Y'"
-          then: P.A
-        - otherwise: {literal: skip}
-  - name: B
-    type: str
-    derivation:
-      case:
-        - when: "SELECT = 'Y'"
-          then: P.B
-        - otherwise: {literal: skip}
-"#;
-        /// This test keeps its 0.5 document until the 0.5 path goes (#3447).
-        #[test]
-        fn nested_named_source_absence_handlers_are_lazy_and_preserve_existing_missing_values() {
-            let fixture = Fixture::new();
-            fixture.populate();
-            let body = BODY_0_5.edit(
-                "then: P.A",
-                "then: {source: {variable: P.A, absent: fallback}}",
-            );
-            for (body, expected, count) in [
-                (
-                    body.clone(),
-                    b"ID,A,B\n1,first,\n2,skip,skip\n3,,\n".as_slice(),
-                    0,
-                ),
-                (
-                    body.edit("variable: P.A,", "variable: P.ABSENT,"),
-                    b"ID,A,B\n1,fallback,\n2,skip,skip\n3,fallback,\n".as_slice(),
-                    2,
-                ),
-            ] {
-                let mut result = fixture.run(&body).unwrap();
-                assert!(result.issues().is_empty(), "{:?}", result.issues());
-                assert!(result.save().unwrap());
-                assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(), expected);
-                assert_eq!(
-                    result.observations()["handler_counts"]
-                        .as_array()
-                        .unwrap()
-                        .iter()
-                        .find(|entry| entry["spec_path"]
-                            == "columns.A.derivation.case[0].then.source.absent")
-                        .unwrap(),
-                    &yamaa_adapters::json!({"spec_path":"columns.A.derivation.case[0].then.source.absent","handler":"absent","count":count})
-                );
-            }
         }
     }
 }

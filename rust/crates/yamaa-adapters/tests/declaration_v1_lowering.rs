@@ -365,24 +365,6 @@ fn each_node_is_located_in_the_layer_whose_value_took_effect() {
 }
 
 #[test]
-fn absent_answers_an_unknown_variable_only_on_the_0_5_surface() {
-    // D67: in 1.0 `absent` answers only a lookup that finds no record.
-    assert!(Surface::V0_5.absent_answers_unknown_variable());
-    assert!(!Surface::V1 { minor: 0 }.absent_answers_unknown_variable());
-    let spec = lowered(&spec(&[
-        "{name: V, type: int, derivation: {source: {variable: EX.UNKNOWN, absent: 7}}}",
-    ]));
-    let ExprKind::Source(source) = &spec.expr(derived(&spec, "V")).kind else {
-        panic!("a structured source");
-    };
-    assert_eq!(
-        source.absent.as_ref().unwrap().value,
-        Literal::Int("7".into())
-    );
-    assert!(!spec.header.surface.absent_answers_unknown_variable());
-}
-
-#[test]
 fn a_declared_baseline_order_starts_with_the_date_ascending() {
     let baseline = |order: &str| {
         spec(&[

@@ -2,7 +2,6 @@
 //! A mapping source carries the same filter, selection, and absent value as
 //! a plain source binding, so a filtered raw column no longer needs a
 //! helper column that exists only to feed the dictionary lookup.
-use crate::support::Edit as _;
 use std::fs;
 use yamaa_adapters::file_application;
 use yamaa_core::diagnostic::Diagnostic;
@@ -104,27 +103,6 @@ fn mapping_source_with_a_filter_alone_reads_the_selected_record() {
     assert_eq!(
         fixture.saved("adsl.csv"),
         "STUDYID,USUBJID,SEX\nS1,001,Female\nS1,002,Male\n"
-    );
-}
-
-/// The input has no SEX column. Only a 0.5 file answers such a read with
-/// `absent` (D67, D102); a 1.0 file fails it as `unknown_field`, so this
-/// test keeps its 0.5 document until the 0.5 path goes (#3447).
-#[test]
-fn mapping_source_absent_value_feeds_the_dictionary() {
-    let specification = adsl_specification("{variable: DM.SEX, absent: M}")
-        .edit("yamaa: \"1.0\"\ntype: spec\n", "schema_version: '1.0'\n")
-        .edit(
-            "unmapped: null",
-            "missing: {literal: null}, unmapped: {literal: null}",
-        );
-    let fixture = Fixture::new(
-        &specification,
-        &[("dm.csv", "STUDYID,USUBJID,SEQ,VISIT\nS1,001,1,SCREENING\n")],
-    );
-    assert_eq!(
-        fixture.saved("adsl.csv"),
-        "STUDYID,USUBJID,SEX\nS1,001,Male\n"
     );
 }
 

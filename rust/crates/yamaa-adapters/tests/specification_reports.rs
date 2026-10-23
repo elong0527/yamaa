@@ -8,441 +8,6 @@ mod execution {
         use yamaa_core::application_observer::Scope;
 
         #[test]
-        fn original_window_failures_match_independent_diagnostics_and_completed_observations() {
-            use crate::support::ports::Sources;
-            use yamaa_adapters::json;
-            use yamaa_adapters::{
-                specification_report::{self, Identity},
-                specification_run::PreparedRun,
-            };
-            use yamaa_core::json::Value as Json;
-            let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-            let case = root.join("benchmarks/schema-window-functions");
-            let schema = schema(&root.join("yaml"));
-            // The benchmark as 0.5 wrote it: in 1.0 the schema refuses an
-            // ordered baseline window before WINDOW-5 compiles it. Its input
-            // is the benchmark's own.
-            let original = std::fs::read_to_string(
-                crate::support::benchmarks::legacy("schema-window-functions").join("spec.yaml"),
-            )
-            .unwrap();
-            let cases: Vec<Json> = yamaa_adapters::json_wire::decode_array(include_str!(
-                "fixtures/specs/window-failures.json"
-            ))
-            .unwrap();
-            for variant in cases {
-                let raw = original.replace(
-                    variant["before"].as_str().unwrap(),
-                    variant["after"].as_str().unwrap(),
-                );
-                let run = PreparedRun::prepare(prepare(&schema, raw.as_bytes())).unwrap();
-                let mut content = std::fs::read_to_string(case.join("input/vs.csv")).unwrap();
-                if let Some(input_before) = variant["input_before"].as_str() {
-                    content =
-                        content.replace(input_before, variant["input_after"].as_str().unwrap());
-                }
-                let mut host = Sources::by_path([("input/vs.csv", content.as_bytes())]);
-                let attempt = run.execute_with_ports(&mut NoFunctions, &mut host, Scope::default());
-                let result = specification_report::build_result(
-                    &run,
-                    &attempt,
-                    Identity {
-                        runtime: "python",
-                        runtime_version: "fixture-runtime",
-                        engine_version: "fixture-engine",
-                        example: "schema-window-functions",
-                        specification: "spec.yaml",
-                        base_directory: ".",
-                    },
-                    &[],
-                )
-                .unwrap();
-                // A failed window has no file to save.
-                assert!(result.files().is_empty());
-                let actual = result.saved_observations().unwrap();
-                let mut expected: Json = yamaa_adapters::json_wire::decode(include_str!(
-                    "fixtures/specs/schema-window-functions.json"
-                ))
-                .unwrap();
-                expected["outcome"] = json!("failure");
-                expected["nodes"][0]["outcome"] = json!("failure");
-                for field in ["diagnostics", "handler_counts"] {
-                    expected[field] = variant[field].clone();
-                    expected["nodes"][0][field] = variant[field].clone();
-                }
-                expected["artifacts"] = json!([]);
-                expected["verifications"] = json!([]);
-                expected["tables"]
-                    .as_array_mut()
-                    .unwrap()
-                    .retain(|table| table["stage"] == "source");
-                if let Some(cells) = variant["source_cells"].as_array() {
-                    for cell in cells {
-                        expected["tables"][0]["rows"][cell[0].as_u64().unwrap() as usize]
-                            [cell[1].as_u64().unwrap() as usize] = cell[2].clone();
-                    }
-                }
-                assert_eq!(
-                    actual,
-                    expected,
-                    "{}",
-                    yamaa_adapters::json_wire::encode(&variant["name"])
-                );
-                assert_eq!(host.captured(), ["VS"]);
-            }
-        }
-
-        #[test]
-        fn inherited_original_preparation_prunes_before_source_binding() {
-            use yamaa_core::schema::SchemaSource;
-            use yamaa_core::{inheritance as graph, inheritance_preparation as lifecycle};
-            struct Host {
-                root: std::path::PathBuf,
-                reads: Vec<String>,
-                resolutions: Vec<String>,
-                paths: Vec<String>,
-                fail_path: bool,
-            }
-            impl graph::InheritanceSourcePort for Host {
-                type Error = &'static str;
-                fn canonicalize(
-                    &mut self,
-                    _: &str,
-                    written: &str,
-                ) -> Result<graph::Source, graph::SourceError<&'static str>> {
-                    self.resolutions.push(written.into());
-                    Ok(graph::Source {
-                        identity: written.into(),
-                        display_path: written.into(),
-                    })
-                }
-                fn read(
-                    &mut self,
-                    source: &graph::Source,
-                ) -> Result<Document, graph::SourceError<&'static str>> {
-                    self.reads.push(source.identity.clone());
-                    Ok(
-                        decode_yaml(&std::fs::read(self.root.join(&source.identity)).unwrap())
-                            .unwrap()
-                            .document,
-                    )
-                }
-            }
-            impl lifecycle::PathPort for Host {
-                fn rebase(
-                    &mut self,
-                    _: &graph::Source,
-                    _: &graph::Source,
-                    written: &str,
-                ) -> Result<String, &'static str> {
-                    if self.fail_path {
-                        return Err("original path failure");
-                    }
-                    self.paths.push(written.into());
-                    Ok(written.into())
-                }
-            }
-            impl yamaa_core::resolver::Resolver for Host {
-                type Error = &'static str;
-                fn inspect(
-                    &mut self,
-                    name: yamaa_core::resolver::Name<'_>,
-                ) -> Result<graph::Source, &'static str> {
-                    let yamaa_core::resolver::Name::Written { written, .. } = name else {
-                        panic!("unexpected request {name:?}")
-                    };
-                    self.resolutions.push(written.into());
-                    Ok(graph::Source {
-                        identity: written.into(),
-                        display_path: written.into(),
-                    })
-                }
-                fn capture(
-                    &mut self,
-                    name: yamaa_core::resolver::Name<'_>,
-                ) -> Result<yamaa_core::resolver::Captured, &'static str> {
-                    let yamaa_core::resolver::Name::Located { source, .. } = name else {
-                        panic!("unexpected request {name:?}")
-                    };
-                    self.reads.push(source.identity.clone());
-                    let bytes = std::fs::read(self.root.join(&source.identity)).unwrap();
-                    Ok(yamaa_core::resolver::Captured::resource(bytes.into(), true))
-                }
-                fn failure(
-                    &self,
-                    _: yamaa_core::resolver::Name<'_>,
-                    _: &&'static str,
-                ) -> Option<yamaa_core::resolver::Failure> {
-                    None
-                }
-                fn rebase(
-                    &mut self,
-                    layer: &graph::Source,
-                    entry: &graph::Source,
-                    written: &str,
-                ) -> Result<String, &'static str> {
-                    lifecycle::PathPort::rebase(self, layer, entry, written)
-                }
-            }
-            let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-            let case = root.join("benchmarks/schema-inheritance");
-            // The 0.5 inheritance lifecycle reads the layers as 0.5 wrote
-            // them; the inputs and the expected output are the benchmark's.
-            let layers = crate::support::benchmarks::legacy("schema-inheritance");
-            let schema = schema(&root.join("yaml"));
-            let raw = decode_yaml(&std::fs::read(layers.join("spec_study.yaml")).unwrap())
-                .unwrap()
-                .document;
-            let mut host = Host {
-                root: layers.clone(),
-                reads: vec![],
-                resolutions: vec![],
-                paths: vec![],
-                fail_path: false,
-            };
-            let prepared = lifecycle::prepare(
-                schema.structure(),
-                graph::Source {
-                    identity: "spec_study.yaml".into(),
-                    display_path: "spec_study.yaml".into(),
-                },
-                raw.clone(),
-                &mut host,
-            )
-            .unwrap();
-            assert_eq!(host.reads, ["spec_compound.yaml", "spec_organization.yaml"]);
-            assert_eq!(
-                host.resolutions,
-                ["spec_compound.yaml", "spec_organization.yaml"]
-            );
-            assert_eq!(
-                prepared
-                    .layers()
-                    .iter()
-                    .map(|layer| layer.source.identity.as_str())
-                    .collect::<Vec<_>>(),
-                [
-                    "spec_organization.yaml",
-                    "spec_compound.yaml",
-                    "spec_study.yaml"
-                ]
-            );
-            let d = prepared.model().document();
-            let columns = sequence(d, d.field(d.root(), "columns").unwrap());
-            assert_eq!(
-                columns
-                    .iter()
-                    .map(|&column| text(d, d.field(column, "name").unwrap()))
-                    .collect::<Vec<_>>(),
-                ["USUBJID", "PARAMCD", "AVAL", "AVALU"]
-            );
-            assert_eq!(
-                text(d, d.field(columns[2], "label").unwrap()),
-                "Analysis Value"
-            );
-            assert_eq!(
-                text(d, d.field(columns[3], "label").unwrap()),
-                "Standardized Analysis Unit"
-            );
-            let compiled =
-                yamaa_core::specification::PreparedSpecification::prepare(prepared.model())
-                    .unwrap();
-            assert_eq!(compiled.sources().len(), 1);
-            assert_eq!(
-                (&*compiled.source().name, &*compiled.source().path),
-                ("LB", "input/lb.csv")
-            );
-            assert_eq!(prepared.origins().len(), d.nodes().len());
-            for origin in prepared.origins() {
-                if origin.source == SchemaSource::Input {
-                    assert!(origin.node < prepared.normalization_input().nodes().len());
-                }
-            }
-            assert!(prepared
-                .provenance()
-                .iter()
-                .any(|origin| origin.path == "columns.AVAL.label" && origin.layer == 2));
-
-            let table = yamaa_adapters::typed_csv::parse(
-                &std::fs::read(case.join("input/lb.csv")).unwrap(),
-                &compiled.source().types,
-            )
-            .unwrap();
-            let plan = compiled.bind(table.schema()).unwrap();
-            let execution = plan
-                .execute(
-                    &table,
-                    &[],
-                    &mut yamaa_core::function_invocation::NoFunctions::new(),
-                    None,
-                    &|| false,
-                )
-                .result
-                .unwrap();
-            assert_eq!(
-                execution.dataset.rows(),
-                &[
-                    vec![
-                        Value::Str("01".into()),
-                        Value::Str("ALT".into()),
-                        Value::float(12.5),
-                        Value::Str("U/L".into())
-                    ],
-                    vec![
-                        Value::Str("02".into()),
-                        Value::Str("ALT".into()),
-                        Value::float(21.0),
-                        Value::Str("U/L".into())
-                    ],
-                ]
-            );
-            // The organization level declares no verification: its `unique`
-            // repeated the study's keys, which output-key validation asserts.
-            assert!(execution.verifications.is_empty());
-            assert_eq!(
-                yamaa_adapters::csv_artifact::render(&execution.dataset, &[0, 1, 2, 3], None)
-                    .unwrap(),
-                std::fs::read(case.join("expected/adlb.csv")).unwrap()
-            );
-            for (original, reserved, path) in [
-                ("scope", "label", "metadata.label"),
-                ("analysis_role", "origin", "columns.AVAL.metadata.origin"),
-            ] {
-                let mut nodes = d.nodes().to_vec();
-                let key = nodes
-                    .iter()
-                    .position(|n| matches!(n,N::Text(value) if value == original))
-                    .unwrap();
-                nodes[key] = N::Text(reserved.into());
-                let changed = SpecificationDocument::admit(Document::new(nodes, d.root()).unwrap())
-                    .unwrap()
-                    .unwrap();
-                let error = yamaa_core::specification::PreparedSpecification::prepare(&changed)
-                    .unwrap_err();
-                assert!(
-                    matches!(error,yamaa_core::specification::PrepareError::Invalid(ref items) if items.iter().any(|item|matches!(item, yamaa_core::specification::PreflightFinding::Scalar(diagnostic) if diagnostic.code == yamaa_core::diagnostic::ConditionCode::SubmissionReservedMetadata && diagnostic.spec_paths == [path])))
-                );
-            }
-            host.reads.clear();
-            let captured = schema
-                .prepare_inherited(
-                    Source {
-                        identity: "spec_study.yaml".into(),
-                        bytes: std::fs::read(layers.join("spec_study.yaml")).unwrap(),
-                    },
-                    "spec_study.yaml".into(),
-                    &mut host,
-                )
-                .unwrap();
-            assert_eq!(host.reads, ["spec_compound.yaml", "spec_organization.yaml"]);
-            assert_eq!(captured.parents().len(), 2);
-            for parent in captured.parents() {
-                assert_eq!(
-                    parent.source().bytes,
-                    std::fs::read(layers.join(&parent.source().identity)).unwrap()
-                );
-                assert!(!parent.raw().locations.is_empty());
-            }
-            assert!(captured.inheritance().is_some());
-            let run = yamaa_adapters::specification_run::PreparedRun::prepare(captured).unwrap();
-            struct Data {
-                bytes: Arc<[u8]>,
-                reads: usize,
-            }
-            use yamaa_core::resolver;
-            impl resolver::Resolver for Data {
-                type Error = ();
-                fn inspect(
-                    &mut self,
-                    name: resolver::Name<'_>,
-                ) -> Result<resolver::Located, Self::Error> {
-                    let resolver::Name::Input(source) = name else {
-                        panic!("unexpected request {name:?}")
-                    };
-                    Ok(resolver::Located {
-                        identity: source.path.clone(),
-                        display_path: source.path.clone(),
-                    })
-                }
-                fn capture(
-                    &mut self,
-                    name: resolver::Name<'_>,
-                ) -> Result<resolver::Captured, Self::Error> {
-                    let resolver::Name::Input(source) = name else {
-                        panic!("unexpected request {name:?}")
-                    };
-                    let before = self.reads;
-                    assert_eq!((&*source.name, &*source.path), ("LB", "input/lb.csv"));
-                    self.reads = 1;
-                    Ok(resolver::Captured::resource(
-                        self.bytes.clone(),
-                        self.reads != before,
-                    ))
-                }
-                fn failure(
-                    &self,
-                    _: resolver::Name<'_>,
-                    _: &Self::Error,
-                ) -> Option<resolver::Failure> {
-                    None
-                }
-                fn rebase(
-                    &mut self,
-                    _: &resolver::Located,
-                    _: &resolver::Located,
-                    _: &str,
-                ) -> Result<String, Self::Error> {
-                    panic!("an input is never rebased")
-                }
-            }
-            let mut data = Data {
-                bytes: Arc::from(std::fs::read(case.join("input/lb.csv")).unwrap()),
-                reads: 0,
-            };
-            let artifact = std::fs::read(case.join("expected/adlb.csv")).unwrap();
-            for created in [1, 0] {
-                let attempt = run.execute_with_ports(&mut NoFunctions, &mut data, Scope::default());
-                let result = yamaa_adapters::specification_report::build_result(
-                    &run,
-                    &attempt,
-                    yamaa_adapters::specification_report::Identity {
-                        runtime: "python",
-                        runtime_version: "fixture-runtime",
-                        engine_version: "fixture-engine",
-                        example: "schema-inheritance",
-                        specification: "spec_study.yaml",
-                        base_directory: ".",
-                    },
-                    &[],
-                )
-                .unwrap();
-                assert_eq!(result.files(), [("adlb.csv", &artifact[..])]);
-                let report = result.saved_observations().unwrap();
-                let mut expected: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(
-                    include_str!("fixtures/specs/schema-inheritance.json"),
-                )
-                .unwrap();
-                expected["source_reads"][0]["snapshots_created"] = yamaa_adapters::json!(created);
-                assert_eq!(report, expected);
-            }
-            host.fail_path = true;
-            let error = lifecycle::prepare(
-                schema.structure(),
-                graph::Source {
-                    identity: "spec_study.yaml".into(),
-                    display_path: "spec_study.yaml".into(),
-                },
-                raw.clone(),
-                &mut host,
-            )
-            .unwrap_err();
-            assert!(matches!(
-                error,
-                lifecycle::Error::Path("original path failure")
-            ));
-        }
-
-        #[test]
         fn classified_capture_failures_retain_complete_reports_without_publication() {
             use yamaa_adapters::json;
             use yamaa_adapters::{
@@ -519,12 +84,9 @@ mod execution {
             }
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let case = root.join("benchmarks/schema-lookup");
-            let schema = schema(&root.join("yaml"));
-            let run = PreparedRun::prepare(prepare(
-                &schema,
-                &std::fs::read(case.join("spec.yaml")).unwrap(),
-            ))
-            .unwrap();
+            let run =
+                PreparedRun::prepare(prepare(&std::fs::read(case.join("spec.yaml")).unwrap()))
+                    .unwrap();
             let bytes: Arc<[u8]> = std::fs::read(case.join("input/dm.csv")).unwrap().into();
             let metadata = || Identity {
                 runtime: "python",
@@ -746,11 +308,11 @@ mod execution {
                 "SRC: {path: nested/data.csv, types: {ID: int}}",
             ] {
                 for child_path in [None, Some("child.csv")] {
-                    let mut entry = String::from("schema_version: '1.0'\nparent: parent.yaml\ndomain: TEST\nkeys: [ID]\noutput: {path: result.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n");
+                    let mut entry = String::from("yamaa: '1.0'\ntype: spec\nparent: parent.yaml\ndomain: TEST\nkeys: [ID]\noutput: {path: result.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n");
                     if let Some(path) = child_path {
                         entry.push_str(&format!("input: {{SRC: {path}}}\n"));
                     }
-                    let parent = format!("schema_version: '1.0'\ninput: {{{declaration}}}\n");
+                    let parent = format!("yamaa: '1.0'\ntype: spec\ninput: {{{declaration}}}\n");
                     let document = yamaa_adapters::shipped_schema::prepare(
                         Source {
                             identity: "entry.yaml".into(),
@@ -873,9 +435,7 @@ mod execution {
                 }
             }
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-            let schema = schema(&root.join("yaml"));
             let run = PreparedRun::prepare(prepare(
-                &schema,
                 &std::fs::read(root.join("benchmarks/schema-lookup/spec.yaml")).unwrap(),
             ))
             .unwrap();
@@ -1009,15 +569,14 @@ mod execution {
                 specification_report::{self, Identity},
                 specification_run::PreparedRun,
             };
-            let schema = yamaa_adapters::shipped_schema::capture().unwrap();
-            let prefix = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+            let prefix = "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\noutput: {path: result.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
             for input in [b"ID\n".as_slice(), b"ID\n1\n2\n".as_slice()] {
                 for bound in [
                     "min: 999999999999999999999999999999",
                     "max: -999999999999999999999999999999",
                 ] {
                     let source = format!("{prefix}verifications:\n  - row_count: {{id: first, min: -999999999999999999999999999999, max: 999999999999999999999999999999}}\n  - row_count: {{{bound}}}\n");
-                    let run = PreparedRun::prepare(prepare(&schema, source.as_bytes())).unwrap();
+                    let run = PreparedRun::prepare(prepare(source.as_bytes())).unwrap();
                     let mut host = Sources::any(input);
                     let attempt =
                         run.execute_with_ports(&mut NoFunctions, &mut host, Scope::default());
@@ -1098,13 +657,11 @@ mod execution {
 
         #[test]
         fn odm_preflight_matches_complete_independent_findings_before_source_authority() {
-            let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             let mut count = 0;
             for row in fixture_rows(include_str!("fixtures/odm_preflight.json")) {
                 let raw = fixture_bytes(&row["source"]);
-                let error =
-                    yamaa_adapters::specification_run::PreparedRun::prepare(prepare(&schema, &raw))
-                        .unwrap_err();
+                let error = yamaa_adapters::specification_run::PreparedRun::prepare(prepare(&raw))
+                    .unwrap_err();
                 let expected: yamaa_core::json::Value = row["expected"].clone();
                 assert_eq!(expected["outcome"]["status"], "invalid");
                 assert_eq!(
@@ -1151,33 +708,31 @@ mod execution {
         fn deferred_column_findings_keep_vocabulary_and_report_admission() {
             use yamaa_adapters::specification_run::{Error, PreparedRun};
             use yamaa_core::specification::PrepareError;
-            let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             let raw = |first: &str, severity: &str| {
                 format!(
-        "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: unread.csv}}\noutput: {{path: result.csv, columns: [ID, V]}}\ncolumns:\n  - {{name: ID, type: str, label: ID, derivation: SRC.ID}}\n  - name: V\n    type: str\n    label: V\n    derivation: SRC.V\n    verifications:\n      - {first}\n      - matches: {{pattern: 'a{{1000001}}', severity: {severity}}}\n"
+        "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: unread.csv}}\noutput: {{path: result.csv, columns: [ID, V]}}\ncolumns:\n  - {{name: ID, type: str, label: ID, derivation: SRC.ID}}\n  - name: V\n    type: str\n    label: V\n    derivation: SRC.V\n    verifications:\n      - {first}\n      - matches: {{pattern: 'a{{1000001}}', severity: {severity}}}\n"
     )
             };
             for first in ["matches: {pattern: '('}", "allowed_values: {values: []}"] {
-                let document = prepare(&schema, raw(first, "error").as_bytes());
+                let document = prepare(raw(first, "error").as_bytes());
                 PreparedRun::prepare(document).expect("the earlier finding remains deferred");
-                let document = prepare(&schema, raw(first, "warning").as_bytes());
+                let document = prepare(raw(first, "warning").as_bytes());
                 assert!(matches!(PreparedRun::prepare(document),
             Err(Error::Prepare(PrepareError::Invalid(items)))
                 if items.iter().any(|item| item.diagnostic().definition().condition == "missing_report")));
                 let with_report = raw(first, "warning")
                     .edit("columns: [ID, V]}", "columns: [ID, V], report: report.csv}");
-                PreparedRun::prepare(prepare(&schema, with_report.as_bytes()))
+                PreparedRun::prepare(prepare(with_report.as_bytes()))
                     .expect("the earlier finding remains deferred with a declared report file");
             }
         }
 
         #[test]
         fn static_verification_checks_match_complete_issues_without_study_authority() {
-            let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             let rows = fixture_rows(include_str!("fixtures/static_verification_checks.json"));
             assert_eq!(rows.len(), 15);
             for row in &rows {
-                let document = prepare(&schema, &fixture_bytes(&row["source"]));
+                let document = prepare(&fixture_bytes(&row["source"]));
                 let run =
                     yamaa_adapters::specification_run::PreparedRun::prepare(document).unwrap();
                 for _ in 0..2 {
@@ -1201,12 +756,10 @@ mod execution {
                 specification_report::{self, Identity},
                 specification_run::PreparedRun,
             };
-            let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             let mut count = 0;
             for row in fixture_rows(include_str!("fixtures/original_source_bindings.json")) {
                 let case = row["case"].as_str().unwrap();
-                let run =
-                    PreparedRun::prepare(prepare(&schema, &fixture_bytes(&row["source"]))).unwrap();
+                let run = PreparedRun::prepare(prepare(&fixture_bytes(&row["source"]))).unwrap();
                 let inputs: BTreeMap<String, String> = row["inputs"]
                     .as_object()
                     .unwrap()
@@ -1265,7 +818,7 @@ mod execution {
                 }
                 count += 1;
             }
-            assert_eq!(count, 16);
+            assert_eq!(count, 12);
         }
 
         #[test]
@@ -1276,7 +829,6 @@ mod execution {
                 specification_report::{self, Identity},
                 specification_run::PreparedRun,
             };
-            let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             let mut count = 0;
             for row in fixture_rows(include_str!("fixtures/original_mapping_cut.json")) {
                 let case = row["case"].as_str().unwrap();
@@ -1285,8 +837,7 @@ mod execution {
                         .unwrap(),
                     row["expected"]
                 );
-                let run =
-                    PreparedRun::prepare(prepare(&schema, &fixture_bytes(&row["source"]))).unwrap();
+                let run = PreparedRun::prepare(prepare(&fixture_bytes(&row["source"]))).unwrap();
                 let inputs: BTreeMap<String, String> = row["inputs"]
                     .as_object()
                     .unwrap()
@@ -1350,16 +901,18 @@ mod execution {
 
         #[test]
         fn source_condition_stays_unknown_under_the_normative_grammar() {
-            let schema = yamaa_adapters::shipped_schema::capture().unwrap();
-            let raw=b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: src.csv}\noutput: {path: result.csv, columns: [ID]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation:\n      source: {variable: SRC.ID, condition: TRUE}\n";
-            let error = schema
-                .prepare_standalone(Source {
+            let raw=b"yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: src.csv}\noutput: {path: result.csv, columns: [ID]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation:\n      source: {variable: SRC.ID, condition: TRUE}\n";
+            let error = yamaa_adapters::shipped_schema::prepare(
+                Source {
                     identity: "spec.yaml".into(),
                     bytes: raw.to_vec(),
-                })
-                .unwrap_err();
+                },
+                "spec.yaml".into(),
+                &mut crate::support::specification_run::EntryOnly,
+            )
+            .unwrap_err();
             let findings = crate::support::findings(
-                yamaa_adapters::specification_diagnostics::capture_failure(&error),
+                yamaa_adapters::specification_diagnostics::inheritance_failure_ref(&error).unwrap(),
             );
             assert!(findings
                 .as_array()
@@ -1372,13 +925,11 @@ mod execution {
 
         #[test]
         fn original_mapping_cut_admission_has_complete_findings_before_study_ports() {
-            let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             for row in fixture_rows(include_str!("fixtures/mapping_cut_admission.json")) {
                 let bytes = fixture_bytes(&row["source"]);
-                let error = yamaa_adapters::specification_run::PreparedRun::prepare(prepare(
-                    &schema, &bytes,
-                ))
-                .unwrap_err();
+                let error =
+                    yamaa_adapters::specification_run::PreparedRun::prepare(prepare(&bytes))
+                        .unwrap_err();
                 let expected: yamaa_core::json::Value = row["expected"].clone();
                 assert_eq!(
                     spec_findings(&error, None).unwrap(),

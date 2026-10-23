@@ -79,10 +79,7 @@ fn reserved(
     let governed = if column.is_some() {
         crate::specification_submission_document::COLUMN_METADATA_FIELDS
     } else {
-        crate::specification_submission_document::dataset_metadata_fields(matches!(
-            spec.header.surface,
-            ast::Surface::V1 { .. }
-        ))
+        crate::specification_submission_document::DATASET_METADATA_FIELDS
     };
     for (key, _) in metadata {
         if governed.iter().any(|field| field.name() == key.name) {
@@ -116,9 +113,8 @@ impl Declared<'_> {
 }
 /// The origins a column or a value-level entry declares at `path`, each
 /// checked on its own: at least one (SUB-14), each one's description
-/// (SUB-16), and a method beside a `Derived` origin anywhere (SUB-18). A 1.0
-/// origin's missing description is reported at its own `origins[<i>]`, and a
-/// 0.5 one's at `path`, as 0.5.0 reports it (D75).
+/// (SUB-16), and a method beside a `Derived` origin anywhere (SUB-18). An
+/// origin's missing description is reported at its own `origins[<i>]`.
 fn origins<'a>(
     spec: &ast::Spec,
     metadata: &'a SubmissionMetadata,
@@ -136,7 +132,6 @@ fn origins<'a>(
         result.push(finding(C::SubmissionOriginMissing, path, &fields));
         return Vec::new();
     }
-    let v1 = matches!(spec.header.surface, ast::Surface::V1 { .. });
     let mut declared = Vec::with_capacity(metadata.origins.len());
     for origin in &metadata.origins {
         let declaration = Declared {
@@ -152,12 +147,11 @@ fn origins<'a>(
         {
             let mut context = fields.clone();
             context.push(("origin_type", s(kind)));
-            let at = if v1 {
-                spec.cite(origin.meta)
-            } else {
-                path.to_string()
-            };
-            result.push(finding(C::SubmissionOriginDescription, &at, &context));
+            result.push(finding(
+                C::SubmissionOriginDescription,
+                &spec.cite(origin.meta),
+                &context,
+            ));
         } else if kind == OriginType::Predecessor.name() && declaration.predecessor().is_none() {
             // SUB-16: a Predecessor description names `<dataset>.<column>`.
             let mut context = fields.clone();

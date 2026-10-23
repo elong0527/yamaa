@@ -1,8 +1,7 @@
 //! Issue locations (P-ISSUE-1, D28): each case of
 //! `docs/design/interface-1.0/api.md`, "Issue locations", through the public
-//! engine, on a specification that declares `schema_version` and on one that
-//! declares the 1.x header. Every expected line and column was counted by hand
-//! in the files below; each test names the text that precedes the column.
+//! engine. Every expected line and column was counted by hand in the files
+//! below; each test names the text that precedes the column.
 //!
 //! 1. An issue without a spec path has no location, except `invalid_yaml` and
 //!    `non_ascii_source`, which give the file read and the reader's position.
@@ -59,90 +58,67 @@ fn location(issues: &[Diagnostic]) -> Option<(String, usize, usize)> {
     Some((location.file, position.line, position.column))
 }
 
-/// The two headers: today's and the 1.x one.
-const SURFACES: [&[&str]; 2] = [
-    &["schema_version: '1.0'"],
-    &["yamaa: \"1.0\"", "type: spec"],
-];
+/// The header of a specification.
+const HEADER: [&str; 2] = ["yamaa: \"1.0\"", "type: spec"];
 
-/// `lines` after `header`, and the number of header lines.
-fn spec(header: &[&str], lines: &[&str]) -> (Vec<String>, usize) {
-    let mut text = header
-        .iter()
-        .map(|line| (*line).to_owned())
-        .collect::<Vec<_>>();
+/// `lines` after [`HEADER`], and the number of header lines.
+fn spec(lines: &[&str]) -> (Vec<String>, usize) {
+    let mut text = HEADER.map(str::to_owned).to_vec();
     text.extend(lines.iter().map(|line| (*line).to_owned()));
-    (text, header.len())
+    (text, HEADER.len())
 }
 
 fn write(study: &Study, name: &str, lines: &[String]) {
     study.write(name, &lines.iter().map(String::as_str).collect::<Vec<_>>());
 }
 
-/// Rule 5: ASTDY reads TRTSDT, declared after it (COLUMN-5). Today's path
-/// ends at the operation, `columns.ASTDY.derivation.compute`; the 1.0 path at
-/// the expression field, `columns.ASTDY.derivation`.
+/// Rule 5: ASTDY reads TRTSDT, declared after it (COLUMN-5). The path ends
+/// at the expression field, `columns.ASTDY.derivation`.
 #[test]
 fn a_path_locates_at_the_key_of_its_deepest_written_member() {
-    let lines = |v1: bool| {
-        let derivation = if v1 {
-            "    derivation: TRTSDT + 1"
-        } else {
-            "    derivation: {compute: {expr: TRTSDT + 1}}"
-        };
-        vec![
-            "domain: ADAE",
-            "keys: [USUBJID]",
-            "input: {AE: {path: ae.csv, types: {TRTSDT: int}}}",
-            "columns:",
-            "  - {name: USUBJID, type: str, label: Subject, derivation: AE.USUBJID}",
-            "  - name: ASTDY",
-            "    type: int",
-            "    label: Study Day",
-            derivation,
-            "  - {name: TRTSDT, type: int, label: Start, derivation: AE.TRTSDT}",
-            "output: {path: adae.csv, columns: [USUBJID, ASTDY, TRTSDT]}",
-        ]
-        .into_iter()
-        .map(str::to_owned)
-        .collect::<Vec<_>>()
+    let study = Study::new();
+    let (text, offset) = spec(&[
+        "domain: ADAE",
+        "keys: [USUBJID]",
+        "input: {AE: {path: ae.csv, types: {TRTSDT: int}}}",
+        "columns:",
+        "  - {name: USUBJID, type: str, label: Subject, derivation: AE.USUBJID}",
+        "  - name: ASTDY",
+        "    type: int",
+        "    label: Study Day",
+        "    derivation: TRTSDT + 1",
+        "  - {name: TRTSDT, type: int, label: Start, derivation: AE.TRTSDT}",
+        "output: {path: adae.csv, columns: [USUBJID, ASTDY, TRTSDT]}",
+    ]);
+    write(&study, "adae.yaml", &text);
+    study.write("ae.csv", &["USUBJID,TRTSDT", "S1,3"]);
+    let check = engine()
+        .spec_check(&study.path("adae.yaml"), None, &CancellationToken::new())
+        .unwrap();
+    let issues = check.diagnostics();
+    // Line 9 of the body: the `derivation` key at column 5, after four
+    // spaces.
+    let column = 5;
+    assert_eq!(
+        location(&issues),
+        Some((study.file("adae.yaml"), offset + 9, column)),
+        "{:?}",
+        issues
+    );
+    // The issue line starts with the location, and the table and the
+    // JSON object carry it.
+    assert!(issues[0].text().starts_with(&format!(
+        "{}:{}:{column}: column ASTDY reads TRTSDT",
+        study.file("adae.yaml"),
+        offset + 9
+    )));
+    let ContextValue::Map(object) = issues[0].to_value() else {
+        panic!("an issue is an object");
     };
-    for (surface, header) in SURFACES.into_iter().enumerate() {
-        let study = Study::new();
-        let v1 = surface == 1;
-        let body = lines(v1);
-        let (text, offset) = spec(header, &body.iter().map(String::as_str).collect::<Vec<_>>());
-        write(&study, "adae.yaml", &text);
-        study.write("ae.csv", &["USUBJID,TRTSDT", "S1,3"]);
-        let check = engine()
-            .spec_check(&study.path("adae.yaml"), None, &CancellationToken::new())
-            .unwrap();
-        let issues = check.diagnostics();
-        // Line 9 of the body: the 1.0 `derivation` key at column 5, after
-        // four spaces; today's `compute` key at column 18, after
-        // `    derivation: {` (17 characters).
-        let column = if v1 { 5 } else { 18 };
-        assert_eq!(
-            location(&issues),
-            Some((study.file("adae.yaml"), offset + 9, column)),
-            "{:?}",
-            issues
-        );
-        // The issue line starts with the location, and the table and the
-        // JSON object carry it.
-        assert!(issues[0].text().starts_with(&format!(
-            "{}:{}:{column}: column ASTDY reads TRTSDT",
-            study.file("adae.yaml"),
-            offset + 9
-        )));
-        let ContextValue::Map(object) = issues[0].to_value() else {
-            panic!("an issue is an object");
-        };
-        assert_eq!(object["file"], ContextValue::Text(study.file("adae.yaml")));
-        assert_eq!(object["line"], ContextValue::Int((offset + 9) as i64));
-        assert_eq!(object["column"], ContextValue::Int(column as i64));
-        assert_eq!(check.issues().rows(), 1);
-    }
+    assert_eq!(object["file"], ContextValue::Text(study.file("adae.yaml")));
+    assert_eq!(object["line"], ContextValue::Int((offset + 9) as i64));
+    assert_eq!(object["column"], ContextValue::Int(column as i64));
+    assert_eq!(check.issues().rows(), 1);
 }
 
 /// Rule 2: a path into an expanded long form stops at the written node. AGE
@@ -167,309 +143,250 @@ fn a_path_into_an_expanded_long_form_stops_at_the_written_node() {
         "    derivation: RAW.AGEYRS",
         "output: {path: dm.csv, columns: [USUBJID, AGE]}",
     ];
-    for header in SURFACES {
-        let study = Study::new();
-        let (text, offset) = spec(header, &body);
-        write(&study, "dm.yaml", &text);
-        study.write("raw.csv", &["USUBJID,AGE", "S1,30"]);
-        let run = engine()
-            .spec_run(&study.path("dm.yaml"), None, &CancellationToken::new())
-            .unwrap();
-        let issues = run.diagnostics();
-        assert_eq!(
-            issues[0].spec_path,
-            ["columns.AGE.derivation.source"],
-            "{issues:?}"
-        );
-        // Line 12 of the body, after four spaces.
-        assert_eq!(
-            location(&issues),
-            Some((study.file("dm.yaml"), offset + 12, 5))
-        );
-    }
+    let study = Study::new();
+    let (text, offset) = spec(&body);
+    write(&study, "dm.yaml", &text);
+    study.write("raw.csv", &["USUBJID,AGE", "S1,30"]);
+    let run = engine()
+        .spec_run(&study.path("dm.yaml"), None, &CancellationToken::new())
+        .unwrap();
+    let issues = run.diagnostics();
+    assert_eq!(
+        issues[0].spec_path,
+        ["columns.AGE.derivation.source"],
+        "{issues:?}"
+    );
+    // Line 12 of the body, after four spaces.
+    assert_eq!(
+        location(&issues),
+        Some((study.file("dm.yaml"), offset + 12, 5))
+    );
 }
 
 /// Rule 3: a value a child layer writes is located in the child, one it
 /// inherits in the parent. RATIO divides by zero at run time, in the
-/// derivation the parent writes, unless the child writes its own. Today's
-/// surface writes the operation, `compute`, under `derivation`; the 1.0
-/// surface writes the expression as the field's text.
+/// derivation the parent writes, unless the child writes its own; each
+/// writes the expression as the field's text, located at its `derivation`
+/// key, after four spaces.
 #[test]
 fn a_layered_issue_is_located_in_the_layer_whose_value_took_effect() {
-    for (surface, header) in SURFACES.into_iter().enumerate() {
-        let v1 = surface == 1;
-        let (written, rewritten, path, column) = if v1 {
-            (
-                "    derivation: AGE / ZERO",
-                "    derivation: AGE / (ZERO * 2)",
-                "columns.RATIO.derivation",
-                5,
-            )
-        } else {
-            (
-                "    derivation: {compute: {expr: AGE / ZERO}}",
-                "    derivation: {compute: {expr: AGE / (ZERO * 2)}}",
-                "columns.RATIO.derivation.compute",
-                // After `    derivation: {` (17 characters).
-                18,
-            )
-        };
-        let parent = [
-            "domain: ADSL",
-            "keys: [USUBJID]",
-            "input: {DM: {path: dm.csv, types: {AGE: int, ZERO: int}}}",
-            "columns:",
-            "  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}",
-            "  - name: RATIO",
-            "    type: float",
-            "    label: Ratio",
-            written,
-            "  - {name: AGE, type: int, label: Age, derivation: DM.AGE}",
-            "  - {name: ZERO, type: int, label: Zero, derivation: DM.ZERO}",
-            "output: {path: adsl.csv, columns: [USUBJID, RATIO, AGE, ZERO]}",
-        ];
-        let relabelled = [
-            "parent: parent.yaml",
-            "columns:",
-            "  - name: RATIO",
-            "    label: Age Ratio",
-        ];
-        let rederived = [
-            "parent: parent.yaml",
-            "columns:",
-            "  - name: RATIO",
-            rewritten,
-        ];
-        let study = Study::new();
-        let (text, offset) = spec(header, &parent);
-        write(&study, "parent.yaml", &text);
-        let (text, child_offset) = spec(header, &relabelled);
-        write(&study, "relabelled.yaml", &text);
-        let (text, _) = spec(header, &rederived);
-        write(&study, "rederived.yaml", &text);
-        study.write("dm.csv", &["USUBJID,AGE,ZERO", "S1,30,0"]);
-        let first = |name: &str| {
-            let run = engine()
-                .spec_run(&study.path(name), None, &CancellationToken::new())
-                .unwrap();
-            let issues = run.diagnostics();
-            assert_eq!(issues[0].spec_path, [path], "{issues:?}");
-            location(&issues)
-        };
-        // Line 9 of the parent's body.
-        assert_eq!(
-            first("relabelled.yaml"),
-            Some((study.file("parent.yaml"), offset + 9, column))
-        );
-        // Line 4 of the child's own body.
-        assert_eq!(
-            first("rederived.yaml"),
-            Some((study.file("rederived.yaml"), child_offset + 4, column))
-        );
-    }
+    let (path, column) = ("columns.RATIO.derivation", 5);
+    let parent = [
+        "domain: ADSL",
+        "keys: [USUBJID]",
+        "input: {DM: {path: dm.csv, types: {AGE: int, ZERO: int}}}",
+        "columns:",
+        "  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}",
+        "  - name: RATIO",
+        "    type: float",
+        "    label: Ratio",
+        "    derivation: AGE / ZERO",
+        "  - {name: AGE, type: int, label: Age, derivation: DM.AGE}",
+        "  - {name: ZERO, type: int, label: Zero, derivation: DM.ZERO}",
+        "output: {path: adsl.csv, columns: [USUBJID, RATIO, AGE, ZERO]}",
+    ];
+    let relabelled = [
+        "parent: parent.yaml",
+        "columns:",
+        "  - name: RATIO",
+        "    label: Age Ratio",
+    ];
+    let rederived = [
+        "parent: parent.yaml",
+        "columns:",
+        "  - name: RATIO",
+        "    derivation: AGE / (ZERO * 2)",
+    ];
+    let study = Study::new();
+    let (text, offset) = spec(&parent);
+    write(&study, "parent.yaml", &text);
+    let (text, child_offset) = spec(&relabelled);
+    write(&study, "relabelled.yaml", &text);
+    let (text, _) = spec(&rederived);
+    write(&study, "rederived.yaml", &text);
+    study.write("dm.csv", &["USUBJID,AGE,ZERO", "S1,30,0"]);
+    let first = |name: &str| {
+        let run = engine()
+            .spec_run(&study.path(name), None, &CancellationToken::new())
+            .unwrap();
+        let issues = run.diagnostics();
+        assert_eq!(issues[0].spec_path, [path], "{issues:?}");
+        location(&issues)
+    };
+    // Line 9 of the parent's body.
+    assert_eq!(
+        first("relabelled.yaml"),
+        Some((study.file("parent.yaml"), offset + 9, column))
+    );
+    // Line 4 of the child's own body.
+    assert_eq!(
+        first("rederived.yaml"),
+        Some((study.file("rederived.yaml"), child_offset + 4, column))
+    );
 }
 
-/// A shorthand contributes the same source variable as its long form. The
-/// A label-only child keeps the parent's source. A 0.5 source shorthand
-/// inherits the parent's filter; a 1.x text expression replaces it whole.
+/// A shorthand contributes the same source variable as its long form. A
+/// label-only child keeps the parent's source; a text expression replaces
+/// it whole, so the parent's filter no longer applies.
 #[test]
 fn a_child_source_shorthand_is_located_in_the_child_over_a_structured_parent() {
-    for header in SURFACES {
-        let study = Study::new();
-        let (text, parent_offset) = spec(
-            header,
-            &[
-                "domain: IT",
-                "keys: [ID]",
-                "input: {RAW: raw.csv}",
-                "output: {path: out.csv, columns: [ID, V]}",
-                "columns:",
-                "  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}",
-                "  - name: V",
-                "    type: str",
-                "    label: Value",
-                "    derivation:",
-                "      source:",
-                "        variable: RAW.OLD",
-                "        filter: RAW.ID IS NOT NULL",
-            ],
-        );
-        write(&study, "parent.yaml", &text);
-        study.write("raw.csv", &["ID,OLD", "S1,old"]);
-        for derivation in [
-            "    derivation: RAW.NEW",
-            "    derivation: {source: {variable: RAW.NEW, filter: RAW.ID IS NOT NULL}}",
-        ] {
-            let (text, offset) = spec(
-                header,
-                &["parent: parent.yaml", "columns:", "  - name: V", derivation],
-            );
-            write(&study, "child.yaml", &text);
-            let run = engine()
-                .spec_run(&study.path("child.yaml"), None, &CancellationToken::new())
-                .unwrap();
-            let issues = run.diagnostics();
-            assert_eq!(issues[0].code, "unknown_field", "{issues:?}");
-            assert_eq!(issues[0].spec_path, ["columns.V.derivation.source"]);
-            // Shorthand is at its derivation key; the long form at source.
-            let column = if derivation == "    derivation: RAW.NEW" {
-                5
-            } else {
-                18
-            };
-            assert_eq!(
-                location(&issues),
-                Some((study.file("child.yaml"), offset + 4, column))
-            );
-        }
-        // A label-only contribution keeps the parent's source location.
-        let (text, _) = spec(
-            header,
-            &[
-                "parent: parent.yaml",
-                "columns:",
-                "  - name: V",
-                "    label: Renamed",
-            ],
-        );
+    let study = Study::new();
+    let (text, parent_offset) = spec(&[
+        "domain: IT",
+        "keys: [ID]",
+        "input: {RAW: raw.csv}",
+        "output: {path: out.csv, columns: [ID, V]}",
+        "columns:",
+        "  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}",
+        "  - name: V",
+        "    type: str",
+        "    label: Value",
+        "    derivation:",
+        "      source:",
+        "        variable: RAW.OLD",
+        "        filter: RAW.ID IS NOT NULL",
+    ]);
+    write(&study, "parent.yaml", &text);
+    study.write("raw.csv", &["ID,OLD", "S1,old"]);
+    for derivation in [
+        "    derivation: RAW.NEW",
+        "    derivation: {source: {variable: RAW.NEW, filter: RAW.ID IS NOT NULL}}",
+    ] {
+        let (text, offset) = spec(&["parent: parent.yaml", "columns:", "  - name: V", derivation]);
         write(&study, "child.yaml", &text);
-        study.write("raw.csv", &["ID", "S1"]);
-        let run = engine()
-            .spec_run(&study.path("child.yaml"), None, &CancellationToken::new())
-            .unwrap();
-        assert_eq!(
-            location(&run.diagnostics()),
-            Some((study.file("parent.yaml"), parent_offset + 11, 7))
-        );
-
-        // Exercise the source's inherited sibling, rather than assigning
-        // every path below derivation to the latest layer indiscriminately.
-        let parent = std::fs::read_to_string(study.path("parent.yaml"))
-            .unwrap()
-            .replace(
-                "filter: RAW.ID IS NOT NULL",
-                "filter: RAW.MISSING IS NOT NULL",
-            );
-        std::fs::write(study.path("parent.yaml"), parent).unwrap();
-        let (text, _) = spec(
-            header,
-            &[
-                "parent: parent.yaml",
-                "columns:",
-                "  - name: V",
-                "    derivation: RAW.NEW",
-            ],
-        );
-        write(&study, "child.yaml", &text);
-        study.write("raw.csv", &["ID,NEW", "S1,new"]);
         let run = engine()
             .spec_run(&study.path("child.yaml"), None, &CancellationToken::new())
             .unwrap();
         let issues = run.diagnostics();
-        if header.len() == 1 {
-            assert_eq!(issues[0].code, "unknown_field", "{issues:?}");
-            assert_eq!(issues[0].spec_path, ["columns.V.derivation.source.filter"]);
-            assert_eq!(
-                location(&issues),
-                Some((study.file("parent.yaml"), parent_offset + 13, 9))
-            );
+        assert_eq!(issues[0].code, "unknown_field", "{issues:?}");
+        assert_eq!(issues[0].spec_path, ["columns.V.derivation.source"]);
+        // Shorthand is at its derivation key; the long form at source.
+        let column = if derivation == "    derivation: RAW.NEW" {
+            5
         } else {
-            assert!(issues.is_empty(), "{issues:?}");
-        }
+            18
+        };
+        assert_eq!(
+            location(&issues),
+            Some((study.file("child.yaml"), offset + 4, column))
+        );
     }
+    // A label-only contribution keeps the parent's source location.
+    let (text, _) = spec(&[
+        "parent: parent.yaml",
+        "columns:",
+        "  - name: V",
+        "    label: Renamed",
+    ]);
+    write(&study, "child.yaml", &text);
+    study.write("raw.csv", &["ID", "S1"]);
+    let run = engine()
+        .spec_run(&study.path("child.yaml"), None, &CancellationToken::new())
+        .unwrap();
+    assert_eq!(
+        location(&run.diagnostics()),
+        Some((study.file("parent.yaml"), parent_offset + 11, 7))
+    );
+
+    // Exercise the source's inherited sibling, rather than assigning
+    // every path below derivation to the latest layer indiscriminately.
+    let parent = std::fs::read_to_string(study.path("parent.yaml"))
+        .unwrap()
+        .replace(
+            "filter: RAW.ID IS NOT NULL",
+            "filter: RAW.MISSING IS NOT NULL",
+        );
+    std::fs::write(study.path("parent.yaml"), parent).unwrap();
+    let (text, _) = spec(&[
+        "parent: parent.yaml",
+        "columns:",
+        "  - name: V",
+        "    derivation: RAW.NEW",
+    ]);
+    write(&study, "child.yaml", &text);
+    study.write("raw.csv", &["ID,NEW", "S1,new"]);
+    let run = engine()
+        .spec_run(&study.path("child.yaml"), None, &CancellationToken::new())
+        .unwrap();
+    let issues = run.diagnostics();
+    assert!(issues.is_empty(), "{issues:?}");
 }
 
 /// A root mapping replaces its parent whole; a clear removes the named
 /// inherited field. Neither operation can be fixed at the parent's old key.
 #[test]
 fn replaced_and_cleared_fields_do_not_locate_in_overridden_parent_values() {
-    for header in SURFACES {
-        let study = Study::new();
-        let (text, _) = spec(
-            header,
-            &[
-                "domain: IT",
-                "keys: [ID]",
-                "input: {RAW: raw.csv}",
-                "output:",
-                "  path: out.csv",
-                "  columns: [ID]",
-                "  report: report.csv",
-                "columns:",
-                "  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}",
-                "verifications:",
-                "  - row_count: {min: 1, severity: warning}",
-            ],
-        );
-        write(&study, "parent.yaml", &text);
-        study.write("raw.csv", &["ID", "S1"]);
-        let check = |name: &str| {
-            engine()
-                .spec_check(&study.path(name), None, &CancellationToken::new())
-                .unwrap()
-                .diagnostics()
-        };
-        assert!(check("parent.yaml").is_empty());
-        let (text, offset) = spec(
-            header,
-            &[
-                "parent: parent.yaml",
-                "output:",
-                "  path: child.csv",
-                "  columns: [ID]",
-            ],
-        );
-        write(&study, "child.yaml", &text);
-        let issues = check("child.yaml");
-        assert_eq!(issues[0].code, "missing_report", "{issues:?}");
-        assert_eq!(issues[0].spec_path, ["output.report"]);
+    let study = Study::new();
+    let (text, _) = spec(&[
+        "domain: IT",
+        "keys: [ID]",
+        "input: {RAW: raw.csv}",
+        "output:",
+        "  path: out.csv",
+        "  columns: [ID]",
+        "  report: report.csv",
+        "columns:",
+        "  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}",
+        "verifications:",
+        "  - row_count: {min: 1, severity: warning}",
+    ]);
+    write(&study, "parent.yaml", &text);
+    study.write("raw.csv", &["ID", "S1"]);
+    let check = |name: &str| {
+        engine()
+            .spec_check(&study.path(name), None, &CancellationToken::new())
+            .unwrap()
+            .diagnostics()
+    };
+    assert!(check("parent.yaml").is_empty());
+    let (text, offset) = spec(&[
+        "parent: parent.yaml",
+        "output:",
+        "  path: child.csv",
+        "  columns: [ID]",
+    ]);
+    write(&study, "child.yaml", &text);
+    let issues = check("child.yaml");
+    assert_eq!(issues[0].code, "missing_report", "{issues:?}");
+    assert_eq!(issues[0].spec_path, ["output.report"]);
+    assert_eq!(
+        location(&issues),
+        Some((study.file("child.yaml"), offset + 2, 1))
+    );
+    for (cleared, code, path) in [
+        ("output.report", "missing_report", "output.report"),
+        (
+            "columns.ID.derivation",
+            "missing_derivation",
+            "columns.ID.derivation",
+        ),
+    ] {
+        let (text, offset) = spec(&["parent: parent.yaml", &format!("clear: [{cleared}]")]);
+        write(&study, "cleared.yaml", &text);
+        let issues = check("cleared.yaml");
+        assert_eq!(issues[0].code, code, "{issues:?}");
+        assert_eq!(issues[0].spec_path, [path]);
+        // The clear entry follows `clear: [` (eight characters).
         assert_eq!(
             location(&issues),
-            Some((study.file("child.yaml"), offset + 2, 1))
+            Some((study.file("cleared.yaml"), offset + 2, 9))
         );
-        if header.len() == 2 {
-            for (cleared, code, path) in [
-                ("output.report", "missing_report", "output.report"),
-                (
-                    "columns.ID.derivation",
-                    "missing_derivation",
-                    "columns.ID.derivation",
-                ),
-            ] {
-                let (text, offset) = spec(
-                    header,
-                    &["parent: parent.yaml", &format!("clear: [{cleared}]")],
-                );
-                write(&study, "cleared.yaml", &text);
-                let issues = check("cleared.yaml");
-                assert_eq!(issues[0].code, code, "{issues:?}");
-                assert_eq!(issues[0].spec_path, [path]);
-                // The clear entry follows `clear: [` (eight characters).
-                assert_eq!(
-                    location(&issues),
-                    Some((study.file("cleared.yaml"), offset + 2, 9))
-                );
-            }
-            let (text, _) = spec(header, &["parent: parent.yaml", "clear: [output.report]"]);
-            write(&study, "cleared.yaml", &text);
-            let (text, offset) = spec(
-                header,
-                &[
-                    "parent: cleared.yaml",
-                    "output:",
-                    "  path: grandchild.csv",
-                    "  columns: [ID]",
-                ],
-            );
-            write(&study, "grandchild.yaml", &text);
-            let issues = check("grandchild.yaml");
-            assert_eq!(issues[0].code, "missing_report", "{issues:?}");
-            assert_eq!(
-                location(&issues),
-                Some((study.file("grandchild.yaml"), offset + 2, 1))
-            );
-        }
     }
+    let (text, _) = spec(&["parent: parent.yaml", "clear: [output.report]"]);
+    write(&study, "cleared.yaml", &text);
+    let (text, offset) = spec(&[
+        "parent: cleared.yaml",
+        "output:",
+        "  path: grandchild.csv",
+        "  columns: [ID]",
+    ]);
+    write(&study, "grandchild.yaml", &text);
+    let issues = check("grandchild.yaml");
+    assert_eq!(issues[0].code, "missing_report", "{issues:?}");
+    assert_eq!(
+        location(&issues),
+        Some((study.file("grandchild.yaml"), offset + 2, 1))
+    );
 }
 
 /// Rule 4: a path that starts in the project file locates there, or in the
@@ -561,65 +478,50 @@ fn a_project_path_locates_in_the_project_or_the_file_it_lists() {
 
 /// Rule 5: a finding in the header of the producer a `schema` link names
 /// names that producer as `source`, so it is located in the producer even
-/// where the consumer writes the same field: a malformed version under a 1.0
-/// consumer, whose own `yamaa` ties with the producer's, and a version the
-/// engine does not read under a 0.5 one, on the check and run routes of each
-/// host (SCHEMA-2, #3581).
+/// where the consumer writes the same field: a malformed version, where the
+/// consumer's own `yamaa` ties with the producer's, on the check and run
+/// routes of each host (SCHEMA-2, #3581).
 #[test]
 fn a_linked_producer_s_header_finding_locates_in_the_producer() {
     let token = CancellationToken::new();
-    let body = [
+    let study = Study::new();
+    let (consumer, _) = spec(&[
         "domain: DM",
         "keys: [USUBJID]",
         "input: {SRC: {path: produced.csv, schema: producer.yaml}}",
         "columns:",
         "  - {name: USUBJID, type: str, label: Subject, derivation: SRC.USUBJID}",
         "output: {path: dm.csv, columns: [USUBJID]}",
-    ];
-    for (header, producer, condition) in [
-        (
-            SURFACES[1],
-            ["yamaa: 1.0", "type: spec"],
-            "invalid_field_type",
-        ),
-        (
-            SURFACES[0],
-            ["yamaa: \"1.4\"", "type: spec"],
-            "unsupported_language_version",
-        ),
-    ] {
-        let study = Study::new();
-        let (consumer, _) = spec(header, &body);
-        write(&study, "dm.yaml", &consumer);
-        study.write("producer.yaml", &producer);
-        for host in [HostLanguage::Python, HostLanguage::R] {
-            let engine = Engine::new(EngineOptions::new(
-                host,
-                "issue-locations".into(),
-                "0".into(),
-            ));
-            let entry = study.path("dm.yaml");
-            let checked = engine.spec_check(&entry, None, &token).unwrap();
-            let run = engine.spec_run(&entry, None, &token).unwrap();
-            for issues in [checked.diagnostics(), run.diagnostics()] {
-                let first = issues.first().expect("an issue");
-                assert_eq!(
-                    (
-                        first.code.as_str(),
-                        first.spec_path.as_slice(),
-                        first.context.get("source"),
-                        location(&issues),
-                    ),
-                    (
-                        condition,
-                        ["yamaa".to_string()].as_slice(),
-                        Some(&ContextValue::Text(study.file("producer.yaml"))),
-                        // The producer's `yamaa` key, line 1.
-                        Some((study.file("producer.yaml"), 1, 1)),
-                    ),
-                    "{host:?}, {header:?}: {issues:?}"
-                );
-            }
+    ]);
+    write(&study, "dm.yaml", &consumer);
+    study.write("producer.yaml", &["yamaa: 1.0", "type: spec"]);
+    for host in [HostLanguage::Python, HostLanguage::R] {
+        let engine = Engine::new(EngineOptions::new(
+            host,
+            "issue-locations".into(),
+            "0".into(),
+        ));
+        let entry = study.path("dm.yaml");
+        let checked = engine.spec_check(&entry, None, &token).unwrap();
+        let run = engine.spec_run(&entry, None, &token).unwrap();
+        for issues in [checked.diagnostics(), run.diagnostics()] {
+            let first = issues.first().expect("an issue");
+            assert_eq!(
+                (
+                    first.code.as_str(),
+                    first.spec_path.as_slice(),
+                    first.context.get("source"),
+                    location(&issues),
+                ),
+                (
+                    "invalid_field_type",
+                    ["yamaa".to_string()].as_slice(),
+                    Some(&ContextValue::Text(study.file("producer.yaml"))),
+                    // The producer's `yamaa` key, line 1.
+                    Some((study.file("producer.yaml"), 1, 1)),
+                ),
+                "{host:?}: {issues:?}"
+            );
         }
     }
 }
@@ -638,27 +540,25 @@ fn a_location_never_points_into_a_data_file() {
         "  - {name: AGE, type: int, label: Age, derivation: RAW.AGE}",
         "output: {path: dm.csv, columns: [USUBJID, AGE]}",
     ];
-    for header in SURFACES {
-        let study = Study::new();
-        let (text, offset) = spec(header, &body);
-        write(&study, "dm.yaml", &text);
-        study.write("raw.csv", &["USUBJID,AGE", "S1,30", "S2,NA"]);
-        let run = engine()
-            .spec_run(&study.path("dm.yaml"), None, &CancellationToken::new())
-            .unwrap();
-        let issues = run.diagnostics();
-        assert_eq!(issues[0].spec_path, ["input.RAW.types.AGE"], "{issues:?}");
-        // Line 3 of the body, after `input: {RAW: {path: raw.csv, types: {`
-        // (37 characters).
-        assert_eq!(
-            location(&issues),
-            Some((study.file("dm.yaml"), offset + 3, 38))
-        );
-        assert_eq!(
-            issues[0].context.get("value"),
-            Some(&ContextValue::Text("NA".into()))
-        );
-    }
+    let study = Study::new();
+    let (text, offset) = spec(&body);
+    write(&study, "dm.yaml", &text);
+    study.write("raw.csv", &["USUBJID,AGE", "S1,30", "S2,NA"]);
+    let run = engine()
+        .spec_run(&study.path("dm.yaml"), None, &CancellationToken::new())
+        .unwrap();
+    let issues = run.diagnostics();
+    assert_eq!(issues[0].spec_path, ["input.RAW.types.AGE"], "{issues:?}");
+    // Line 3 of the body, after `input: {RAW: {path: raw.csv, types: {`
+    // (37 characters).
+    assert_eq!(
+        location(&issues),
+        Some((study.file("dm.yaml"), offset + 3, 38))
+    );
+    assert_eq!(
+        issues[0].context.get("value"),
+        Some(&ContextValue::Text("NA".into()))
+    );
 }
 
 /// Rule 1: an issue without a spec path has no location. `invalid_yaml` and
@@ -741,58 +641,56 @@ fn only_a_refused_file_locates_an_issue_without_a_written_node() {
 
 /// A parent layer the reader refuses gives the issue an entry it refuses
 /// gives, `invalid_yaml` or `non_ascii_source` at `$` with the reader's
-/// position, located in that parent, on both surfaces and on every route
-/// that reads the specification (SCHEMA-3, SPEC-8; #3519).
+/// position, located in that parent, on every route that reads the
+/// specification (SCHEMA-3, SPEC-8; #3519).
 #[test]
 fn a_parent_the_reader_refuses_locates_its_issue_in_that_parent() {
     let token = CancellationToken::new();
-    for header in SURFACES {
-        let study = Study::new();
-        let (child, _) = spec(header, &["parent: refused.yaml"]);
-        write(&study, "child.yaml", &child);
-        let entry = study.path("child.yaml");
-        // The flow sequence is never closed: the reader stops at the line
-        // after it, at column 1.
-        let (invalid, lines) = spec(header, &["domain: [ADSL"]);
-        write(&study, "refused.yaml", &invalid);
-        // The comment's sixth character, after `# caf`, is not ASCII.
-        let (accented, _) = spec(header, &["domain: ADSL", "# caf\u{e9}"]);
-        for (text, condition, rule, line, column) in [
-            (invalid, "invalid_yaml", "SCHEMA-3", lines + 2, 1),
-            (accented, "non_ascii_source", "SPEC-8", lines + 2, 6),
+    let study = Study::new();
+    let (child, _) = spec(&["parent: refused.yaml"]);
+    write(&study, "child.yaml", &child);
+    let entry = study.path("child.yaml");
+    // The flow sequence is never closed: the reader stops at the line
+    // after it, at column 1.
+    let (invalid, lines) = spec(&["domain: [ADSL"]);
+    write(&study, "refused.yaml", &invalid);
+    // The comment's sixth character, after `# caf`, is not ASCII.
+    let (accented, _) = spec(&["domain: ADSL", "# caf\u{e9}"]);
+    for (text, condition, rule, line, column) in [
+        (invalid, "invalid_yaml", "SCHEMA-3", lines + 2, 1),
+        (accented, "non_ascii_source", "SPEC-8", lines + 2, 6),
+    ] {
+        write(&study, "refused.yaml", &text);
+        let checked = engine().spec_check(&entry, None, &token).unwrap();
+        let ran = engine().spec_run(&entry, None, &token).unwrap();
+        let resolved = engine().spec_resolve(&entry, None).unwrap_err();
+        for issues in [
+            checked.diagnostics(),
+            ran.diagnostics(),
+            resolved.diagnostics,
         ] {
-            write(&study, "refused.yaml", &text);
-            let checked = engine().spec_check(&entry, None, &token).unwrap();
-            let ran = engine().spec_run(&entry, None, &token).unwrap();
-            let resolved = engine().spec_resolve(&entry, None).unwrap_err();
-            for issues in [
-                checked.diagnostics(),
-                ran.diagnostics(),
-                resolved.diagnostics,
-            ] {
-                let [issue] = issues.as_slice() else {
-                    panic!("one issue: {issues:?}")
-                };
-                assert_eq!(
-                    (issue.code.as_str(), issue.rule.as_deref()),
-                    (condition, Some(rule)),
-                    "{header:?}"
-                );
-                assert_eq!(issue.spec_path, ["$"]);
-                assert_eq!(
-                    issue.context.get("line"),
-                    Some(&ContextValue::Int(line as i64))
-                );
-                assert_eq!(
-                    issue.context.get("column"),
-                    Some(&ContextValue::Int(column as i64))
-                );
-                assert_eq!(
-                    location(&issues),
-                    Some((study.file("refused.yaml"), line, column)),
-                    "{header:?} {condition}"
-                );
-            }
+            let [issue] = issues.as_slice() else {
+                panic!("one issue: {issues:?}")
+            };
+            assert_eq!(
+                (issue.code.as_str(), issue.rule.as_deref()),
+                (condition, Some(rule)),
+                "{condition}"
+            );
+            assert_eq!(issue.spec_path, ["$"]);
+            assert_eq!(
+                issue.context.get("line"),
+                Some(&ContextValue::Int(line as i64))
+            );
+            assert_eq!(
+                issue.context.get("column"),
+                Some(&ContextValue::Int(column as i64))
+            );
+            assert_eq!(
+                location(&issues),
+                Some((study.file("refused.yaml"), line, column)),
+                "{condition}"
+            );
         }
     }
 }

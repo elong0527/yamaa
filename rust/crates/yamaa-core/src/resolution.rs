@@ -1,15 +1,15 @@
-//! The one resolution lifecycle after composition: expand named windows,
-//! prune (LAYER-11), order (LAYER-13), normalize, expand strictly and admit
-//! the model. A spec that declares no `parent` is a composition of one layer
-//! (LAYER-1) and takes the same lifecycle, keeping its declaration order
-//! (COLUMN-5); only a layered spec is ordered.
+//! Pruning (LAYER-11) and ordering (LAYER-13) of a composed specification,
+//! the step of [`crate::inheritance_preparation::prepare_versioned`] between
+//! expanding its named windows and normalizing what survives. A spec that
+//! declares no `parent` is a composition of one layer (LAYER-1) and keeps
+//! its declaration order (COLUMN-5); only a layered spec is ordered.
 //!
-//! Pruning reads the AST. The expanded document is lowered once
-//! ([`lower_document`]); the live set is a fixpoint over [`Spec::reads`]
-//! from the semantic roots; and the order runs the one cycle detector,
-//! [`dependency_analysis`], over the columns each derivation reads, so a
-//! layered cycle names its closed loop as a single-file one does. No table
-//! is read, no function activated and nothing published.
+//! Pruning reads the AST of the expanded document; the live set is a
+//! fixpoint over [`Spec::reads`] from the semantic roots; and the order runs
+//! the one cycle detector, [`dependency_analysis`], over the columns each
+//! derivation reads, so a layered cycle names its closed loop as a
+//! single-file one does. No table is read, no function activated and
+//! nothing published.
 
 use crate::ast::{
     DatasetCheckKind, Derivation, ExprId, ExprKind, Intermediate, JoinKey, Literal, Named, Role,
@@ -17,11 +17,8 @@ use crate::ast::{
 };
 use crate::dependency_analysis;
 use crate::expression::{CompileError, Context};
-use crate::front_end::v0_5::lower_document;
 use crate::schema::{
-    Document, DocumentError, DocumentNode as N, LayerNodeOrigin, NormalizationError,
-    NormalizedDocument, SchemaDiagnostic, SchemaOrigin, SchemaSource, SchemaStructure,
-    SpecificationDocument, ValidationError, WindowReference,
+    Document, DocumentError, DocumentNode as N, NormalizedDocument, SchemaOrigin, SchemaSource,
 };
 use std::collections::BTreeSet;
 
@@ -64,14 +61,10 @@ pub enum Error {
     Invalid(Vec<Issue>),
 }
 
-/// Keep the declarations reachable from the semantic roots (LAYER-11), with
-/// the surviving columns in `order`, and each node's origin in `document`.
-pub fn prune(document: &Document, order: Order) -> Result<NormalizedDocument, Error> {
-    prune_lowered(document, lower_document(document, None).spec(), order)
-}
-
-/// [`prune`] a document that `spec` lowers, written in either surface: the
-/// 1.0 front end lowers its own documents ([`crate::front_end::v1::spec`]).
+/// Keep the declarations of `document`, which `spec` lowers
+/// ([`crate::front_end::v1::spec`]), reachable from the semantic roots
+/// (LAYER-11), with the surviving columns in `order`, and each node's origin
+/// in `document`.
 pub fn prune_lowered(
     document: &Document,
     spec: &Spec,
@@ -98,7 +91,7 @@ enum Kind {
     Predicate,
     /// An ODM item, which names its dataset before the first dot (NAME-7).
     Item,
-    /// On a 1.0 tree, a lookup's match value or range value, which reads
+    /// A lookup's match value or range value, which reads
     /// only a column of the row when bare and whose own binding reports a
     /// name it cannot read (LOOKUP-5, LOOKUP-9), so the name orders
     /// declarations but is never an unknown dependency.
@@ -222,20 +215,17 @@ impl<'a> Live<'a> {
         // one never reads a column, and binding refuses one that no binding
         // names as `unknown_derive_variable` (LOOKUP-22), layered or not.
         let mut reducers = BTreeSet::new();
-        let one_meaning = spec.header.surface.one_meaning_per_form();
         let mut failure = None;
         spec.walk(root, scope, |at, _| {
             // A match value or range value, with every node inside it.
-            if one_meaning {
-                let inside = matched.contains(&at);
-                matched.extend(
-                    spec.children(at)
-                        .filter(|&(role, _)| {
-                            inside || matches!(role, Role::KeyValue | Role::RangeValue)
-                        })
-                        .map(|(_, child)| child),
-                );
-            }
+            let inside = matched.contains(&at);
+            matched.extend(
+                spec.children(at)
+                    .filter(|&(role, _)| {
+                        inside || matches!(role, Role::KeyValue | Role::RangeValue)
+                    })
+                    .map(|(_, child)| child),
+            );
             match &spec.expr(at).kind {
                 ExprKind::Formula(formula) => {
                     if let Err(error @ CompileError::Limit { .. }) = &formula.compiled {
@@ -261,11 +251,7 @@ impl<'a> Live<'a> {
                         Some(JoinKey::Columns { columns, .. }) => {
                             out.extend(columns.iter().map(|column| Reading {
                                 name: column.name.clone(),
-                                kind: if one_meaning {
-                                    Kind::Match
-                                } else {
-                                    Kind::Variable
-                                },
+                                kind: Kind::Match,
                             }));
                         }
                         Some(JoinKey::FromInput) => {
@@ -683,13 +669,12 @@ impl<'a> Live<'a> {
 
 /// Without a relation change or `require_match`, an intermediate whose
 /// absence answer is missing reads what the implicit join reads (LOOKUP-4):
-/// in 0.5 one that writes no `key`, in 1.0 one whose `key` lists the columns
-/// of its input's declared key (D23, D71).
+/// one whose `key` lists the columns of its input's declared key (D23, D71).
 fn rename_only(spec: &Spec, item: &Intermediate) -> bool {
     let joins_as_input = match &item.key {
         Some(JoinKey::Columns { .. }) => spec.keys_as_input(item),
         Some(JoinKey::Pairs { .. }) => false,
-        Some(JoinKey::FromInput | JoinKey::Applicable) | None => true,
+        Some(JoinKey::FromInput) | None => true,
     };
     joins_as_input
         && item.between.is_none()
@@ -825,163 +810,4 @@ impl<'a> Rebuild<'a> {
         });
         self.nodes.len() - 1
     }
-}
-
-/// An origin each lifecycle traces through every pass: a standalone spec's
-/// raw node, or a layered spec's contributing layer.
-pub trait Origin: Copy {
-    /// Where a pass output came from, through the pass input's origins.
-    fn through(origin: SchemaOrigin, prior: &[Self]) -> Self;
-}
-
-impl Origin for SchemaOrigin {
-    fn through(origin: SchemaOrigin, prior: &[Self]) -> Self {
-        match origin.source {
-            SchemaSource::Input => {
-                let mut mapped = prior[origin.node];
-                mapped.generated |= origin.generated;
-                mapped
-            }
-            SchemaSource::Default { .. } => origin,
-        }
-    }
-}
-
-impl Origin for LayerNodeOrigin {
-    fn through(origin: SchemaOrigin, prior: &[Self]) -> Self {
-        LayerNodeOrigin::through(origin, prior)
-    }
-}
-
-/// The admitted model with what each lifecycle retains from its passes.
-#[derive(Debug)]
-pub struct Resolved<O> {
-    pub model: SpecificationDocument,
-    /// The pruned document, which final normalization reads.
-    pub pruned: Document,
-    /// Each model node's origin in `pruned`, or its schema default.
-    pub origins: Vec<SchemaOrigin>,
-    /// Each model node's origin, traced to the caller's arena.
-    pub traced: Vec<O>,
-    /// The named-window references whose declaring column or intermediate
-    /// survived pruning; the strict expansion finds none left to record.
-    pub windows: Vec<WindowReference>,
-}
-
-/// A failed pass, with the document it read: its findings address it.
-#[derive(Debug)]
-pub enum Failure {
-    Normalize {
-        error: NormalizationError,
-        input: Document,
-    },
-    Prune(Error),
-    Validation(ValidationError),
-    /// Final model findings have no document-value references.
-    Model(Vec<SchemaDiagnostic>),
-}
-
-/// Resolve a composed document whose nodes `origins` trace: expand named
-/// windows, prune, normalize the resolved document, expand strictly and
-/// admit the model. Every null field is already absent (LAYER-9).
-pub fn resolve<O: Origin>(
-    schema: &SchemaStructure,
-    composed: Document,
-    origins: &[O],
-    order: Order,
-) -> Result<Resolved<O>, Failure> {
-    let expanded = schema
-        .expand_named_windows(&composed, false)
-        .map_err(|error| Failure::Normalize {
-            error,
-            input: composed,
-        })?;
-    let expanded_origins = expanded
-        .origins
-        .iter()
-        .map(|&node| origins[node])
-        .collect::<Vec<_>>();
-    let pruned = prune(&expanded.document, order).map_err(Failure::Prune)?;
-    let pruned_origins = pruned
-        .origins
-        .iter()
-        .map(|&origin| O::through(origin, &expanded_origins))
-        .collect::<Vec<_>>();
-    let normalized = match schema.normalize_resolved_document(&pruned.document) {
-        Ok(normalized) => normalized,
-        Err(error) => {
-            return Err(Failure::Normalize {
-                error,
-                input: pruned.document,
-            })
-        }
-    };
-    let normalized_origins = normalized
-        .origins
-        .iter()
-        .map(|&origin| O::through(origin, &pruned_origins))
-        .collect::<Vec<_>>();
-    let strict = schema
-        .expand_named_windows(&normalized.document, true)
-        .map_err(|error| Failure::Normalize {
-            error,
-            input: normalized.document,
-        })?;
-    let traced = strict
-        .origins
-        .iter()
-        .map(|&node| normalized_origins[node])
-        .collect();
-    let final_origins = strict
-        .origins
-        .iter()
-        .map(|&node| normalized.origins[node])
-        .collect();
-    let model = SpecificationDocument::admit(strict.document)
-        .map_err(Failure::Validation)?
-        .map_err(Failure::Model)?;
-    let windows = surviving(&pruned.document, expanded.references);
-    Ok(Resolved {
-        model,
-        pruned: pruned.document,
-        origins: final_origins,
-        traced,
-        windows,
-    })
-}
-
-/// Keep the window references whose declaring column or intermediate is
-/// still in the pruned document; other references are kept as recorded.
-fn surviving(pruned: &Document, references: Vec<WindowReference>) -> Vec<WindowReference> {
-    let declared = |field: &str, identity: &str| -> Vec<&str> {
-        let Some(list) = pruned.field(pruned.root(), field) else {
-            return Vec::new();
-        };
-        let N::Sequence(items) = &pruned.nodes()[list] else {
-            return Vec::new();
-        };
-        items
-            .iter()
-            .filter_map(
-                |&item| match &pruned.nodes()[pruned.field(item, identity)?] {
-                    N::Text(name) => Some(name.as_str()),
-                    _ => None,
-                },
-            )
-            .collect()
-    };
-    let columns = declared("columns", "name");
-    let intermediates = declared("intermediates", "id");
-    references
-        .into_iter()
-        .filter(|reference| {
-            for (prefix, names) in [("columns.", &columns), ("intermediates.", &intermediates)] {
-                if let Some(rest) = reference.path.strip_prefix(prefix) {
-                    let name = rest.split('.').next().unwrap_or(rest);
-                    return names.contains(&name);
-                }
-            }
-            true
-        })
-        .collect()
 }

@@ -9,7 +9,6 @@ use yamaa_core::{
     },
     diagnostic::{ConditionCode, Diagnostic},
     table::ValueRef,
-    temporal::Precision as P,
 };
 fn operation(kind: K) -> Imputation {
     Imputation::new(
@@ -48,56 +47,18 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         assert_eq!(diagnostic.operand_route, None);
         reached.insert(rendered(&diagnostic));
     };
-    for (month, day, minimum, condition, rule, path, fields) in [
-        (
-            Some("6"),
-            Some(D::Number("1")),
-            P::Month,
-            "month_not_permitted",
-            "TIME-10",
-            "impute.month",
-            vec![("month", V::from(6))],
-        ),
-        (
-            None,
-            Some(D::Number("1")),
-            P::Year,
-            "month_required",
-            "TIME-10",
-            "impute.month",
-            vec![("minimum_source_precision", text("year"))],
-        ),
+    for (month, day, condition, rule, path, fields) in [
         (
             Some("15"),
             Some(D::Number("1")),
-            P::Year,
             "month_out_of_range",
             "TIME-10",
             "impute.month",
             vec![("month", V::from(15))],
         ),
         (
-            None,
-            None,
-            P::Month,
-            "day_required",
-            "TIME-10",
-            "impute.day",
-            vec![("minimum_source_precision", text("month"))],
-        ),
-        (
-            None,
-            Some(D::Position("last")),
-            P::Day,
-            "day_not_permitted",
-            "TIME-10",
-            "impute.day",
-            vec![("day", text("last"))],
-        ),
-        (
             Some("6"),
             Some(D::Number("32")),
-            P::Year,
             "value_not_permitted",
             "TIME-10",
             "impute",
@@ -110,7 +71,6 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         (
             Some("6"),
             Some(D::Position("mid")),
-            P::Year,
             "value_not_permitted",
             "TIME-10",
             "impute.day",
@@ -121,33 +81,17 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         ),
     ] {
         let DatePolicyError::Diagnostic(diagnostic) =
-            completion_policy(T::Date, month, day, minimum, None, "impute").unwrap_err()
+            completion_policy(T::Date, month, day, None, "impute").unwrap_err()
         else {
             panic!("admitted semantic policy failure")
         };
         check(diagnostic, "validation", condition, rule, path, fields);
     }
     let date = K::Impute(
-        completion_policy(
-            T::Date,
-            Some("12"),
-            Some(D::Number("31")),
-            P::Year,
-            None,
-            "impute",
-        )
-        .unwrap(),
+        completion_policy(T::Date, Some("12"), Some(D::Number("31")), None, "impute").unwrap(),
     );
     let datetime = K::Impute(
-        completion_policy(
-            T::DateTime,
-            None,
-            None,
-            P::Day,
-            Some(TimeRule::First),
-            "impute",
-        )
-        .unwrap(),
+        completion_policy(T::DateTime, None, None, Some(TimeRule::First), "impute").unwrap(),
     );
     // One grammar serves both types: a missing source is no failure, and text
     // that is not collected date text is invalid date text.

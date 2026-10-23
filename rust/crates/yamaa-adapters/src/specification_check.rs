@@ -34,14 +34,16 @@ mod tests {
     use crate::specification_run::PreparedRun;
     #[test]
     fn complete_utf8_issue_payload_preserves_authored_fields() {
-        let schema = crate::shipped_schema::capture().unwrap();
-        let raw = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: unread.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: str\n    label: V\n    derivation: SRC.V\n    verifications: [{matches: {pattern: \"\\u00e9(\"}}]\n";
-        let document = schema
-            .prepare_standalone(crate::specification_source::Source {
+        let raw = "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: unread.csv}\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - name: V\n    type: str\n    label: V\n    derivation: SRC.V\n    verifications: [{matches: {pattern: \"\\u00e9(\"}}]\n";
+        let document = crate::shipped_schema::prepare(
+            crate::specification_source::Source {
                 identity: "spec.yaml".into(),
                 bytes: raw.as_bytes().to_vec(),
-            })
-            .unwrap();
+            },
+            "spec.yaml".into(),
+            &mut crate::specification_source::EntryOnly,
+        )
+        .unwrap();
         let run = PreparedRun::prepare(document).unwrap();
         let expected: yamaa_core::json::Value = crate::json_wire::decode(include_str!(
             "../tests/fixtures/check_invalid_regex_truth.json"

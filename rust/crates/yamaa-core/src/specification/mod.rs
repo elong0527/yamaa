@@ -6,7 +6,6 @@ use crate::{
     ast, column_dependencies,
     expression::{CompileError, CompiledExpression, Context as ExpressionContext},
     reference_binding::{self, Catalog},
-    schema::SpecificationDocument,
     table::{Column, TableSchema},
     value::ColumnType,
 };
@@ -24,7 +23,6 @@ mod binder;
 use binder::BindContext;
 mod binding_diagnostics;
 mod checks;
-mod intermediate_admission;
 mod intermediate_derivations;
 mod intermediate_range;
 mod intermediates;
@@ -109,7 +107,7 @@ pub enum PreflightFinding {
         row: String,
     },
     UndeclaredRowColumn {
-        /// The row template's path, as its specification's surface writes it.
+        /// The row template's path, as diagnostics cite it.
         row_path: String,
         column: String,
     },
@@ -285,8 +283,7 @@ pub enum SourceProfile {
     Xport,
     Sas7bdat,
     /// An ODM 1.3 or 2.0 document read into the clinical-item table
-    /// (`crate::odm_items`; INPUT-1, ODM-1). Only a 1.0 specification selects
-    /// it: a 0.5 one keeps refusing `.xml` as an unknown profile.
+    /// (`crate::odm_items`; INPUT-1, ODM-1).
     OdmXml,
 }
 /// Core-selected semantic source interpretation, independent of storage profile.
@@ -296,8 +293,7 @@ pub enum SourceInterpretation {
     Odm,
 }
 impl SourceProfile {
-    /// The profile a path's case-insensitive extension names (INPUT-1). The
-    /// front end admits [`Self::OdmXml`] on a 1.0 tree only.
+    /// The profile a path's case-insensitive extension names (INPUT-1).
     pub fn from_path(path: &str) -> Option<Self> {
         let name = path.rsplit('/').next()?;
         let (stem, extension) = name.rsplit_once('.')?;
@@ -662,48 +658,13 @@ fn prepare_output_declarations(
 }
 
 impl PreparedSpecification {
-    /// Reject unsupported declarations before requesting any source bytes. Effective
-    /// source empty-string behavior is missing unless explicitly declared otherwise.
-    pub fn prepare(spec: &SpecificationDocument) -> Result<Self, PrepareError> {
-        Self::prepare_implementation(spec, None, None, Default::default(), None, None)
-    }
-    /// Prepare calls against statically admitted environment definitions. No
-    /// project imports, lock verification, test invocation or study reads occur.
-    pub fn prepare_with_project(
-        spec: &SpecificationDocument,
-        functions: &[crate::project_function::Function],
-    ) -> Result<Self, PrepareError> {
-        Self::prepare_implementation(spec, Some(functions), None, Default::default(), None, None)
-    }
-    /// Compile project calls and fixed terminology against the same admitted metadata.
-    pub fn prepare_with_environment(
-        spec: &SpecificationDocument,
-        environment: &crate::project_environment::ExecutionEnvironment,
-    ) -> Result<Self, PrepareError> {
-        Self::prepare_linked(spec, Some(environment), Default::default())
-    }
-    /// Compile with the producing specifications that `schema` links name. Each
-    /// link supplies only its output contract's field names, order and types;
-    /// a linked input without supplied metadata is invalid.
-    pub fn prepare_linked(
-        spec: &SpecificationDocument,
-        environment: Option<&crate::project_environment::ExecutionEnvironment>,
-        links: crate::producer_contract::Links<'_>,
-    ) -> Result<Self, PrepareError> {
-        Self::prepare_implementation(
-            spec,
-            environment.map(|e| e.functions()),
-            environment.map(|e| e.catalogue()),
-            links,
-            environment.map(|e| e.inventory()),
-            environment.and_then(|e| e.undeclared()),
-        )
-    }
     /// Prepare a 1.x specification its front end lowered into `tree`, whose
     /// resolved document `document` declares its linked inputs, against the
     /// admitted environment and the producing specifications its `schema`
-    /// links name, as [`PreparedSpecification::prepare_linked`] prepares a
-    /// 0.5 model: preparation and binding read only the tree (#3030 D76).
+    /// links name, before any source is read. Each link supplies only its
+    /// output contract's field names, order and types; a linked input without
+    /// supplied metadata is invalid. Preparation and binding read only the
+    /// tree (#3030 D76).
     pub fn prepare_tree_linked(
         tree: ast::Spec,
         document: &crate::schema::Document,
@@ -722,29 +683,8 @@ impl PreparedSpecification {
             environment.and_then(|e| e.undeclared()),
         )
     }
-    fn prepare_implementation(
-        spec: &SpecificationDocument,
-        functions: Option<&[crate::project_function::Function]>,
-        catalogue: Option<&crate::project_terminology::Catalogue>,
-        links: crate::producer_contract::Links<'_>,
-        inventory: Option<&crate::submission_inventory::Inventory>,
-        undeclared: Option<crate::project_environment::Undeclared>,
-    ) -> Result<Self, PrepareError> {
-        // The one typed tree of the admitted document, which preparation and
-        // binding read.
-        let tree = crate::front_end::v0_5::lower(spec, None).into_spec();
-        Self::prepare_lowered(
-            tree,
-            spec.document(),
-            functions,
-            catalogue,
-            links,
-            inventory,
-            undeclared,
-        )
-    }
-    /// Admit the links `document` declares, then prepare `tree`, the
-    /// lowering of either language.
+    /// Admit the links `document` declares, then prepare `tree`, its
+    /// lowering.
     fn prepare_lowered(
         tree: ast::Spec,
         document: &crate::schema::Document,
@@ -787,12 +727,8 @@ impl PreparedSpecification {
         // `prepare_tree_linked` gives none of a project's functions, codelists
         // or inventory, binds nothing a project supplies: each codelist,
         // inventory vocabulary and project function it names fails validation
-        // as `project_binding_missing` (CT-13). A 0.5 specification keeps its
-        // 0.5.0 meaning (#3030 D75).
-        let projectless = matches!(spec.header.surface, ast::Surface::V1 { .. })
-            && functions.is_none()
-            && catalogue.is_none()
-            && inventory.is_none();
+        // as `project_binding_missing` (CT-13).
+        let projectless = functions.is_none() && catalogue.is_none() && inventory.is_none();
         match_values::declaration_admission(spec)?;
         let mut findings = checks::root::findings(spec);
         findings.extend(checks::odm::context_findings(spec)?);
@@ -895,14 +831,8 @@ impl PreparedSpecification {
             verifications,
             output_report,
         } = prepare_output_declarations(spec, &output, &column_verifications)?;
-        let intermediates = intermediates::Declarations::prepare(
-            spec,
-            &sources,
-            &output,
-            &keys,
-            project.as_ref(),
-            &mut extra,
-        )?;
+        let intermediates =
+            intermediates::Declarations::prepare(spec, &sources, project.as_ref(), &mut extra)?;
         let admission = derivations::Admission {
             project: project.as_ref(),
             intermediates: &intermediates,
@@ -1131,10 +1061,6 @@ impl PreparedSpecification {
     }
     pub fn output_path(&self) -> &str {
         &self.output_path
-    }
-    /// The surface the specification is written in, as its header declares.
-    pub fn surface(&self) -> ast::Surface {
-        self.tree.spec().header.surface
     }
     /// The file the run report is written to, when the specification names one.
     pub fn output_report(&self) -> Option<&str> {

@@ -382,32 +382,28 @@ impl Reads {
                 return Err(Failure::Diagnostic(vec![refused]));
             }
         }
-        let document = file_preparation::prepare_document_from(
-            self.resources_mut(),
-            Some(declaring),
-            written,
-            None,
-        )
-        .map_err(|error| match error {
-            // A listed file the walk cannot reach fails at its listing, as
-            // reading the project refuses it (FILE-11, #3030 D188).
-            file_preparation::Error::Resource(
-                error @ (file_resources::Error::Missing
-                | file_resources::Error::NotRegularFile
-                | file_resources::Error::Symlink),
-            ) => match file_resources::resource_failure(&error) {
-                Some(failure) => Failure::ClassifiedResource {
-                    diagnostic: Box::new(failure.field_diagnostic(path, written)),
-                    error,
-                },
-                None => Failure::Project(project_application::Error::Project(
-                    file_project::Error::Document(file_preparation::Error::Resource(error)),
-                )),
-            },
-            error => Failure::Project(project_application::Error::Project(
-                file_project::Error::Document(error.entry_field(path, written)),
-            )),
-        })?;
+        let document =
+            file_preparation::prepare_document_from(self.resources_mut(), Some(declaring), written)
+                .map_err(|error| match error {
+                    // A listed file the walk cannot reach fails at its listing, as
+                    // reading the project refuses it (FILE-11, #3030 D188).
+                    file_preparation::Error::Resource(
+                        error @ (file_resources::Error::Missing
+                        | file_resources::Error::NotRegularFile
+                        | file_resources::Error::Symlink),
+                    ) => match file_resources::resource_failure(&error) {
+                        Some(failure) => Failure::ClassifiedResource {
+                            diagnostic: Box::new(failure.field_diagnostic(path, written)),
+                            error,
+                        },
+                        None => Failure::Project(project_application::Error::Project(
+                            file_project::Error::Document(file_preparation::Error::Resource(error)),
+                        )),
+                    },
+                    error => Failure::Project(project_application::Error::Project(
+                        file_project::Error::Document(error.entry_field(path, written)),
+                    )),
+                })?;
         let document = std::sync::Arc::new(document);
         self.specifications.push((
             path.into(),

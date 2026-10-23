@@ -478,9 +478,8 @@ mod scalar {
             }
         }
 
-        /// B has no NOTTHERE column. Only a 0.5 file answers such a read with
-        /// `absent` (D67, D102); a 1.0 file fails it as `unknown_field`, so
-        /// this test keeps its 0.5 document until the 0.5 path goes (#3447).
+        /// B holds no record with SEQ 99, so ABSENT's filtered read finds no
+        /// record for a or c, and its `absent` answers both (NAME-3, D67).
         #[test]
         fn nested_structured_sources_keep_filters_stable_choices_absence_and_lazy_handlers() {
             let fixture = Fixture::new();
@@ -492,10 +491,11 @@ mod scalar {
             fs::write(fixture.0.join("b.csv"),b"ID,SEQ,USE,TEXT,NUM\na,10,Y,late,2\na,1,Y,early,1\na,1,Y,same-order,1\na,50,N,excluded,9\nb,1,Y,hidden,1\nb,2,Y,hidden2,2\n").unwrap();
             fs::write(
                 fixture.0.join("spec.yaml"),
-                r#"schema_version: '1.0'
+                r#"yamaa: '1.0'
+type: spec
 domain: TEST
 keys: [ID]
-input: {A: a.csv, B: {path: b.csv, types: {SEQ: int}}}
+input: {A: a.csv, B: {path: b.csv, key: [ID], types: {SEQ: int}}}
 base: A
 output: {path: result.csv, columns: [ID, TEXT, FIRST, MAP, ABSENT]}
 columns:
@@ -512,7 +512,7 @@ rows:
         case:
           - when: "A.USE = 'Y'"
             then: {source: {variable: B.TEXT, filter: "B.USE = 'Y'", order_by: [B.SEQ], keep: last}}
-          - otherwise: {literal: SKIP}
+          - otherwise: "'SKIP'"
       FIRST:
         case:
           - when: "A.USE = 'Y'"
@@ -522,7 +522,7 @@ rows:
                   - {variable: B.TEXT, filter: "B.USE = 'Y' AND B.SEQ = 10"}
                   - {variable: A.FALLBACK, filter: "A.USE = 'Y'"}
                 missing: NONE
-          - otherwise: {literal: SKIP}
+          - otherwise: "'SKIP'"
       MAP:
         case:
           - when: "A.USE = 'Y'"
@@ -531,12 +531,12 @@ rows:
                 source: {variable: B.NUM, filter: "B.USE = 'Y' AND B.SEQ = 10"}
                 dict: {'1': 10, '2': 20}
                 missing: 0
-          - otherwise: {literal: 0}
+          - otherwise: 0
       ABSENT:
         case:
           - when: "A.USE = 'Y'"
-            then: {source: {variable: B.NOTTHERE, absent: EDGE}}
-          - otherwise: {literal: SKIP}
+            then: {source: {variable: B.TEXT, filter: "B.SEQ = 99", absent: EDGE}}
+          - otherwise: "'SKIP'"
 "#,
             )
             .unwrap();
@@ -553,17 +553,17 @@ rows:
                 .clone();
             for (path, handler, count) in [
                 (
-                    "rows[0].derivations.TEXT.case[0].then.source.multiple_matches",
+                    "rows.records.derivations.TEXT.case[0].then.source.multiple_matches",
                     "multiple_matches",
                     1,
                 ),
                 (
-                    "rows[0].derivations.MAP.case[0].then.mapping.missing",
+                    "rows.records.derivations.MAP.case[0].then.mapping.missing",
                     "missing",
                     1,
                 ),
                 (
-                    "rows[0].derivations.ABSENT.case[0].then.source.absent",
+                    "rows.records.derivations.ABSENT.case[0].then.source.absent",
                     "absent",
                     2,
                 ),
@@ -582,7 +582,7 @@ rows:
         fixture.saved(),
         b"ID,TEXT,FIRST,MAP,ABSENT\na,early,late,20,EDGE\nb,SKIP,SKIP,0,SKIP\nc,,fallback,0,EDGE\n"
     );
-            let case = "TEXT:\n        case:\n          - when: \"A.USE = 'Y'\"\n            then: {source: {variable: B.TEXT, filter: \"B.USE = 'Y'\", order_by: [B.SEQ], keep: last}}\n          - otherwise: {literal: SKIP}";
+            let case = "TEXT:\n        case:\n          - when: \"A.USE = 'Y'\"\n            then: {source: {variable: B.TEXT, filter: \"B.USE = 'Y'\", order_by: [B.SEQ], keep: last}}\n          - otherwise: \"'SKIP'\"";
             fs::write(fixture.0.join("spec.yaml"), original.replace(case, "TEXT: {source: {variable: B.TEXT, filter: \"B.USE = 'Y'\", order_by: [B.SEQ], keep: last}}" )).unwrap();
             assert_eq!(fixture.saved(),b"ID,TEXT,FIRST,MAP,ABSENT\na,late,late,20,EDGE\nb,hidden2,SKIP,0,SKIP\nc,,fallback,0,EDGE\n");
         }
@@ -939,19 +939,24 @@ rows:
             );
         }
 
-        /// One specification written in 0.5 and in 1.0. S-2 has no
-        /// subject-level record and S-3 is outside the safety population, so
-        /// the row template's read of SAFETY answers both and its read of
-        /// ADSL through the implicit join answers S-2. Each handler row names
-        /// the column it derives, whichever way the file writes the row
-        /// template: `rows[0]` in 0.5, `rows.event` in 1.0 (P-CLR-2). A 1.0
-        /// file counts both answers under `absent` (D202), and each cites
-        /// LOOKUP-24 (D204); a 0.5 file counts SAFETY's under `no_match`,
-        /// citing LOOKUP-24, and cites NAME-3 for the join's `absent`, as at
-        /// the `yamaa-v0.5.0` tag (D75).
+        /// S-2 has no subject-level record and S-3 is outside the safety
+        /// population, so the row template's read of SAFETY answers both and
+        /// its read of ADSL through the implicit join answers S-2. Each
+        /// handler row names the column it derives and the row template by
+        /// its id, `rows.event` (P-CLR-2); both answers count under `absent`
+        /// (D202), and each cites LOOKUP-24 (D204).
         #[test]
         fn a_row_template_s_handler_rows_name_their_column_and_cite_their_surface_s_rule() {
-            let body = r#"output: {path: out.csv, columns: [USUBJID, ARM, TRTSDT], report: report.csv}
+            let specification = r#"yamaa: "1.0"
+type: spec
+domain: ADAE
+keys: [USUBJID]
+input:
+  AE: input/ae.csv
+  ADSL: {path: input/adsl.csv, key: [USUBJID]}
+intermediates:
+  - {id: SAFETY, dataset: ADSL, key: [USUBJID], filter: "ADSL.SAFFL = 'Y'"}
+output: {path: out.csv, columns: [USUBJID, ARM, TRTSDT], report: report.csv}
 columns:
   - {name: USUBJID, type: str}
   - {name: ARM, type: str}
@@ -964,68 +969,34 @@ rows:
       ARM: SAFETY.ARM
       TRTSDT: ADSL.TRTSDT
 "#;
-            for (surface, header, constructed) in [
-                (
-                    "0.5",
-                    r#"schema_version: '1.0'
-domain: ADAE
-keys: [USUBJID]
-input:
-  AE: input/ae.csv
-  ADSL: input/adsl.csv
-intermediates:
-  - {id: SAFETY, dataset: ADSL, filter: "ADSL.SAFFL = 'Y'"}
-"#,
-                    "out.csv,rows,rows[0],AE,,,,,,,3,3,,{}\n\
-                     out.csv,handler,rows[0].derivations.ARM.source.no_match,no_match,,ARM,LOOKUP-24,,,,2,,,{}\n\
-                     out.csv,handler,rows[0].derivations.TRTSDT.source.absent,absent,,TRTSDT,NAME-3,,,,1,,,{}\n",
-                ),
-                (
-                    "1.0",
-                    r#"yamaa: "1.0"
-type: spec
-domain: ADAE
-keys: [USUBJID]
-input:
-  AE: input/ae.csv
-  ADSL: {path: input/adsl.csv, key: [USUBJID]}
-intermediates:
-  - {id: SAFETY, dataset: ADSL, key: [USUBJID], filter: "ADSL.SAFFL = 'Y'"}
-"#,
-                    "out.csv,rows,rows.event,AE,,,,,,,3,3,,{}\n\
-                     out.csv,handler,rows.event.derivations.ARM.source.absent,absent,,ARM,LOOKUP-24,,,,2,,,{}\n\
-                     out.csv,handler,rows.event.derivations.TRTSDT.source.absent,absent,,TRTSDT,LOOKUP-24,,,,1,,,{}\n",
-                ),
-            ] {
-                let study = Study::new();
-                fs::write(study.0.join("input/ae.csv"), "USUBJID\nS-1\nS-2\nS-3\n").unwrap();
-                fs::write(
-                    study.0.join("input/adsl.csv"),
-                    "USUBJID,ARM,TRTSDT,SAFFL\nS-1,drug a,2025-01-10,Y\nS-3,drug b,2025-02-01,N\n",
+            let study = Study::new();
+            fs::write(study.0.join("input/ae.csv"), "USUBJID\nS-1\nS-2\nS-3\n").unwrap();
+            fs::write(
+                study.0.join("input/adsl.csv"),
+                "USUBJID,ARM,TRTSDT,SAFFL\nS-1,drug a,2025-01-10,Y\nS-3,drug b,2025-02-01,N\n",
+            )
+            .unwrap();
+            let mut result = study.build(specification);
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert!(result.save().unwrap());
+            assert_eq!(
+                fs::read_to_string(study.0.join("out.csv")).unwrap(),
+                "USUBJID,ARM,TRTSDT\nS-1,drug a,2025-01-10\nS-2,,\nS-3,,2025-02-01\n"
+            );
+            assert_eq!(
+                saved_report(&study, "report.csv"),
+                format!(
+                    "{HEADER}out.csv,run,output,,,,,,succeeded,,3,,,{{}}\n\
+                     out.csv,input,input.AE,AE,,,,,,,3,,,\"{{\"\"bytes\"\":20,\"\"path\"\":\"\"input/ae.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
+                     out.csv,input,input.ADSL,ADSL,,,,,,,2,,,\"{{\"\"bytes\"\":73,\"\"path\"\":\"\"input/adsl.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
+                     out.csv,rows,rows.event,AE,,,,,,,3,3,,{{}}\n\
+                     out.csv,handler,rows.event.derivations.ARM.source.absent,absent,,ARM,LOOKUP-24,,,,2,,,{{}}\n\
+                     out.csv,handler,rows.event.derivations.TRTSDT.source.absent,absent,,TRTSDT,LOOKUP-24,,,,1,,,{{}}\n\
+                     out.csv,column,columns.USUBJID,USUBJID,,,,,,,0,3,,\"{{\"\"max_length\"\":3}}\"\n\
+                     out.csv,column,columns.ARM,ARM,,,,,,,2,3,,\"{{\"\"max_length\"\":6}}\"\n\
+                     out.csv,column,columns.TRTSDT,TRTSDT,,,,,,,1,3,,\"{{\"\"max_length\"\":10}}\"\n"
                 )
-                .unwrap();
-                let mut result = study.build(&format!("{header}{body}"));
-                assert!(result.issues().is_empty(), "{surface}: {:?}", result.issues());
-                assert!(result.save().unwrap(), "{surface}");
-                assert_eq!(
-                    fs::read_to_string(study.0.join("out.csv")).unwrap(),
-                    "USUBJID,ARM,TRTSDT\nS-1,drug a,2025-01-10\nS-2,,\nS-3,,2025-02-01\n",
-                    "{surface}"
-                );
-                assert_eq!(
-                    saved_report(&study, "report.csv"),
-                    format!(
-                        "{HEADER}out.csv,run,output,,,,,,succeeded,,3,,,{{}}\n\
-                         out.csv,input,input.AE,AE,,,,,,,3,,,\"{{\"\"bytes\"\":20,\"\"path\"\":\"\"input/ae.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
-                         out.csv,input,input.ADSL,ADSL,,,,,,,2,,,\"{{\"\"bytes\"\":73,\"\"path\"\":\"\"input/adsl.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
-                         {constructed}\
-                         out.csv,column,columns.USUBJID,USUBJID,,,,,,,0,3,,\"{{\"\"max_length\"\":3}}\"\n\
-                         out.csv,column,columns.ARM,ARM,,,,,,,2,3,,\"{{\"\"max_length\"\":6}}\"\n\
-                         out.csv,column,columns.TRTSDT,TRTSDT,,,,,,,1,3,,\"{{\"\"max_length\"\":10}}\"\n"
-                    ),
-                    "{surface}"
-                );
-            }
+            );
         }
 
         /// The report's handler rows and the run's handler counts, as

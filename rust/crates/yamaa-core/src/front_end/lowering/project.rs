@@ -79,17 +79,6 @@ impl<'a> Metas<'a> {
     pub(in crate::front_end) fn index(&mut self, parent: Meta, index: usize, node: usize) -> Meta {
         self.child(parent, Segment::Index(index as u32), Some(node))
     }
-    /// A list entry with an identity, such as a parameter by its name.
-    pub(super) fn member(&mut self, parent: Meta, index: usize, key: &str, node: usize) -> Meta {
-        self.child(
-            parent,
-            Segment::Member {
-                index: index as u32,
-                key: key.into(),
-            },
-            Some(node),
-        )
-    }
     pub(in crate::front_end) fn key(
         &mut self,
         parent: Meta,
@@ -299,11 +288,7 @@ pub(in crate::front_end) fn parameters(
         .enumerate()
         .map(|(i, &node)| {
             let path = format!("params[{i}]");
-            let written = document
-                .field(node, "name")
-                .and_then(|name| text_of(document, name))
-                .unwrap_or_default();
-            let meta = metas.member(list, i, written, node);
+            let meta = metas.index(list, i, node);
             let at = (node, meta);
             let name = text_field(reader, metas, document, at, "name", &format!("{path}.name"));
             let kind = parameter_kind(reader, node, &format!("{path}.type"));
@@ -349,11 +334,7 @@ pub(in crate::front_end) fn cases(
         .enumerate()
         .map(|(i, &node)| {
             let path = format!("tests[{i}]");
-            let written = document
-                .field(node, "id")
-                .and_then(|id| text_of(document, id))
-                .unwrap_or_default();
-            let meta = metas.member(list, i, written, node);
+            let meta = metas.index(list, i, node);
             let at = (node, meta);
             let id = text_field(reader, metas, document, at, "id", &format!("{path}.id"));
             let tags = metas.field(meta, "covers", document.field(node, "covers"));
@@ -469,11 +450,7 @@ pub(in crate::front_end) fn codelist_source(
         .enumerate()
     {
         let path = format!("codelists[{index}]");
-        let written = document
-            .field(node, "id")
-            .and_then(|id| text_of(document, id))
-            .unwrap_or_default();
-        let meta = metas.member(list, index, written, node);
+        let meta = metas.index(list, index, node);
         let at = (node, meta);
         let id = text_field(reader, metas, document, at, "id", &format!("{path}.id"));
         let name = text_field(reader, metas, document, at, "name", &format!("{path}.name"));

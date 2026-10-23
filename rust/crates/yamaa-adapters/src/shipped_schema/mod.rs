@@ -1,9 +1,8 @@
 //! Package-owned schema closures; no directory search or caller-provided schema.
-//! The package ships the 0.5 closures the engine reads and, beside them, the
-//! 1.0 closure of each file type (`yaml/v1/`), which a document's header
-//! selects (SCHEMA-2), and that type's JSON Schema ([`json_schema`]). Shared
-//! schema admission checks the entry and each parent's declared version
-//! before preparing an executable model.
+//! The package ships the 1.0 closure of each file type (`yaml/v1/`), which a
+//! document's header selects (SCHEMA-2), and that type's JSON Schema
+//! ([`json_schema`]); and, until the 0.5 project route goes (P2-13d), the 0.5
+//! project and environment closures that route reads.
 //!
 //! Each closure is fixed when the package is built, so the process admits it
 //! once, on first use, and every later check, compilation and run shares that
@@ -16,14 +15,6 @@ use yamaa_core::resolver::Resolver;
 mod data;
 mod json;
 pub use json::json_schema;
-
-/// Admit the exact generated closure retained inside both native packages.
-pub fn capture() -> Result<Arc<CapturedSchema>, Error> {
-    static ADMITTED: OnceLock<Arc<CapturedSchema>> = OnceLock::new();
-    once(&ADMITTED, || {
-        CapturedSchema::admit(sources(data::MODULES), 0)
-    })
-}
 
 /// Admit the separately versioned environment root with its exact shared module.
 pub fn capture_environment() -> Result<Arc<CapturedSchema>, Error> {
@@ -119,15 +110,15 @@ fn admit_root(modules: &[(&str, &str)], root_class: &str) -> Result<Arc<Captured
     CapturedSchema::admit_root(sources(modules), 0, root_class)
 }
 
-/// Prepare either original document form without host semantic selection.
+/// Prepare a specification with the shipped 1.0 closures, without host
+/// semantic selection; a file that declares `schema_version` is refused as
+/// `unsupported_language_version` (SCHEMA-2).
 pub fn prepare<P: Resolver>(
     source: Source,
     display_path: String,
     port: &mut P,
 ) -> Result<PreparedDocument, InheritanceError<P::Error>> {
-    capture()
-        .map_err(InheritanceError::Entry)?
-        .prepare_document(source, display_path, port)
+    crate::specification_source::prepare_versioned(source, display_path, port)
 }
 
 #[cfg(all(test, feature = "yaml"))]
@@ -136,8 +127,6 @@ mod tests {
 
     #[test]
     fn each_shipped_closure_is_admitted_once_and_shared_across_threads() {
-        let specification = capture().unwrap();
-        assert!(Arc::ptr_eq(&specification, &capture().unwrap()));
         let environment = capture_environment().unwrap();
         let project = capture_project().unwrap();
         assert!(Arc::ptr_eq(&project.environment, &environment));
@@ -145,8 +134,11 @@ mod tests {
             &project.project,
             &capture_project().unwrap().project
         ));
-        let shared = std::thread::spawn(|| capture().unwrap()).join().unwrap();
-        assert!(Arc::ptr_eq(&shared, &specification));
+        let spec = yamaa_core::language::FileType::Spec;
+        let shared = std::thread::spawn(move || capture_versioned(spec).unwrap())
+            .join()
+            .unwrap();
+        assert!(Arc::ptr_eq(&shared, &capture_versioned(spec).unwrap()));
         for file_type in yamaa_core::language::FileType::ALL {
             let versioned = capture_versioned(file_type).unwrap();
             assert!(Arc::ptr_eq(
@@ -161,9 +153,9 @@ mod tests {
             assert_eq!(versioned.structure().version(), "1.0");
         }
         // The shared closure is the one a fresh admission captures.
-        let fresh = CapturedSchema::admit(sources(data::MODULES), 0).unwrap();
-        assert_eq!(fresh.sources().len(), specification.sources().len());
-        for (fresh, kept) in fresh.sources().iter().zip(specification.sources()) {
+        let fresh = admit_root(data::ENVIRONMENT_MODULES, "environment_class").unwrap();
+        assert_eq!(fresh.sources().len(), environment.sources().len());
+        for (fresh, kept) in fresh.sources().iter().zip(environment.sources()) {
             assert_eq!(
                 (&fresh.identity, &fresh.bytes),
                 (&kept.identity, &kept.bytes)

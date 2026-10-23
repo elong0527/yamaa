@@ -738,18 +738,17 @@ mod project {
                 .map(|column| format!("F{column:04}"))
                 .collect::<Vec<_>>();
             let columns = names
-        .iter()
-        .map(|name| {
-            format!("  - {{name: {name}, type: str, label: Field, derivation: {{literal: x}}}}\n")
-        })
-        .collect::<String>();
-            let document = yamaa_adapters::shipped_schema::capture().unwrap().prepare_standalone(
-        yamaa_adapters::specification_source::Source {
-            identity: "wide-producer.yaml".into(),
-            bytes: format!("schema_version: '1.0'\ndomain: TEST\nkeys: [F0000]\ninput: {{RAW: raw.csv}}\ncolumns:\n{columns}output: {{path: produced.csv, columns: [{}]}}\n", names.join(", ")).into_bytes(),
-        }
-    ).unwrap();
-            let contract = yamaa_core::producer_contract::prepare(document.model()).unwrap();
+                .iter()
+                .map(|name| {
+                    format!("  - {{name: {name}, type: str, label: Field, derivation: \"'x'\"}}\n")
+                })
+                .collect::<String>();
+            let document = crate::support::specification_run::prepare_as(
+                "wide-producer.yaml",
+                format!("yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [F0000]\ninput: {{RAW: raw.csv}}\ncolumns:\n{columns}output: {{path: produced.csv, columns: [{}]}}\n", names.join(", ")).as_bytes(),
+            );
+            let contract =
+                yamaa_core::producer_contract::prepare_document(document.document()).unwrap();
             let source = SourceDeclaration {
                 name: "P".into(),
                 path: "produced.csv".into(),
@@ -810,13 +809,12 @@ mod project {
 
         #[test]
         fn producer_csv_admits_original_header_before_typing_and_owns_portable_mismatch() {
-            let document = yamaa_adapters::shipped_schema::capture().unwrap().prepare_standalone(
-        yamaa_adapters::specification_source::Source {
-            identity: "held-producer.yaml".into(),
-            bytes: b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: VALUE, type: int, label: Value, derivation: RAW.VALUE}\noutput: {path: produced.csv, columns: [ID, VALUE]}\n".to_vec(),
-        }
-    ).unwrap();
-            let contract = yamaa_core::producer_contract::prepare(document.model()).unwrap();
+            let document = crate::support::specification_run::prepare_as(
+                "held-producer.yaml",
+                b"yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: VALUE, type: int, label: Value, derivation: RAW.VALUE}\noutput: {path: produced.csv, columns: [ID, VALUE]}\n",
+            );
+            let contract =
+                yamaa_core::producer_contract::prepare_document(document.document()).unwrap();
             let source = SourceDeclaration {
                 name: "P".into(),
                 path: "produced.csv".into(),
@@ -1185,12 +1183,15 @@ mod project {
             )
             .unwrap()
             .into_execution();
-            let raw = b"schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: {value: {source: {variable: SRC.ID}}}}\n  - {name: VALUE, type: int, derivation: {value: {function: {name: id, args: {x: SRC.ID}}}}}\noutput: {path: output.csv, columns: [ID, VALUE]}\n";
-            let decoded = yamaa_adapters::yaml_decode::decode_yaml(raw).unwrap();
-            let model = yamaa_core::schema::SpecificationDocument::admit(decoded.document)
-                .unwrap()
-                .unwrap();
-            let checked = project_domain::check_owned(&model, environment).unwrap();
+            let raw = b"yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\noutput: {path: output.csv, columns: [ID, VALUE]}\n";
+            let document = crate::support::specification_run::prepare(raw);
+            let checked = project_domain::check_owned_tree_linked(
+                document.tree().clone(),
+                document.document(),
+                environment,
+                Default::default(),
+            )
+            .unwrap();
             let trace = Rc::new(RefCell::new(vec![]));
             let payload = Rc::new(());
             let mut activation = Activation {

@@ -905,21 +905,19 @@ mod table {
 
         const SPEC: &str = "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: output.csv, columns: [ID, VALUE, DOUBLE], decimals: PRECISION}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: DOUBLE, type: float, derivation: 'VALUE + VALUE'}\n";
         fn prepared(precision: &str, path: &str, expression: &str) -> PreparedRun {
-            let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             let bytes = SPEC
                 .edit("PRECISION", precision)
                 .edit("output.csv", path)
                 .edit("VALUE + VALUE", expression);
-            let document = schema
-                .prepare_document(
-                    Source {
-                        identity: "spec.yaml".into(),
-                        bytes: bytes.into_bytes(),
-                    },
-                    "spec.yaml".into(),
-                    &mut crate::support::inheritance::Files,
-                )
-                .unwrap();
+            let document = yamaa_adapters::shipped_schema::prepare(
+                Source {
+                    identity: "spec.yaml".into(),
+                    bytes: bytes.into_bytes(),
+                },
+                "spec.yaml".into(),
+                &mut crate::support::inheritance::Files,
+            )
+            .unwrap();
             PreparedRun::prepare(document).unwrap()
         }
         /// The one CSV input of the csv-precision cases, served at `input.csv`.
@@ -1019,18 +1017,16 @@ mod table {
 
         #[test]
         fn compiler_keeps_arbitrary_width_precision_without_a_metadata_copy_allowance() {
-            let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             let precision = "9".repeat(1000);
-            let document = schema
-                .prepare_document(
-                    Source {
-                        identity: "spec.yaml".into(),
-                        bytes: SPEC.edit("PRECISION", &precision).into_bytes(),
-                    },
-                    "spec.yaml".into(),
-                    &mut crate::support::inheritance::Files,
-                )
-                .unwrap();
+            let document = yamaa_adapters::shipped_schema::prepare(
+                Source {
+                    identity: "spec.yaml".into(),
+                    bytes: SPEC.edit("PRECISION", &precision).into_bytes(),
+                },
+                "spec.yaml".into(),
+                &mut crate::support::inheritance::Files,
+            )
+            .unwrap();
             let run = PreparedRun::prepare(document).unwrap();
             assert_eq!(run.compiled().output_decimals(), Some(precision.as_str()));
         }
@@ -1540,7 +1536,6 @@ mod table {
         #[test]
         fn original_regex_and_temporal_reports_match_independently_captured_reference() {
             use crate::support::ports::Sources;
-            let schema = yamaa_adapters::shipped_schema::capture().unwrap();
             let mut count = 0;
             for row in include_str!("fixtures/predicate_context_diagnostics.tsv")
                 .lines()
@@ -1548,16 +1543,15 @@ mod table {
             {
                 let fields = row.split('\t').collect::<Vec<_>>();
                 assert_eq!(fields.len(), 3);
-                let prepared = schema
-                    .prepare_document(
-                        Source {
-                            identity: "spec.yaml".into(),
-                            bytes: fields[1].as_bytes().to_vec(),
-                        },
-                        "spec.yaml".into(),
-                        &mut crate::support::inheritance::Files,
-                    )
-                    .unwrap();
+                let prepared = yamaa_adapters::shipped_schema::prepare(
+                    Source {
+                        identity: "spec.yaml".into(),
+                        bytes: fields[1].as_bytes().to_vec(),
+                    },
+                    "spec.yaml".into(),
+                    &mut crate::support::inheritance::Files,
+                )
+                .unwrap();
                 let run = PreparedRun::prepare(prepared).unwrap();
                 let mut port = Sources::by_path([("source.csv", b"ID,V\n1,2\n".as_slice())]);
                 let attempt = run.execute_with_ports(&mut NoFunctions, &mut port, Scope::default());

@@ -10,64 +10,9 @@ use crate::{
 };
 use crate::{
     project_environment::ExecutionEnvironment,
-    schema::SpecificationDocument,
     specification::{PrepareError, PreparedSpecification},
     table::TableAccess,
 };
-
-/// The private fields tie compilation and selected indices to the same immutable
-/// environment. No caller can swap a different definition collection at build.
-#[derive(Debug)]
-pub struct CheckedProject<'a> {
-    checked: CheckedSpecification,
-    environment: &'a ExecutionEnvironment,
-}
-
-/// Static checking uses admitted metadata only, without activation or study ports.
-pub fn check<'a>(
-    document: &SpecificationDocument,
-    environment: &'a ExecutionEnvironment,
-) -> Result<CheckedProject<'a>, PrepareError> {
-    Ok(CheckedProject {
-        checked: domain::check_with_environment(document, environment)?,
-        environment,
-    })
-}
-impl CheckedProject<'_> {
-    pub fn compiled(&self) -> &PreparedSpecification {
-        self.checked.compiled()
-    }
-    pub fn check_diagnostics(&self) -> Vec<crate::diagnostic::Diagnostic> {
-        self.checked.check_diagnostics()
-    }
-    /// Repeat lock, binding and all complete cases on each build. Source capture
-    /// uses already activated handles and preserves the original host payloads.
-    /// `lock` holds the bytes of the declared lock, captured with the project,
-    /// and is empty when it declares none.
-    #[allow(clippy::too_many_arguments)]
-    pub fn build_into<A: HostFunctions, P: Resolver, D: SourceDecoder>(
-        &self,
-        functions: &mut A,
-        lock: &[u8],
-        source: &mut P,
-        decoder: &mut D,
-        attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
-        observations: Option<&mut project_activation::Observations>,
-        scope: crate::application_observer::Scope<'_>,
-    ) -> Result<(), Failure<A::Error>>
-    where
-        D::Table: TableAccess<Error = A::Error>,
-    {
-        build(
-            (&self.checked, self.environment),
-            (functions, lock),
-            source,
-            decoder,
-            attempt,
-            (observations, scope),
-        )
-    }
-}
 
 /// Own the admitted metadata alongside its private checked specification. Native
 /// prepared handles can move this capability without a self-referential borrow.
@@ -81,32 +26,12 @@ pub struct RejectedOwnedProject {
     pub environment: ExecutionEnvironment,
     pub error: PrepareError,
 }
-pub fn check_owned(
-    document: &SpecificationDocument,
-    environment: ExecutionEnvironment,
-) -> Result<CheckedOwnedProject, Box<RejectedOwnedProject>> {
-    check_owned_linked(document, environment, Default::default())
-}
-/// Own the admitted environment beside a compilation that also admits the
-/// output contracts of linked producing specifications. A build without a
-/// project compiles against no environment, as a specification checked alone
-/// does; its empty environment only carries the host to the build.
-pub fn check_owned_linked(
-    document: &SpecificationDocument,
-    environment: ExecutionEnvironment,
-    links: crate::producer_contract::Links<'_>,
-) -> Result<CheckedOwnedProject, Box<RejectedOwnedProject>> {
-    let admitted = environment.is_project().then_some(&environment);
-    match domain::check_linked(document, admitted, links) {
-        Ok(checked) => Ok(CheckedOwnedProject {
-            checked,
-            environment,
-        }),
-        Err(error) => Err(Box::new(RejectedOwnedProject { environment, error })),
-    }
-}
-/// [`check_owned_linked`] for a 1.x specification its front end lowered into
-/// `tree`, beside its resolved `document`, which declares its linked inputs.
+/// Own the admitted environment beside the compilation of a 1.x
+/// specification its front end lowered into `tree`, beside its resolved
+/// `document`, which declares its linked inputs, and the output contracts of
+/// the producing specifications they link. A build without a project
+/// compiles against no environment, as a specification checked alone does;
+/// its empty environment only carries the host to the build.
 pub fn check_owned_tree_linked(
     tree: crate::ast::Spec,
     document: &crate::schema::Document,

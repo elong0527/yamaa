@@ -7,7 +7,6 @@ use crate::{
         lookup::{self, Owner},
         ConditionCode as C, Diagnostic,
     },
-    key_relation::Implied,
     value::Value,
 };
 mod row_sources;
@@ -21,11 +20,9 @@ pub(super) struct Declaration {
     filter: Option<Filter>,
     order: Vec<(String, bool, bool)>,
     keep: Option<crate::dataset::Keep>,
+    /// The answer when the read finds no record, never when the variable
+    /// does not exist, which fails under NAME-3 (D67).
     absent: Option<Value>,
-    /// Whether `absent` also answers a variable that does not exist where
-    /// it is read, as the 0.5 surface reads it; in 1.0 such a variable fails
-    /// under NAME-3 (COLUMN-11, D67).
-    answers_unknown: bool,
     require_match: bool,
     /// Declaration defects, reported before any field is bound.
     declaration_findings: Vec<Diagnostic>,
@@ -118,7 +115,6 @@ impl Declaration {
                     order: Vec::new(),
                     keep: None,
                     absent: None,
-                    answers_unknown: false,
                     require_match: false,
                     declaration_findings: Vec::new(),
                 })
@@ -182,8 +178,6 @@ impl Declaration {
             filter,
             order,
             keep,
-            answers_unknown: absent.is_some()
-                && spec.header.surface.absent_answers_unknown_variable(),
             absent,
             require_match: read.require_match,
             declaration_findings,
@@ -476,9 +470,8 @@ impl Declaration {
     /// finding refuses it. Whether a record read names the driver of every row
     /// that reads the join is admitted per context ([`lookup_range::admit`]).
     /// `row` names the row template of a row-phase read, and `driver` the
-    /// driver whose records build the rows the binding is read for. With
-    /// `one_meaning` (1.0) a bare value that no column takes fails whatever
-    /// the bounds bind.
+    /// driver whose records build the rows the binding is read for. A bare
+    /// value that no column takes fails whatever the bounds bind.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn bind_range(
         &self,
@@ -489,7 +482,6 @@ impl Declaration {
         row: Option<&str>,
         driver: Option<&str>,
         available: Option<&[usize]>,
-        one_meaning: bool,
         edges: &mut Vec<usize>,
         findings: &mut Vec<BindFinding>,
     ) -> Result<Option<Option<crate::dataset::RelationRange>>, BindError> {
@@ -508,7 +500,7 @@ impl Declaration {
         );
         findings.extend(diagnostics.into_iter().map(wrap));
         let Some(bounds) = bounds else {
-            if one_meaning && range.names_no_column(catalog) {
+            if range.names_no_column(catalog) {
                 findings.push(wrap(range.unknown_value(owner)));
             }
             return Ok(None);
@@ -544,10 +536,9 @@ impl Declaration {
             findings.push(wrap(range.unknown_value(owner)));
             return Ok(None);
         };
-        // On a 1.0 tree a type refusal names the variable too, as every
-        // other refusal of the binding's range does.
-        let named = if one_meaning { owner } else { Owner::Unnamed };
-        Ok(match range.finish(read, kind, bounds, named)? {
+        // A type refusal names the variable too, as every other refusal of
+        // the binding's range does.
+        Ok(match range.finish(read, kind, bounds, owner)? {
             Ok(range) => Some(Some(range.for_variable(&self.variable))),
             Err(diagnostic) => {
                 findings.push(wrap(diagnostic));
@@ -559,13 +550,7 @@ impl Declaration {
     pub(super) fn range_value(&self) -> Option<&str> {
         self.range.as_ref().map(|range| range.value.as_str())
     }
-    fn wrap(
-        &self,
-        expression: Expression,
-        column: usize,
-        path: &str,
-        variable_absent: bool,
-    ) -> Expression {
+    fn wrap(&self, expression: Expression, column: usize, path: &str) -> Expression {
         if self.absent.is_some() || self.keep.is_some() {
             Expression::SourceBinding {
                 source: std::boxed::Box::new(crate::dataset::Assignment {
@@ -574,7 +559,6 @@ impl Declaration {
                     path: path.into(),
                 }),
                 absent: self.absent.clone(),
-                variable_absent,
                 selection_declared: self.keep.is_some(),
                 variable: self.variable.clone(),
                 path: path.into(),
@@ -628,7 +612,7 @@ pub(super) fn bind(
 /// and otherwise collects the distinct readings of the row's records.
 fn bind_implicit_source(
     cx: &mut BindContext<'_, '_>,
-    implicit: binder::Implicit<'_>,
+    implicit: binder::Implicit,
     declaration: &Declaration,
     column: usize,
     path: &str,
@@ -660,7 +644,6 @@ fn bind_implicit_source(
         .map_err(|_| BindError::Internal)?
         .ok_or(BindError::Internal)?;
     let name = &declaration.variable;
-    let mut variable_absent = false;
     let expression = if let Some((index, field)) = named.reference(name) {
         if let Some(item) = &items[index] {
             // A filtered-source operand naming one intermediate record cannot filter it again.
@@ -675,9 +658,6 @@ fn bind_implicit_source(
                 cx.edges
                     .extend(row_intermediates::dependencies(index, items)?);
                 Some(Expression::Intermediate { index, column })
-            } else if declaration.answers_unknown && !item.source.is_self() {
-                variable_absent = true;
-                Some(Expression::Literal(Value::Missing))
             } else {
                 cx.findings
                     .push(BindFinding::Lookup(LookupFinding::reference(
@@ -708,11 +688,6 @@ fn bind_implicit_source(
             if let Some(source_column) =
                 source.schema.columns().iter().position(|c| c.name == field)
             {
-                let output_keys = implicit
-                    .keys
-                    .iter()
-                    .map(|&column| cx.output.columns()[column].name.as_str())
-                    .collect::<Vec<_>>();
                 let donor_fields = source
                     .schema
                     .columns()
@@ -722,12 +697,9 @@ fn bind_implicit_source(
                         column_type: field.kind,
                     })
                     .collect::<Vec<_>>();
-                // The applicable output keys (0.5), or the input's declared
-                // key (1.0, LOOKUP-1).
-                let implied = row_drivers::implied(cx.spec(), dataset);
-                let key_names = implied.names(&output_keys).to_vec();
-                match implied
-                    .resolve(catalog, &output_keys, &donor_fields)
+                // The input's declared key (LOOKUP-1).
+                let key_names = row_drivers::declared_key(cx.spec(), dataset);
+                match crate::key_relation::declared(catalog, &key_names, &donor_fields)
                     .map_err(BindError::Catalog)?
                 {
                     crate::key_relation::Inference::Keys { keys } => {
@@ -761,7 +733,6 @@ fn bind_implicit_source(
                                 None,
                                 None,
                                 None,
-                                cx.spec().header.surface.one_meaning_per_form(),
                                 cx.edges,
                                 cx.findings,
                             )?
@@ -778,15 +749,11 @@ fn bind_implicit_source(
                             })
                     }
                     refused => {
-                        cx.findings.push(join_key_finding(
-                            path, dataset, &implied, &key_names, refused,
-                        )?);
+                        cx.findings
+                            .push(join_key_finding(path, dataset, &key_names, refused)?);
                         None
                     }
                 }
-            } else if declaration.answers_unknown {
-                variable_absent = true;
-                Some(Expression::Literal(Value::Missing))
             } else {
                 cx.findings.push(BindFinding::UnknownReference {
                     path: path.into(),
@@ -809,9 +776,6 @@ fn bind_implicit_source(
                         selection,
                     })
                 }
-            } else if declaration.answers_unknown {
-                variable_absent = true;
-                Some(Expression::Literal(Value::Missing))
             } else {
                 cx.findings.push(BindFinding::UnknownReference {
                     path: path.into(),
@@ -831,23 +795,18 @@ fn bind_implicit_source(
             .validate_output(name, None, None, &[0])
             .map_err(BindError::Catalog)?
         {
-            if !declaration.answers_unknown {
-                cx.findings.push(BindFinding::OutputReference {
-                    path: path.into(),
-                    name: name.clone(),
-                    row: None,
-                    finding,
-                });
-                return Ok(None);
-            }
+            cx.findings.push(BindFinding::OutputReference {
+                path: path.into(),
+                name: name.clone(),
+                row: None,
+                finding,
+            });
+            return Ok(None);
         }
         declaration.bind_filter_named(path, base, &base_fields, named, cx.findings)?;
         if let Some(reference_binding::Binding::Output { column, .. }) = catalog.bind(name) {
             cx.edges.push(column);
             Some(Expression::Column(column))
-        } else if declaration.answers_unknown {
-            variable_absent = true;
-            Some(Expression::Literal(Value::Missing))
         } else {
             cx.findings.push(BindFinding::UnknownReference {
                 path: path.into(),
@@ -862,18 +821,16 @@ fn bind_implicit_source(
     }) {
         return Ok(None);
     }
-    Ok(expression.map(|expression| declaration.wrap(expression, column, path, variable_absent)))
+    Ok(expression.map(|expression| declaration.wrap(expression, column, path)))
 }
 
 /// Scalar expression operands use the same implicit join as a bare
-/// stored-source derivation: on the output keys the input stores (0.5), or on
-/// its declared key (1.0). Admission retains the donor and key types.
-#[allow(clippy::too_many_arguments)]
+/// stored-source derivation: on the input's declared key, `key_names`.
+/// Admission retains the donor and key types.
 pub(super) fn bind_implicit(
     name: &str,
     path: &str,
-    keys: &[usize],
-    implied: &Implied<'_>,
+    key_names: &[&str],
     catalog: &Catalog,
     secondary: &[crate::dataset::SecondarySource],
     edges: &mut Vec<usize>,
@@ -898,10 +855,6 @@ pub(super) fn bind_implicit(
         return Ok(None);
     };
     let outputs = catalog.output_names();
-    let output_keys = keys
-        .iter()
-        .map(|&key| outputs.get(key).copied().ok_or(BindError::Internal))
-        .collect::<Result<Vec<_>, _>>()?;
     let donor = source
         .schema
         .columns()
@@ -911,14 +864,10 @@ pub(super) fn bind_implicit(
             column_type: column.kind,
         })
         .collect::<Vec<_>>();
-    let key_names = implied.names(&output_keys).to_vec();
-    match implied
-        .resolve(catalog, &output_keys, &donor)
-        .map_err(BindError::Catalog)?
-    {
-        crate::key_relation::Inference::Keys { keys: inferred } => {
+    match crate::key_relation::declared(catalog, key_names, &donor).map_err(BindError::Catalog)? {
+        crate::key_relation::Inference::Keys { keys } => {
             let mut bound = Vec::new();
-            for key in inferred {
+            for key in keys {
                 let output_column = outputs
                     .iter()
                     .position(|name| *name == key_names[key])
@@ -950,9 +899,7 @@ pub(super) fn bind_implicit(
             }))
         }
         refused => {
-            findings.push(join_key_finding(
-                path, dataset, implied, &key_names, refused,
-            )?);
+            findings.push(join_key_finding(path, dataset, key_names, refused)?);
             Ok(None)
         }
     }
@@ -965,16 +912,12 @@ pub(super) fn bind_implicit(
 pub(super) fn join_key_finding(
     path: &str,
     dataset: &str,
-    implied: &Implied<'_>,
     key_names: &[&str],
     refused: crate::key_relation::Inference,
 ) -> Result<BindFinding, BindError> {
     use crate::key_relation::Inference;
     let diagnostic = match refused {
-        Inference::NoApplicableKeys => match implied {
-            Implied::Applicable => lookup::no_applicable_keys(path, dataset, key_names, false),
-            Implied::Declared(_) => lookup::undeclared_input_key(path, dataset, false),
-        },
+        Inference::NoApplicableKeys => lookup::undeclared_input_key(path, dataset, false),
         Inference::Incompatible {
             key,
             expected,
@@ -994,9 +937,7 @@ pub(super) fn join_key_finding(
         Inference::UnknownValue { key } => {
             lookup::match_value_reference(path, Owner::Unnamed, key_names[key])
         }
-        Inference::Keys { .. } | Inference::UndeclaredOutput { .. } => {
-            return Err(BindError::Internal)
-        }
+        Inference::Keys { .. } => return Err(BindError::Internal),
     };
     Ok(BindFinding::Source(SourceFinding(diagnostic)))
 }
@@ -1059,8 +1000,7 @@ pub(super) fn bind_catalog_join(
                         ],
                     ))
                 }
-                JoinedFinding::NoApplicableKeys { .. }
-                | JoinedFinding::UndeclaredKey { .. }
+                JoinedFinding::UndeclaredKey { .. }
                 | JoinedFinding::DonorKey { .. }
                 | JoinedFinding::MatchValue { .. }
                 | JoinedFinding::KeyType { .. } => return Err(BindError::Internal),
@@ -1074,44 +1014,35 @@ pub(super) fn bind_catalog_join(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::front_end::v0_5::tests::{admit, document as legacy};
     use crate::test_document::Tree;
     use crate::test_specification::{column, derivation, document, lower, op};
 
     /// `V` reads `SRC.UNKNOWN`, a field the input does not hold, with
-    /// `absent: 7`. The 0.5 surface answers the missing variable with the
-    /// literal, as COLUMN-11 at `yamaa-v0.5.0` says; a 1.0 tree refuses it
-    /// under NAME-3, so `absent` answers only a lookup without a record
-    /// (D67, D102).
+    /// `absent: 7`. The variable fails under NAME-3: `absent` answers only a
+    /// lookup without a record (D67, D102).
     #[test]
-    fn absent_answers_a_missing_variable_only_on_the_0_5_surface() {
-        let columns = || {
-            vec![column(
-                "V",
-                "int",
-                derivation(op(
-                    "source",
-                    Tree::map(vec![
-                        ("variable", Tree::text("SRC.UNKNOWN")),
-                        ("absent", Tree::integer(7)),
-                    ]),
-                )),
-            )]
-        };
+    fn absent_does_not_answer_a_variable_that_does_not_exist() {
+        let columns = vec![column(
+            "V",
+            "int",
+            derivation(op(
+                "source",
+                Tree::map(vec![
+                    ("variable", Tree::text("SRC.UNKNOWN")),
+                    ("absent", Tree::integer(7)),
+                ]),
+            )),
+        )];
         let source = TableSchema::new(vec![crate::table::Column {
             name: "ID".into(),
             kind: ColumnType::Int,
         }])
         .unwrap();
-        // The 0.5 surface, 0.5-only until #3447.
-        let prepared = PreparedSpecification::prepare(&admit(legacy(columns(), vec![]))).unwrap();
-        assert!(prepared.bind(&source).is_ok());
-
-        let spec = lower(document(columns(), vec![]));
+        let spec = lower(document(columns, vec![]));
         let prepared =
             PreparedSpecification::from_tree(spec, Vec::new(), None, None, None, None).unwrap();
         let Err(BindError::Invalid(findings)) = prepared.bind(&source) else {
-            panic!("a variable that does not exist fails in 1.0");
+            panic!("a variable that does not exist fails");
         };
         let [finding] = findings.as_slice() else {
             panic!("one finding: {findings:?}");
@@ -1134,64 +1065,42 @@ mod tests {
     }
 
     /// `V` reads `NOPE`, which no column declares, with a filter and
-    /// `absent: 7`. On the 0.5 surface `absent` answers the missing name, so
-    /// `check()` reports the filter of a single value that binding reports;
-    /// on a 1.0 tree the name fails as a reference first, and `check()` does
-    /// not report the filter (D67, D102).
+    /// `absent: 7`. The name fails as a reference first, so `check()` reports
+    /// no filter of a single value, which binding does not reach (D67, D102).
     #[test]
-    fn check_reports_a_filtered_unknown_name_only_where_absent_answers_it() {
-        let columns = || {
-            vec![column(
-                "V",
-                "int",
-                derivation(op(
-                    "source",
-                    Tree::map(vec![
-                        ("variable", Tree::text("NOPE")),
-                        ("filter", Tree::text("NOPE > 1")),
-                        ("absent", Tree::integer(7)),
-                    ]),
-                )),
-            )]
-        };
-        let identity = |diagnostic: crate::diagnostic::Diagnostic| diagnostic.code;
+    fn a_filtered_unknown_name_fails_as_a_reference_before_its_filter() {
+        let columns = vec![column(
+            "V",
+            "int",
+            derivation(op(
+                "source",
+                Tree::map(vec![
+                    ("variable", Tree::text("NOPE")),
+                    ("filter", Tree::text("NOPE > 1")),
+                    ("absent", Tree::integer(7)),
+                ]),
+            )),
+        )];
         let source = TableSchema::new(vec![crate::table::Column {
             name: "ID".into(),
             kind: ColumnType::Int,
         }])
         .unwrap();
-        // What `check()` reports, and the first finding of binding.
-        let outcome = |spec: ast::Spec| {
-            let prepared =
-                PreparedSpecification::from_tree(spec, Vec::new(), None, None, None, None).unwrap();
-            let Err(BindError::Invalid(findings)) = prepared.bind(&source) else {
-                panic!("binding refuses the read");
-            };
-            let first = findings[0]
-                .diagnostics(prepared.source())
-                .unwrap()
-                .remove(0);
-            (
-                prepared
-                    .check_declaration_diagnostics()
-                    .into_iter()
-                    .map(identity)
-                    .collect::<Vec<_>>(),
-                identity(first),
-            )
+        let spec = lower(document(columns, vec![]));
+        let prepared =
+            PreparedSpecification::from_tree(spec, Vec::new(), None, None, None, None).unwrap();
+        assert_eq!(prepared.check_declaration_diagnostics(), []);
+        let Err(BindError::Invalid(findings)) = prepared.bind(&source) else {
+            panic!("binding refuses the read");
         };
-        // LOOKUP-8's filter of a single value, and NAME-3's unknown field.
-        let filter = crate::diagnostic::ConditionCode::SourceFilterSingleValue;
-        // The 0.5 surface, 0.5-only until #3447.
-        let legacy = legacy(columns(), vec![]).document();
-        let spec = crate::front_end::v0_5::lower_document(&legacy, None).into_spec();
-        assert_eq!(outcome(spec), (vec![filter], filter));
+        let first = findings[0]
+            .diagnostics(prepared.source())
+            .unwrap()
+            .remove(0);
+        // NAME-3's unknown output column.
         assert_eq!(
-            outcome(lower(document(columns(), vec![]))),
-            (
-                vec![],
-                crate::diagnostic::ConditionCode::OutputUnknownReference
-            )
+            first.code,
+            crate::diagnostic::ConditionCode::OutputUnknownReference
         );
     }
 }

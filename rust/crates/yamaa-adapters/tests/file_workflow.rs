@@ -402,11 +402,11 @@ mod file {
         #[test]
         fn project_function_calls_without_a_host_environment_report_the_undeclared_environment() {
             let study = Study::new();
-            // Environment files are 0.5's, so this study stays as 0.5 wrote it
-            // until the 0.5 path goes.
+            // Environment files are 0.5's, so this project stays as 0.5 wrote
+            // it until the 0.5 project route goes (P2-13d).
             study.write("project.yaml", "schema_version: '1.0'\n");
             // Two live columns call the same project function.
-            study.write("root.yaml", "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {RAW: never-read.csv}\ncolumns:\n  - {name: ID, type: int, derivation: RAW.ID}\n  - {name: FIRST, type: str, derivation: {function: {name: lookup, args: {x: RAW.VALUE}}}}\n  - {name: SECOND, type: str, derivation: {function: {name: lookup, args: {x: RAW.ID}}}}\noutput: {path: never-written.csv, columns: [ID, FIRST, SECOND]}\n");
+            study.write("root.yaml", "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {RAW: never-read.csv}\ncolumns:\n  - {name: ID, type: int, derivation: RAW.ID}\n  - {name: FIRST, type: str, derivation: {function: {name: lookup, args: {x: RAW.VALUE}}}}\n  - {name: SECOND, type: str, derivation: {function: {name: lookup, args: {x: RAW.ID}}}}\noutput: {path: never-written.csv, columns: [ID, FIRST, SECOND]}\n");
             let entry = study.path("root.yaml");
             let project = study.path("project.yaml");
             let calls = [
@@ -474,7 +474,7 @@ mod file {
                 .retained_sources()
                 .iter()
                 .all(|(identity, _)| !identity.ends_with("/environment.yaml")));
-            // Without any project there is no environment to name.
+            // Without any project each call binds nothing (CT-13).
             assert_eq!(
                 crate::support::rows(&yamaa_adapters::file_application::check(
                     Language::Python,
@@ -491,60 +491,13 @@ mod file {
                         base_directory: ".",
                     },
                 )),
-                unknown
+                rows(
+                    "project_binding_missing",
+                    "CT-13",
+                    yamaa_adapters::json!({"binding": "function", "function": "lookup"}),
+                )
             );
             assert!(!study.0.join("never-read.csv").exists());
-        }
-
-        #[test]
-        fn retained_project_and_environment_schema_diagnostics_preserve_wide_integer_tokens() {
-            const DIGITS: &str = "92233720368547758081234567890";
-            let wide = format!("schema_version: {DIGITS}\n");
-            // First the project root itself, then the environment file it links.
-            for linked in [false, true] {
-                let study = Study::new();
-                let (source, declaration) = if linked {
-                    study.write(
-                        "project.yaml",
-                        "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n",
-                    );
-                    study.write("environment.yaml", &wide);
-                    (study.path("environment.yaml"), "environments.python")
-                } else {
-                    study.write("project.yaml", &wide);
-                    (study.path("project.yaml"), "$")
-                };
-                let error = study.rejected();
-                let rows = preparation_issues(&error).unwrap();
-                assert_eq!(rows.len(), 1);
-                assert_eq!(rows[0].condition(), "schema_version_mismatch");
-                assert_eq!(rows[0].spec_paths, ["schema_version"]);
-                let context = yamaa_core::json::Value::Object(rows[0].context.clone());
-                assert_eq!(context["actual"].as_number().unwrap().as_str(), DIGITS);
-                assert_eq!(context["expected"], "1.0");
-                assert_eq!(context["source"], source);
-                assert_eq!(context["entry"], study.path("project.yaml"));
-                assert_eq!(context["environment_path"], declaration);
-                assert!(yamaa_adapters::json_wire::encode_object(&rows[0].context)
-                    .contains(&format!("\"actual\":{DIGITS}")));
-                assert_eq!(
-                    rows,
-                    yamaa_adapters::project_application::check(
-                        &study.path("root.yaml"),
-                        &study.path("project.yaml"),
-                        Language::Python,
-                    ),
-                );
-                let Error::Environment(owner) = &error else {
-                    panic!("schema finding keeps its retained environment owner")
-                };
-                let reads = if linked { 2 } else { 1 };
-                assert_eq!(owner.capture_reads(), reads);
-                assert!(!study.0.join("root.yaml").exists());
-                fs::remove_dir_all(&study.0).unwrap();
-                assert_eq!(preparation_issues(&error).unwrap(), rows);
-                assert_eq!(owner.capture_reads(), reads);
-            }
         }
 
         #[test]
@@ -1421,20 +1374,12 @@ mod file {
         #[test]
         fn rejected_mistyped_schema_keeps_the_original_shipped_schema_cause_and_raw_entry() {
             let study = Study::new();
-            // A null field is absent only in 0.5, so these specifications stay
-            // as 0.5 wrote them until the 0.5 path goes.
-            let legacy = |input: &str| {
-                yaml(input, "RAW", "never-written.csv", false)
-                    .edit("yamaa: \"1.0\"\ntype: spec\n", "schema_version: '1.0'\n")
-            };
-            // A null schema is absent, so the input is an ordinary source.
-            study.write(
-                "root.yaml",
-                &legacy("{RAW: {path: never-read.csv, schema: null}}"),
+            let original = yaml(
+                "{RAW: {path: never-read.csv, schema: 7}}",
+                "RAW",
+                "never-written.csv",
+                false,
             );
-            let plain = study.prepare();
-            assert!(plain.run().compiled().source_contract(0).is_none());
-            let original = legacy("{RAW: {path: never-read.csv, schema: 7}}");
             study.write("root.yaml", &original);
             let rejection = study.rejected();
             let Error::Entry(entry) = &rejection else {
@@ -1464,7 +1409,6 @@ mod file {
                     "root.yaml",
                     "project.yaml",
                     Language::Python,
-                    shipped_schema::capture().unwrap(),
                     shipped_schema::capture_project().unwrap(),
                 )
             }
@@ -1504,7 +1448,6 @@ mod file {
                 "root.yaml",
                 "project.yaml",
                 Language::Python,
-                shipped_schema::capture().unwrap(),
                 shipped_schema::capture_project().unwrap(),
             )
             .unwrap();

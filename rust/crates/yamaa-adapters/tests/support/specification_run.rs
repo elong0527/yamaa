@@ -5,13 +5,13 @@ use super::ports::NoFunctions;
 pub(crate) use std::{path::Path, sync::Arc};
 pub(crate) use yamaa_adapters::{
     csv_source,
-    specification_source::{CapturedSchema, PreparedDocument, Source},
+    specification_source::{PreparedDocument, Source},
     yaml_decode::decode_yaml,
 };
 use yamaa_core::application_observer::Scope;
 pub(crate) use yamaa_core::{
     expression::ErrorKind as EvaluationErrorKind,
-    schema::{Document, DocumentNode as N, SpecificationDocument},
+    schema::{Document, DocumentNode as N},
     table::{TableAccess, TableSchema},
     value::Value,
 };
@@ -66,98 +66,75 @@ pub(crate) fn sequence(d: &Document, id: usize) -> &[usize] {
     };
     value
 }
-pub(crate) fn schema(root: &Path) -> Arc<CapturedSchema> {
-    pub(crate) fn visit(root: &Path, name: &str, modules: &mut Vec<Source>) {
-        if modules.iter().any(|m| m.identity == name) {
-            return;
-        }
-        let d = decode_yaml(&std::fs::read(root.join(name)).unwrap())
-            .unwrap()
-            .document;
-        let children = d
-            .field(d.root(), "includes")
-            .map(|id| {
-                sequence(&d, id)
-                    .iter()
-                    .map(|&id| text(&d, id).to_owned())
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
-        modules.push(Source {
-            identity: name.into(),
-            bytes: std::fs::read(root.join(name)).unwrap(),
-        });
-        for child in children {
-            visit(root, &child, modules);
-        }
+/// A port that holds only the entry: every parent and dictionary it names
+/// is unavailable, and every path keeps the spelling its layer wrote.
+pub(crate) struct EntryOnly;
+impl yamaa_core::resolver::Resolver for EntryOnly {
+    type Error = ();
+    fn inspect(
+        &mut self,
+        _: yamaa_core::resolver::Name<'_>,
+    ) -> Result<yamaa_core::resolver::Located, ()> {
+        Err(())
     }
-    let mut modules = Vec::new();
-    visit(root, "schema.yaml", &mut modules);
-    CapturedSchema::admit(modules, 0).unwrap()
+    fn capture(
+        &mut self,
+        _: yamaa_core::resolver::Name<'_>,
+    ) -> Result<yamaa_core::resolver::Captured, ()> {
+        Err(())
+    }
+    fn failure(
+        &self,
+        _: yamaa_core::resolver::Name<'_>,
+        _: &(),
+    ) -> Option<yamaa_core::resolver::Failure> {
+        Some(yamaa_core::resolver::Failure::Resource(
+            yamaa_core::resource::ResourceFailure::Missing,
+        ))
+    }
+    fn rebase(
+        &mut self,
+        _: &yamaa_core::resolver::Located,
+        _: &yamaa_core::resolver::Located,
+        written: &str,
+    ) -> Result<String, ()> {
+        Ok(written.into())
+    }
 }
-/// A specification without parents, prepared in the language it is written
-/// in: a 0.5 file by `schema`, and a file that declares the 1.x header by the
-/// 1.0 closures the package ships (#3030 D76). The benchmarks these tests
-/// read move to 1.0 one prefix at a time (#3422).
-pub(crate) fn prepare(schema: &Arc<CapturedSchema>, source: &[u8]) -> PreparedDocument {
-    try_prepare(schema, source).unwrap_or_else(|error| panic!("{error}"))
+/// A specification without parents, prepared by the 1.0 closures the
+/// package ships (#3030 D76).
+pub(crate) fn prepare(source: &[u8]) -> PreparedDocument {
+    try_prepare(source).unwrap_or_else(|error| panic!("{error}"))
 }
 /// [`prepare`], or why the specification is refused.
-pub(crate) fn try_prepare(
-    schema: &Arc<CapturedSchema>,
-    source: &[u8],
-) -> Result<PreparedDocument, String> {
-    use yamaa_core::resolver::{Captured, Failure, Located, Name, Resolver};
-    use yamaa_core::resource::ResourceFailure;
-    /// A resolver that finds no parent: a standalone specification never asks.
-    struct Standalone;
-    impl Resolver for Standalone {
-        type Error = ();
-        fn inspect(&mut self, _: Name<'_>) -> Result<Located, ()> {
-            Err(())
-        }
-        fn capture(&mut self, _: Name<'_>) -> Result<Captured, ()> {
-            Err(())
-        }
-        fn failure(&self, _: Name<'_>, _: &()) -> Option<Failure> {
-            Some(Failure::Resource(ResourceFailure::Missing))
-        }
-        fn rebase(&mut self, _: &Located, _: &Located, written: &str) -> Result<String, ()> {
-            Ok(written.into())
-        }
-    }
+pub(crate) fn try_prepare(source: &[u8]) -> Result<PreparedDocument, String> {
     let source = Source {
         identity: "spec.yaml".into(),
         bytes: source.to_vec(),
     };
-    if crate::support::benchmarks::declares_header(&source.bytes) {
-        schema
-            .prepare_document(source, "spec.yaml".into(), &mut Standalone)
-            .map_err(|error| format!("{error:?}"))
-    } else {
-        schema
-            .prepare_standalone(source)
-            .map_err(|error| format!("{error:?}"))
+    yamaa_adapters::shipped_schema::prepare(source, "spec.yaml".into(), &mut EntryOnly)
+        .map_err(|error| refusal(&error))
+}
+/// The findings a refused preparation reports, or the refusal itself when it
+/// reports none.
+fn refusal(error: &yamaa_adapters::specification_source::InheritanceError<()>) -> String {
+    match yamaa_adapters::specification_diagnostics::inheritance_failure_ref(error) {
+        Ok(rejection) => format!("{:?}", rejection.into_issues()),
+        Err(_) => format!("{error:?}"),
     }
 }
 /// Compile a prepared specification without an environment or linked
-/// producers, in the language it is written in: a 0.5 model, or the tree a
-/// 1.x specification's front end lowered (#3030 D76).
+/// producers, from the tree its front end lowered (#3030 D76).
 pub(crate) fn compile(
     document: &PreparedDocument,
 ) -> Result<yamaa_core::specification::PreparedSpecification, yamaa_core::specification::PrepareError>
 {
-    use yamaa_adapters::specification_source::Compilation;
-    use yamaa_core::specification::PreparedSpecification;
-    match document.compilation() {
-        Compilation::Legacy(model) => PreparedSpecification::prepare(model),
-        Compilation::Versioned { tree, document } => PreparedSpecification::prepare_tree_linked(
-            tree.clone(),
-            document,
-            None,
-            Default::default(),
-        ),
-    }
+    yamaa_core::specification::PreparedSpecification::prepare_tree_linked(
+        document.tree().clone(),
+        document.document(),
+        None,
+        Default::default(),
+    )
 }
 pub(crate) fn lower(document: &PreparedDocument, source: &TableSchema) -> ResolvedPlan {
     compile(document).unwrap().bind(source).unwrap()
@@ -208,7 +185,6 @@ pub(crate) fn independent_failed_reports(
             panic!("an input is never rebased")
         }
     }
-    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
     let mut cases = 0;
     let mut findings = 0;
     // Converted fixtures are JSON rows; the remaining readable TSV fixtures
@@ -245,7 +221,7 @@ pub(crate) fn independent_failed_reports(
                 .collect()
         };
     for (case, source, expected, source_bytes) in &rows {
-        let run = PreparedRun::prepare(prepare(&schema, source.as_bytes())).unwrap();
+        let run = PreparedRun::prepare(prepare(source.as_bytes())).unwrap();
         let content = source_bytes.as_deref().unwrap_or(content);
         let mut port = Port(0, Arc::from(content));
         let attempt = run.execute_with_ports(&mut NoFunctions, &mut port, Scope::default());
@@ -322,7 +298,6 @@ pub(crate) fn independent_scalar_reports(fixture: &str, prefix: &str, expected_c
             panic!("an input is never rebased")
         }
     }
-    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
     let mut cases = 0;
     for row in fixture_rows(fixture) {
         let mut port = Port {
@@ -330,8 +305,7 @@ pub(crate) fn independent_scalar_reports(fixture: &str, prefix: &str, expected_c
             expected: fixture_bytes(&row["output"]),
         };
         let run =
-            PreparedRun::prepare(prepare(&schema, row["source"].as_str().unwrap().as_bytes()))
-                .unwrap();
+            PreparedRun::prepare(prepare(row["source"].as_str().unwrap().as_bytes())).unwrap();
         let attempt = run.execute_with_ports(&mut NoFunctions, &mut port, Scope::default());
         let example = format!("{prefix}-{}", row["case"].as_str().unwrap());
         let result = specification_report::build_result(
@@ -420,12 +394,11 @@ pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: us
             panic!("an input is never rebased")
         }
     }
-    let schema = yamaa_adapters::shipped_schema::capture().unwrap();
     let mut count = 0;
     for row in fixture_rows(truth) {
         let case = row["case"].as_str().unwrap();
         let raw = fixture_bytes(&row["source"]);
-        let run = PreparedRun::prepare(prepare(&schema, &raw)).unwrap();
+        let run = PreparedRun::prepare(prepare(&raw)).unwrap();
         let mut port = Port {
             content: fixture_bytes(&row["input"]).into(),
             reads: 0,
@@ -508,4 +481,13 @@ pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: us
         count += 1;
     }
     assert_eq!(count, cases);
+}
+/// [`prepare`], for a specification the port names `identity`.
+pub(crate) fn prepare_as(identity: &str, source: &[u8]) -> PreparedDocument {
+    let source = Source {
+        identity: identity.into(),
+        bytes: source.to_vec(),
+    };
+    yamaa_adapters::shipped_schema::prepare(source, identity.into(), &mut EntryOnly)
+        .unwrap_or_else(|error| panic!("{}", refusal(&error)))
 }

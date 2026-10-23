@@ -2,8 +2,7 @@
 //!
 //! A node's path is a chain of segments in its spec's [`Paths`] arena: a
 //! mapping field, a keyed mapping entry, a list index, or a list member with
-//! an identity. The renderer writes a chain in either notation, so a
-//! notation change is one switch here instead of a spelling at every site.
+//! an identity. The renderer writes a chain in the notation of P-CLR-2.
 
 /// A node's spec path: an index into its spec's [`Paths`] arena.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -22,19 +21,6 @@ pub enum Segment {
     /// An entry of a list whose entries have an identity: a column by
     /// `name`, a row template, an intermediate or a value-level entry by `id`.
     Member { index: u32, key: String },
-}
-
-/// The notation a path is written in.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Notation {
-    /// Today's diagnostic paths: columns and value-level entries by
-    /// identity, row templates and intermediates by position
-    /// (`columns.AVAL`, `rows[0]`, `intermediates[1]`).
-    V0_5,
-    /// The 1.0 paths of P-CLR-2: every list member with an identity by
-    /// that identity, and a segment that is not a plain name quoted
-    /// (`rows.week-2`, `dict['NOT REPORTED']`).
-    V1,
 }
 
 /// The path arena of one spec. Entry 0 is the root, written `$`.
@@ -86,8 +72,10 @@ impl Paths {
     pub fn is_empty(&self) -> bool {
         self.nodes.len() == 1
     }
-    /// Write a path in `notation`; the root alone is `$`.
-    pub fn render(&self, path: PathId, notation: Notation) -> String {
+    /// Write a path in the notation of P-CLR-2: every list member with an
+    /// identity by that identity, and a key that is not a plain name quoted
+    /// (`rows.week-2`, `dict['NOT REPORTED']`); the root alone is `$`.
+    pub fn render(&self, path: PathId) -> String {
         let mut chain = Vec::new();
         let mut at = Some(path);
         while let Some(id) = at {
@@ -99,33 +87,21 @@ impl Paths {
             return "$".into();
         }
         let mut text = String::new();
-        let mut parent = None;
         for &id in chain.iter().rev() {
             match self.segment(id) {
                 Segment::Field(name) => name_segment(&mut text, name, false),
-                Segment::Key(key) => name_segment(&mut text, key, notation == Notation::V1),
-                Segment::Index(index) => text.push_str(&format!("[{index}]")),
-                Segment::Member { index, key } => {
-                    let by_identity = notation == Notation::V1
-                        || matches!(
-                            parent.map(|parent| self.segment(parent)),
-                            Some(Segment::Field("columns" | "value_level"))
-                        );
-                    if by_identity {
-                        name_segment(&mut text, key, notation == Notation::V1);
-                    } else {
-                        text.push_str(&format!("[{index}]"));
-                    }
+                Segment::Key(key) | Segment::Member { key, .. } => {
+                    name_segment(&mut text, key, true)
                 }
+                Segment::Index(index) => text.push_str(&format!("[{index}]")),
             }
-            parent = Some(id);
         }
         text
     }
 }
 
-/// Append `.name`, or `name` first; in 1.0 a segment outside the plain-name
-/// alphabet of P-CLR-1 is written `['...']`, doubling each quote.
+/// Append `.name`, or `name` first; with `quote`, a segment outside the
+/// plain-name alphabet of P-CLR-1 is written `['...']`, doubling each quote.
 fn name_segment(text: &mut String, name: &str, quote: bool) {
     let plain = !name.is_empty()
         && name
@@ -161,48 +137,32 @@ mod tests {
     #[test]
     fn the_root_is_written_as_a_dollar() {
         let paths = Paths::new();
-        assert_eq!(paths.render(paths.root(), Notation::V0_5), "$");
-        assert_eq!(paths.render(paths.root(), Notation::V1), "$");
+        assert_eq!(paths.render(paths.root()), "$");
         assert!(paths.is_empty());
     }
 
     #[test]
-    fn today_columns_are_named_and_rows_and_intermediates_are_indexed() {
+    fn every_member_with_an_identity_is_written_by_that_identity() {
+        // P-CLR-2: a column by its `name`, a row template and an
+        // intermediate by their `id`; a list without identity by position.
         let mut paths = Paths::new();
         let column = member(&mut paths, "columns", 3, "AVAL");
         let derivation = paths.child(column, Segment::Field("derivation"));
-        let compute = paths.child(derivation, Segment::Field("compute"));
-        let expr = paths.child(compute, Segment::Field("expr"));
-        assert_eq!(
-            paths.render(expr, Notation::V0_5),
-            "columns.AVAL.derivation.compute.expr"
-        );
+        let aggregate = paths.child(derivation, Segment::Key("aggregate".into()));
+        let expr = paths.child(aggregate, Segment::Field("expr"));
+        assert_eq!(paths.render(expr), "columns.AVAL.derivation.aggregate.expr");
         let row = member(&mut paths, "rows", 1, "week-2");
         let derivations = paths.child(row, Segment::Field("derivations"));
         let entry = paths.child(derivations, Segment::Key("AVAL".into()));
-        assert_eq!(
-            paths.render(entry, Notation::V0_5),
-            "rows[1].derivations.AVAL"
-        );
-        assert_eq!(
-            paths.render(entry, Notation::V1),
-            "rows.week-2.derivations.AVAL"
-        );
+        assert_eq!(paths.render(entry), "rows.week-2.derivations.AVAL");
         let intermediate = member(&mut paths, "intermediates", 0, "DEATH");
         let key = paths.child(intermediate, Segment::Field("key"));
         let position = paths.child(key, Segment::Index(2));
-        assert_eq!(
-            paths.render(position, Notation::V0_5),
-            "intermediates[0].key[2]"
-        );
-        assert_eq!(
-            paths.render(position, Notation::V1),
-            "intermediates.DEATH.key[2]"
-        );
+        assert_eq!(paths.render(position), "intermediates.DEATH.key[2]");
     }
 
     #[test]
-    fn value_level_entries_are_named_in_both_notations() {
+    fn value_level_entries_are_written_by_their_identity() {
         let mut paths = Paths::new();
         let column = member(&mut paths, "columns", 0, "AVAL");
         let submission = paths.child(column, Segment::Field("submission"));
@@ -216,13 +176,14 @@ mod tests {
         );
         let clause = paths.child(entry, Segment::Field("where"));
         let column = paths.child(clause, Segment::Key("VSTESTCD".into()));
-        let expected = "columns.AVAL.submission.value_level.SYSBP.where.VSTESTCD";
-        assert_eq!(paths.render(column, Notation::V0_5), expected);
-        assert_eq!(paths.render(column, Notation::V1), expected);
+        assert_eq!(
+            paths.render(column),
+            "columns.AVAL.submission.value_level.SYSBP.where.VSTESTCD"
+        );
     }
 
     #[test]
-    fn only_the_1_0_notation_quotes_keys_outside_the_plain_alphabet() {
+    fn keys_outside_the_plain_alphabet_are_quoted() {
         let mut paths = Paths::new();
         let column = member(&mut paths, "columns", 0, "RACEN");
         let mapping = paths.child(column, Segment::Field("mapping"));
@@ -230,15 +191,11 @@ mod tests {
         let entry = paths.child(dict, Segment::Key("NOT REPORTED".into()));
         let quote = paths.child(dict, Segment::Key("O'BRIEN".into()));
         assert_eq!(
-            paths.render(entry, Notation::V0_5),
-            "columns.RACEN.mapping.dict.NOT REPORTED"
-        );
-        assert_eq!(
-            paths.render(entry, Notation::V1),
+            paths.render(entry),
             "columns.RACEN.mapping.dict['NOT REPORTED']"
         );
         assert_eq!(
-            paths.render(quote, Notation::V1),
+            paths.render(quote),
             "columns.RACEN.mapping.dict['O''BRIEN']"
         );
         assert_eq!(paths.parent(entry), Some(dict));

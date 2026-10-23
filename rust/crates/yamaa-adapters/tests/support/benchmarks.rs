@@ -61,15 +61,6 @@ pub fn converted(name: &str) -> String {
     std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()))
 }
 
-/// The file `file` of the benchmark `name` as 0.5 wrote it, from
-/// `tests/fixtures/legacy/`, for a test of 0.5-only behaviour. The copies go
-/// when the engine stops reading 0.5 specifications.
-pub fn legacy(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/legacy")
-        .join(name)
-}
-
 /// What the negative benchmark `name` states in its `expected/error.yaml`.
 pub fn error(name: &str) -> Value {
     yaml(&path(name).join("expected/error.yaml"))

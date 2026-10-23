@@ -30,13 +30,6 @@ pub enum InheritanceFinding<'a> {
         path: &'a [String],
         returns_to_entry: bool,
     },
-    Version {
-        source: &'a str,
-        entry: &'a str,
-        expected: &'a str,
-        actual: &'a str,
-        is_entry: bool,
-    },
     /// A layer declares a language version the engine does not read (SCHEMA-2,
     /// LAYER-4): reported at the entry's `yamaa`, or at the `parent` naming it.
     LanguageVersion {
@@ -110,25 +103,6 @@ impl InheritanceFinding<'_> {
                 );
                 context.insert("source".into(), text(&path[path.len() - 2]));
                 (C::InheritanceCycle, "parent")
-            }
-            Self::Version {
-                source,
-                entry,
-                expected,
-                actual,
-                is_entry,
-            } => {
-                context.insert("source".into(), text(source));
-                context.insert("entry".into(), text(entry));
-                if is_entry {
-                    context.insert("expected".into(), text(expected));
-                    context.insert("actual".into(), text(actual));
-                    (C::InheritanceEntryVersion, "schema_version")
-                } else {
-                    context.insert("entry_version".into(), text(expected));
-                    context.insert("parent_version".into(), text(actual));
-                    (C::InheritanceParentVersion, "parent")
-                }
             }
             Self::LanguageVersion {
                 source,

@@ -6,8 +6,7 @@
 //! compose, YAML null is the missing value and never removes anything, a
 //! finding names row templates and intermediates by `id`, and the resolved
 //! specification keeps the provenance of every value. The converted
-//! `schema-inheritance-clear` and `negative-property-clear` resolve as their
-//! 0.5 sources do.
+//! `negative-property-clear` fails where its 0.5 source did.
 mod declaration {
     mod layer_composition {
         use crate::support::Edit as _;
@@ -29,17 +28,6 @@ mod declaration {
         use yamaa_core::resolver::{Captured, Failure, Name, Resolver};
         use yamaa_core::resource::ResourceFailure;
         use yamaa_core::schema::{NormalizationError, SchemaContext as C, SchemaDiagnostic};
-
-        fn repository() -> PathBuf {
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
-        }
-
-        /// A repository file's identity as the engine reports it.
-        fn repository_file(name: &str) -> String {
-            identity(
-                &yamaa_adapters::canonical_path::canonicalize(repository().join(name)).unwrap(),
-            )
-        }
 
         struct Study(crate::support::Scratch);
         impl Study {
@@ -684,8 +672,7 @@ columns:
             let spec = study.path("study/spec.yaml");
             // The entry records the chain's version, and its model is the
             // resolved specification, without `parent` or `clear`.
-            assert_eq!(entry.language_version.as_deref(), Some("1.0"));
-            assert_eq!(entry.schema_version, None);
+            assert_eq!(entry.language_version, "1.0");
             assert_eq!(entry.layers, [base.clone(), spec.clone()]);
             assert_eq!(entry.specification, resolved(&prepared));
             let origin = |pointer: &str| {
@@ -765,31 +752,81 @@ columns:
             assert_eq!(ResolvedArtifact::from_json(&json).unwrap(), artifact);
         }
 
+        /// A parent whose `PREV` reads the previous `VAL` in the window
+        /// `VISITS`, and whose `RANK` numbers the rows in the window `OTHER`.
+        const WINDOWED: &str = r#"yamaa: "1.0"
+type: spec
+domain: OUT
+keys: [ID]
+input: {SRC: {path: input.csv, types: {SEQ: int, VAL: int}}}
+windows:
+  VISITS: {group_by: [G], order_by: [SEQ]}
+  OTHER: {group_by: [G], order_by: [VAL]}
+columns:
+  - {name: ID, type: str, derivation: SRC.ID}
+  - {name: G, type: str, derivation: SRC.G}
+  - {name: SEQ, type: int, derivation: SRC.SEQ}
+  - {name: VAL, type: int, derivation: SRC.VAL}
+  - {name: PREV, type: int, derivation: {row_value: {source: VAL, offset: -1, window: VISITS}}}
+  - {name: RANK, type: int, derivation: {row_number: {window: OTHER}}}
+output: {path: out.csv, columns: [ID, PREV, RANK]}
+"#;
+
+        /// A later definition of an inherited window merges with it by name,
+        /// keeping the settings it does not write and the other inherited
+        /// windows, and the inherited reference reads the composed definition
+        /// (LAYER-8, LAYER-6).
+        #[test]
+        fn a_named_window_composes_by_name_and_every_reference_uses_the_final_definition() {
+            let study = Study::new();
+            study.write("input.csv", "ID,G,SEQ,VAL\na,X,1,10\nb,X,,20\nc,X,2,30\n");
+            study.write("base.yaml", WINDOWED);
+            study.write(
+                "spec.yaml",
+                "yamaa: \"1.0\"\ntype: spec\nparent: base.yaml\nwindows:\n  VISITS:\n    order_by: [{variable: SEQ, nulls: first}]\n",
+            );
+            // The resolved specification holds each reference's composed
+            // definition inline (WINDOW-2).
+            let spec = resolved(&prepare(&study.path("spec.yaml")).unwrap());
+            let previous = "/columns/4/derivation/value/row_value/window";
+            let rank = "/columns/5/derivation/value/row_number/window";
+            for (pointer, expected) in [
+                (format!("{previous}/group_by"), r#"["G"]"#),
+                (format!("{previous}/order_by/0/variable"), r#""SEQ""#),
+                (format!("{previous}/order_by/0/nulls"), r#""first""#),
+                (format!("{rank}/order_by/0/variable"), r#""VAL""#),
+            ] {
+                assert_eq!(at(&spec, &pointer), &json(expected), "{pointer}");
+            }
+            let path = study.path("spec.yaml");
+            let mut domain = crate::support::study::domain(
+                Language::Python,
+                Request {
+                    specification: &path,
+                    environment: None,
+                },
+                crate::support::study::identity("named-window", &path),
+            )
+            .unwrap();
+            assert!(domain.issues().is_empty(), "{:?}", domain.issues());
+            assert!(domain.save().unwrap());
+            // VISITS orders the missing SEQ first, so its rows run b, a, c:
+            // a reads b's VAL and c reads a's, while OTHER still numbers the
+            // rows by VAL.
+            assert_eq!(
+                fs::read_to_string(study.0.join("out.csv")).unwrap(),
+                "ID,PREV,RANK\na,20,1\nb,,2\nc,10,3\n"
+            );
+        }
+
         /// The converted `negative-property-clear`, as the converter wrote it.
         const CONVERTED_PARENT: &str = "yamaa: \"1.0\"\ntype: spec\ninput:\n  DM: ../input/dm.csv\nbase: DM\n\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n";
         const CONVERTED_ENTRY: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\nparent: layers/parent.yaml\nclear:\n  # null clears the type inherited from layers/parent.yaml, but a column\n  # must have a type, so it cannot be cleared.\n  - columns.USUBJID.type\ndomain: ADSL\nkeys: [USUBJID]\n\noutput:\n  path: adsl.csv\n  columns: [USUBJID]\n";
 
         #[test]
         fn the_converted_negative_property_clear_fails_as_its_source_at_clear_0() {
-            // The 0.5 source, frozen as it was written before the benchmark
-            // moved to 1.0, checked as a public call checks it.
-            let source = repository_file(
-                "rust/crates/yamaa-adapters/tests/fixtures/legacy/negative-property-clear/spec.yaml",
-            );
-            let issues = yamaa_adapters::file_application::check(
-                Language::Python,
-                Request {
-                    specification: &source,
-                    environment: None,
-                },
-                crate::support::study::identity("test", &source),
-            );
-            let [legacy] = issues.as_slice() else {
-                panic!("one issue: {issues:?}");
-            };
-            assert_eq!(legacy.spec_paths, ["columns.USUBJID.type"]);
-            // The conversion fails with the same condition, rule and context,
-            // at the clear entry the null became.
+            // The converted benchmark fails at the clear entry the 0.5 null
+            // became: a column must have a type (LAYER-9).
             let study = Study::new();
             study.write("input/dm.csv", "USUBJID\n01\n");
             study.write("layers/parent.yaml", CONVERTED_PARENT);
@@ -800,104 +837,8 @@ columns:
             let definition = ConditionCode::SchemaLayerInvalidClear.definition();
             assert_eq!(
                 (definition.phase, definition.condition, definition.rule),
-                (legacy.phase(), legacy.condition(), legacy.rule())
+                ("validation", "invalid_clear", Some("LAYER-9"))
             );
-            // The 0.5 issue names the same field; the public projection adds
-            // the layer it is in, which is the entry in both.
-            assert_eq!(legacy.context["field"], json(r#""type""#));
-            assert_eq!(legacy.context["source"], Value::String(source.clone()));
-        }
-
-        #[test]
-        fn the_converted_schema_inheritance_clear_resolves_as_its_source() {
-            // The 0.5 source, frozen as it was written before the benchmark
-            // moved to 1.0.
-            let source = repository_file(
-                "rust/crates/yamaa-adapters/tests/fixtures/legacy/schema-inheritance-clear/spec_study.yaml",
-            );
-            let artifact =
-                resolved_artifact::resolve(&source, None, Some(Language::Python), None).unwrap();
-            let legacy = &artifact.entries()[0].specification;
-            // The converter's output for the benchmark: its YAML values are
-            // the example's, as the converter's tests checked.
-            let entry = repository_file(
-                "docs/design/interface-1.0/examples/schema-inheritance-clear/spec_study.yaml",
-            );
-            let prepared = prepare(&entry).unwrap();
-            let spec = resolved(&prepared);
-            // Every field but the header resolves to the same value, the
-            // cleared PD entry gone and the other three translations kept.
-            for pointer in [
-                "/base",
-                "/domain",
-                "/input",
-                "/keys",
-                "/metadata",
-                "/output",
-                "/columns/1",
-                "/columns/0/name",
-                "/columns/0/type",
-                "/columns/0/label",
-            ] {
-                assert_eq!(at(&spec, pointer), at(legacy, pointer), "{pointer}");
-            }
-            assert_eq!(
-                at(&spec, "/columns/1/derivation/value/mapping/dict")
-                    .as_object()
-                    .unwrap()
-                    .keys()
-                    .collect::<Vec<_>>(),
-                ["AE", "LTFU", "WBS"]
-            );
-            // The bare reference stays text until the 1.0 front end lowers
-            // it to the source binding 0.5 writes.
-            assert_eq!(
-                at(legacy, "/columns/0/derivation/value/source/variable"),
-                &json(r#""DS.USUBJID""#)
-            );
-            assert_eq!(
-                at(&spec, "/columns/0/derivation/value"),
-                &json(r#""DS.USUBJID""#)
-            );
-            // The header: `schema_version` becomes `yamaa` and `type`, and
-            // the converter writes the entry's `model`.
-            assert_eq!(at(legacy, "/schema_version"), &json(r#""1.0""#));
-            let header = spec.as_object().unwrap();
-            assert_eq!(
-                (&header["yamaa"], &header["type"], &header["model"]),
-                (&json(r#""1.0""#), &json(r#""spec""#), &json(r#""ADaM""#))
-            );
-            assert_eq!(
-                spec.as_object().unwrap().len(),
-                legacy.as_object().unwrap().len() + 2
-            );
-            // Each value keeps the layer that wrote it, as in 0.5.
-            let file = |identity: &str| identity.rsplit('/').next().unwrap().to_string();
-            let legacy_origins = &artifact.entries()[0].origins;
-            for (path, pointer, layer) in [
-                (
-                    "columns.DCSREAS.derivation.mapping.dict.AE",
-                    "/columns/1/derivation/value/mapping/dict/AE",
-                    "spec_organization.yaml",
-                ),
-                ("metadata.scope", "/metadata/scope", "spec_study.yaml"),
-                ("domain", "/domain", "spec_study.yaml"),
-            ] {
-                assert_eq!(
-                    prepared.declaring_source(path).map(file).as_deref(),
-                    Some(layer),
-                    "{path}"
-                );
-                assert_eq!(
-                    legacy_origins[pointer]
-                        .declaring_source
-                        .as_deref()
-                        .map(file)
-                        .as_deref(),
-                    Some(layer),
-                    "{pointer}"
-                );
-            }
         }
     }
 }

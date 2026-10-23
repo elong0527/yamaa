@@ -221,43 +221,6 @@
       },
       "csv": "ID,VALUE\na,-9223372036854775808\nbackup-b,20\nbackup-c,30\nFINAL,9223372036854775807\n"
     },
-    "absent-key-full-int64": {
-      "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: input.csv\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: {source: {variable: SRC.ABSENT, absent: -9223372036854775808}}}\n  - {name: VALUE, type: str, derivation: SRC.V}\n",
-      "inputs": {
-        "input.csv": "V\nconstant\nconstant\n"
-      },
-      "issues": [],
-      "check_issues": [],
-      "handlers": [
-        {
-          "spec_path": "columns.ID.derivation.source.absent",
-          "handler": "absent",
-          "count": 2
-        }
-      ],
-      "source_reads": [
-        "input.csv"
-      ],
-      "table": {
-        "columns": [
-          [
-            "ID",
-            "int"
-          ],
-          [
-            "VALUE",
-            "str"
-          ]
-        ],
-        "rows": [
-          [
-            "-9223372036854775808",
-            "constant"
-          ]
-        ]
-      },
-      "csv": "ID,VALUE\n-9223372036854775808,constant\n"
-    },
     "key-first-available-earlier": {
       "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID, K]\ninput:\n  SRC: input.csv\noutput: {path: result.csv, columns: [ID, K, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: K, type: str, derivation: {first_available: {sources: [ID, SRC.OTHER]}}}\n  - {name: VALUE, type: int, derivation: SRC.V}\n",
       "inputs": {

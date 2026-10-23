@@ -290,7 +290,7 @@ pub fn codelists(
 #[cfg(test)]
 pub(in crate::front_end) mod tests {
     use super::*;
-    use crate::ast::{CodelistSource, DefineContext, GuideStatus, Notation, Transport};
+    use crate::ast::{CodelistSource, DefineContext, GuideStatus, Transport};
     use crate::test_document::Tree;
     use crate::value::Value;
 
@@ -445,7 +445,7 @@ pub(in crate::front_end) mod tests {
             ],
         );
         let project = project(&tree.document(), None).unwrap();
-        let path = |meta: Meta| project.paths.render(meta.path, Notation::V0_5);
+        let path = |meta: Meta| project.paths.render(meta.path);
         assert_eq!(project.header.surface, Surface::V1 { minor: 0 });
         assert_eq!(project.header.version.text, "1.0");
         assert_eq!(path(project.header.meta), "yamaa");
@@ -665,7 +665,7 @@ pub(in crate::front_end) mod tests {
             Tree::text("2024-03-01"),
         );
         let function = function(&tree.document(), None).unwrap();
-        let path = |meta: Meta| function.paths.render(meta.path, Notation::V0_5);
+        let path = |meta: Meta| function.paths.render(meta.path);
         let header = function.header.as_ref().unwrap();
         assert_eq!(header.surface, Surface::V1 { minor: 0 });
         assert_eq!(function.name.name, "shift");
@@ -753,7 +753,7 @@ pub(in crate::front_end) mod tests {
         )
         .unwrap();
         let header = file.header.as_ref().unwrap();
-        assert_eq!(file.paths.render(header.meta.path, Notation::V0_5), "yamaa");
+        assert_eq!(file.paths.render(header.meta.path), "yamaa");
         assert_eq!(
             file.standard
                 .as_ref()
@@ -763,9 +763,6 @@ pub(in crate::front_end) mod tests {
         assert_eq!(file.codelists.len(), 1);
         let item = &file.codelists[0].items.as_ref().unwrap()[0];
         assert_eq!(item.value, Value::Str("F".into()));
-        assert_eq!(
-            file.paths.render(item.meta.path, Notation::V0_5),
-            "codelists[0].items[0]"
-        );
+        assert_eq!(file.paths.render(item.meta.path), "codelists[0].items[0]");
     }
 }

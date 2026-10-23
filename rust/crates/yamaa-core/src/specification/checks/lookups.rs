@@ -57,7 +57,7 @@ pub(in crate::specification) fn driver_prohibited(
     spec: &Spec,
     item: &ast::Intermediate,
 ) -> Vec<&'static str> {
-    // The absence answer as its surface spells it: `no_match` in 0.5.
+    // The absence answer, written `absent`.
     let answer = item
         .absent
         .as_ref()
@@ -79,15 +79,11 @@ pub(in crate::specification) fn driver_prohibited(
 
 /// Without a relation change or `require_match`, an intermediate whose
 /// absence answer is missing, by default or written as missing, reads what
-/// the implicit join reads (LOOKUP-4): in 0.5 one that writes no `key`, in
-/// 1.0 one whose `key` lists its input's declared key (D71). A written field
-/// changes the relation even when it is empty, such as `derivations: {}`.
+/// the implicit join reads (LOOKUP-4): one whose `key` lists its input's
+/// declared key (D71). A written field changes the relation even when it is
+/// empty, such as `derivations: {}`.
 fn rename_only(spec: &Spec, item: &ast::Intermediate) -> bool {
-    let joins_as_input = if spec.header.surface.infers_join_keys() {
-        !item.written.contains("key")
-    } else {
-        spec.keys_as_input(item)
-    };
+    let joins_as_input = spec.keys_as_input(item);
     let changes_relation = [
         "between",
         "filter",
@@ -189,8 +185,8 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
             findings.push(PreflightFinding::Scalar(finding.diagnostic()));
         }
         // Asserting a match and answering its absence are two absence policies.
-        // A 0.5 absence answer written null states no policy; a 1.0 null is the
-        // missing value it answers (D18), which the lowering records written.
+        // A null answer is the missing value it answers (D18), which the
+        // lowering records written.
         let answer = item.absent.as_ref().filter(|answer| {
             matches!(spec.paths.segment(answer.meta.path),
                 ast::Segment::Field(field) if item.written.contains(field))

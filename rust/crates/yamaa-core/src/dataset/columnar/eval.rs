@@ -201,8 +201,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         Ok(values)
     }
 
-    /// A source binding: an absent variable answers its declared literal and
-    /// counts it; otherwise the bound read.
+    /// A source binding evaluates its bound read.
     fn source_binding(
         &mut self,
         cx: &Cx<'_, E>,
@@ -210,22 +209,6 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         rows: &[usize],
         retained: bool,
     ) -> Result<Values, Fail<E>> {
-        let Op::SourceBinding {
-            absent,
-            variable_absent,
-            path,
-            ..
-        } = &self.plan.expr(expr).op
-        else {
-            unreachable!("a source binding node holds its binding")
-        };
-        if *variable_absent {
-            let absent = absent.as_ref().expect("admitted absence handler");
-            for _ in rows {
-                self.fire_node(expr, HandlerKind::Absent, || format!("{path}.absent"))?;
-            }
-            return Ok(Values::repeat(ValueRef::from(absent), rows.len()));
-        }
         let operand = self.operand(expr, OperandRole::Value, 0);
         self.eval(cx, operand, rows, retained)
     }

@@ -144,32 +144,17 @@ fn check_reports_each_row_phase_boundary_as_domain_does() {
     }
 }
 
-/// The two spellings of one specification.
-#[derive(Clone, Copy, Debug)]
-enum Spelling {
-    V0_5,
-    V1_0,
-}
-
-/// A dosing specification in `spelling` whose one row template, `dosed`,
+/// A dosing specification whose one row template, `dosed`,
 /// reads EX with the further `fields` and derives `derivations`. TOTAL's
 /// default holds an aggregate only in a `case` result, and FIRSTSEQ's reads
 /// the SELF intermediate FIRST.
-fn dosing(spelling: Spelling, fields: &str, derivations: &str) -> String {
-    // 1.0 declares the key that EX's keyless aggregate matches on (D63).
-    let (header, key, zero) = match spelling {
-        Spelling::V0_5 => ("schema_version: \"1.0\"\n", "", "{literal: 0.0}"),
-        Spelling::V1_0 => (
-            "yamaa: \"1.0\"\ntype: spec\n",
-            ", key: [STUDYID, USUBJID]",
-            "0.0",
-        ),
-    };
+fn dosing(fields: &str, derivations: &str) -> String {
+    // EX declares the key its keyless aggregate matches on (D63).
     format!(
-        "{header}domain: ADEX\n\
+        "yamaa: \"1.0\"\ntype: spec\ndomain: ADEX\n\
          keys: [STUDYID, USUBJID, ASEQ]\n\
          input:\n\
-         \x20 EX: {{path: ex.csv, types: {{EXSEQ: int, EXDOSE: float}}{key}}}\n\
+         \x20 EX: {{path: ex.csv, types: {{EXSEQ: int, EXDOSE: float}}, key: [STUDYID, USUBJID]}}\n\
          intermediates:\n\
          \x20 - {{id: FIRST, dataset: SELF, key: [STUDYID, USUBJID], order_by: [SELF.ASEQ], keep: first}}\n\
          output: {{path: out.csv, columns: [STUDYID, USUBJID, ASEQ, TOTAL, FIRSTSEQ, SHARE]}}\n\
@@ -179,7 +164,7 @@ fn dosing(spelling: Spelling, fields: &str, derivations: &str) -> String {
          \x20 - {{name: ASEQ, type: int, derivation: EX.EXSEQ}}\n\
          \x20 - name: TOTAL\n\
          \x20   type: float\n\
-         \x20   derivation: {{case: [{{when: \"ASEQ > 0\", then: {{aggregate: \"SUM(EX.EXDOSE)\"}}}}, {{otherwise: {zero}}}]}}\n\
+         \x20   derivation: {{case: [{{when: \"ASEQ > 0\", then: {{aggregate: \"SUM(EX.EXDOSE)\"}}}}, {{otherwise: 0.0}}]}}\n\
          \x20 - {{name: FIRSTSEQ, type: int, derivation: FIRST.ASEQ}}\n\
          \x20 - {{name: SHARE, type: float}}\n\
          rows:\n\
@@ -192,7 +177,6 @@ fn dosing(spelling: Spelling, fields: &str, derivations: &str) -> String {
 
 #[test]
 fn an_aggregate_in_a_case_result_is_not_row_local_in_either_spelling() {
-    use Spelling::{V0_5, V1_0};
     // An aggregate makes its default not row local wherever it is written,
     // the whole derivation or a `case` result, as a window does (SPEC-6,
     // #3030 D132), and a template that reads the default no longer
@@ -221,16 +205,9 @@ fn an_aggregate_in_a_case_result_is_not_row_local_in_either_spelling() {
         })
     };
     let grouped = "\x20   group_by: [EX.STUDYID, EX.USUBJID, EX.EXSEQ]\n";
-    for (spelling, fields, derivations, expected) in [
+    for (fields, derivations, expected) in [
         // Naming TOTAL no longer replaces its default.
         (
-            V0_5,
-            "",
-            "SHARE: {literal: 1.0}, TOTAL: {literal: 7.0}",
-            duplicate("TOTAL", "aggregate"),
-        ),
-        (
-            V1_0,
             "",
             "SHARE: 1.0, TOTAL: 7.0",
             duplicate("TOTAL", "aggregate"),
@@ -239,13 +216,6 @@ fn an_aggregate_in_a_case_result_is_not_row_local_in_either_spelling() {
         // default in the template, where an ungrouped template has no
         // aggregate context (LOOKUP-18) ...
         (
-            V0_5,
-            "",
-            "SHARE: {compute: {expr: \"EX.EXDOSE / TOTAL\"}}",
-            boundary("rows[0].derivations.SHARE.compute.expr"),
-        ),
-        (
-            V1_0,
             "",
             "SHARE: \"EX.EXDOSE / TOTAL\"",
             boundary("rows.dosed.derivations.SHARE"),
@@ -253,32 +223,18 @@ fn an_aggregate_in_a_case_result_is_not_row_local_in_either_spelling() {
         // ... and a grouped one reduced over its own group, not over EX's
         // records for the subject.
         (
-            V0_5,
-            grouped,
-            "SHARE: {compute: {expr: \"TOTAL / 2\"}}",
-            boundary("rows[0].derivations.SHARE.compute.expr"),
-        ),
-        (
-            V1_0,
             grouped,
             "SHARE: \"TOTAL / 2\"",
             boundary("rows.dosed.derivations.SHARE"),
         ),
         // A default that reads a SELF intermediate names it as the reason.
         (
-            V0_5,
-            "",
-            "SHARE: {literal: 1.0}, FIRSTSEQ: {literal: 0}",
-            duplicate("FIRSTSEQ", "self_intermediate"),
-        ),
-        (
-            V1_0,
             "",
             "SHARE: 1.0, FIRSTSEQ: 0",
             duplicate("FIRSTSEQ", "self_intermediate"),
         ),
     ] {
-        let fixture = Fixture::new(&dosing(spelling, fields, derivations));
+        let fixture = Fixture::new(&dosing(fields, derivations));
         fs::write(
             fixture.0.join("ex.csv"),
             "STUDYID,USUBJID,EXSEQ,EXDOSE\nS,S-1,1,10\nS,S-1,2,20\nS,S-2,1,5\n",
@@ -292,7 +248,7 @@ fn an_aggregate_in_a_case_result_is_not_row_local_in_either_spelling() {
         };
         for host in [Language::Python, Language::R] {
             let (checked, built) = fixture.diagnostics(host);
-            let case = format!("{spelling:?} {derivations} ({host:?})");
+            let case = format!("{derivations} ({host:?})");
             assert_eq!(
                 json(checked),
                 std::slice::from_ref(&expected),

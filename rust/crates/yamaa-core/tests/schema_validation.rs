@@ -18,21 +18,11 @@ mod schema {
         fn field(name: &'static str, kind: &'static str) -> V {
             V::map(vec![(name, descriptor(kind))])
         }
-        fn bundle(fields: Vec<V>, declarations: Vec<(&'static str, V)>) -> SchemaStructure {
-            bundle_headed("schema_version", fields, declarations)
-        }
         /// A root class headed by the 1.x `yamaa`, which a complete 1.x
         /// document is normalized against by `normalize_root` once its
         /// header is read (SCHEMA-2).
-        fn bundle_v1(fields: Vec<V>, declarations: Vec<(&'static str, V)>) -> SchemaStructure {
-            bundle_headed("yamaa", fields, declarations)
-        }
-        fn bundle_headed(
-            header: &'static str,
-            fields: Vec<V>,
-            declarations: Vec<(&'static str, V)>,
-        ) -> SchemaStructure {
-            let mut fields_with_version = vec![field(header, "str")];
+        fn bundle(fields: Vec<V>, declarations: Vec<(&'static str, V)>) -> SchemaStructure {
+            let mut fields_with_version = vec![field("yamaa", "str")];
             fields_with_version.extend(fields);
             let mut entries = vec![
                 ("version", V::text("1.0")),
@@ -52,7 +42,7 @@ mod schema {
 
         #[test]
         fn invalid_default_preparation_never_bypasses_normalization_admission() {
-            let mut schema = bundle_v1(
+            let mut schema = bundle(
                 vec![V::map(vec![(
                     "value",
                     V::map(vec![("type", V::text("str")), ("default", V::integer("2"))]),
@@ -128,67 +118,9 @@ mod schema {
             );
         }
 
-        /// 0.5 only (#3447): `validate_document` checks `schema_version`
-        /// against the bundle's version before any field, as SCHEMA-2
-        /// states for a 0.5 file. A 1.x header is read before any schema
-        /// (SCHEMA-2), and the class order of a complete 1.x document is
-        /// the next test, which SCHEMA-13 can cite once this one goes.
-        #[test]
-        fn version_precedes_field_findings_and_classes_keep_schema_then_input_order() {
-            let schema = bundle(
-                vec![
-                    V::map(vec![(
-                        "needed",
-                        V::map(vec![
-                            ("type", V::text("str")),
-                            ("required", V::boolean(true)),
-                        ]),
-                    )]),
-                    field("count", "int"),
-                ],
-                vec![],
-            );
-            let input = document(V::map(vec![
-                ("unknown", V::Scalar(N::Null)),
-                ("count", V::boolean(true)),
-                ("schema_version", V::text("old")),
-            ]));
-            let result = schema.validate_document(&input).unwrap();
-            assert_eq!(
-                findings(&result),
-                [("schema_version", "schema_version_mismatch")]
-            );
-            assert_eq!(result[0].context[0], ("expected", C::Text("1.0".into())));
-            let input = document(V::map(vec![
-                ("unknown", V::Scalar(N::Null)),
-                ("count", V::boolean(true)),
-                ("schema_version", V::text("1.0")),
-            ]));
-            let result = schema.validate_document(&input).unwrap();
-            assert_eq!(
-                findings(&result),
-                [
-                    ("needed", "missing_required_field"),
-                    ("count", "invalid_field_type"),
-                    ("unknown", "unknown_field"),
-                ]
-            );
-            assert_eq!(
-                result[1].context,
-                [
-                    ("expected", C::Text("int".into())),
-                    ("actual", C::ValueKind(DocumentKind::Boolean))
-                ]
-            );
-            for value in [V::Scalar(N::Null), V::List(vec![]), V::map(vec![])] {
-                let result = schema.validate_document(&document(value)).unwrap();
-                assert_eq!(findings(&result), [("$", "invalid_field_type")]);
-            }
-        }
-
         #[test]
         fn classes_keep_schema_then_input_order_in_a_complete_document() {
-            let schema = bundle_v1(
+            let schema = bundle(
                 vec![
                     V::map(vec![(
                         "needed",
@@ -661,9 +593,6 @@ mod schema {
                 )),
                 [("derive.absent", "unknown_operation")]
             );
-            let result = validate(&schema, "derive", V::integer("4"), false);
-            assert_eq!(findings(&result), [("derive", "bare_derivation_scalar")]);
-            assert_eq!(result[0].definition().rule, Some("EXPR-5"));
         }
 
         fn case_bundle(registry: &'static str) -> SchemaStructure {
@@ -929,7 +858,6 @@ mod schema {
                         (
                             "root_class",
                             V::List(vec![
-                                field("schema_version", "str"),
                                 V::map(vec![("simple", declaration(vec!["str", "list[str]"]))]),
                                 V::map(vec![(
                                     "nested",
@@ -1278,7 +1206,7 @@ mod schema {
 
         #[test]
         fn whole_document_normalization_keeps_schema_order_and_nested_default_provenance() {
-            let schema = bundle_v1(
+            let schema = bundle(
                 vec![
                     V::map(vec![(
                         "groups",

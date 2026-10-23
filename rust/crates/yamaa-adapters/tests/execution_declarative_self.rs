@@ -2259,42 +2259,6 @@ output: {path: out.csv, columns: [I, B]}
             );
             assert_eq!(study.saved(), "I,B\n1,Y\n2,skipped\n3,skipped\n");
         }
-
-        /// A run without an environment file is a 0.5 notion (D8): a 1.0
-        /// specification run without its project fails the call as
-        /// `project_binding_missing` instead (D32, D146), so this test keeps its
-        /// 0.5 document until the 0.5 path goes (#3447).
-        #[test]
-        fn missing_environment_keeps_unknown_nested_function_static_before_input_capture() {
-            let study = Study::new(
-                "I\n1\n",
-                r#"schema_version: '1.0'
-domain: TEST
-keys: [I]
-input: {SRC: input.csv}
-columns:
-  - {name: I, type: int, derivation: SRC.I}
-  - name: V
-    type: int
-    derivation:
-      case:
-        - when: 'I > 0'
-          then: {function: {name: unknown, args: {x: I}}}
-output: {path: out.csv, columns: [I, V]}
-"#,
-            );
-            fs::remove_file(study.0.join("input.csv")).unwrap();
-            let Err(issues) = study.try_build() else {
-                panic!("static function failure before input capture")
-            };
-            assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(issues[0].condition(), "unknown_project_function");
-            assert_eq!(issues[0].rule(), Some("FUNC-4"));
-            assert_eq!(
-                issues[0].spec_paths,
-                ["columns.V.derivation.case[0].then.function.name"]
-            );
-        }
     }
     mod original_named_windows {
         //! Original named-window witnesses retired with the Python evaluator in #2110.
@@ -2444,40 +2408,24 @@ output: {path: out.csv, columns: [I, V]}
             assert!(!study.0.join("input.csv").exists());
         }
 
-        /// A 0.5 file forbids a `baseline_flag` window order, and a 1.0 file
-        /// admits one that starts with its date (WINDOW-5), so this test keeps
-        /// its 0.5 documents until the 0.5 path goes (#3447).
+        /// A named window keeps each operation's restrictions where it is
+        /// expanded: a `row_number` over a window without `order_by` is refused
+        /// (WINDOW-5).
         #[test]
         fn named_expansion_preserves_each_operations_window_restrictions() {
-            for (operation, window, kind, condition) in [
-                ("row_number", json!({}), "int", "window_order_by_required"),
-                (
-                    "baseline_flag",
-                    json!({"order_by":["SEQ"]}),
-                    "str",
-                    "window_order_by_forbidden",
-                ),
-            ] {
-                let study = Study::new();
-                let mut authored = document();
-                let header = authored.as_object_mut().unwrap();
-                header.remove("yamaa");
-                header.remove("type");
-                header.insert("schema_version".into(), "1.0".into());
-                authored["windows"]["VISITS"] = window;
-                let mut payload = json!({"window":"VISITS"});
-                if operation == "baseline_flag" {
-                    payload["date"] = "SEQ".into();
-                    payload["reference_date"] = "SEQ".into();
-                    payload["value"] = "SEQ".into();
-                }
-                authored["columns"][4]["type"] = kind.into();
-                authored["columns"][4]["derivation"] = json!({operation:payload});
-                study.write("spec.yaml", &authored);
-                fs::write(study.0.join("input.csv"), INPUT).unwrap();
-                let issues = study.refused();
-                assert_eq!(issues[0].condition(), condition, "{operation}: {issues:?}");
-            }
+            let study = Study::new();
+            let mut authored = document();
+            authored["windows"]["VISITS"] = json!({});
+            authored["columns"][4]["type"] = "int".into();
+            authored["columns"][4]["derivation"] = json!({"row_number": {"window": "VISITS"}});
+            study.write("spec.yaml", &authored);
+            fs::write(study.0.join("input.csv"), INPUT).unwrap();
+            let issues = study.refused();
+            assert_eq!(
+                issues[0].condition(),
+                "window_order_by_required",
+                "{issues:?}"
+            );
         }
     }
     mod original_verification {
@@ -2789,113 +2737,6 @@ output: {path: out.csv, columns: [G, LOWEST, HIGHEST, DATED, TRAILING]}
                 study.saved(),
                 "G,LOWEST,HIGHEST,DATED,TRAILING\nA,amiss,a3,a1,amiss\nB,bmiss,b2,b2,bmiss\n"
             );
-        }
-    }
-    mod baseline_operands {
-        //! baseline_flag binds its value and tie-break operands at their own
-        //! paths, and still refuses window.order_by beside them.
-        //! `value` and `tie_break` are 0.5 spellings and
-        //! `window_order_by_forbidden` a 0.5 condition (WINDOW-5), so this
-        //! module keeps its 0.5 document until the 0.5 path goes (#3447).
-        use std::fs;
-        use yamaa_core::domain_entry::Request;
-        const INPUT: &str = "I,G,D,R,V,SEQ\n1,A,2025-01-03,2025-01-05,10,2\n\
-                             2,A,2025-01-03,2025-01-05,11,1\n3,A,2025-01-05,2025-01-05,12,3\n";
-        const SPECIFICATION: &str = r#"schema_version: '1.0'
-domain: TEST
-keys: [I]
-input: {SRC: {path: input.csv, types: {I: int, D: date, R: date, V: int, SEQ: int}}}
-columns:
-  - {name: I, type: int, derivation: SRC.I}
-  - {name: G, type: str, derivation: SRC.G}
-  - {name: D, type: date, derivation: SRC.D}
-  - {name: R, type: date, derivation: SRC.R}
-  - {name: V, type: int, derivation: SRC.V}
-  - {name: SEQ, type: int, derivation: SRC.SEQ}
-  - name: BLFL
-    type: str
-    derivation:
-      baseline_flag:
-        date: D
-        reference_date: R
-        value: V
-        inclusive: false
-        tie_break: [SEQ]
-        window: {group_by: [G]}
-output: {path: out.csv, columns: [I, BLFL]}
-"#;
-        /// The first issue's condition, paths and identifier context, or the saved CSV.
-        fn run(specification: &str) -> Result<String, (String, Vec<String>, String)> {
-            let root = crate::support::Scratch::new("baseline-operands").resolved(fs::canonicalize);
-            fs::write(root.join("input.csv"), INPUT).unwrap();
-            fs::write(root.join("spec.yaml"), specification).unwrap();
-            let path = root.join("spec.yaml").to_str().unwrap().to_owned();
-            let outcome = crate::support::study::domain(
-                yamaa_core::project_function::Language::Python,
-                Request {
-                    specification: &path,
-                    environment: None,
-                },
-                crate::support::study::identity("baseline-operands", &path),
-            );
-            let issues = match outcome {
-                Ok(mut result) if result.issues().is_empty() => {
-                    assert!(result.save().unwrap());
-                    let saved = fs::read_to_string(root.join("out.csv")).unwrap();
-                    return Ok(saved);
-                }
-                Ok(result) => result.issues(),
-                Err(issues) => issues,
-            };
-            let first = issues.first().expect("a failed run reports an issue");
-            Err((
-                first.condition().to_owned(),
-                first.spec_paths.clone(),
-                first
-                    .context
-                    .get("identifier")
-                    .and_then(yamaa_core::json::Value::as_str)
-                    .unwrap_or_default()
-                    .to_owned(),
-            ))
-        }
-
-        #[test]
-        fn value_and_tie_break_bind_at_their_paths_and_window_order_stays_forbidden() {
-            // Strictly before January 5, the two January 3 rows are ordered by SEQ.
-            assert_eq!(run(SPECIFICATION).unwrap(), "I,BLFL\n1,Y\n2,\n3,\n");
-            let path = "columns.BLFL.derivation.baseline_flag";
-            for (before, after, condition, at, identifier) in [
-                (
-                    "value: V",
-                    "value: ABSENT",
-                    "unknown_field",
-                    format!("{path}.value"),
-                    "ABSENT",
-                ),
-                (
-                    "tie_break: [SEQ]",
-                    "tie_break: [I, ABSENT]",
-                    "unknown_field",
-                    format!("{path}.tie_break[1]"),
-                    "ABSENT",
-                ),
-                (
-                    "window: {group_by: [G]}",
-                    "window: {group_by: [G], order_by: [SEQ]}",
-                    "window_order_by_forbidden",
-                    format!("{path}.window.order_by"),
-                    "",
-                ),
-            ] {
-                let changed = SPECIFICATION.replace(before, after);
-                assert_ne!(changed, SPECIFICATION);
-                assert_eq!(
-                    run(&changed).unwrap_err(),
-                    (condition.to_owned(), vec![at], identifier.to_owned()),
-                    "{after}"
-                );
-            }
         }
     }
 }

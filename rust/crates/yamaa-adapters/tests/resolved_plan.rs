@@ -4,7 +4,7 @@
 //! failed resolution check produces.
 use crate::support;
 use std::path::{Path, PathBuf};
-use support::specification_run::{compile, prepare, schema, try_prepare};
+use support::specification_run::{compile, prepare, try_prepare};
 use yamaa_core::{
     dataset::{
         resolved::{ColumnPhase, Grain, RegionId, RegionKind, Stage, Step},
@@ -25,8 +25,7 @@ fn root() -> PathBuf {
 fn bind(case: &str) -> ResolvedPlan {
     let root = root();
     let case = root.join("benchmarks").join(case);
-    let captured = schema(&root.join("yaml"));
-    let document = prepare(&captured, &std::fs::read(case.join("spec.yaml")).unwrap());
+    let document = prepare(&std::fs::read(case.join("spec.yaml")).unwrap());
     let prepared = compile(&document).unwrap();
     let schemas: Vec<_> = prepared
         .sources()
@@ -181,8 +180,7 @@ fn try_bind(case: &str) -> Option<ResolvedPlan> {
     let root = root();
     let case = root.join("benchmarks").join(case);
     let bytes = std::fs::read(case.join("spec.yaml")).ok()?;
-    let captured = schema(&root.join("yaml"));
-    let document = try_prepare(&captured, &bytes).ok()?;
+    let document = try_prepare(&bytes).ok()?;
     let prepared = compile(&document).ok()?;
     let mut schemas = Vec::new();
     for (index, source) in prepared.sources().iter().enumerate() {

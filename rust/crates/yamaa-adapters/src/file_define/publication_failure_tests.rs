@@ -150,7 +150,7 @@ fn actual_changed_define_resource_keeps_authored_cause_path_and_snapshot() {
 #[test]
 fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dictionary_occurrences(
 ) {
-    const SPEC: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}]\n";
+    const SPEC: &str = "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: never-read.csv}\noutput: {path: never-written.csv, columns: [ID]}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}]\n";
     for changed in [
         "project.yaml",
         "python/environment.yaml",
@@ -179,7 +179,7 @@ fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dic
         let spec = match changed {
             "base.yaml" => {
                 fs::write(directory.join("base.yaml"), SPEC).unwrap();
-                "schema_version: '1.0'\nparent: base.yaml\n".to_owned()
+                "yamaa: '1.0'\ntype: spec\nparent: base.yaml\n".to_owned()
             }
             "dict.yaml" => {
                 fs::write(directory.join("dict.yaml"), b"A: answer\n").unwrap();
