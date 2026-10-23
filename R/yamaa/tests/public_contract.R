@@ -453,15 +453,18 @@ qualify_callbacks <- function() {
   if (.Platform$OS.type == "unix") {
     for (entry_name in names(entries)) {
       invoked <- 0L
+      # The stand-in replies through a closed envelope, as the installed
+      # capability does: R takes the pending interrupt at its next check, and
+      # one taken outside an envelope would end the callback as a failure.
       resolve_signal <- function(call, parameters) {
         resolved <- capabilities$resolve(call, parameters)
         if (resolved[[1L]] != 0L) return(resolved)
         invoke <- resolved[[2L]]
-        list(0L, function(arguments) {
+        list(0L, function(arguments) tryCatch({
           invoked <<- invoked + 1L
           if (invoked == host_truth[["signal_interrupt_calls"]]) tools::pskill(Sys.getpid(), signal = 2L)
           invoke(arguments)
-        })
+        }, interrupt = function(condition) list(3L, condition)))
       }
       seen <- with_capabilities(capabilities$verify, resolve_signal,
         tryCatch(entries[[entry_name]](), interrupt = identity))
