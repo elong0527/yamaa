@@ -1693,6 +1693,147 @@ class NativeWorkflowContract(unittest.TestCase):
         ):
             native.compare_cohorts(coverage, ROOT, "a" * 40)
 
+    def share_lanes(self):
+        """List each share lane's platform and route."""
+        return list(
+            itertools.product(
+                self.coverage["share"]["os"], self.coverage["share"]["route"]
+            )
+        )
+
+    def test_the_corpus_runs_on_a_windows_share_by_unc_path_and_mapped_drive(self):
+        # #3030 D15 admits a Windows network share, and a drive mapped to one,
+        # for every file that a run reads or saves. The engine's walk serves
+        # every host, so the wheel that a release publishes for Windows,
+        # installed with the build Python, runs the corpus there by each
+        # route, and a release requires each lane's steps.
+        self.assertEqual(
+            self.coverage["share"],
+            {"os": ["windows-2025"], "route": ["unc-path", "mapped-drive"]},
+        )
+        required = release.required_jobs(self.coverage)
+        producers = release_assets.artifacts(release_assets.declared(self.coverage))
+        for platform, route in self.share_lanes():
+            job = f"native-share ({platform}, {route})"
+            details = self.jobs[job]
+            names = [step.get("name") for step in details["definitions"]]
+            [setup] = [
+                step
+                for step in details["definitions"]
+                if step.get("uses", "").split("@")[0] == "actions/setup-python"
+            ]
+            wheel = f"native-python-{platform}-{native.BUILD_PYTHON}"
+            with self.subTest(job=job):
+                self.assertEqual(details["job"]["needs"], "dist")
+                self.assertEqual(
+                    expand(details["job"]["runs-on"], details["context"]), platform
+                )
+                self.assertIn(wheel, producers)
+                self.assertEqual(
+                    details["downloads"],
+                    [wheel, f"native-project-{platform}-{native.BUILD_PYTHON}"],
+                )
+                self.assertEqual(
+                    expand(setup["with"]["python-version"], details["context"]),
+                    native.BUILD_PYTHON,
+                )
+                self.assertEqual(
+                    required[job],
+                    (
+                        "Install the wheel",
+                        "Share a directory over SMB",
+                        "Report installed Python public benchmark conformance "
+                        "on the share",
+                    ),
+                )
+                self.assertEqual(
+                    [name for name in names if name in required[job]],
+                    list(required[job]),
+                )
+                self.assertEqual(
+                    details["uploads"],
+                    [f"public-conformance-python-share-{platform}-{route}"],
+                )
+
+    def test_each_share_lane_names_the_staged_cases_through_its_route_alone(self):
+        # The runner stages and records each case in the shared directory, as
+        # every lane stages it, and names it in every call through the lane's
+        # route: the share's UNC path, or a drive that the same step maps to
+        # the share, since a mapping belongs to the logon session that made
+        # it. The comparator reads the cases where they were staged.
+        # PowerShell stops on a failed cmdlet, and on a failed program only
+        # where the step checks its exit status, so it checks each one.
+        for platform, route in self.share_lanes():
+            job = f"native-share ({platform}, {route})"
+            details = self.jobs[job]
+            steps = {step.get("name"): step for step in details["definitions"]}
+            share = steps["Share a directory over SMB"]
+            conformance = steps[
+                "Report installed Python public benchmark conformance on the share"
+            ]
+            upload = steps[
+                "Preserve Python public benchmark inventory and saved artifacts"
+            ]
+            script = conformance["run"]
+            with self.subTest(job=job):
+                for step in (share, conformance):
+                    self.assertEqual(step["shell"], "pwsh")
+                    self.assertNotIn("if", step)
+                self.assertIn("(Join-Path $env:RUNNER_TEMP 'share')", share["run"])
+                self.assertIn(
+                    "New-SmbShare -Name yamaa-share -Path $directory.FullName",
+                    share["run"],
+                )
+                self.assertIn(
+                    r"Test-Path -LiteralPath '\\localhost\yamaa-share' "
+                    "-PathType Container",
+                    share["run"],
+                )
+                self.assertEqual(conformance["working-directory"], "${{ runner.temp }}")
+                self.assertEqual(
+                    expand(conformance["env"]["ROUTE"], details["context"]), route
+                )
+                # A branch for each route that native.py declares.
+                for each in self.coverage["share"]["route"]:
+                    self.assertEqual(script.count(f"$env:ROUTE -eq '{each}'"), 1)
+                self.assertIn(r"$root = '\\localhost\yamaa-share\'", script)
+                mapping = r"net use Y: '\\localhost\yamaa-share' /persistent:no"
+                self.assertIn(mapping, script)
+                self.assertIn("[System.IO.DriveType]::Network", script)
+                self.assertIn(r"$root = 'Y:\'", script)
+                runner = (
+                    r"python -I (Join-Path $env:GITHUB_WORKSPACE "
+                    r"'python\tests\installed\public_conformance.py') @corpus"
+                )
+                self.assertIn(
+                    "'--output', 'share\\observed', '--output-as', \"${root}observed\"",
+                    script,
+                )
+                self.assertIn("'--package-form', 'wheel'", script)
+                compare = (
+                    r"public_conformance compare --fixtures $benchmarks "
+                    r"--observed 'share\observed' "
+                    r"--output 'public-conformance\inventory.json'"
+                )
+                order = [
+                    mapping,
+                    "public_conformance plan --fixtures $benchmarks",
+                    runner,
+                    compare,
+                ]
+                self.assertEqual(sorted(order, key=script.index), order)
+                programs = script.count("python -I") + script.count("net use ")
+                self.assertEqual(
+                    script.count("if ($LASTEXITCODE) { exit $LASTEXITCODE }"), programs
+                )
+                self.assertEqual(
+                    upload["with"]["path"].splitlines(),
+                    [
+                        "${{ runner.temp }}/public-conformance",
+                        "${{ runner.temp }}/share/observed",
+                    ],
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -74,6 +74,12 @@ python -I -m tools.conformance.public_conformance compare --fixtures benchmarks 
 
 Use absolute runner, fixture and lock paths when running outside the checkout.
 The importable comparison tools are installed by `make setup`.
+
+The Python runner's `--output-as` names another path that reaches the output
+directory, such as a Windows network share or a drive mapped to it: every
+call then names the staged cases through that path as written, unresolved,
+while the runner stages and records them in `--output`. The `native-share`
+jobs run the corpus that way (`docs/release.md`).
 The comparator needs the pinned YAML and Arrow dependencies in `python/uv.lock`;
 the R runner needs base R and the installed package.
 

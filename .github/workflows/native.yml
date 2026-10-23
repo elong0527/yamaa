@@ -2543,6 +2543,122 @@ jobs:
             ${{ runner.temp }}/offline/public-conformance-cli/observed
           if-no-files-found: error
 
+  share:
+    name: native-share (${{ matrix.os }}, ${{ matrix.route }})
+    needs: dist
+    runs-on: ${{ matrix.os }}
+    # Windows network shares (#3030 D15): the conformance corpus with every
+    # specification, project, input and output on an SMB share. The runner
+    # shares a directory of its own, and the wheel that a release publishes
+    # for it, installed with the build Python, runs the corpus on that share
+    # by the lane's route: its UNC path, \\localhost\yamaa-share, or a drive
+    # mapped to it. The conformance runner stages each case in the shared
+    # directory, as every lane stages it, and names it in every call through
+    # the route's spelling alone, which the engine resolves itself. The
+    # corpus's symbolic link reaches the engine as the file server reports
+    # it, a reparse point, and stays refused (FILE-8).
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025]
+        route: [unc-path, mapped-drive]
+    steps:
+      - name: Preserve fixture bytes and symlinks on Windows
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: '0.13.0'
+          enable-cache: true
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.NATIVE_BUILD_PYTHON }}
+      - name: Install repository tools
+        run: |
+          python -m pip install --no-deps -e .
+          python -m pip install py-yaml12==0.2.0 pyyaml==6.0.3
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: native-python-${{ matrix.os }}-${{ env.NATIVE_BUILD_PYTHON }}
+          path: ${{ runner.temp }}/native-dist
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: native-project-${{ matrix.os }}-${{ env.NATIVE_BUILD_PYTHON }}
+          path: ${{ runner.temp }}/project-dist
+      - name: Record source revision and table requirements
+        run: |
+          echo "QUALIFICATION_SOURCE_REVISION=$(git rev-parse HEAD)" >> "${GITHUB_ENV}"
+          uv export --project python --locked --extra test --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/table-requirements.txt"
+      - name: Install the wheel
+        working-directory: ${{ runner.temp }}
+        run: python -m pip install --no-deps -r table-requirements.txt native-dist/*.whl project-dist/*.whl
+      # The share's permissions name the runner's own account, which owns the
+      # directory. Creating a share needs an administrator, as the runner is.
+      - name: Share a directory over SMB
+        shell: pwsh
+        run: |
+          $directory = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP 'share')
+          $account = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+          New-SmbShare -Name yamaa-share -Path $directory.FullName -FullAccess $account |
+            Format-List Name, Path, ShareState
+          if (-not (Test-Path -LiteralPath '\\localhost\yamaa-share' -PathType Container)) {
+            throw '\\localhost\yamaa-share is not reachable'
+          }
+      # A drive mapping belongs to the logon session that made it, so the step
+      # that runs the corpus maps the drive itself. PowerShell stops on a
+      # failed cmdlet but not on a failed program, so the step checks the exit
+      # status of each program it runs. The runner stages and records the
+      # cases in share\observed, inside the shared directory, and names them
+      # in every call through the route's spelling of that directory; the
+      # comparator then reads them there.
+      - name: Report installed Python public benchmark conformance on the share
+        shell: pwsh
+        working-directory: ${{ runner.temp }}
+        env:
+          ROUTE: ${{ matrix.route }}
+        run: |
+          if ($env:ROUTE -eq 'unc-path') {
+            $root = '\\localhost\yamaa-share\'
+          } elseif ($env:ROUTE -eq 'mapped-drive') {
+            net use Y: '\\localhost\yamaa-share' /persistent:no
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+            $drive = [System.IO.DriveInfo]::new('Y')
+            if ($drive.DriveType -ne [System.IO.DriveType]::Network) {
+              throw "Y: is a $($drive.DriveType) drive, not a network drive"
+            }
+            $root = 'Y:\'
+          } else {
+            throw "no share route $env:ROUTE"
+          }
+          $benchmarks = Join-Path $env:GITHUB_WORKSPACE 'benchmarks'
+          python -I -m tools.conformance.public_conformance plan --fixtures $benchmarks --output public-conformance-plan
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $corpus = @(
+            '--plan', 'public-conformance-plan', '--fixtures', $benchmarks,
+            '--python-lock', (Join-Path $env:GITHUB_WORKSPACE 'python\uv.lock'),
+            '--output', 'share\observed', '--output-as', "${root}observed",
+            '--source-revision', $env:QUALIFICATION_SOURCE_REVISION, '--package-form', 'wheel',
+            '--evidence', "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          )
+          python -I (Join-Path $env:GITHUB_WORKSPACE 'python\tests\installed\public_conformance.py') @corpus
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -I -m tools.conformance.public_conformance compare --fixtures $benchmarks --observed 'share\observed' --output 'public-conformance\inventory.json'
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Preserve Python public benchmark inventory and saved artifacts
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: public-conformance-python-share-${{ matrix.os }}-${{ matrix.route }}
+          path: |
+            ${{ runner.temp }}/public-conformance
+            ${{ runner.temp }}/share/observed
+          if-no-files-found: error
+
   public-cohort:
     name: public-cohort-complete-runs
     needs: [qualify, r, r-binary-install, cli-install]
