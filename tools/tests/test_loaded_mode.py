@@ -101,13 +101,13 @@ class LoadedPackageCheck(unittest.TestCase):
     # as it prints it for the engine library.
     LOG = (
         "* checking compiled code ... NOTE\n"
-        "File ‘yamaa/{library}’:\n"
-        "  Found no calls to: ‘R_registerRoutines’, ‘R_useDynamicSymbols’\n"
+        "File \u2018yamaa/{library}\u2019:\n"
+        "  Found no calls to: \u2018R_registerRoutines\u2019, \u2018R_useDynamicSymbols\u2019\n"
         "\n"
         "It is good practice to register native routines and to disable symbol\n"
         "search.\n"
         "\n"
-        "See ‘Writing portable packages’ in the ‘Writing R Extensions’ manual.\n"
+        "See \u2018Writing portable packages\u2019 in the \u2018Writing R Extensions\u2019 manual.\n"
         "* checking examples ... OK\n"
         "* DONE\n"
         "\n"
@@ -122,21 +122,21 @@ class LoadedPackageCheck(unittest.TestCase):
             (
                 "libs/yamaa.so",
                 loaded_notes,
-                ["NOTE: checking compiled code: File ‘yamaa/libs/yamaa.so’:"],
+                ["NOTE: checking compiled code: File \u2018yamaa/libs/yamaa.so\u2019:"],
             ),
             (
                 "libs/libyamaa_engine.so",
                 check_r.EXPECTED_NOTES,
                 [
                     "NOTE: checking compiled code",
-                    "    File ‘yamaa/libs/libyamaa_engine.so’:",
-                    "    Found no calls to: ‘R_registerRoutines’, "
-                    "‘R_useDynamicSymbols’",
+                    "    File \u2018yamaa/libs/libyamaa_engine.so\u2019:",
+                    "    Found no calls to: \u2018R_registerRoutines\u2019, "
+                    "\u2018R_useDynamicSymbols\u2019",
                     "    It is good practice to register native routines and to "
                     "disable symbol",
                     "    search.",
-                    "    See ‘Writing portable packages’ in the "
-                    "‘Writing R Extensions’ manual.",
+                    "    See \u2018Writing portable packages\u2019 in the "
+                    "\u2018Writing R Extensions\u2019 manual.",
                 ],
             ),
         ]

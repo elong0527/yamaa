@@ -106,8 +106,10 @@ class HostBindings(unittest.TestCase):
 
     def test_only_jobs_that_check_the_r_host_install_r(self):
         workflow = support.workflow("ci.yml")
+        # The loaded lane checks the R host too, in the test-only loaded mode.
         installs = {
             "r": ["check"],
+            "loaded": ["check"],
         }
         for name, job in workflow["jobs"].items():
             setups = [

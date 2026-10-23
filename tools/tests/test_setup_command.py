@@ -11,10 +11,12 @@ from tools.commands import setup
 from tools.paths import ROOT
 
 
-def commands(*arguments, rustup=None, package="python"):
+def commands(*arguments, rustup=None, package="python", engine="linked"):
     """The commands that setup runs, where rustup is absent unless `rustup`
-    names it, and the installed package's directory is `package`."""
+    names it, the installed package's directory is `package` and YAMAA_ENGINE
+    is `engine`."""
     with (
+        mock.patch.dict(setup.os.environ, {"YAMAA_ENGINE": engine}),
         mock.patch.object(setup.shutil, "which", return_value=rustup),
         mock.patch.object(setup.subprocess, "run") as run,
         mock.patch.object(
@@ -61,13 +63,12 @@ class SetupCommand(unittest.TestCase):
         # builds the wheel without its linked engine, installs it in that
         # build's place and puts the engine library beside its module.
         with (
-            mock.patch.dict(setup.os.environ, {"YAMAA_ENGINE": "loaded"}),
             mock.patch.object(
                 setup.loaded, "build_engine", return_value=Path("engine")
             ),
             mock.patch.object(setup.loaded, "install_beside") as beside,
         ):
-            sync, tools, build, install = commands()
+            sync, tools, build, install = commands(engine="loaded")
         self.assertEqual(
             (sync, tools, build[:4], build[-2:], install, beside.call_args.args),
             (
