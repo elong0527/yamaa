@@ -211,7 +211,7 @@ Evidence: `negative-review-unknown-date`, `negative-direct-dose-read`, `adam-ads
 | Grouped row filter | Only unqualified columns derived by that row |
 | Aggregate, record-lookup and multiple-match filters | Records of their owning right-side dataset |
 | Window filter | Constructed output columns in row construction; in an intermediate derivation, the augmented donor records [LOOKUP-15](lookup.md#lookup-15) describes |
-| Verification | Completed columns and record intermediates resolved for the completed row |
+| Verification | Completed columns and record intermediates resolved for the completed row; completed columns alone in a `not_missing`'s `when` ([CHECK-5](verification.md#check-5)) |
 | `case` | The values available to its enclosing derivation |
 | Expression-field text in column derivation | Constructed output columns, and fields of a declared record lookup |
 | Expression-field text in row construction | The names the paragraphs below give |
@@ -358,10 +358,11 @@ case-sensitive. No escape character exists by default. `ESCAPE` declares a
 string literal of exactly one scalar value, which marks the next pattern scalar
 as literal. An invalid `ESCAPE` literal or a trailing escape character fails.
 
-Fails: `incompatible_input_type`, `invalid_expression`.
+Fails: `invalid_expression`.
 Evidence: `adam-adae-protocol-review`, `schema-predicates`, `rust/crates/yamaa-adapters/tests/fixtures/syntax_controls.json`.
 
-A non-string operand fails with `incompatible_input_type`. An invalid
+A non-string operand fails with `incompatible_input_type` under
+[FORMULA-5](#formula-5). An invalid
 `ESCAPE` literal, or a pattern with a dangling escape, fails with
 `invalid_expression`: a literal pattern when the expression is admitted, and
 a pattern read from a value when it is evaluated.

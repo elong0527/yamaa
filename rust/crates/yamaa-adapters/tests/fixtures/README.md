@@ -648,7 +648,7 @@ Rust and both installed hosts compare complete independent reports after releasi
 ## static_verification_checks
 # Static verification check truth
 
-Fifteen independently enumerated issue payloads inspect known verification declaration findings over admitted original YAML without supplying study bytes or a study-data capability. The original raw documents and diagnostic vocabulary come from separately authored full-report truth already compared against reference execution. The static projection adds an explicit ordered column/dataset case and a Unicode pattern case before candidate replay.
+Twenty independently enumerated issue payloads inspect known verification declaration findings over admitted original YAML without supplying study bytes or a study-data capability. The original raw documents and diagnostic vocabulary come from separately authored full-report truth already compared against reference execution. The static projection adds an explicit ordered column/dataset case and a Unicode pattern case before candidate replay. Five `not_missing` cases are authored from CHECK-4 and CHECK-5 (#3030 D208): a `max_fraction` above one or below zero fails at the field, worded as a `row_count` fraction is, a `when` naming no column or a qualified field fails as `unknown_field` with that identifier, since a `when` reads completed columns alone, and a `when` over a later column with `max_fraction: 0` has no static finding.
 
 Unicode is written with the required escape in ASCII YAML source and decoded into UTF-8 issue text; the source policy is unchanged.
 

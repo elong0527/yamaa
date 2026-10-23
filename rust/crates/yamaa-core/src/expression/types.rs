@@ -32,6 +32,9 @@ pub enum TypeFinding {
         source: String,
         actual: ValueType,
     },
+    /// A reduction or grouping column that is not numeric, read by
+    /// `aggregate.expr`'s arithmetic (FORMULA-23), named by its written text.
+    AggregateOperand { source: String, actual: ValueType },
 }
 
 fn numeric(kind: ValueType) -> bool {
@@ -174,6 +177,11 @@ impl CompiledExpression {
                 }
             }
             Context::Aggregate => {
+                // An expression that is not one bare reduction is numeric, so
+                // each reduction and grouping column its arithmetic reads must
+                // be numeric (FORMULA-23).
+                let arithmetic = self.result == AggregateResult::Numeric;
+                let mut operands = Vec::new();
                 for reduction in &self.reductions {
                     match &reduction.operand {
                         ReductionOperand::Numeric => {
@@ -184,28 +192,47 @@ impl CompiledExpression {
                             }
                         }
                         ReductionOperand::Value(name) => {
-                            let reducer = match reduction.reducer {
-                                Reducer::Sum => NumericReducer::Sum,
-                                Reducer::Mean => NumericReducer::Mean,
-                                _ => continue,
-                            };
                             if collected_sources && name.contains('.') {
                                 continue;
                             }
-                            if let Some(actual) = kind(name).filter(|actual| !numeric(*actual)) {
-                                findings.push(TypeFinding::ReductionInput {
-                                    reducer,
-                                    source: name.clone(),
-                                    actual,
-                                });
-                            }
+                            let Some(actual) = kind(name).filter(|actual| !numeric(*actual)) else {
+                                continue;
+                            };
+                            let reducer = match reduction.reducer {
+                                Reducer::Sum => NumericReducer::Sum,
+                                Reducer::Mean => NumericReducer::Mean,
+                                // These keep the type they reduce, which the
+                                // arithmetic that reads them needs numeric.
+                                Reducer::Min | Reducer::Max | Reducer::Only => {
+                                    let reference = reduction.reference.as_str();
+                                    if arithmetic && !operands.contains(&reference) {
+                                        operands.push(reference);
+                                        findings.push(TypeFinding::AggregateOperand {
+                                            source: reference.into(),
+                                            actual,
+                                        });
+                                    }
+                                    continue;
+                                }
+                                Reducer::Count => continue,
+                            };
+                            findings.push(TypeFinding::ReductionInput {
+                                reducer,
+                                source: name.clone(),
+                                actual,
+                            });
                         }
                         ReductionOperand::Records(_) => {}
                     }
                 }
-                if self.result == AggregateResult::Numeric {
+                if arithmetic {
                     for name in self.ungrouped_identifiers() {
-                        self.numeric_name(name, &kind, &mut findings);
+                        if let Some(actual) = kind(name).filter(|actual| !numeric(*actual)) {
+                            findings.push(TypeFinding::AggregateOperand {
+                                source: name.into(),
+                                actual,
+                            });
+                        }
                     }
                 }
             }

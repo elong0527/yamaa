@@ -5,12 +5,35 @@ use crate::{
     value::Value,
 };
 
-type UniqueDeclarations = Vec<(String, Vec<(String, String)>, Option<String>)>;
+/// One `unique` check of an intermediate (LOOKUP-17).
+#[derive(Debug)]
+struct UniqueDeclaration {
+    path: String,
+    /// Each column as written, with its path.
+    columns: Vec<(String, String)>,
+    identity: Option<String>,
+    severity: crate::dataset::VerificationSeverity,
+}
+type UniqueDeclarations = Vec<UniqueDeclaration>;
+
+/// An intermediate's `unique` check, as its run-report row names it: the
+/// intermediate, the dataset it reads and the columns the check lists
+/// (LOOKUP-17, CHECK-24).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IntermediateCheck<'a> {
+    pub intermediate: &'a str,
+    pub dataset: &'a str,
+    pub columns: Vec<&'a str>,
+    pub identity: Option<&'a str>,
+    pub severity: crate::dataset::VerificationSeverity,
+}
 
 #[derive(Debug)]
 struct Declaration {
     name: String,
     path: String,
+    /// The intermediate's position among those the specification declares.
+    declared: usize,
     source: self_relations::Relation,
     keys: Option<Vec<(String, match_values::Declaration)>>,
     filter_text: Option<String>,
@@ -150,9 +173,9 @@ fn finish_item(
         .transpose()?
         .flatten();
     let mut unique = Vec::new();
-    for (path, names, identity) in &item.unique {
+    for declared in &item.unique {
         let mut columns = Vec::new();
-        for (name, field_path) in names {
+        for (name, field_path) in &declared.columns {
             if let Some(column) = schema
                 .columns()
                 .iter()
@@ -171,9 +194,11 @@ fn finish_item(
             }
         }
         unique.push(crate::dataset::IntermediateUnique {
-            path: path.clone(),
+            path: declared.path.clone(),
             columns,
-            identity: identity.clone(),
+            identity: declared.identity.clone(),
+            severity: declared.severity,
+            declared: item.declared,
         });
     }
     for check in &unique {
@@ -686,13 +711,43 @@ impl Declarations {
                 .iter()
                 .map(|column| (column.name.clone(), checks::render(spec, column.meta)))
                 .collect();
-            unique.push((
-                checks::render(spec, check.meta),
+            unique.push(UniqueDeclaration {
+                path: checks::render(spec, check.meta),
                 columns,
-                check.id.as_ref().map(|identity| identity.text.clone()),
-            ));
+                identity: check.id.as_ref().map(|identity| identity.text.clone()),
+                severity: match check.severity {
+                    ast::Severity::Error => crate::dataset::VerificationSeverity::Error,
+                    ast::Severity::Warning => crate::dataset::VerificationSeverity::Warning,
+                },
+            });
         }
         Ok(unique)
+    }
+
+    /// The `unique` check at `path` of an intermediate that reads `sources`
+    /// or `SELF` (LOOKUP-17).
+    pub(super) fn unique_check<'a>(
+        &'a self,
+        path: &str,
+        sources: &'a [SourceDeclaration],
+    ) -> Option<IntermediateCheck<'a>> {
+        self.0.iter().find_map(|item| {
+            let check = item.unique.iter().find(|check| check.path == path)?;
+            Some(IntermediateCheck {
+                intermediate: &item.name,
+                dataset: match item.source {
+                    self_relations::Relation::Input(index) => &sources.get(index)?.name,
+                    self_relations::Relation::SelfRows => "SELF",
+                },
+                columns: check
+                    .columns
+                    .iter()
+                    .map(|(name, _)| name.as_str())
+                    .collect(),
+                identity: check.identity.as_deref(),
+                severity: check.severity,
+            })
+        })
     }
 
     /// Each named intermediate, in the order its derivations need, admitted
@@ -842,6 +897,7 @@ impl Declarations {
                 .push(Declaration {
                     name: name.into(),
                     path,
+                    declared: index,
                     source,
                     keys,
                     filter,

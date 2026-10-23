@@ -70,6 +70,7 @@ pub(crate) fn record(code: ConditionCode, path: &str, rows: &[Row]) -> CheckReco
         inventory: None,
         row_count: None,
         entries: None,
+        denominator: None,
     }
 }
 pub(crate) fn object<'a>(fact: &'a Fact<'a>) -> &'a yamaa_core::project_diagnostics::Context<'a> {

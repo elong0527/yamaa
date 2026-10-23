@@ -62,13 +62,27 @@ fn deferred(diagnostic: Diagnostic) -> Stop {
     DeclarationFinding::Diagnostic(diagnostic).into()
 }
 
-/// Compile one dataset predicate: grammar text over the output columns and
-/// the fields of named intermediates.
+/// What a verification predicate reads besides the output columns: a
+/// dataset check also reads the fields of named intermediates, and a
+/// `not_missing`'s `when` the completed columns alone (CHECK-5).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Reads {
+    Lookups,
+    Columns,
+}
+
+/// Compile one verification predicate: grammar text over the output columns
+/// and, as `reads` admits, the fields of named intermediates.
 fn predicate(
     spec: &ast::Spec,
     root: ExprId,
     output: &TableSchema,
+    reads: Reads,
 ) -> Result<Result<BoundPredicate, Diagnostic>, PrepareError> {
+    let declared = |name: &str| match reads {
+        Reads::Lookups => lookups::declared(spec, name),
+        Reads::Columns => None,
+    };
     let expr = spec.expr(root);
     let path = spec.cite(expr.meta);
     let ExprKind::Formula(formula) = &expr.kind else {
@@ -109,7 +123,7 @@ fn predicate(
     };
     if let Some(name) = plan
         .identifiers()
-        .filter(|name| column(name).is_none() && lookups::declared(spec, name).is_none())
+        .filter(|name| column(name).is_none() && declared(name).is_none())
         .min()
     {
         return Ok(Err(Diagnostic {
@@ -128,7 +142,7 @@ fn predicate(
             read: match column(name) {
                 Some(column) => Read::Column(column),
                 None => Read::Intermediate {
-                    index: lookups::declared(spec, name).expect("declared lookup"),
+                    index: declared(name).expect("declared lookup"),
                     column: 0,
                 },
             },
@@ -287,7 +301,10 @@ fn compile_predicates(
     path: &str,
     output: &TableSchema,
 ) -> Result<Predicates, PrepareError> {
-    let compile = |root: Option<ExprId>| root.map(|root| predicate(spec, root, output)).transpose();
+    let compile = |root: Option<ExprId>| {
+        root.map(|root| predicate(spec, root, output, Reads::Lookups))
+            .transpose()
+    };
     Ok(match &check.kind {
         DatasetCheckKind::Assert { when, require } => {
             let when = compile(*when)?;
@@ -446,6 +463,27 @@ fn row_count(
             })
         },
     )
+}
+
+/// Compile one `not_missing`: a `max_fraction` lies from 0 through 1 or
+/// fails at the field, as a `row_count`'s does, and its `when`, compiled
+/// before any payload finding defers, reads completed columns (CHECK-5,
+/// CHECK-4).
+fn not_missing(
+    max_fraction: Option<&ast::Constant>,
+    path: &str,
+    when: &mut Option<Result<BoundPredicate, Diagnostic>>,
+) -> Result<Check, Stop> {
+    let max_fraction = fraction(max_fraction)?;
+    if max_fraction.is_some_and(|n| !n.is_finite() || !(0.0..=1.0).contains(&n)) {
+        return Err(defer(
+            format!("{path}.max_fraction"),
+            ConditionCode::VerificationDeclarationRequired,
+            "a not_missing fraction is between 0 and 1",
+        ));
+    }
+    let when = when.take().transpose().map_err(deferred)?;
+    Ok(Check::NotMissing { when, max_fraction })
 }
 
 /// Every column's verifications: its declared checks, then those its
@@ -640,15 +678,31 @@ impl Verifications {
             }),
             &COLUMN_OPERATIONS,
         )?;
+        // Admit each `when` before any payload finding defers, as the dataset
+        // checks admit their predicates.
+        let mut whens = checks
+            .iter()
+            .map(|check| match &check.kind {
+                ColumnCheckKind::NotMissing {
+                    when: Some(when), ..
+                } => predicate(spec, *when, output, Reads::Columns).map(Some),
+                _ => Ok(None),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         result.compile_prefix(
             checks
                 .iter()
                 .zip(paths)
                 .map(|(check, path)| (check, path, check.id.as_ref(), check.severity)),
-            |_, check, path| match column_checks::prepare(check, path, kind)? {
-                Check::InvalidDiagnostic(diagnostic) => Err(deferred(diagnostic)),
-                Check::InvalidDeclaration { code, reason } => Err(defer(path, code, reason)),
-                compiled => Ok(compiled),
+            |index, check, path| match &check.kind {
+                ColumnCheckKind::NotMissing { max_fraction, .. } => {
+                    not_missing(max_fraction.as_ref(), path, &mut whens[index])
+                }
+                _ => match column_checks::prepare(check, path, kind)? {
+                    Check::InvalidDiagnostic(diagnostic) => Err(deferred(diagnostic)),
+                    Check::InvalidDeclaration { code, reason } => Err(defer(path, code, reason)),
+                    compiled => Ok(compiled),
+                },
             },
         )?;
         Ok(result)

@@ -1368,6 +1368,224 @@ columns:
             );
         }
 
+        /// The report's check rows, in report order.
+        fn check_rows(study: &Study) -> Vec<String> {
+            saved_report(study, "report.csv")
+                .lines()
+                .filter(|line| line.starts_with("out.csv,check,"))
+                .map(String::from)
+                .collect()
+        }
+
+        /// An intermediate's `warning` checks are the first check rows: those
+        /// of intermediates over an input, then those over `SELF`, each in
+        /// declaration order, though A's derivation reads B, so B is derived
+        /// first. A `SELF` check's one row holds its evaluation after the
+        /// last template: P's IDs are unique after `first` and repeat from
+        /// `second` on. An `error` check, A's on ID, has no row (LOOKUP-17,
+        /// CHECK-23, CHECK-24, D211).
+        #[test]
+        fn intermediate_warning_checks_lead_the_check_rows_in_declaration_order() {
+            let study = Study::new();
+            fs::write(study.0.join("input/src.csv"), "ID,VAL\n1,10\n2,10\n").unwrap();
+            let mut result = study.build(
+                r#"yamaa: "1.0"
+type: spec
+domain: OUT
+keys: [ID, STAGE]
+base: SRC
+input: {SRC: {path: input/src.csv, types: {ID: int, VAL: int}}}
+output: {path: out.csv, columns: [ID, STAGE, VALUE], report: report.csv}
+intermediates:
+  - id: P
+    dataset: SELF
+    key: [ID]
+    derivations:
+      TWICE: 'SELF.VALUE * 2'
+      PLUS: 'TWICE + 1'
+    order_by: [SELF.STAGE]
+    keep: last
+    verifications:
+      - unique: {columns: [ID], severity: warning}
+  - id: A
+    dataset: SRC
+    key: [ID]
+    derivations: {NEXT: B.VAL}
+    order_by: [SRC.VAL]
+    keep: first
+    verifications:
+      - unique: {columns: [NEXT], severity: warning}
+      - unique: [ID]
+  - id: B
+    dataset: SRC
+    key: [ID]
+    order_by: [SRC.VAL]
+    keep: first
+    verifications:
+      - unique: {columns: [VAL], severity: warning}
+columns:
+  - {name: ID, type: int, derivation: SRC.ID}
+  - {name: STAGE, type: int}
+  - {name: VALUE, type: int, verifications: [not_missing]}
+rows:
+  - id: first
+    derivations: {STAGE: 1, VALUE: SRC.VAL}
+  - id: second
+    derivations: {STAGE: 2, VALUE: P.PLUS}
+  - id: third
+    derivations: {STAGE: 3, VALUE: P.PLUS}
+"#,
+            );
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert!(result.save().unwrap());
+            assert_eq!(
+                fs::read_to_string(study.0.join("out.csv")).unwrap(),
+                "ID,STAGE,VALUE\n1,1,10\n2,1,10\n1,2,21\n2,2,21\n1,3,43\n2,3,43\n"
+            );
+            assert_eq!(
+                check_rows(&study),
+                [
+                    "out.csv,check,intermediates.A.verifications[0].unique,unique,,,LOOKUP-17,warning,violated,duplicate_intermediate_records,1,1,\"[{\"\"NEXT\"\":10}]\",\"{\"\"columns\"\":[\"\"NEXT\"\"],\"\"dataset\"\":\"\"SRC\"\",\"\"intermediate\"\":\"\"A\"\"}\"",
+                    "out.csv,check,intermediates.B.verifications[0].unique,unique,,,LOOKUP-17,warning,violated,duplicate_intermediate_records,1,1,\"[{\"\"VAL\"\":10}]\",\"{\"\"columns\"\":[\"\"VAL\"\"],\"\"dataset\"\":\"\"SRC\"\",\"\"intermediate\"\":\"\"B\"\"}\"",
+                    "out.csv,check,intermediates.P.verifications[0].unique,unique,,,LOOKUP-17,warning,violated,duplicate_intermediate_records,2,2,\"[{\"\"ID\"\":1},{\"\"ID\"\":2}]\",\"{\"\"columns\"\":[\"\"ID\"\"],\"\"dataset\"\":\"\"SELF\"\",\"\"intermediate\"\":\"\"P\"\"}\"",
+                    "out.csv,check,columns.VALUE.verifications[0].not_missing,not_missing,,VALUE,CHECK-5,error,held,,0,6,,{}",
+                ]
+            );
+        }
+
+        /// A `not_missing` whose `when` reads a later column checks the rows
+        /// that column's completed values select: the `read` template leaves
+        /// LATER to its column derivation, which completes after V's, and
+        /// rows 1 and 2, both selected, lack V. The check rows keep column
+        /// declaration order (CHECK-1, CHECK-5).
+        #[test]
+        fn a_not_missing_when_waits_for_the_later_column_it_reads() {
+            let study = Study::new();
+            fs::write(
+                study.0.join("input/src.csv"),
+                "ID,KIND,V,FLAG\n1,fixed,,N\n2,read,,Y\n3,read,,N\n4,read,x,Y\n",
+            )
+            .unwrap();
+            let mut result = study.build(
+                r#"yamaa: "1.0"
+type: spec
+domain: OUT
+keys: [ID, KIND]
+input: {SRC: input/src.csv}
+output: {path: out.csv, columns: [ID, KIND, V, LATER], report: report.csv}
+columns:
+  - {name: ID, type: str, derivation: SRC.ID}
+  - {name: KIND, type: str}
+  - name: V
+    type: str
+    derivation: SRC.V
+    verifications:
+      - not_missing: {when: "LATER = 'Y'", severity: warning}
+  - name: LATER
+    type: str
+    derivation: SRC.FLAG
+    verifications: [not_missing]
+rows:
+  - id: fixed
+    filter: "SRC.KIND = 'fixed'"
+    derivations: {KIND: "'fixed'", LATER: "'Y'"}
+  - id: read
+    filter: "SRC.KIND = 'read'"
+    derivations: {KIND: "'read'"}
+"#,
+            );
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert!(result.save().unwrap());
+            assert_eq!(
+                fs::read_to_string(study.0.join("out.csv")).unwrap(),
+                "ID,KIND,V,LATER\n1,fixed,,Y\n2,read,,Y\n3,read,,N\n4,read,x,Y\n"
+            );
+            assert_eq!(
+                check_rows(&study),
+                [
+                    "out.csv,check,columns.V.verifications[0].not_missing,not_missing,,V,CHECK-5,warning,violated,not_missing_failed,2,4,\"[{\"\"ID\"\":\"\"1\"\",\"\"KIND\"\":\"\"fixed\"\"},{\"\"ID\"\":\"\"2\"\",\"\"KIND\"\":\"\"read\"\"}]\",\"{\"\"column\"\":\"\"V\"\"}\"",
+                    "out.csv,check,columns.LATER.verifications[0].not_missing,not_missing,,LATER,CHECK-5,error,held,,0,4,,{}",
+                ]
+            );
+        }
+
+        /// A column that only a `not_missing`'s `when` reads stays live, as
+        /// one a dataset check's predicate reads does: FLAGGED is no output
+        /// column, and nothing else reads it (LAYER-11, CHECK-5).
+        #[test]
+        fn a_column_only_a_when_reads_stays_live() {
+            let study = Study::new();
+            fs::write(study.0.join("input/src.csv"), "ID,V,FLAG\n1,,Y\n2,,N\n").unwrap();
+            let mut result = study.build(
+                r#"yamaa: "1.0"
+type: spec
+domain: OUT
+keys: [ID]
+input: {SRC: input/src.csv}
+output: {path: out.csv, columns: [ID, V], report: report.csv}
+columns:
+  - {name: ID, type: str, derivation: SRC.ID}
+  - name: V
+    type: str
+    derivation: SRC.V
+    verifications:
+      - not_missing: {when: "FLAGGED = 'Y'", severity: warning}
+  - {name: FLAGGED, type: str, derivation: SRC.FLAG}
+"#,
+            );
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert!(result.save().unwrap());
+            assert_eq!(
+                check_rows(&study),
+                ["out.csv,check,columns.V.verifications[0].not_missing,not_missing,,V,CHECK-5,warning,violated,not_missing_failed,1,2,\"[{\"\"ID\"\":\"\"1\"\"}]\",\"{\"\"column\"\":\"\"V\"\"}\""]
+            );
+        }
+
+        /// A `warning` on an intermediate's `unique` needs `output.report`,
+        /// as every warning does, and the finding names its path (CHECK-22,
+        /// LOOKUP-17).
+        #[test]
+        fn an_intermediate_warning_needs_a_report_file() {
+            let study = Study::new();
+            let issues = study
+                .try_build(
+                    r#"yamaa: "1.0"
+type: spec
+domain: OUT
+keys: [ID]
+input: {SRC: input/src.csv, EX: input/ex.csv}
+base: SRC
+output: {path: out.csv, columns: [ID, LAST]}
+intermediates:
+  - id: LASTEX
+    dataset: EX
+    key: [ID]
+    order_by: [EX.SEQ]
+    keep: last
+    verifications:
+      - unique: {columns: [ID], severity: warning}
+columns:
+  - {name: ID, type: str, derivation: SRC.ID}
+  - {name: LAST, type: str, derivation: LASTEX.SEQ}
+"#,
+                )
+                .err()
+                .expect("a warning without a report file is refused");
+            assert_eq!(
+                issues
+                    .iter()
+                    .map(crate::support::study::issue_row)
+                    .collect::<Vec<_>>(),
+                [yamaa_adapters::json!({
+                    "phase": "validation",
+                    "condition": "missing_report",
+                    "rule": "CHECK-22",
+                    "spec_paths": ["output.report"],
+                    "context": {"warnings": ["intermediates.LASTEX.verifications[0].unique"]}
+                })]
+            );
+        }
+
         #[test]
         #[cfg(feature = "parquet")]
         fn parquet_reports_preserve_governed_logical_rows_and_integer_columns() {

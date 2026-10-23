@@ -356,6 +356,7 @@ conditions! {
     ExpressionInvalid => ("validation", "invalid_expression", Some("FORMULA-1")),
     ExpressionInvalidEscape => ("validation", "invalid_expression", Some("FORMULA-7")),
     ExpressionInvalidRegex => ("validation", "invalid_expression", Some("FORMULA-8")),
+    ExpressionPatternNotLiteral => ("validation", "invalid_expression", Some("FORMULA-8")),
     ExpressionProhibitedConstruct => ("validation", "prohibited_construct", Some("FORMULA-27")),
     ExpressionProhibitedFunction => ("validation", "prohibited_function", Some("FORMULA-13")),
     ExpressionNestedReduction => ("validation", "nested_reduction", Some("FORMULA-21")),
@@ -363,6 +364,7 @@ conditions! {
     AggregateRowMultipleRecords => ("row_construction", "aggregate_multiple_records", Some("FORMULA-20")),
     AggregateIdentifierNotGrouped => ("validation", "aggregate_identifier_not_grouped", Some("FORMULA-22")),
     AggregateIncomparableSources => ("validation", "incomparable_sources", Some("FORMULA-23")),
+    AggregateNumericOperand => ("validation", "incompatible_input_type", Some("FORMULA-23")),
     AggregateOutputGroups => ("validation", "invalid_aggregate_context", Some("LOOKUP-19")),
     AggregateOwnGroupKeys => ("validation", "invalid_aggregate_context", Some("LOOKUP-5")),
     AggregateMixedRelations => ("validation", "mixed_relations", Some("LOOKUP-18")),
@@ -433,6 +435,9 @@ conditions! {
     IntermediateDuplicateRecords => ("verification", "duplicate_intermediate_records", Some("LOOKUP-17")),
     IntermediateUniqueField => ("validation", "unknown_field", Some("LOOKUP-17")),
     IntermediateUniqueCorrelatedFilter => ("validation", "correlated_filter_with_unique_verification", Some("LOOKUP-17")),
+    // A `warning` unique on an intermediate without `keep` and `order_by`
+    // (D210).
+    IntermediateUniqueSeverity => ("validation", "value_not_permitted", Some("LOOKUP-17")),
     IntermediateIdentifierCollision => ("validation", "duplicate_identifier", Some("LOOKUP-3")),
     // A 1.0 intermediate read as a lookup without `key` (D23, D63).
     IntermediateKeyRequired => ("validation", "missing_required_field", Some("LOOKUP-3")),

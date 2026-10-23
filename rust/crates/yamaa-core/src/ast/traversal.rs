@@ -7,7 +7,9 @@
 //! bindings), the donor record (an intermediate's own declarations), or the
 //! local bindings of an aggregate.
 
-use super::{DatasetCheckKind, ExprId, ExprKind, JoinKey, Name, Spec, WindowFunction};
+use super::{
+    ColumnCheckKind, DatasetCheckKind, ExprId, ExprKind, JoinKey, Name, Spec, WindowFunction,
+};
 
 /// Why an expression is a child of its parent.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -103,6 +105,11 @@ pub enum Owner {
     },
     /// A dataset check's predicate.
     Check {
+        check: usize,
+    },
+    /// A column check's predicate, a `not_missing`'s `when` (CHECK-5).
+    ColumnCheck {
+        column: usize,
         check: usize,
     },
 }
@@ -225,16 +232,27 @@ impl Spec {
     }
 
     /// Every expression root in declaration order: column defaults, the
-    /// root filter, each row template's groups, filter and overrides, each
-    /// intermediate's key values, range, filter, order and bindings, the
-    /// dataset checks' predicates and the output order. Every expression
-    /// of the arena is reachable from exactly one root.
+    /// column checks' predicates, the root filter, each row template's
+    /// groups, filter and overrides, each intermediate's key values, range,
+    /// filter, order and bindings, the dataset checks' predicates and the
+    /// output order. Every expression of the arena is reachable from exactly
+    /// one root.
     pub fn sites(&self) -> Vec<Site> {
         let mut sites = Vec::new();
         let mut push = |root, owner, scope| sites.push(Site { root, owner, scope });
         for (column, declared) in self.columns.iter().enumerate() {
             if let Some(derivation) = &declared.derivation {
                 push(derivation.expr, Owner::Default { column }, Scope::Row);
+            }
+        }
+        for (column, declared) in self.columns.iter().enumerate() {
+            for (check, verification) in declared.checks.iter().enumerate() {
+                if let ColumnCheckKind::NotMissing {
+                    when: Some(when), ..
+                } = &verification.kind
+                {
+                    push(*when, Owner::ColumnCheck { column, check }, Scope::Row);
+                }
             }
         }
         if let Some(filter) = self.rows.filter {

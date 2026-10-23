@@ -1706,7 +1706,7 @@ impl<'p> Builder<'p> {
                     &check.path,
                     scope,
                     family,
-                    Error,
+                    check.severity,
                     &[],
                     Vec::new(),
                     position,
@@ -1718,8 +1718,17 @@ impl<'p> Builder<'p> {
             let column = cx.column(group.column)?;
             for (position, verification) in group.checks.iter().enumerate() {
                 let mut reads = vec![Read::Column(column)];
-                for where_column in where_columns(&verification.check) {
-                    reads.push(Read::Column(cx.column(where_column)?));
+                // A check waits for every completed column it selects its
+                // rows by: a value-level check's where columns, a
+                // `not_missing`'s `when` columns (CHECK-5).
+                for read in where_columns(&verification.check)
+                    .into_iter()
+                    .chain(verification.check.when_columns())
+                {
+                    let read = Read::Column(cx.column(read)?);
+                    if !reads.contains(&read) {
+                        reads.push(read);
+                    }
                 }
                 let severity = plan.verification_severity(&verification.path);
                 let family = check_family(&verification.check);
@@ -1960,7 +1969,7 @@ fn where_columns(check: &Check) -> Vec<usize> {
 
 fn check_family(check: &Check) -> CheckFamily {
     match check {
-        Check::NotMissing => CheckFamily::NotMissing,
+        Check::NotMissing { .. } => CheckFamily::NotMissing,
         Check::Mandatory(_) => CheckFamily::Mandatory,
         Check::DataType { .. } => CheckFamily::DataType,
         Check::AllowedValues(_) => CheckFamily::AllowedValues,

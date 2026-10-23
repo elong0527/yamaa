@@ -155,6 +155,7 @@ pub fn flag_condition_diagnostic<E>(
         }
         Condition::NumericUnknownField { .. }
         | Condition::NumericInput { .. }
+        | Condition::AggregateOperand { .. }
         | Condition::Arithmetic(_) => return error.diagnostic().ok(),
     };
     Some(Diagnostic {

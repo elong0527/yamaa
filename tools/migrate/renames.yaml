@@ -88,11 +88,11 @@ status: approved
 measured_at: 1758ad145
 design: docs/design/interface-1.0.md
 summary:
-  entries: 639
-  changes: 70
+  entries: 642
+  changes: 73
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 24
+    new, decided: 27
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7312,6 +7312,45 @@ entries:
     today''s default (EXPR-13).'
   field_kind: value
   convert: {action: transform, transform: write_new_field}
+- id: new.spec.column_verifications.not_missing.when
+  file_type: spec
+  path: columns[].verifications[].not_missing.when
+  today: null
+  kind: new
+  proposed: 'not_missing: {when: PREDICATE}'
+  decision: decided (D208)
+  reason: 'An addition to the approved table under D27 (D206, D208). Optional, with no default (I5): the
+    check reads only the output rows whose `when` is TRUE, as an assert''s `when` selects rows, and a row
+    whose `when` is FALSE or UNKNOWN passes; an unknown column fails as unknown_field (CHECK-5, CHECK-4).
+    No 0.5 file declares it, so the converter wrote none.'
+  field_kind: expression
+  convert: {action: none}
+- id: new.spec.column_verifications.not_missing.max_fraction
+  file_type: spec
+  path: columns[].verifications[].not_missing.max_fraction
+  today: null
+  kind: new
+  proposed: 'not_missing: {max_fraction: 0.05}'
+  decision: decided (D208)
+  reason: 'An addition to the approved table under D27 (D206, D208). Optional, with no default (I5): the
+    check passes while the checked rows whose value is missing are at most this share of the checked rows,
+    compared as a row_count share is, and a share outside 0 through 1 fails as invalid_declaration (CHECK-5,
+    CHECK-4). No 0.5 file declares it, so the converter wrote none.'
+  field_kind: value
+  convert: {action: none}
+- id: new.spec.intermediate_unique_arguments.severity
+  file_type: spec
+  path: intermediates[].verifications[].unique.severity
+  today: null
+  kind: new
+  proposed: 'unique: {columns: [COLUMN, ...], severity: warning}'
+  decision: decided (D210)
+  reason: 'An addition to the approved table under D27 (D206, D210). Optional, `error` by default, as on a
+    dataset unique (CHECK-2); `warning` is permitted only on an intermediate that declares keep and order_by,
+    and fails as value_not_permitted elsewhere (LOOKUP-17). No 0.5 file declares it, so the converter wrote
+    none.'
+  field_kind: value
+  convert: {action: none}
 conditions:
 - today: schema_version_mismatch
   kind: rename

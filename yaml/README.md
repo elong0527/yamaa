@@ -40,7 +40,7 @@ replay the same parser vectors.
 | [Schema fields (1.0)](https://elong0527.github.io/yamaa/reference/schema-fields-v1/) | The same view of `v1/`, with each field's kind |
 | [Rule index](https://elong0527.github.io/yamaa/reference/rule-index/) | Generated canonical IDs and owners |
 | [benchmarks/](../benchmarks/README.md) | Specifications, inputs, and expected outcomes |
-| [conformance/](conformance/) | Shared language fixtures |
+| [conformance/](conformance/) | Shared language fixtures: the portable regex contract, and the evaluation set of the expression language |
 | [grammar/](grammar/README.md) | Closed grammars and parser vectors |
 | [vocabulary/cdisc.yaml](vocabulary/cdisc.yaml) | Closed CDISC vocabularies: models, dataset classes and subclasses, standard names and statuses, publishing sets, origin types and sources, column roles, core designations, submission data types, where comparators |
 
@@ -189,6 +189,11 @@ rule, grammar, or fixture:
   compared with it, and both hosts replay its vectors, so a change made
   anywhere else fails validation. Add a vector for every behavior the change
   decides, in each context that decides it.
+- Change what an expression evaluates to, or the issue it reports, together
+  with the cases of `conformance/expressions.yaml` that show it, authored from
+  the rule cards. `make check-repository` runs every case through the engine,
+  and refuses a function, reducer or operator of the grammar that no case
+  evaluates.
 - Change a closed CDISC vocabulary in `vocabulary/cdisc.yaml` first, giving
   each added value the language version that admits it, then the schema
   type or class field the vocabulary names, in `yaml/` and `v1/` or only in

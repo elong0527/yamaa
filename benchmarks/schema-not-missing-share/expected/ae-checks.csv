@@ -1,0 +1,17 @@
+ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS
+ae.csv,run,output,,,,,,succeeded,,8,,,{}
+ae.csv,input,input.AE_RAW,AE_RAW,,,,,,,8,,,"{""bytes"":364,""path"":""input/ae_raw.csv"",""profile"":""csv""}"
+ae.csv,rows,base,AE_RAW,,,,,,,8,8,,{}
+ae.csv,column,columns.USUBJID,USUBJID,,,,,,,0,8,,"{""max_length"":3}"
+ae.csv,column,columns.AESEQ,AESEQ,,,,,,,0,8,,{}
+ae.csv,column,columns.AETERM,AETERM,,,,,,,1,8,,"{""max_length"":9}"
+ae.csv,column,columns.AEDECOD,AEDECOD,,,,,,,1,8,,"{""max_length"":9}"
+ae.csv,column,columns.AESER,AESER,,,,,,,1,8,,"{""max_length"":1}"
+ae.csv,column,columns.AESDTH,AESDTH,,,,,,,5,8,,"{""max_length"":1}"
+ae.csv,column,columns.AESTDTC,AESTDTC,,,,,,,2,8,,"{""max_length"":10}"
+ae.csv,column,columns.AEENDTC,AEENDTC,,,,,,,3,8,,"{""max_length"":10}"
+ae.csv,check,columns.AEDECOD.verifications[0].not_missing,not_missing,coded-when-reported,AEDECOD,CHECK-5,error,held,,0,8,,{}
+ae.csv,check,columns.AESDTH.verifications[0].not_missing,not_missing,death-when-serious,AESDTH,CHECK-5,error,held,,0,8,,{}
+ae.csv,check,columns.AESTDTC.verifications[0].not_missing,not_missing,start-mostly-present,AESTDTC,CHECK-5,error,held,,0,8,,{}
+ae.csv,check,columns.AEENDTC.verifications[0].not_missing,not_missing,end-mostly-present,AEENDTC,CHECK-5,warning,violated,not_missing_failed,2,8,"[{""AESEQ"":2,""USUBJID"":""S-1""},{""AESEQ"":2,""USUBJID"":""S-4""}]","{""column"":""AEENDTC"",""denominator"":7}"
+ae.csv,check,columns.AEENDTC.verifications[1].not_missing,not_missing,end-when-fatal,AEENDTC,CHECK-5,error,held,,0,8,,{}
