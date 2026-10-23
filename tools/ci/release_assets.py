@@ -18,7 +18,8 @@ from tools.ci import native
 
 # Placeholders in a declared file name. In a wheel's platform tag, `*` stands
 # for the platform version, such as the 11_0 of macosx_11_0_arm64. The Cargo
-# version is the engine's, which `yamaa --version` prints.
+# version is the engine's, which `yamaa --version` prints, and the release's
+# own, as its tag and title spell it.
 PLACEHOLDERS = {
     "<Python version>": lambda identity: re.escape(identity.python),
     "<R version>": lambda identity: re.escape(identity.r),
@@ -61,7 +62,7 @@ class Asset:
     """One file that a release publishes, and the native artifact holding it."""
 
     # What the selector checks inside the file: "wheel", "sdist", "r-source",
-    # "r-binary" or "cli".
+    # "r-binary", "cli" or "conformance".
     kind: str
     title: str
     # The file name, with the placeholders above.
@@ -156,6 +157,20 @@ def declared(coverage=None):
                 f"native-cli ({platform}, {target})",
             )
         )
+    # The conformance archive (#3690): the closed grammars and the evaluation
+    # set of the expression language as committed, named with the release's
+    # version in its Cargo spelling, as tools/packaging/conformance_archive.py
+    # writes it. Its files are the same for every platform, so the source
+    # platform builds it once.
+    assets.append(
+        Asset(
+            "conformance",
+            "Grammars and expression evaluation set",
+            "yamaa-<Cargo version>-conformance.zip",
+            f"native-conformance-{source}",
+            f"native-conformance ({source})",
+        )
+    )
     return assets
 
 

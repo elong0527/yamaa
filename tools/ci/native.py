@@ -24,7 +24,9 @@ R_PLATFORMS = PYTHON_PLATFORMS
 GLIBC_PLATFORMS = ("ubuntu-24.04", "ubuntu-24.04-arm")
 BUILD_PYTHON = "3.14"
 # The host whose Python and R source archives a release publishes. Every
-# source lane, on every platform, installs those same archives.
+# source lane, on every platform, installs those same archives. Its
+# native-conformance job also builds the conformance archive that a release
+# publishes (#3690), whose committed files are the same for every platform.
 SOURCE_PLATFORM = "ubuntu-24.04"
 # CRAN's incoming checks of that R source archive: R CMD check --as-cran with
 # these R versions on each of these platforms, with the workspace's minimum
