@@ -29,7 +29,8 @@ Rules that bind this lane in particular.
   yours: prepare everything, verify the preconditions, and hand the exact
   commands to the orchestrator.
 
-Work in a worktree from `origin/main` with the shared Cargo target, make one
+Work in a worktree from `origin/main` with its own Cargo target behind the
+machine's sccache, make one
 validated push with the explicit refspec, open the pull request ready for
 review with its native run linked, get CI green on the exact head, answer
 reviews, and stop. Report the pull request, the native run, each "Done

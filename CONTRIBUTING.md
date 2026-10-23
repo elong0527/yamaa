@@ -185,11 +185,12 @@ uv run --project python --no-sync python -m tools.packaging.generate_component_i
 ## Develop and verify
 
 Run `make help` at the repository root for prerequisites, configuration variables
-and supported targets. Its inventory is the command reference. Point every
-worktree on a machine at one shared `CARGO_TARGET_DIR`, as `AGENTS.md` says:
-Cargo serialises concurrent builds with its own lock, and the locked
-dependencies are then built once for every branch. Give a worktree its own
-target only when two builds must run at the same time.
+and supported targets. Its inventory is the command reference. Give every
+worktree its own `CARGO_TARGET_DIR` and share the compilation through sccache
+(`RUSTC_WRAPPER=sccache`, one `SCCACHE_DIR` per machine), as `AGENTS.md` says:
+a target shared between worktrees mixes their artifacts, because Cargo names a
+workspace crate's outputs without the worktree's path and trusts modification
+times (D232 on #3673).
 The R package's build ignores it: `make test-r` installs the package twice,
 each time building the engine inside the package, unless
 `YAMAA_R_CARGO_TARGET_DIR` names an absolute directory for both installations
