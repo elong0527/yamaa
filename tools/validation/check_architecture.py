@@ -18,10 +18,8 @@ Two rules hold for the Rust workspace under `rust/`:
   file, IO, network, process, environment, OS or path modules, or its clock.
   Format code decodes bytes as text, or writes a format's mark in a literal:
   an XML declaration, namespace or escape, a SAS transport header record or
-  the Parquet magic number. The scan is a ratchet, not a proof. `EXCEPTIONS`
-  names each core file that still holds such code, with the issue that moves
-  it to the adapters, and an entry whose file no longer matches fails, so the
-  move removes its entry.
+  the Parquet magic number. The scan reads marks, so it is a check, not a
+  proof, and it admits no exception.
 """
 
 import argparse
@@ -96,15 +94,9 @@ SIGNATURES = (
     ("HEADER RECORD", "a SAS transport header record"),
     ("PAR1", "the Parquet magic number"),
 )
-# Core files that still hold file or format code, each with the issue that
-# moves it to the adapters (#3261).
-EXCEPTIONS = {
-    "rust/crates/yamaa-core/src/csv_source.rs": "#3418 moves the CSV parser",
-}
 HINT = (
     "#3030 section 2.10 keeps file and format code in the adapters, and core "
-    "keeps the metadata models: move the code behind a port, or name the file "
-    f"in {SELF}'s EXCEPTIONS with the issue that moves it."
+    "keeps the metadata models: move the code to the adapters, behind a port."
 )
 
 
@@ -252,49 +244,29 @@ def marks(source, *, crate_root=False):
     return sorted(found)
 
 
-def core_errors(root, exceptions):
-    """The file and format code in core outside `exceptions`, and the
-    exceptions whose file no longer matches."""
+def core_errors(root):
+    """The file and format code in core."""
     directory = root / CORE_SOURCES
     sources = sorted(directory.rglob("*.rs"))
     if not sources:
         return [f"{CORE_SOURCES.as_posix()}: no core sources found"]
     errors = []
-    matched = set()
     for path in sources:
         relative = path.relative_to(root).as_posix()
         found = marks(
             path.read_text(encoding="utf-8"), crate_root=path == directory / "lib.rs"
         )
-        if not found:
-            continue
-        matched.add(relative)
-        if relative not in exceptions:
-            errors.extend(
-                f"{relative}:{line}: {kind} code in core: {mark}"
-                for line, kind, mark in found
-            )
-    for relative, reason in sorted(exceptions.items()):
-        if relative not in matched:
-            state = (
-                "holds no file or format code any more"
-                if (root / relative).is_file()
-                else "does not exist"
-            )
-            errors.append(
-                f"{SELF}: EXCEPTIONS names {relative} ({reason}), which {state}; "
-                "remove its entry"
-            )
+        errors.extend(
+            f"{relative}:{line}: {kind} code in core: {mark}"
+            for line, kind, mark in found
+        )
     return errors
 
 
-def check(root, exceptions=None):
+def check(root):
     """Every architecture error under the repository `root`."""
     root = Path(root)
-    return [
-        *edge_errors(root),
-        *core_errors(root, EXCEPTIONS if exceptions is None else exceptions),
-    ]
+    return [*edge_errors(root), *core_errors(root)]
 
 
 def main(argv=None):
@@ -306,10 +278,9 @@ def main(argv=None):
     if errors:
         print(HINT)
         return 1
-    pending = ", ".join(f"{path} ({reason})" for path, reason in EXCEPTIONS.items())
     print(
         "PASS: the workspace keeps the crate edges of #3030 section 2.10, and core "
-        f"holds no file or format code outside {pending or 'no exception'}."
+        "holds no file or format code."
     )
     return 0
 

@@ -1,82 +1,95 @@
 use super::rendered;
 use std::collections::BTreeSet;
 use yamaa_core::json::Value as C;
-use yamaa_core::{csv_source::parse, diagnostic::ConditionCode};
+use yamaa_core::{
+    csv_source::{Error, Field, ProfileCause},
+    diagnostic::ConditionCode,
+};
+/// Each CSV profile refusal the adapters' parser reports (its own suite pins
+/// which bytes give which cause, record and field) reaches its condition.
 pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
-    for (input, condition, rule, record, field) in [
+    for (cause, condition, rule, record, field) in [
         (
-            &b""[..],
+            ProfileCause::HeaderAbsent,
             "source_header_absent",
             "CSV-16",
             1,
-            C::Number(("1").parse().expect("canonical integer")),
+            Field::Index(1),
         ),
         (
-            &b"\xef\xbb\xbfID\n"[..],
+            ProfileCause::ByteOrderMark { declared: false },
             "source_byte_order_mark",
             "CSV-16",
             1,
-            C::Number(("1").parse().expect("canonical integer")),
+            Field::Index(1),
         ),
         (
-            &b"ID\nx\r"[..],
+            ProfileCause::CarriageReturn,
             "source_carriage_return",
             "CSV-16",
             2,
-            C::Number(("1").parse().expect("canonical integer")),
+            Field::Index(1),
         ),
         (
-            &b"ID\nx\"y"[..],
+            ProfileCause::QuoteInBareField,
             "source_quote_in_bare_field",
             "CSV-16",
             2,
-            C::Number(("1").parse().expect("canonical integer")),
+            Field::Index(1),
         ),
         (
-            &b"ID\n\"x\" "[..],
+            ProfileCause::TextAfterQuote,
             "source_text_after_quote",
             "CSV-16",
             2,
-            C::Number(("1").parse().expect("canonical integer")),
+            Field::Index(1),
         ),
         (
-            &b"ID\n\"x"[..],
+            ProfileCause::QuoteUnterminated,
             "source_quote_unterminated",
             "CSV-16",
             2,
-            C::Number(("1").parse().expect("canonical integer")),
+            Field::Index(1),
         ),
         (
-            &b"ID,V\nx"[..],
+            ProfileCause::RecordWidth,
             "source_record_width",
             "CSV-16",
             2,
-            C::Number(("2").parse().expect("canonical integer")),
+            Field::Index(2),
         ),
         (
-            &b"ID,\nx,y"[..],
+            ProfileCause::FieldNameEmpty,
             "source_field_name_empty",
             "CSV-16",
             1,
-            C::Number(("2").parse().expect("canonical integer")),
+            Field::Index(2),
         ),
         (
-            &b"ID,ID\nx,y"[..],
+            ProfileCause::FieldNameDuplicate,
             "source_field_name_duplicate",
             "CSV-16",
             1,
-            C::String("ID".into()),
+            Field::Name("ID".into()),
         ),
         (
-            &b"\xef\xbb\xbfID\n\"x\ny\",\xff"[..],
+            ProfileCause::InvalidText,
             "invalid_text",
             "CSV-10",
             2,
-            C::Number(("2").parse().expect("canonical integer")),
+            Field::Index(2),
         ),
     ] {
-        let error = parse(input).unwrap_err();
+        let expected_field = match &field {
+            Field::Index(index) => C::from(*index),
+            Field::Name(name) => C::String(name.clone()),
+        };
+        let error = Error::Profile {
+            cause,
+            record,
+            field,
+        };
         let finding = error.finding("SRC", "source.csv").unwrap().diagnostic();
         let definition = finding.definition();
         assert_eq!(
@@ -88,7 +101,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         assert_eq!(finding.context["dataset"], C::String("SRC".into()));
         assert_eq!(finding.context["path"], C::String("source.csv".into()));
         assert_eq!(finding.context["record"], C::from(record));
-        assert_eq!(finding.context["field"], field);
+        assert_eq!(finding.context["field"], expected_field);
         // A mark also records whether its input declares one (CSV-10).
         if condition == "source_byte_order_mark" {
             assert_eq!(finding.context["declared"], C::Bool(false));
@@ -102,18 +115,23 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     }
     // A declared mark that is absent keeps the condition and records the
     // declaration.
-    let error = yamaa_core::csv_source::parse_declared(b"ID\n", true).unwrap_err();
+    let error = Error::Profile {
+        cause: ProfileCause::ByteOrderMark { declared: true },
+        record: 1,
+        field: Field::Index(1),
+    };
     let finding = error.finding("SRC", "source.csv").unwrap().diagnostic();
     assert_eq!(finding.condition(), "source_byte_order_mark");
     assert_eq!(finding.rule(), Some("CSV-16"));
     assert_eq!(finding.spec_paths, ["input.SRC.path"]);
     assert_eq!(finding.context["declared"], C::Bool(true));
     reached.insert(rendered(&finding));
-    let header = (0..=yamaa_core::limits::Limits::COLUMNS)
-        .map(|index| format!("C{index}"))
-        .collect::<Vec<_>>()
-        .join(",");
-    let error = parse(header.as_bytes()).unwrap_err();
+    // A boundary refusal is no profile finding.
+    let error = Error::Limit {
+        resource: "columns",
+        limit: yamaa_core::limits::Limits::COLUMNS,
+        actual: Some(yamaa_core::limits::Limits::COLUMNS + 1),
+    };
     assert!(error.finding("SRC", "source.csv").is_none());
     assert!(error.rule().is_none());
     reached
@@ -122,17 +140,15 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
 pub(crate) fn typing_reached() -> std::collections::BTreeSet<yamaa_core::diagnostic::ConditionCode>
 {
     use yamaa_core::json::Value as JsonValue;
-    use yamaa_core::{
-        csv_source, diagnostic::Context, typed_csv::PreparedTypes, value::ColumnType,
-    };
+    use yamaa_core::{diagnostic::Context, typed_csv::PreparedTypes, value::ColumnType};
     let mut reached = std::collections::BTreeSet::new();
-    for (declarations, content, phase, condition, rule, field, extra) in [
+    for (declarations, source, phase, condition, rule, field, extra) in [
         (
             vec![
                 ("X".into(), ColumnType::Int),
                 ("ABSENT".into(), ColumnType::Int),
             ],
-            b"X\ninvalid".as_slice(),
+            crate::support::text_table(&["X"], &[&[Some("invalid")]]),
             "validation",
             "unknown_field",
             "INPUT-6",
@@ -141,7 +157,10 @@ pub(crate) fn typing_reached() -> std::collections::BTreeSet<yamaa_core::diagnos
         ),
         (
             vec![("B".into(), ColumnType::Int), ("A".into(), ColumnType::Int)],
-            b"A,B\n1,bad\nworse,2".as_slice(),
+            crate::support::text_table(
+                &["A", "B"],
+                &[&[Some("1"), Some("bad")], &[Some("worse"), Some("2")]],
+            ),
             "ingest",
             "field_parse_failed",
             "INPUT-7",
@@ -150,9 +169,7 @@ pub(crate) fn typing_reached() -> std::collections::BTreeSet<yamaa_core::diagnos
         ),
     ] {
         let types = PreparedTypes::new(&declarations).unwrap();
-        let error = types
-            .convert(csv_source::parse(content).unwrap())
-            .unwrap_err();
+        let error = types.convert(source).unwrap_err();
         let diagnostic = error.finding("SRC").unwrap().diagnostic();
         let definition = diagnostic.definition();
         assert_eq!(
