@@ -2776,6 +2776,9 @@ impl Checks<'_> {
         let donors = self.donors(&stored, &current)?;
         let mut refused = BTreeSet::new();
         let mut underived = BTreeSet::new();
+        // Whether a filter has failed so far, which leaves binding binding
+        // nothing of its lookup whether or not this reports it (LOOKUP-7).
+        let mut unfiltered = false;
         for (position, donor) in donors.iter().enumerate() {
             let (index, item) = (donor.index, donor.item);
             let identifier = item.id.name.as_str();
@@ -2835,7 +2838,9 @@ impl Checks<'_> {
             }
             // Binding keeps none of the derivations when one of them fails,
             // or when a lookup derived before this one is not bound.
-            if !item.bindings.is_empty() && (!refused.is_empty() || findings.len() != derivations) {
+            if !item.bindings.is_empty()
+                && (!refused.is_empty() || unfiltered || findings.len() != derivations)
+            {
                 underived.insert(index);
             }
             // A key compares each donor column with its current-row value: a
@@ -2893,6 +2898,7 @@ impl Checks<'_> {
                 self.grammar(filter, findings)?;
                 let (fails, reported) = self.filter_qualifiers(donor, findings);
                 filtered = !fails;
+                unfiltered |= fails;
                 if reported {
                     refused.insert(index);
                 }
