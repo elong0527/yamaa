@@ -24,6 +24,9 @@
 //!   parent it reads, is linted with and without `--fix`; each finding the
 //!   document prints is compared with the case's rows, all six lint columns,
 //!   and the layer stays as written.
+//! - **Conditions.** `yamaa conditions` prints the catalogue as text and as
+//!   JSON, and both name every condition of the `conditions` family in its
+//!   order, with each authored row's cells (#3700).
 //!
 //! A case whose rows or files differ by host gives them by host, under
 //! `python`, `r` and `cli`, and the command line reads its own: a case that
@@ -616,6 +619,124 @@ fn a_partial_restatement_prints_the_lint_rows_both_hosts_return() {
             std::fs::read_to_string(directory.join(file)).unwrap(),
             text(&case["files"], file),
             "{name}: yamaa {arguments:?} leaves the layer as written"
+        );
+    }
+}
+
+/// The condition catalogue (#3700): `yamaa conditions` prints a line of the
+/// `conditions` family's columns, then one line per condition the family
+/// names, in its order, each cell separated by a tab, a list joined with
+/// `, ` and a missing cell empty; with `--format json` it prints the status
+/// and each condition as an object with exactly those columns, its lists as
+/// lists and a missing cell null. Each authored row is the line and the
+/// object of its condition, as the hosts' tables hold it, and both forms
+/// exit 0 with nothing on standard error.
+#[test]
+fn the_conditions_command_prints_the_catalogue_both_hosts_return() {
+    let truth = family("conditions");
+    let columns = names(truth, "columns");
+    let conditions = names(truth, "names");
+    let rows = truth["rows"].as_array().unwrap();
+    let directory = Scratch::new("parity");
+    let printed = |arguments: &[&str]| {
+        let output = yamaa_in(&directory, arguments);
+        let text = |bytes: Vec<u8>| String::from_utf8(bytes).expect("UTF-8 output");
+        (
+            output.status.code(),
+            text(output.stdout),
+            text(output.stderr),
+        )
+    };
+
+    let (status, stdout, stderr) = printed(&["conditions"]);
+    assert_eq!((status, stderr.as_str()), (Some(0), ""), "yamaa conditions");
+    let lines = stdout.lines().collect::<Vec<_>>();
+    assert_eq!(
+        (
+            lines[0].to_owned(),
+            lines[1..]
+                .iter()
+                .map(|line| line.split('\t').next().unwrap())
+                .collect::<Vec<_>>()
+        ),
+        (columns.join("\t"), conditions.clone()),
+        "the printed columns and conditions"
+    );
+    for row in rows {
+        let cells = row.as_array().unwrap();
+        let line = cells
+            .iter()
+            .map(|cell| match cell {
+                Value::Array(items) => items
+                    .iter()
+                    .map(|item| item.as_str().unwrap())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                Value::Null => String::new(),
+                other => other.as_str().unwrap().to_owned(),
+            })
+            .collect::<Vec<_>>()
+            .join("\t");
+        let name = cells[0].as_str().unwrap();
+        let at = conditions.iter().position(|other| *other == name).unwrap();
+        assert_eq!(lines[at + 1], line, "the line of {name}");
+    }
+
+    let (status, stdout, stderr) = printed(&["--format", "json", "conditions"]);
+    assert_eq!(
+        (status, stderr.as_str()),
+        (Some(0), ""),
+        "yamaa --format json conditions"
+    );
+    let document: BTreeMap<String, Value> =
+        serde_json::from_str(stdout.strip_suffix('\n').unwrap()).unwrap();
+    assert_eq!(
+        (
+            document.keys().map(String::as_str).collect::<Vec<_>>(),
+            &document["command"],
+            &document["status"]
+        ),
+        (
+            vec!["command", "conditions", "status"],
+            &Value::from("conditions"),
+            &Value::from("succeeded")
+        ),
+        "the document"
+    );
+    let objects: Vec<BTreeMap<String, Value>> =
+        serde_json::from_value(document["conditions"].clone()).unwrap();
+    let mut keys = columns.clone();
+    keys.sort_unstable();
+    for object in &objects {
+        assert_eq!(
+            object.keys().map(String::as_str).collect::<Vec<_>>(),
+            keys,
+            "the keys of {}",
+            object["condition"]
+        );
+    }
+    assert_eq!(
+        objects
+            .iter()
+            .map(|object| object["condition"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        conditions,
+        "the conditions of the document"
+    );
+    for row in rows {
+        let cells = row.as_array().unwrap();
+        let name = cells[0].as_str().unwrap();
+        let object = objects
+            .iter()
+            .find(|object| object["condition"] == cells[0])
+            .unwrap();
+        assert_eq!(
+            columns
+                .iter()
+                .map(|&column| object[column].clone())
+                .collect::<Vec<_>>(),
+            *cells,
+            "the object of {name}"
         );
     }
 }

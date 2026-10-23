@@ -26,7 +26,7 @@ explained in [Schema introduction](schema-intro.md).
 | [`schema_environment.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_environment.yaml) | One language's environment: packaging lock and versionless installed functions with inline tests (Project functions) |
 | [`schema_verification.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_verification.yaml) | Dataset and column verifications (Verification) |
 | [`schema_metadata.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_metadata.yaml) | Governed dataset and column metadata (Submission metadata) |
-| [`conditions.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/conditions.yaml) | The validation-condition registry: every condition an implementation may raise, keyed to the phases that may raise it, with the message its issues carry |
+| [`conditions.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/conditions.yaml) | The validation-condition registry: every condition an implementation may raise, keyed to the phases that may raise it, with the message its issues carry and the name a release renamed it from, and every condition a release retired: the catalogue that `conditions()` returns |
 
 The derivation verbs in full, with what each one is for, are tabulated in
 [Schema introduction](schema-intro.md#the-derivation-vocabulary). The

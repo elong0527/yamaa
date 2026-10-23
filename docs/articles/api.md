@@ -30,6 +30,7 @@ project functions.
 | Read ODM XML | `yamaa_read_odm(path)` | `yamaa.read_odm(path)` |
 | Lint, and fix the layout | `yamaa_lint(paths, fix = TRUE)` | `yamaa.lint(paths, fix=True)` |
 | JSON Schema of a file type | `yamaa_schema("spec")` | `yamaa.schema("spec")` |
+| Conditions and their history | `yamaa_conditions()` | `yamaa.conditions()` |
 | Engine version and platform | `yamaa_info()` | `yamaa.info()` |
 | Check an installation | `yamaa_selftest()` | `yamaa.selftest()` |
 
@@ -195,7 +196,7 @@ PyArrow. A library that reads the Arrow PyCapsule interface, such as
 | `float` | double | `float` | Float64 |
 | `date` | `Date` | `datetime.date` | Date32 |
 | `datetime` | `POSIXct` in UTC | `datetime.datetime`, without a time zone | Timestamp, in seconds |
-| list, in `issues` | list column | `list` | List |
+| list, in `issues` and `conditions()` | list column | `list` | List |
 
 A missing value is `NA` in R, `NULL` for a missing list, and `None` in
 Python. `to_pandas()` keeps each column's Arrow type as a `pandas.ArrowDtype`,
@@ -727,6 +728,39 @@ names the condition `unexpected_file_type`.
     Path("spec.schema.json").write_text(yamaa.schema("spec") + "\n")
     ```
 
+## Conditions and their history
+
+`conditions()` returns the condition catalogue: every condition the engine
+may report in an issue, and every condition a release retired, one row per
+condition in name order. `condition` is the name that an issue's `condition`
+column gives, `severity` the severity of its issues, `phases` the phases that
+may report it, `rules` the rule cards that its issues cite in their `rule`
+column, in card order, and `message` the template that its issues' messages
+are written from. `renamed_from` gives the name a condition had before a
+release renamed it, and `retired_in` the release that retired a condition,
+which keeps its row with no phase, rule or message. So a program that
+matches conditions by name, such as one that explains them, finds every name
+it knows: a condition of the catalogue, the `renamed_from` of one, or a
+retired one. `phases` and `rules` are list columns, and a `message`,
+`renamed_from` or `retired_in` that a condition lacks is `NA` in R and `None`
+in Python. The catalogue is part of the installed engine, so every
+installation of one release gives the same table, and `yaml/conditions.yaml`
+at the release's tag holds it too.
+
+=== "R"
+
+    ```r
+    catalogue <- yamaa_conditions()
+    catalogue[!is.na(catalogue$renamed_from), c("condition", "renamed_from")]
+    ```
+
+=== "Python"
+
+    ```python
+    rows = yamaa.conditions().to_pylist()
+    renamed = {row["renamed_from"]: row["condition"] for row in rows if row["renamed_from"]}
+    ```
+
 ## Check an installation
 
 `selftest()` runs the benchmark cases built into the engine, in memory, and
@@ -849,6 +883,7 @@ yamaa resolve PATH [--spec NAME]
 yamaa read-odm SOURCE OUT [--archive-member NAME] [--max-archive-members N] [--max-expanded-bytes N] [--max-xml-depth N]
 yamaa lint [--fix] PATH...
 yamaa schema TYPE
+yamaa conditions
 yamaa selftest
 ```
 
@@ -861,6 +896,7 @@ yamaa selftest
 | `read-odm` | Reads SOURCE, an ODM XML file or a TAR archive that holds one, and saves its items to OUT | `read_odm()` |
 | `lint` | Lints each PATH, a yamaa file or a directory of them; with `--fix`, first applies the proved fixes in place | `lint()` |
 | `schema` | Prints the JSON Schema of TYPE: `spec`, `project`, `codelists` or `function` | `schema()` |
+| `conditions` | Prints the condition catalogue | `conditions()` |
 | `selftest` | Runs the cases built into the engine and compares each with its expected files | `selftest()` |
 
 `check`, `run` and `resolve` take a specification or a project, whichever
@@ -920,10 +956,13 @@ order written, and a submission made without `--created` prints
 canonical JSON in either format, and `read-odm` prints the path it wrote.
 `lint` prints each finding as `<file>:<line>:<column>: <finding> <message>`,
 then a summary line such as `3 lint findings in 2 of 5 files`, to which
-`--fix` adds `; fixed 1 file`. `selftest` prints the report that R and Python
-print. A call that cannot complete prints the message of the error that R and
-Python raise ([Errors](#errors)), which carries the first issue, then each
-other issue's line and the paths written before it.
+`--fix` adds `; fixed 1 file`. `conditions` prints the catalogue as a table: a
+line of its column names, then one line per condition, each cell separated by
+a tab, a list's items joined with `, ` and a missing cell empty. `selftest`
+prints the report that R and Python print. A call that cannot complete prints
+the message of the error that R and Python raise ([Errors](#errors)), which
+carries the first issue, then each other issue's line and the paths written
+before it.
 
 With `--format json`, a command prints one canonical JSON document instead:
 one line, with its members in key order ([JSON documents](#json-documents)).
@@ -969,6 +1008,7 @@ same keys, except where the table names a refusal's.
 | `read-odm` | `command`, `path`, `rows`, `status`, `issues`, `paths` |
 | `lint` | `command`, `status`, `findings`, `paths`; a refusal: `command`, `status`, `findings`, `issues`, `paths` |
 | `schema` | the JSON Schema; a refusal: `command`, `type`, `status`, `issues` |
+| `conditions` | `command`, `status`, `conditions` |
 | `selftest` | `command`, `status`, `cases`, `info` |
 | `--version` | `version`, `language_versions`, `features`, `host`, `host_version`, `platform` |
 
@@ -977,7 +1017,8 @@ same keys, except where the table names a refusal's.
   SOURCE.
 * `status` is the result's status, which a refused save keeps, and `failed`
   for a call refused before it has a result. `lint`'s is `failed` when a
-  finding remains, and `selftest`'s when a case failed.
+  finding remains, and `selftest`'s when a case failed; `conditions`' is
+  always `succeeded`.
 * `issues` holds every issue as an object with the twelve columns of
   `issues`: `severity`, `phase`, `condition`, `rule`, `spec_paths`, `file`,
   `line`, `column`, `message`, `context`, `source_span` and `operand_route`,
@@ -998,6 +1039,10 @@ same keys, except where the table names a refusal's.
 * `cases` has one object for each selftest case, with its `case`, `status`
   and `message`, and `info` holds the engine information with the keys that
   `--version` prints.
+* `conditions` has one object for each condition of the catalogue, in name
+  order, with its `condition`, `severity`, `phases`, `rules`, `message`,
+  `renamed_from` and `retired_in`; `phases` and `rules` are lists, and a
+  missing cell is null.
 
 From 1.0.0, every 1.x release keeps the commands, flags, exit statuses and
 JSON keys on this page, and may add commands, flags and keys, as the

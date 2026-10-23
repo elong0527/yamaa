@@ -3,6 +3,7 @@
 # Sources: rust/crates/yamaa/src/*.rs (public modules only; adapter and core internals excluded).
 yamaa: pub mod api
 yamaa: pub mod cancel
+yamaa: pub mod conditions
 yamaa: pub mod diagnostic
 yamaa: pub mod engine
 yamaa: pub mod error
@@ -21,10 +22,13 @@ yamaa::Action: pub use yamaa::text::Action
 yamaa::Argument: pub use yamaa::functions::Argument
 yamaa::Array: pub use yamaa::table::Array
 yamaa::BatchArgument: pub use yamaa::functions::BatchArgument
+yamaa::CONDITION_COLUMNS: pub use yamaa::conditions::CONDITION_COLUMNS
 yamaa::CallError: pub use yamaa::functions::CallError
 yamaa::CancellationToken: pub use yamaa::cancel::CancellationToken
 yamaa::Check: pub use yamaa::api::Check
 yamaa::ColumnType: pub use yamaa::functions::ColumnType
+yamaa::Condition: pub use yamaa::conditions::Condition
+yamaa::Conditions: pub use yamaa::conditions::Conditions
 yamaa::ContextValue: pub use yamaa::diagnostic::ContextValue
 yamaa::DataType: pub use yamaa::table::DataType
 yamaa::Date32Array: pub use yamaa::table::Date32Array
@@ -192,6 +196,25 @@ yamaa::cancel::CancellationToken::cancel: pub fn cancel(&self)
 yamaa::cancel::CancellationToken::is_cancelled: pub fn is_cancelled(&self) -> bool
 yamaa::cancel::CancellationToken::new: pub fn new() -> Self
 yamaa::cancel::CancellationToken::with_probe: pub fn with_probe(probe: impl Fn() -> bool + Send + Sync + 'static) -> Self
+yamaa::conditions: pub use yamaa::conditions::conditions
+yamaa::conditions::CONDITION_COLUMNS: pub const CONDITION_COLUMNS: [&str; 7]
+yamaa::conditions::Condition: impl Condition
+yamaa::conditions::Condition: pub struct Condition [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::conditions::Condition::condition: pub condition: &'static str
+yamaa::conditions::Condition::message: pub message: Option<&'static str>
+yamaa::conditions::Condition::phases: pub phases: Vec<&'static str>
+yamaa::conditions::Condition::renamed_from: pub renamed_from: Option<&'static str>
+yamaa::conditions::Condition::retired_in: pub retired_in: Option<&'static str>
+yamaa::conditions::Condition::rules: pub rules: Vec<&'static str>
+yamaa::conditions::Condition::severity: pub severity: Severity
+yamaa::conditions::Condition::text: pub fn text(&self) -> String
+yamaa::conditions::Condition::to_value: pub fn to_value(&self) -> ContextValue
+yamaa::conditions::Conditions: impl Conditions
+yamaa::conditions::Conditions: pub struct Conditions [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::conditions::Conditions::entries: pub fn entries(&self) -> &[Condition]
+yamaa::conditions::Conditions::lines: pub fn lines(&self) -> Vec<String>
+yamaa::conditions::Conditions::table: pub fn table(&self) -> Table
+yamaa::conditions::conditions: pub fn conditions() -> Conditions
 yamaa::decode_renv_lock: pub use yamaa::functions::decode_renv_lock
 yamaa::diagnostic::ContextValue: impl ContextValue
 yamaa::diagnostic::ContextValue: pub enum ContextValue [derive(Clone, Debug, PartialEq)] [non_exhaustive]

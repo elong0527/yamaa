@@ -250,6 +250,30 @@ tables:
       - name: message
         type: optional<str>
         meaning: why the case failed or is not covered, missing when it passed; not frozen
+  # #3700: the condition catalogue, every condition of the registry
+  # (yaml/conditions.yaml) and every condition a release retired.
+  conditions:
+    rust: yamaa::CONDITION_COLUMNS
+    order: conditions in name order, the retired ones among them
+    columns:
+      - {name: condition, type: str, values: yaml/conditions.yaml}
+      - {name: severity, type: str, values: severity}
+      - name: phases
+        type: list<str>
+        values: phase
+        meaning: the phases that may report it, as yaml/conditions.yaml lists them; none for a retired condition
+      - name: rules
+        type: list<str>
+        meaning: "the card IDs the registry's causes of it cite, in card order; none for engine_rejected, unsupported_operation and a retired condition"
+      - name: message
+        type: optional<str>
+        meaning: the template its issues' messages render from (P-MSG-1); missing for a retired condition; not frozen
+      - name: renamed_from
+        type: optional<str>
+        meaning: the name it had before a release renamed it; missing when no release did
+      - name: retired_in
+        type: optional<str>
+        meaning: the release that retired it, such as 1.0.0; missing for a condition the engine may report
 
 # Named records a host returns as a dict or named list.
 records:
@@ -369,6 +393,15 @@ public:
       raises: refusal
       calls: schema
       doc: The JSON Schema of a file type, spec, project, codelists or function, as canonical JSON text.
+    # #3700: the catalogue that the bundled yaml/conditions.yaml and the
+    # registry give, the same in every host.
+    - name: conditions
+      python: yamaa.conditions
+      r: yamaa_conditions
+      returns: table
+      table: conditions
+      calls: conditions
+      doc: Every condition the engine may report or a release retired, with its severity, phases, rules, message template and history.
     # D41: the record a selftest's `info` holds, made by the same helper in
     # each binding.
     - name: info
@@ -830,6 +863,15 @@ cli:
       text: the JSON Schema of TYPE as canonical JSON, in both formats
       json_keys: the JSON Schema itself
       refusal_keys: [command, type, status, issues]
+    # #3700: the catalogue that conditions() returns; nothing can refuse it.
+    - name: conditions
+      synopsis: yamaa conditions
+      operations: [conditions]
+      text: >-
+        a line of the catalogue's column names, then one line per condition,
+        each cell separated by a tab, a list's items joined with `, ` and a
+        missing cell empty
+      json_keys: [command, status, conditions]
     # D119: a case this build does not cover is skipped, which fails nothing.
     - name: selftest
       synopsis: yamaa selftest
@@ -841,10 +883,11 @@ cli:
         host and platform
       json_keys: [command, status, cases, info]
   # The keys of the objects the documents hold: each of `issues`, `members`,
-  # `findings` and `cases`, and an `info`. An issue has the columns of the
-  # issues table, its `context` an object rather than canonical JSON text. A
-  # member without output has null `rows` and `columns`, and one whose listing
-  # could not be read is named by the listing's path (D130).
+  # `findings`, `cases` and `conditions`, and an `info`. An issue has the
+  # columns of the issues table, its `context` an object rather than canonical
+  # JSON text. A member without output has null `rows` and `columns`, and one
+  # whose listing could not be read is named by the listing's path (D130). A
+  # condition has the columns of the catalogue, its lists as lists.
   json:
     issue_keys:
       - severity
@@ -862,6 +905,7 @@ cli:
     member_keys: [name, status, rows, columns, issue_count]
     finding_keys: [file, line, column, finding, spec_path, message]
     case_keys: [case, status, message]
+    condition_keys: [condition, severity, phases, rules, message, renamed_from, retired_in]
     info_keys: [version, language_versions, features, host, host_version, platform]
 
 # Complete current registrations, in source order. Both hosts expose the same
@@ -1036,6 +1080,11 @@ python:
       args: {file_type: text}
       returns: text
     - kind: function
+      name: _conditions
+      rust: api_entry::_conditions
+      args: {}
+      returns: Table
+    - kind: function
       name: _info
       rust: api_entry::_info
       args: {}
@@ -1118,6 +1167,7 @@ r:
         - {name: submission_summary, args: {handle: robj}, returns: r_reply}
         - {name: lint, args: {paths: robj, fix: bool}, returns: r_reply}
         - {name: schema, args: {file_type: raw}, returns: r_reply}
+        - {name: conditions, args: {}, returns: r_reply}
         - {name: info, args: {version: raw}, returns: r_reply}
         - {name: selftest, args: {version: raw}, returns: r_reply}
         - {name: selftest_status, args: {handle: robj}, returns: r_reply}
@@ -1174,6 +1224,7 @@ operations:
   submission_summary: {python: [_Submission.summary], r: [submission_summary]}
   lint: {python: [_lint], r: [lint]}
   schema: {python: [_schema], r: [schema]}
+  conditions: {python: [_conditions], r: [conditions]}
   info: {python: [_info], r: [info]}
   selftest: {python: [_selftest], r: [selftest]}
   selftest_status: {python: [_SelfTest.status], r: [selftest_status]}
