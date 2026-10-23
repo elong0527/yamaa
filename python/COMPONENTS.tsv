@@ -15,8 +15,7 @@ arrow-schema	55.2.0	Apache-2.0	crates.io	Arrow schemas and data types of those t
 arrow-select	55.2.0	Apache-2.0	crates.io	transitive dependency of parquet and arrow-cast: Arrow selection kernels
 atoi	2.0.0	MIT	crates.io	transitive dependency of arrow-cast: integer parsing
 autocfg	1.5.1	MIT	crates.io	build script: compiler feature probes of num-traits, and of memoffset in the Python binding
-base64	0.22.1	MIT	crates.io	decodes the base64 Arrow schema in Parquet metadata (the parquet feature); an older release comes with parquet and arrow-cast
-base64	0.23.1	MIT	crates.io	decodes the base64 Arrow schema in Parquet metadata (the parquet feature); an older release comes with parquet and arrow-cast
+base64	0.22.1	MIT	crates.io	decodes the base64 Arrow schema in Parquet metadata (the parquet feature); parquet and arrow-cast use it too
 bitflags	2.13.2	MIT	crates.io	transitive dependency of arrow-schema, flatbuffers and rustix: typed flag sets
 brotli	8.0.4	MIT AND BSD-3-Clause	crates.io	Brotli codec for Parquet pages (the parquet feature)
 brotli-decompressor	5.0.3	BSD-3-Clause	crates.io	transitive dependency of brotli: the Brotli decoder
@@ -64,14 +63,12 @@ libm	0.2.16	MIT	crates.io	portable mathematics, pinned exactly so that results a
 libzstd	1.5.7	BSD-3-Clause	bundled in zstd-sys 2.1.2+zstd.1.5.7	the Zstandard C library that zstd-sys compiles and links: the zstd codec of Parquet pages (the parquet feature)
 linux-raw-sys	0.12.1	MIT	crates.io	transitive dependency of rustix on Linux: raw Linux system call bindings
 log	0.4.34	MIT	crates.io	not compiled: iana-time-zone's logging on wasm32
-lz4_flex	0.11.6	MIT	crates.io	LZ4 codec for Parquet pages (the parquet feature); an older release comes with parquet's lz4 support
-lz4_flex	0.13.1	MIT	crates.io	LZ4 codec for Parquet pages (the parquet feature); an older release comes with parquet's lz4 support
+lz4_flex	0.11.6	MIT	crates.io	LZ4 codec for Parquet pages (the parquet feature); parquet's lz4 support uses it too
 memchr	2.8.3	MIT	crates.io	transitive dependency of quick-xml and serde_json: fast byte search
 memoffset	0.9.1	MIT	crates.io	transitive dependency of pyo3: field offsets of Python object layouts
 miniz_oxide	0.9.1	MIT	crates.io	transitive dependency of flate2: the pure-Rust DEFLATE backend that yamaa-adapters names; flate2 prefers zlib-rs, which parquet's flate2 feature selects
 num	0.4.3	MIT	crates.io	transitive dependency of the Arrow crates and parquet: generic numeric traits, re-exporting the num-* crates
-num-bigint	0.4.8	MIT	crates.io	big integers for exact decimal rounding (yamaa-core) and YAML integer scalars (the yaml feature); an older release comes with num and parquet
-num-bigint	0.5.1	MIT	crates.io	big integers for exact decimal rounding (yamaa-core) and YAML integer scalars (the yaml feature); an older release comes with num and parquet
+num-bigint	0.4.8	MIT	crates.io	big integers for exact decimal rounding (yamaa-core) and YAML integer scalars (the yaml feature); num and parquet use it too
 num-complex	0.4.6	MIT	crates.io	transitive dependency of num: the complex number types that it re-exports
 num-integer	0.1.47	MIT	crates.io	transitive dependency of num-bigint, num-rational and num: integer algorithms
 num-iter	0.1.46	MIT	crates.io	transitive dependency of num: numeric range iterators
@@ -153,8 +150,6 @@ zerocopy	0.8.63	MIT	crates.io	transitive dependency of ahash and half: checked b
 zerocopy-derive	0.8.63	MIT	crates.io	procedural macro: zerocopy's derives, which half enables
 zlib-rs	0.6.8	Zlib	crates.io	transitive dependency of flate2: the DEFLATE backend that parquet's flate2 feature selects, which flate2 prefers
 zmij	1.0.23	MIT	crates.io	transitive dependency of serde_json: floating-point formatting
-zstd	0.13.3	MIT	crates.io	Zstandard codec for Parquet pages (the parquet feature); an older release comes with parquet's zstd support
-zstd	0.14.3	BSD-3-Clause	crates.io	Zstandard codec for Parquet pages (the parquet feature); an older release comes with parquet's zstd support
+zstd	0.13.3	MIT	crates.io	Zstandard codec for Parquet pages (the parquet feature); parquet's zstd support uses it too
 zstd-safe	7.3.0	BSD-3-Clause	crates.io	transitive dependency of zstd: safe bindings to the zstd C library
-zstd-safe	8.2.0	BSD-3-Clause	crates.io	transitive dependency of zstd: safe bindings to the zstd C library
 zstd-sys	2.1.2+zstd.1.5.7	BSD-3-Clause	crates.io	transitive dependency of zstd-safe: builds and links the zstd C library that it bundles
