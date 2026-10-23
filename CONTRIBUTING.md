@@ -557,7 +557,11 @@ shared Python dependency metadata, engine/build changes and unknown paths
 run all four lanes. Fuzzing remains a separate workflow selected by affected
 parsers. There is no separate reporting job or equivalence status to wait for.
 The main schedule and release pushes run all development checks; dispatch
-also qualifies both hosts against benchmark truth.
+also qualifies both hosts against benchmark truth. A fifth lane, `loaded`,
+which is not required, checks both freshly installed hosts in the test-only
+loaded mode (`YAMAA_ENGINE=loaded`) when an input of that mode changes: the
+boundary, the engine's C ABI, either binding, the R build files, the
+interface suites or the tooling that builds the hosts; dispatch runs it too.
 
 The `Release compatibility` workflow checks the minimum Rust toolchain, the R
 source package built with it, minimal format builds, Python 3.15 and minimum

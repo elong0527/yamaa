@@ -206,6 +206,19 @@ by default resolves a link itself and serves its target in its place: FILE-8
 and [Inputs, outputs and paths](articles/api.md#inputs-outputs-and-paths)
 state that limit.
 
+On Windows x64 and macOS arm64 the native run also checks both hosts in the
+test-only loaded mode (#3702): its `native-loaded` jobs. Each builds the wheel
+and the R source package from the checkout with their bindings'
+`dynamic-engine` feature, which links no engine, and the engine library beside
+each module with that host's toolchain: MSVC beside the wheel's module, and
+Rtools' GNU target beside the R package's on Windows. It then runs the
+installed Python suites and the R package check with `YAMAA_ENGINE=loaded`
+(`tools/commands/host_checks.py`), where both interface suites also load each
+fixture engine. In that mode the R package check accepts one more note, on the
+engine library, which registers no R routines since the loader, not R, loads
+it. CI's `loaded` lane runs the same checks on Linux for a change to the
+boundary. No release asset comes from these jobs.
+
 The native run also runs CRAN's incoming checks on the R source archive that a
 release publishes, the bytes of its `native-r-ubuntu-24.04` artifact: its
 `native-cran` jobs. Each runs `R CMD check --as-cran` through
