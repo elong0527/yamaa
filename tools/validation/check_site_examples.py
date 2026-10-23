@@ -16,11 +16,11 @@ repository checks read YAML.
 
 CONTRIBUTING.md's "Documentation" section states the convention for authors.
 
-Until #3451 (P2-14) takes the 0.5 surface out of the docs, a block may declare
-`schema_version`, the 0.5 header. #3451 turns REFUSE_SCHEMA_VERSION on, and
-from then on such a block fails, a fragment included. The design record
-(`docs/design/`) and the release notes (`docs/releases/`) keep their 0.5
-examples, and this check reads neither.
+Until #3703 rewrites the schema introduction, the last page that holds a 0.5
+example, a block may declare `schema_version`, the 0.5 header. #3703 turns
+REFUSE_SCHEMA_VERSION on, and from then on such a block fails, a fragment
+included. The design record (`docs/design/`) and the release notes
+(`docs/releases/`) keep their 0.5 examples, and this check reads neither.
 """
 
 import argparse
@@ -48,7 +48,8 @@ FORMS = ".github/ISSUE_TEMPLATE/*.yml"
 JSON_SCHEMAS = Path("yaml/json")
 SCHEMA_SUFFIX = ".schema.json"
 FRAGMENT = "# fragment"
-# Off until #3451 (P2-14) takes the last 0.5 example off the pages.
+# Off until #3703 takes the last 0.5 example, in the schema introduction, off
+# the pages.
 REFUSE_SCHEMA_VERSION = False
 # A Markdown code fence and its info string, whose first word is the language.
 FENCE = re.compile(r"(?P<indent> *)(?P<fence>`{3,}|~{3,})(?P<info>.*)")

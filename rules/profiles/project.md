@@ -43,11 +43,9 @@ without a project file fails validation at each function call, codelist
 binding and inventory vocabulary it declares, all of which only a project file
 supplies ([CT-13](terminology.md#ct-13)).
 
-A project file that declares `schema_version` was written for language
-version 0.5, which no 1.x engine reads: it fails as
-`unsupported_language_version` at `schema_version`, naming version `0.5`
-([SCHEMA-2](../reference/schema-language.md#schema-2)), and none of the
-environment files it links is read.
+A project file that declares `schema_version` is refused under
+[SCHEMA-2](../reference/schema-language.md#schema-2) before any file it names
+is read.
 
 <a id="project-2"></a>
 

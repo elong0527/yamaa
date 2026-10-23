@@ -424,13 +424,15 @@ through other columns, fails under the
 
 ### LAYER-14. The resolved specification is canonical
 
-The resolved specification contains no `parent` and no clearing nulls, uses
-the long form of every shorthand, holds only reachable keyed declarations,
+The resolved specification contains no `parent` and no `clear`, uses the
+long form of every shorthand, holds only reachable keyed declarations,
 lists columns in the order of [LAYER-13](#layer-13), and keeps root and member
 fields in schema order. Conformance compares its YAML data tree, not its
 layout.
 
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_clear_removes_what_the_layer_inherits_before_its_own_fields_compose`.
+
 A free-form mapping whose owning field was replaced whole keeps the order of
 the contribution that supplied it. Composition consumes a layer's `clear` as
-it consumes `parent` ([LAYER-9](#layer-9)), so the resolved specification
-holds no `clear`, and `yamaa` records the newest version any layer declares.
+it consumes `parent` ([LAYER-9](#layer-9)), and `yamaa` records the newest
+version any layer declares.
