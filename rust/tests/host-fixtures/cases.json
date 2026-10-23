@@ -6218,6 +6218,26 @@
           }
         },
         {
+          "name": "an_overriding_value_in_an_included_fragment",
+          "files": {
+            "parent.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: {path: dm.csv, types: {AGE: int, ZERO: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n  - name: RATIO\n    type: float\n    label: Ratio\n    derivation: AGE / ZERO\n  - {name: AGE, type: int, label: Age, derivation: DM.AGE}\n  - {name: ZERO, type: int, label: Zero, derivation: DM.ZERO}\noutput: {path: adsl.csv, columns: [USUBJID, RATIO, AGE, ZERO]}\n",
+            "fragment.yaml": "yamaa: \"1.0\"\ntype: spec\ncolumns:\n  - name: RATIO\n    derivation: AGE / (ZERO * 3)\n",
+            "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\ninclude: [fragment.yaml]\ncolumns:\n  - name: RATIO\n    label: Age Ratio\n",
+            "dm.csv": "USUBJID,AGE,ZERO\nS1,30,0\n"
+          },
+          "call": {
+            "operation": "run",
+            "path": "child.yaml"
+          },
+          "issue": {
+            "condition": "division_by_zero",
+            "spec_path": "columns.RATIO.derivation",
+            "file": "fragment.yaml",
+            "line": 5,
+            "column": 5
+          }
+        },
+        {
           "name": "a_1_0_shorthand_overrides_a_structured_parent",
           "files": {
             "parent.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: IT\nkeys: [ID]\ninput: {RAW: raw.csv}\noutput: {path: out.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\n  - name: V\n    type: str\n    label: Value\n    derivation:\n      source:\n        variable: RAW.OLD\n        filter: RAW.ID IS NOT NULL\n",
@@ -6397,6 +6417,192 @@
           }
         }
       ]
+    },
+    "include-fragments": {
+      "files": {
+        "ae.csv": "USUBJID,AESEQ,AESEV,AESTDTC,AEENDTC\nS1,1,MILD,2026-01-05,2026-01-07\n",
+        "ae.yaml": "yamaa: \"1.0\"\ntype: spec\ninput:\n  AE: {path: ae.csv, types: {AESEQ: int, AESTDTC: date, AEENDTC: date}}\nbase: AE\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: AE.USUBJID}\n  - {name: AESEQ, type: int, label: Sequence, derivation: AE.AESEQ}\n  - {name: ASTDT, type: date, label: Start, derivation: AE.AESTDTC}\n  - {name: AENDT, type: date, label: End, derivation: AE.AEENDTC}\n",
+        "duration.yaml": "yamaa: \"1.0\"\ntype: spec\ncolumns:\n  - name: ADURN\n    type: int\n    label: Duration\n    derivation: {diff: {type: date, start: ASTDT, end: AENDT, unit: day, closed: both}}\n",
+        "severity.yaml": "yamaa: \"1.0\"\ntype: spec\ncolumns:\n  - name: ASEVN\n    type: int\n    label: Severity\n    derivation: {mapping: {source: AE.AESEV, dict: {MILD: 1, MODERATE: 2, SEVERE: 3}}}\n",
+        "adae.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: ae.yaml\ninclude: [duration.yaml, severity.yaml]\ndomain: ADAE\nkeys: [USUBJID, AESEQ]\noutput: {path: adae.csv, columns: [USUBJID, AESEQ, ADURN, ASEVN]}\n",
+        "named-parent.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: ae.yaml\ncolumns:\n  - {name: AFLAG, type: str, label: Flag, derivation: \"'Y'\"}\n",
+        "own-template.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: ae.yaml\ninclude: [named-parent.yaml]\ndomain: ADAE\nkeys: [USUBJID, AESEQ]\noutput: {path: adae.csv, columns: [USUBJID, AESEQ, AFLAG]}\n",
+        "cyclic-template.yaml": "yamaa: \"1.0\"\ntype: spec\ninclude: [cyclic.yaml]\n",
+        "cyclic.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: cyclic-template.yaml\ndomain: ADAE\nkeys: [USUBJID]\noutput: {path: adae.csv, columns: [USUBJID]}\n",
+        "twice-template.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: ae.yaml\ninclude: [duration.yaml]\n",
+        "twice.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: twice-template.yaml\ninclude: [duration.yaml]\ndomain: ADAE\nkeys: [USUBJID, AESEQ]\noutput: {path: adae.csv, columns: [USUBJID, AESEQ, ADURN]}\n",
+        "absent-template.yaml": "yamaa: \"1.0\"\ntype: spec\ninclude: [absent.yaml]\n",
+        "below-absent.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: absent-template.yaml\ninclude: [duration.yaml]\ndomain: ADAE\nkeys: [USUBJID]\noutput: {path: adae.csv, columns: [USUBJID]}\n",
+        "missing.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: ae.yaml\ninclude: [absent.yaml]\ndomain: ADAE\nkeys: [USUBJID, AESEQ]\noutput: {path: adae.csv, columns: [USUBJID, AESEQ]}\n"
+      },
+      "checks": [
+        {
+          "name": "a_parent_chain_and_its_fragments_check_clean",
+          "path": "adae.yaml",
+          "issues": []
+        },
+        {
+          "name": "a_fragment_that_names_a_parent_is_refused_at_that_parent",
+          "path": "own-template.yaml",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "prohibited_construct",
+              "rule": "LAYER-4",
+              "spec_paths": [
+                "parent"
+              ],
+              "file": "named-parent.yaml",
+              "line": 3,
+              "column": 1,
+              "message": "a construct is written where its field does not admit it",
+              "context": "{\"construct\":\"parent\",\"entry\":\"{root}/own-template.yaml\",\"source\":\"{root}/named-parent.yaml\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "an_include_back_to_the_entry_is_a_cycle",
+          "path": "cyclic.yaml",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "inheritance_cycle",
+              "rule": "LAYER-3",
+              "spec_paths": [
+                "include[0]"
+              ],
+              "file": "cyclic-template.yaml",
+              "line": 3,
+              "column": 11,
+              "message": "the layers form a cycle: {root}/cyclic.yaml, {root}/cyclic-template.yaml, {root}/cyclic.yaml",
+              "context": "{\"cycle\":[\"{root}/cyclic.yaml\",\"{root}/cyclic-template.yaml\",\"{root}/cyclic.yaml\"],\"reason\":\"parent_chain_returns_to_entry\",\"source\":\"{root}/cyclic-template.yaml\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "a_fragment_reached_twice_is_refused_at_its_second_include",
+          "path": "twice.yaml",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "duplicate_layer",
+              "rule": "LAYER-3",
+              "spec_paths": [
+                "include[0]"
+              ],
+              "file": "twice.yaml",
+              "line": 4,
+              "column": 11,
+              "message": "include duration.yaml names a layer the specification already composes",
+              "context": "{\"layer\":\"{root}/duration.yaml\",\"path\":\"duration.yaml\",\"source\":\"{root}/twice.yaml\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "a_fragment_that_is_not_there_is_refused_at_its_include",
+          "path": "missing.yaml",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "resource_path_missing",
+              "rule": "FILE-7",
+              "spec_paths": [
+                "include[0]"
+              ],
+              "file": "missing.yaml",
+              "line": 4,
+              "column": 11,
+              "message": "absent.yaml does not exist",
+              "context": "{\"path\":\"absent.yaml\",\"source\":\"{root}/missing.yaml\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
+          "name": "a_template_s_missing_fragment_is_refused_in_the_template",
+          "path": "below-absent.yaml",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "validation",
+              "condition": "resource_path_missing",
+              "rule": "FILE-7",
+              "spec_paths": [
+                "include[0]"
+              ],
+              "file": "absent-template.yaml",
+              "line": 3,
+              "column": 11,
+              "message": "absent.yaml does not exist",
+              "context": "{\"path\":\"absent.yaml\",\"source\":\"{root}/absent-template.yaml\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        }
+      ],
+      "resolve": {
+        "path": "adae.yaml",
+        "layers": [
+          "ae.yaml",
+          "duration.yaml",
+          "severity.yaml",
+          "adae.yaml"
+        ],
+        "resources": [
+          {
+            "spec_path": "include[0]",
+            "role": "included_specification",
+            "declaring_source": "adae.yaml",
+            "written": "duration.yaml",
+            "location": "duration.yaml"
+          },
+          {
+            "spec_path": "include[1]",
+            "role": "included_specification",
+            "declaring_source": "adae.yaml",
+            "written": "severity.yaml",
+            "location": "severity.yaml"
+          },
+          {
+            "spec_path": "parent",
+            "role": "parent_specification",
+            "declaring_source": "adae.yaml",
+            "written": "ae.yaml",
+            "location": "ae.yaml"
+          }
+        ],
+        "columns": [
+          "USUBJID",
+          "AESEQ",
+          "ASTDT",
+          "AENDT",
+          "ADURN",
+          "ASEVN"
+        ],
+        "declaring_sources": {
+          "/columns/0/label": "ae.yaml",
+          "/columns/4/label": "duration.yaml",
+          "/columns/5/label": "severity.yaml",
+          "/domain": "adae.yaml"
+        },
+        "absent_fields": [
+          "parent",
+          "include",
+          "clear"
+        ]
+      }
     },
     "project-parity": {
       "cases": [
