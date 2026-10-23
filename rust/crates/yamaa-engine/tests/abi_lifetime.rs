@@ -41,50 +41,40 @@ fn every_released_handle_leaves_the_census() {
     let (spec, project) = (Str::of(&spec), Str::of(&project));
     let engine = engine();
     let run = spec_run(&call(), &study.spelled("spec.yaml"), None, 0).done();
-    // SAFETY, for every case: the arguments are valid for the call.
-    let cases: [(&str, Box<dyn Fn() -> Answer<u64>>); 7] = unsafe {
-        [
-            (
-                "plans",
-                Box::new(|| answer(|o, r| (engine.plans_new)(o, r))),
-            ),
-            (
-                "check",
-                Box::new(|| answer(|o, r| (engine.spec_check)(&call(), spec, Str::NONE, o, r))),
-            ),
-            (
-                "run",
-                Box::new(|| answer(|o, r| (engine.spec_run)(&call(), spec, Str::NONE, 0, o, r))),
-            ),
-            (
-                "project_run",
-                Box::new(|| {
+    let make = |kind: &str| {
+        // SAFETY: the arguments are valid for the call.
+        unsafe {
+            match kind {
+                "check" => answer(|o, r| (engine.spec_check)(&call(), spec, Str::NONE, o, r)),
+                "run" => answer(|o, r| (engine.spec_run)(&call(), spec, Str::NONE, 0, o, r)),
+                "project_run" => {
                     answer(|o, r| (engine.project_run)(&call(), project, Str::NONE, 0, o, r))
+                }
+                "submission" => answer(|o, r| {
+                    (engine.project_submission)(&call(), project, Str::NONE, Str::NONE, o, r)
                 }),
-            ),
-            (
-                "submission",
-                Box::new(|| {
-                    answer(|o, r| {
-                        (engine.project_submission)(&call(), project, Str::NONE, Str::NONE, o, r)
-                    })
-                }),
-            ),
-            (
-                "selftest",
-                Box::new(|| answer(|o, r| (engine.selftest)(&call(), o, r))),
-            ),
-            ("table", Box::new(|| table(engine.output, run))),
-        ]
+                "selftest" => answer(|o, r| (engine.selftest)(&call(), o, r)),
+                "plans" => answer(|o, r| (engine.plans_new)(o, r)),
+                _ => table(engine.output, run),
+            }
+        }
     };
     let before = census();
     let (mut seen, mut expected) = (Vec::new(), Vec::new());
-    for (kind, make) in &cases {
-        let made = make().done();
+    for kind in [
+        "check",
+        "run",
+        "project_run",
+        "submission",
+        "selftest",
+        "plans",
+        "table",
+    ] {
+        let made = make(kind).done();
         let held = census();
         release(made);
-        seen.push((*kind, held, census()));
-        expected.push((*kind, before.plus(kind), before.clone()));
+        seen.push((kind, held, census()));
+        expected.push((kind, before.plus(kind), before.clone()));
     }
     release(run);
     assert_eq!(seen, expected, "each kind of handle, made and released");
