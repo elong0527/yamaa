@@ -204,11 +204,11 @@ pub struct Call {
     pub is_interrupt: Option<IsInterrupt>,
     /// The five installed-distribution queries with which the engine
     /// verifies a uv lock (Python, D172).
-    pub providers: Option<Providers>,
-    pub standard_library: Option<StandardLibrary>,
-    pub distribution_version: Option<DistributionVersion>,
-    pub environment: Option<Environment>,
-    pub integer_digits: Option<IntegerDigits>,
+    pub providers: Option<Query>,
+    pub standard_library: Option<Query>,
+    pub distribution_version: Option<Query>,
+    pub environment: Option<Query>,
+    pub integer_digits: Option<Query>,
     /// The comparison of the versions the engine decoded from an renv lock
     /// with the installed ones (R).
     pub compare_locked: Option<CompareLocked>,
@@ -265,32 +265,22 @@ pub type CallBatch = unsafe extern "C" fn(
 /// host's interrupt: 1 or 0.
 pub type IsInterrupt =
     unsafe extern "C" fn(context: *mut c_void, kind: u32, payload: *mut c_void) -> c_int;
-/// The installed distributions that provide each of the top-level
-/// `modules`: [`ANSWERED`] with (module, distribution) pairs in
-/// `reply.texts`, or [`RAISED`].
-pub type Providers = unsafe extern "C" fn(
+/// One installed-distribution query, asked with its texts: [`ANSWERED`] or
+/// [`RAISED`]. `providers` is asked the top-level modules and answers
+/// (module, distribution) pairs in `reply.texts`; `standard_library` is asked
+/// one module and answers a boolean `reply.scalar`; `distribution_version` is
+/// asked one distribution and answers its version as text, a missing scalar
+/// when none of that name is installed, or any other kind when its metadata
+/// records no version text; `environment` is asked nothing and answers the
+/// marker environment as (name, value) pairs; `integer_digits` is asked
+/// nothing and answers the interpreter's limit on the digits of an integer
+/// read from text as an integer, 0 when the limit is off.
+pub type Query = unsafe extern "C" fn(
     context: *mut c_void,
-    modules: *const Str,
-    modules_len: usize,
+    texts: *const Str,
+    texts_len: usize,
     reply: *mut Reply,
 ) -> c_int;
-/// Whether `module` belongs to the standard library: [`ANSWERED`] with a
-/// boolean `reply.scalar`, or [`RAISED`].
-pub type StandardLibrary =
-    unsafe extern "C" fn(context: *mut c_void, module: Str, reply: *mut Reply) -> c_int;
-/// The installed version of `distribution`: [`ANSWERED`] with the version
-/// text in `reply.scalar`, a missing scalar when no distribution of that
-/// name is installed, or any other kind when its metadata records no version
-/// text; or [`RAISED`].
-pub type DistributionVersion =
-    unsafe extern "C" fn(context: *mut c_void, distribution: Str, reply: *mut Reply) -> c_int;
-/// The marker environment: [`ANSWERED`] with (name, value) pairs in
-/// `reply.texts`, or [`RAISED`].
-pub type Environment = unsafe extern "C" fn(context: *mut c_void, reply: *mut Reply) -> c_int;
-/// The interpreter's limit on the digits of an integer read from text:
-/// [`ANSWERED`] with an integer `reply.scalar`, 0 when the limit is off; or
-/// [`RAISED`].
-pub type IntegerDigits = unsafe extern "C" fn(context: *mut c_void, reply: *mut Reply) -> c_int;
 /// Compare the locked versions, (package, version) pairs in `packages`, with
 /// the installed ones for the functions whose logical calls are `calls`:
 /// [`ANSWERED`] with the findings in `reply.texts`, four items each (the
@@ -610,46 +600,58 @@ pub struct Outcome {
     pub language_versions_len: usize,
 }
 
+/// An entry of a call: [`Engine::selftest`] and [`Engine::info`].
+pub type OnCall<T> =
+    unsafe extern "C" fn(call: *const Call, out: *mut T, refusal: *mut Refusal) -> Status;
+/// An entry of one path, read without the engine: the printed lines of a
+/// lazy object (D37) and a file type's schema.
+pub type OnPath<T> = unsafe extern "C" fn(path: Str, out: *mut T, refusal: *mut Refusal) -> Status;
+/// An entry of a call and one path: a project's check and its names.
+pub type OnFile<T> = unsafe extern "C" fn(
+    call: *const Call,
+    path: Str,
+    out: *mut T,
+    refusal: *mut Refusal,
+) -> Status;
+/// An entry of a call, a path and an optional second text: a specification
+/// with its project or none, or a project with a name.
+pub type OnPair<T> = unsafe extern "C" fn(
+    call: *const Call,
+    path: Str,
+    second: Str,
+    out: *mut T,
+    refusal: *mut Refusal,
+) -> Status;
+/// A run: a specification with its project, or a project with its section,
+/// reusing the plans holder `plans`, or none for 0.
+pub type OnRun = unsafe extern "C" fn(
+    call: *const Call,
+    path: Str,
+    second: Str,
+    plans: Handle,
+    out: *mut Handle,
+    refusal: *mut Refusal,
+) -> Status;
+/// A result accessor: a result handle and, for a project run's member, its
+/// name, or no text for the result itself.
+pub type OnMember<T> =
+    unsafe extern "C" fn(result: Handle, member: Str, out: *mut T, refusal: *mut Refusal) -> Status;
+/// An entry of one handle: a result's or a table's.
+pub type OnHandle<T> =
+    unsafe extern "C" fn(handle: Handle, out: *mut T, refusal: *mut Refusal) -> Status;
+
 /// The engine's function table, which a negotiation returns on acceptance.
-/// Every entry is described in the module documentation's terms; a result
-/// accessor takes a result handle and, where a project run's member answers
-/// too, the member's name or no text.
+/// A host reads no entry past `size`. An entry that answers a handle hands
+/// out a new one, which the host gives back to `release`.
 #[repr(C)]
 pub struct Engine {
-    /// The size of the table, in bytes; a host reads no entry past it.
     pub size: u32,
     /// The boundary version the table implements.
     pub version: u32,
-    pub spec_check: unsafe extern "C" fn(
-        call: *const Call,
-        specification: Str,
-        project: Str,
-        out: *mut Handle,
-        refusal: *mut Refusal,
-    ) -> Status,
-    pub project_check: unsafe extern "C" fn(
-        call: *const Call,
-        project: Str,
-        out: *mut Handle,
-        refusal: *mut Refusal,
-    ) -> Status,
-    /// `plans` is a plans handle the run reuses, or 0.
-    pub spec_run: unsafe extern "C" fn(
-        call: *const Call,
-        specification: Str,
-        project: Str,
-        plans: Handle,
-        out: *mut Handle,
-        refusal: *mut Refusal,
-    ) -> Status,
-    pub project_run: unsafe extern "C" fn(
-        call: *const Call,
-        project: Str,
-        section: Str,
-        plans: Handle,
-        out: *mut Handle,
-        refusal: *mut Refusal,
-    ) -> Status,
+    pub spec_check: OnPair<Handle>,
+    pub project_check: OnFile<Handle>,
+    pub spec_run: OnRun,
+    pub project_run: OnRun,
     pub project_submission: unsafe extern "C" fn(
         call: *const Call,
         project: Str,
@@ -674,72 +676,24 @@ pub struct Engine {
         out: *mut Handle,
         refusal: *mut Refusal,
     ) -> Status,
-    pub selftest:
-        unsafe extern "C" fn(call: *const Call, out: *mut Handle, refusal: *mut Refusal) -> Status,
+    pub selftest: OnCall<Handle>,
     pub plans_new: unsafe extern "C" fn(out: *mut Handle, refusal: *mut Refusal) -> Status,
-    pub spec_resolve: unsafe extern "C" fn(
-        call: *const Call,
-        specification: Str,
-        project: Str,
-        out: *mut Nodes,
-        refusal: *mut Refusal,
-    ) -> Status,
-    pub project_spec: unsafe extern "C" fn(
-        call: *const Call,
-        project: Str,
-        name: Str,
-        out: *mut Text,
-        refusal: *mut Refusal,
-    ) -> Status,
-    pub project_names: unsafe extern "C" fn(
-        call: *const Call,
-        project: Str,
-        out: *mut Texts,
-        refusal: *mut Refusal,
-    ) -> Status,
-    /// The printed lines of a lazy specification object (D37).
-    pub spec_summary:
-        unsafe extern "C" fn(specification: Str, out: *mut Texts, refusal: *mut Refusal) -> Status,
-    pub project_summary:
-        unsafe extern "C" fn(project: Str, out: *mut Texts, refusal: *mut Refusal) -> Status,
-    pub schema:
-        unsafe extern "C" fn(file_type: Str, out: *mut Text, refusal: *mut Refusal) -> Status,
-    pub info:
-        unsafe extern "C" fn(call: *const Call, out: *mut Info, refusal: *mut Refusal) -> Status,
-    pub status: unsafe extern "C" fn(
-        result: Handle,
-        member: Str,
-        out: *mut Text,
-        refusal: *mut Refusal,
-    ) -> Status,
+    pub spec_resolve: OnPair<Nodes>,
+    pub project_spec: OnPair<Text>,
+    pub project_names: OnFile<Texts>,
+    pub spec_summary: OnPath<Texts>,
+    pub project_summary: OnPath<Texts>,
+    pub schema: OnPath<Text>,
+    pub info: OnCall<Info>,
+    pub status: OnMember<Text>,
     /// A table handle.
-    pub issues: unsafe extern "C" fn(
-        result: Handle,
-        member: Str,
-        out: *mut Handle,
-        refusal: *mut Refusal,
-    ) -> Status,
+    pub issues: OnMember<Handle>,
     /// The printed lines (D37).
-    pub summary: unsafe extern "C" fn(
-        result: Handle,
-        member: Str,
-        out: *mut Texts,
-        refusal: *mut Refusal,
-    ) -> Status,
+    pub summary: OnMember<Texts>,
     /// A table handle, or 0 when the run built no output.
-    pub output: unsafe extern "C" fn(
-        result: Handle,
-        member: Str,
-        out: *mut Handle,
-        refusal: *mut Refusal,
-    ) -> Status,
+    pub output: OnMember<Handle>,
     /// A table handle, or 0 when the run never reached execution.
-    pub report: unsafe extern "C" fn(
-        result: Handle,
-        member: Str,
-        out: *mut Handle,
-        refusal: *mut Refusal,
-    ) -> Status,
+    pub report: OnMember<Handle>,
     /// The paths written; the call's probe can cancel it.
     pub save: unsafe extern "C" fn(
         call: *const Call,
@@ -747,10 +701,8 @@ pub struct Engine {
         out: *mut Texts,
         refusal: *mut Refusal,
     ) -> Status,
-    pub names:
-        unsafe extern "C" fn(result: Handle, out: *mut Texts, refusal: *mut Refusal) -> Status,
-    pub created:
-        unsafe extern "C" fn(result: Handle, out: *mut Text, refusal: *mut Refusal) -> Status,
+    pub names: OnHandle<Texts>,
+    pub created: OnHandle<Text>,
     /// Private installed-run evidence, or an empty buffer when the run has
     /// none; `include_measurements` is 0 or 1.
     pub observations: unsafe extern "C" fn(
@@ -760,24 +712,16 @@ pub struct Engine {
         refusal: *mut Refusal,
     ) -> Status,
     /// A selftest's cases, a table handle.
-    pub cases:
-        unsafe extern "C" fn(result: Handle, out: *mut Handle, refusal: *mut Refusal) -> Status,
+    pub cases: OnHandle<Handle>,
     /// The engine information that ran a selftest's cases.
-    pub selftest_info:
-        unsafe extern "C" fn(result: Handle, out: *mut Info, refusal: *mut Refusal) -> Status,
-    pub rows: unsafe extern "C" fn(table: Handle, out: *mut u64, refusal: *mut Refusal) -> Status,
-    pub columns:
-        unsafe extern "C" fn(table: Handle, out: *mut Texts, refusal: *mut Refusal) -> Status,
+    pub selftest_info: OnHandle<Info>,
+    pub rows: OnHandle<u64>,
+    pub columns: OnHandle<Texts>,
     /// The table's printed preview (D167).
-    pub preview:
-        unsafe extern "C" fn(table: Handle, out: *mut Text, refusal: *mut Refusal) -> Status,
+    pub preview: OnHandle<Text>,
     /// A fresh Arrow C stream over the table, with its own cursor over
     /// shared immutable buffers, into `out`, which holds a released stream.
-    pub export: unsafe extern "C" fn(
-        table: Handle,
-        out: *mut ArrowArrayStream,
-        refusal: *mut Refusal,
-    ) -> Status,
+    pub export: OnHandle<ArrowArrayStream>,
     /// Give a handle back; releasing a released handle, or 0, does nothing.
     pub release: unsafe extern "C" fn(handle: Handle) -> Status,
     pub census: unsafe extern "C" fn(out: *mut Census) -> Status,
