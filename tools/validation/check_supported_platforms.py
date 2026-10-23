@@ -27,12 +27,13 @@ and tests the installed package:
 - native-cli-install: each command-line binary, for its Rust target.
 
 The other lanes are diagnostic: native-rust tests the shared workspace,
-native-dist builds what the qualifying lanes install, native-cran with R-devel
-checks the R source package with an R that is not released yet, and its
-variants without the suggested packages and in R-hub's containers, gcc16 and
-clang-asan with its sanitizers, repeat that check in more of CRAN's
-configurations. A kind of lane that native.py adds fails this check until it
-is classified here.
+native-dist builds what the qualifying lanes install, native-share runs the
+conformance corpus with a wheel that native-qualify qualifies, on a Windows
+network share, native-cran with R-devel checks the R source package with an R
+that is not released yet, and its variants without the suggested packages and
+in R-hub's containers, gcc16 and clang-asan with its sanitizers, repeat that
+check in more of CRAN's configurations. A kind of lane that native.py adds
+fails this check until it is classified here.
 
 An R source package cell may state a floor, `R 4.2 or later`, as the package's
 DESCRIPTION does. It counts as qualified when lanes on its platform qualify the
@@ -75,7 +76,7 @@ QUALIFYING = frozenset(
         "cli",
     }
 )
-DIAGNOSTIC = frozenset({"rust", "build", "cran_container", "cran_no_suggests"})
+DIAGNOSTIC = frozenset({"rust", "build", "share", "cran_container", "cran_no_suggests"})
 
 
 @dataclass(frozen=True)

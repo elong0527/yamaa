@@ -2,6 +2,11 @@
 
 Run with python -I outside the checkout. Expected files are never copied into
 execution staging. The companion comparator is the only truth reader.
+
+The runner stages each case below --output and records it there. With
+--output-as, another path that reaches that directory, such as a Windows
+network share or a drive mapped to it (#3030 D15), every call names the
+staged case through that path instead.
 """
 
 from __future__ import annotations
@@ -172,6 +177,29 @@ def relative(paths, case):
     return [one(path) for path in paths]
 
 
+def named_output(output, written):
+    """The directory through which every call names the staged cases.
+
+    That is `output`, unless `written` (--output-as) gives another path that
+    reaches it, which is then made absolute but not resolved: resolving a
+    mapped drive would name its share instead, and the engine would never see
+    the drive. The record already written in `output` must read back through
+    that path unchanged; otherwise it reaches another directory, and this
+    raises ValueError.
+    """
+    if written is None:
+        return output
+    named = Path(os.path.abspath(written))
+    record = (output / "run.json").read_bytes()
+    try:
+        reached = (named / "run.json").read_bytes() == record
+    except OSError:
+        reached = False
+    if not reached:
+        raise ValueError(f"--output-as {written} does not reach --output {output}")
+    return named
+
+
 def table(result):
     """A yamaa.Table's columns, with their types, and its cells as text."""
     if result is None:
@@ -208,6 +236,12 @@ def main(argv=None):
     parser.add_argument("--fixtures", type=Path, required=True)
     parser.add_argument("--python-lock", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--output-as",
+        type=Path,
+        help="another path that reaches --output, such as a network share or a "
+        "drive mapped to it, through which every call names the staged cases",
+    )
     parser.add_argument("--source-revision", required=True)
     parser.add_argument("--package-form", default="installed")
     parser.add_argument("--evidence")
@@ -245,12 +279,22 @@ def main(argv=None):
             "table_encoding": "str:utf8-hex,float:ieee754-be,int:decimal,date:epoch-days,datetime:epoch-seconds",
         },
     )
+    try:
+        named = named_output(output, args.output_as)
+    except ValueError as error:
+        parser.error(str(error))
+
+    def through(case):
+        """A staged case as every call names it."""
+        return named / case.relative_to(output)
 
     def observe(run, case):
         tables = {"output": table(run.output), "report": table(run.report)}
         # A save returns the paths it wrote, in publication order; a refused
         # save raises with the paths it wrote first. The record keeps them
-        # relative to the case's root.
+        # relative to the case's root: the case as the calls named it,
+        # resolved, because the engine returns resolved paths, those of a
+        # mapped drive on its share.
         saved, paths = False, None
         if not run.issues.num_rows:
             try:
@@ -266,7 +310,7 @@ def main(argv=None):
             "issues": issues,
             "tables": tables,
             "saved": saved,
-            "paths": relative(paths, case),
+            "paths": relative(paths, through(case).resolve()),
         }
 
     def files(case):
@@ -282,10 +326,13 @@ def main(argv=None):
         return json.loads(run._native.observations(True))["measurements"]["plan"]
 
     def build(case, entry, specification, repeat=False):
+        # The runner stages and reads `case` itself; every call names it as
+        # `called`, the same directory through --output-as when given.
+        called = through(case)
         # An entry's `environment` names the project file it runs with.
         project = entry["environment"]
         if project is None:
-            spec = yamaa.spec(case / specification)
+            spec = yamaa.spec(called / specification)
         else:
             stage_lock(case, project, args.python_lock)
             # A project names a specification by its entry's `domain`, which
@@ -293,7 +340,7 @@ def main(argv=None):
             name = domain_of(case / entry["specification"])
             listing = project_for(case, project, entry["specification"], specification)
             try:
-                spec = yamaa.project(case / listing).spec(name)
+                spec = yamaa.project(called / listing).spec(name)
             except yamaa.Error as refusal:
                 # A project that fails admission refuses to name its specs.
                 # The spec-with-project object, which R's runner opens for
@@ -301,7 +348,7 @@ def main(argv=None):
                 # project's issues, which the record keeps. A refusal that
                 # this spec's check does not reproduce exactly stays this
                 # record's error.
-                spec = yamaa.Spec(case / specification, os.fspath(case / listing))
+                spec = yamaa.Spec(called / specification, os.fspath(called / listing))
                 checked = spec.check().issues
                 if not checked.num_rows or (
                     checked.to_pylist() != refusal.issues.to_pylist()

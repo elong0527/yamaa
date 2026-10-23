@@ -280,6 +280,32 @@ class PublicConformance(unittest.TestCase):
         ]
         self.assertEqual(relative(outside, case), outside)
 
+    def test_the_python_runner_names_its_output_through_a_path_that_reaches_it(self):
+        # --output-as names the output directory through another path to it,
+        # as a drive mapped to a network share reaches the share (#3030 D15);
+        # a linked directory stands in for one here. The path stays as
+        # written, never resolved to the directory that it reaches, and the
+        # record already written in the output must read back through it.
+        named_output = installed_runner().named_output
+        output = self.root / "output"
+        output.mkdir()
+        (output / "run.json").write_text('{"protocol": "public-conformance/1"}\n')
+        alias = self.root / "alias"
+        os.symlink(output, alias, target_is_directory=True)
+        self.assertEqual(named_output(output, None), output)
+        self.assertEqual(named_output(output, alias), alias)
+        elsewhere = self.root / "elsewhere"
+        elsewhere.mkdir()
+        (elsewhere / "run.json").write_text('{"protocol": "another run"}\n')
+        for written in (elsewhere, self.root / "absent"):
+            with (
+                self.subTest(written=written),
+                self.assertRaisesRegex(
+                    ValueError, f"--output-as {written} does not reach --output"
+                ),
+            ):
+                named_output(output, written)
+
     def test_retired_adapter_csv_mutations_cannot_pass_public_conformance(self):
         # Preserve the independent corruption controls from the retired
         # adapters/test_conformance.py: cell, header, row order and row count.

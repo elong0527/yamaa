@@ -95,6 +95,13 @@ CLI_TARGETS = {
     "windows-2025": "x86_64-pc-windows-msvc",
     "ubuntu-24.04-arm": "aarch64-unknown-linux-musl",
 }
+# Windows network shares (#3030 D15). The runner shares a directory of its own
+# over SMB, and the wheel that a release publishes for it, installed with the
+# build Python, runs the conformance corpus with every specification, project,
+# input and output on that share, reached by one route per lane: the share's
+# UNC path, or a drive mapped to the share.
+SHARE_PLATFORMS = ("windows-2025",)
+SHARE_ROUTES = ("unc-path", "mapped-drive")
 
 
 def r_series(version):
@@ -150,6 +157,7 @@ def coverage():
                 for platform, target in CLI_TARGETS.items()
             ]
         },
+        "share": {"os": list(SHARE_PLATFORMS), "route": list(SHARE_ROUTES)},
     }
 
 

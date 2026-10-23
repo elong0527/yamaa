@@ -190,6 +190,20 @@ Python and the R reports beside that wheel: for each case of the
 complete-report cohort, the command line's outcome and saved files must
 equal both installed hosts' reports, CSV byte for byte.
 
+On Windows the native run also runs the conformance corpus on a network share
+(#3030 D15): its `native-share` jobs. The runner shares a directory of its own
+over SMB as `\\localhost\yamaa-share`, and the wheel that a release publishes
+for Windows runs the corpus with every specification, project, input and
+output on that share, through its UNC path in one job and through a drive
+mapped to the share in the other. The conformance runner stages each case in
+the shared directory and names it in every call through the share or the
+drive alone, so the engine resolves the share itself, and the corpus's
+symbolic link, which the file server reports as a reparse point, is refused
+there as on a local drive (FILE-8). No job runs against a Samba server, which
+by default resolves a link itself and serves its target in its place: FILE-8
+and [Inputs, outputs and paths](articles/api.md#inputs-outputs-and-paths)
+state that limit.
+
 The native run also runs CRAN's incoming checks on the R source archive that a
 release publishes, the bytes of its `native-r-ubuntu-24.04` artifact: its
 `native-cran` jobs. Each runs `R CMD check --as-cran` through
