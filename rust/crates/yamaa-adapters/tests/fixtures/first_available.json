@@ -1692,7 +1692,8 @@
         {
           "condition": "prohibited_construct",
           "context": {
-            "identifier": "ID"
+            "identifier": "ID",
+            "construct": "filter"
           },
           "phase": "validation",
           "rule": "LOOKUP-8",
@@ -1711,7 +1712,8 @@
             {
               "condition": "prohibited_construct",
               "context": {
-                "identifier": "ID"
+                "identifier": "ID",
+                "construct": "filter"
               },
               "phase": "validation",
               "rule": "LOOKUP-8",

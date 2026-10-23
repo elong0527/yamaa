@@ -814,8 +814,8 @@ fn a_dataset_binds_the_section_standard_it_selects() {
 /// DEFINE-7: a listed specification without its submission metadata fails at
 /// its listing, and an output column without its `submission` or its `label`
 /// at the column's `submission`, naming in `detail` the domain, the column or
-/// the missing `label`. A column without both fails once, for its
-/// `submission`.
+/// the missing `label`, and in `field` the metadata it lacks. A column
+/// without both fails once, for its `submission`.
 #[test]
 fn missing_submission_metadata_is_reported_at_the_listing_or_the_column_submission() {
     let study = define_study();
@@ -829,25 +829,25 @@ fn missing_submission_metadata_is_reported_at_the_listing_or_the_column_submissi
         (
             &[label][..],
             "sdtm.specs[0].columns.STUDYID.submission",
-            r#"{"detail":"label"}"#,
+            r#"{"detail":"label","field":"label"}"#,
             "a column without its label",
         ),
         (
             &[column],
             "sdtm.specs[0].columns.STUDYID.submission",
-            r#"{"detail":"STUDYID"}"#,
+            r#"{"detail":"STUDYID","field":"submission"}"#,
             "a column without its submission",
         ),
         (
             &[label, column],
             "sdtm.specs[0].columns.STUDYID.submission",
-            r#"{"detail":"STUDYID"}"#,
+            r#"{"detail":"STUDYID","field":"submission"}"#,
             "a column without its label and its submission",
         ),
         (
             &[root],
             "sdtm.specs[0]",
-            r#"{"detail":"DM"}"#,
+            r#"{"detail":"DM","field":"submission"}"#,
             "a specification without its submission",
         ),
     ] {

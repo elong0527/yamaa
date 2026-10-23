@@ -104,7 +104,10 @@ fn a_require_pattern_read_from_data_fails_although_when_exempts_the_row() {
         Err(vec![json!({
             "phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-7",
             "spec_paths": ["verifications[1].assert.require"],
-            "context": {"reason": "LIKE pattern has a dangling escape"}
+            "context": {
+                "expr": "'text' LIKE P ESCAPE '!'",
+                "reason": "LIKE pattern has a dangling escape"
+            }
         })])
     );
     assert_eq!(
@@ -132,7 +135,10 @@ fn a_source_filter_is_asked_about_every_record_of_the_key() {
         Err(vec![json!({
             "phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-7",
             "spec_paths": ["columns.V.derivation.source.filter"],
-            "context": {"reason": "LIKE pattern has a dangling escape"}
+            "context": {
+                "expr": "'x' LIKE SRC.P ESCAPE '!'",
+                "reason": "LIKE pattern has a dangling escape"
+            }
         })])
     );
 }

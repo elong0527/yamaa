@@ -510,6 +510,7 @@ fn scalar_record(finding: &ScalarFinding, origin: Option<Origin>) -> Result<Reco
             let mut record =
                 Borrowed.start(ConditionCode::LiteralIntegerOverflow, &finding.path)?;
             record.field("actual", FieldValue::Integer(value))?;
+            record.field("value", FieldValue::Text(value))?;
             record.field("minimum", FieldValue::Integer(INT_MIN))?;
             record.field("maximum", FieldValue::Integer(INT_MAX))?;
             Ok(record)

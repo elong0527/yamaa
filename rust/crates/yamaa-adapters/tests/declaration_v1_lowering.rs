@@ -391,10 +391,11 @@ fn a_declared_baseline_order_starts_with_the_date_ascending() {
             "columns.ABLFL.derivation.baseline_flag.window.order_by[1]",
         ]
     );
-    // Any other first term fails, at that term.
-    for (order, variable, direction) in [
-        ("[ATM, ADT]", "ATM", "asc"),
-        ("[{variable: ADT, direction: desc}]", "ADT", "desc"),
+    // Any other first term fails, at that term, naming the refused value:
+    // a variable other than the date, or the date's descending direction.
+    for (order, variable, direction, value) in [
+        ("[ATM, ADT]", "ATM", "asc", "ATM"),
+        ("[{variable: ADT, direction: desc}]", "ADT", "desc", "desc"),
     ] {
         let study = Study::new(&[("spec.yaml", &baseline(order))]);
         let Err(SpecificationError::Entry(Error::Findings(captured))) =
@@ -420,6 +421,7 @@ fn a_declared_baseline_order_starts_with_the_date_ascending() {
                 ("variable", C::Text(variable.into())),
                 ("direction", C::Text(direction.into())),
                 ("date", C::Text("ADT".into())),
+                ("value", C::Text(value.into())),
             ]
         );
     }

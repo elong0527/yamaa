@@ -4,7 +4,7 @@ use yamaa_core::diagnostic::Diagnostic;
 
 /// Semantic source findings are shared by byte probes and document preparation.
 /// Resource refusals and internal defects are never fabricated language findings.
-fn source_diagnostics(error: &DecodeFailure, identity: Option<&str>) -> Option<Vec<Diagnostic>> {
+fn source_diagnostics(error: &DecodeFailure, identity: &str) -> Option<Vec<Diagnostic>> {
     use yamaa_core::yaml_diagnostics::Failure;
     let failure = match error {
         DecodeFailure::NonAscii(position) => Failure::NonAscii {
@@ -32,8 +32,13 @@ pub(crate) fn capture_diagnostics(
     error: &DecodeFailure,
     identity: &str,
 ) -> Option<Vec<Diagnostic>> {
-    source_diagnostics(error, Some(identity))
+    source_diagnostics(error, identity)
 }
-pub(crate) fn semantic_diagnostics(error: &DecodeFailure) -> Option<Vec<Diagnostic>> {
-    source_diagnostics(error, None)
+/// The findings of a file a layer names, `written` as the naming field
+/// writes it.
+pub(crate) fn semantic_diagnostics(
+    error: &DecodeFailure,
+    written: &str,
+) -> Option<Vec<Diagnostic>> {
+    source_diagnostics(error, written)
 }

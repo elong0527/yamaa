@@ -1253,7 +1253,8 @@
           "condition": "invalid_expression",
           "context": {
             "position": 3,
-            "predicate": "V >"
+            "predicate": "V >",
+            "expr": "V >"
           },
           "phase": "validation",
           "rule": "FORMULA-1",
@@ -1273,7 +1274,8 @@
               "condition": "invalid_expression",
               "context": {
                 "position": 3,
-                "predicate": "V >"
+                "predicate": "V >",
+                "expr": "V >"
               },
               "phase": "validation",
               "rule": "FORMULA-1",
@@ -1366,7 +1368,8 @@
           "condition": "invalid_expression",
           "context": {
             "position": 3,
-            "predicate": "V >"
+            "predicate": "V >",
+            "expr": "V >"
           },
           "phase": "validation",
           "rule": "FORMULA-1",
@@ -1386,7 +1389,8 @@
               "condition": "invalid_expression",
               "context": {
                 "position": 3,
-                "predicate": "V >"
+                "predicate": "V >",
+                "expr": "V >"
               },
               "phase": "validation",
               "rule": "FORMULA-1",
@@ -1479,7 +1483,8 @@
           "condition": "incompatible_input_type",
           "context": {
             "left_type": "int",
-            "right_type": "str"
+            "right_type": "str",
+            "actual": "str"
           },
           "phase": "validation",
           "rule": "FORMULA-5",
@@ -1500,7 +1505,8 @@
               "condition": "incompatible_input_type",
               "context": {
                 "left_type": "int",
-                "right_type": "str"
+                "right_type": "str",
+                "actual": "str"
               },
               "phase": "validation",
               "rule": "FORMULA-5",
@@ -1594,7 +1600,8 @@
           "condition": "incompatible_input_type",
           "context": {
             "left_type": "int",
-            "right_type": "str"
+            "right_type": "str",
+            "actual": "str"
           },
           "phase": "validation",
           "rule": "FORMULA-5",
@@ -1615,7 +1622,8 @@
               "condition": "incompatible_input_type",
               "context": {
                 "left_type": "int",
-                "right_type": "str"
+                "right_type": "str",
+                "actual": "str"
               },
               "phase": "validation",
               "rule": "FORMULA-5",
@@ -1709,7 +1717,8 @@
           "condition": "incompatible_input_type",
           "context": {
             "left_type": "int",
-            "right_type": "str"
+            "right_type": "str",
+            "actual": "str"
           },
           "phase": "validation",
           "rule": "FORMULA-5",
@@ -1730,7 +1739,8 @@
               "condition": "incompatible_input_type",
               "context": {
                 "left_type": "int",
-                "right_type": "str"
+                "right_type": "str",
+                "actual": "str"
               },
               "phase": "validation",
               "rule": "FORMULA-5",
@@ -1792,7 +1802,8 @@
         {
           "condition": "duplicate_identifier",
           "context": {
-            "reason": "verification id 'prefix' repeats verifications[0].row_count"
+            "reason": "verification id 'prefix' repeats verifications[0].row_count",
+            "identifier": "prefix"
           },
           "phase": "validation",
           "rule": "CHECK-3",
@@ -1811,7 +1822,8 @@
             {
               "condition": "duplicate_identifier",
               "context": {
-                "reason": "verification id 'prefix' repeats verifications[0].row_count"
+                "reason": "verification id 'prefix' repeats verifications[0].row_count",
+                "identifier": "prefix"
               },
               "phase": "validation",
               "rule": "CHECK-3",
@@ -1916,7 +1928,8 @@
           "condition": "incompatible_input_type",
           "context": {
             "left_type": "int",
-            "right_type": "str"
+            "right_type": "str",
+            "actual": "str"
           },
           "phase": "validation",
           "rule": "FORMULA-5",
@@ -1937,7 +1950,8 @@
               "condition": "incompatible_input_type",
               "context": {
                 "left_type": "int",
-                "right_type": "str"
+                "right_type": "str",
+                "actual": "str"
               },
               "phase": "validation",
               "rule": "FORMULA-5",
@@ -2031,7 +2045,8 @@
           "condition": "incompatible_input_type",
           "context": {
             "left_type": "int",
-            "right_type": "str"
+            "right_type": "str",
+            "actual": "str"
           },
           "phase": "validation",
           "rule": "FORMULA-5",
@@ -2052,7 +2067,8 @@
               "condition": "incompatible_input_type",
               "context": {
                 "left_type": "int",
-                "right_type": "str"
+                "right_type": "str",
+                "actual": "str"
               },
               "phase": "validation",
               "rule": "FORMULA-5",

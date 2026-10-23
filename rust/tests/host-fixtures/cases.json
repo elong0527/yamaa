@@ -931,6 +931,7 @@
                 "intermediates.LOOK.filter"
               ],
               "context": {
+                "actual": "int",
                 "left_type": "str",
                 "right_type": "int"
               }
@@ -977,6 +978,7 @@
                 "intermediates.LOOK.filter"
               ],
               "context": {
+                "actual": "int",
                 "left_type": "str",
                 "right_type": "int"
               }
@@ -1082,6 +1084,7 @@
                 "intermediates.LOOK.filter"
               ],
               "context": {
+                "actual": "int",
                 "left_type": "str",
                 "right_type": "int"
               }
@@ -1792,6 +1795,7 @@
                 "verifications[0].row_count.filter"
               ],
               "context": {
+                "actual": "int",
                 "left_type": "str",
                 "right_type": "int"
               }
@@ -1871,6 +1875,7 @@
                 "verifications[0].row_count.filter"
               ],
               "context": {
+                "actual": "int",
                 "left_type": "str",
                 "right_type": "int"
               }
@@ -4084,6 +4089,7 @@
                 "intermediates.LOOK.filter"
               ],
               "context": {
+                "actual": "str",
                 "left_type": "int",
                 "right_type": "str"
               }
@@ -4138,6 +4144,7 @@
                 "intermediates.LOOK.filter"
               ],
               "context": {
+                "actual": "str",
                 "left_type": "int",
                 "right_type": "str"
               }
@@ -4152,6 +4159,7 @@
                 "intermediates.LOOK.filter"
               ],
               "context": {
+                "actual": "str",
                 "left_type": "int",
                 "right_type": "str"
               }
@@ -4384,7 +4392,8 @@
                 "datasets.DM.columns.DOMAIN.label"
               ],
               "context": {
-                "detail": "forbidden XML whitespace"
+                "detail": "forbidden XML whitespace",
+                "whitespace": "tab"
               }
             }
           ],
@@ -4438,7 +4447,8 @@
                 "sdtm.documents[0].title"
               ],
               "context": {
-                "detail": "forbidden XML whitespace"
+                "detail": "forbidden XML whitespace",
+                "whitespace": "tab"
               }
             }
           ],
@@ -4468,7 +4478,8 @@
                 "datasets.DM.columns.DOMAIN.label"
               ],
               "context": {
-                "detail": "forbidden XML whitespace"
+                "detail": "forbidden XML whitespace",
+                "whitespace": "tab"
               }
             }
           ],
@@ -4502,7 +4513,8 @@
                 "datasets.DM.columns.DOMAIN.label"
               ],
               "context": {
-                "detail": "forbidden XML whitespace"
+                "detail": "forbidden XML whitespace",
+                "whitespace": "tab"
               }
             }
           ],
@@ -4543,7 +4555,7 @@
         "file": "project.yaml",
         "line": 54,
         "column": 5,
-        "message": "sdtm.specs[1] would write a transport file that another writer also writes",
+        "message": "sdtm.specs[1] names dm.json, which another writer of the submission also writes",
         "context_names": "dm.json",
         "source_span": null,
         "operand_route": null
@@ -4703,8 +4715,8 @@
         "refused_submission_save": "cannot save {path}, section sdtm: {path} does not exist [resource_path_missing, FILE-7]",
         "no_member_built": "cannot select ADSL: the project has no specification named ADSL [unknown_specification_name, PROJECT-6]",
         "unknown_member": "cannot select ADSL: the project has no specification named ADSL [unknown_specification_name, PROJECT-6]",
-        "empty_project_run_save": "cannot save {path}, section sdtm: there is nothing to save [nothing_to_save, PROJECT-12]",
-        "empty_submission_save": "cannot save {path}: there is nothing to save [nothing_to_save, PROJECT-13]"
+        "empty_project_run_save": "cannot save {path}, section sdtm: the project run has nothing to save [nothing_to_save, PROJECT-12]",
+        "empty_submission_save": "cannot save {path}: the project submission has nothing to save [nothing_to_save, PROJECT-13]"
       },
       "nothing_to_save_issues": {
         "empty_project_run_save": {
@@ -4716,8 +4728,8 @@
           "file": null,
           "line": null,
           "column": null,
-          "message": "there is nothing to save",
-          "context": "{}",
+          "message": "the project run has nothing to save",
+          "context": "{\"operation\":\"run\"}",
           "source_span": null,
           "operand_route": null
         },
@@ -4730,8 +4742,8 @@
           "file": null,
           "line": null,
           "column": null,
-          "message": "there is nothing to save",
-          "context": "{}",
+          "message": "the project submission has nothing to save",
+          "context": "{\"operation\":\"submission\"}",
           "source_span": null,
           "operand_route": null
         }
@@ -4937,8 +4949,8 @@
               "file": "spec.yaml",
               "line": 8,
               "column": 26,
-              "message": "an int value is outside the range -9223372036854775808 to 9223372036854775807",
-              "context": "{\"actual\":18446744073709551616,\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808}",
+              "message": "18446744073709551616 is outside the int range -9223372036854775808 to 9223372036854775807",
+              "context": "{\"actual\":18446744073709551616,\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"value\":\"18446744073709551616\"}",
               "source_span": null,
               "operand_route": null
             }
@@ -5019,7 +5031,7 @@
               "file": "spec.yaml",
               "line": 9,
               "column": 39,
-              "message": "columns.V.derivation.aggregate has a value of the wrong type or form",
+              "message": "columns.V.derivation.aggregate has a value of the wrong type or form (expected at least one match pair)",
               "context": "{\"dataset\":\"SRC\",\"expected\":\"at least one match pair\"}",
               "source_span": null,
               "operand_route": null
@@ -5043,7 +5055,7 @@
               "file": "spec.yaml",
               "line": 9,
               "column": 39,
-              "message": "columns.V.derivation.aggregate has a value of the wrong type or form",
+              "message": "columns.V.derivation.aggregate has a value of the wrong type or form (expected at least one match pair)",
               "context": "{\"dataset\":\"SRC\",\"expected\":\"at least one match pair\"}",
               "source_span": null,
               "operand_route": null
@@ -5067,7 +5079,7 @@
               "file": "spec.yaml",
               "line": 9,
               "column": 71,
-              "message": "columns.V.derivation.aggregate.between has a value of the wrong type or form",
+              "message": "columns.V.derivation.aggregate.between has a value of the wrong type or form (expected at least one of lower, upper)",
               "context": "{\"expected\":\"at least one of lower, upper\"}",
               "source_span": null,
               "operand_route": null
@@ -5393,7 +5405,7 @@
               "file": "spec.yaml",
               "line": 8,
               "column": 5,
-              "message": "columns[1].name lacks a field it requires",
+              "message": "columns[1].name lacks the field name, which it requires",
               "context": "{\"class\":\"column_class\",\"entry\":\"{entry}\",\"field\":\"name\",\"source\":\"{entry}\"}",
               "source_span": null,
               "operand_route": null
@@ -5638,9 +5650,10 @@
             "spec_paths": [
               "max_xml_depth"
             ],
-            "message": "max_xml_depth has a value that is not permitted",
+            "message": "max_xml_depth has the value 7, which is not permitted",
             "context": {
-              "minimum": 8
+              "minimum": 8,
+              "value": 7
             }
           }
         },
@@ -6850,7 +6863,7 @@
                   "file": "dm.yaml",
                   "line": 5,
                   "column": 26,
-                  "message": "keys[2] repeats an identifier declared earlier",
+                  "message": "keys[2] repeats the identifier USUBJID, declared earlier",
                   "context": "{\"entry\":\"{root}/dm.yaml\",\"identifier\":\"USUBJID\",\"source\":\"{root}/dm.yaml\"}",
                   "source_span": null,
                   "operand_route": null
@@ -6875,7 +6888,7 @@
                   "file": "dm.yaml",
                   "line": 5,
                   "column": 26,
-                  "message": "keys[2] repeats an identifier declared earlier",
+                  "message": "keys[2] repeats the identifier USUBJID, declared earlier",
                   "context": "{\"identifier\":\"USUBJID\"}",
                   "source_span": null,
                   "operand_route": null
@@ -6901,7 +6914,7 @@
                   "file": "dm.yaml",
                   "line": 5,
                   "column": 26,
-                  "message": "sdtm.specs[0].keys[2] repeats an identifier declared earlier",
+                  "message": "sdtm.specs[0].keys[2] repeats the identifier USUBJID, declared earlier",
                   "context": "{\"identifier\":\"USUBJID\"}",
                   "source_span": null,
                   "operand_route": null
@@ -6935,7 +6948,7 @@
                   "file": "dm.yaml",
                   "line": 5,
                   "column": 1,
-                  "message": "keys has a value of the wrong type or form",
+                  "message": "keys has a value of the wrong type or form (expected at least one key column)",
                   "context": "{\"actual\":\"empty list\",\"entry\":\"{root}/dm.yaml\",\"expected\":\"at least one key column\",\"source\":\"{root}/dm.yaml\"}",
                   "source_span": null,
                   "operand_route": null
@@ -6960,7 +6973,7 @@
                   "file": "dm.yaml",
                   "line": 5,
                   "column": 1,
-                  "message": "keys has a value of the wrong type or form",
+                  "message": "keys has a value of the wrong type or form (expected at least one key column)",
                   "context": "{\"actual\":\"empty list\",\"expected\":\"at least one key column\"}",
                   "source_span": null,
                   "operand_route": null
@@ -6986,7 +6999,7 @@
                   "file": "dm.yaml",
                   "line": 5,
                   "column": 1,
-                  "message": "sdtm.specs[0].keys has a value of the wrong type or form",
+                  "message": "sdtm.specs[0].keys has a value of the wrong type or form (expected at least one key column)",
                   "context": "{\"actual\":\"empty list\",\"expected\":\"at least one key column\"}",
                   "source_span": null,
                   "operand_route": null
@@ -7105,8 +7118,8 @@
                   "file": "dm.yaml",
                   "line": 7,
                   "column": 60,
-                  "message": "output.columns[3] repeats an identifier declared earlier",
-                  "context": "{\"column\":\"DOMAIN\",\"entry\":\"{root}/dm.yaml\",\"source\":\"{root}/dm.yaml\"}",
+                  "message": "output.columns[3] repeats the identifier DOMAIN, declared earlier",
+                  "context": "{\"column\":\"DOMAIN\",\"entry\":\"{root}/dm.yaml\",\"identifier\":\"DOMAIN\",\"source\":\"{root}/dm.yaml\"}",
                   "source_span": null,
                   "operand_route": null
                 }
@@ -7130,8 +7143,8 @@
                   "file": "dm.yaml",
                   "line": 7,
                   "column": 60,
-                  "message": "output.columns[3] repeats an identifier declared earlier",
-                  "context": "{\"column\":\"DOMAIN\"}",
+                  "message": "output.columns[3] repeats the identifier DOMAIN, declared earlier",
+                  "context": "{\"column\":\"DOMAIN\",\"identifier\":\"DOMAIN\"}",
                   "source_span": null,
                   "operand_route": null
                 }
@@ -7156,8 +7169,8 @@
                   "file": "dm.yaml",
                   "line": 7,
                   "column": 60,
-                  "message": "sdtm.specs[0].output.columns[3] repeats an identifier declared earlier",
-                  "context": "{\"column\":\"DOMAIN\"}",
+                  "message": "sdtm.specs[0].output.columns[3] repeats the identifier DOMAIN, declared earlier",
+                  "context": "{\"column\":\"DOMAIN\",\"identifier\":\"DOMAIN\"}",
                   "source_span": null,
                   "operand_route": null
                 }

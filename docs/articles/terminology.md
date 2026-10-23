@@ -355,7 +355,7 @@ before any input is read:
 Each of the four bound columns gives one `project_binding_missing` issue
 ([CT-13](../../rules/profiles/terminology.md#ct-13)) at its binding, such as
 `columns.SEX.submission.codelist`, with the message
-`columns.SEX.submission.codelist needs a project file, and none is given`.
+`the codelist at columns.SEX.submission.codelist needs a project file, and none is given`.
 Its `context` names the `binding`, here `codelist`, the `column` and the
 `codelist`. `run()` reports the same issues and builds nothing. A column that
 declares `inventory_vocabulary: true` and a call to a project function fail

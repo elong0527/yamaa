@@ -1056,7 +1056,8 @@
         {
           "condition": "duplicate_identifier",
           "context": {
-            "reason": "verification id 'same' repeats columns.V.verifications[0].not_missing"
+            "reason": "verification id 'same' repeats columns.V.verifications[0].not_missing",
+            "identifier": "same"
           },
           "phase": "validation",
           "rule": "CHECK-3",
@@ -1075,7 +1076,8 @@
             {
               "condition": "duplicate_identifier",
               "context": {
-                "reason": "verification id 'same' repeats columns.V.verifications[0].not_missing"
+                "reason": "verification id 'same' repeats columns.V.verifications[0].not_missing",
+                "identifier": "same"
               },
               "phase": "validation",
               "rule": "CHECK-3",
@@ -5670,7 +5672,8 @@
         {
           "condition": "duplicate_identifier",
           "context": {
-            "reason": "verification id 'same' repeats columns.V.verifications[0].matches"
+            "reason": "verification id 'same' repeats columns.V.verifications[0].matches",
+            "identifier": "same"
           },
           "phase": "validation",
           "rule": "CHECK-3",
@@ -5689,7 +5692,8 @@
             {
               "condition": "duplicate_identifier",
               "context": {
-                "reason": "verification id 'same' repeats columns.V.verifications[0].matches"
+                "reason": "verification id 'same' repeats columns.V.verifications[0].matches",
+                "identifier": "same"
               },
               "phase": "validation",
               "rule": "CHECK-3",

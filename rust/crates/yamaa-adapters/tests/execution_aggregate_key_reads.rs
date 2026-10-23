@@ -84,7 +84,7 @@ fn overridden(row: &str) -> Result<String, Vec<Value>> {
         "condition": "duplicate_derivation",
         "rule": "SPEC-6",
         "spec_paths": ["columns.NCAL.derivation"],
-        "context": {"column": "NCAL", "not_row_local": "aggregate", "rows": [row]}
+        "context": {"column": "NCAL", "identifier": "NCAL", "not_row_local": "aggregate", "rows": [row]}
     })])
 }
 

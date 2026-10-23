@@ -16,6 +16,7 @@ pub fn shared_target(earlier: &str, later: &str) -> Finding {
     crate::define_diagnostics::admit_relation(
         crate::define_diagnostics::TargetRelation::TransportCollision,
         "define.targets",
+        later,
         &format!("{earlier} and {later} name one physical publication target"),
     )
     .unwrap_err()
@@ -32,17 +33,12 @@ pub fn created_time(
         return crate::define_diagnostics::created_text(created).map(str::to_owned);
     }
     let seconds = clock().ok_or_else(|| {
-        Finding::cause(
-            ConditionCode::DefineCreatedInvalid,
-            "created",
-            "UTC clock before epoch",
-        )
+        crate::define_diagnostics::creation_refusal("UTC clock before epoch", JsonValue::Null)
     })?;
     utc_time(seconds).ok_or_else(|| {
-        Finding::cause(
-            ConditionCode::DefineCreatedInvalid,
-            "created",
+        crate::define_diagnostics::creation_refusal(
             "UTC clock outside supported calendar",
+            JsonValue::from(seconds),
         )
     })
 }
@@ -134,10 +130,21 @@ pub fn resource_diagnostic(
             return diagnostic;
         }
     };
+    let mut context: crate::diagnostic::Context =
+        [(String::from("path"), JsonValue::String(written.into()))].into();
+    // A missing published artifact names its dataset, `datasets.<id>.artifact`
+    // (INPUT-11).
+    if code == ConditionCode::ProducerContractMismatch {
+        let dataset = path
+            .strip_prefix("datasets.")
+            .and_then(|rest| rest.strip_suffix(".artifact"))
+            .unwrap_or_default();
+        context.insert("dataset".into(), JsonValue::String(dataset.into()));
+    }
     Diagnostic {
         code,
         spec_paths: vec![path.into()],
-        context: [(String::from("path"), JsonValue::String(written.into()))].into(),
+        context,
         source_span: None,
         operand_route: None,
     }
@@ -156,6 +163,7 @@ pub enum PublicationFailure {
 /// The native original error remains held separately from its display text.
 pub fn publication_diagnostic(
     index: usize,
+    written: &str,
     stage: PublicationFailure,
     cause: String,
 ) -> Diagnostic {
@@ -163,10 +171,12 @@ pub fn publication_diagnostic(
         PublicationFailure::TargetAdmission(fault) => {
             crate::application_issue::rejected(Step::PublicationTargetAdmission, fault)
         }
+        // A failed publication names the file it could not publish as the
+        // section writes it (OUTPUT-8).
         PublicationFailure::Publication => Diagnostic {
             code: ConditionCode::OutputPublicationFailed,
             spec_paths: Vec::new(),
-            context: Default::default(),
+            context: [("path".into(), JsonValue::String(written.into()))].into(),
             source_span: None,
             operand_route: None,
         },

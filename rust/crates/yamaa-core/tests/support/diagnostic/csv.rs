@@ -153,7 +153,7 @@ pub(crate) fn typing_reached() -> std::collections::BTreeSet<yamaa_core::diagnos
             "unknown_field",
             "INPUT-6",
             "ABSENT",
-            vec![],
+            vec![("identifier", "ABSENT")],
         ),
         (
             vec![("B".into(), ColumnType::Int), ("A".into(), ColumnType::Int)],

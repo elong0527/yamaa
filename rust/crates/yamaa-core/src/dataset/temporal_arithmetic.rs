@@ -90,11 +90,16 @@ impl Temporal {
             operand_route: None,
         }
     }
-    fn failure(&self, code: C) -> Diagnostic {
+    /// A result outside its type's range or a text that does not read, with
+    /// the facts its message names.
+    fn failure(&self, code: C, context: &[(&str, JsonValue)]) -> Diagnostic {
         Diagnostic {
             code,
             spec_paths: vec![self.path.clone()],
-            context: Default::default(),
+            context: context
+                .iter()
+                .map(|(key, value)| ((*key).into(), value.clone()))
+                .collect(),
             source_span: None,
             operand_route: None,
         }
@@ -147,7 +152,9 @@ impl Temporal {
                     .checked_add(*days)
                     .and_then(|day| date_from_ordinal(day, date.collected_precision()))
                     .map(Value::Date)
-                    .ok_or_else(|| self.failure(C::DateShiftRange))?
+                    .ok_or_else(|| {
+                        self.failure(C::DateShiftRange, &[("to", JsonValue::from("date"))])
+                    })?
             }
             TemporalKind::DateTimeDifference { unit } => {
                 let (Value::DateTime(start), Value::DateTime(end)) = (&values[0], &values[1])
@@ -178,7 +185,12 @@ impl Temporal {
                 target
                     .and_then(|target| datetime_from_seconds(target, source.collected_precision()))
                     .map(Value::DateTime)
-                    .ok_or_else(|| self.failure(C::DatetimeShiftRange))?
+                    .ok_or_else(|| {
+                        self.failure(
+                            C::DatetimeShiftRange,
+                            &[("to", JsonValue::from("datetime"))],
+                        )
+                    })?
             }
             TemporalKind::DurationValue { unit } => {
                 let Value::Str(ref text) = values[0] else {
@@ -187,7 +199,15 @@ impl Temporal {
                 match super::duration::read(text, unit) {
                     Some(value) => value,
                     None if self.invalid.is_some() => return Ok(TemporalStep::Invalid),
-                    None => return Err(self.failure(C::DurationInvalid)),
+                    None => {
+                        return Err(self.failure(
+                            C::DurationInvalid,
+                            &[
+                                ("source", JsonValue::from(self.sources[0].as_str())),
+                                ("value", JsonValue::from(text.as_str())),
+                            ],
+                        ))
+                    }
                 }
             }
             TemporalKind::TimeOfDay => {

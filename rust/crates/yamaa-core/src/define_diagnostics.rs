@@ -15,12 +15,17 @@ pub fn created_text(written: &str) -> Result<&str, Finding> {
     if written.len() == 19 && written.parse::<crate::temporal::DateTime>().is_ok() {
         Ok(written)
     } else {
-        Err(creation_refusal("expected whole-second civil datetime"))
+        Err(creation_refusal(
+            "expected whole-second civil datetime",
+            JsonValue::String(written.into()),
+        ))
     }
 }
-/// A retained native clock refusal, after clock acquisition/format admission.
-pub fn creation_refusal(detail: &str) -> Finding {
-    Finding::cause(ConditionCode::DefineCreatedInvalid, "created", detail)
+/// A retained native clock refusal, after clock acquisition/format admission,
+/// naming the refused `value`: the text given, or the clock's reading, null
+/// when the clock gave none (DEFINE-3).
+pub fn creation_refusal(detail: &str, value: JsonValue) -> Finding {
+    Finding::cause(ConditionCode::DefineCreatedInvalid, "created", detail).with("value", value)
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TargetRelation {
@@ -30,13 +35,20 @@ pub enum TargetRelation {
 }
 /// Project the entered platform comparison, preserving the original detail
 /// spelling and declaring position. No path is canonicalized or hashed here.
-pub fn admit_relation(relation: TargetRelation, path: &str, detail: &str) -> Result<(), Finding> {
+/// `target` is the colliding file as written, which the finding names as its
+/// `path` (JSON-2).
+pub fn admit_relation(
+    relation: TargetRelation,
+    path: &str,
+    target: &str,
+    detail: &str,
+) -> Result<(), Finding> {
     let code = match relation {
         TargetRelation::Independent => return Ok(()),
         TargetRelation::ArtifactCollision => ConditionCode::DefineArtifactCollision,
         TargetRelation::TransportCollision => ConditionCode::DefineTransportCollision,
     };
-    Err(Finding::cause(code, path, detail))
+    Err(Finding::cause(code, path, detail).with("path", target))
 }
 /// DEFINE-16: the listing at `path` publishes the artifact of `dataset`, its
 /// `output.path` as written, outside the directory of the document whose
@@ -65,23 +77,31 @@ pub fn artifact_outside_document(
     finding
 }
 /// DEFINE-24: generated text at `path` holds a carriage return or a tab, or an
-/// attribute value holds a line feed.
-pub fn xml_whitespace(path: &str) -> Finding {
+/// attribute value holds a line feed: `character`, which the finding names as
+/// `carriage_return`, `tab` or `line_feed`.
+pub fn xml_whitespace(path: &str, character: char) -> Finding {
+    let whitespace = match character {
+        '\r' => "carriage_return",
+        '\t' => "tab",
+        _ => "line_feed",
+    };
     Finding::cause(
         ConditionCode::SubmissionXmlWhitespace,
         path,
         "forbidden XML whitespace",
     )
+    .with("whitespace", whitespace)
 }
 /// DEFINE-25: the generated document at `path` would break the Define-XML 2.1
 /// schema `facet` names, such as a forbidden character or an unresolved
-/// generated reference.
-pub fn xml_invalid(path: &str, facet: &str) -> Finding {
+/// generated reference; `value` is the value that breaks it.
+pub fn xml_invalid(path: &str, facet: &str, value: JsonValue) -> Finding {
     Finding::cause(
         ConditionCode::SubmissionXmlInvalid,
         path,
         &format!("schema_violation: {facet}"),
     )
+    .with("value", value)
 }
 /// XPT-10: the transport file of `dataset` would hold `bytes`, more than the
 /// 5,000,000,000 bytes one file carries.

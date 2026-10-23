@@ -357,6 +357,7 @@ mod declaration {
             let text = |text: &str| Value::String(text.into());
             for (key, value) in [
                 ("actual", number("99999999999999999999")),
+                ("value", text("99999999999999999999")),
                 ("minimum", number("-9223372036854775808")),
                 ("maximum", number("9223372036854775807")),
                 ("source", text(&project)),
@@ -365,7 +366,7 @@ mod declaration {
             ] {
                 assert_eq!(issue.context[key], value, "{key}");
             }
-            assert_eq!(issue.context.len(), 6);
+            assert_eq!(issue.context.len(), 7);
             // Written in a codelist file the project lists.
             study.write(
                 "project.yaml",
@@ -952,6 +953,7 @@ mod declaration {
                         "path": "renv.lock",
                         "environment_path": "environments.r.lock",
                         "cause": "invalid_packaging_lock",
+                        "reason": "invalid_packaging_lock",
                     }),
                 )]
             );

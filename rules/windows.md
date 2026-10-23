@@ -170,7 +170,8 @@ Evidence: `negative-locf-no-order`, `rust/crates/yamaa-adapters/tests/declaratio
 
 A `baseline_flag` order whose first term is not its `date` ascending fails
 validation as `value_not_permitted` at that term, its context naming the
-term's variable, its direction and the `date`.
+term's variable, its direction, the `date` and the refused `value`: the
+variable, or `desc` when the term orders the `date` descending.
 
 ## Window operations
 

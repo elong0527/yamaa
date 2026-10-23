@@ -6,7 +6,6 @@ use crate::{
 };
 use yamaa_core::application_issue::{Fault, Step};
 use yamaa_core::inheritance as graph;
-use yamaa_core::json::Value;
 use yamaa_core::schema::{Document, NormalizationError, SchemaStructure};
 
 fn rejected(code: Fault) -> Rejection {
@@ -109,13 +108,9 @@ fn dictionary_failure_ref<'a, T>(
             let crate::specification_source::Error::Decode { error, .. } = error else {
                 return Ok(capture_failure(error));
             };
-            if let Some(mut rows) = crate::yaml_diagnostics::semantic_diagnostics(error) {
-                if matches!(error, DecodeFailure::NonAscii(_)) {
-                    for row in &mut rows {
-                        row.context
-                            .insert("path".into(), Value::String(reference.written().into()));
-                    }
-                }
+            if let Some(rows) =
+                crate::yaml_diagnostics::semantic_diagnostics(error, reference.written())
+            {
                 Rejection::Invalid(rows)
             } else if let DecodeFailure::Unavailable = error {
                 fault(Step::Dictionary, Fault::YamlReaderUnavailable)
@@ -241,6 +236,7 @@ pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<Rejection, &T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use yamaa_core::json::Value;
     #[test]
     fn traversal_preserves_the_complete_long_failure_and_original_owner() {
         let path = "x".repeat(3_000_000);

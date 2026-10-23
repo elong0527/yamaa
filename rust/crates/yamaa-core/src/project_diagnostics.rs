@@ -244,6 +244,12 @@ pub fn binding_diagnostics<'a, 'e, E>(
                 .function
                 .language()
                 .expect("preflighted host language");
+            // A callable its host cannot bind is an invalid callable, as the
+            // function file's admission names one (FUNC-2), unless the host
+            // gave its own reason.
+            context
+                .entry("reason")
+                .or_insert(Fact::Text("invalid_callable"));
             Diagnostic {
                 code: ConditionCode::FunctionFileInvalid,
                 spec_path: format!("{}.implementations.{}", source.path, language.key()),

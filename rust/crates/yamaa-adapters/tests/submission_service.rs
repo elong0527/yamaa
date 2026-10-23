@@ -292,7 +292,7 @@ mod service {
                 ConditionCode::DefineRequiredDeclaration,
                 Some("DEFINE-28"),
                 ["study".to_owned()].as_slice(),
-                yamaa_adapters::json!({"detail": "study"})
+                yamaa_adapters::json!({"detail": "study", "field": "study"})
             )
         );
         assert_eq!(resolver.seen(), requests(PROJECT_READ));
@@ -321,7 +321,7 @@ mod service {
                 ConditionCode::DefineRequiredDeclaration,
                 Some("DEFINE-28"),
                 vec![path.to_owned()],
-                yamaa_adapters::json!({ "detail": field }),
+                yamaa_adapters::json!({ "detail": field, "field": field }),
             )
         };
         assert_eq!(

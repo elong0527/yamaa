@@ -207,8 +207,9 @@ The specification's `output.columns` and `keys` fail under
 checking the specification reports them, at the entry under its listing. An
 output column that repeats an earlier entry fails with `duplicate_identifier`,
 and one that no column declares with `undeclared_column`, at
-`<section>.specs[<n>].output.columns[<i>]`, naming the column in `column`;
-neither has metadata for this rule to check. An empty `keys` fails with
+`<section>.specs[<n>].output.columns[<i>]`, naming the column in `column`
+(a repeated one in `identifier` too); neither has metadata for this rule to
+check. An empty `keys` fails with
 `invalid_field_type` at `<section>.specs[<n>].keys`. A key fails at
 `<section>.specs[<n>].keys[<i>]`: with `duplicate_identifier` when an
 earlier key names it, naming it in `identifier`; with `undeclared_column`

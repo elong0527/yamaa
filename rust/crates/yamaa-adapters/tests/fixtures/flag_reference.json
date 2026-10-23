@@ -130,7 +130,8 @@
           "rule": "FORMULA-1",
           "context": {
             "predicate": "AGE >> 65",
-            "position": 5
+            "position": 5,
+            "expr": "AGE >> 65"
           }
         }
       ]
@@ -247,7 +248,8 @@
           "rule": "FORMULA-5",
           "context": {
             "left_type": "date",
-            "right_type": "str"
+            "right_type": "str",
+            "actual": "str"
           }
         }
       ]
@@ -405,7 +407,8 @@
           "rule": "FORMULA-8",
           "context": {
             "predicate": "str_contains(SRC.EXTRA, '[')",
-            "position": 24
+            "position": 24,
+            "expr": "str_contains(SRC.EXTRA, '[')"
           }
         }
       ],
@@ -436,7 +439,8 @@
           "rule": "FORMULA-8",
           "context": {
             "predicate": "str_contains(SRC.ID, '[')",
-            "position": 21
+            "position": 21,
+            "expr": "str_contains(SRC.ID, '[')"
           }
         }
       ],
@@ -572,7 +576,8 @@
           "rule": "FORMULA-1",
           "context": {
             "predicate": "UNKNOWN >> 65",
-            "position": 9
+            "position": 9,
+            "expr": "UNKNOWN >> 65"
           }
         },
         {
@@ -874,7 +879,8 @@
           "rule": "FORMULA-1",
           "context": {
             "predicate": "AGE >> 65",
-            "position": 5
+            "position": 5,
+            "expr": "AGE >> 65"
           }
         },
         {
