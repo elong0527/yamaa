@@ -492,15 +492,29 @@ fn held(handle: Handle) -> Answer<Arc<Held>> {
     handles::get(handle).ok_or_else(|| boundary("expired native handle"))
 }
 
+/// A kind as a refusal names it, in words: `project run`, not the census's
+/// `project_run`.
+fn noun(kind: HandleKind) -> &'static str {
+    match kind {
+        HandleKind::Check => "check",
+        HandleKind::Run => "run",
+        HandleKind::ProjectRun => "project run",
+        HandleKind::Submission => "submission",
+        HandleKind::SelfTest => "selftest",
+        HandleKind::Plans => "plans",
+        HandleKind::Table => "table",
+    }
+}
+
 fn another(entry: &str, kind: HandleKind) -> Fault {
-    boundary(format!("{entry} does not take a {} handle", kind.as_str()))
+    boundary(format!("{entry} does not take a {} handle", noun(kind)))
 }
 
 /// A result, unless another call holds it.
 fn locked<T>(value: &Mutex<T>, kind: HandleKind) -> Answer<MutexGuard<'_, T>> {
     value
         .try_lock()
-        .map_err(|_| boundary(format!("{} handle is in use or poisoned", kind.as_str())))
+        .map_err(|_| boundary(format!("{} handle is in use or poisoned", noun(kind))))
 }
 
 /// A result, or a project run's member, as an accessor reads it.
@@ -534,10 +548,7 @@ fn view<T>(
     let held = held(handle)?;
     let kind = held.value.kind();
     if member.is_some() && kind != HandleKind::ProjectRun {
-        return Err(boundary(format!(
-            "a {} handle has no members",
-            kind.as_str()
-        )));
+        return Err(boundary(format!("a {} handle has no members", noun(kind))));
     }
     match &held.value {
         Value::Check(check) => read(View::Check(&*locked(check, kind)?)),
