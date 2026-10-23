@@ -598,7 +598,6 @@ yamaa::stream::Batches::schema: pub fn schema(&self) -> SchemaRef
 yamaa::stream::RunGuard: impl Deref for RunGuard<'_>
 yamaa::stream::RunGuard: impl DerefMut for RunGuard<'_>
 yamaa::stream::RunGuard: pub struct RunGuard<'a>
-yamaa::stream::StreamProgress: impl StreamProgress
 yamaa::stream::StreamProgress: pub enum StreamProgress [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::stream::StreamProgress::Cancelled: Cancelled
 yamaa::stream::StreamProgress::Ended: Ended

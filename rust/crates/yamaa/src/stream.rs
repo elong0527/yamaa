@@ -94,29 +94,26 @@ pub enum StreamProgress {
     Cancelled,
 }
 
-impl StreamProgress {
-    const ALL: [Self; 4] = [Self::Unread, Self::Reading, Self::Ended, Self::Cancelled];
+/// The progresses in the order of their codes, which the run's atomic holds.
+const PROGRESSES: [StreamProgress; 4] = [
+    StreamProgress::Unread,
+    StreamProgress::Reading,
+    StreamProgress::Ended,
+    StreamProgress::Cancelled,
+];
 
-    /// The progress `state` stands at.
-    fn of(state: &State) -> Self {
-        match state {
-            State::Unread(_) => Self::Unread,
-            State::Taken(_) | State::Producing { .. } => Self::Reading,
-            State::Ended { .. } | State::Failed(_) => Self::Ended,
-            State::Cancelled => Self::Cancelled,
-        }
-    }
-
-    fn code(self) -> u8 {
-        Self::ALL
-            .iter()
-            .position(|progress| *progress == self)
-            .map_or(u8::MAX, |position| position as u8)
-    }
-
-    fn from_code(code: u8) -> Self {
-        Self::ALL[usize::from(code)]
-    }
+/// The code of the progress `state` stands at.
+fn progress_code(state: &State) -> u8 {
+    let progress = match state {
+        State::Unread(_) => StreamProgress::Unread,
+        State::Taken(_) | State::Producing { .. } => StreamProgress::Reading,
+        State::Ended { .. } | State::Failed(_) => StreamProgress::Ended,
+        State::Cancelled => StreamProgress::Cancelled,
+    };
+    PROGRESSES
+        .iter()
+        .position(|known| *known == progress)
+        .map_or(u8::MAX, |position| position as u8)
 }
 
 /// What a run needs to be built.
@@ -227,7 +224,7 @@ impl Held<'_> {
     /// Publish where the run stands now, before the hold ends.
     fn publish(&self) {
         self.progress
-            .store(StreamProgress::of(&self.state).code(), Ordering::SeqCst);
+            .store(progress_code(&self.state), Ordering::SeqCst);
     }
 }
 
@@ -345,7 +342,7 @@ impl Streamed {
                 host,
                 rows,
                 abandoned: AtomicBool::new(false),
-                progress: AtomicU8::new(StreamProgress::of(&state).code()),
+                progress: AtomicU8::new(progress_code(&state)),
                 state: Mutex::new(state),
             }),
         }
@@ -368,7 +365,7 @@ impl Streamed {
     /// Where the run stands, read without waiting for, or getting in the way
     /// of, a call that is building it or a batch of it.
     pub fn progress(&self) -> StreamProgress {
-        StreamProgress::from_code(self.shared.progress.load(Ordering::SeqCst))
+        PROGRESSES[usize::from(self.shared.progress.load(Ordering::SeqCst))]
     }
 
     /// A reader of the output, which reads nothing until its first pull.
