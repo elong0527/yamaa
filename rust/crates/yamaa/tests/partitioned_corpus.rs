@@ -4,8 +4,9 @@
     feature = "readstat",
     feature = "odm"
 ))]
-//! Partitioned and streamed runs reproduce the benchmark corpus (#3697): the whole-table
-//! results each benchmark states, independently authored, in `expected/`.
+//! Partitioned and streamed runs reproduce the benchmark corpus (#3697): the
+//! whole-table results each benchmark states, independently authored, in
+//! `expected/`.
 //!
 //! Every benchmark with one specification and no project runs on an engine
 //! that divides its driver input into one-record partitions, the division
