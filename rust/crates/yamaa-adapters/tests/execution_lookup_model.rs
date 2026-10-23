@@ -1500,13 +1500,51 @@ fn a_required_nearest_match_fails_an_ecg_without_a_reference() {
     );
 }
 
+/// A spec over subjects or ECG groups whose PCSEQ reads `NEAR`, measured to
+/// the ECG's time (LOOKUP-26): built from `DM` when `rows` is empty, and
+/// otherwise by the row templates `rows` writes.
+fn nearest_subjects(base: &str, rows: &str) -> String {
+    let derivation = |value: &str| match rows {
+        "" => format!(", derivation: {value}"),
+        _ => String::new(),
+    };
+    format!(
+        "yamaa: \"1.0\"\n\
+         type: spec\n\
+         domain: OUT\n\
+         keys: [STUDYID, USUBJID]\n\
+         input:\n\
+         \x20 DM: dm.csv\n\
+         \x20 EG: {{path: eg.csv, types: {{EGSEQ: int, EGDTC: datetime}}}}\n\
+         \x20 PC: {{path: pc.csv, types: {{PCSEQ: int, PCDTM: datetime}}}}\n\
+         {base}\
+         output: {{path: out.csv, columns: [STUDYID, USUBJID, PCSEQ]}}\n\
+         intermediates:\n\
+         \x20 - id: NEAR\n\
+         \x20   dataset: PC\n\
+         \x20   key: [STUDYID, USUBJID]\n\
+         \x20   nearest: {{source: PCDTM, to: EG.EGDTC, unit: minute}}\n\
+         columns:\n\
+         \x20 - {{name: STUDYID, type: str{}}}\n\
+         \x20 - {{name: USUBJID, type: str{}}}\n\
+         \x20 - {{name: PCSEQ, type: int{}}}\n\
+         {rows}",
+        derivation("DM.STUDYID"),
+        derivation("DM.USUBJID"),
+        derivation("NEAR.PCSEQ"),
+    )
+}
+
 /// LOOKUP-26's refusals, which `check` reports wherever the run does: an
 /// order and a position beside the nearest selection, at each field and
 /// then `nearest`, before any input is read; a source of collected date text,
 /// which stays `str`; a unit a datetime does not count in (TIME-4); a
-/// reference of another type, a date beside a datetime; and a reference that
-/// reads no value of the current row (LOOKUP-5). A selection that binds
-/// nothing leaves every read of its lookup unknown.
+/// reference of another type, a date beside a datetime; a reference that
+/// reads no value of the current row, and one that reads the record of an
+/// input that does not build the reading rows (LOOKUP-5); and, in grouped
+/// construction, a reference that reads a driver field outside the group
+/// keys (ROW-5). A selection that binds nothing leaves every read of its
+/// lookup unknown.
 #[test]
 fn nearest_refusals_fail_validation_in_check_and_the_run_alike() {
     let unread = yamaa_adapters::json!({
@@ -1523,12 +1561,20 @@ fn nearest_refusals_fail_validation_in_check_and_the_run_alike() {
             "context": context,
         })
     };
-    for (selection, expected) in [
+    let grouped = "rows:\n\
+        \x20 - id: subjects\n\
+        \x20   dataset: EG\n\
+        \x20   group_by: [EG.STUDYID, EG.USUBJID]\n\
+        \x20   derivations:\n\
+        \x20     STUDYID: EG.STUDYID\n\
+        \x20     USUBJID: EG.USUBJID\n\
+        \x20     PCSEQ: NEAR.PCSEQ\n";
+    for (specification, expected) in [
         (
-            format!(
+            nearest_ecgs(&format!(
                 "{}    order_by: [PC.PCSEQ]\n    keep: first\n",
                 nearest_in("hour")
-            ),
+            )),
             vec![yamaa_adapters::json!({
                 "phase": "validation",
                 "condition": "prohibited_construct",
@@ -1541,7 +1587,7 @@ fn nearest_refusals_fail_validation_in_check_and_the_run_alike() {
             })],
         ),
         (
-            "    nearest: {source: PCDTC, to: EG.EGDTC, unit: hour}\n".into(),
+            nearest_ecgs("    nearest: {source: PCDTC, to: EG.EGDTC, unit: hour}\n"),
             vec![
                 refused(
                     "incompatible_input_type",
@@ -1557,7 +1603,7 @@ fn nearest_refusals_fail_validation_in_check_and_the_run_alike() {
             ],
         ),
         (
-            nearest_in("week"),
+            nearest_ecgs(&nearest_in("week")),
             vec![
                 refused(
                     "value_not_permitted",
@@ -1571,7 +1617,7 @@ fn nearest_refusals_fail_validation_in_check_and_the_run_alike() {
             ],
         ),
         (
-            "    nearest: {source: PCDTM, to: \"DATE '2025-01-10'\", unit: hour}\n".into(),
+            nearest_ecgs("    nearest: {source: PCDTM, to: \"DATE '2025-01-10'\", unit: hour}\n"),
             vec![
                 refused(
                     "incompatible_input_type",
@@ -1586,7 +1632,7 @@ fn nearest_refusals_fail_validation_in_check_and_the_run_alike() {
             ],
         ),
         (
-            "    nearest: {source: PCDTM, to: EGDTM, unit: hour}\n".into(),
+            nearest_ecgs("    nearest: {source: PCDTM, to: EGDTM, unit: hour}\n"),
             vec![
                 refused(
                     "unknown_field",
@@ -1596,9 +1642,40 @@ fn nearest_refusals_fail_validation_in_check_and_the_run_alike() {
                 unread.clone(),
             ],
         ),
+        // The ECG's time is a field of an ECG record, which is no value of a
+        // row that a subject builds.
+        (
+            nearest_subjects("base: DM\n", ""),
+            vec![refused(
+                "unknown_field",
+                "intermediates.NEAR.nearest.to",
+                yamaa_adapters::json!({"intermediate": "NEAR", "identifier": "EG.EGDTC"}),
+            )],
+        ),
+        // A row that a subject's ECGs build together has no one ECG time.
+        (
+            nearest_subjects("", grouped),
+            vec![refused(
+                "ungrouped_driver_field",
+                "intermediates.NEAR.nearest.to",
+                yamaa_adapters::json!({
+                    "intermediate": "NEAR",
+                    "identifier": "EG.EGDTC",
+                    "row": "subjects",
+                    "dataset": "EG",
+                }),
+            )],
+        ),
     ] {
-        let fixture = Fixture::new(&nearest_ecgs(&selection), &[("eg.csv", EG), ("pc.csv", PC)]);
-        assert_eq!(agreeing(&fixture), expected, "{selection}");
+        let fixture = Fixture::new(
+            &specification,
+            &[
+                ("dm.csv", "STUDYID,USUBJID\nS,S-1\nS,S-2\n"),
+                ("eg.csv", EG),
+                ("pc.csv", PC),
+            ],
+        );
+        assert_eq!(agreeing(&fixture), expected, "{specification}");
     }
 }
 

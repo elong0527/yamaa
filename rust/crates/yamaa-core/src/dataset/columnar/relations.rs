@@ -174,8 +174,11 @@ impl State {
                     .expect("a named relation")
             })
             .collect();
+        // A nearest selection's reference is read as a key's match value is
+        // (LOOKUP-26).
         let windowed_key = |item: &Intermediate| {
-            item.keys.iter().any(
+            let reference = item.nearest.iter().map(|nearest| &nearest.reference);
+            item.keys.iter().chain(reference).any(
                 |key| matches!(&key.value, MatchValue::Expression(expression) if expression.windowed),
             )
         };

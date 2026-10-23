@@ -235,7 +235,10 @@ pub(super) fn admit_reads<'a>(
             let Some(item) = items.get(index).and_then(Option::as_ref) else {
                 return;
             };
-            for key in &item.keys {
+            // The reference of a nearest selection is read as a key's match
+            // value is (LOOKUP-26).
+            let reference = item.nearest.iter().map(|nearest| &nearest.reference);
+            for key in item.keys.iter().chain(reference) {
                 if let crate::dataset::MatchValue::Contextual(declaration) = &key.value {
                     findings.push(BindFinding::Lookup(LookupFinding::reference(
                         &key.path,
