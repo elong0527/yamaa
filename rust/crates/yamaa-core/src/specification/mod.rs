@@ -1264,6 +1264,22 @@ impl PreparedSpecification {
     pub fn project_calls(&self) -> Option<&crate::project_calls::ProjectCalls> {
         self.project_calls.as_ref()
     }
+    /// The spec path of the first derivation, in authored order, that calls a
+    /// project function the build runs: where a build no host can run is
+    /// refused (#3030 D221). Authored order is the order a formatted file
+    /// writes derivations in (yaml/v1): the intermediates', then the
+    /// columns', then the row templates', each in declaration order. A
+    /// column's derivation that every row template replaces calls nothing the
+    /// build runs.
+    pub fn first_calling_derivation(&self) -> Option<&str> {
+        self.project_calls
+            .as_ref()?
+            .calls()
+            .iter()
+            .filter(|call| call.slot().is_some())
+            .min_by_key(|call| call.located.authored)
+            .map(|call| call.located.derivation.as_str())
+    }
     /// Bind only immutable source metadata. No cell reads or expression evaluation.
     pub fn bind(&self, source: &TableSchema) -> Result<ResolvedPlan, BindError> {
         self.bind_sources(&[source])

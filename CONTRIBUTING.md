@@ -189,11 +189,12 @@ uv run --project python --no-sync python -m tools.packaging.generate_component_i
 ## Develop and verify
 
 Run `make help` at the repository root for prerequisites, configuration variables
-and supported targets. Its inventory is the command reference. Point every
-worktree on a machine at one shared `CARGO_TARGET_DIR`, as `AGENTS.md` says:
-Cargo serialises concurrent builds with its own lock, and the locked
-dependencies are then built once for every branch. Give a worktree its own
-target only when two builds must run at the same time.
+and supported targets. Its inventory is the command reference. Give every
+worktree its own `CARGO_TARGET_DIR` and share the compilation through sccache
+(`RUSTC_WRAPPER=sccache`, one `SCCACHE_DIR` per machine), as `AGENTS.md` says:
+a target shared between worktrees mixes their artifacts, because Cargo names a
+workspace crate's outputs without the worktree's path and trusts modification
+times (D232 on #3673).
 The R package's build ignores it: `make test-r` installs the package twice,
 each time building the engine inside the package, unless
 `YAMAA_R_CARGO_TARGET_DIR` names an absolute directory for both installations
@@ -551,12 +552,16 @@ source package built with it, minimal format builds, Python 3.15 and minimum
 Python saved artifact readers on each `release/**` push and on dispatch. CI's R job checks minimum R saved
 artifact readers on those same release events. The `R-CMD-check` workflow
 checks macOS, Windows and R-devel packages on release pushes and dispatch.
-Dependency graphs and advisories, native qualification, Harbor and coverage
-run on dispatch (native qualification also on a
-`qualification/issue-*` push, and dependency graphs and advisories also
-weekly on main). Dispatch any of them on a branch with
-`gh workflow run <workflow> --ref <branch>` to check a change that needs them
-before merging.
+Dependency graphs and advisories, Harbor and coverage run on dispatch
+(dependency graphs and advisories also weekly on main). Dispatch any of them
+on a branch with `gh workflow run <workflow> --ref <branch>` to check a change
+that needs them before merging. Native qualification, described below, runs
+only in the regular CI/CD on main: weekly, and at the candidate and release
+cuts (D233 on #3673). Never dispatch it on a pull request's branch or push
+that branch as `qualification/issue-*`; no pull request waits for a native
+run. A pull request that changes packaging, paths, file handling,
+`cfg`-gated code or a workflow says so in its body: the next native run on
+main is its native evidence.
 
 The `Fuzz` workflow fuzzes the readers that parse untrusted input under
 AddressSanitizer, with UndefinedBehaviorSanitizer for the C they compile. A PR
@@ -749,11 +754,16 @@ installed from its standalone installer with no rustup or network (its
 release publishes and installs each with no Rust, Rtools or network (its
 `native-r-binary` and `native-r-binary-install` jobs), and runs CRAN's
 incoming checks on the R source archive that a release publishes (its
-`native-cran` jobs). It also builds the command-line binaries that a release
-publishes, statically on Linux and Windows, and runs each archive's
-`yamaa selftest` and then the conformance corpus with the network disabled
-on a fresh runner of its platform (its `native-cli` and `native-cli-install`
-jobs). Passing ordinary CI does not qualify a release. The final
+`native-cran` jobs), also in R-hub's `gcc16` container and in its
+`clang-asan` container, whose C compiler instruments the package's C with
+AddressSanitizer and UndefinedBehaviorSanitizer. It also builds the
+command-line binaries that a release publishes, statically on Linux and
+Windows, and runs each archive's `yamaa selftest` and then the conformance
+corpus with the network disabled on a fresh runner of its platform (its
+`native-cli` and `native-cli-install` jobs), and runs the corpus with the
+installed Windows wheel on an SMB share of the runner's own, through its UNC
+path and through a drive mapped to it (its `native-share` jobs). Passing
+ordinary CI does not qualify a release. The final
 merged revision needs complete native evidence, including the R package
 checks below. A release tag publishes the native run that its
 `Qualified-Run` trailer names, and the `Release rehearsal` workflow, dispatched
@@ -772,7 +782,11 @@ settings of CRAN's own checks that `--as-cran` leaves off. It fails on any NOTE,
 explained notes with the lines each may print, and a test keeps that list
 equal to the notes that the file's "R CMD check results" section names. To
 accept a new note, explain it there and add it to `EXPECTED_NOTES` in the same
-pull request; a warning or an error is never accepted. Remote checks (CRAN's
+pull request; a warning or an error is never accepted. With an R whose
+compiler adds the sanitizers, as in the `native-cran (clang-asan)` job, it
+also fails on any AddressSanitizer or UndefinedBehaviorSanitizer report in
+the installation, example or test output, which it prints whole: R passes a
+test that UndefinedBehaviorSanitizer reported on. Remote checks (CRAN's
 package index, URLs and the clock) stay off unless the caller sets
 `_R_CHECK_CRAN_INCOMING_REMOTE_` or `_R_CHECK_SYSTEM_CLOCK_`. The Linux jobs
 have `checkbashisms`, and those of CI, native qualification and R-CMD-check

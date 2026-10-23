@@ -7,11 +7,11 @@ use crate::{
     dataset::ExecutionPhase,
     function_invocation::{Argument, FunctionPort, HostError},
     function_signature::{InvocationPlan, ProjectInvocationPlan},
-    project_activation::ActivationPort,
+    host_functions::{HostFunctions, Lock},
 };
 use crate::{
+    function_batch::BatchArgument,
     function_signature::{LogicalSignature, ProjectFunctionIdentity},
-    project_environment::LockReference,
     project_function::Language,
     value::Value,
 };
@@ -123,7 +123,7 @@ impl<'a> Scope<'a> {
     pub fn refusal(self, phase: Phase, refusal: Refusal) {
         self.observer.observe(Event::Refusal { phase, refusal });
     }
-    pub(crate) fn activation<P: ActivationPort>(self, port: &mut P) -> Activation<'_, 'a, P> {
+    pub(crate) fn activation<P: HostFunctions>(self, port: &mut P) -> Activation<'_, 'a, P> {
         Activation { port, scope: self }
     }
     pub(crate) fn functions<'p, E>(
@@ -165,17 +165,38 @@ impl<E> FunctionPort for Functions<'_, '_, E> {
     }
 }
 
+/// The host-functions port of one activation, whose calls the scope observes.
 pub(crate) struct Activation<'p, 'a, P> {
     port: &'p mut P,
     scope: Scope<'a>,
 }
-impl<P: ActivationPort> ActivationPort for Activation<'_, '_, P> {
+impl<P: HostFunctions> Activation<'_, '_, P> {
+    /// One observed call into the host.
+    fn observed<T>(
+        &mut self,
+        call: impl FnOnce(&mut P) -> Result<T, HostError<P::Error>>,
+    ) -> Result<T, HostError<P::Error>> {
+        self.scope.observer.observe(Event::FunctionCall {
+            stage: CallStage::Activation,
+        });
+        let result = call(&mut *self.port);
+        self.scope.observer.observe(Event::FunctionReturn {
+            stage: CallStage::Activation,
+            outcome: Outcome::from_result(&result),
+        });
+        result
+    }
+}
+impl<P: HostFunctions> HostFunctions for Activation<'_, '_, P> {
     type Handle = P::Handle;
     type Error = P::Error;
+    fn is_empty(&self) -> bool {
+        self.port.is_empty()
+    }
     fn verify_lock(
         &mut self,
         language: Language,
-        lock: &LockReference,
+        lock: Lock<'_>,
         functions: &[ProjectFunctionIdentity],
     ) -> Result<(), P::Error> {
         self.port.verify_lock(language, lock, functions)
@@ -195,14 +216,104 @@ impl<P: ActivationPort> ActivationPort for Activation<'_, '_, P> {
         handle: &P::Handle,
         arguments: &[Argument<'_>],
     ) -> Result<Value, HostError<P::Error>> {
-        self.scope.observer.observe(Event::FunctionCall {
-            stage: CallStage::Activation,
-        });
-        let result = self.port.invoke(handle, arguments);
-        self.scope.observer.observe(Event::FunctionReturn {
-            stage: CallStage::Activation,
-            outcome: Outcome::from_result(&result),
-        });
-        result
+        self.observed(|port| port.invoke(handle, arguments))
+    }
+    fn call_batch(
+        &mut self,
+        handle: &P::Handle,
+        rows: usize,
+        arguments: &[BatchArgument],
+    ) -> Result<Vec<Value>, HostError<P::Error>> {
+        self.observed(|port| port.call_batch(handle, rows, arguments))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::RefCell;
+
+    /// The events an operation emits, in order.
+    #[derive(Default)]
+    struct Recorded(RefCell<Vec<Event>>);
+    impl Observer for Recorded {
+        fn observe(&self, event: Event) {
+            self.0.borrow_mut().push(event);
+        }
+    }
+
+    /// A port that answers each batch whole with its `x` values, or raises.
+    struct Batches {
+        raise: bool,
+    }
+    impl HostFunctions for Batches {
+        type Handle = ();
+        type Error = ();
+        fn verify_lock(
+            &mut self,
+            _: Language,
+            _: Lock<'_>,
+            _: &[ProjectFunctionIdentity],
+        ) -> Result<(), ()> {
+            unreachable!("a batch verifies no lock")
+        }
+        fn bind(&mut self, _: &ProjectFunctionIdentity, _: &LogicalSignature) -> Result<(), ()> {
+            unreachable!("a batch is given its handle")
+        }
+        fn invoke(&mut self, _: &(), _: &[Argument<'_>]) -> Result<Value, HostError<()>> {
+            unreachable!("this port answers a batch whole")
+        }
+        fn call_batch(
+            &mut self,
+            _: &(),
+            _: usize,
+            arguments: &[BatchArgument],
+        ) -> Result<Vec<Value>, HostError<()>> {
+            if self.raise {
+                return Err(HostError::Raised(()));
+            }
+            Ok(arguments[0].values.clone())
+        }
+    }
+
+    /// An activation's scope observes one call and one return per batch,
+    /// with the batch's outcome, however many rows the batch holds.
+    #[test]
+    fn an_observed_batch_is_one_call_and_one_return() {
+        let rows = vec![Value::Int(1), Value::Int(2), Value::Int(3)];
+        let arguments = [BatchArgument {
+            name: "x".into(),
+            values: rows.clone(),
+        }];
+        for (raise, expected, outcome, label) in [
+            (false, Ok(rows), Outcome::Succeeded, "a batch answered"),
+            (
+                true,
+                Err(HostError::Raised(())),
+                Outcome::Failed,
+                "a batch raised",
+            ),
+        ] {
+            let recorded = Recorded::default();
+            let mut port = Batches { raise };
+            let returned =
+                Scope::new(&recorded)
+                    .activation(&mut port)
+                    .call_batch(&(), 3, &arguments);
+            assert_eq!(returned, expected, "{label}");
+            assert_eq!(
+                *recorded.0.borrow(),
+                [
+                    Event::FunctionCall {
+                        stage: CallStage::Activation
+                    },
+                    Event::FunctionReturn {
+                        stage: CallStage::Activation,
+                        outcome
+                    },
+                ],
+                "{label}"
+            );
+        }
     }
 }

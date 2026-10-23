@@ -772,10 +772,11 @@ mod declaration {
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::function_invocation::{Argument, HostError};
         use yamaa_core::function_signature::{LogicalSignature, ProjectFunctionIdentity};
+        use yamaa_core::host_functions::{HostFunctions, Lock};
         use yamaa_core::json::Value;
         use yamaa_core::language::{FileType, LANGUAGE_VERSION};
-        use yamaa_core::project_activation::{ActivationPort, Failure};
-        use yamaa_core::project_environment::{LockKind, LockReference};
+        use yamaa_core::project_activation::Failure;
+        use yamaa_core::project_environment::LockKind;
         use yamaa_core::project_function::Language;
         use yamaa_core::table::ValueRef;
 
@@ -1254,20 +1255,23 @@ mod declaration {
             reject_binding: bool,
             mismatch: bool,
         }
-        impl ActivationPort for Activation {
+        impl HostFunctions for Activation {
             type Handle = ();
             type Error = &'static str;
             fn verify_lock(
                 &mut self,
                 language: Language,
-                lock: &LockReference,
+                lock: Lock<'_>,
                 functions: &[ProjectFunctionIdentity],
             ) -> Result<(), Self::Error> {
                 let (written, kind, call) = match language {
                     Language::Python => ("uv.lock", LockKind::Uv, "program.id"),
                     Language::R => ("renv.lock", LockKind::Renv, "program::id"),
                 };
-                assert_eq!((lock.written.as_str(), lock.kind), (written, kind));
+                assert_eq!(
+                    (lock.reference.written.as_str(), lock.reference.kind),
+                    (written, kind)
+                );
                 assert_eq!(functions[0].call, call);
                 if self.reject_lock {
                     Err("original lock rejection")

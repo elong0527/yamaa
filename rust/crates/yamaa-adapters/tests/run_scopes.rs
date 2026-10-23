@@ -9,7 +9,7 @@
 //! saved CSV is its input text.
 use std::sync::Arc;
 
-use crate::support::ports::NoActivation;
+use crate::support::ports::NoFunctions;
 use yamaa_adapters::{
     file_application::{self, Domain},
     file_preparation::FileSpecification,
@@ -143,7 +143,7 @@ impl Compiled {
         let (_, result) = file_application::run(
             &self.0,
             run,
-            &mut NoActivation,
+            &mut NoFunctions,
             |_| file_application::Classification::Opaque,
             identity(),
             Scope::default(),

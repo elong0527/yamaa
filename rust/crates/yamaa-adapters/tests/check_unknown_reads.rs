@@ -96,7 +96,7 @@ impl Fixture {
                 .collect::<Vec<_>>()
         };
         let checked = render(&file_application::check(host, request(), identity()));
-        let built = match file_application::domain(host, request(), identity()) {
+        let built = match crate::support::study::domain(host, request(), identity()) {
             Ok(domain) => render(&domain.issues()),
             Err(issues) => render(&issues),
         };
@@ -1567,6 +1567,20 @@ fn check_reports_a_lookup_filter_s_undeclared_qualifier_where_its_suggestion_is_
             filtered("XX.Y > 1 AND XX.DOSENUM > 1"),
             &[at, read],
             &[at, at, read],
+        ),
+        // Binding then keeps none of a later lookup's derivations, so none
+        // reads another input's record beside its uniqueness verification
+        // (LOOKUP-17).
+        (
+            implicit(
+                "  - {id: P, dataset: PLAN, key: [USUBJID], filter: \"XX.Y > 1\"}\n\
+                 \x20 - {id: Q, dataset: PLAN, key: [USUBJID], derivations: {E: DM.RFSTDTC}, verifications: [{unique: [USUBJID]}]}\n",
+                "",
+                "P.PLANDOSE",
+                "Q.E",
+            ),
+            &[],
+            &[at, read],
         ),
     ]);
 }

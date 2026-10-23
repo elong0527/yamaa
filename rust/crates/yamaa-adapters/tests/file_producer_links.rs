@@ -37,7 +37,7 @@ mod file {
             }
             fn build(&self, entry: &str) -> Domain {
                 let path = self.path(entry);
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
@@ -150,7 +150,7 @@ mod file {
                 );
                 // Refused while it is prepared, before any study read.
                 let path = study.path("consumer/root.yaml");
-                let issues = file_application::domain(
+                let issues = crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,

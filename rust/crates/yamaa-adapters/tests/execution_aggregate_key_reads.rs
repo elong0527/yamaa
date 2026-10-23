@@ -27,7 +27,7 @@ impl Fixture {
     fn run(&self) -> Result<String, Vec<Value>> {
         let specification = self.0.join("spec.yaml");
         let specification = specification.to_str().unwrap();
-        let mut domain = file_application::domain(
+        let mut domain = crate::support::study::domain(
             yamaa_core::project_function::Language::Python,
             Request {
                 specification,

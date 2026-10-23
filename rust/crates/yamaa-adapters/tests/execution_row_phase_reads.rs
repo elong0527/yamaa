@@ -4,7 +4,6 @@
 //! the column phase reports the same phase boundary at its own operand,
 //! naming the column and the row template, before any data is read.
 use std::fs;
-use yamaa_adapters::file_application;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::domain_entry::Request;
 
@@ -19,7 +18,7 @@ impl Fixture {
     fn issues(&self) -> Vec<Diagnostic> {
         let specification = self.0.join("spec.yaml");
         let specification = specification.to_str().unwrap();
-        let mut domain = file_application::domain(
+        let mut domain = crate::support::study::domain(
             yamaa_core::project_function::Language::Python,
             Request {
                 specification,
@@ -36,7 +35,7 @@ impl Fixture {
     fn output(&self) -> String {
         let specification = self.0.join("spec.yaml");
         let specification = specification.to_str().unwrap();
-        let mut domain = file_application::domain(
+        let mut domain = crate::support::study::domain(
             yamaa_core::project_function::Language::Python,
             Request {
                 specification,

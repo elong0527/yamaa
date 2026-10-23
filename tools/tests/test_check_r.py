@@ -258,8 +258,8 @@ class EnvironmentTests(unittest.TestCase):
                 check_r.check(Path(archive.name), ROOT / "build/r-check")
 
 
-class FailingTestsTests(unittest.TestCase):
-    """Every test file runs, and a failing file's whole output is printed."""
+class FakeCheckTests(unittest.TestCase):
+    """Run check() against a fake R CMD check, which writes given outputs."""
 
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
@@ -269,16 +269,19 @@ class FailingTestsTests(unittest.TestCase):
         self.archive.write_bytes(b"archive")
 
     def run_check(self, returncode, outputs):
-        """Run check() against a fake R CMD check that writes `outputs`."""
+        """Run check() against a fake R CMD check that writes `outputs`, by
+        path below yamaa.Rcheck, and exits with `returncode`."""
         commands = []
+        # Each check needs a work directory of its own.
+        work = Path(tempfile.mkdtemp(dir=self.root)) / "check"
 
         def fake_run(command, cwd, env, check):
             commands.append((command, check))
-            tests = Path(cwd) / "yamaa.Rcheck" / "tests"
-            tests.mkdir(parents=True)
+            directory = Path(cwd) / "yamaa.Rcheck"
+            (directory / "tests").mkdir(parents=True)
             for name, text in outputs.items():
-                (tests / name).write_text(text, encoding="utf-8")
-            (tests.parent / "00check.log").write_text(
+                (directory / name).write_text(text, encoding="utf-8")
+            (directory / "00check.log").write_text(
                 log(HEAD, status="1 NOTE"), encoding="utf-8"
             )
             return check_r.subprocess.CompletedProcess(command, returncode)
@@ -294,14 +297,18 @@ class FailingTestsTests(unittest.TestCase):
             contextlib.redirect_stdout(printed),
         ):
             try:
-                check_r.check(self.archive, self.root / "check")
+                check_r.check(self.archive, work)
                 failure = None
-            except check_r.subprocess.CalledProcessError as error:
+            except (check_r.subprocess.CalledProcessError, RuntimeError) as error:
                 failure = error
         return commands, printed.getvalue(), failure
 
+
+class FailingTestsTests(FakeCheckTests):
+    """Every test file runs, and a failing file's whole output is printed."""
+
     def test_r_cmd_check_runs_every_test_file(self):
-        commands, _, failure = self.run_check(0, {"lint.Rout": "fine\n"})
+        commands, _, failure = self.run_check(0, {"tests/lint.Rout": "fine\n"})
         self.assertEqual(
             commands,
             [
@@ -325,9 +332,9 @@ class FailingTestsTests(unittest.TestCase):
         _, printed, failure = self.run_check(
             1,
             {
-                "lint.Rout": "lint passed\n",
-                "schema.Rout.fail": "line 1\nError: the schema is one line\n",
-                "selftest.Rout.fail": "Error: every case passes\n",
+                "tests/lint.Rout": "lint passed\n",
+                "tests/schema.Rout.fail": "line 1\nError: the schema is one line\n",
+                "tests/selftest.Rout.fail": "Error: every case passes\n",
             },
         )
         self.assertEqual(
@@ -337,6 +344,67 @@ class FailingTestsTests(unittest.TestCase):
             "===== end of schema.Rout.fail =====\n"
             "===== selftest.Rout.fail =====\n"
             "Error: every case passes\n"
+            "===== end of selftest.Rout.fail =====\n",
+        )
+        self.assertEqual(failure.returncode, 1)
+
+
+# Reports in the forms that the sanitizers document: UndefinedBehaviorSanitizer
+# names the source location and carries on, and with print_summary=0 prints no
+# summary line; AddressSanitizer stops the program.
+UBSAN_LINE = """\
+readstat_sas7bdat_read.c:512:23: runtime error: signed integer overflow: \
+2147483647 + 1 cannot be represented in type 'int'
+"""
+UBSAN_REPORT = f"""\
+{UBSAN_LINE}\
+SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior readstat_sas7bdat_read.c:512:23
+"""
+ASAN_REPORT = """\
+==4242==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x602000000014
+READ of size 4 at 0x602000000014 thread T0
+SUMMARY: AddressSanitizer: heap-buffer-overflow readstat_bits.c:42:12 in readstat_int32
+"""
+
+
+class SanitizerReportsTests(FakeCheckTests):
+    """A sanitizer report in an output of the check fails it, and the output
+    is printed whole, once."""
+
+    def test_a_report_fails_a_check_that_r_passed(self):
+        # R passes a test, an example or an installation that
+        # UndefinedBehaviorSanitizer reported on, since the program carried on.
+        for output, report in (
+            ("00install.out", UBSAN_REPORT),
+            ("yamaa-Ex.Rout", UBSAN_REPORT),
+            ("tests/lint.Rout", UBSAN_REPORT),
+            ("tests/lint.Rout", UBSAN_LINE),
+        ):
+            with self.subTest(output=output, summary=report == UBSAN_REPORT):
+                text = f"> library(yamaa)\n{report}> q()\n"
+                _, printed, failure = self.run_check(
+                    0, {output: text, "tests/schema.Rout": "schema passed\n"}
+                )
+                name = Path(output).name
+                self.assertEqual(
+                    printed,
+                    f"===== {name} =====\n{text}===== end of {name} =====\n",
+                )
+                self.assertEqual(
+                    str(failure),
+                    "these outputs of the check hold a sanitizer report: "
+                    f"yamaa.Rcheck/{output}",
+                )
+
+    def test_a_failed_test_with_a_report_is_printed_once(self):
+        text = f"> yamaa::yamaa_selftest()\n{ASAN_REPORT}"
+        _, printed, failure = self.run_check(
+            1, {"tests/selftest.Rout.fail": text, "00install.out": "* DONE (yamaa)\n"}
+        )
+        self.assertEqual(
+            printed,
+            "===== selftest.Rout.fail =====\n"
+            f"{text}"
             "===== end of selftest.Rout.fail =====\n",
         )
         self.assertEqual(failure.returncode, 1)

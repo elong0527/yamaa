@@ -70,7 +70,7 @@ fn assert_output(specification: &str, expected: &str) {
     assert!(checked.is_empty(), "{checked:?}\n{specification}");
     assert!(!study.0.join("ex.csv").exists());
     study.input();
-    let mut result = file_application::domain(
+    let mut result = crate::support::study::domain(
         yamaa_core::project_function::Language::Python,
         request(),
         identity(&path),
@@ -191,7 +191,7 @@ fn known_date_choices_reject_incompatible_filter_types_in_check_and_build() {
             yamaa_adapters::json!({"left_type":"date","right_type":"str"})
         );
         study.input();
-        let result = file_application::domain(
+        let result = crate::support::study::domain(
             yamaa_core::project_function::Language::Python,
             request(),
             identity(&path),
@@ -241,7 +241,7 @@ fn unknown_choices_compare_the_actual_date_when_a_date_source_is_present() {
             "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,2024-01-01,2024-01-10,2024-01-01\n",
         )
         .unwrap();
-        let mut result = file_application::domain(
+        let mut result = crate::support::study::domain(
             yamaa_core::project_function::Language::Python,
             request(),
             identity(&path),
@@ -280,7 +280,7 @@ fn unknown_choices_report_the_actual_integer_when_date_sources_are_missing() {
             "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,,,2024-01-01\n",
         )
         .unwrap();
-        let result = file_application::domain(
+        let result = crate::support::study::domain(
             yamaa_core::project_function::Language::Python,
             request(),
             identity(&path),
@@ -320,7 +320,7 @@ fn assert_integer_day_count(expression: &str, integer_row: &str, float_row: &str
         format!("USUBJID,EXSTDTC,EXENDTC,EXINT,EXFLOAT\n{integer_row}\n"),
     )
     .unwrap();
-    let mut result = file_application::domain(
+    let mut result = crate::support::study::domain(
         yamaa_core::project_function::Language::Python,
         request(),
         identity(&path),
@@ -342,7 +342,7 @@ fn assert_integer_day_count(expression: &str, integer_row: &str, float_row: &str
         format!("USUBJID,EXSTDTC,EXENDTC,EXINT,EXFLOAT\n{float_row}\n"),
     )
     .unwrap();
-    let result = file_application::domain(
+    let result = crate::support::study::domain(
         yamaa_core::project_function::Language::Python,
         request(),
         identity(&path),
@@ -409,7 +409,7 @@ fn nullif_over_an_int_and_a_float_is_refused_as_integer_days_when_bound() {
         "USUBJID,EXSTDTC,EXENDTC,EXINT,EXFLOAT\nS01,2024-01-01,,1,\n",
     )
     .unwrap();
-    let result = file_application::domain(
+    let result = crate::support::study::domain(
         yamaa_core::project_function::Language::Python,
         request(),
         identity(&path),
@@ -453,7 +453,7 @@ columns:
         "USUBJID,EXINT,EXFLOAT\nS01,9007199254740993,\nS02,9007199254740993,0.5\nS03,3,3.0\n",
     )
     .unwrap();
-    let mut result = file_application::domain(
+    let mut result = crate::support::study::domain(
         yamaa_core::project_function::Language::Python,
         request(),
         identity(&path),
@@ -491,7 +491,7 @@ fn unknown_kind_survives_later_aliases_and_choices() {
                 "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,,,2024-01-01\n",
             )
             .unwrap();
-            let mut result = file_application::domain(
+            let mut result = crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 request(),
                 identity(&path),
@@ -531,7 +531,7 @@ fn unknown_kind_flows_through_an_earlier_selector_in_dependency_order() {
         "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,2024-01-01,2024-01-10,2024-01-01\n",
     )
     .unwrap();
-    let mut result = file_application::domain(
+    let mut result = crate::support::study::domain(
         yamaa_core::project_function::Language::Python,
         request(),
         identity(&path),
@@ -571,7 +571,7 @@ fn generic_predicate_consumers_use_the_named_intermediates_unknown_kind() {
         "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,2024-01-01,2024-01-10,2024-01-01\n",
     )
     .unwrap();
-    let mut result = file_application::domain(
+    let mut result = crate::support::study::domain(
         yamaa_core::project_function::Language::Python,
         request(),
         identity(&path),
@@ -608,7 +608,7 @@ fn unknown_numeric_operands_do_not_invent_an_integer_result_kind() {
         "USUBJID,EXSTDTC,EXENDTC,EXINT,EXFLOAT\nS01,2024-01-01,,,1.5\n",
     )
     .unwrap();
-    let result = file_application::domain(
+    let result = crate::support::study::domain(
         yamaa_core::project_function::Language::Python,
         request(),
         identity(&path),
@@ -670,7 +670,7 @@ fn assert_nested_lookup_output(specification: &str, input: &str, expected: &[u8]
         format!("USUBJID,EXSTDTC,EXENDTC\n{input}"),
     )
     .unwrap();
-    let mut result = file_application::domain(
+    let mut result = crate::support::study::domain(
         yamaa_core::project_function::Language::Python,
         request(),
         identity(&path),
@@ -716,7 +716,7 @@ fn assert_nested_lookup_type_error(
         "USUBJID,EXSTDTC,EXENDTC\nS01,,2024-01-01\n",
     )
     .unwrap();
-    let result = file_application::domain(
+    let result = crate::support::study::domain(
         yamaa_core::project_function::Language::Python,
         request(),
         identity(&path),

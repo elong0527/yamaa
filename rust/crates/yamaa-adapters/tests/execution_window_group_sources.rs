@@ -21,7 +21,7 @@ impl Fixture {
     fn run(&self) -> file_application::Domain {
         let specification = self.0.join("spec.yaml");
         let specification = specification.to_str().unwrap();
-        file_application::domain(
+        crate::support::study::domain(
             yamaa_core::project_function::Language::Python,
             Request {
                 specification,

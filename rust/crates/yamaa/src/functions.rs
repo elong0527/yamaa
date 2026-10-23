@@ -1,9 +1,9 @@
 //! Facade-owned project function capability.
 //!
-//! Hosts implement [`ProjectFunctions`] with facade scalar arguments; the
-//! core batch port and activation port stay internal. Function invocation
-//! happens on the calling thread of the operation, exactly as with the
-//! current host crates.
+//! Hosts implement [`ProjectFunctions`] with facade scalar arguments; it is
+//! the public form of the engine's one host-functions port, whose core trait
+//! stays internal. Function invocation happens on the calling thread of the
+//! operation, exactly as with the current host crates.
 
 use std::collections::BTreeMap;
 
@@ -222,10 +222,10 @@ impl CallError {
 
 /// Installed metadata, callable resolution and scalar host invocation.
 ///
-/// The facade adapts this port to the internal activation port once per
-/// operation. All methods take shared access so one engine serves concurrent
-/// independent attempts; hosts use interior mutability when they must. Every
-/// method runs on the calling thread of the operation.
+/// The engine's host-functions port: each build verifies, binds and invokes
+/// through it directly. All methods take shared access so one engine serves
+/// concurrent independent attempts; hosts use interior mutability when they
+/// must. Every method runs on the calling thread of the operation.
 pub trait ProjectFunctions: Send + Sync {
     /// Verify the declared packaging lock for the functions about to run.
     /// A non-empty finding list fails activation with those findings.

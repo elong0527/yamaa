@@ -5,7 +5,7 @@ upstream commit `104ba03a8da116eb8c094abc18bc2530b733eda9` from
 <https://github.com/WizardMac/ReadStat>, with the later upstream fixes listed
 under [Upstream changes after 1.1.9](#upstream-changes-after-119), ported by
 hand. Upstream `dev` was last reviewed through commit
-`65d410762b9fcd1f1573ff97a4fb3f8ca8e49508` (2026-10-18), the review baseline:
+`4fbf1d8e516513dc06c7a73aab03b3daced87d4f` (2026-10-20), the review baseline:
 every upstream commit up to it that changes a vendored file is listed there.
 The upstream license is in `LICENSE`.
 SAS writer/header-construction helpers are omitted from the shared upstream
@@ -134,11 +134,12 @@ reviews the commits after the baseline and moves it.
 | `b2d5407d`, `bb29605a`, `95aee731` | The release field accepts revision tags `J` and `TK` for SAS 8 and 9, any tag for other majors such as SAS 7, and the alternative magic number whose first 28 bytes are zero. | Ported |
 | `d6ffcec1`, `73756b20` | Encoding code 136 names CP932 and code 38 names ISO-8859-10. | Ported. The name is recorded metadata only; the declared encoding decodes text. |
 | `fdf4e1e0`, `5c446781`, `4010db5e`, `6f2bcc65`, `6443b805`, `1badba77`, `fa08c079` | Display format digits, widths and informats are read into each variable's format strings, in SAS datasets and version 8 transport files. | Not ported: the bridge passes on only names, widths and storage types, and display formats never select types, so these change no result. Reading informat text references would also refuse a file whose unused informat reference is out of range. |
+| `d0e36ecb` | A transport file's format string keeps the period after its width when the format has no decimals, so `DATE9.` is no longer read as `DATE9`. | Not ported: the bridge passes on only names, widths and storage types, and display formats never select types, so this changes no result. |
 | `38d4418e` | Header timestamps subtract their recorded time-zone offsets. | Not ported: the bridge does not pass header timestamps on. |
 | `a1496e2c` | An unspecified encoding (code 0) is reported as none, and text converts from Windows-1252 by default. | Not ported: an unknown encoding is recorded as empty text, and the declared encoding always decodes text. |
 | `725bb907` | `readstat_double_value` returns NaN for a tagged missing value, and a non-trimming conversion is added for Stata. | Not ported: the bridge reads missingness separately, and the SAS readers trim padding. |
 | `6ed4ccda`, `98813868`, `ba4392e9`, `a4984d52`, `558aa896`, `913267ed`, `47579684` | Declarations, documentation, error codes and metadata in the shared files for the writers and the SPSS and Stata readers. | Not ported: the vendored subset builds neither, and the SAS readers do not use them. |
-| `8884b6b3`, `2d942c31`, `1984af8e`, `95adba94` | SAS writer changes in the shared SAS unit. | Not ported: the writer helpers are omitted. |
+| `8884b6b3`, `2d942c31`, `1984af8e`, `95adba94`, `4d7587ea` | SAS writer changes in the shared SAS unit. | Not ported: the writer helpers are omitted. |
 | `211c342a`, `f6a54c24` | `(void)` prototypes and comment typos. | Not ported: no behavior change. |
 
 ## Tests

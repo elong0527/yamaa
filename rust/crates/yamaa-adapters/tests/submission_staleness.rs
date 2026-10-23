@@ -121,7 +121,7 @@ submission:
         /// One run of `dm.yaml` alone, which the composition reads back.
         fn run(&self) -> file_application::Domain {
             let path = self.path("dm.yaml");
-            file_application::domain(
+            crate::support::study::domain(
                 Language::Python,
                 Request {
                     specification: &path,

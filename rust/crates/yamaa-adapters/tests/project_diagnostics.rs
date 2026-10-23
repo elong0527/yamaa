@@ -207,7 +207,8 @@ mod project {
         };
         use yamaa_core::{
             function_invocation::{Argument, FailureKind, HostError, InvocationFailure},
-            project_activation::{self, ActivationPort, BindingFailure, Failure, TestFailure},
+            host_functions::{HostFunctions, Lock},
+            project_activation::{self, BindingFailure, Failure, TestFailure},
         };
         use yamaa_core::{
             function_signature::{LogicalSignature, ProjectFunctionIdentity},
@@ -223,13 +224,13 @@ mod project {
             calls: usize,
             bindings: usize,
         }
-        impl ActivationPort for Port {
+        impl HostFunctions for Port {
             type Handle = ();
             type Error = Rc<str>;
             fn verify_lock(
                 &mut self,
                 _: Language,
-                _: &LockReference,
+                _: Lock<'_>,
                 _: &[ProjectFunctionIdentity],
             ) -> Result<(), Rc<str>> {
                 Ok(())
@@ -274,10 +275,16 @@ mod project {
                 bindings: 0,
             }
         }
-        fn lock() -> LockReference {
-            LockReference {
-                written: "uv.lock".into(),
-                kind: LockKind::Uv,
+        /// The declared uv lock each activation verifies, with no captured bytes.
+        fn lock() -> Lock<'static> {
+            static REFERENCE: std::sync::LazyLock<LockReference> =
+                std::sync::LazyLock::new(|| LockReference {
+                    written: "uv.lock".into(),
+                    kind: LockKind::Uv,
+                });
+            Lock {
+                reference: &REFERENCE,
+                bytes: b"",
             }
         }
         fn sources(functions: &[Function; 2]) -> [DefinitionSource<'_>; 2] {
@@ -297,7 +304,7 @@ mod project {
             let functions = [support::function("first"), support::function("second")];
             let mut port = port();
             let Failure::Tests(failures) =
-                project_activation::activate(Language::Python, &lock(), &functions, &mut port)
+                project_activation::activate(Language::Python, lock(), &functions, &mut port)
                     .unwrap_err()
             else {
                 panic!("actual case mismatch")
@@ -336,7 +343,7 @@ mod project {
             let mut port = port();
             port.bindings_fail = true;
             let Failure::Bindings(failures) =
-                project_activation::activate(Language::Python, &lock(), &functions, &mut port)
+                project_activation::activate(Language::Python, lock(), &functions, &mut port)
                     .unwrap_err()
             else {
                 panic!("binding failures")
@@ -359,7 +366,7 @@ mod project {
             port.bindings_fail = false;
             port.calls_fail = true;
             let Failure::Tests(failures) =
-                project_activation::activate(Language::Python, &lock(), &functions, &mut port)
+                project_activation::activate(Language::Python, lock(), &functions, &mut port)
                     .unwrap_err()
             else {
                 panic!("call failures")

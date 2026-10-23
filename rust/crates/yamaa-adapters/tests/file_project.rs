@@ -15,12 +15,13 @@ mod file {
         use yamaa_core::application_observer::Scope;
         use yamaa_core::{
             function_invocation::{Argument, HostError},
-            project_activation::{ActivationPort, Failure, LockObservation},
+            host_functions::{HostFunctions, Lock},
+            project_activation::{Failure, LockObservation},
             specification_run::PortError,
         };
         use yamaa_core::{
             function_signature::{LogicalSignature, ProjectFunctionIdentity},
-            project_environment::{LockKind, LockReference},
+            project_environment::LockKind,
             project_function::Language,
             table::{TableAccess, ValueRef},
             value::Value,
@@ -163,17 +164,17 @@ mod file {
             reject_binding: bool,
             mismatch: bool,
         }
-        impl ActivationPort for Activation {
+        impl HostFunctions for Activation {
             type Handle = ();
             type Error = &'static str;
             fn verify_lock(
                 &mut self,
                 _: Language,
-                lock: &LockReference,
+                lock: Lock<'_>,
                 functions: &[ProjectFunctionIdentity],
             ) -> Result<(), Self::Error> {
-                assert_eq!(lock.kind, LockKind::Uv);
-                assert_eq!(lock.written, "uv.lock");
+                assert_eq!(lock.reference.kind, LockKind::Uv);
+                assert_eq!(lock.reference.written, "uv.lock");
                 assert_eq!(functions[0].call, "program.id");
                 self.trace.push("lock");
                 if self.reject {
@@ -471,24 +472,25 @@ mod file {
             assert_eq!(activation.trace, ["lock"]);
         }
 
+        /// Each build gives the host-functions port the exact lock bytes the
+        /// prepared project holds, without copying them.
         #[test]
-        fn installed_port_factory_borrows_the_exact_prepared_lock_on_each_build() {
-            struct Borrowed<'a> {
-                lock: &'a [u8],
+        fn each_build_verifies_the_lock_bytes_the_prepared_project_holds() {
+            struct Held {
                 expected: *const u8,
                 inner: Activation,
             }
-            impl ActivationPort for Borrowed<'_> {
+            impl HostFunctions for Held {
                 type Handle = ();
                 type Error = &'static str;
                 fn verify_lock(
                     &mut self,
                     language: Language,
-                    lock: &LockReference,
+                    lock: Lock<'_>,
                     functions: &[ProjectFunctionIdentity],
                 ) -> Result<(), Self::Error> {
-                    assert_eq!(self.lock.as_ptr(), self.expected);
-                    assert_eq!(self.lock, b"version = 1\npackage = []\n");
+                    assert_eq!(lock.bytes.as_ptr(), self.expected);
+                    assert_eq!(lock.bytes, b"version = 1\npackage = []\n");
                     self.inner.verify_lock(language, lock, functions)
                 }
                 fn bind(
@@ -518,28 +520,18 @@ mod file {
                 .bytes
                 .as_ptr();
             study.write("entry/input.csv", "ID\n1\n");
-            let mut constructed = 0;
+            let mut port = Held {
+                expected,
+                inner: Activation::default(),
+            };
             for _ in 0..2 {
-                // Each build borrows the exact retained lock for a port
-                // constructed for it, without copying it.
-                let mut port = Borrowed {
-                    lock: &project
-                        .run()
-                        .captured_environment()
-                        .lock()
-                        .unwrap()
-                        .source
-                        .bytes,
-                    expected,
-                    inner: Activation::default(),
-                };
-                constructed += 1;
                 let attempt = project.build(&mut run_scope, &mut port, Scope::default());
                 assert!(attempt.boundary.is_ok());
                 assert_eq!(attempt.activation.lock, LockObservation::Verified);
                 assert!(attempt.dataset.result.unwrap().result.is_ok());
             }
-            assert_eq!(constructed, 2);
+            let verified = port.inner.trace.iter().filter(|&&effect| effect == "lock");
+            assert_eq!(verified.count(), 2, "one verification per build");
             assert_eq!(run_scope.capture_reads(), 6);
         }
 

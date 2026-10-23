@@ -680,7 +680,8 @@ mod project {
         use yamaa_core::{
             dataset::ExecutionError,
             function_invocation::{Argument, FailureKind, HostError},
-            project_activation::{ActivationPort, Failure},
+            host_functions::{HostFunctions, Lock},
+            project_activation::Failure,
             project_domain,
             specification_run::{
                 CapturedAttempt, PortError, SourceDecoder, SpecificationSourcePort,
@@ -1026,17 +1027,17 @@ mod project {
             live_failed: bool,
             lock_failed: bool,
         }
-        impl ActivationPort for Activation {
+        impl HostFunctions for Activation {
             type Handle = ();
             type Error = Payload;
             fn verify_lock(
                 &mut self,
                 language: Language,
-                lock: &LockReference,
+                lock: Lock<'_>,
                 functions: &[ProjectFunctionIdentity],
             ) -> Result<(), Payload> {
                 assert_eq!(language, Language::Python);
-                assert_eq!(lock.kind, LockKind::Uv);
+                assert_eq!(lock.reference.kind, LockKind::Uv);
                 assert_eq!(
                     functions
                         .iter()
@@ -1159,6 +1160,7 @@ mod project {
                 checked
                     .build_into(
                         &mut activation,
+                        b"",
                         &mut source,
                         &mut decoder,
                         &mut attempt,
@@ -1204,6 +1206,7 @@ mod project {
             checked
                 .build_into(
                     &mut activation,
+                    b"",
                     &mut source,
                     &mut decoder,
                     &mut attempt,
@@ -1235,6 +1238,7 @@ mod project {
             let Failure::Lock(Payload(original)) = checked
                 .build_into(
                     &mut activation,
+                    b"",
                     &mut source,
                     &mut decoder,
                     &mut attempt,

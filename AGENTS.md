@@ -138,18 +138,26 @@ merge steps and the review gate.
   branch, or link the pull request on the issue when you cannot assign.
   Leave an issue another session holds. A follow-up found in review goes to
   the session that owns the chain it belongs to.
-- **One worktree per pull request, one Cargo target per machine.** Create
-  the branch with `git worktree add --no-track -b <branch>
-  .worktrees/<name> origin/main` and push with an explicit refspec,
-  `git push -u origin HEAD:refs/heads/<branch>`: a branch that tracks
-  `origin/main` otherwise pushes to main. Point every worktree at one
-  shared target, `CARGO_TARGET_DIR=<machine>/yamaa-target`: Cargo
-  serialises builds with its own lock, the locked dependencies are built
-  once for every branch, and only the workspace crates rebuild per
-  worktree. Give a worktree its own target only when two builds must run
-  at the same time. Set `CARGO_INCREMENTAL=0` for a one-off check (Clippy,
-  the full suite); incremental artifacts pay only for the edit-build loop
-  on one crate. Remove a worktree when its pull request merges.
+- **One worktree per pull request, one Cargo target per worktree, one
+  sccache cache per machine.** Create the branch with `git worktree add
+  --no-track -b <branch> .worktrees/<name> origin/main` and push with an
+  explicit refspec, `git push -u origin HEAD:refs/heads/<branch>`: a branch
+  that tracks `origin/main` otherwise pushes to main. Give each worktree
+  its own target, `CARGO_TARGET_DIR=<machine>/yamaa-target/<name>`, never
+  a target another worktree uses: Cargo names a workspace crate's
+  artifacts without the worktree's path, so two worktrees write the same
+  file names into a shared target, and Cargo, which trusts modification
+  times, compiles one worktree against the other's artifacts (D232).
+  Share the compilation instead with sccache: install it once per machine
+  (`cargo install sccache`) and give every worktree `RUSTC_WRAPPER=sccache`,
+  one `SCCACHE_DIR=<machine>/yamaa-sccache` and a `SCCACHE_CACHE_SIZE`
+  above the 10G default, such as 50G, so each locked dependency compiles
+  once per machine and every other target takes it from the cache. The
+  cache saves time, not disk: each target holds its own artifacts, so
+  remove a worktree and its target when its pull request merges. sccache
+  caches nothing compiled incrementally, which is only the workspace
+  crates in the edit-build loop; set `CARGO_INCREMENTAL=0` for a one-off
+  check (Clippy, the full suite).
 - **Sequence shared files.** Read the issue's "Order" line and its
   sequencing comments before starting. An issue that edits a file an open
   pull request reshapes waits for that pull request.
@@ -199,10 +207,17 @@ Run only these locally (D148 on #3030):
   suite, so it needs no R.
 
 Never run `make check-equivalence`, or a host check with `--equivalence`,
-locally, except to debug a CI failure of that gate. Pull request CI runs only on
-Linux, so a change to paths, file handling, `cfg`-gated code or
-packaging also gets one native qualification run on its branch before
-merge: `gh workflow run native.yml --ref <branch>`.
+locally, except to debug a CI failure of that gate. Native qualification
+(`native.yml`) runs only in the regular CI/CD on main: weekly, and at the
+candidate and release cuts (D233 on #3673). Never dispatch it on a pull
+request's branch or push the branch as `qualification/issue-*`, never wait
+for a native run before opening or finishing a pull request, and never
+reproduce its jobs locally. Pull request CI runs only on Linux, so a pull
+request that changes packaging, paths, file handling, `cfg`-gated code or a
+workflow says so in its body: the next native run on main is its native
+evidence, and a failure there becomes a child issue of the planning issue.
+A "Done when" line that asks for a native run on the branch is met by that
+run on main.
 
 The tests nearest the change:
 

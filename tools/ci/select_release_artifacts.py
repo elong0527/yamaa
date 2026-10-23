@@ -366,6 +366,15 @@ def required_jobs(coverage):
             "Run the command-line selftest",
             "Report command-line public benchmark conformance",
         )
+    # Windows network shares: the installed wheel runs the conformance corpus
+    # on an SMB share of the runner's own, through the route of each lane.
+    for platform in coverage["share"]["os"]:
+        for route in coverage["share"]["route"]:
+            jobs[f"native-share ({platform}, {route})"] = (
+                "Install the wheel",
+                "Share a directory over SMB",
+                "Report installed Python public benchmark conformance on the share",
+            )
     return jobs
 
 

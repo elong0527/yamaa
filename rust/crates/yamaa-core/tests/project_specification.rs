@@ -5,7 +5,9 @@ mod project {
         use crate::support::project_call_compiler as support;
         use crate::support::resolved;
         use crate::support::specification::{prepare, prepare_in};
-        use support::{call, environment, file, project, specification_with_rows, Tree};
+        use support::{
+            call, environment, file, project, specification, specification_with_rows, Tree,
+        };
         use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             bound_expression::Read,
@@ -159,6 +161,138 @@ mod project {
                 findings[0].diagnostic().spec_paths,
                 ["columns.A.derivation.function.args.x"]
             );
+        }
+
+        /// A build no host can run is refused at the first derivation, in
+        /// authored order, that calls a project function the build runs
+        /// (#3030 D221). Authored order is the order a formatted file writes
+        /// derivations in (yaml/v1): the intermediates', then the columns',
+        /// then the row templates', each in declaration order and named by
+        /// its derivation however deep the call sits in it. A column's
+        /// derivation that every row template replaces calls nothing the
+        /// build runs.
+        #[test]
+        fn the_first_calling_derivation_is_the_first_whose_call_the_build_runs() {
+            let seven = || Tree::Scalar(N::Integer("7".into()));
+            // An intermediate whose derivation calls `id`, read by a column
+            // after a column that calls `id` too.
+            let intermediate = {
+                let column = |name, value| {
+                    Tree::map(vec![
+                        ("name", Tree::text(name)),
+                        ("type", Tree::text("int")),
+                        ("derivation", Tree::map(vec![("value", value)])),
+                    ])
+                };
+                Tree::map(vec![
+                    ("yamaa", Tree::text("1.0")),
+                    ("type", Tree::text("spec")),
+                    ("domain", Tree::text("TEST")),
+                    (
+                        "input",
+                        Tree::map(vec![
+                            ("SRC", Tree::map(vec![("path", Tree::text("input.csv"))])),
+                            ("DONOR", Tree::map(vec![("path", Tree::text("donor.csv"))])),
+                        ]),
+                    ),
+                    ("keys", Tree::List(vec![Tree::text("ID")])),
+                    ("base", Tree::text("SRC")),
+                    (
+                        "intermediates",
+                        Tree::List(vec![Tree::map(vec![
+                            ("id", Tree::text("P")),
+                            ("dataset", Tree::text("DONOR")),
+                            ("key", Tree::map(vec![("K", Tree::text("ID"))])),
+                            (
+                                "derivations",
+                                Tree::map(vec![("B", call("id", vec![("x", seven())]))]),
+                            ),
+                        ])]),
+                    ),
+                    (
+                        "columns",
+                        Tree::List(vec![
+                            column("ID", Tree::text("SRC.ID")),
+                            column("C", call("id", vec![("x", Tree::text("ID"))])),
+                            column("D", Tree::text("P.B")),
+                        ]),
+                    ),
+                    (
+                        "output",
+                        Tree::map(vec![
+                            ("path", Tree::text("output.csv")),
+                            (
+                                "columns",
+                                Tree::List(vec![
+                                    Tree::text("ID"),
+                                    Tree::text("C"),
+                                    Tree::text("D"),
+                                ]),
+                            ),
+                        ]),
+                    ),
+                ])
+                .document()
+            };
+            let nested = Tree::map(vec![(
+                "case",
+                Tree::List(vec![
+                    Tree::map(vec![
+                        ("when", Tree::text("ID > 0")),
+                        ("then", call("id", vec![("x", Tree::text("A"))])),
+                    ]),
+                    Tree::map(vec![("otherwise", literal(0))]),
+                ]),
+            )]);
+            let overridden = || ("A", "int", call("id", vec![("x", seven())]));
+            let cases = [
+                (
+                    intermediate,
+                    // P-CLR-2 addresses an intermediate by its `id`.
+                    Some("intermediates.P.derivations.B"),
+                    "an intermediate's call before a column's",
+                ),
+                (
+                    specification(vec![
+                        ("A", "int", literal(0)),
+                        ("B", "int", nested),
+                        ("C", "int", call("id", vec![("x", Tree::text("B"))])),
+                    ]),
+                    Some("columns.B.derivation"),
+                    "a call nested in the second of two calling columns",
+                ),
+                (
+                    specification_with_rows(
+                        vec![overridden(), ("B", "int", literal(0))],
+                        vec![
+                            row("first", vec![("A", literal(8))], None),
+                            row(
+                                "second",
+                                vec![("A", literal(9)), ("B", call("id", vec![("x", seven())]))],
+                                None,
+                            ),
+                        ],
+                    ),
+                    // P-CLR-2 addresses a row template by its `id`.
+                    Some("rows.second.derivations.B"),
+                    "a row template's call after a replaced column call",
+                ),
+                (
+                    specification_with_rows(
+                        vec![overridden()],
+                        vec![
+                            row("first", vec![("A", literal(8))], None),
+                            row("second", vec![("A", literal(9))], None),
+                        ],
+                    ),
+                    None,
+                    "only a column call every row template replaces",
+                ),
+            ];
+            for (spec, expected, label) in cases {
+                let prepared = prepare_in(&spec, &environment(&["id"])).unwrap();
+                assert_eq!(prepared.first_calling_derivation(), expected, "{label}");
+            }
         }
 
         #[test]

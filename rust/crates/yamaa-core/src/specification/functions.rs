@@ -174,12 +174,37 @@ fn invalid(finding: FunctionFinding) -> PreflightFinding {
     PreflightFinding::ProjectFunction(finding)
 }
 
-/// One call a derivation evaluates: its expression, path and whether its
-/// references read a record context (an aggregate binding or a donor).
+/// One call a derivation evaluates: its expression, its path, the path of
+/// that derivation and whether its references read a record context (an
+/// aggregate binding or a donor).
 struct Request {
     call: ExprId,
     path: String,
+    derivation: String,
+    /// The call's position in authored order ([`LocatedCall::authored`]).
+    authored: usize,
     contextual: bool,
+}
+
+/// The spec path of the derivation a call site evaluates: a column's, an
+/// intermediate's or a row template's.
+fn derivation_path(spec: &ast::Spec, site: &ast::Site) -> String {
+    use crate::ast::Owner;
+    let derivation = match site.owner {
+        Owner::Default { column } => spec.columns[column].derivation.as_ref(),
+        Owner::Binding {
+            intermediate,
+            binding,
+        } => Some(&spec.intermediates[intermediate].bindings[binding].derivation),
+        Owner::Override { template, entry } => {
+            Some(&spec.rows.templates[template].overrides[entry].1)
+        }
+        _ => None,
+    };
+    derivation.map_or_else(
+        || checks::path(spec, site.root),
+        |derivation| checks::render(spec, derivation.meta),
+    )
 }
 
 /// Every call the derivations evaluate, in today's occurrence order:
@@ -195,15 +220,20 @@ fn requests(spec: &ast::Spec) -> (Vec<Request>, BTreeMap<ExprId, Vec<usize>>, Ve
         |owner| matches!(owner, Owner::Binding { .. }),
         |owner| matches!(owner, Owner::Override { .. }),
     ];
-    for pass in passes {
-        for site in sites.iter().filter(|site| pass(&site.owner)) {
+    let mut counts = [0usize; 3];
+    for (pass, owns) in passes.into_iter().enumerate() {
+        for site in sites.iter().filter(|site| owns(&site.owner)) {
+            let derivation = derivation_path(spec, site);
             let mut indices = Vec::new();
             spec.walk(site.root, site.scope, |at, scope| {
                 if matches!(spec.expr(at).kind, ExprKind::Call { .. }) {
                     indices.push(requests.len());
+                    counts[pass] += 1;
                     requests.push(Request {
                         call: at,
                         path: checks::path(spec, at),
+                        derivation: derivation.clone(),
+                        authored: 0,
                         contextual: scope != Scope::Row,
                     });
                 }
@@ -214,6 +244,17 @@ fn requests(spec: &ast::Spec) -> (Vec<Request>, BTreeMap<ExprId, Vec<usize>>, Ve
             }
             by_site.insert(site.root, indices);
         }
+    }
+    // A formatted file writes the intermediates before the columns and the
+    // row templates after them (yaml/v1): the intermediates' calls come
+    // first in authored order, each pass keeping its own order (D221).
+    let [columns, intermediates, _] = counts;
+    for (index, request) in requests.iter_mut().enumerate() {
+        request.authored = match index {
+            index if index < columns => intermediates + index,
+            index if index < columns + intermediates => index - columns,
+            index => index,
+        };
     }
     (requests, by_site, bindings)
 }
@@ -356,6 +397,8 @@ pub(super) fn prepare(
                     origins.push((request, *call, path.clone(), decoded.name.clone()));
                     calls.push(LocatedCall {
                         path: path.clone(),
+                        derivation: requests[request].derivation.clone(),
+                        authored: requests[request].authored,
                         call: decoded,
                     });
                 }

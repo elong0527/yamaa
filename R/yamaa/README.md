@@ -145,15 +145,20 @@ release and R-devel, and validate Windows and macOS as well as Linux. Native
 qualification's `native-cran` jobs do so on every run, for the tarball that a
 release publishes: with R-devel, R-release and R 4.2.0 on all three platforms
 and Rust 1.82, with R-devel on Linux and none of the suggested packages, as
-CRAN's noSuggests check runs, and in R-hub's Fedora `gcc16` container with
-Fedora's Rust.
+CRAN's noSuggests check runs, in R-hub's Fedora `gcc16` container with
+Fedora's Rust, and in R-hub's `clang-asan` container with Rust 1.82. There
+the package's C, the bundled ReadStat and zstd sources included, is compiled
+with AddressSanitizer and UndefinedBehaviorSanitizer, as in CRAN's
+additional checks, and any sanitizer report fails the check.
 
 The build follows CRAN's
 [Rust guidance](https://cran.r-project.org/web/packages/using_rust.html):
 `configure` checks that Cargo and rustc are present and at least the
 workspace's `rust-version`, reports their versions before compiling and never
 installs a toolchain, and the Makevars run `cargo build --offline -j 2` from
-the bundled crates with a Cargo home inside the build tree. Rust 1.82, the
+the bundled crates with a Cargo home inside the build tree. They give Cargo
+R's C compiler, so the C sources that crates compile build with the compiler
+of the package's own C, sanitizer flags included. Rust 1.82, the
 minimum, builds the full locked dependency graph, not only our workspace.
 `cran-comments.md` explains the notes that a submission reports, and
 `make test-r` fails on any other.

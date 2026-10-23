@@ -60,14 +60,15 @@ mod service {
             build::{self, MetadataAdmissionPort},
             domain_entry::{self, Request},
             function_invocation::{Argument, HostError},
-            project_activation::{self, ActivationPort},
+            host_functions::{HostFunctions, Lock},
+            project_activation,
             project_domain::{self, CheckedOwnedProject},
             project_preparation as metadata,
             specification_run::CapturedAttempt,
         };
         use yamaa_core::{
             function_signature::{LogicalSignature, ProjectFunctionIdentity},
-            project_environment::{ExecutionEnvironment, LockKind, LockReference},
+            project_environment::{ExecutionEnvironment, LockKind},
             project_function::Language,
             schema::{Document, DocumentNode as N},
             specification::PrepareError,
@@ -100,13 +101,13 @@ mod service {
             log: EventLog,
             fail: bool,
         }
-        impl ActivationPort for Activation {
+        impl HostFunctions for Activation {
             type Handle = ();
             type Error = Opaque;
             fn verify_lock(
                 &mut self,
                 _: Language,
-                _: &LockReference,
+                _: Lock<'_>,
                 _: &[ProjectFunctionIdentity],
             ) -> Result<(), Opaque> {
                 self.log.record(Event::Observation("lock"));
@@ -237,6 +238,7 @@ mod service {
                 checked
                     .build_into(
                         &mut self.activation,
+                        b"",
                         &mut self.source,
                         &mut self.decoder,
                         &mut attempt,

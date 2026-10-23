@@ -274,9 +274,10 @@ gives the command line's too. The command line runs no project function and
 checks no lock (D110, D123). So `a_function_the_running_host_does_not_implement`
 writes it a function file that implements both languages, and both
 project-function cases give its `unsupported_operation`, which names the
-operation `environment` and has no location. A project run prints any project
-finding, then every member's issues in run order, and counts each member's in
-`members`, so a case that names a member compares that member's issues.
+operation `environment` and is located at the first derivation that calls a
+project function (D221). A project run prints any project finding, then
+every member's issues in run order, and counts each member's in `members`,
+so a case that names a member compares that member's issues.
 
 ## Public conformance mapping
 

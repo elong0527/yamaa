@@ -385,10 +385,10 @@ class LanesTest(unittest.TestCase):
         )
 
     def test_a_kind_of_lane_that_is_not_classified_refuses(self):
-        coverage = dict(native.coverage(), windows_shares={"os": ["windows-2025"]})
+        coverage = dict(native.coverage(), musl_wheel={"os": ["ubuntu-24.04"]})
         with self.assertRaisesRegex(
             ValueError,
-            "classifies neither as qualifying nor as diagnostic: windows_shares",
+            "classifies neither as qualifying nor as diagnostic: musl_wheel",
         ):
             platforms.lanes(coverage)
 
@@ -433,7 +433,9 @@ class LanesTest(unittest.TestCase):
     def test_diagnostic_lanes_and_r_devel_qualify_nothing(self):
         jobs = {item.job for item in platforms.lanes()}
         for job in release.required_jobs(native.coverage()):
-            diagnostic = job.startswith(("native-rust ", "native-dist ")) or (
+            diagnostic = job.startswith(
+                ("native-rust ", "native-dist ", "native-share ")
+            ) or (
                 job.startswith("native-cran ") and ("R devel" in job or "R " not in job)
             )
             if diagnostic:

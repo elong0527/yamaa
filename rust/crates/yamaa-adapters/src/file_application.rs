@@ -4,15 +4,15 @@ use crate::report_storage::StoredReport;
 use crate::{
     file_preparation::{self, FileSpecification},
     specification_report::{self, BuildResult, Identity},
-    specification_run::Attempt,
+    specification_run::{Attempt, BoundaryFailure},
 };
 use std::any::Any;
 use yamaa_core::application_issue::{Fault, Step};
 use yamaa_core::application_observer::Scope;
 use yamaa_core::diagnostic::Diagnostic;
-use yamaa_core::domain_entry::{self, Request};
+use yamaa_core::domain_entry::Request;
+use yamaa_core::host_functions::HostFunctions;
 use yamaa_core::json::Value;
-use yamaa_core::project_activation::ActivationPort;
 use yamaa_core::project_function::Language;
 
 /// The diagnostics of a refused operation, in authored order.
@@ -567,15 +567,21 @@ pub enum Classification {
 }
 
 /// Run one prepared specification in `run` and build its result: activate the
-/// project functions it calls through `activation`, read its inputs from the
-/// scope, execute, and report. A specification alone and a member of a project
-/// run take this one route; Save targets resolve in the scope. `classify`
-/// reads the retained failures of `activation`. The attempt is returned beside
-/// the result for the host failures it holds.
-pub fn run<A: ActivationPort>(
+/// project functions it calls through `functions`, the build's host-functions
+/// port, read its inputs from the scope, execute, and report. A specification
+/// alone and a member of a project run take this one route; Save targets
+/// resolve in the scope. `classify` reads the retained failures of
+/// `functions`. The attempt is returned beside the result for the host
+/// failures it holds.
+///
+/// Through the empty port, which keeps no project functions, a build that
+/// calls one is refused before it reads any input (#3030 D110, D123), as one
+/// `unsupported_operation` issue with operation `environment` at the first
+/// derivation that calls one (D221).
+pub fn run<A: HostFunctions>(
     prepared: &FileSpecification,
     run: &mut crate::file_resources::RunScope,
-    activation: &mut A,
+    functions: &mut A,
     classify: impl Fn(&A::Error) -> Classification,
     identity: Identity<'_>,
     scope: Scope<'_>,
@@ -583,7 +589,16 @@ pub fn run<A: ActivationPort>(
     Attempt<crate::file_resources::Error, A::Error>,
     Result<Domain, Failure>,
 ) {
-    let attempt = prepared.build(run, activation, scope);
+    let attempt = prepared.build(run, functions, scope);
+    if let Err(BoundaryFailure::Activation(
+        yamaa_core::project_activation::Failure::FunctionLanguageMismatch {
+            selected: None, ..
+        },
+    )) = &attempt.boundary
+    {
+        let derivation = prepared.run().compiled().first_calling_derivation();
+        return (attempt, Err(unsupported("environment", derivation)));
+    }
     if let Some(error) = file_preparation::opaque_resource_failure(&attempt.dataset) {
         let failure = resource_failure(Step::Capture, error);
         return (attempt, Err(failure));
@@ -728,46 +743,6 @@ pub fn file_type_located(
         )
     })
 }
-/// Prepare and run one request with no project functions: a request with a
-/// project, whose functions need a host, is unsupported here.
-pub fn domain(
-    host: Language,
-    request: Request<'_>,
-    identity: Identity<'_>,
-) -> Result<Domain, Failure> {
-    domain_observed(host, request, identity, Scope::default())
-}
-fn domain_observed(
-    host: Language,
-    request: Request<'_>,
-    identity: Identity<'_>,
-    scope: Scope<'_>,
-) -> Result<Domain, Failure> {
-    domain_entry::domain(
-        scope,
-        || {
-            select(Some(host), request, None)
-                .map_err(|error| crate::project_application::selection_failure(&error))
-        },
-        |prepared| {
-            if prepared.run().has_project() {
-                return Err(unsupported("environment", Some("environment")));
-            }
-            let mut run = prepared.run_scope(None);
-            let (_, result) = self::run(
-                prepared,
-                &mut run,
-                &mut crate::specification_run::NoActivation,
-                |_| Classification::Opaque,
-                identity,
-                scope,
-            );
-            result
-        },
-    )
-    .map_err(collect)
-}
-
 #[cfg(test)]
 mod collect_tests {
     use super::*;
@@ -812,7 +787,31 @@ mod tests {
             Arc,
         },
     };
+    use yamaa_core::host_functions::Empty;
     static NEXT: AtomicUsize = AtomicUsize::new(0);
+    /// Prepare and run one request on the route, through the empty port of an
+    /// engine that supplies no project functions, with phases observed in
+    /// `scope`.
+    fn domain_observed(
+        request: Request<'_>,
+        identity: Identity<'_>,
+        scope: Scope<'_>,
+    ) -> Result<Domain, Failure> {
+        yamaa_core::domain_entry::domain(
+            scope,
+            || {
+                select(Some(Language::Python), request, None)
+                    .map_err(|error| crate::project_application::selection_failure(&error))
+            },
+            |prepared| {
+                let mut scoped = prepared.run_scope(None);
+                let mut empty = Empty::<std::convert::Infallible>::new();
+                let classify = |_: &_| Classification::Opaque;
+                run(prepared, &mut scoped, &mut empty, classify, identity, scope).1
+            },
+        )
+        .map_err(collect)
+    }
     #[test]
     fn primary_above_the_former_eight_megabyte_quota_retains_the_report_and_saves_held_bytes() {
         let root = std::env::temp_dir().join(format!(
@@ -838,7 +837,8 @@ mod tests {
         let document =
             crate::file_preparation::prepare_document(&mut resources, &entry, None).unwrap();
         let prepared = crate::specification_run::PreparedRun::prepare(document).unwrap();
-        let attempt = prepared.execute(&mut resources, Scope::default());
+        let mut empty = Empty::<std::convert::Infallible>::new();
+        let attempt = prepared.execute_with_ports(&mut empty, &mut resources, Scope::default());
         let result = specification_report::build_result(
             &prepared,
             &attempt,
@@ -942,15 +942,10 @@ mod tests {
             specification: &entry,
             environment: None,
         };
-        let ordinary = domain(Language::Python, request(), identity()).unwrap();
+        let ordinary = domain_observed(request(), identity(), Scope::default()).unwrap();
         let result = if let Some(measurements) = measurements {
-            let observed = domain_observed(
-                Language::Python,
-                request(),
-                identity(),
-                Scope::new(measurements),
-            )
-            .unwrap_or_else(|_| panic!("observed fixture failed"));
+            let observed = domain_observed(request(), identity(), Scope::new(measurements))
+                .unwrap_or_else(|_| panic!("observed fixture failed"));
             measurements.complete(observed.output().is_some());
             assert_eq!(observed.observations_json(), ordinary.observations_json());
             assert_eq!(observed.output(), ordinary.output());
@@ -1303,7 +1298,8 @@ mod tests {
                 crate::file_preparation::prepare_document(&mut resources, &entry, Some(schema))
                     .unwrap();
             let prepared = crate::specification_run::PreparedRun::prepare(document).unwrap();
-            let attempt = prepared.execute(&mut resources, Scope::default());
+            let mut empty = Empty::<std::convert::Infallible>::new();
+            let attempt = prepared.execute_with_ports(&mut empty, &mut resources, Scope::default());
             assert!(attempt.dataset.result.as_ref().unwrap().result.is_ok());
             let result = specification_report::build_result(
                 &prepared,

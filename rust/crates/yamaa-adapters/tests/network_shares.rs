@@ -84,7 +84,7 @@ fn a_specification_on_a_network_share_builds_and_saves_through_the_share() {
             .starts_with("//localhost/"),
         "{identity_text}"
     );
-    let mut result = file_application::domain(
+    let mut result = crate::support::study::domain(
         Language::Python,
         Request {
             specification: &specification,

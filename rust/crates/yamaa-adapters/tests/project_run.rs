@@ -2,7 +2,7 @@
 //! Project contracts: project report and project run.
 mod project {
     mod project_report {
-        use crate::support::ports::NoActivation;
+        use crate::support::ports::NoFunctions;
         use crate::support::project_schemas as schemas;
         use std::{collections::BTreeMap, convert::Infallible, path::PathBuf, sync::Arc};
         use yamaa_adapters::{
@@ -122,7 +122,7 @@ mod project {
                     cached: BTreeMap::new(),
                 };
                 let attempt =
-                    run.execute_with_ports(&mut NoActivation, &mut study, Scope::default());
+                    run.execute_with_ports(&mut NoFunctions, &mut study, Scope::default());
                 let result = yamaa_adapters::specification_report::build_result(
                     &run,
                     &attempt,
@@ -179,7 +179,7 @@ mod project {
                     ),
                 )]),
             };
-            let attempt = run.execute_with_ports(&mut NoActivation, &mut study, Scope::default());
+            let attempt = run.execute_with_ports(&mut NoFunctions, &mut study, Scope::default());
             let result = yamaa_adapters::specification_report::build_result(
                 &run,
                 &attempt,
@@ -280,7 +280,7 @@ mod project {
                         inspections: 0,
                     };
                     let attempt =
-                        run.execute_with_ports(&mut NoActivation, &mut resources, Scope::default());
+                        run.execute_with_ports(&mut NoFunctions, &mut resources, Scope::default());
                     let candidate = yamaa_adapters::specification_report::build_result(
                         &run,
                         &attempt,
@@ -343,7 +343,7 @@ mod project {
                     ),
                 )]),
             };
-            let attempt = run.execute_with_ports(&mut NoActivation, &mut study, Scope::default());
+            let attempt = run.execute_with_ports(&mut NoFunctions, &mut study, Scope::default());
             let result = yamaa_adapters::specification_report::build_result(
                 &run,
                 &attempt,
@@ -385,12 +385,13 @@ mod project {
         use yamaa_core::{
             dataset::ExecutionError,
             function_invocation::{Argument, FailureKind, HostError},
-            project_activation::{ActivationPort, Failure, LockObservation, TestOutcome},
+            host_functions::{HostFunctions, Lock},
+            project_activation::{Failure, LockObservation, TestOutcome},
             specification_run::{PortError, SpecificationSourcePort},
         };
         use yamaa_core::{
             function_signature::{LogicalSignature, ProjectFunctionIdentity},
-            project_environment::{LockKind, LockReference},
+            project_environment::LockKind,
             project_function::Language,
             specification::SourceDeclaration,
             table::{TableAccess, ValueRef},
@@ -521,17 +522,17 @@ functions:
                 }
             }
         }
-        impl ActivationPort for Activation {
+        impl HostFunctions for Activation {
             type Handle = ();
             type Error = Payload;
             fn verify_lock(
                 &mut self,
                 language: Language,
-                lock: &LockReference,
+                lock: Lock<'_>,
                 functions: &[ProjectFunctionIdentity],
             ) -> Result<(), Payload> {
                 assert_eq!(language, Language::Python);
-                assert_eq!(lock.written, "../uv.lock");
+                assert_eq!(lock.reference.written, "../uv.lock");
                 assert_eq!(functions.len(), 1);
                 assert_eq!(functions[0].name, self.function);
                 self.trace.borrow_mut().push("lock");
@@ -1577,13 +1578,13 @@ functions:
             };
             struct EmptyFailure;
             struct RejectLock;
-            impl ActivationPort for RejectLock {
+            impl HostFunctions for RejectLock {
                 type Handle = ();
                 type Error = EmptyFailure;
                 fn verify_lock(
                     &mut self,
                     _: Language,
-                    _: &LockReference,
+                    _: Lock<'_>,
                     _: &[ProjectFunctionIdentity],
                 ) -> Result<(), EmptyFailure> {
                     Err(EmptyFailure)

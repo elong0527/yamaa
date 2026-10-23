@@ -6,9 +6,17 @@ use crate::{
 };
 use std::{collections::BTreeMap, vec};
 
+/// One authored call: its own spec path, the spec path of the derivation
+/// that evaluates it, that derivation's position in authored order, and the
+/// call as written.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LocatedCall {
     pub path: String,
+    pub derivation: String,
+    /// Authored order is the order a formatted file writes derivations in:
+    /// the intermediates', then the columns', then the row templates', each
+    /// in declaration order (D221).
+    pub authored: usize,
     pub call: Call,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]

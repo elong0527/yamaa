@@ -29,7 +29,7 @@ impl Fixture {
     /// The saved artifact, or the issues that kept anything from being saved.
     fn run(&self) -> Result<String, Vec<Value>> {
         let specification = self.specification();
-        let mut domain = file_application::domain(
+        let mut domain = crate::support::study::domain(
             yamaa_core::project_function::Language::Python,
             Request {
                 specification: &specification,

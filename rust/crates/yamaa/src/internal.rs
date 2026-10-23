@@ -4,34 +4,28 @@
 //!
 //! Every build, of a specification alone or of one member of a project run,
 //! takes one route: compile the member, then run it through the one
-//! host-functions port, the embedder's or an empty one. Each adjudicated
-//! build, including a refused compilation, returns an owned [`Build`]
-//! carrying its diagnostics and evidence. `Rejected` errors are reserved for
-//! refusals without a result, such as a failed specification resolution.
+//! host-functions port, the embedder's [`ProjectFunctions`] or the empty
+//! port. Each adjudicated build, including a refused compilation, returns an
+//! owned [`Build`] carrying its diagnostics and evidence. `Rejected` errors
+//! are reserved for refusals without a result, such as a failed
+//! specification resolution.
 
 use std::convert::Infallible;
 use std::sync::Arc;
 
 use yamaa_adapters::application_measurements::Measurements;
+use yamaa_core::host_functions::{Empty, HostFunctions, Lock};
 
 use crate::cancel::CancellationToken;
 use crate::diagnostic::Locator;
 use crate::engine::Build;
 use crate::error::{Error, FunctionError, ResolverFailure};
 use crate::functions::{
-    Argument, CallError, FunctionHandle, FunctionIdentity, HostLanguage, LockContext, LockKind,
-    ProjectFunctions, Signature,
+    Argument, BatchArgument, CallError, FunctionHandle, FunctionIdentity, HostLanguage,
+    LockContext, LockKind, ProjectFunctions, Signature,
 };
 use crate::resolver::{ResolverReply, ResolverRequest, ResourceResolver};
 use crate::scalar::{Scalar, ScalarRef};
-
-/// The internal host error carrier. Raised and invalid-result failures stay
-/// distinct through the outer invocation wrapper, preserving engine
-/// diagnostics.
-#[derive(Clone, Debug)]
-pub(crate) struct HostFailure {
-    pub error: FunctionError,
-}
 
 pub(crate) struct ResolverBridge {
     inner: Arc<dyn ResourceResolver>,
@@ -148,61 +142,55 @@ pub(crate) fn read_project(
     .map_err(|(issues, locator)| (issues, Arc::new(locator)))
 }
 
-struct HostPort<'a> {
-    functions: &'a dyn ProjectFunctions,
-    lock_bytes: &'a [u8],
-}
-
-impl yamaa_core::project_activation::ActivationPort for HostPort<'_> {
+/// The embedder's project functions are the build's host-functions port: a
+/// host's (Python's or R's), the memory route's or another embedder's. Each
+/// call converts between the core's values and the facade's on the calling
+/// thread; a host failure is retained as the `FunctionError` it returned.
+impl HostFunctions for &dyn ProjectFunctions {
     type Handle = FunctionHandle;
-    type Error = HostFailure;
+    type Error = FunctionError;
 
     fn verify_lock(
         &mut self,
         language: yamaa_core::project_function::Language,
-        lock: &yamaa_core::project_environment::LockReference,
+        lock: Lock<'_>,
         functions: &[yamaa_core::function_signature::ProjectFunctionIdentity],
-    ) -> Result<(), Self::Error> {
-        let host = match language {
+    ) -> Result<(), FunctionError> {
+        let language = match language {
             yamaa_core::project_function::Language::Python => HostLanguage::Python,
             yamaa_core::project_function::Language::R => HostLanguage::R,
         };
         let context = LockContext {
-            language: host,
-            kind: LockKind::from_core(lock.kind),
-            bytes: self.lock_bytes,
+            language,
+            kind: LockKind::from_core(lock.reference.kind),
+            bytes: lock.bytes,
         };
         let identities: Vec<FunctionIdentity> =
             functions.iter().map(FunctionIdentity::from_core).collect();
-        self.functions
-            .verify_lock(&context, &identities)
-            .map_err(|error| HostFailure { error })
+        (**self).verify_lock(&context, &identities)
     }
 
     fn bind(
         &mut self,
         identity: &yamaa_core::function_signature::ProjectFunctionIdentity,
         signature: &yamaa_core::function_signature::LogicalSignature,
-    ) -> Result<Self::Handle, Self::Error> {
-        self.functions
-            .bind(
-                &FunctionIdentity::from_core(identity),
-                &Signature::from_core(signature),
-            )
-            .map_err(|error| HostFailure { error })
+    ) -> Result<FunctionHandle, FunctionError> {
+        (**self).bind(
+            &FunctionIdentity::from_core(identity),
+            &Signature::from_core(signature),
+        )
     }
 
-    fn is_interrupt(&self, error: &Self::Error) -> bool {
-        self.functions.is_interrupt(&error.error)
+    fn is_interrupt(&self, error: &FunctionError) -> bool {
+        (**self).is_interrupt(error)
     }
 
     fn invoke(
         &mut self,
-        handle: &Self::Handle,
+        handle: &FunctionHandle,
         arguments: &[yamaa_core::function_invocation::Argument<'_>],
-    ) -> Result<yamaa_core::value::Value, yamaa_core::function_invocation::HostError<Self::Error>>
+    ) -> Result<yamaa_core::value::Value, yamaa_core::function_invocation::HostError<FunctionError>>
     {
-        use yamaa_core::function_invocation::HostError;
         let borrowed: Vec<Argument<'_>> = arguments
             .iter()
             .map(|argument| Argument {
@@ -210,51 +198,56 @@ impl yamaa_core::project_activation::ActivationPort for HostPort<'_> {
                 value: ScalarRef::from_core(argument.value),
             })
             .collect();
-        match self.functions.invoke(handle, &borrowed) {
-            Ok(value) => Ok(value.into_core()),
-            Err(CallError::Raised(error)) => Err(HostError::Raised(HostFailure { error })),
-            Err(CallError::InvalidResult(error)) => {
-                Err(HostError::InvalidResult(HostFailure { error }))
-            }
-        }
+        (**self)
+            .invoke(handle, &borrowed)
+            .map(Scalar::into_core)
+            .map_err(host_error)
+    }
+
+    fn call_batch(
+        &mut self,
+        handle: &FunctionHandle,
+        rows: usize,
+        arguments: &[yamaa_core::function_batch::BatchArgument],
+    ) -> Result<
+        Vec<yamaa_core::value::Value>,
+        yamaa_core::function_invocation::HostError<FunctionError>,
+    > {
+        let arguments: Vec<BatchArgument> = arguments
+            .iter()
+            .map(|argument| BatchArgument {
+                name: argument.name.clone(),
+                values: argument
+                    .values
+                    .iter()
+                    .cloned()
+                    .map(Scalar::from_core)
+                    .collect(),
+            })
+            .collect();
+        (**self)
+            .call_batch(handle, rows, &arguments)
+            .map(|values| values.into_iter().map(Scalar::into_core).collect())
+            .map_err(host_error)
     }
 }
 
-/// The host-functions port of an engine configured without project
-/// functions, such as the command line's. Only a member that calls no
-/// project function runs with it, with or without a project, so activation
-/// never enters it; a request that did reach it would fail as a missing
-/// binding.
-struct NoFunctions;
-
-impl ProjectFunctions for NoFunctions {
-    fn verify_lock(
-        &self,
-        _: &LockContext<'_>,
-        _: &[FunctionIdentity],
-    ) -> Result<(), FunctionError> {
-        Err(FunctionError::Protocol)
-    }
-
-    fn bind(
-        &self,
-        identity: &FunctionIdentity,
-        _: &Signature,
-    ) -> Result<FunctionHandle, FunctionError> {
-        Err(FunctionError::MissingBinding(identity.call.clone()))
-    }
-
-    fn invoke(&self, _: &FunctionHandle, _: &[Argument<'_>]) -> Result<Scalar, CallError> {
-        Err(CallError::Raised(FunctionError::Protocol))
+/// A raised host failure stays distinct from a rejected host representation,
+/// preserving the engine's diagnostics.
+fn host_error(error: CallError) -> yamaa_core::function_invocation::HostError<FunctionError> {
+    use yamaa_core::function_invocation::HostError;
+    match error {
+        CallError::Raised(error) => HostError::Raised(error),
+        CallError::InvalidResult(error) => HostError::InvalidResult(error),
     }
 }
 
 /// Classify one retained host failure: ordinary facts project into
 /// diagnostics while opaque failures stay held without classification facts.
-fn classify(failure: &HostFailure) -> yamaa_adapters::file_application::Classification {
+fn classify(failure: &FunctionError) -> yamaa_adapters::file_application::Classification {
     use yamaa_adapters::callback::CallbackError;
     use yamaa_adapters::file_application::Classification;
-    match &failure.error {
+    match failure {
         FunctionError::Exception { class, message, .. } => {
             Classification::Host(CallbackError::Exception {
                 class: class.clone(),
@@ -430,7 +423,13 @@ type Ran = (
     Vec<FunctionError>,
 );
 
-/// One run of a prepared member through the engine's host-functions port.
+/// One run of a prepared member through the engine's host-functions port:
+/// the embedder's project functions, or the empty port when it supplies none.
+/// An engine that claims no host language keeps no functions, so it runs
+/// through the empty port too. A member that calls no project function runs
+/// as a host runs it, with or without a project; through the empty port, one
+/// that calls a project function is refused before it reads any input
+/// (#3030 D110, D123, D221).
 fn run_member(
     shared: &EngineShared,
     specification: &str,
@@ -438,48 +437,35 @@ fn run_member(
     held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
     scope: yamaa_core::application_observer::Scope<'_>,
 ) -> Ran {
-    let project = prepared.run().has_project();
-    // Without project functions the port is empty: a member that calls a
-    // project function is unsupported before it reads data, and any other
-    // member, with or without a project, runs as a host runs it. An engine
-    // that claims no host language keeps no functions, so this refuses its
-    // calls too.
-    let functions: &dyn ProjectFunctions = match shared.functions.as_deref() {
-        Some(functions) => functions,
-        None if !prepared.run().compiled().called_functions().is_empty() => {
-            let issues =
-                yamaa_adapters::file_application::unsupported("environment", Some("environment"));
-            return (Err(issues), Vec::new());
-        }
-        None => &NoFunctions,
-    };
     let mut run_scope = prepared.run_scope(None);
     if let Some(held) = held {
         run_scope.hold(held);
     }
     let identity = shared.identity("domain", specification);
-    let lock_bytes = prepared
-        .run()
-        .captured_environment()
-        .lock()
-        .map_or(&[][..], |lock| &lock.source.bytes[..]);
-    let mut port = HostPort {
-        functions,
-        lock_bytes,
+    let Some(mut functions) = shared.functions.as_deref() else {
+        let (_, result) = yamaa_adapters::file_application::run(
+            prepared,
+            &mut run_scope,
+            &mut Empty::<FunctionError>::new(),
+            classify,
+            identity,
+            scope,
+        );
+        return (result.map(Box::new), Vec::new());
     };
     let (attempt, result) = yamaa_adapters::file_application::run(
         prepared,
         &mut run_scope,
-        &mut port,
+        &mut functions,
         classify,
         identity,
         scope,
     );
     // A member with a project reports the host failures it retained.
     let mut failures = Vec::new();
-    if project {
+    if prepared.run().has_project() {
         yamaa_adapters::project_attempt::visit_host_failures(&attempt, |_, failure| {
-            failures.push(failure.error.clone());
+            failures.push(failure.clone());
         });
     }
     (result.map(Box::new), failures)
@@ -531,4 +517,121 @@ pub(crate) fn unchanged(compiled: &Compiled) -> bool {
         return false;
     };
     prepared.verify_metadata().is_ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+    use yamaa_core::function_invocation::HostError;
+    use yamaa_core::value::Value;
+
+    /// Project functions answering a batch whole: each `x` plus one, missing
+    /// for missing, and a rejected representation for an `x` of 0. They
+    /// record each batch they are given.
+    #[derive(Default)]
+    struct Vectorized {
+        batches: Mutex<Vec<(usize, Vec<BatchArgument>)>>,
+    }
+
+    impl ProjectFunctions for Vectorized {
+        fn verify_lock(
+            &self,
+            _: &LockContext<'_>,
+            _: &[FunctionIdentity],
+        ) -> Result<(), FunctionError> {
+            unreachable!("a batch verifies no lock")
+        }
+
+        fn bind(
+            &self,
+            _: &FunctionIdentity,
+            _: &Signature,
+        ) -> Result<FunctionHandle, FunctionError> {
+            unreachable!("a batch is given its handle")
+        }
+
+        fn invoke(&self, _: &FunctionHandle, _: &[Argument<'_>]) -> Result<Scalar, CallError> {
+            unreachable!("these functions answer a batch whole")
+        }
+
+        fn call_batch(
+            &self,
+            _: &FunctionHandle,
+            rows: usize,
+            arguments: &[BatchArgument],
+        ) -> Result<Vec<Scalar>, CallError> {
+            self.batches
+                .lock()
+                .unwrap()
+                .push((rows, arguments.to_vec()));
+            arguments[0]
+                .values
+                .iter()
+                .map(|value| match value {
+                    Scalar::Int(0) => Err(CallError::InvalidResult(FunctionError::Rejected {
+                        reason: "zero".into(),
+                        returned: None,
+                    })),
+                    Scalar::Int(x) => Ok(Scalar::Int(x + 1)),
+                    _ => Ok(Scalar::Missing),
+                })
+                .collect()
+        }
+    }
+
+    /// The port forwards a batch to the embedder's own `call_batch` whole,
+    /// converting each value both ways, and a rejected representation stays
+    /// distinct from a raised failure.
+    #[test]
+    fn a_batch_reaches_the_embedder_s_call_batch_whole() {
+        let functions = Vectorized::default();
+        let mut port: &dyn ProjectFunctions = &functions;
+        let handle = FunctionHandle::new(());
+        let batch = |values| {
+            [yamaa_core::function_batch::BatchArgument {
+                name: "x".into(),
+                values,
+            }]
+        };
+        let returned = HostFunctions::call_batch(
+            &mut port,
+            &handle,
+            2,
+            &batch(vec![Value::Int(1), Value::Missing]),
+        );
+        assert_eq!(
+            returned.ok(),
+            Some(vec![Value::Int(2), Value::Missing]),
+            "an answered batch"
+        );
+        let rejected =
+            HostFunctions::call_batch(&mut port, &handle, 1, &batch(vec![Value::Int(0)]));
+        assert!(
+            matches!(
+                rejected,
+                Err(HostError::InvalidResult(FunctionError::Rejected { ref reason, returned: None }))
+                    if reason == "zero"
+            ),
+            "a rejected batch: {rejected:?}"
+        );
+        let batches = functions.batches.lock().unwrap();
+        let given = batches
+            .iter()
+            .map(|(rows, arguments)| {
+                let [argument] = arguments.as_slice() else {
+                    panic!("one argument: {arguments:?}")
+                };
+                (*rows, argument.name.as_str(), argument.values.clone())
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            given,
+            [
+                (2, "x", vec![Scalar::Int(1), Scalar::Missing]),
+                (1, "x", vec![Scalar::Int(0)]),
+            ],
+            "the batches the embedder was given"
+        );
+    }
 }

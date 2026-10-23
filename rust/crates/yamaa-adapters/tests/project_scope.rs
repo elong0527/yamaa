@@ -2,6 +2,7 @@
 //! Project-scope contracts in the adapters: listed names, run-scope plans,
 //! held producer artifacts, report-only saves and the preflight of one save
 //! across results.
+use crate::support::ports::NoFunctions;
 use crate::support::Edit as _;
 use std::{fs, sync::Arc};
 use yamaa_adapters::{
@@ -11,7 +12,6 @@ use yamaa_adapters::{
     project_scope::Project,
     publication::{self, Cause},
     specification_report::Identity,
-    specification_run::NoActivation,
 };
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{
@@ -313,7 +313,7 @@ fn saved_build(
         run
     };
     let origin = prepared
-        .build(&mut run(), &mut NoActivation, scope())
+        .build(&mut run(), &mut NoFunctions, scope())
         .dataset
         .sources
         .first()
@@ -321,7 +321,7 @@ fn saved_build(
     let (_, result) = file_application::run(
         &prepared,
         &mut run(),
-        &mut NoActivation,
+        &mut NoFunctions,
         |_| file_application::Classification::Opaque,
         id(),
         scope(),
@@ -366,7 +366,7 @@ fn saved_links_read_held_or_saved_artifacts_under_the_producer_contract() {
 }
 
 fn domain(study: &Study, name: &str) -> Domain {
-    yamaa_adapters::file_application::domain(
+    crate::support::study::domain(
         Language::Python,
         yamaa_core::domain_entry::Request {
             specification: &study.path(name),

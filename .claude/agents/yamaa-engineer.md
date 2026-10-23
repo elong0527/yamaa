@@ -15,9 +15,10 @@ Work this way.
 1. Claim the issue by assigning yourself, or say in your report that you
    could not. Create a worktree from `origin/main`:
    `git worktree add --no-track -b <branch> .worktrees/<name> origin/main`,
-   and point Cargo at the machine's shared target
-   (`CARGO_TARGET_DIR=<machine>/yamaa-target`, `CARGO_INCREMENTAL=0` for
-   one-off checks). Run `make setup` once in the worktree.
+   give it its own Cargo target behind the machine's sccache
+   (`CARGO_TARGET_DIR=<machine>/yamaa-target/<name>`, `RUSTC_WRAPPER=sccache`,
+   the shared `SCCACHE_DIR`; `CARGO_INCREMENTAL=0` for one-off checks), and
+   run `make setup` once in the worktree.
 2. Read the files the issue names before editing them. Build the smallest
    change that meets every "Done when" line. Remove obsolete interfaces and
    their callers together; never add compatibility aliases.
@@ -31,7 +32,11 @@ Work this way.
    (`cargo clippy --locked -p <crate> --all-targets --all-features -- -D warnings`
    from `rust/`), and `make quick` only when generated files, rule cards,
    schemas, docs generators or Python changed. Never run
-   `make check-equivalence` locally.
+   `make check-equivalence` locally. Never dispatch native qualification
+   on the branch or wait for a native run (D233): a change to packaging,
+   paths, file handling, `cfg`-gated code or a workflow says so in the pull
+   request body, and the next native run on main is its native evidence,
+   also for a "Done when" line that asks for a native run on the branch.
 5. Push once, validated, with the explicit refspec
    `git push -u origin HEAD:refs/heads/<branch>`, and open the pull request
    ready for review (a draft only when it cannot merge until another pull

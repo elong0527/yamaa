@@ -4,7 +4,10 @@
 R/yamaa/cran-comments.md explains to CRAN. EXPECTED_NOTES lists them, with
 the lines that each may print; any other NOTE, any WARNING or ERROR, or an
 unexpected line under a listed NOTE fails the check. INFO findings, which R
-does not count in its status, are printed and pass.
+does not count in its status, are printed and pass. With an R whose compiler
+instruments packages with AddressSanitizer and UndefinedBehaviorSanitizer, a
+sanitizer report in the installation, example or test output fails the check
+too, since R passes a test that UndefinedBehaviorSanitizer reported on.
 
     python -m tools.commands.check_r --archive <yamaa_X.Y.Z.tar.gz> --work-dir <new dir>
     python -m tools.commands.check_r --log <yamaa.Rcheck/00check.log>
@@ -84,6 +87,18 @@ CRAN_SETTINGS = {
     "_R_CHECK_EXAMPLE_TIMING_CPU_TO_ELAPSED_THRESHOLD_": "2.5",
     "_R_CHECK_TEST_TIMING_CPU_TO_ELAPSED_THRESHOLD_": "2.5",
 }
+# What a sanitizer prints with each report. AddressSanitizer names itself and
+# stops the program, so R fails the test or the installation.
+# UndefinedBehaviorSanitizer reports and carries on: each report starts with
+# "<location>: runtime error: ", and ends with the summary that names it,
+# which R-hub's sanitizer containers search for, unless print_summary=0.
+SANITIZER_REPORT = re.compile(
+    r"AddressSanitizer|UndefinedBehaviorSanitizer|: runtime error: "
+)
+# The outputs of a check, below its yamaa.Rcheck, that hold what the package's
+# compiled code prints: the installation, which loads the package, the
+# examples and each test file.
+SANITIZER_OUTPUTS = ("00install.out", "*-Ex.Rout", "tests/*.Rout", "tests/*.Rout.fail")
 COUNTED = ("ERROR", "WARNING", "NOTE")
 STATUSES = (*COUNTED, "INFO", "OK", "SKIPPED", "NONE")
 HEADER = re.compile(r"^\* checking (?P<check>.+?) \.\.\.(?P<rest>.*)$")
@@ -257,6 +272,13 @@ def has_checkbashisms(environment=None):
     return shutil.which("checkbashisms", path=environment.get("PATH")) is not None
 
 
+def print_output(path):
+    """Print one output file of a check whole, between two marker lines."""
+    print(f"===== {path.name} =====")
+    print(path.read_text(encoding="utf-8", errors="replace"), end="")
+    print(f"===== end of {path.name} =====")
+
+
 def print_failed_tests(work):
     """Print the complete output of each test file that failed in a check.
 
@@ -266,10 +288,19 @@ def print_failed_tests(work):
     """
     failed = sorted(work.glob("*.Rcheck/tests/*.Rout.fail"))
     for path in failed:
-        print(f"===== {path.name} =====")
-        print(path.read_text(encoding="utf-8", errors="replace"), end="")
-        print(f"===== end of {path.name} =====")
+        print_output(path)
     return [path.name for path in failed]
+
+
+def sanitizer_reports(work):
+    """The outputs of a check in `work` that hold a sanitizer report, in the
+    order of SANITIZER_OUTPUTS."""
+    return [
+        path
+        for pattern in SANITIZER_OUTPUTS
+        for path in sorted(work.glob(f"*.Rcheck/{pattern}"))
+        if SANITIZER_REPORT.search(path.read_text(encoding="utf-8", errors="replace"))
+    ]
 
 
 def check(archive, work, environment=None):
@@ -297,9 +328,20 @@ def check(archive, work, environment=None):
         str(archive),
     ]
     completed = subprocess.run(command, cwd=work, env=environment, check=False)
-    print_failed_tests(work)
+    printed = print_failed_tests(work)
+    # Each output with a report is printed whole, once, for the stack that
+    # the report gives.
+    reports = sanitizer_reports(work)
+    for path in reports:
+        if path.name not in printed:
+            print_output(path)
     if completed.returncode != 0:
         raise subprocess.CalledProcessError(completed.returncode, command)
+    if reports:
+        raise RuntimeError(
+            "these outputs of the check hold a sanitizer report: "
+            + ", ".join(str(path.relative_to(work)) for path in reports)
+        )
     logs = list(work.glob("*.Rcheck/00check.log"))
     if len(logs) != 1:
         raise RuntimeError("R package check wrote no single 00check.log")

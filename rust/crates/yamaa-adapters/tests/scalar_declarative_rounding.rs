@@ -59,7 +59,7 @@ mod scalar {
             .is_empty());
             fs::create_dir(study.0.join("input")).unwrap();
             fs::write(study.0.join("input/adsl.csv"), INPUT).unwrap();
-            let result = file_application::domain(
+            let result = crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
@@ -100,7 +100,7 @@ mod scalar {
                 json!({"source":"SEX", "expected":"numeric", "actual":"str"})
             );
             assert_eq!(
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
@@ -144,7 +144,7 @@ mod scalar {
         fn undeclared_rounding_relation_is_classified_with_actual_source_schema() {
             let study = Study::new(&POSITIVE.edit("source: VAL1", "source: OTHER.VAL1"), true);
             let path = study.path();
-            let findings = file_application::domain(
+            let findings = crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
@@ -231,7 +231,7 @@ mod scalar {
                 identity(&path),
             );
             assert!(issues.is_empty(), "{issues:?}");
-            let result = file_application::domain(
+            let result = crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &path,
@@ -338,7 +338,7 @@ mod scalar {
                     identity(&path),
                 );
                 assert!(check.is_empty(), "{name}: {check:?}");
-                let mut result = file_application::domain(
+                let mut result = crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
@@ -397,7 +397,7 @@ mod scalar {
                 let finding = &findings[0];
                 let actual = crate::support::study::issue_row(finding);
                 assert_eq!(actual, expected, "{name}");
-                let failed = file_application::domain(
+                let failed = crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
@@ -449,7 +449,7 @@ mod scalar {
         let path = study.path();
         let issues = file_application::check(yamaa_core::project_function::Language::Python, Request { specification: &path, environment: None }, identity(&path));
         assert!(issues.is_empty(), "{issues:?}");
-        let mut result = file_application::domain(yamaa_core::project_function::Language::Python, Request { specification: &path, environment: None }, identity(&path)).unwrap();
+        let mut result = crate::support::study::domain(yamaa_core::project_function::Language::Python, Request { specification: &path, environment: None }, identity(&path)).unwrap();
         assert!(result.issues().is_empty(), "{:?}", result.issues());
         assert!(!study.0.join("result.csv").exists());
         assert!(result.save().unwrap());
@@ -676,7 +676,7 @@ mod scalar {
                     fs::write(study.0.join(name), bytes.as_str().unwrap()).unwrap();
                 }
                 let path = study.path();
-                let result = file_application::domain(
+                let result = crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
@@ -748,7 +748,7 @@ mod scalar {
             fn run(&self) -> file_application::Domain {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 let identity = crate::support::study::identity("test", &specification);
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
@@ -812,7 +812,7 @@ mod scalar {
                 let fixture = Fixture::new(name);
                 let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
                 let identity = crate::support::study::identity(name, &specification);
-                let issues = match file_application::domain(
+                let issues = match crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
@@ -967,7 +967,7 @@ columns:
         fn issue_rows(fixture: &Fixture) -> yamaa_core::json::Value {
             let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
             let identity = crate::support::study::identity("test", &specification);
-            let issues = match file_application::domain(
+            let issues = match crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &specification,
@@ -1336,7 +1336,7 @@ columns:
             fn run(&self) -> file_application::Domain {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 let identity = crate::support::study::identity("test", &specification);
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
@@ -1397,7 +1397,7 @@ columns:
                 fs::remove_dir_all(fixture.0.join("input")).unwrap();
                 let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
                 let identity = crate::support::study::identity(name, &specification);
-                let issues = match file_application::domain(
+                let issues = match crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
@@ -1569,7 +1569,7 @@ columns:
                 fs::remove_file(fixture.0.join("input.csv")).unwrap();
                 let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
                 let identity = crate::support::study::identity("test", &specification);
-                let issues = match file_application::domain(
+                let issues = match crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
@@ -1622,7 +1622,7 @@ columns:
             fn run(&self) -> file_application::Domain {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 let identity = crate::support::study::identity("test", &specification);
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
@@ -1679,7 +1679,7 @@ columns:
             fixture: &Fixture,
         ) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>> {
             let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-            file_application::domain(
+            crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &specification,
@@ -1935,7 +1935,7 @@ columns:
                 fs::write(fixture.0.join("input.csv"), case["input"].as_str().unwrap()).unwrap();
                 let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
                 let identity = crate::support::study::identity(name, &specification);
-                let mut result = match file_application::domain(
+                let mut result = match crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
@@ -1992,7 +1992,7 @@ columns:
             let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
             let identity =
                 crate::support::study::identity("negative-str-pad-width", &specification);
-            let issues = match file_application::domain(
+            let issues = match crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &specification,
@@ -2029,7 +2029,7 @@ columns:
                 .unwrap();
                 fs::write(fixture.0.join("input.csv"), "ID\nrow1\n").unwrap();
                 let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let result = file_application::domain(
+                let result = crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
@@ -2097,7 +2097,7 @@ columns:
             fn run(&self) -> file_application::Domain {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 let identity = crate::support::study::identity("test", &specification);
-                file_application::domain(
+                crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &specification,
@@ -2169,7 +2169,7 @@ columns:
             fixture: &Fixture,
         ) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>> {
             let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-            file_application::domain(
+            crate::support::study::domain(
                 yamaa_core::project_function::Language::Python,
                 Request {
                     specification: &specification,
