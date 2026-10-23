@@ -69,7 +69,7 @@ pub(crate) fn capture_environment(
 ) -> Result<project_source::OwnedEnvironment, Error> {
     let prepared = match yamaa_core::build::prepare_environment(
         resources,
-        &mut project_source::Decoder(schemas),
+        &mut crate::decoder::Decoder::<std::convert::Infallible>::with_schemas(schemas),
         written,
         host,
     ) {

@@ -863,10 +863,9 @@ mod service {
         use std::{cell::RefCell, rc::Rc, sync::Arc};
         use yamaa_core::{
             dataset::ExecutionError,
+            decoder,
             resolver::{Captured, Failure, Located, Name, Resolver},
-            specification_run::{
-                self as run, CapturedAttempt, PortError, RunError, SourceDecoder, SourceIssue,
-            },
+            specification_run::{self as run, CapturedAttempt, PortError, RunError, SourceIssue},
         };
         use yamaa_core::{
             odm_source::FIELDS,
@@ -988,14 +987,15 @@ mod service {
             payload: Rc<()>,
             fail: Option<(usize, usize)>,
         }
-        impl SourceDecoder for Decoder {
+        impl decoder::Decoder for Decoder {
+            crate::support::ports::no_documents!();
             fn continue_after(&self, _error: &Self::Error) -> bool {
                 false
             }
             type Error = Original;
             type Table = Table;
 
-            fn decode(
+            fn table(
                 &mut self,
                 source: &SourceDeclaration,
                 bytes: &[u8],

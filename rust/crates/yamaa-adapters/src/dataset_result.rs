@@ -1,5 +1,4 @@
 //! Retained typed execution results and bounded report observations.
-pub(crate) use crate::dataset_snapshot::Snapshot;
 use crate::{
     callback::{BoundaryError, CallbackError},
     execution_diagnostics as diagnostics,

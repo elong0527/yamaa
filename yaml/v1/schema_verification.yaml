@@ -15,6 +15,14 @@ column_verification_entry:
 column_verifications:
     not_missing:
         - id: {type: verification_id, required: false}
+        - when:
+            type: predicate
+            required: false
+            description: See CHECK-5.
+        - max_fraction:
+            type: float
+            required: false
+            description: See CHECK-5.
         - severity: {type: verification_severity, required: false, default: error}
     allowed_values:
         - id: {type: verification_id, required: false}
@@ -81,6 +89,11 @@ dataset_unique_arguments:
 intermediate_unique_arguments:
     - id: {type: verification_id, required: false}
     - columns: {type: "list[variable]", required: true}
+    - severity:
+        type: verification_severity
+        required: false
+        default: error
+        description: See LOOKUP-17.
 
 verification_id:
     type: str

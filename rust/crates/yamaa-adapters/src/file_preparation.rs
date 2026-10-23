@@ -216,28 +216,29 @@ impl FileSpecification {
     /// naming its declaration; see [`crate::file_application::verify_held`].
     pub fn verify_metadata(&self) -> Result<(), crate::file_application::Failure> {
         use crate::changed_metadata as changed;
+        let captured = self.run.captured_environment();
+        let held = changed::Held {
+            entry: &self.entry,
+            document: self.run.document(),
+            links: &self.links,
+            project: captured.project(),
+            inventory: captured.inventory_documents(),
+            environment: captured
+                .root_optional()
+                .zip(captured.project())
+                .zip(captured.written())
+                .map(|((root, project), written)| changed::Environment {
+                    written,
+                    host: self.run.environment().host(),
+                    root,
+                    project,
+                    environment_file: captured.environment_file(),
+                    lock: captured.lock(),
+                    captures: captured.captures(),
+                }),
+        };
         crate::file_application::verify_held(&self.resources, |identity, failure| {
-            let document = self.run.document();
-            let captured = self.run.captured_environment();
-            changed::specification("specification", &self.entry, document, identity, failure)
-                .or_else(|| changed::links(document, &self.links, identity, failure))
-                .or_else(|| {
-                    let root = captured.root_optional()?;
-                    let project = captured.project()?;
-                    changed::inventory(project, captured.inventory_documents(), identity, failure)
-                        .or_else(|| {
-                            let environment = changed::Environment {
-                                written: captured.written()?,
-                                host: self.run.environment().host(),
-                                root,
-                                project,
-                                environment_file: captured.environment_file(),
-                                lock: captured.lock(),
-                                captures: captured.captures(),
-                            };
-                            changed::environment(&environment, identity, failure)
-                        })
-                })
+            changed::declaration(&held, identity, failure)
         })
     }
     /// Bounded aliases of the held metadata bytes; no file access or replay.
@@ -295,21 +296,55 @@ pub(crate) fn prepare_document_from(
     declaring: Option<&str>,
     written: &str,
 ) -> Result<crate::specification_source::PreparedDocument, Error> {
-    use yamaa_core::file_preparation::{self as application, Error as Failure};
-    let document = application::prepare(&mut *resources, &mut Documents, declaring, written)
-        .map_err(|error| match error {
-            // Only an entry no file declares is the caller's own; a producer a
-            // `schema` link names was resolved from its declaring file first.
-            Failure::Entry(error) if declaring.is_none() => Error::Entry(error),
-            Failure::Entry(error) | Failure::Resource(error) => Error::Resource(error),
-            Failure::Preparation(error) => Error::Preparation(error),
-            Failure::ResourceFinding { error, diagnostic } => {
-                Error::ResourceFinding { error, diagnostic }
-            }
-            Failure::PreparationFinding { error, diagnostic } => {
-                Error::PreparationFinding { error, diagnostic }
-            }
+    prepare_with(resources, declaring, written, |source, display, aliases| {
+        crate::shipped_schema::prepare(source, display, aliases)
+    })
+}
+
+/// Capture the entry `written` names, prepare its document with `prepare`
+/// through a cache that keeps every spelling that located a metadata file,
+/// and, only once it has prepared, capture every spelling of each file it
+/// holds again (FILE-9, FILE-10). Only then does the entry become the scope's
+/// base.
+fn prepare_with(
+    resources: &mut Resources,
+    declaring: Option<&str>,
+    written: &str,
+    prepare: impl FnOnce(
+        Source,
+        String,
+        &mut yamaa_core::file_preparation::AliasCache<'_, Resources>,
+    ) -> Result<
+        crate::specification_source::PreparedDocument,
+        InheritanceError<ResourceError>,
+    >,
+) -> Result<crate::specification_source::PreparedDocument, Error> {
+    use yamaa_core::file_preparation::{self as application, AliasCache, Error as Failure};
+    let prepared = (|| {
+        let source = application::capture_entry(&mut *resources, declaring, written)?;
+        let display = source.identity.clone();
+        let mut aliases = AliasCache::new(&mut *resources);
+        let mut document =
+            prepare(source, display, &mut aliases).map_err(|error| aliases.refused(error))?;
+        let held = aliases.accept(document.held(), |declaring, written, failure| {
+            document.resource_diagnostic(declaring, written, failure)
         })?;
+        document.retain_resource_aliases(held);
+        Ok(document)
+    })();
+    let document = prepared.map_err(|error| match error {
+        // Only an entry no file declares is the caller's own; a producer a
+        // `schema` link names was resolved from its declaring file first.
+        Failure::Entry(error) if declaring.is_none() => Error::Entry(error),
+        Failure::Entry(error) | Failure::Resource(error) => Error::Resource(error),
+        Failure::Preparation(error) => Error::Preparation(error),
+        Failure::ResourceFinding { error, diagnostic } => {
+            Error::ResourceFinding { error, diagnostic }
+        }
+        Failure::PreparationFinding { error, diagnostic } => {
+            Error::PreparationFinding { error, diagnostic }
+        }
+    })?;
     // Data the entry declares reads from the identity its resolver gave it.
     resources
         .select_entry_base(&document.source().identity)
@@ -571,19 +606,6 @@ mod profile_inspection_tests {
     }
 }
 
-struct Documents;
-impl yamaa_core::file_preparation::DocumentPort<ResourceError> for Documents {
-    type Prepared = crate::specification_source::PreparedDocument;
-    type Error = InheritanceError<ResourceError>;
-    fn prepare<P: yamaa_core::resolver::Resolver<Error = ResourceError>>(
-        &mut self,
-        source: Source,
-        display: String,
-        port: &mut P,
-    ) -> Result<Self::Prepared, Self::Error> {
-        crate::shipped_schema::prepare(source, display, port)
-    }
-}
 #[cfg(all(test, feature = "yaml"))]
 mod declaring_origin_tests {
     use super::*;
@@ -837,20 +859,25 @@ mod dispatch_policy_tests {
         assert!(!study.0.join("entry/never-read.csv").exists());
         assert!(!study.0.join("entry/never-written.csv").exists());
     }
-    impl yamaa_core::file_preparation::DocumentPort<ResourceError> for ChangeAfterSuccess {
-        type Prepared = crate::specification_source::PreparedDocument;
-        type Error = InheritanceError<ResourceError>;
-        fn prepare<P: yamaa_core::resolver::Resolver<Error = ResourceError>>(
-            &mut self,
-            source: Source,
-            display: String,
-            port: &mut P,
-        ) -> Result<Self::Prepared, Self::Error> {
-            let document = crate::shipped_schema::prepare(source, display, port)?;
-            // A deterministic external change occurs after semantic success and
-            // before the application accepts any successful authored alias.
-            fs::write(&self.path, b"changed after semantic success").unwrap();
-            Ok(document)
+    impl ChangeAfterSuccess {
+        /// Prepare `entry/root.yaml`, changing the file at this path once the
+        /// document has prepared.
+        fn prepare(
+            &self,
+            resources: &mut Resources,
+        ) -> Result<crate::specification_source::PreparedDocument, Error> {
+            prepare_with(
+                resources,
+                None,
+                "entry/root.yaml",
+                |source, display, aliases| {
+                    let document = crate::shipped_schema::prepare(source, display, aliases)?;
+                    // A deterministic external change occurs after semantic success and
+                    // before the application accepts any successful authored alias.
+                    fs::write(&self.path, b"changed after semantic success").unwrap();
+                    Ok(document)
+                },
+            )
         }
     }
     #[test]
@@ -859,17 +886,11 @@ mod dispatch_policy_tests {
         let study = Study::new(root);
         fs::write(study.0.join("entry/dict.yaml"), b"A: answer\n").unwrap();
         let mut resources = study.resources();
-        let result = yamaa_core::file_preparation::prepare(
-            &mut resources,
-            &mut ChangeAfterSuccess {
-                path: study.0.join("entry/dict.yaml"),
-            },
-            None,
-            "entry/root.yaml",
-        );
-        let Err(yamaa_core::file_preparation::Error::ResourceFinding { error, diagnostic }) =
-            result
-        else {
+        let result = ChangeAfterSuccess {
+            path: study.0.join("entry/dict.yaml"),
+        }
+        .prepare(&mut resources);
+        let Err(Error::ResourceFinding { error, diagnostic }) = result else {
             panic!("original changed dictionary with authored diagnostic");
         };
         assert_eq!(error, ResourceError::Changed);
@@ -897,17 +918,11 @@ mod dispatch_policy_tests {
     fn changed_parent_after_semantic_success_is_original_resource_failure() {
         let study = Study::new(ROOT);
         let mut resources = study.resources();
-        let result = yamaa_core::file_preparation::prepare(
-            &mut resources,
-            &mut ChangeAfterSuccess {
-                path: study.0.join("parent/base.yaml"),
-            },
-            None,
-            "entry/root.yaml",
-        );
-        let Err(yamaa_core::file_preparation::Error::ResourceFinding { error, diagnostic }) =
-            result
-        else {
+        let result = ChangeAfterSuccess {
+            path: study.0.join("parent/base.yaml"),
+        }
+        .prepare(&mut resources);
+        let Err(Error::ResourceFinding { error, diagnostic }) = result else {
             panic!("original changed parent with authored diagnostic");
         };
         assert_eq!(error, ResourceError::Changed);

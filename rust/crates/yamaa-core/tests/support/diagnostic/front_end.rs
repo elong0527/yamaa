@@ -1,6 +1,6 @@
 //! The 1.0 front end's own causes (FUNC-6, WINDOW-5, TIME-10, LOOKUP-3,
-//! CSV-10, SUB-3), raised by its checks on a lowered 1.0 tree and pinned to
-//! their phase, condition, rule, path and context.
+//! LOOKUP-17, CSV-10, SUB-3), raised by its checks on a lowered 1.0 tree and
+//! pinned to their phase, condition, rule, path and context.
 use super::rendered;
 use crate::support::document::Tree as T;
 use std::collections::BTreeSet;
@@ -185,6 +185,61 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ("class", C::Text("intermediate_class".into())),
         ],
     );
+    // An intermediate's `unique` warns only where `keep` and `order_by`
+    // choose the record every read takes (LOOKUP-17, D210): one without
+    // either, with `keep` alone or with an `order_by` of no term fails at its
+    // `severity`, and one beside both, or at `error`, does not.
+    let checked = |selection: Vec<(&str, T)>, severity: &str| {
+        let mut fields = vec![
+            ("id", T::text("LAST")),
+            ("dataset", T::text("SRC")),
+            ("key", T::list(vec![T::text("ID")])),
+        ];
+        fields.extend(selection);
+        fields.push((
+            "verifications",
+            T::list(vec![T::map(vec![(
+                "unique",
+                T::map(vec![
+                    ("columns", T::list(vec![T::text("ID")])),
+                    ("severity", T::text(severity)),
+                ]),
+            )])]),
+        ));
+        with(
+            T::map(vec![
+                ("name", T::text("V")),
+                ("type", T::text("str")),
+                ("derivation", T::map(vec![("value", T::text("LAST.V"))])),
+            ]),
+            vec![("intermediates", T::list(vec![T::map(fields)]))],
+        )
+    };
+    let order = || ("order_by", T::list(vec![T::text("SRC.SEQ")]));
+    for selection in [
+        Vec::new(),
+        vec![("keep", T::text("last"))],
+        vec![("order_by", T::list(Vec::new())), ("keep", T::text("last"))],
+    ] {
+        pinned(
+            &mut reached,
+            finding(&checked(selection, "warning")),
+            ("value_not_permitted", "LOOKUP-17"),
+            "intermediates.LAST.verifications[0].unique.severity",
+            vec![
+                ("intermediate", C::Text("LAST".into())),
+                ("value", C::Text("warning".into())),
+                ("permitted", C::TextList(vec!["error".into()])),
+            ],
+        );
+    }
+    for (selection, severity) in [
+        (vec![order(), ("keep", T::text("last"))], "warning"),
+        (Vec::new(), "error"),
+    ] {
+        let lowered = front_end::lower(&checked(selection, severity), None);
+        assert_eq!(front_end::checks::findings(lowered.spec()), []);
+    }
     // Only the csv profile reads a byte-order mark (CSV-10): an input that
     // another profile reads declares none, whatever the value written, and
     // an input whose extension selects no profile leaves that fault to

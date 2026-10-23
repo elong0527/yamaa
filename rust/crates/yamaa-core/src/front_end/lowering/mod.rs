@@ -614,6 +614,7 @@ impl<'d> Lower<'d> {
                     checks.push(UniqueCheck {
                         columns: self.names(meta, unique, "columns"),
                         id: self.text_field(meta, unique, "id"),
+                        severity: self.severity(unique),
                         meta,
                     });
                 }
@@ -700,7 +701,17 @@ impl<'d> Lower<'d> {
             };
             let meta = self.meta(entry, keyword(operation), Some(payload));
             let kind = match operation {
-                "not_missing" => ColumnCheckKind::NotMissing,
+                // The bare keyword writes neither field.
+                "not_missing" => {
+                    let when = self.field(payload, "when").map(|node| {
+                        let meta = self.field_meta(meta, "when", node);
+                        self.predicate(node, meta)
+                    });
+                    ColumnCheckKind::NotMissing {
+                        when,
+                        max_fraction: self.bound(meta, payload, "max_fraction"),
+                    }
+                }
                 "allowed_values" => {
                     let mut values = Vec::new();
                     if let Some(list) = self.field(payload, "values") {

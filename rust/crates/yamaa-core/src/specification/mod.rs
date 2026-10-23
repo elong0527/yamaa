@@ -26,6 +26,7 @@ mod checks;
 mod intermediate_derivations;
 mod intermediate_range;
 mod intermediates;
+pub use intermediates::IntermediateCheck;
 mod lookup_diagnostics;
 mod lookup_range;
 mod match_values;
@@ -569,6 +570,28 @@ struct PreparedOutputDeclarations {
     output_report: Option<String>,
 }
 
+/// Each intermediate `unique` declared at `warning`, in the order of their
+/// run-report rows: those of intermediates over an input, then those over
+/// `SELF`, each in declaration order (CHECK-23, LOOKUP-17).
+fn intermediate_warnings(spec: &ast::Spec) -> Vec<String> {
+    let mut warnings = Vec::new();
+    for over_self in [false, true] {
+        for item in spec
+            .intermediates
+            .iter()
+            .filter(|item| (item.dataset.name == "SELF") == over_self)
+        {
+            warnings.extend(
+                item.checks
+                    .iter()
+                    .filter(|check| check.severity == ast::Severity::Warning)
+                    .map(|check| spec.cite(check.meta)),
+            );
+        }
+    }
+    warnings
+}
+
 /// Admit the output declaration, the keys and the dataset verifications,
 /// then the run report the declared warnings require.
 fn prepare_output_declarations(
@@ -631,11 +654,15 @@ fn prepare_output_declarations(
         })
         .collect::<Result<Vec<_>, _>>()?;
     let verifications = verifications::Verifications::prepare(spec, output)?;
-    let warnings = column_verifications
-        .iter()
-        .flat_map(|group| &group.declared_warning_paths)
-        .chain(&verifications.declared_warning_paths)
-        .cloned()
+    let warnings = intermediate_warnings(spec)
+        .into_iter()
+        .chain(
+            column_verifications
+                .iter()
+                .flat_map(|group| &group.declared_warning_paths)
+                .chain(&verifications.declared_warning_paths)
+                .cloned(),
+        )
         .collect::<Vec<_>>();
     let (output_report, report_findings) = report::prepare(declared, warnings);
     if !report_findings.is_empty() {
@@ -965,6 +992,9 @@ impl PreparedSpecification {
         &self.verifications.checks
     }
     pub fn verification_severity(&self, path: &str) -> crate::dataset::VerificationSeverity {
+        if let Some(check) = self.intermediate_check(path) {
+            return check.severity;
+        }
         if self
             .verifications
             .warning_paths
@@ -980,6 +1010,11 @@ impl PreparedSpecification {
         } else {
             crate::dataset::VerificationSeverity::Error
         }
+    }
+    /// The intermediate `unique` check at `path`, which its run-report row
+    /// names (LOOKUP-17, CHECK-24).
+    pub fn intermediate_check(&self, path: &str) -> Option<IntermediateCheck<'_>> {
+        self.intermediates.unique_check(path, &self.sources)
     }
     fn warning_verification_paths(&self) -> Vec<String> {
         self.verifications
@@ -1025,6 +1060,9 @@ impl PreparedSpecification {
             })
     }
     pub fn verification_identity(&self, path: &str) -> Option<&str> {
+        if let Some(check) = self.intermediate_check(path) {
+            return check.identity;
+        }
         std::iter::once(&self.verifications)
             .chain(&self.column_verifications)
             .find_map(|group| {

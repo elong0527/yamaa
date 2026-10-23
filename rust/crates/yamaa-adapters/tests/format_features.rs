@@ -7,8 +7,8 @@ use yamaa_adapters::{
     arrow_table::ArrowTable, parquet_artifact, parquet_source, sas_source, yaml_decode,
 };
 use yamaa_core::{
+    decoder::Decoder as _,
     specification::{SourceDeclaration, SourceProfile},
-    specification_run::SourceDecoder as _,
     table::{TableAccess, ValueRef},
 };
 
@@ -157,15 +157,14 @@ fn odm_reader_is_an_independent_capability() {
     let mut declaration = source(SourceProfile::OdmXml);
     declaration.path = "held.xml".into();
     declaration.encoding = None;
-    let decoded =
-        yamaa_adapters::project_source_decoder::Decoder::<std::convert::Infallible>::default()
-            .decode(
-                &declaration,
-                DOCUMENT.as_bytes(),
-                yamaa_core::specification::SourceInterpretation::Ordinary,
-                None,
-            )
-            .map(yamaa_adapters::project_source_decoder::Snapshot::into_table);
+    let decoded = yamaa_adapters::decoder::Decoder::<std::convert::Infallible>::default()
+        .table(
+            &declaration,
+            DOCUMENT.as_bytes(),
+            yamaa_core::specification::SourceInterpretation::Ordinary,
+            None,
+        )
+        .map(yamaa_adapters::decoder::Snapshot::into_table);
     #[cfg(feature = "odm")]
     {
         let table = result.unwrap();

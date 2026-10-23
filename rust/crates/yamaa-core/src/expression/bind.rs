@@ -456,7 +456,7 @@ impl Binder<'_> {
         let NodeKind::String(text) = &node.kind else {
             return Err(self.invalid(
                 node.site,
-                Failure::Syntax,
+                Failure::PatternNotLiteral,
                 "str_contains pattern must be a string literal",
             ));
         };

@@ -14,11 +14,11 @@ use super::eval::owned;
 use super::frame::{Frame, Identity, IdentityMap};
 use super::index::{self, Index};
 use super::{Cx, Fail, Run, Table};
-use crate::dataset::execution::ExecutionError;
+use crate::dataset::execution::{CheckRecord, ExecutionError, RowIdentity};
 use crate::dataset::resolved::{ExprId, KeyValue, Read, RegionId, RelationId, ResolvedPlan};
 use crate::dataset::{
     CurrentField, CurrentRead, Intermediate, IntermediateSource, Keep, MatchRead, MatchValue,
-    OrderTerm, RelationPredicate, SourceSelection,
+    OrderTerm, RelationPredicate, SourceSelection, VerificationSeverity,
 };
 use crate::expression::Truth;
 use crate::numeric_lifecycle::HandlerKind;
@@ -419,16 +419,21 @@ pub(super) fn driver<'a, E>(
 
 /// Intermediate `unique` verifications. Source-only checks are eager even
 /// when no output expression reads the selector; the check narrows every
-/// record, and a later match reuses each answer.
+/// record, and a later match reuses each answer. A violated `error` check
+/// fails the run; each `warning` check, held or violated, is a record in
+/// `records`, those of one pass in declaration order, and a `SELF` check's
+/// one record holds its last evaluation (LOOKUP-17, CHECK-23).
 pub(super) fn verify<'a, E>(
     run: &mut Run<'_, 'a, E>,
     frame: &Frame,
     secondary: &[Table<'a, E>],
     self_only: bool,
+    records: &mut Vec<CheckRecord>,
 ) -> Result<(), Fail<E>> {
     let plan = run.plan;
     let region = RegionId::DATASET;
     let mut failures = Vec::new();
+    let mut warnings = Vec::new();
     let relations: Vec<RelationId> = plan
         .region_relations(region)
         .filter(|&relation| plan.relation(relation).named.is_some())
@@ -451,7 +456,7 @@ pub(super) fn verify<'a, E>(
             table,
             rows: &eligible,
         };
-        for check in &item.unique {
+        for (position, check) in item.unique.iter().enumerate() {
             let mut columns = Vec::new();
             for &column in &check.columns {
                 if !columns.contains(&column) {
@@ -460,9 +465,46 @@ pub(super) fn verify<'a, E>(
             }
             let groups = crate::table_grouping::partition(&filtered, &columns)
                 .map_err(|error| Box::new(ExecutionError::Grouping(error)))?;
-            let count = groups.iter().filter(|group| group.len() > 1).count();
-            if count != 0 {
-                failures.push(check.diagnostic(item, table.schema(), name, count));
+            let repeated: Vec<&Vec<usize>> =
+                groups.iter().filter(|group| group.len() > 1).collect();
+            match check.severity {
+                VerificationSeverity::Error => {
+                    if !repeated.is_empty() {
+                        failures.push(check.diagnostic(item, table.schema(), name, repeated.len()));
+                    }
+                }
+                VerificationSeverity::Warning => {
+                    // Each repeated combination offends once, as its first
+                    // donor record holds it, in donor order (CHECK-24).
+                    let mut offending_rows = Vec::new();
+                    for members in &repeated {
+                        let source_row = eligible[members[0]];
+                        let mut values = Vec::new();
+                        for &column in &check.columns {
+                            values.push(owned(cell(table, item, source_row, column)?));
+                        }
+                        offending_rows.push(RowIdentity {
+                            position: source_row,
+                            values,
+                        });
+                    }
+                    warnings.push((
+                        (check.declared, position),
+                        CheckRecord {
+                            path: check.path.clone(),
+                            code: crate::diagnostic::ConditionCode::IntermediateDuplicateRecords,
+                            evaluated_count: groups.len(),
+                            failed_count: repeated.len(),
+                            output_rows: frame.rows(),
+                            offending_rows,
+                            codelist: None,
+                            inventory: None,
+                            row_count: None,
+                            entries: None,
+                            denominator: None,
+                        },
+                    ));
+                }
             }
         }
         let mut narrowed = vec![Some(false); table.row_count()];
@@ -470,6 +512,13 @@ pub(super) fn verify<'a, E>(
             narrowed[row] = Some(true);
         }
         run.relations.named(relation).narrowed = Some(narrowed);
+    }
+    warnings.sort_by_key(|(order, _)| *order);
+    for (_, record) in warnings {
+        match records.iter_mut().find(|held| held.path == record.path) {
+            Some(held) => *held = record,
+            None => records.push(record),
+        }
     }
     if failures.is_empty() {
         Ok(())

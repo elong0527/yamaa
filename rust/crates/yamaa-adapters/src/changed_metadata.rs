@@ -28,6 +28,40 @@ pub(crate) struct Environment<'a> {
     pub(crate) captures: &'a [DocumentCapture],
 }
 
+/// What one specification's preparation holds that declares a metadata file:
+/// the entry, as written, and its document; the producing specifications its
+/// `schema` links name; and, with a project, the specifications the project
+/// lists for the submission inventory and the project's own documents.
+pub(crate) struct Held<'a> {
+    pub(crate) entry: &'a str,
+    pub(crate) document: &'a PreparedDocument,
+    pub(crate) links: &'a [LinkedSpecification],
+    pub(crate) project: Option<&'a ast::Project>,
+    pub(crate) inventory: &'a [PreparedDocument],
+    pub(crate) environment: Option<Environment<'a>>,
+}
+
+/// The declaration of the held file `identity` locates, searched from the
+/// entry outward: the entry with its layers and dictionaries, the producers
+/// its links name, the specifications the project lists, then the project's
+/// own documents.
+pub(crate) fn declaration(
+    held: &Held<'_>,
+    identity: &str,
+    failure: ResourceFailure,
+) -> Option<Diagnostic> {
+    specification(
+        "specification",
+        held.entry,
+        held.document,
+        identity,
+        failure,
+    )
+    .or_else(|| links(held.document, held.links, identity, failure))
+    .or_else(|| inventory(held.project?, held.inventory, identity, failure))
+    .or_else(|| environment(held.environment.as_ref()?, identity, failure))
+}
+
 /// A specification document declared by `field` as `written`: the document
 /// itself, then its layers and dictionaries under their own fields.
 pub(crate) fn specification(

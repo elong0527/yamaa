@@ -1,0 +1,2550 @@
+# Evaluation set of the expression language.
+#
+# Each case evaluates one text of the closed grammar
+# (yaml/grammar/expression.yaml) over a small invented table and states what
+# every implementation must produce: one value for each row or group, or the
+# one issue a run reports instead. Every expectation is authored by hand from
+# the Formulas and Values rules (rules/formulas.md, rules/values.md) and
+# three-valued logic; none is taken from an implementation. The comment above
+# each section names the rules its expectations come from. `make
+# check-repository` checks that the engine reproduces every case
+# (tools/validation/check_expression_conformance.py).
+#
+# A case reads its text in one context of FORMULA-27:
+#
+#   predicate   a field typed predicate, such as a filter or a flag's
+#               condition. Each row's value is "TRUE", "FALSE" or "UNKNOWN"
+#               (FORMULA-4), written as quoted text.
+#   derivation  text in an expression field, such as a column's derivation.
+#               Each row's value has the case's type.
+#   aggregate   aggregate.expr. The text reduces each group of records of
+#               the relation R, naming its fields R.<column> and its records
+#               R.*, and each group's value has the case's type.
+#
+# The keys of a case:
+#
+#   id          a stable name
+#   context     predicate, derivation or aggregate
+#   covers      the functions, reducers, operators, literals and topics the
+#               case is evidence for
+#   text        the expression
+#   columns     the type of each input column: str, int, float, date or
+#               datetime (VALUE-1); a text names a column as written
+#   rows        predicate and derivation: the input rows, in order
+#   groups      aggregate: the records of each group, in relation record
+#               order; a group may hold no record
+#   group_by    aggregate, optional: the columns whose one value each group's
+#               records share, which the text may read outside a reduction
+#               (FORMULA-22); a case that names them gives no empty group
+#   type        derivation and aggregate: the result type the rules give the
+#               text (VALUE-10, EXPR-14, FORMULA-23)
+#   values      the expected value of each row or group, in order
+#   phase, condition, rule
+#               instead of values: the one issue the run reports, with its
+#               phase, condition and rule. A `validation` issue refuses the
+#               text before any row is read; a `derivation` issue fails the
+#               run while a row is evaluated (FORMULA-15).
+#
+# A value is written as YAML for its type: a number for int and float, quoted
+# text for str, quoted YYYY-MM-DD text for date, quoted YYYY-MM-DDThh:mm:ss
+# text for datetime (VALUE-15), and null for missing. A float is the binary64
+# value its decimal text reads as, written with a decimal point and with any
+# exponent signed, so that YAML 1.1 and 1.2 readers read the same numbers. A
+# non-ASCII scalar is written as an escape in double-quoted text, so that this
+# file stays ASCII. Each row names every column, and a missing value is
+# written as null.
+#
+# A text that calls a function its field does not admit, or calls an admitted
+# function with another number of arguments, is refused with
+# `prohibited_function` under FORMULA-13, whichever card describes the call
+# (FORMULA-8, FORMULA-18 or FORMULA-27), as the benchmark goldens record it
+# (negative-row-aggregate). A construct its field does not admit is refused
+# with `prohibited_construct` under FORMULA-27, and a field refuses its
+# constructs before it checks any call (FORMULA-1), so str_contains in
+# aggregate.expr reports its quoted pattern.
+#
+# The set pins only what the rules fix: EXP, LN and POWER are evaluated where
+# the exact result is a binary64 value, and no case depends on evaluation
+# order beyond what the rules state.
+
+schema_version: "1.0"
+contract: expressions
+contract_version: "1.0.0"
+grammar:
+  contract: expression
+  contract_version: "1.1.0"
+cases:
+  # Comparisons over int: each operator against one literal, and a missing
+  # operand makes the comparison UNKNOWN (FORMULA-4, FORMULA-5).
+  - id: equal-compares-two-ints
+    context: predicate
+    covers: ["=", missing]
+    text: "X = 2"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: 2}
+      - {X: 3}
+      - {X: null}
+    values: ["FALSE", "TRUE", "FALSE", "UNKNOWN"]
+  - id: not-equal-compares-two-ints
+    context: predicate
+    covers: ["<>", missing]
+    text: "X <> 2"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: 2}
+      - {X: 3}
+      - {X: null}
+    values: ["TRUE", "FALSE", "TRUE", "UNKNOWN"]
+  - id: less-than-compares-two-ints
+    context: predicate
+    covers: ["<", missing]
+    text: "X < 2"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: 2}
+      - {X: 3}
+      - {X: null}
+    values: ["TRUE", "FALSE", "FALSE", "UNKNOWN"]
+  - id: less-or-equal-compares-two-ints
+    context: predicate
+    covers: ["<=", missing]
+    text: "X <= 2"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: 2}
+      - {X: 3}
+      - {X: null}
+    values: ["TRUE", "TRUE", "FALSE", "UNKNOWN"]
+  - id: greater-than-compares-two-ints
+    context: predicate
+    covers: [">", missing]
+    text: "X > 2"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: 2}
+      - {X: 3}
+      - {X: null}
+    values: ["FALSE", "FALSE", "TRUE", "UNKNOWN"]
+  - id: greater-or-equal-compares-two-ints
+    context: predicate
+    covers: [">=", missing]
+    text: "X >= 2"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: 2}
+      - {X: 3}
+      - {X: null}
+    values: ["FALSE", "TRUE", "TRUE", "UNKNOWN"]
+  - id: a-comparison-of-two-columns-is-unknown-when-either-is-missing
+    context: predicate
+    covers: ["<", missing]
+    text: "A < B"
+    columns: {A: int, B: int}
+    rows:
+      - {A: 1, B: 2}
+      - {A: 2, B: 1}
+      - {A: 1, B: null}
+      - {A: null, B: 1}
+      - {A: null, B: null}
+    values: ["TRUE", "FALSE", "UNKNOWN", "UNKNOWN", "UNKNOWN"]
+  - id: floats-compare-in-binary64-order
+    context: predicate
+    covers: [">"]
+    text: "F > G"
+    columns: {F: float, G: float}
+    rows:
+      - {F: 0.5, G: 0.25}
+      - {F: -1.5, G: 1.5}
+      - {F: 2.0, G: 2.0}
+    values: ["TRUE", "FALSE", "FALSE"]
+
+  # A mixed int and float pair compares by exact mathematical value, never by
+  # rounding the int to binary64, and an arithmetic operand keeps the numeric
+  # type of its result (FORMULA-5, VALUE-19, VALUE-10). 9007199254740993 is
+  # 2^53 + 1, which no binary64 value equals.
+  - id: an-int-and-a-float-compare-exactly
+    context: predicate
+    covers: ["=", exactness]
+    text: "I = F"
+    columns: {I: int, F: float}
+    rows:
+      - {I: 9007199254740993, F: 9007199254740992.0}
+      - {I: 9007199254740992, F: 9007199254740992.0}
+      - {I: 1, F: 1.0}
+      - {I: 1, F: 1.5}
+    values: ["FALSE", "TRUE", "TRUE", "FALSE"]
+  - id: an-int-and-a-float-order-exactly
+    context: predicate
+    covers: [">", exactness]
+    text: "I > F"
+    columns: {I: int, F: float}
+    rows:
+      - {I: 9007199254740993, F: 9007199254740992.0}
+      - {I: 2, F: 2.5}
+    values: ["TRUE", "FALSE"]
+  - id: int-arithmetic-keeps-an-exact-int-operand
+    context: predicate
+    covers: ["+", "=", exactness, typing]
+    text: "I + 0 = 9007199254740993"
+    columns: {I: int}
+    rows:
+      - {I: 9007199254740993}
+      - {I: 9007199254740992}
+    values: ["TRUE", "FALSE"]
+  - id: float-arithmetic-makes-a-float-operand
+    context: predicate
+    covers: ["*", "=", exactness, typing]
+    text: "I * 1.0 = 9007199254740993"
+    columns: {I: int}
+    rows:
+      - {I: 9007199254740993}
+      - {I: 1}
+    values: ["FALSE", "FALSE"]
+
+  # Text compares scalar by scalar, by Unicode scalar value, case-sensitively;
+  # a prefix is less than the longer text, and a supplementary-plane scalar is
+  # one value, never a surrogate pair (FORMULA-5, VALUE-12, VALUE-20).
+  - id: text-equality-is-exact-and-case-sensitive
+    context: predicate
+    covers: ["=", text-order, missing]
+    text: "S = 'abc'"
+    columns: {S: str}
+    rows:
+      - {S: "abc"}
+      - {S: "ABC"}
+      - {S: "abc "}
+      - {S: null}
+    values: ["TRUE", "FALSE", "FALSE", "UNKNOWN"]
+  - id: text-orders-by-scalar-value
+    context: predicate
+    covers: ["<", text-order]
+    text: "S < T"
+    columns: {S: str, T: str}
+    rows:
+      - {S: "B", T: "a"}
+      - {S: "a", T: "ab"}
+      - {S: "b", T: "ab"}
+      - {S: "\u00E9", T: "z"}
+      - {S: "\uFFFD", T: "\U0001F600"}
+    values: ["TRUE", "TRUE", "FALSE", "FALSE", "TRUE"]
+
+  # Dates and datetimes compare chronologically with their own type, and a
+  # temporal literal needs its keyword (FORMULA-3, FORMULA-5, VALUE-21).
+  - id: dates-compare-chronologically
+    context: predicate
+    covers: ["<", temporal, missing]
+    text: "D < E"
+    columns: {D: date, E: date}
+    rows:
+      - {D: "2024-12-31", E: "2025-01-01"}
+      - {D: "2025-01-01", E: "2025-01-01"}
+      - {D: "2025-02-01", E: "2025-01-31"}
+      - {D: null, E: "2025-01-01"}
+    values: ["TRUE", "FALSE", "FALSE", "UNKNOWN"]
+  - id: a-date-compares-with-a-date-literal
+    context: predicate
+    covers: [">=", DATE, temporal, literal]
+    text: "D >= DATE '2025-06-01'"
+    columns: {D: date}
+    rows:
+      - {D: "2025-06-01"}
+      - {D: "2025-05-31"}
+      - {D: "2026-01-01"}
+      - {D: null}
+    values: ["TRUE", "FALSE", "TRUE", "UNKNOWN"]
+  - id: a-datetime-compares-with-a-datetime-literal
+    context: predicate
+    covers: ["<", DATETIME, temporal, literal]
+    text: "DT < DATETIME '2025-06-01T08:30:00'"
+    columns: {DT: datetime}
+    rows:
+      - {DT: "2025-06-01T08:29:59"}
+      - {DT: "2025-06-01T08:30:00"}
+      - {DT: "2025-05-31T23:59:59"}
+      - {DT: null}
+    values: ["TRUE", "FALSE", "TRUE", "UNKNOWN"]
+
+  # NULL is missing, so a comparison with it is UNKNOWN whatever the other
+  # operand holds (FORMULA-3, FORMULA-4).
+  - id: a-comparison-with-null-is-unknown
+    context: predicate
+    covers: ["=", "NULL", literal, missing]
+    text: "X = NULL"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: null}
+    values: ["UNKNOWN", "UNKNOWN"]
+  - id: an-inequality-with-null-is-unknown
+    context: predicate
+    covers: ["<>", "NULL", literal, missing]
+    text: "X <> NULL"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: null}
+    values: ["UNKNOWN", "UNKNOWN"]
+
+  # Operands whose types are not mutually comparable are refused, and a truth
+  # value is not a comparison operand (FORMULA-1, FORMULA-5).
+  - id: text-and-an-int-do-not-compare
+    context: predicate
+    covers: ["="]
+    text: "S = X"
+    columns: {S: str, X: int}
+    rows:
+      - {S: "1", X: 1}
+    phase: validation
+    condition: incompatible_input_type
+    rule: FORMULA-5
+  - id: a-date-and-a-datetime-do-not-compare
+    context: predicate
+    covers: ["=", temporal]
+    text: "D = DT"
+    columns: {D: date, DT: datetime}
+    rows:
+      - {D: "2025-06-01", DT: "2025-06-01T00:00:00"}
+    phase: validation
+    condition: incompatible_input_type
+    rule: FORMULA-5
+  - id: quoted-date-text-is-not-a-date
+    context: predicate
+    covers: ["=", temporal]
+    text: "D = '2025-06-01'"
+    columns: {D: date}
+    rows:
+      - {D: "2025-06-01"}
+    phase: validation
+    condition: incompatible_input_type
+    rule: FORMULA-5
+  - id: a-truth-value-is-not-a-comparison-operand
+    context: predicate
+    covers: ["=", "TRUE"]
+    text: "X = TRUE"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    phase: validation
+    condition: invalid_expression
+    rule: FORMULA-1
+
+  # IN is a disjunction of equalities and BETWEEN a conjunction of two
+  # inclusive bounds; their NOT forms negate the result, so a missing operand
+  # gives UNKNOWN (FORMULA-4, FORMULA-6).
+  - id: in-is-true-when-one-item-is-equal
+    context: predicate
+    covers: [IN, missing]
+    text: "X IN (1, 3)"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: 2}
+      - {X: 3}
+      - {X: null}
+    values: ["TRUE", "FALSE", "TRUE", "UNKNOWN"]
+  - id: in-with-a-null-item-is-unknown-unless-an-item-is-equal
+    context: predicate
+    covers: [IN, "NULL", three-valued-logic]
+    text: "X IN (1, NULL)"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: 2}
+      - {X: null}
+    values: ["TRUE", "UNKNOWN", "UNKNOWN"]
+  - id: not-in-is-true-when-no-item-is-equal
+    context: predicate
+    covers: [NOT IN, missing]
+    text: "X NOT IN (1, 3)"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: 2}
+      - {X: null}
+    values: ["FALSE", "TRUE", "UNKNOWN"]
+  - id: not-in-with-a-null-item-is-never-true
+    context: predicate
+    covers: [NOT IN, "NULL", three-valued-logic]
+    text: "X NOT IN (1, NULL)"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: 2}
+      - {X: null}
+    values: ["FALSE", "UNKNOWN", "UNKNOWN"]
+  - id: in-compares-text-exactly
+    context: predicate
+    covers: [IN, text-order]
+    text: "S IN ('a', 'b')"
+    columns: {S: str}
+    rows:
+      - {S: "a"}
+      - {S: "c"}
+      - {S: "A"}
+    values: ["TRUE", "FALSE", "FALSE"]
+  - id: in-items-may-be-columns-and-arithmetic
+    context: predicate
+    covers: [IN, "+"]
+    text: "X IN (A, B + 1)"
+    columns: {X: int, A: int, B: int}
+    rows:
+      - {X: 1, A: 1, B: 5}
+      - {X: 6, A: 1, B: 5}
+      - {X: 2, A: 1, B: 5}
+      - {X: 2, A: 1, B: null}
+    values: ["TRUE", "TRUE", "FALSE", "UNKNOWN"]
+  - id: an-in-item-must-compare-with-the-subject
+    context: predicate
+    covers: [IN]
+    text: "X IN (1, 'a')"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    phase: validation
+    condition: incompatible_input_type
+    rule: FORMULA-5
+  - id: between-includes-both-bounds
+    context: predicate
+    covers: [BETWEEN, missing]
+    text: "X BETWEEN 1 AND 3"
+    columns: {X: int}
+    rows:
+      - {X: 0}
+      - {X: 1}
+      - {X: 2}
+      - {X: 3}
+      - {X: 4}
+      - {X: null}
+    values: ["FALSE", "TRUE", "TRUE", "TRUE", "FALSE", "UNKNOWN"]
+  - id: not-between-excludes-both-bounds
+    context: predicate
+    covers: [NOT BETWEEN, missing]
+    text: "X NOT BETWEEN 1 AND 3"
+    columns: {X: int}
+    rows:
+      - {X: 0}
+      - {X: 1}
+      - {X: 3}
+      - {X: 4}
+      - {X: null}
+    values: ["TRUE", "FALSE", "FALSE", "TRUE", "UNKNOWN"]
+  - id: between-with-a-missing-bound-is-false-below-the-other
+    context: predicate
+    covers: [BETWEEN, "NULL", three-valued-logic]
+    text: "X BETWEEN 1 AND NULL"
+    columns: {X: int}
+    rows:
+      - {X: 0}
+      - {X: 2}
+    values: ["FALSE", "UNKNOWN"]
+  - id: not-between-with-a-missing-bound-is-true-below-the-other
+    context: predicate
+    covers: [NOT BETWEEN, "NULL", three-valued-logic]
+    text: "X NOT BETWEEN 1 AND NULL"
+    columns: {X: int}
+    rows:
+      - {X: 0}
+      - {X: 2}
+    values: ["TRUE", "UNKNOWN"]
+  - id: between-compares-an-int-and-floats-exactly
+    context: predicate
+    covers: [BETWEEN, exactness]
+    text: "I BETWEEN F AND G"
+    columns: {I: int, F: float, G: float}
+    rows:
+      - {I: 9007199254740993, F: 9007199254740992.0, G: 9007199254740992.0}
+      - {I: 9007199254740992, F: 9007199254740992.0, G: 9007199254740992.0}
+    values: ["FALSE", "TRUE"]
+  - id: between-with-reversed-bounds-is-false
+    context: predicate
+    covers: [BETWEEN]
+    text: "X BETWEEN A AND B"
+    columns: {X: int, A: int, B: int}
+    rows:
+      - {X: 2, A: 3, B: 1}
+      - {X: 2, A: 1, B: 3}
+    values: ["FALSE", "TRUE"]
+
+  # LIKE matches text scalar by scalar and case-sensitively: % matches any
+  # sequence, _ exactly one scalar, there is no default escape character, and
+  # ESCAPE declares one (FORMULA-7).
+  - id: like-percent-matches-any-sequence
+    context: predicate
+    covers: [LIKE, missing]
+    text: "S LIKE 'ab%'"
+    columns: {S: str}
+    rows:
+      - {S: "ab"}
+      - {S: "abc"}
+      - {S: "xab"}
+      - {S: "AB"}
+      - {S: null}
+    values: ["TRUE", "TRUE", "FALSE", "FALSE", "UNKNOWN"]
+  - id: like-underscore-matches-exactly-one-scalar
+    context: predicate
+    covers: [LIKE]
+    text: "S LIKE 'a_c'"
+    columns: {S: str}
+    rows:
+      - {S: "abc"}
+      - {S: "ac"}
+      - {S: "abbc"}
+      - {S: "a\u00E9c"}
+      - {S: "a\U0001F600c"}
+    values: ["TRUE", "FALSE", "FALSE", "TRUE", "TRUE"]
+  - id: like-matches-anywhere-between-percents
+    context: predicate
+    covers: [LIKE]
+    text: "S LIKE '%b%'"
+    columns: {S: str}
+    rows:
+      - {S: "abc"}
+      - {S: "b"}
+      - {S: "ac"}
+    values: ["TRUE", "TRUE", "FALSE"]
+  - id: not-like-negates-the-match
+    context: predicate
+    covers: [NOT LIKE, missing]
+    text: "S NOT LIKE 'ab%'"
+    columns: {S: str}
+    rows:
+      - {S: "abc"}
+      - {S: "xab"}
+      - {S: null}
+    values: ["FALSE", "TRUE", "UNKNOWN"]
+  - id: escape-makes-the-next-scalar-literal
+    context: predicate
+    covers: [LIKE, ESCAPE]
+    text: "S LIKE '100!%' ESCAPE '!'"
+    columns: {S: str}
+    rows:
+      - {S: "100%"}
+      - {S: "1000"}
+      - {S: "100!%"}
+    values: ["TRUE", "FALSE", "FALSE"]
+  - id: a-backslash-is-no-escape-character
+    context: predicate
+    covers: [LIKE]
+    text: "S LIKE 'a\\_c'"
+    columns: {S: str}
+    rows:
+      - {S: "a\\bc"}
+      - {S: "a_c"}
+    values: ["TRUE", "FALSE"]
+  - id: a-like-pattern-may-be-read-from-a-column
+    context: predicate
+    covers: [LIKE, missing]
+    text: "S LIKE P"
+    columns: {S: str, P: str}
+    rows:
+      - {S: "abc", P: "a%"}
+      - {S: "abc", P: "b%"}
+      - {S: "abc", P: null}
+    values: ["TRUE", "FALSE", "UNKNOWN"]
+  - id: like-takes-text-operands
+    context: predicate
+    covers: [LIKE]
+    text: "X LIKE '1%'"
+    columns: {X: int}
+    rows:
+      - {X: 10}
+    phase: validation
+    condition: incompatible_input_type
+    rule: FORMULA-5
+  - id: escape-takes-exactly-one-scalar
+    context: predicate
+    covers: [LIKE, ESCAPE]
+    text: "S LIKE 'a' ESCAPE '!!'"
+    columns: {S: str}
+    rows:
+      - {S: "a"}
+    phase: validation
+    condition: invalid_expression
+    rule: FORMULA-7
+  - id: a-literal-pattern-may-not-end-in-its-escape
+    context: predicate
+    covers: [LIKE, ESCAPE]
+    text: "S LIKE 'ab!' ESCAPE '!'"
+    columns: {S: str}
+    rows:
+      - {S: "ab"}
+    phase: validation
+    condition: invalid_expression
+    rule: FORMULA-7
+
+  # IS NULL and IS NOT NULL test for missing and are never UNKNOWN
+  # (FORMULA-4), including over arithmetic that yields missing (FORMULA-14).
+  - id: is-null-is-true-only-for-missing
+    context: predicate
+    covers: [IS NULL, missing]
+    text: "X IS NULL"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: null}
+    values: ["FALSE", "TRUE"]
+  - id: is-not-null-is-true-only-for-a-value
+    context: predicate
+    covers: [IS NOT NULL, missing]
+    text: "S IS NOT NULL"
+    columns: {S: str}
+    rows:
+      - {S: "a"}
+      - {S: null}
+    values: ["TRUE", "FALSE"]
+  - id: null-is-null
+    context: predicate
+    covers: [IS NULL, "NULL", literal]
+    text: "NULL IS NULL"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    values: ["TRUE"]
+  - id: arithmetic-over-a-missing-operand-is-null
+    context: predicate
+    covers: [IS NULL, "+", missing]
+    text: "X + Z IS NULL"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 1, Z: 2}
+      - {X: 1, Z: null}
+    values: ["FALSE", "TRUE"]
+
+  # NOT, AND and OR follow the three-valued tables of FORMULA-4, and NOT binds
+  # looser than a comparison, AND tighter than OR (FORMULA-2).
+  - id: not-negates-true-and-false-and-keeps-unknown
+    context: predicate
+    covers: [NOT, three-valued-logic, precedence]
+    text: "NOT X = 1"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: 0}
+      - {X: null}
+    values: ["FALSE", "TRUE", "UNKNOWN"]
+  - id: and-follows-the-three-valued-table
+    context: predicate
+    covers: [AND, three-valued-logic]
+    text: "A = 1 AND B = 1"
+    columns: {A: int, B: int}
+    rows:
+      - {A: 1, B: 1}
+      - {A: 1, B: 0}
+      - {A: 1, B: null}
+      - {A: 0, B: 1}
+      - {A: 0, B: 0}
+      - {A: 0, B: null}
+      - {A: null, B: 1}
+      - {A: null, B: 0}
+      - {A: null, B: null}
+    values: ["TRUE", "FALSE", "UNKNOWN", "FALSE", "FALSE", "FALSE", "UNKNOWN",
+             "FALSE", "UNKNOWN"]
+  - id: or-follows-the-three-valued-table
+    context: predicate
+    covers: [OR, three-valued-logic]
+    text: "A = 1 OR B = 1"
+    columns: {A: int, B: int}
+    rows:
+      - {A: 1, B: 1}
+      - {A: 1, B: 0}
+      - {A: 1, B: null}
+      - {A: 0, B: 1}
+      - {A: 0, B: 0}
+      - {A: 0, B: null}
+      - {A: null, B: 1}
+      - {A: null, B: 0}
+      - {A: null, B: null}
+    values: ["TRUE", "TRUE", "TRUE", "TRUE", "FALSE", "UNKNOWN", "TRUE",
+             "UNKNOWN", "UNKNOWN"]
+  - id: not-over-a-conjunction-keeps-unknown
+    context: predicate
+    covers: [NOT, AND, three-valued-logic]
+    text: "NOT (A = 1 AND B = 1)"
+    columns: {A: int, B: int}
+    rows:
+      - {A: 1, B: 1}
+      - {A: 0, B: null}
+      - {A: 1, B: null}
+    values: ["FALSE", "TRUE", "UNKNOWN"]
+  - id: and-binds-tighter-than-or
+    context: predicate
+    covers: [AND, OR, precedence]
+    text: "A = 1 OR B = 1 AND C = 1"
+    columns: {A: int, B: int, C: int}
+    rows:
+      - {A: 1, B: 0, C: 0}
+      - {A: 0, B: 1, C: 1}
+      - {A: 0, B: 1, C: 0}
+    values: ["TRUE", "TRUE", "FALSE"]
+  - id: parentheses-group-a-disjunction
+    context: predicate
+    covers: [AND, OR, precedence]
+    text: "(A = 1 OR B = 1) AND C = 1"
+    columns: {A: int, B: int, C: int}
+    rows:
+      - {A: 1, B: 0, C: 0}
+      - {A: 0, B: 1, C: 1}
+      - {A: 0, B: 1, C: 0}
+    values: ["FALSE", "TRUE", "FALSE"]
+  - id: keywords-are-case-insensitive
+    context: predicate
+    covers: [AND, IS NOT NULL, keyword-case]
+    text: "A = 1 and B Is Not Null"
+    columns: {A: int, B: int}
+    rows:
+      - {A: 1, B: 2}
+      - {A: 1, B: null}
+      - {A: 2, B: 2}
+    values: ["TRUE", "FALSE", "FALSE"]
+
+  # TRUE and FALSE are truth values: TRUE OR UNKNOWN is TRUE and FALSE AND
+  # UNKNOWN is FALSE (FORMULA-3, FORMULA-4).
+  - id: true-holds-for-every-row
+    context: predicate
+    covers: ["TRUE", literal]
+    text: "TRUE"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: null}
+    values: ["TRUE", "TRUE"]
+  - id: not-false-holds-for-every-row
+    context: predicate
+    covers: [NOT, "FALSE", literal]
+    text: "NOT FALSE"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    values: ["TRUE"]
+  - id: true-decides-a-disjunction-with-unknown
+    context: predicate
+    covers: [OR, "TRUE", three-valued-logic]
+    text: "X = 1 OR TRUE"
+    columns: {X: int}
+    rows:
+      - {X: 0}
+      - {X: null}
+    values: ["TRUE", "TRUE"]
+  - id: false-decides-a-conjunction-with-unknown
+    context: predicate
+    covers: [AND, "FALSE", three-valued-logic]
+    text: "X = 1 AND FALSE"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: null}
+    values: ["FALSE", "FALSE"]
+  - id: false-or-unknown-is-unknown
+    context: predicate
+    covers: [OR, "FALSE", three-valued-logic]
+    text: "FALSE OR X = 1"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: 0}
+      - {X: null}
+    values: ["TRUE", "FALSE", "UNKNOWN"]
+
+  # Arithmetic in a predicate is numeric: a missing operand makes its
+  # comparison UNKNOWN, and a failure fails the run rather than giving
+  # UNKNOWN (FORMULA-14, FORMULA-15, FORMULA-27).
+  - id: arithmetic-is-a-comparison-operand
+    context: predicate
+    covers: [">", "*", missing]
+    text: "ALT > 3 * ULN"
+    columns: {ALT: int, ULN: int}
+    rows:
+      - {ALT: 100, ULN: 30}
+      - {ALT: 90, ULN: 30}
+      - {ALT: null, ULN: 30}
+      - {ALT: 100, ULN: null}
+    values: ["TRUE", "FALSE", "UNKNOWN", "UNKNOWN"]
+  - id: a-numeric-function-is-a-comparison-operand
+    context: predicate
+    covers: [ABS, ">", missing]
+    text: "ABS(X - Z) > 2"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 1, Z: 5}
+      - {X: 5, Z: 4}
+      - {X: null, Z: 4}
+    values: ["TRUE", "FALSE", "UNKNOWN"]
+  - id: division-by-zero-in-a-predicate-fails-the-run
+    context: predicate
+    covers: ["/"]
+    text: "X / Z > 1"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 1, Z: 0}
+    phase: derivation
+    condition: division_by_zero
+    rule: FORMULA-15
+
+  # str_contains is TRUE when its portable regex matches anywhere in the
+  # source, FALSE when it does not, and UNKNOWN for a missing source, also
+  # under NOT (FORMULA-8).
+  - id: str-contains-searches-the-whole-source
+    context: predicate
+    covers: [STR_CONTAINS, missing]
+    text: "str_contains(S, 'b+c')"
+    columns: {S: str}
+    rows:
+      - {S: "abbc"}
+      - {S: "ac"}
+      - {S: null}
+    values: ["TRUE", "FALSE", "UNKNOWN"]
+  - id: not-str-contains-keeps-unknown
+    context: predicate
+    covers: [STR_CONTAINS, NOT, three-valued-logic]
+    text: "NOT str_contains(S, '^a')"
+    columns: {S: str}
+    rows:
+      - {S: "abc"}
+      - {S: "bca"}
+      - {S: null}
+    values: ["FALSE", "TRUE", "UNKNOWN"]
+  - id: str-contains-is-case-insensitive-in-its-name
+    context: predicate
+    covers: [STR_CONTAINS, keyword-case]
+    text: "STR_CONTAINS(S, 'A')"
+    columns: {S: str}
+    rows:
+      - {S: "BAD"}
+      - {S: "bad"}
+    values: ["TRUE", "FALSE"]
+  - id: str-contains-takes-a-text-source
+    context: predicate
+    covers: [STR_CONTAINS]
+    text: "str_contains(X, '1')"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    phase: validation
+    condition: incompatible_input_type
+    rule: FORMULA-8
+  - id: str-contains-refuses-an-invalid-pattern
+    context: predicate
+    covers: [STR_CONTAINS]
+    text: "str_contains(S, '(')"
+    columns: {S: str}
+    rows:
+      - {S: "a"}
+    phase: validation
+    condition: invalid_expression
+    rule: FORMULA-8
+  - id: str-contains-takes-a-string-literal-pattern
+    context: predicate
+    covers: [STR_CONTAINS]
+    text: "str_contains(S, P)"
+    columns: {S: str, P: str}
+    rows:
+      - {S: "a", P: "a"}
+    phase: validation
+    condition: invalid_expression
+    rule: FORMULA-8
+  - id: str-contains-takes-two-arguments
+    context: predicate
+    covers: [STR_CONTAINS, arity]
+    text: "str_contains(S)"
+    columns: {S: str}
+    rows:
+      - {S: "a"}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+
+  # Functions outside the closed list are refused in a predicate as in every
+  # field, and so is a reduction (FORMULA-13, FORMULA-27).
+  - id: round-is-refused-in-a-predicate
+    context: predicate
+    covers: [vocabulary]
+    text: "ROUND(F, 1) > 2"
+    columns: {F: float}
+    rows:
+      - {F: 2.25}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: round-half-away-from-zero-is-refused-in-a-predicate
+    context: predicate
+    covers: [vocabulary]
+    text: "ROUND_HALF_AWAY_FROM_ZERO(F, 1) > 2"
+    columns: {F: float}
+    rows:
+      - {F: 2.25}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: coalesce-is-refused-in-a-predicate
+    context: predicate
+    covers: [vocabulary]
+    text: "COALESCE(X, 0) = 0"
+    columns: {X: int}
+    rows:
+      - {X: null}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: greatest-is-refused-in-a-predicate
+    context: predicate
+    covers: [vocabulary]
+    text: "GREATEST(X, Z) > 1"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 1, Z: 2}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: least-is-refused-in-a-predicate
+    context: predicate
+    covers: [vocabulary]
+    text: "LEAST(X, Z) < 1"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 1, Z: 2}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: a-reduction-is-refused-in-a-predicate
+    context: predicate
+    covers: [SUM, context]
+    text: "SUM(X) > 1"
+    columns: {X: int}
+    rows:
+      - {X: 2}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+
+  # Literals in an expression field: text holding only a literal returns it
+  # with its type, a number without fraction or exponent is an int, quoted
+  # text is a str even when it reads as a date, and NULL is missing
+  # (FORMULA-3, EXPR-4, EXPR-5, VALUE-4).
+  - id: an-integer-literal-is-an-int
+    context: derivation
+    covers: [literal, typing]
+    text: "5"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: null}
+    type: int
+    values: [5, 5]
+  - id: a-literal-with-a-fraction-is-a-float
+    context: derivation
+    covers: [literal, typing]
+    text: "2.5"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    type: float
+    values: [2.5]
+  - id: a-literal-with-an-exponent-is-a-float
+    context: derivation
+    covers: [literal, typing]
+    text: "1e3"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    type: float
+    values: [1000.0]
+  - id: a-sign-belongs-to-its-literal
+    context: derivation
+    covers: [literal]
+    text: "-1.5"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    type: float
+    values: [-1.5]
+  - id: the-int-range-holds-its-largest-literal
+    context: derivation
+    covers: [literal, overflow]
+    text: "9223372036854775807"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    type: int
+    values: [9223372036854775807]
+  - id: the-least-int-is-a-signed-literal
+    context: derivation
+    covers: [literal, overflow]
+    text: "-9223372036854775808"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    type: int
+    values: [-9223372036854775808]
+  - id: an-integer-literal-outside-the-int-range-is-refused
+    context: derivation
+    covers: [literal, overflow]
+    text: "9223372036854775808"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    phase: validation
+    condition: integer_overflow
+    rule: VALUE-5
+  - id: a-float-literal-beyond-binary64-is-missing
+    context: derivation
+    covers: [literal, non-finite]
+    text: "1e309"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    type: float
+    values: [null]
+  - id: quoted-text-is-a-str-literal
+    context: derivation
+    covers: [literal]
+    text: "'DM'"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    type: str
+    values: ["DM"]
+  - id: a-doubled-quote-is-one-quote
+    context: derivation
+    covers: [literal]
+    text: "'it''s'"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    type: str
+    values: ["it's"]
+  - id: quoted-date-text-is-a-str-literal
+    context: derivation
+    covers: [literal, temporal]
+    text: "'2025-06-01'"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    type: str
+    values: ["2025-06-01"]
+  - id: a-date-literal-is-a-date
+    context: derivation
+    covers: [DATE, literal, temporal]
+    text: "DATE '2025-06-01'"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    type: date
+    values: ["2025-06-01"]
+  - id: a-datetime-literal-is-a-datetime
+    context: derivation
+    covers: [DATETIME, literal, temporal]
+    text: "DATETIME '2025-06-01T08:30:00'"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    type: datetime
+    values: ["2025-06-01T08:30:00"]
+  # NULL has no runtime type (FORMULA-4): it is missing in a field of any type.
+  - id: null-is-missing-in-every-row
+    context: derivation
+    covers: ["NULL", literal, missing]
+    text: "NULL"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: null}
+    type: str
+    values: [null, null]
+  - id: a-name-alone-copies-its-column
+    context: derivation
+    covers: [missing]
+    text: "X"
+    columns: {X: int}
+    rows:
+      - {X: 7}
+      - {X: null}
+    type: int
+    values: [7, null]
+
+  # + - * keep int over two ints and give float otherwise; / always gives a
+  # float, with no integer division; a missing operand gives missing
+  # (FORMULA-12, FORMULA-14, VALUE-8, VALUE-10).
+  - id: adding-two-ints-gives-an-int
+    context: derivation
+    covers: ["+", typing, missing]
+    text: "X + Z"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 2, Z: 3}
+      - {X: -2, Z: 3}
+      - {X: 2, Z: null}
+      - {X: null, Z: null}
+    type: int
+    values: [5, 1, null, null]
+  - id: arithmetic-with-null-is-missing
+    context: derivation
+    covers: ["+", "NULL", missing]
+    text: "X + NULL"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: null}
+    type: int
+    values: [null, null]
+  - id: adding-an-int-and-a-float-gives-a-float
+    context: derivation
+    covers: ["+", typing, missing]
+    text: "X + F"
+    columns: {X: int, F: float}
+    rows:
+      - {X: 2, F: 0.5}
+      - {X: 1, F: null}
+    type: float
+    values: [2.5, null]
+  - id: float-addition-rounds-to-binary64
+    context: derivation
+    covers: ["+", precision]
+    text: "F + G"
+    columns: {F: float, G: float}
+    rows:
+      - {F: 0.1, G: 0.2}
+      - {F: 0.5, G: 0.25}
+    type: float
+    values: [0.30000000000000004, 0.75]
+  - id: an-int-widens-to-the-nearest-binary64
+    context: derivation
+    covers: ["+", exactness, typing]
+    text: "X + 0.0"
+    columns: {X: int}
+    rows:
+      - {X: 9007199254740993}
+      - {X: 3}
+    type: float
+    values: [9007199254740992.0, 3.0]
+  - id: subtracting-two-ints-gives-an-int
+    context: derivation
+    covers: ["-", typing, missing]
+    text: "X - Z"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 5, Z: 3}
+      - {X: 3, Z: 5}
+      - {X: null, Z: 1}
+    type: int
+    values: [2, -2, null]
+  - id: multiplying-two-ints-gives-an-int
+    context: derivation
+    covers: ["*", typing, missing]
+    text: "X * Z"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 4, Z: 3}
+      - {X: -2, Z: 3}
+      - {X: 2, Z: null}
+    type: int
+    values: [12, -6, null]
+  - id: multiplying-by-a-float-gives-a-float
+    context: derivation
+    covers: ["*", typing]
+    text: "X * F"
+    columns: {X: int, F: float}
+    rows:
+      - {X: 3, F: 0.5}
+      - {X: 4, F: 2.5}
+    type: float
+    values: [1.5, 10.0]
+  - id: dividing-two-ints-gives-a-float
+    context: derivation
+    covers: ["/", typing, missing]
+    text: "X / Z"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 7, Z: 2}
+      - {X: 6, Z: 3}
+      - {X: 1, Z: 3}
+      - {X: -7, Z: 2}
+      - {X: null, Z: 2}
+      - {X: 7, Z: null}
+      - {X: null, Z: 0}
+    type: float
+    values: [3.5, 2.0, 0.3333333333333333, -3.5, null, null, null]
+  - id: division-widens-each-int-before-dividing
+    context: derivation
+    covers: ["/", exactness]
+    text: "X / Z"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 9007199254740993, Z: 3}
+    type: float
+    values: [3002399751580330.5]
+  - id: unary-minus-negates-an-int
+    context: derivation
+    covers: ["unary -", missing]
+    text: "-X"
+    columns: {X: int}
+    rows:
+      - {X: 3}
+      - {X: -3}
+      - {X: null}
+    type: int
+    values: [-3, 3, null]
+  - id: unary-minus-negates-a-float
+    context: derivation
+    covers: ["unary -"]
+    text: "-F"
+    columns: {F: float}
+    rows:
+      - {F: 2.5}
+      - {F: -0.25}
+    type: float
+    values: [-2.5, 0.25]
+  - id: unary-plus-keeps-its-operand
+    context: derivation
+    covers: ["unary +", missing]
+    text: "+X"
+    columns: {X: int}
+    rows:
+      - {X: 3}
+      - {X: -3}
+      - {X: null}
+    type: int
+    values: [3, -3, null]
+
+  # Precedence and association are as written: * and / bind tighter than +
+  # and -, repeated operators associate from the left, and no expression is
+  # reassociated (FORMULA-2, FORMULA-26).
+  - id: multiplication-binds-tighter-than-addition
+    context: derivation
+    covers: ["+", "*", precedence]
+    text: "X + Z * 2"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 1, Z: 3}
+    type: int
+    values: [7]
+  - id: parentheses-group-an-addition
+    context: derivation
+    covers: ["+", "*", precedence]
+    text: "(X + Z) * 2"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 1, Z: 3}
+    type: int
+    values: [8]
+  - id: subtraction-associates-from-the-left
+    context: derivation
+    covers: ["-", association]
+    text: "X - Z - 1"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 10, Z: 3}
+    type: int
+    values: [6]
+  - id: division-associates-from-the-left
+    context: derivation
+    covers: ["/", association]
+    text: "X / Z / 2"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 8, Z: 2}
+    type: float
+    values: [2.0]
+  - id: float-addition-associates-from-the-left
+    context: derivation
+    covers: ["+", association, precision]
+    text: "F + G + H"
+    columns: {F: float, G: float, H: float}
+    rows:
+      - {F: 0.1, G: 0.2, H: 0.3}
+    type: float
+    values: [0.6000000000000001]
+  - id: float-addition-is-never-reassociated
+    context: derivation
+    covers: ["+", association, precision]
+    text: "F + (G + H)"
+    columns: {F: float, G: float, H: float}
+    rows:
+      - {F: 0.1, G: 0.2, H: 0.3}
+    type: float
+    values: [0.6]
+
+  # Failures: division by zero and an int result outside the int range fail
+  # the run; a non-finite float becomes missing instead (FORMULA-15, VALUE-4,
+  # VALUE-5).
+  - id: dividing-an-int-by-zero-fails
+    context: derivation
+    covers: ["/"]
+    text: "X / Z"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 1, Z: 0}
+    type: float
+    phase: derivation
+    condition: division_by_zero
+    rule: FORMULA-15
+  - id: dividing-a-float-by-zero-fails
+    context: derivation
+    covers: ["/"]
+    text: "F / G"
+    columns: {F: float, G: float}
+    rows:
+      - {F: 1.0, G: 0.0}
+    type: float
+    phase: derivation
+    condition: division_by_zero
+    rule: FORMULA-15
+  - id: int-addition-past-the-largest-int-fails
+    context: derivation
+    covers: ["+", overflow]
+    text: "X + 1"
+    columns: {X: int}
+    rows:
+      - {X: 9223372036854775807}
+    type: int
+    phase: derivation
+    condition: integer_overflow
+    rule: VALUE-5
+  - id: int-subtraction-past-the-least-int-fails
+    context: derivation
+    covers: ["-", overflow]
+    text: "X - 1"
+    columns: {X: int}
+    rows:
+      - {X: -9223372036854775808}
+    type: int
+    phase: derivation
+    condition: integer_overflow
+    rule: VALUE-5
+  - id: int-multiplication-past-the-largest-int-fails
+    context: derivation
+    covers: ["*", overflow]
+    text: "X * 2"
+    columns: {X: int}
+    rows:
+      - {X: 4611686018427387904}
+    type: int
+    phase: derivation
+    condition: integer_overflow
+    rule: VALUE-5
+  - id: negating-the-least-int-fails
+    context: derivation
+    covers: ["unary -", overflow]
+    text: "-X"
+    columns: {X: int}
+    rows:
+      - {X: -9223372036854775808}
+    type: int
+    phase: derivation
+    condition: integer_overflow
+    rule: VALUE-5
+  - id: a-float-result-beyond-binary64-is-missing
+    context: derivation
+    covers: ["*", non-finite]
+    text: "F * 10"
+    columns: {F: float}
+    rows:
+      - {F: 1.0e+308}
+      - {F: 2.5}
+    type: float
+    values: [null, 25.0]
+
+  # Every operand of arithmetic is numeric: text and dates are refused before
+  # any row is read (FORMULA-12).
+  - id: text-is-not-an-arithmetic-operand
+    context: derivation
+    covers: ["+"]
+    text: "S + 1"
+    columns: {S: str}
+    rows:
+      - {S: "1"}
+    phase: validation
+    condition: incompatible_input_type
+    rule: FORMULA-12
+  - id: quoted-text-is-not-an-arithmetic-operand
+    context: derivation
+    covers: ["+", literal]
+    text: "X + '1'"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    phase: validation
+    condition: incompatible_input_type
+    rule: FORMULA-12
+  - id: a-date-is-not-an-arithmetic-operand
+    context: derivation
+    covers: ["+", temporal]
+    text: "D + 1"
+    columns: {D: date}
+    rows:
+      - {D: "2025-06-01"}
+    phase: validation
+    condition: incompatible_input_type
+    rule: FORMULA-12
+  - id: text-is-not-a-unary-operand
+    context: derivation
+    covers: ["unary -"]
+    text: "-S"
+    columns: {S: str}
+    rows:
+      - {S: "1"}
+    phase: validation
+    condition: incompatible_input_type
+    rule: FORMULA-12
+
+  # ABS keeps int over an int and float otherwise (FORMULA-13, VALUE-10).
+  - id: abs-of-an-int-is-an-int
+    context: derivation
+    covers: [ABS, typing, missing]
+    text: "ABS(X)"
+    columns: {X: int}
+    rows:
+      - {X: -3}
+      - {X: 0}
+      - {X: 5}
+      - {X: null}
+    type: int
+    values: [3, 0, 5, null]
+  - id: abs-of-a-float-is-a-float
+    context: derivation
+    covers: [ABS, typing, missing]
+    text: "ABS(F)"
+    columns: {F: float}
+    rows:
+      - {F: -2.5}
+      - {F: 0.25}
+      - {F: null}
+    type: float
+    values: [2.5, 0.25, null]
+  - id: function-names-are-case-insensitive
+    context: derivation
+    covers: [ABS, keyword-case]
+    text: "abs(X)"
+    columns: {X: int}
+    rows:
+      - {X: -4}
+    type: int
+    values: [4]
+  - id: abs-of-the-least-int-fails
+    context: derivation
+    covers: [ABS, overflow]
+    text: "ABS(X)"
+    columns: {X: int}
+    rows:
+      - {X: -9223372036854775808}
+    type: int
+    phase: derivation
+    condition: integer_overflow
+    rule: VALUE-5
+  - id: abs-takes-one-argument
+    context: derivation
+    covers: [ABS, arity]
+    text: "ABS(X, Z)"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 1, Z: 2}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: abs-takes-a-number
+    context: derivation
+    covers: [ABS]
+    text: "ABS(S)"
+    columns: {S: str}
+    rows:
+      - {S: "-1"}
+    phase: validation
+    condition: incompatible_input_type
+    rule: FORMULA-12
+
+  # CEIL, FLOOR and TRUNC return the integral part as a float, also for an
+  # int argument (FORMULA-13, FORMULA-16, VALUE-10).
+  - id: ceil-rounds-up-to-an-integral-float
+    context: derivation
+    covers: [CEIL, typing, missing]
+    text: "CEIL(F)"
+    columns: {F: float}
+    rows:
+      - {F: 2.1}
+      - {F: -2.1}
+      - {F: 3.0}
+      - {F: null}
+    type: float
+    values: [3.0, -2.0, 3.0, null]
+  - id: ceil-of-an-int-is-a-float
+    context: derivation
+    covers: [CEIL, typing]
+    text: "CEIL(X)"
+    columns: {X: int}
+    rows:
+      - {X: 4}
+      - {X: -4}
+    type: float
+    values: [4.0, -4.0]
+  - id: ceil-takes-one-argument
+    context: derivation
+    covers: [CEIL, arity]
+    text: "CEIL()"
+    columns: {F: float}
+    rows:
+      - {F: 1.5}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: floor-rounds-down-to-an-integral-float
+    context: derivation
+    covers: [FLOOR, typing, missing]
+    text: "FLOOR(F)"
+    columns: {F: float}
+    rows:
+      - {F: 2.9}
+      - {F: -2.1}
+      - {F: null}
+    type: float
+    values: [2.0, -3.0, null]
+  - id: floor-floors-the-binary64-quotient
+    context: derivation
+    covers: [FLOOR, "/"]
+    text: "FLOOR(X / Z)"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 7, Z: 2}
+      - {X: -7, Z: 2}
+    type: float
+    values: [3.0, -4.0]
+  - id: floor-takes-one-argument
+    context: derivation
+    covers: [FLOOR, arity]
+    text: "FLOOR(F, 1)"
+    columns: {F: float}
+    rows:
+      - {F: 1.5}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: trunc-drops-the-fraction-toward-zero
+    context: derivation
+    covers: [TRUNC, typing, missing]
+    text: "TRUNC(F)"
+    columns: {F: float}
+    rows:
+      - {F: 2.9}
+      - {F: -2.9}
+      - {F: null}
+    type: float
+    values: [2.0, -2.0, null]
+  - id: trunc-of-an-int-is-a-float
+    context: derivation
+    covers: [TRUNC, typing]
+    text: "TRUNC(X)"
+    columns: {X: int}
+    rows:
+      - {X: -4}
+    type: float
+    values: [-4.0]
+  - id: trunc-takes-one-argument
+    context: derivation
+    covers: [TRUNC, arity]
+    text: "TRUNC(F, 1)"
+    columns: {F: float}
+    rows:
+      - {F: 1.25}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+
+  # SQRT is the non-negative square root, a float rounded as binary64 rounds
+  # it, and a negative argument fails (FORMULA-13, FORMULA-15, VALUE-5,
+  # VALUE-10).
+  - id: sqrt-is-the-non-negative-root
+    context: derivation
+    covers: [SQRT, typing, missing]
+    text: "SQRT(X)"
+    columns: {X: int}
+    rows:
+      - {X: 4}
+      - {X: 0}
+      - {X: 2}
+      - {X: null}
+    type: float
+    values: [2.0, 0.0, 1.4142135623730951, null]
+  - id: sqrt-of-a-float
+    context: derivation
+    covers: [SQRT]
+    text: "SQRT(F)"
+    columns: {F: float}
+    rows:
+      - {F: 2.25}
+    type: float
+    values: [1.5]
+  - id: sqrt-of-a-negative-number-fails
+    context: derivation
+    covers: [SQRT]
+    text: "SQRT(X)"
+    columns: {X: int}
+    rows:
+      - {X: -1}
+    type: float
+    phase: derivation
+    condition: sqrt_of_negative
+    rule: FORMULA-15
+  - id: sqrt-takes-one-argument
+    context: derivation
+    covers: [SQRT, arity]
+    text: "SQRT()"
+    columns: {X: int}
+    rows:
+      - {X: 4}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+
+  # POWER raises x to y as a float; a zero base with a negative exponent and
+  # a negative base with a non-integral exponent fail, and a result beyond
+  # binary64 is missing (FORMULA-13, FORMULA-15, VALUE-4, VALUE-10).
+  - id: power-raises-to-an-integral-exponent
+    context: derivation
+    covers: [POWER, typing, missing]
+    text: "POWER(X, Z)"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 2, Z: 3}
+      - {X: 2, Z: -3}
+      - {X: -2, Z: 3}
+      - {X: -2, Z: 2}
+      - {X: 0, Z: 0}
+      - {X: 2, Z: null}
+      - {X: null, Z: 2}
+    type: float
+    values: [8.0, 0.125, -8.0, 4.0, 1.0, null, null]
+  - id: power-raises-to-a-fractional-exponent
+    context: derivation
+    covers: [POWER]
+    text: "POWER(X, F)"
+    columns: {X: int, F: float}
+    rows:
+      - {X: 4, F: 0.5}
+      - {X: 9, F: 0.5}
+    type: float
+    values: [2.0, 3.0]
+  - id: power-beyond-binary64-is-missing
+    context: derivation
+    covers: [POWER, non-finite]
+    text: "POWER(X, Z)"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 10, Z: 400}
+    type: float
+    values: [null]
+  - id: a-zero-base-with-a-negative-exponent-fails
+    context: derivation
+    covers: [POWER]
+    text: "POWER(X, Z)"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 0, Z: -1}
+    type: float
+    phase: derivation
+    condition: invalid_power
+    rule: FORMULA-15
+  - id: a-negative-base-with-a-fractional-exponent-fails
+    context: derivation
+    covers: [POWER]
+    text: "POWER(X, F)"
+    columns: {X: int, F: float}
+    rows:
+      - {X: -8, F: 0.5}
+    type: float
+    phase: derivation
+    condition: invalid_power
+    rule: FORMULA-15
+  - id: power-takes-two-arguments
+    context: derivation
+    covers: [POWER, arity]
+    text: "POWER(X)"
+    columns: {X: int}
+    rows:
+      - {X: 2}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+
+  # EXP and LN are floats; EXP beyond binary64 is missing and underflows to
+  # zero, and LN of zero or a negative number fails (FORMULA-13, FORMULA-15,
+  # VALUE-4, VALUE-10).
+  - id: exp-raises-e-to-its-argument
+    context: derivation
+    covers: [EXP, typing, missing, non-finite]
+    text: "EXP(X)"
+    columns: {X: int}
+    rows:
+      - {X: 0}
+      - {X: null}
+      - {X: 1000}
+      - {X: -1000}
+    type: float
+    values: [1.0, null, null, 0.0]
+  - id: exp-takes-one-argument
+    context: derivation
+    covers: [EXP, arity]
+    text: "EXP(X, Z)"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 1, Z: 2}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: ln-is-the-natural-logarithm
+    context: derivation
+    covers: [LN, typing, missing]
+    text: "LN(X)"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: null}
+    type: float
+    values: [0.0, null]
+  - id: ln-of-zero-fails
+    context: derivation
+    covers: [LN]
+    text: "LN(X)"
+    columns: {X: int}
+    rows:
+      - {X: 0}
+    type: float
+    phase: derivation
+    condition: ln_of_nonpositive
+    rule: FORMULA-15
+  - id: ln-of-a-negative-number-fails
+    context: derivation
+    covers: [LN]
+    text: "LN(F)"
+    columns: {F: float}
+    rows:
+      - {F: -1.5}
+    type: float
+    phase: derivation
+    condition: ln_of_nonpositive
+    rule: FORMULA-15
+  - id: ln-takes-one-argument
+    context: derivation
+    covers: [LN, arity]
+    text: "LN()"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+
+  # MOD is the remainder of x / y with the sign of x, an int over two ints and
+  # a float otherwise; a zero divisor fails (FORMULA-13, FORMULA-15,
+  # VALUE-10).
+  - id: mod-takes-the-sign-of-its-dividend
+    context: derivation
+    covers: [MOD, typing, missing]
+    text: "MOD(X, Z)"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 7, Z: 3}
+      - {X: -7, Z: 3}
+      - {X: 7, Z: -3}
+      - {X: -7, Z: -3}
+      - {X: 6, Z: 3}
+      - {X: null, Z: 3}
+      - {X: 7, Z: null}
+    type: int
+    values: [1, -1, 1, -1, 0, null, null]
+  - id: mod-of-a-float-is-a-float
+    context: derivation
+    covers: [MOD, typing]
+    text: "MOD(F, Z)"
+    columns: {F: float, Z: int}
+    rows:
+      - {F: 7.5, Z: 2}
+      - {F: -7.5, Z: 2}
+    type: float
+    values: [1.5, -1.5]
+  - id: mod-of-the-least-int-by-minus-one-is-zero
+    context: derivation
+    covers: [MOD, overflow]
+    text: "MOD(X, Z)"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: -9223372036854775808, Z: -1}
+    type: int
+    values: [0]
+  - id: mod-by-zero-fails
+    context: derivation
+    covers: [MOD]
+    text: "MOD(X, Z)"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 7, Z: 0}
+    type: int
+    phase: derivation
+    condition: division_by_zero
+    rule: FORMULA-15
+  - id: mod-takes-two-arguments
+    context: derivation
+    covers: [MOD, arity]
+    text: "MOD(X)"
+    columns: {X: int}
+    rows:
+      - {X: 7}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+
+  # NULLIF(x, y) is missing when x = y and x otherwise, and stays x when only
+  # y is missing; it is an int over two ints or a NULL y, and a float when
+  # either argument is a float, also where that argument is missing
+  # (FORMULA-13, FORMULA-14, VALUE-10).
+  - id: nullif-is-missing-when-its-arguments-are-equal
+    context: derivation
+    covers: [NULLIF, typing, missing]
+    text: "NULLIF(X, Z)"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 1, Z: 1}
+      - {X: 1, Z: 2}
+      - {X: null, Z: 1}
+      - {X: 1, Z: null}
+    type: int
+    values: [null, 1, null, 1]
+  - id: nullif-with-a-float-argument-is-a-float
+    context: derivation
+    covers: [NULLIF, typing, exactness, missing]
+    text: "NULLIF(X, F)"
+    columns: {X: int, F: float}
+    rows:
+      - {X: 3, F: 3.0}
+      - {X: 3, F: 2.5}
+      - {X: 3, F: null}
+    type: float
+    values: [null, 3.0, 3.0]
+  - id: nullif-with-a-null-second-argument-keeps-an-int
+    context: derivation
+    covers: [NULLIF, "NULL", typing]
+    text: "NULLIF(X, NULL)"
+    columns: {X: int}
+    rows:
+      - {X: 3}
+      - {X: null}
+    type: int
+    values: [3, null]
+  - id: nullif-guards-a-division
+    context: derivation
+    covers: [NULLIF, "*", "-", "/", missing]
+    text: "100 * (X - Z) / NULLIF(Z, 0)"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 110, Z: 100}
+      - {X: 5, Z: 0}
+      - {X: null, Z: 100}
+    type: float
+    values: [10.0, null, null]
+  - id: nullif-takes-two-arguments
+    context: derivation
+    covers: [NULLIF, arity]
+    text: "NULLIF(X)"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: nullif-takes-numbers
+    context: derivation
+    covers: [NULLIF]
+    text: "NULLIF(S, 1)"
+    columns: {S: str}
+    rows:
+      - {S: "a"}
+    phase: validation
+    condition: incompatible_input_type
+    rule: FORMULA-12
+
+  # The closed list has no other function: the rounding, coalescing,
+  # extreme-picking and logarithm functions of SQL dialects are refused
+  # (FORMULA-13, FORMULA-16).
+  - id: round-is-not-a-function
+    context: derivation
+    covers: [vocabulary]
+    text: "ROUND(F, 1)"
+    columns: {F: float}
+    rows:
+      - {F: 2.25}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: round-half-away-from-zero-is-not-a-function
+    context: derivation
+    covers: [vocabulary]
+    text: "ROUND_HALF_AWAY_FROM_ZERO(F, 1)"
+    columns: {F: float}
+    rows:
+      - {F: 2.25}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: coalesce-is-not-a-function
+    context: derivation
+    covers: [vocabulary]
+    text: "COALESCE(X, 0)"
+    columns: {X: int}
+    rows:
+      - {X: null}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: greatest-is-not-a-function
+    context: derivation
+    covers: [vocabulary]
+    text: "GREATEST(X, Z)"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 1, Z: 2}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: least-is-not-a-function
+    context: derivation
+    covers: [vocabulary]
+    text: "LEAST(X, Z)"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 1, Z: 2}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: log-is-not-a-function
+    context: derivation
+    covers: [vocabulary]
+    text: "LOG(X)"
+    columns: {X: int}
+    rows:
+      - {X: 10}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+
+  # An expression field admits no comparison, Boolean logic, str_contains or
+  # reduction (FORMULA-27).
+  - id: a-comparison-is-refused-in-an-expression-field
+    context: derivation
+    covers: [">", context]
+    text: "X > 1"
+    columns: {X: int}
+    rows:
+      - {X: 2}
+    phase: validation
+    condition: prohibited_construct
+    rule: FORMULA-27
+  - id: a-null-test-is-refused-in-an-expression-field
+    context: derivation
+    covers: [IS NULL, context]
+    text: "X IS NULL"
+    columns: {X: int}
+    rows:
+      - {X: 2}
+    phase: validation
+    condition: prohibited_construct
+    rule: FORMULA-27
+  - id: list-membership-is-refused-in-an-expression-field
+    context: derivation
+    covers: [IN, context]
+    text: "X IN (1, 2)"
+    columns: {X: int}
+    rows:
+      - {X: 2}
+    phase: validation
+    condition: prohibited_construct
+    rule: FORMULA-27
+  - id: a-range-is-refused-in-an-expression-field
+    context: derivation
+    covers: [BETWEEN, context]
+    text: "X BETWEEN 1 AND 2"
+    columns: {X: int}
+    rows:
+      - {X: 2}
+    phase: validation
+    condition: prohibited_construct
+    rule: FORMULA-27
+  - id: a-pattern-match-is-refused-in-an-expression-field
+    context: derivation
+    covers: [LIKE, context]
+    text: "S LIKE 'a%'"
+    columns: {S: str}
+    rows:
+      - {S: "ab"}
+    phase: validation
+    condition: prohibited_construct
+    rule: FORMULA-27
+  - id: a-truth-literal-is-refused-in-an-expression-field
+    context: derivation
+    covers: ["TRUE", context]
+    text: "TRUE"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    phase: validation
+    condition: prohibited_construct
+    rule: FORMULA-27
+  - id: negation-is-refused-in-an-expression-field
+    context: derivation
+    covers: [NOT, context]
+    text: "NOT X"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    phase: validation
+    condition: prohibited_construct
+    rule: FORMULA-27
+  - id: a-conjunction-is-refused-in-an-expression-field
+    context: derivation
+    covers: [AND, context]
+    text: "X = 1 AND Z = 1"
+    columns: {X: int, Z: int}
+    rows:
+      - {X: 1, Z: 1}
+    phase: validation
+    condition: prohibited_construct
+    rule: FORMULA-27
+  - id: str-contains-is-refused-in-an-expression-field
+    context: derivation
+    covers: [STR_CONTAINS, context]
+    text: "str_contains(S, 'a')"
+    columns: {S: str}
+    rows:
+      - {S: "a"}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: a-reduction-is-refused-in-an-expression-field
+    context: derivation
+    covers: [SUM, context]
+    text: "SUM(X)"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: a-count-is-refused-in-an-expression-field
+    context: derivation
+    covers: [COUNT, context]
+    text: "COUNT(X)"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+
+  # SUM adds the present values in relation record order with the numeric +,
+  # keeps its argument's numeric type, and gives missing for a group with no
+  # record or no present value; an int total outside the int range fails, and
+  # a non-finite float total is missing (FORMULA-15, FORMULA-19, FORMULA-23,
+  # FORMULA-24, VALUE-4).
+  - id: sum-adds-the-present-values
+    context: aggregate
+    covers: [SUM, typing, missing]
+    text: "SUM(R.X)"
+    columns: {X: int}
+    groups:
+      - [{X: 1}, {X: 2}, {X: 3}]
+      - [{X: 5}, {X: null}]
+      - [{X: null}]
+      - []
+    type: int
+    values: [6, 5, null, null]
+  - id: sum-of-floats-is-a-float
+    context: aggregate
+    covers: [SUM, typing]
+    text: "SUM(R.F)"
+    columns: {F: float}
+    groups:
+      - [{F: 0.5}, {F: 0.25}]
+      - [{F: 1.5}]
+    type: float
+    values: [0.75, 1.5]
+  - id: sum-adds-in-record-order
+    context: aggregate
+    covers: [SUM, record-order, precision]
+    text: "SUM(R.F)"
+    columns: {F: float}
+    groups:
+      - [{F: 1.0e+16}, {F: 1.0}, {F: -1.0e+16}]
+      - [{F: 1.0e+16}, {F: -1.0e+16}, {F: 1.0}]
+    type: float
+    values: [0.0, 1.0]
+  - id: an-int-sum-outside-the-int-range-fails
+    context: aggregate
+    covers: [SUM, overflow]
+    text: "SUM(R.X)"
+    columns: {X: int}
+    groups:
+      - [{X: 9223372036854775807}, {X: 1}]
+    type: int
+    phase: derivation
+    condition: integer_overflow
+    rule: VALUE-5
+  - id: a-float-sum-beyond-binary64-is-missing
+    context: aggregate
+    covers: [SUM, non-finite]
+    text: "SUM(R.F)"
+    columns: {F: float}
+    groups:
+      - [{F: 1.0e+308}, {F: 1.0e+308}]
+      - [{F: 1.0e+308}]
+    type: float
+    values: [null, 1.0e+308]
+  - id: sum-takes-a-number
+    context: aggregate
+    covers: [SUM]
+    text: "SUM(R.S)"
+    columns: {S: str}
+    groups:
+      - [{S: "1"}]
+    phase: validation
+    condition: incompatible_input_type
+    rule: FORMULA-23
+  - id: a-reducer-is-case-insensitive
+    context: aggregate
+    covers: [SUM, keyword-case]
+    text: "sum(R.X)"
+    columns: {X: int}
+    groups:
+      - [{X: 1}, {X: 2}]
+    type: int
+    values: [3]
+
+  # COUNT(x) counts the present values and COUNT(R.*) the records; each is an
+  # int, 0 for a group whose values are all missing, and missing for a group
+  # with no record (FORMULA-18, FORMULA-23, FORMULA-24).
+  - id: count-counts-present-values
+    context: aggregate
+    covers: [COUNT, typing, missing]
+    text: "COUNT(R.X)"
+    columns: {X: int}
+    groups:
+      - [{X: 1}, {X: null}, {X: 3}]
+      - [{X: null}]
+      - []
+    type: int
+    values: [2, 0, null]
+  - id: count-of-the-record-star-counts-records
+    context: aggregate
+    covers: [COUNT, missing]
+    text: "COUNT(R.*)"
+    columns: {X: int}
+    groups:
+      - [{X: 1}, {X: null}, {X: 3}]
+      - [{X: null}]
+      - []
+    type: int
+    values: [3, 1, null]
+  - id: count-takes-any-type
+    context: aggregate
+    covers: [COUNT]
+    text: "COUNT(R.S)"
+    columns: {S: str}
+    groups:
+      - [{S: "a"}, {S: "b"}]
+      - [{S: null}]
+    type: int
+    values: [2, 0]
+  - id: counting-values-and-records-differ-by-the-missing-values
+    context: aggregate
+    covers: [COUNT, "-", missing]
+    text: "COUNT(R.X) - COUNT(R.*)"
+    columns: {X: int}
+    groups:
+      - [{X: 1}, {X: null}]
+      - [{X: 2}]
+    type: int
+    values: [-1, 0]
+
+  # MIN and MAX give the least and greatest present value and keep its type:
+  # numbers by value, text by scalar value and dates chronologically
+  # (FORMULA-18, FORMULA-23, FORMULA-24, VALUE-20, VALUE-21).
+  - id: min-is-the-least-present-value
+    context: aggregate
+    covers: [MIN, missing]
+    text: "MIN(R.X)"
+    columns: {X: int}
+    groups:
+      - [{X: 3}, {X: 1}, {X: 2}]
+      - [{X: null}, {X: 5}]
+      - [{X: null}]
+      - []
+    type: int
+    values: [1, 5, null, null]
+  - id: max-is-the-greatest-present-value
+    context: aggregate
+    covers: [MAX, missing]
+    text: "MAX(R.X)"
+    columns: {X: int}
+    groups:
+      - [{X: 3}, {X: 1}, {X: 2}]
+      - [{X: null}, {X: 5}]
+      - [{X: null}]
+      - []
+    type: int
+    values: [3, 5, null, null]
+  - id: min-of-text-orders-by-scalar-value
+    context: aggregate
+    covers: [MIN, text-order]
+    text: "MIN(R.S)"
+    columns: {S: str}
+    groups:
+      - [{S: "b"}, {S: "a"}, {S: "B"}]
+      - [{S: "abc"}, {S: "ab"}]
+    type: str
+    values: ["B", "ab"]
+  - id: max-of-text-orders-by-scalar-value
+    context: aggregate
+    covers: [MAX, text-order]
+    text: "MAX(R.S)"
+    columns: {S: str}
+    groups:
+      - [{S: "b"}, {S: "a"}, {S: "B"}]
+      - [{S: "abc"}, {S: "ab"}]
+    type: str
+    values: ["b", "abc"]
+  - id: min-of-dates-is-the-earliest
+    context: aggregate
+    covers: [MIN, temporal]
+    text: "MIN(R.D)"
+    columns: {D: date}
+    groups:
+      - [{D: "2025-03-01"}, {D: "2024-12-31"}]
+    type: date
+    values: ["2024-12-31"]
+  - id: max-of-datetimes-is-the-latest
+    context: aggregate
+    covers: [MAX, temporal]
+    text: "MAX(R.DT)"
+    columns: {DT: datetime}
+    groups:
+      - [{DT: "2025-03-01T08:00:00"}, {DT: "2025-03-01T07:59:59"}]
+    type: datetime
+    values: ["2025-03-01T08:00:00"]
+
+  # MEAN divides the ordered SUM by COUNT, is a float, and gives missing
+  # before dividing when no value is present; its SUM fails on int overflow
+  # even when the mean would fit (FORMULA-15, FORMULA-19, FORMULA-23,
+  # FORMULA-24).
+  - id: mean-of-ints-is-a-float
+    context: aggregate
+    covers: [MEAN, typing, missing]
+    text: "MEAN(R.X)"
+    columns: {X: int}
+    groups:
+      - [{X: 1}, {X: 2}]
+      - [{X: 1}, {X: 2}, {X: null}]
+      - [{X: null}]
+      - []
+    type: float
+    values: [1.5, 1.5, null, null]
+  - id: mean-divides-the-ordered-sum
+    context: aggregate
+    covers: [MEAN, precision]
+    text: "MEAN(R.F)"
+    columns: {F: float}
+    groups:
+      - [{F: 0.1}, {F: 0.2}]
+    type: float
+    values: [0.15000000000000002]
+  - id: mean-fails-when-its-int-sum-overflows
+    context: aggregate
+    covers: [MEAN, overflow]
+    text: "MEAN(R.X)"
+    columns: {X: int}
+    groups:
+      - [{X: 9223372036854775807}, {X: 1}]
+    type: float
+    phase: derivation
+    condition: integer_overflow
+    rule: VALUE-5
+  - id: mean-takes-a-number
+    context: aggregate
+    covers: [MEAN]
+    text: "MEAN(R.S)"
+    columns: {S: str}
+    groups:
+      - [{S: "1"}]
+    phase: validation
+    condition: incompatible_input_type
+    rule: FORMULA-23
+
+  # ONLY gives the value of a group's one record, even a missing one, gives
+  # missing for a group with no record, and fails for a group of more than
+  # one record, counting records rather than values (FORMULA-20, FORMULA-23,
+  # FORMULA-24).
+  - id: only-gives-the-value-of-the-one-record
+    context: aggregate
+    covers: [ONLY, missing]
+    text: "ONLY(R.X)"
+    columns: {X: int}
+    groups:
+      - [{X: 7}]
+      - [{X: null}]
+      - []
+    type: int
+    values: [7, null, null]
+  - id: only-keeps-the-type-it-reduces
+    context: aggregate
+    covers: [ONLY]
+    text: "ONLY(R.S)"
+    columns: {S: str}
+    groups:
+      - [{S: "a"}]
+    type: str
+    values: ["a"]
+  - id: only-of-two-records-fails
+    context: aggregate
+    covers: [ONLY]
+    text: "ONLY(R.X)"
+    columns: {X: int}
+    groups:
+      - [{X: 1}, {X: 2}]
+    type: int
+    phase: derivation
+    condition: aggregate_multiple_records
+    rule: FORMULA-20
+  - id: only-counts-records-not-values
+    context: aggregate
+    covers: [ONLY, missing]
+    text: "ONLY(R.X)"
+    columns: {X: int}
+    groups:
+      - [{X: 5}, {X: null}]
+    type: int
+    phase: derivation
+    condition: aggregate_multiple_records
+    rule: FORMULA-20
+
+  # Arithmetic and the numeric functions combine reductions and stand in
+  # their arguments: a record whose argument is missing contributes nothing,
+  # a missing reduction propagates, and a grouping column may stand outside a
+  # reduction (FORMULA-14, FORMULA-22, FORMULA-23, FORMULA-24).
+  - id: a-ratio-of-reductions-is-a-float
+    context: aggregate
+    covers: [SUM, COUNT, "/", missing]
+    text: "SUM(R.X) / COUNT(R.*)"
+    columns: {X: int}
+    groups:
+      - [{X: 1}, {X: 2}, {X: null}]
+      - [{X: 4}]
+      - []
+    type: float
+    values: [1.0, 4.0, null]
+  - id: arithmetic-over-a-reduction-keeps-an-int
+    context: aggregate
+    covers: [SUM, "+", missing]
+    text: "SUM(R.X) + 1"
+    columns: {X: int}
+    groups:
+      - [{X: 1}, {X: 2}]
+      - []
+    type: int
+    values: [4, null]
+  - id: a-reduction-argument-skips-a-record-missing-either-factor
+    context: aggregate
+    covers: [SUM, "*", missing]
+    text: "SUM(R.X * R.Z)"
+    columns: {X: int, Z: int}
+    groups:
+      - [{X: 2, Z: 3}, {X: 4, Z: null}, {X: null, Z: 5}]
+      - [{X: null, Z: 1}]
+    type: int
+    values: [6, null]
+  - id: a-function-may-stand-in-a-reduction-argument
+    context: aggregate
+    covers: [SUM, ABS]
+    text: "SUM(ABS(R.X))"
+    columns: {X: int}
+    groups:
+      - [{X: -1}, {X: 2}, {X: -3}]
+    type: int
+    values: [6]
+  - id: nullif-may-take-a-reduction
+    context: aggregate
+    covers: [NULLIF, SUM]
+    text: "NULLIF(SUM(R.X), 0)"
+    columns: {X: int}
+    groups:
+      - [{X: 1}, {X: -1}]
+      - [{X: 2}]
+    type: int
+    values: [null, 2]
+  - id: unary-minus-negates-a-reduction
+    context: aggregate
+    covers: [SUM, "unary -"]
+    text: "-SUM(R.X)"
+    columns: {X: int}
+    groups:
+      - [{X: 1}, {X: 2}]
+    type: int
+    values: [-3]
+  - id: a-grouping-column-may-stand-outside-a-reduction
+    context: aggregate
+    covers: [SUM, "*"]
+    text: "SUM(R.X) * R.N"
+    columns: {N: int, X: int}
+    group_by: [N]
+    groups:
+      - [{N: 2, X: 1}, {N: 2, X: 3}]
+      - [{N: 10, X: null}, {N: 10, X: 5}]
+    type: int
+    values: [8, 50]
+
+  # aggregate.expr refuses comparisons, Boolean logic, string and temporal
+  # literals and str_contains (FORMULA-27), names outside the closed lists
+  # (FORMULA-13), nested reductions (FORMULA-21), an identifier outside a
+  # reduction that is not a grouping column (FORMULA-22) and arithmetic over a
+  # reduction or grouping column that is not numeric (FORMULA-23).
+  - id: a-comparison-is-refused-in-an-aggregate
+    context: aggregate
+    covers: [">", context]
+    text: "SUM(R.X) > 1"
+    columns: {X: int}
+    groups:
+      - [{X: 2}]
+    phase: validation
+    condition: prohibited_construct
+    rule: FORMULA-27
+  - id: boolean-logic-is-refused-in-an-aggregate
+    context: aggregate
+    covers: [AND, context]
+    text: "SUM(R.X) AND COUNT(R.*)"
+    columns: {X: int}
+    groups:
+      - [{X: 2}]
+    phase: validation
+    condition: prohibited_construct
+    rule: FORMULA-27
+  - id: a-string-literal-is-refused-in-an-aggregate
+    context: aggregate
+    covers: [literal, context]
+    text: "SUM(R.X) + 'a'"
+    columns: {X: int}
+    groups:
+      - [{X: 2}]
+    phase: validation
+    condition: prohibited_construct
+    rule: FORMULA-27
+  - id: a-temporal-literal-is-refused-in-an-aggregate
+    context: aggregate
+    covers: [DATE, context]
+    text: "DATE '2025-06-01'"
+    columns: {X: int}
+    groups:
+      - [{X: 2}]
+    phase: validation
+    condition: prohibited_construct
+    rule: FORMULA-27
+  - id: str-contains-is-refused-in-an-aggregate-at-its-pattern
+    context: aggregate
+    covers: [STR_CONTAINS, literal, context]
+    text: "str_contains(R.S, 'a')"
+    columns: {S: str}
+    groups:
+      - [{S: "a"}]
+    phase: validation
+    condition: prohibited_construct
+    rule: FORMULA-27
+  - id: avg-is-not-a-reducer
+    context: aggregate
+    covers: [vocabulary]
+    text: "AVG(R.X)"
+    columns: {X: int}
+    groups:
+      - [{X: 2}]
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: median-is-not-a-reducer
+    context: aggregate
+    covers: [vocabulary]
+    text: "MEDIAN(R.X)"
+    columns: {X: int}
+    groups:
+      - [{X: 2}]
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: rounding-a-reduction-is-refused
+    context: aggregate
+    covers: [vocabulary]
+    text: "ROUND(SUM(R.F), 2)"
+    columns: {F: float}
+    groups:
+      - [{F: 2.5}]
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: coalescing-a-reduction-is-refused
+    context: aggregate
+    covers: [vocabulary]
+    text: "COALESCE(SUM(R.X), 0)"
+    columns: {X: int}
+    groups:
+      - [{X: 2}]
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: reductions-do-not-nest
+    context: aggregate
+    covers: [MAX, SUM]
+    text: "MAX(SUM(R.X))"
+    columns: {X: int}
+    groups:
+      - [{X: 2}]
+    phase: validation
+    condition: nested_reduction
+    rule: FORMULA-21
+  - id: an-identifier-outside-a-reduction-must-be-grouped
+    context: aggregate
+    covers: [SUM, "+"]
+    text: "SUM(R.X) + R.Z"
+    columns: {X: int, Z: int}
+    groups:
+      - [{X: 2, Z: 1}]
+    phase: validation
+    condition: aggregate_identifier_not_grouped
+    rule: FORMULA-22
+  - id: arithmetic-over-a-text-reduction-is-refused
+    context: aggregate
+    covers: [MIN, "+"]
+    text: "MIN(R.S) + 1"
+    columns: {S: str}
+    groups:
+      - [{S: "a"}]
+    phase: validation
+    condition: incompatible_input_type
+    rule: FORMULA-23
+  - id: arithmetic-over-a-text-grouping-column-is-refused
+    context: aggregate
+    covers: [SUM, "+"]
+    text: "SUM(R.X) + R.G"
+    columns: {G: str, X: int}
+    group_by: [G]
+    groups:
+      - [{G: "a", X: 1}]
+    phase: validation
+    condition: incompatible_input_type
+    rule: FORMULA-23
+  - id: a-text-reduction-in-arithmetic-is-refused-before-any-record-is-read
+    context: aggregate
+    covers: [MAX, "*", typing]
+    text: "2 * MAX(R.S)"
+    columns: {S: str}
+    groups:
+      - []
+    phase: validation
+    condition: incompatible_input_type
+    rule: FORMULA-23

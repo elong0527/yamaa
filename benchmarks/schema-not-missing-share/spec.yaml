@@ -1,0 +1,89 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: AE
+keys: [USUBJID, AESEQ]
+input:
+  AE_RAW: input/ae_raw.csv
+
+output:
+  path: ae.csv
+  columns: [USUBJID, AESEQ, AETERM, AEDECOD, AESER, AESDTH, AESTDTC, AEENDTC]
+  # Every evaluated check gets one line in the run report, which the
+  # deliberately violated warning requires.
+  report: ae-checks.csv
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE_RAW.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE_RAW.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE_RAW.AETERM
+
+  # A coded term on every event with a reported term. The event without a
+  # reported term is not checked.
+  - name: AEDECOD
+    type: str
+    label: Dictionary-Derived Term
+    derivation: AE_RAW.AEDECOD
+    verifications:
+      - not_missing:
+          id: coded-when-reported
+          when: "AETERM IS NOT NULL"
+
+  - name: AESER
+    type: str
+    label: Serious Event
+    derivation: AE_RAW.AESER
+
+  # A death flag on every serious event. An event that is not serious is
+  # not checked, and neither is the one whose seriousness is missing, for
+  # which the condition is unknown.
+  - name: AESDTH
+    type: str
+    label: Results in Death
+    derivation: AE_RAW.AESDTH
+    verifications:
+      - not_missing:
+          id: death-when-serious
+          when: "AESER = 'Y'"
+
+  # At most a quarter of the events lack a start date: 2 of 8 do, and the
+  # boundary counts as held.
+  - name: AESTDTC
+    type: str
+    label: Start Date/Time of Adverse Event
+    derivation: AE_RAW.AESTDTC
+    verifications:
+      - not_missing:
+          id: start-mostly-present
+          max_fraction: 0.25
+
+  - name: AEENDTC
+    type: str
+    label: End Date/Time of Adverse Event
+    derivation: AE_RAW.AEENDTC
+    verifications:
+      # Deliberately violated: 2 of the 7 events with a reported term lack an
+      # end date, more than a quarter. A warning, so the run reports it and
+      # still succeeds.
+      - not_missing:
+          id: end-mostly-present
+          when: "AETERM IS NOT NULL"
+          max_fraction: 0.25
+          severity: warning
+      # An end date on every event that resulted in death. None did, so no
+      # event is checked and the share of zero holds.
+      - not_missing:
+          id: end-when-fatal
+          when: "AESDTH = 'Y'"
+          max_fraction: 0

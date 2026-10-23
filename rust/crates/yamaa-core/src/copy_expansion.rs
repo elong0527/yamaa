@@ -18,10 +18,11 @@
 //! submission metadata (SUB-1), unless the entry writes `submission`.
 
 use crate::diagnostic::{ConditionCode, Diagnostic};
-use crate::inheritance::VersionedChain;
-use crate::inheritance_preparation::{PathPort, VersionedError};
+use crate::inheritance::{Source, VersionedChain};
+use crate::inheritance_preparation::VersionedError;
 use crate::json::Value;
 use crate::producer_contract::{Contract, Field};
+use crate::resolver::Resolver;
 use crate::schema::{
     Document, DocumentNode as N, NormalizationError, NormalizationResource, NormalizedDocument,
     SchemaContext as C, SchemaDiagnostic, SchemaOrigin, SchemaSource, SchemaStructure, SpecPath,
@@ -446,15 +447,16 @@ pub fn producer_cycle(dataset: &str, cycle: &[&str]) -> Diagnostic {
 
 /// Replace every copy entry of `layers`, the normalized layers of `chain`,
 /// by the columns it declares, reading each linked producer's output
-/// contract through `port` (SPEC-9). While a producer is read, the first
+/// contract with `producer` (SPEC-9). While a producer is read, the first
 /// layer with a copy entry that reads it, and each layer after it, count as
 /// being resolved. A layer without a copy entry is kept as it is.
-pub(crate) fn expand<P: PathPort>(
+pub(crate) fn expand<R: Resolver>(
     schema: &SchemaStructure,
     chain: &VersionedChain,
     layers: &mut [NormalizedDocument],
-    port: &mut P,
-) -> Result<(), VersionedError<P::Error>> {
+    resolver: &mut R,
+    mut producer: impl FnMut(&mut R, &Source, &str, &str, &[&Source]) -> Option<Contract>,
+) -> Result<(), VersionedError<R::Error>> {
     let documents = layers
         .iter()
         .map(|layer| &layer.document)
@@ -478,7 +480,7 @@ pub(crate) fn expand<P: PathPort>(
             .rev()
             .map(|layer| &layer.source)
             .collect::<Vec<_>>();
-        let Some(contract) = port.producer(declaring, link.written, link.dataset, &resolving)
+        let Some(contract) = producer(resolver, declaring, link.written, link.dataset, &resolving)
         else {
             return Err(VersionedError::Producer {
                 dataset: link.dataset.into(),

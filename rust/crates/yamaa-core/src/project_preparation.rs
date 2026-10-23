@@ -20,6 +20,7 @@
 //! (#3030 section 2.10).
 use crate::{
     ast::{self, CodelistSource, FunctionSource},
+    decoder::Decoder,
     front_end::{v0_5::project as lower, v1::project as lower_v1},
     limits::{LimitExceeded, Limits},
     project_environment::{Draft, Environment, Finding, LockKind, LockReference},
@@ -68,24 +69,6 @@ pub enum DecodeTarget {
     FunctionFile,
     /// A 1.0 codelist file, which declares `yamaa` and `type: codelists`.
     CodelistFile,
-}
-
-/// Decode and structurally prepare captured bytes without semantic lowering or effects.
-/// The owned document retains the exact source and its normalized context arena.
-/// Implementations bound physical parsing/normalization before allocating storage.
-pub trait ProjectDecodePort {
-    type Error;
-    type Document;
-    fn decode(
-        &mut self,
-        source: Source,
-        target: DecodeTarget,
-    ) -> Result<Self::Document, Self::Error>;
-    fn document(document: &Self::Document) -> &Document;
-    fn source(document: &Self::Document) -> &Source;
-    /// The packaging tool whose lock syntax the held bytes are, or `None`
-    /// when they are no lock the engine reads.
-    fn lock(&mut self, source: &Source) -> Option<LockKind>;
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -227,16 +210,12 @@ fn capture<P: Resolver, D, X>(
 /// One captured YAML dependency with its lowered root, or the retained
 /// failure of that single source.
 type Captured<P, D, T> = Result<
-    (<D as ProjectDecodePort>::Document, T),
-    CaptureFailure<
-        <P as Resolver>::Error,
-        <D as ProjectDecodePort>::Document,
-        <D as ProjectDecodePort>::Error,
-    >,
+    (<D as Decoder>::Admitted, T),
+    CaptureFailure<<P as Resolver>::Error, <D as Decoder>::Admitted, <D as Decoder>::DocumentError>,
 >;
 
 /// Capture, decode and lower one declared YAML dependency.
-fn capture_document<P: Resolver, D: ProjectDecodePort, T>(
+fn capture_document<P: Resolver, D: Decoder, T>(
     port: &mut P,
     decoder: &mut D,
     (kind, target): (Kind, DecodeTarget),
@@ -246,9 +225,9 @@ fn capture_document<P: Resolver, D: ProjectDecodePort, T>(
 ) -> Captured<P, D, T> {
     let source = capture(port, kind, declaring, written)?;
     let captured = decoder
-        .decode(source, target)
+        .admitted(source, target)
         .map_err(CaptureFailure::Structural)?;
-    let document = D::document(&captured);
+    let document = D::admitted_document(&captured);
     match lower(document) {
         Ok(value) => Ok((captured, value)),
         Err(findings) => Err(CaptureFailure::Scalar {
@@ -261,11 +240,7 @@ fn capture_document<P: Resolver, D: ProjectDecodePort, T>(
 /// The value of one preparation step, or the interrupt that aborts it.
 type Step<T, P, D> = Result<
     T,
-    Failure<
-        <P as Resolver>::Error,
-        <D as ProjectDecodePort>::Document,
-        <D as ProjectDecodePort>::Error,
-    >,
+    Failure<<P as Resolver>::Error, <D as Decoder>::Admitted, <D as Decoder>::DocumentError>,
 >;
 
 /// The failures, origins and captures one preparation collects.
@@ -301,22 +276,22 @@ fn collect<E, D, X, T>(
 
 /// Prepare the project file `source` for the host language `host`, or for an
 /// engine that claims none (`None`), which reads no `environments` entry.
-pub fn prepare<P: Resolver, D: ProjectDecodePort>(
+pub fn prepare<P: Resolver, D: Decoder>(
     decoder: &mut D,
     source: Source,
     host: Option<Language>,
     port: &mut P,
-) -> PreparationResult<P::Error, D::Document, D::Error> {
+) -> PreparationResult<P::Error, D::Admitted, D::DocumentError> {
     Limits::spec_bytes(source.bytes.len()).map_err(Failure::RootLimit)?;
     let root = decoder
-        .decode(source, DecodeTarget::Project)
+        .admitted(source, DecodeTarget::Project)
         .map_err(Failure::Root)?;
     // The project file's own header selects its surface (SCHEMA-2).
-    let versioned = crate::language::declares_header(D::document(&root));
+    let versioned = crate::language::declares_header(D::admitted_document(&root));
     let lowered = if versioned {
-        lower_v1::project(D::document(&root), None)
+        lower_v1::project(D::admitted_document(&root), None)
     } else {
-        lower::project(D::document(&root), None)
+        lower::project(D::admitted_document(&root), None)
     };
     let mut project = match lowered {
         Ok(project) => project,
@@ -332,7 +307,7 @@ pub fn prepare<P: Resolver, D: ProjectDecodePort>(
         origins: SourceOrigins::default(),
         captures: Vec::new(),
     };
-    let entry = D::source(&root).identity.clone();
+    let entry = D::admitted_source(&root).identity.clone();
     let (language, environment_file, declaring) = if versioned {
         // One host language runs the whole build, and a 1.0 project's paths
         // all resolve from the project file (D8).
@@ -349,7 +324,7 @@ pub fn prepare<P: Resolver, D: ProjectDecodePort>(
         // An environment file's own paths resolve from that file.
         let declaring = environment_file
             .as_ref()
-            .map_or(&entry, |captured| &D::source(captured).identity)
+            .map_or(&entry, |captured| &D::admitted_source(captured).identity)
             .clone();
         (language, environment_file, declaring)
     };
@@ -430,14 +405,14 @@ pub fn prepare<P: Resolver, D: ProjectDecodePort>(
 
 /// Capture the environment file a 0.5 project links for `host` and lower it
 /// into the project root.
-fn capture_environment<P: Resolver, D: ProjectDecodePort>(
+fn capture_environment<P: Resolver, D: Decoder>(
     port: &mut P,
     decoder: &mut D,
     project: &mut ast::Project,
     host: Language,
     entry: &str,
-    collected: &mut Collected<P::Error, D::Document, D::Error>,
-) -> Step<Option<D::Document>, P, D> {
+    collected: &mut Collected<P::Error, D::Admitted, D::DocumentError>,
+) -> Step<Option<D::Admitted>, P, D> {
     let linked = project
         .environment(host)
         .and_then(|environment| environment.file.as_ref())
@@ -463,13 +438,13 @@ fn capture_environment<P: Resolver, D: ProjectDecodePort>(
 
 /// The definitions a 0.5 environment file declares, inline or as definition
 /// files relative to `declaring`.
-fn capture_functions<P: Resolver, D: ProjectDecodePort>(
+fn capture_functions<P: Resolver, D: Decoder>(
     port: &mut P,
     decoder: &mut D,
     project: &ast::Project,
     host: Language,
     declaring: &str,
-    collected: &mut Collected<P::Error, D::Document, D::Error>,
+    collected: &mut Collected<P::Error, D::Admitted, D::DocumentError>,
 ) -> Step<Option<Vec<ast::Function>>, P, D> {
     let mut functions = project.functions.as_ref().map(|_| Vec::new());
     for declaration in project.functions.iter().flatten() {
@@ -518,12 +493,12 @@ fn capture_functions<P: Resolver, D: ProjectDecodePort>(
 
 /// The function files a 1.0 project lists, each relative to the project file
 /// (D8). Every listed file is read, whichever host languages it implements.
-fn capture_function_files<P: Resolver, D: ProjectDecodePort>(
+fn capture_function_files<P: Resolver, D: Decoder>(
     port: &mut P,
     decoder: &mut D,
     project: &ast::Project,
     declaring: &str,
-    collected: &mut Collected<P::Error, D::Document, D::Error>,
+    collected: &mut Collected<P::Error, D::Admitted, D::DocumentError>,
 ) -> Step<Option<Vec<ast::Function>>, P, D> {
     let mut functions = project.functions.as_ref().map(|_| Vec::new());
     for (index, declaration) in project.functions.iter().flatten().enumerate() {
@@ -564,13 +539,13 @@ fn capture_function_files<P: Resolver, D: ProjectDecodePort>(
 /// The codelist sources a project declares, inline or as codelist files
 /// relative to the project file: header-less in 0.5, and declaring
 /// `type: codelists` in 1.0 (P-TYPE-1).
-fn capture_codelists<P: Resolver, D: ProjectDecodePort>(
+fn capture_codelists<P: Resolver, D: Decoder>(
     port: &mut P,
     decoder: &mut D,
     project: &ast::Project,
     entry: &str,
     versioned: bool,
-    collected: &mut Collected<P::Error, D::Document, D::Error>,
+    collected: &mut Collected<P::Error, D::Admitted, D::DocumentError>,
 ) -> Step<Vec<ast::Codelists>, P, D> {
     let mut codelists = Vec::new();
     for (index, declaration) in project.codelists.iter().enumerate() {

@@ -656,6 +656,7 @@ mod project {
                     values: vec![value],
                 }),
                 entries: None,
+                denominator: None,
             }
         }
         #[test]

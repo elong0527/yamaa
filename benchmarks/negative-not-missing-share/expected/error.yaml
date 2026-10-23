@@ -1,0 +1,14 @@
+phase: verification
+condition: not_missing_failed
+spec_paths:
+  - columns.WEIGHTBL.verifications[0].not_missing
+rule: CHECK-5
+context:
+  column: WEIGHTBL
+  failure_count: 2
+  denominator: 4
+  keys:
+    - STUDYID: YAMAA-01
+      USUBJID: P02
+    - STUDYID: YAMAA-01
+      USUBJID: P04
