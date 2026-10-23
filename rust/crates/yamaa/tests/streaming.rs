@@ -18,7 +18,7 @@ use arrow_array::ffi_stream::ArrowArrayStreamReader;
 use arrow_array::{Array, Int64Array, RecordBatchReader, StringArray};
 use yamaa::{
     CancellationToken, Engine, EngineOptions, Error, HostLanguage, MemoryResolver, Partitions,
-    Plans, StreamProgress, RecordBatch,
+    Plans, RecordBatch, StreamProgress,
 };
 
 use crate::support::NoFunctions;
@@ -33,7 +33,12 @@ fn resolver(input: bool) -> Arc<MemoryResolver> {
     let resolver = Arc::new(MemoryResolver::new());
     for declaring in ["/", "/project.yaml"] {
         resolver.insert(declaring, "spec.yaml", "spec:1", Arc::from(SPEC.as_bytes()));
-        resolver.insert(declaring, "project.yaml", "project:1", Arc::from(PROJECT.as_bytes()));
+        resolver.insert(
+            declaring,
+            "project.yaml",
+            "project:1",
+            Arc::from(PROJECT.as_bytes()),
+        );
     }
     if input {
         insert_input(&resolver);
@@ -47,8 +52,8 @@ fn insert_input(resolver: &MemoryResolver) {
 
 /// An engine over `resolver`, with partitions of `rows` records when given.
 fn engine(resolver: Arc<MemoryResolver>, rows: Option<usize>) -> Engine {
-    let options = EngineOptions::new(HostLanguage::Python, "test".into(), "0".into())
-        .with_resolver(resolver);
+    let options =
+        EngineOptions::new(HostLanguage::Python, "test".into(), "0".into()).with_resolver(resolver);
     Engine::new(match rows {
         Some(rows) => options.with_partitions(Partitions::new(NonZeroUsize::new(rows).unwrap())),
         None => options,
@@ -60,8 +65,16 @@ fn identities(batches: &[RecordBatch]) -> Vec<Vec<(i64, String)>> {
     batches
         .iter()
         .map(|batch| {
-            let ids = batch.column(0).as_any().downcast_ref::<Int64Array>().unwrap();
-            let names = batch.column(1).as_any().downcast_ref::<StringArray>().unwrap();
+            let ids = batch
+                .column(0)
+                .as_any()
+                .downcast_ref::<Int64Array>()
+                .unwrap();
+            let names = batch
+                .column(1)
+                .as_any()
+                .downcast_ref::<StringArray>()
+                .unwrap();
             (0..batch.num_rows())
                 .map(|row| (ids.value(row), names.value(row).to_owned()))
                 .collect()
@@ -126,9 +139,16 @@ fn streamed_batches_hold_the_whole_table_output_in_its_order() {
             assert_eq!(batch, &whole_rows, "{label}, rows from {start}");
             start += batch.num_rows();
         }
-        assert_eq!(streamed.progress().unwrap(), StreamProgress::Ended, "{label}");
+        assert_eq!(
+            streamed.progress().unwrap(),
+            StreamProgress::Ended,
+            "{label}"
+        );
         let mut run = streamed.run().unwrap();
-        assert!(run.output().is_none(), "{label}: a streamed output is not kept");
+        assert!(
+            run.output().is_none(),
+            "{label}: a streamed output is not kept"
+        );
         assert_eq!(
             (
                 run.status(),
@@ -189,7 +209,11 @@ fn a_consumer_that_stops_pulling_stops_production() {
     reader.next().unwrap().unwrap();
     let first = polls.swap(0, Ordering::SeqCst);
     assert_eq!(reader.count(), 4, "the other batches");
-    assert_eq!(polls.swap(0, Ordering::SeqCst), 4, "one poll per later batch");
+    assert_eq!(
+        polls.swap(0, Ordering::SeqCst),
+        4,
+        "one poll per later batch"
+    );
     let streamed = engine(resolver(true), Some(1))
         .spec_stream("spec.yaml", None, &Plans::new(), &token)
         .unwrap();
@@ -232,12 +256,22 @@ fn a_started_stream_belongs_to_its_reader_until_it_ends() {
     assert_eq!(streamed.progress().unwrap(), StreamProgress::Reading);
     let mut second = streamed.reader();
     assert!(
-        matches!(second.next(), Some(Err(Error::Stream { code: "stream_taken" }))),
+        matches!(
+            second.next(),
+            Some(Err(Error::Stream {
+                code: "stream_taken"
+            }))
+        ),
         "a second reader"
     );
     assert!(second.next().is_none(), "the refused reader ends");
     assert!(
-        matches!(streamed.run(), Err(Error::Stream { code: "stream_open" })),
+        matches!(
+            streamed.run(),
+            Err(Error::Stream {
+                code: "stream_open"
+            })
+        ),
         "the result while the stream is open"
     );
     assert_eq!(first.count(), 2, "the first reader's other batches");
@@ -264,11 +298,21 @@ fn a_run_that_can_call_its_host_is_built_only_on_its_own_thread() {
         scope.spawn(|| {
             let mut reader = streamed.reader();
             assert!(
-                matches!(reader.next(), Some(Err(Error::Stream { code: "host_thread" }))),
+                matches!(
+                    reader.next(),
+                    Some(Err(Error::Stream {
+                        code: "host_thread"
+                    }))
+                ),
                 "a pull on another thread"
             );
             assert!(
-                matches!(streamed.run(), Err(Error::Stream { code: "host_thread" })),
+                matches!(
+                    streamed.run(),
+                    Err(Error::Stream {
+                        code: "host_thread"
+                    })
+                ),
                 "the result on another thread"
             );
         });
@@ -280,7 +324,11 @@ fn a_run_that_can_call_its_host_is_built_only_on_its_own_thread() {
         .unwrap();
     let rows = std::thread::scope(|scope| {
         scope
-            .spawn(|| free.reader().map(|batch| batch.unwrap().num_rows()).sum::<usize>())
+            .spawn(|| {
+                free.reader()
+                    .map(|batch| batch.unwrap().num_rows())
+                    .sum::<usize>()
+            })
             .join()
             .unwrap()
     });

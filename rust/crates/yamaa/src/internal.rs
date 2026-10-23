@@ -394,7 +394,16 @@ pub(crate) fn run(
     measurements: &Arc<Measurements>,
     token: &CancellationToken,
 ) -> Build {
-    run_with(shared, specification, compiled, held, measurements, token, None).0
+    run_with(
+        shared,
+        specification,
+        compiled,
+        held,
+        measurements,
+        token,
+        None,
+    )
+    .0
 }
 
 /// One run of a compiled request whose output is read as a stream (#3697):

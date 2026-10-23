@@ -15,11 +15,11 @@ use pyo3::{
     types::{PyCapsule, PyDate, PyDateTime, PyDict, PyList, PyModule, PyString},
     IntoPyObjectExt,
 };
+use std::sync::Arc;
 use yamaa::{
     Array, DataType, Date32Array, Float64Array, Int64Array, LargeStringArray, ListArray,
     StringArray, StringViewArray, TimeUnit, TimestampSecondArray,
 };
-use std::sync::Arc;
 use yamaa_boundary::{HandleKind, Live};
 
 /// A table that yamaa returned: immutable columns of str, int, float, date,
