@@ -85,9 +85,6 @@ UNREAD_BY_R_SUITES = (
     # Staged for no installed suite.
     "specification-original/binding-diagnostics.tsv",
     "specification-original/grammar-diagnostics.tsv",
-    "specification-original/inheritance-preparation.tsv",
-    "specification-original/inheritance-replay.tsv",
-    "specification-original/normative-inheritance-preparation.tsv",
     "specification-original/output-declarations.tsv",
     "specification-original/predicate-diagnostics.tsv",
     "specification-original/preflight.tsv",

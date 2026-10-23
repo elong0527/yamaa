@@ -45,11 +45,10 @@ local({
   }
 })
 # Each family's handler, whose count a case names as `<handler>_count`,
-# whether a case builds, and the line that reports the family passed. A 1.x
-# file counts an intermediate's absence under `absent`, a 0.5 file under
-# `no_match` (D202), so an inheritance case names the one it reaches.
+# whether a case builds, and the line that reports the family passed. An
+# intermediate's absence counts under `absent` (D202).
 families <- list(
-  inheritance_nulls = list(handler = c("absent", "no_match"),
+  inheritance_nulls = list(handler = "absent",
     builds = function(truth) is.null(truth$run_condition),
     passed = "introducing missing handlers and inherited clears agree across public host boundaries"),
   typed_intermediates = list(handler = "unconvertible",
@@ -87,7 +86,7 @@ for (family in names(families)) local({
     }
     observations <- domain_observations(result)
     if (!is.null(observations)) {
-      handler <- Filter(function(name) !is.null(truth[[paste0(name, "_count")]]), setting$handler)[[1]]
+      handler <- setting$handler
       expected <- truth[[paste0(handler, "_count")]]
       reached <- reached_count(observations, handler)
       if (!isTRUE(reached == expected))
