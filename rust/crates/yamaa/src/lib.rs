@@ -72,7 +72,7 @@ pub use diagnostic::{
     ContextValue, Diagnostic, DiagnosticContext, Location, Position, Report, Severity, SourceSpan,
     ISSUE_COLUMNS, PHASES, REPORT_COLUMNS, REPORT_KINDS, REPORT_OUTCOMES, SEVERITIES,
 };
-pub use engine::{Engine, EngineOptions};
+pub use engine::{Engine, EngineOptions, Partitions};
 pub use error::{
     Error, FunctionError, HostPayload, LockFinding, LockReason, LockSyntaxError, ResolverFailure,
     TableError,

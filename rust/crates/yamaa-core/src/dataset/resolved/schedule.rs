@@ -295,6 +295,56 @@ pub(super) fn annotate(plan: &mut ResolvedPlan) {
     }
 }
 
+impl ResolvedPlan {
+    /// The first dataset step a partitioned run cannot divide (#3697): a
+    /// step the schedule marks [`PartitionClass::Global`] whose evaluation
+    /// reads a window, an aggregate, a named or joined relation, SELF rows
+    /// or a project function. The run's own reconciliation points, which the
+    /// inventory also marks global, are not such steps, because the run
+    /// holds what they need: admission over the complete inputs,
+    /// intermediate verification, SELF publication, the final order over
+    /// the complete accepted relation, and the declaration checks, which
+    /// read no data.
+    pub fn whole_table_step(&self) -> Option<Step> {
+        self.region_schedule(RegionId::DATASET)
+            .iter()
+            .filter(|info| info.partition == PartitionClass::Global)
+            .map(|info| info.step)
+            .find(|&step| match step {
+                Step::Admit
+                | Step::VerifyIntermediates { .. }
+                | Step::PublishSelf(_)
+                | Step::Order => false,
+                Step::Checks(check) => !matches!(
+                    self.check(check).family,
+                    CheckFamily::InvalidDiagnostic
+                        | CheckFamily::InvalidDeclaration
+                        | CheckFamily::PredicateDeclaration
+                ),
+                _ => true,
+            })
+    }
+
+    /// The authored path a dataset step evaluates: its binding's, its
+    /// filter's, its column's first binding's or its check's, and empty for
+    /// a step that evaluates nothing authored.
+    pub fn step_path(&self, step: Step) -> &str {
+        match step {
+            Step::Row(binding) | Step::Window(binding) => &self.binding(binding).path,
+            Step::Filter(template) | Step::PostwindowFilter(template) => self
+                .template(template)
+                .filter
+                .map_or("", |filter| &self.expr(filter.expr).path),
+            Step::Column(column) => self
+                .column_bindings(column)
+                .next()
+                .map_or("", |binding| &self.binding(binding).path),
+            Step::Checks(check) => &self.check(check).path,
+            _ => "",
+        }
+    }
+}
+
 fn step_template(plan: &ResolvedPlan, step: Step) -> Option<TemplateId> {
     match step {
         Step::Driver(template)

@@ -76,6 +76,7 @@ impl Plan {
                 runtime_name: self.shared.runtime_name.clone(),
                 runtime_version: self.shared.runtime_version.clone(),
                 functions: None,
+                partitioning: self.shared.partitioning,
             }),
             compiled: Arc::clone(&self.compiled),
         }

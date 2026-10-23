@@ -922,5 +922,6 @@ mod admission_boundaries;
 mod execution;
 pub use execution::{
     CheckRecord, CodelistObservation, Dataset, Execution, ExecutionAttempt, ExecutionError,
-    ExecutionEvent, ExecutionPhase, Resource, RowCountObservation, RowIdentity, TemplateRows,
+    ExecutionEvent, ExecutionPhase, Partitioning, Resource, RowCountObservation, RowIdentity,
+    TemplateRows,
 };
