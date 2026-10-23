@@ -5901,7 +5901,23 @@
           "yaml": null,
           "condition": "resource_path_missing"
         }
-      ]
+      ],
+      "partial_restatement": {
+        "files": {
+          "parent.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADTOY\nkeys: [USUBJID, VISIT]\ninput:\n  SC: input/scores.csv\n\noutput:\n  path: out.csv\n  columns: [USUBJID, VISIT, AVAL, NOTE]\n\ncolumns:\n  - {name: USUBJID, type: str, label: Subject}\n  - {name: VISIT, type: int, label: Visit}\n  - {name: AVAL, type: float, label: Value}\n  - {name: NOTE, type: str, label: Note, derivation: \"'none'\"}\n\nrows:\n  - id: scores\n    dataset: SC\n    derivations:\n      USUBJID: SC.USUBJID\n      VISIT: SC.VISIT\n      AVAL: SC.SCORE\n      NOTE: SC.COMMENT\n",
+          "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n\nrows:\n  - id: scores\n    derivations:\n      USUBJID: SC.USUBJID\n      VISIT: SC.VISIT\n      AVAL: SC.SCORE\n"
+        },
+        "file_name": "child.yaml",
+        "rows": [
+          {
+            "line": "7",
+            "column": "5",
+            "finding": "partial_restatement",
+            "spec_path": "rows.scores.derivations",
+            "message": "`NOTE` comes back from the parent; list `rows.scores.derivations` in `clear` to replace the mapping, or write only what this layer changes"
+          }
+        ]
+      }
     },
     "selftest": {
       "statuses": [

@@ -1,6 +1,7 @@
-# Installed yamaa_lint: the P-LINT-2 table, fixes and refusals. The lint's
-# complete suite is native (the adapters' lint tests); Python reads the same
-# truth.
+# Installed yamaa_lint: the P-LINT-2 table, fixes, a partial restatement of an
+# inherited mapping, which reads the parent layer, and refusals. The lint's
+# complete suite is native (the adapters' and the facade's lint tests); Python
+# reads the same truth.
 library(yamaa)
 # The truth is JSON, and jsonlite, which reads it, is a suggested package:
 # where it is not installed, the file is skipped.
@@ -23,8 +24,8 @@ read_text <- function(path) rawToChar(readBin(path, "raw", file.info(path)$size)
 write_text(path, truth[["specification_yaml"]])
 
 # Integer columns are decimal text in the truth and doubles in R; the file
-# column is the absolute path with forward slashes.
-check_table <- function(frame, rows, label) {
+# column is the absolute path, with forward slashes, of the file named.
+check_table <- function(frame, rows, label, file_name = truth[["file_name"]]) {
   stopifnot_case(label, "the findings are a data frame" = is.data.frame(frame))
   expect_identical(names(frame), columns, paste(label, "has the lint columns"))
   expect_identical(unname(vapply(frame, typeof, "")), ifelse(columns %in% integers, "double", "character"),
@@ -32,7 +33,7 @@ check_table <- function(frame, rows, label) {
   expect_identical(nrow(frame), length(rows), paste(label, "has the authored rows"))
   files <- frame[["file"]]
   stopifnot_case(label, "a file has forward slashes" = !any(grepl("\\", files, fixed = TRUE)),
-    "a file is the linted file" = all(endsWith(files, paste0("/", truth[["file_name"]]))),
+    "a file is the linted file" = all(endsWith(files, paste0("/", file_name))),
     "a file is absolute" = all(grepl("^(/|[A-Za-z]:/)", files)))
   for (name in setdiff(columns, "file")) {
     cells <- vapply(rows, function(row) row[[name]], character(1))
@@ -50,6 +51,19 @@ check_table(yamaa_lint(path, fix = TRUE), truth[["fixed_rows"]], "lint with fix"
 expect_identical(read_text(path), truth[["fixed_yaml"]], "fix writes the proved fixes")
 check_table(yamaa_lint(path), truth[["fixed_rows"]], "lint after fix")
 cat("fix rewrites the file and lists what remains\n")
+
+# A layer that restates its parent's row template without one derivation: the
+# finding reads the parent, and fix leaves the file as written.
+restatement <- truth[["partial_restatement"]]
+for (name in names(restatement[["files"]])) write_text(file.path(work, name), restatement[["files"]][[name]])
+child <- file.path(work, restatement[["file_name"]])
+for (fix in c(FALSE, TRUE)) {
+  label <- paste("partial restatement, fix =", fix)
+  check_table(yamaa_lint(child, fix = fix), restatement[["rows"]], label, restatement[["file_name"]])
+  expect_identical(read_text(child), restatement[["files"]][[restatement[["file_name"]]]],
+    paste(label, "leaves the file as written"))
+}
+cat("a partial restatement is reported and fix leaves it\n")
 
 write_text(path, truth[["specification_yaml"]])
 for (refusal in truth[["refusals"]]) {

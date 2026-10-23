@@ -19,6 +19,10 @@
 //!   columns (`public-contract.report_columns`). The failed run of
 //!   `public-contract`, assembled as both hosts assemble it, saves only its
 //!   report, whose bytes are compared with `failed_report_csv`.
+//! - **Lint.** The `lint` family's partial restatement, a layer and the
+//!   parent it reads, is linted with and without `--fix`; each finding the
+//!   document prints is compared with the case's rows, all six lint columns,
+//!   and the layer stays as written.
 //!
 //! A case whose rows or files differ by host gives them by host, under
 //! `python`, `r` and `cli`, and the command line reads its own: a case that
@@ -529,4 +533,73 @@ fn a_failed_run_saves_the_report_bytes_both_hosts_save() {
         piece("failed_report_csv"),
         "the failed run's report"
     );
+}
+
+/// The `lint` family's partial restatement: a layer that restates its
+/// parent's row template without one derivation prints the rows both hosts
+/// return, all six lint columns, and `--fix` writes nothing and leaves the
+/// row, since either meaning may be the author's.
+#[test]
+fn a_partial_restatement_prints_the_lint_rows_both_hosts_return() {
+    let lint = family("lint");
+    let case = &lint["partial_restatement"];
+    let name = "partial_restatement";
+    let directory = Scratch::new("parity");
+    for (file, contents) in case["files"].as_object().unwrap() {
+        directory.write(file, contents.as_str().unwrap());
+    }
+    let file = text(case, "file_name");
+    let columns = names(lint, "columns");
+    let integers = names(lint, "integer_columns");
+    let authored = case["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| {
+            columns
+                .iter()
+                .map(|&column| {
+                    let value = if column == "file" {
+                        Value::String(directory.spelled(file))
+                    } else if integers.contains(&column) {
+                        Value::from(text(row, column).parse::<i64>().unwrap())
+                    } else {
+                        row[column].clone()
+                    };
+                    (column, value)
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let mut keys = columns.clone();
+    keys.sort_unstable();
+    for arguments in [["lint", file].as_slice(), &["lint", "--fix", file]] {
+        let document = document(&directory, arguments, name);
+        let findings: Vec<BTreeMap<String, Value>> =
+            serde_json::from_str(raw(&document, "findings", name)).unwrap();
+        let printed = findings
+            .iter()
+            .map(|finding| {
+                assert_eq!(
+                    finding.keys().map(String::as_str).collect::<Vec<_>>(),
+                    keys,
+                    "{name}: a finding's keys"
+                );
+                columns
+                    .iter()
+                    .map(|&column| (column, finding[column].clone()))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            (printed, paths(&document, name)),
+            (authored.clone(), Vec::<String>::new()),
+            "{name}: yamaa {arguments:?}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(directory.join(file)).unwrap(),
+            text(&case["files"], file),
+            "{name}: yamaa {arguments:?} leaves the layer as written"
+        );
+    }
 }

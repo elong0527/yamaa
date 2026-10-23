@@ -44,7 +44,7 @@ the held bytes.
 | read-odm | The two reader documents (the adapters' `odm` fixtures), all 30 columns and cells, archive member selection, the authored sources two refusals read, and each refusal's one issue row and error text (`{source}` stands for the source path the test gave) |
 | parquet-containment | A Parquet file that makes the native decoder panic, its issue row, and a readable file with its saved CSV |
 | plan-reuse | One specification run A, B, A on one object with exact output CSV and issue rows; a changed specification's output; a changed function default's output |
-| lint | One specification with layout, authoring and suppression findings: its exact `lint()` rows, the text the proved fixes write, the rows that remain, and two refusals |
+| lint | One specification with layout, authoring and suppression findings: its exact `lint()` rows, the text the proved fixes write, the rows that remain, and two refusals; and a layer that restates its parent's row template without one derivation, with its `partial_restatement` row, written from the style guide, which `fix` leaves |
 | selftest | The bundled cases in list order, the cases table's columns, the status vocabulary, and the report's lines and the layout of its information line |
 | schema | The four file types, each JSON Schema's dialect, title and `$ref`, the canonical order of its top-level keys, and two refusals with their error text and issue rows |
 | info | The engine information's fields in order, the host vocabulary, and a shipped build's language versions and features |
@@ -257,9 +257,12 @@ reports, it reads the value-level rows of `public-contract.value_level_report`
 from the report that the case's specification declares, which the hosts read
 from `run.report`, and compares the report that the failed run of
 `public-contract` saves with `failed_report_csv`, byte for byte. Those rows
-and bytes hold all fourteen report columns, in order. `cargo test` builds
-and runs the binary, so the leg runs in `make test-rust`, CI's `rust` job, and
-in native qualification's workspace tests on each platform.
+and bytes hold all fourteen report columns, in order. It lints the `lint`
+family's partial restatement with and without `--fix` and compares each
+finding the document prints with the case's rows, all six lint columns.
+`cargo test` builds and runs the binary, so the leg runs in `make test-rust`,
+CI's `rust` job, and in native qualification's workspace tests on each
+platform.
 
 A case whose rows or files differ by host gives them by host, under `python`,
 `r` and `cli`, and each host reads its own: a case that gives them by host
