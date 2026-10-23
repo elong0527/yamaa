@@ -87,6 +87,7 @@ mod table_arrow_table;
 mod table_csv_source;
 mod table_parquet_bytes;
 mod table_parquet_source;
+mod table_public_batches;
 mod table_sas_allocation;
 mod table_sas_source;
 mod uv_lock;
