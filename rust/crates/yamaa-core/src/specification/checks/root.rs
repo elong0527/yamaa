@@ -173,18 +173,15 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
         });
     }
     if spec.keys.is_empty() {
-        let mut finding = LookupFinding::new("keys", C::PreflightEmptyKeys);
-        finding.text("expected", "at least one key column");
-        finding.text("actual", "empty list");
-        findings.push(PreflightFinding::Scalar(finding.diagnostic()));
+        findings.push(PreflightFinding::EmptyKeys);
     }
     for (position, key) in spec.keys.iter().enumerate() {
         let name = key.name.as_str();
         if spec.keys[..position].iter().any(|prior| prior.name == name) {
-            let mut finding =
-                LookupFinding::new(&format!("keys[{position}]"), C::PreflightDuplicateKey);
-            finding.text("identifier", name);
-            findings.push(PreflightFinding::Scalar(finding.diagnostic()));
+            findings.push(PreflightFinding::DuplicateKey {
+                position,
+                identifier: name.into(),
+            });
         }
         if !names.contains(&name) {
             findings.push(PreflightFinding::UndeclaredKey {

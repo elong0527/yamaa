@@ -147,6 +147,11 @@ pub enum PreflightFinding {
     MissingDerivation {
         column: String,
     },
+    EmptyKeys,
+    DuplicateKey {
+        position: usize,
+        identifier: String,
+    },
     UndeclaredKey {
         position: usize,
         column: String,

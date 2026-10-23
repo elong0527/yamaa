@@ -130,6 +130,22 @@ impl PreflightFinding {
                 vec![format!("columns.{column}.derivation")],
                 context([("column", text(column))]),
             ),
+            Self::EmptyKeys => (
+                C::PreflightEmptyKeys,
+                vec!["keys".into()],
+                context([
+                    ("expected", text("at least one key column")),
+                    ("actual", text("empty list")),
+                ]),
+            ),
+            Self::DuplicateKey {
+                position,
+                identifier,
+            } => (
+                C::PreflightDuplicateKey,
+                vec![format!("keys[{position}]")],
+                context([("identifier", text(identifier))]),
+            ),
             Self::UndeclaredKey { position, column } => (
                 C::PreflightUndeclaredKey,
                 vec![format!("keys[{position}]")],

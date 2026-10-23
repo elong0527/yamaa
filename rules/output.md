@@ -20,7 +20,7 @@ repeated entry or an entry naming an undeclared column fails, reporting the
 column name.
 
 Fails: `duplicate_identifier`, `undeclared_column`.
-Evidence: `schema-structure`, `rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv::duplicate`, `rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv::undeclared`.
+Evidence: `schema-structure`, `rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv::duplicate`, `rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv::undeclared`, `rust/tests/host-fixtures/cases.json::an_output_column_that_no_column_declares`, `rust/tests/host-fixtures/cases.json::an_output_column_listed_twice`.
 
 A declared column that `output.columns` does not list is internal
 ([SPEC-7](specification.md#spec-7)). `output.order_by` orders the artifact's
@@ -28,6 +28,14 @@ rows independent of construction order ([OUTPUT-11](#output-11)). Every
 run also builds the run report of [Verification](verification.md); the report
 describes the run and is neither a second derivation target nor a source
 within the specification.
+
+A repeated entry fails as `duplicate_identifier` and an entry naming an
+undeclared column as `undeclared_column`, at the entry, `output.columns[<i>]`,
+naming the column in `column`, and a repeated one in `identifier` too. A
+submission that composes the specification refuses them the same way, at the
+entry under the specification's listing,
+`<section>.specs[<n>].output.columns[<i>]`
+([DEFINE-7](profiles/define-xml.md#define-7)).
 
 <a id="output-2"></a>
 
@@ -39,11 +47,14 @@ list, an unknown or internal column, or a repeated column, and reports the
 invalid name when there is one.
 
 Fails: `duplicate_identifier`, `internal_column_in_keys`, `invalid_field_type`, `undeclared_column`.
-Evidence: `negative-keys-internal`, `rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv::internal-key`, `rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv::declaration-order`, `rust/tests/host-fixtures/cases.json::a_key_that_is_not_an_output_column`.
+Evidence: `negative-keys-internal`, `rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv::internal-key`, `rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv::declaration-order`, `rust/tests/host-fixtures/cases.json::a_key_that_is_not_an_output_column`, `rust/tests/host-fixtures/cases.json::a_key_that_no_column_declares`, `rust/tests/host-fixtures/cases.json::a_key_listed_twice`, `rust/tests/host-fixtures/cases.json::an_empty_key_list`.
 
 An empty list fails as `invalid_field_type`, an unknown column as
 `undeclared_column`, an internal column as `internal_column_in_keys` and a
-repeated column as `duplicate_identifier`.
+repeated column as `duplicate_identifier`. A submission that composes the
+specification refuses `keys` the same way, at the key under the
+specification's listing, `<section>.specs[<n>].keys[<i>]`, and an empty list
+at `<section>.specs[<n>].keys` ([DEFINE-7](profiles/define-xml.md#define-7)).
 
 <a id="output-3"></a>
 
