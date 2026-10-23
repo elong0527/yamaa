@@ -23,9 +23,9 @@ of an operation fails.
 
 Evidence: `schema-expressions`, `rust/crates/yamaa-core/tests/schema_validation.rs::registry_and_bare_derivation_diagnostics_preserve_paths_and_context`.
 
-`schema_expression_*.yaml` and `schema_function.yaml` contribute the entries of
-the `expressions` registry under [Schema language](reference/schema-language.md),
-and `schema_derivation.yaml` exposes that registry as the `expression` type.
+`schema_expression_*.yaml` contribute the entries of the `expressions`
+registry under [Schema language](reference/schema-language.md), and
+`schema_derivation.yaml` exposes that registry as the `expression` type.
 Most keywords name their input variables directly; text in an expression
 field, a YAML number, Boolean or null, and a structured `source` are leaves
 ([EXPR-3](#expr-3)).
