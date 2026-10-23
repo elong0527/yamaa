@@ -7,7 +7,6 @@ use std::{
     rc::Rc,
     time::{Duration, Instant},
 };
-use yamaa::CancellationToken;
 
 // R's SEXP is an opaque pointer. Use that pointer's ABI directly, without
 // exposing extendr-ffi's non-exhaustive SEXPREC definition in an extern block.
@@ -17,7 +16,6 @@ struct State {
     condition: RefCell<Option<Robj>>,
     checked: RefCell<Option<Instant>>,
     classes: Strings,
-    token: CancellationToken,
 }
 thread_local! {
     static ACTIVE: RefCell<Option<Rc<State>>> = const { RefCell::new(None) };
@@ -33,7 +31,6 @@ impl Scope {
             condition: RefCell::new(None),
             checked: RefCell::new(None),
             classes: Strings::from_values(["interrupt", "error"]),
-            token: CancellationToken::with_probe(|| poll(false)),
         });
         Self {
             previous: ACTIVE.with(|active| active.replace(Some(Rc::clone(&state)))),
@@ -53,15 +50,6 @@ impl Drop for Scope {
     }
 }
 
-pub(super) fn token() -> CancellationToken {
-    ACTIVE.with(|active| {
-        active
-            .borrow()
-            .as_ref()
-            .map_or_else(CancellationToken::new, |state| state.token.clone())
-    })
-}
-
 /// Keep the original condition before cancellation drops a callback's attempt.
 pub(super) fn remember(condition: Robj) {
     let state = ACTIVE.with(|active| active.borrow().clone());
@@ -73,7 +61,11 @@ pub(super) fn remember(condition: Robj) {
     }
 }
 
-fn poll(force: bool) -> bool {
+/// Whether the active call is cancelled: an interrupt it kept, or one R has
+/// pending, checked at most every 20 ms unless `force` (D186). The engine
+/// asks this probe at its cancellation points and once more as a call
+/// returns.
+pub(super) fn poll(force: bool) -> bool {
     let state = ACTIVE.with(|active| active.borrow().clone());
     state.is_some_and(|state| poll_state(&state, force))
 }

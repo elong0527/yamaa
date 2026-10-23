@@ -1,8 +1,7 @@
 //! The engine's C ABI: the records, callbacks and function table that a host
 //! binding and the engine exchange, as `repr(C)` types (the design on #2870,
 //! sections 3.4 to 3.6). `rust/crates/yamaa-engine` implements the table,
-//! and [`client`](crate::client) calls it; no package links it yet, and both
-//! bindings still call the facade.
+//! which both bindings link and call through [`client`](crate::client).
 //!
 //! The ABI is internal (#3030 D225): any release may change it with a new
 //! [`BOUNDARY_VERSION`](crate::BOUNDARY_VERSION). Within one boundary version

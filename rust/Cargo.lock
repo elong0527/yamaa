@@ -1404,9 +1404,11 @@ dependencies = [
 name = "yamaa-r"
 version = "1.0.0-rc.1"
 dependencies = [
+ "arrow-array",
+ "arrow-schema",
  "extendr-api",
- "yamaa",
  "yamaa-boundary",
+ "yamaa-engine",
 ]
 
 [[package]]

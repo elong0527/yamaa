@@ -1,15 +1,19 @@
-//! Copy shared Arrow columns into plain owned R vectors.
+//! Copy an engine table's shared Arrow columns, read from a fresh stream,
+//! into plain owned R vectors.
 //!
 //! Every value either keeps its exact value in R or the conversion fails:
 //! integers become doubles up to 2^53 in magnitude, text becomes character
 //! unless it contains NUL, dates become `Date` and zone-free datetimes
 //! `POSIXct` in UTC. List columns, which only engine-built tables such as
 //! issues carry, become lists of such vectors, with `NULL` for a missing list.
-use extendr_api::prelude::*;
-use yamaa::{
-    Array, DataType, Date32Array, Float64Array, Int64Array, LargeStringArray, ListArray,
-    StringArray, StringViewArray, Table, TimeUnit, TimestampSecondArray,
+use arrow_array::ffi_stream::{ArrowArrayStreamReader, FFI_ArrowArrayStream};
+use arrow_array::{
+    Array, Date32Array, Float64Array, Int64Array, LargeStringArray, ListArray, RecordBatch,
+    RecordBatchReader, StringArray, StringViewArray, TimestampSecondArray,
 };
+use arrow_schema::{DataType, TimeUnit};
+use extendr_api::prelude::*;
+use yamaa_boundary::client::{Owned, Refused};
 
 /// The largest magnitude every integer below it holds exactly in binary64.
 const EXACT_DOUBLE_MAGNITUDE: u64 = 1 << 53;
@@ -23,11 +27,29 @@ enum Column {
     List(Vec<Option<Robj>>),
 }
 
-pub(super) fn frame(table: &Table) -> std::result::Result<Robj, String> {
-    let mut columns = Vec::with_capacity(table.columns().len());
-    for (index, field) in table.columns().iter().enumerate() {
-        let mut column = empty(field.data_type(), table.rows())?;
-        for batch in table.batches() {
+/// The data frame of an engine table: its columns read whole from a fresh
+/// stream, which a failed conversion releases with every batch it read.
+pub(super) fn frame(table: &Owned) -> std::result::Result<Robj, String> {
+    let stream = table.engine().export(table.handle());
+    let mut stream = stream
+        .map_err(|refused| match refused {
+            Refused::Engine { message, .. } | Refused::Boundary(message) => message,
+            Refused::Cancelled => "the call was cancelled".to_owned(),
+        })?
+        .into_raw();
+    // SAFETY: the engine's stream has the C stream interface's layout;
+    // `from_raw` moves it out and leaves the source released.
+    let stream = unsafe { FFI_ArrowArrayStream::from_raw((&raw mut stream).cast()) };
+    let reader = ArrowArrayStreamReader::try_new(stream).map_err(|error| error.to_string())?;
+    let schema = reader.schema();
+    let batches = reader
+        .collect::<std::result::Result<Vec<RecordBatch>, _>>()
+        .map_err(|error| error.to_string())?;
+    let rows: usize = batches.iter().map(RecordBatch::num_rows).sum();
+    let mut columns = Vec::with_capacity(schema.fields().len());
+    for (index, field) in schema.fields().iter().enumerate() {
+        let mut column = empty(field.data_type(), rows)?;
+        for batch in &batches {
             extend(&mut column, batch.column(index).as_ref())?;
         }
         columns.push((field.name().as_str(), finish(column)?));
@@ -36,8 +58,7 @@ pub(super) fn frame(table: &Table) -> std::result::Result<Robj, String> {
     result
         .set_class(["data.frame"])
         .map_err(|_| "data-frame class")?;
-    let rows =
-        i32::try_from(table.rows()).map_err(|_| "R data frames hold at most 2^31 - 1 rows")?;
+    let rows = i32::try_from(rows).map_err(|_| "R data frames hold at most 2^31 - 1 rows")?;
     result
         .set_attrib(
             "row.names",
