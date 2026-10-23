@@ -1262,7 +1262,7 @@ class PublicationBoundary(unittest.TestCase):
             [endpoint for endpoint in endpoints if "/runs" in endpoint.split("?")[0]],
             [
                 f"repos/{REPOSITORY['full_name']}/actions/runs/7",
-                f"repos/{REPOSITORY['full_name']}/actions/runs/7/attempts/2/jobs?per_page=100",
+                f"repos/{REPOSITORY['full_name']}/actions/runs/7/attempts/2/jobs?per_page=30",
                 f"repos/{REPOSITORY['full_name']}/actions/runs/7/artifacts?per_page=100",
             ],
         )
@@ -1890,7 +1890,7 @@ class CandidateReleaseBody(unittest.TestCase):
             f"repos/{name}": dict(REPOSITORY),
             f"repos/{name}/releases?per_page=100": [[]],
             f"repos/{name}/actions/runs/7": native_run(),
-            f"repos/{name}/actions/runs/7/attempts/2/jobs?per_page=100": [
+            f"repos/{name}/actions/runs/7/attempts/2/jobs?per_page=30": [
                 {"jobs": native_jobs()}
             ],
             f"repos/{name}/actions/runs/7/artifacts?per_page=100": [

@@ -665,9 +665,14 @@ def select_release(root, repository_name, tag, destination, run_id=None):
         coverage = run_coverage(run, repository, revision)
     except ValueError as error:
         raise ValueError(f"native run {run_id} cannot qualify: {error}") from None
+    # Pages of 30, not GitHub's maximum of 100: GitHub lists the jobs of a
+    # re-run attempt more slowly than a first attempt's, and a native run's
+    # jobs at 100 per page pass its request time limit, so the listing fails
+    # with HTTP 502. Re-running a job keeps a run eligible, so its final
+    # attempt must still list.
     jobs = paginated(
         repository_name,
-        f"actions/runs/{run['id']}/attempts/{run['run_attempt']}/jobs?per_page=100",
+        f"actions/runs/{run['id']}/attempts/{run['run_attempt']}/jobs?per_page=30",
         "jobs",
     )
     jobs = validate_jobs(jobs, coverage, run)
