@@ -109,8 +109,8 @@ fn streamed_output(streamed: &Arc<yamaa::Streamed>) -> PyResult<Option<Table>> {
         .progress()
         .map_err(|error| refusal(streamed, &error))?;
     match progress {
-        yamaa::Progress::Cancelled => Err(refusal(streamed, &Error::Cancelled)),
-        yamaa::Progress::Ended => {
+        yamaa::StreamProgress::Cancelled => Err(refusal(streamed, &Error::Cancelled)),
+        yamaa::StreamProgress::Ended => {
             let run = streamed.run().map_err(|error| refusal(streamed, &error))?;
             Ok(match run.output() {
                 Some(table) => Some(Table::from(table)),

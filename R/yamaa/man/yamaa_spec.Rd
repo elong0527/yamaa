@@ -58,7 +58,16 @@ An object with three methods:
     \code{$issues} what is wrong, \code{$report} what the run read, counted
     and checked, and \code{$save()} writes the declared report file, then the
     output dataset, and returns their absolute paths invisibly, in that order.
-    A failed run writes only its report file.}
+    A failed run writes only its report file.
+
+    \code{$run(stream = TRUE)} builds the dataset as its output is read, and
+    reads nothing until then: \code{$output} is an Arrow C stream, an
+    external pointer of class \code{nanoarrow_array_stream}, which nanoarrow
+    and arrow read, one batch per pull; the first pull builds the run. The
+    other fields give the run once its stream has ended, and run it whole
+    when nothing has read the output, whose stream then reads the dataset it
+    keeps. Releasing the stream before its end cancels the run, which then
+    saves nothing.}
 }
 A failure raises a condition of class \code{yamaa_error} whose \code{issues}
 data frame says why; for a refused \code{$save()}, its \code{paths} lists

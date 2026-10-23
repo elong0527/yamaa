@@ -79,7 +79,6 @@ yamaa::Parameter: pub use yamaa::functions::Parameter
 yamaa::Partitions: pub use yamaa::engine::Partitions
 yamaa::Plans: pub use yamaa::api::Plans
 yamaa::Position: pub use yamaa::diagnostic::Position
-yamaa::Progress: pub use yamaa::stream::Progress
 yamaa::ProjectFunctions: pub use yamaa::functions::ProjectFunctions
 yamaa::ProjectRun: pub use yamaa::api::ProjectRun
 yamaa::REPORT_COLUMNS: pub use yamaa::diagnostic::REPORT_COLUMNS
@@ -111,6 +110,7 @@ yamaa::Severity: pub use yamaa::diagnostic::Severity
 yamaa::Signature: pub use yamaa::functions::Signature
 yamaa::SourceSpan: pub use yamaa::diagnostic::SourceSpan
 yamaa::Status: pub use yamaa::api::Status
+yamaa::StreamProgress: pub use yamaa::stream::StreamProgress
 yamaa::Streamed: pub use yamaa::stream::Streamed
 yamaa::StringArray: pub use yamaa::table::StringArray
 yamaa::StringViewArray: pub use yamaa::table::StringViewArray
@@ -595,17 +595,17 @@ yamaa::stream::Batches: impl Iterator for Batches
 yamaa::stream::Batches: pub struct Batches
 yamaa::stream::Batches::into_stream: pub fn into_stream(self) -> FFI_ArrowArrayStream
 yamaa::stream::Batches::schema: pub fn schema(&self) -> SchemaRef
-yamaa::stream::Progress: pub enum Progress [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::stream::Progress::Cancelled: Cancelled
-yamaa::stream::Progress::Ended: Ended
-yamaa::stream::Progress::Reading: Reading
-yamaa::stream::Progress::Unread: Unread
 yamaa::stream::RunGuard: impl Deref for RunGuard<'_>
 yamaa::stream::RunGuard: impl DerefMut for RunGuard<'_>
 yamaa::stream::RunGuard: pub struct RunGuard<'a>
+yamaa::stream::StreamProgress: pub enum StreamProgress [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::stream::StreamProgress::Cancelled: Cancelled
+yamaa::stream::StreamProgress::Ended: Ended
+yamaa::stream::StreamProgress::Reading: Reading
+yamaa::stream::StreamProgress::Unread: Unread
 yamaa::stream::Streamed: impl Streamed
 yamaa::stream::Streamed: pub struct Streamed
-yamaa::stream::Streamed::progress: pub fn progress(&self) -> Result<Progress, Error>
+yamaa::stream::Streamed::progress: pub fn progress(&self) -> Result<StreamProgress, Error>
 yamaa::stream::Streamed::reader: pub fn reader(&self) -> Batches
 yamaa::stream::Streamed::run: pub fn run(&self) -> Result<RunGuard<'_>, Error>
 yamaa::stream::Streamed::schema: pub fn schema(&self) -> Option<&SchemaRef>
