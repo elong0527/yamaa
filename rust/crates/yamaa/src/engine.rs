@@ -162,7 +162,7 @@ impl EngineOptions {
     ///
     /// let resolver = Arc::new(MemoryResolver::new());
     /// resolver.insert("/", "spec.yaml", "spec:1", Arc::from(
-    ///     &b"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv}}\noutput: {path: out.csv, columns: [ID, NAME]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: NAME, type: str, derivation: SRC.NAME}\n"[..],
+    ///     &b"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: out.csv, columns: [ID, NAME]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: NAME, type: str, derivation: SRC.NAME}\n"[..],
     /// ));
     /// resolver.insert("/spec.yaml", "input.csv", "input:1", Arc::from(&b"ID,NAME\n1,alpha\n2,beta\n3,gamma\n"[..]));
     /// let engine = Engine::new(
