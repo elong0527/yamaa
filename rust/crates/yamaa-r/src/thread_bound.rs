@@ -1,19 +1,17 @@
-//! Single-threaded R object ownership for facade handles.
+//! Single-threaded R object ownership for the objects the engine keeps.
 //!
 //! R API objects are neither `Send` nor `Sync`: they may only be created,
 //! used and dropped on the R thread. Engine operations for this host run on
-//! the calling R thread in normal use, but the facade types that carry these
-//! objects (`FunctionHandle`, `HostPayload`) are `Send`, so a concurrent
-//! attempt from another thread is well-typed. A `Mutex` only serializes such
-//! access; it does not move execution to the R thread.
+//! the calling R thread in normal use, but the engine keeps a bound function
+//! or a condition for as long as the result that holds it lives, and drops
+//! it on the thread that releases that result.
 //!
 //! `ThreadBound` therefore records the creating thread. Every access goes
-//! through [`ThreadBound::get`], which reports a mismatch as a typed
-//! `host_thread` error instead of invoking the R API off-thread. Dropping
-//! off-thread would be equally undefined (unprotect and friends are
-//! thread-bound), so a mismatched drop leaks the value instead of freeing it.
-
-use yamaa::FunctionError;
+//! through [`ThreadBound::get`], which answers `None` on another thread, so
+//! that the caller reports a `host_thread` failure instead of invoking the R
+//! API off-thread. Dropping off-thread would be equally undefined (unprotect
+//! and friends are thread-bound), so a mismatched drop leaks the value
+//! instead of freeing it.
 
 pub(crate) struct ThreadBound<T> {
     value: std::mem::ManuallyDrop<T>,
@@ -29,14 +27,8 @@ impl<T> ThreadBound<T> {
     }
 
     /// Borrow the wrapped value when called on the creating thread.
-    pub(crate) fn get(&self) -> Result<&T, FunctionError> {
-        if std::thread::current().id() == self.owner {
-            Ok(&self.value)
-        } else {
-            Err(FunctionError::Internal {
-                code: "host_thread",
-            })
-        }
+    pub(crate) fn get(&self) -> Option<&T> {
+        (std::thread::current().id() == self.owner).then_some(&*self.value)
     }
 }
 
@@ -56,6 +48,7 @@ impl<T> Drop for ThreadBound<T> {
 // shares observe the handle without touching the R object.
 unsafe impl<T> Send for ThreadBound<T> {}
 
-// SAFETY: same contract. Shared references may cross threads inside facade
-// handles, but the contents are only dereferenced via the checked accessor.
+// SAFETY: same contract. Shared references may cross threads inside the
+// engine's handles, but the contents are only dereferenced via the checked
+// accessor.
 unsafe impl<T> Sync for ThreadBound<T> {}

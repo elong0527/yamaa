@@ -1,24 +1,24 @@
 //! The interface handshake of the R binding, the gate that every native
-//! routine passes, and the census of the binding's live handles
+//! routine passes, and the census of the engine's live handles
 //! (`rust/interface/README.md`, "Version and feature handshake").
 //!
 //! The generated `.onLoad` calls `interface_handshake` before any other
-//! routine. Every other routine replies through `api_entry::reply`, which
-//! passes the gate first, so until a negotiation is accepted each one
-//! refuses with no issues.
+//! routine; the binding sends the request to the engine it links. Every
+//! other routine replies through `api_entry::reply`, which passes the gate
+//! first, so until a negotiation is accepted each one refuses with no
+//! issues.
 use crate::api_entry::{answer, reply};
 use crate::function_callback::text_at;
 use extendr_api::prelude::*;
-use yamaa_boundary::{Census, EngineFacts, Gate, Outcome, Value, DEPTH};
+use yamaa_boundary::client::{Engine, Gate};
+use yamaa_boundary::{Outcome, Value, DEPTH};
 
-/// The gate, which the first accepted handshake opens.
+/// The gate, which the first accepted handshake opens with the engine's
+/// table.
 static GATE: Gate = Gate::new();
 
-/// The binding's live native handles, by kind.
-pub(crate) static CENSUS: Census = Census::new();
-
-/// Refuse a native routine until the interface handshake succeeds.
-pub(crate) fn gate() -> std::result::Result<(), String> {
+/// The engine, once the interface handshake succeeded.
+pub(crate) fn gate() -> std::result::Result<Engine, String> {
     GATE.pass().map_err(|closed| closed.to_string())
 }
 
@@ -33,13 +33,12 @@ fn version(version: u32) -> Robj {
 /// the gate; a later call answers its request and changes nothing.
 #[extendr]
 fn interface_handshake(request: Robj) -> List {
-    answer(|| {
-        // The engine information names no host version, which nothing here
-        // reads.
-        let info = yamaa::info(yamaa::Host::R, None);
-        let engine = EngineFacts::new(&info.features, yamaa::VERSION, &info.language_versions);
+    answer(None, || {
         let absent = |value: Option<u32>| value.map_or_else(|| NULL.into_robj(), version);
-        let record = match GATE.negotiate(&value(&request, 0), &engine) {
+        // SAFETY: the binding links the engine, whose negotiation entry this
+        // is.
+        let outcome = unsafe { GATE.negotiate(&value(&request, 0), yamaa_engine::negotiate) };
+        let record = match outcome {
             Outcome::Accepted(accepted) => list!(
                 accepted = true,
                 version = version(accepted.version),
@@ -60,12 +59,12 @@ fn interface_handshake(request: Robj) -> List {
     })
 }
 
-/// The live native handles by kind, in the census's order, as a named
+/// The engine's live handles by kind, in the census's order, as a named
 /// integer vector: the private accessor of the handle lifetime suites.
 #[extendr]
 fn live_handles() -> List {
-    reply(|| {
-        let counts = CENSUS.counts();
+    reply(|engine| {
+        let counts = engine.census().handles;
         let mut census = r!(counts
             .iter()
             .map(|(_, count)| i32::try_from(*count).unwrap_or(i32::MAX))

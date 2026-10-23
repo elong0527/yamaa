@@ -192,6 +192,7 @@ check_gate <- function() {
       project_submission = list(path, NULL, NULL, r_version),
       lint = list(list(path), FALSE),
       schema = list(charToRaw("spec")),
+      conditions = list(),
       info = list(r_version),
       selftest = list(r_version),
       live_handles = list()))

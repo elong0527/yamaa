@@ -5,9 +5,9 @@
 parser table `COMMANDS` and its flag constants in
 rust/crates/yamaa-cli/src/arguments.rs, and the usage text and exit statuses
 in main.rs. Neither side can then change alone. The JSON objects the commands
-print are the facade's issue, lint finding, selftest case and engine
-information records, so their keys are the columns and fields the hosts
-return.
+print are the facade's issue, lint finding, selftest case, catalogue
+condition and engine information records, so their keys are the columns and
+fields the hosts return.
 """
 
 import re
@@ -157,12 +157,19 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual(
             {
                 key: json[key]
-                for key in ("issue_keys", "finding_keys", "case_keys", "info_keys")
+                for key in (
+                    "issue_keys",
+                    "finding_keys",
+                    "case_keys",
+                    "condition_keys",
+                    "info_keys",
+                )
             },
             {
                 "issue_keys": columns("issues"),
                 "finding_keys": columns("lint"),
                 "case_keys": columns("selftest_cases"),
+                "condition_keys": columns("conditions"),
                 "info_keys": [field["name"] for field in info],
             },
         )

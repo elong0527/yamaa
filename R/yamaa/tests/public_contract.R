@@ -28,8 +28,8 @@ namespace <- asNamespace("yamaa")
 expect_identical(as.character(packageVersion("yamaa")), "1.0.0", "the package version")
 expect_identical(yamaa:::.core_version(), "1.0.0-rc.1", "the engine's version")
 expect_identical(sort(getNamespaceExports("yamaa")),
-  c("yamaa_info", "yamaa_lint", "yamaa_project", "yamaa_read_odm", "yamaa_schema",
-    "yamaa_selftest", "yamaa_spec"),
+  c("yamaa_conditions", "yamaa_info", "yamaa_lint", "yamaa_project", "yamaa_read_odm",
+    "yamaa_schema", "yamaa_selftest", "yamaa_spec"),
   "the exported functions")
 expect_identical(getNamespaceInfo("yamaa", "S3methods")[, 3L],
     c("names.yamaa_check", "length.yamaa_check", "print.yamaa_check", "format.yamaa_check",

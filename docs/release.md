@@ -298,7 +298,14 @@ starts at 1.0.0 (#3030 D1).
   each may report; the condition and the rule that an existing failure
   reports; a `context` key that a benchmark's expected `error.yaml` pins,
   with its value (#3030 D156); and the twelve columns of `issues` and the
-  fourteen of the run report, in order.
+  fourteen of the run report, in order. Each release's condition catalogue,
+  which `conditions()` returns, is also that release's committed
+  `yaml/conditions.yaml` at its tag, as each JSON Schema is: every condition
+  with its phases, message template and former name, and every condition a
+  release retired; for 1.0.0 it is
+  `https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v1.0.0/yaml/conditions.yaml`.
+  The rules that `conditions()` adds are those that the core registry's
+  causes cite (#3700).
 - Host functions and the command line: the frozen sections of
   `rust/interface/bindings.yaml`, as `rust/interface/manifest.txt` lists
   them. They hold the Python, R and command-line names; the arguments, with
@@ -891,8 +898,8 @@ notices remain in the distributed `LICENSE-YAML.txt`.
 
 `tools/staging/engine_bundle.py` stages each host's engine source bundle,
 from which both source packages build (#3030 D55). The bundle holds the
-engine crates `yamaa-core`, `yamaa-adapters` and `yamaa` with `yamaa-boundary`
-and that host's binding crate; the canonical workspace manifest with `crates/*` as its
+engine crates `yamaa-core`, `yamaa-adapters` and `yamaa` with `yamaa-boundary`,
+`yamaa-engine` and that host's binding crate; the canonical workspace manifest with `crates/*` as its
 members, which in the bundle are exactly those crates, and with the profiles
 that the host builds with, so that the R bundle's leaves out
 `[profile.dist]`, which only the wheels and the command-line binaries
@@ -1232,8 +1239,10 @@ owns decoding behavior.
 - Generate both hosts' binding declarations from
   `rust/interface/bindings.yaml` and compare them in the repository check
   and the native qualification lane. Both hosts run the version and feature
-  handshake of `yamaa-boundary` before any other native call (#3679); an
-  engine that loads separately from the host packages is later work (#2870).
+  handshake of `yamaa-boundary` before any other native call (#3679), and
+  reach the engine they link only through its client, over the engine's
+  internal C ABI (D225 on #3030, #3702); an engine that loads separately
+  from the host packages, for tests only, is later work (#3702).
 - The `yamaa` facade crate is the only supported Rust surface;
   `yamaa-adapters` and `yamaa-core` are internal and may change in any
   release.

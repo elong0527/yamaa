@@ -50,9 +50,10 @@ definition against the handwritten PyO3 surface (``#[pyclass]`` names,
 method or private export is drift, not a silent deletion.
 
 The one path translation is the version constant: the definition names
-``yamaa_core::VERSION``, but ``yamaa-python`` depends only on the ``yamaa``
-facade crate, which re-exports that constant unchanged, so the registration
-reads ``yamaa::VERSION``.
+``yamaa_core::VERSION``, which is core's package version, but
+``yamaa-python`` reaches the engine only through the boundary's client.
+Every workspace crate carries the workspace's version, so the registration
+reads the binding's own, ``env!("CARGO_PKG_VERSION")``.
 
 R declarations are reconciled against every handwritten ``#[extendr]`` function,
 including argument order/types and return types.
@@ -981,7 +982,7 @@ def _registration(export):
     if kind == "constant":
         if rust != "yamaa_core::VERSION":
             raise ValueError(f"unsupported constant source for {name}: {rust}")
-        return ['    module.add("_CORE_VERSION", yamaa::VERSION)?;']
+        return ['    module.add("_CORE_VERSION", env!("CARGO_PKG_VERSION"))?;']
     if kind == "class":
         return [f"    module.add_class::<{rust}>()?;"]
     if kind == "exception":
