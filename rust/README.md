@@ -90,8 +90,9 @@ profile when adapting the boundary.
 ## Arrow host handoff
 
 The Python bridge uses Arrow-rs 55.2.0 C Data/Stream callbacks and PyArrow
->=23.0.1. The R binding instead copies each table into plain R vectors in Rust,
-so no Arrow stream crosses the R boundary. An exported stream owns a reader
+>=23.0.1. The R binding instead reads the engine's stream in Rust and copies
+each table into plain R vectors, so no Arrow stream reaches R. An exported
+stream owns a reader
 with an independent cursor and shared immutable Arrow array references. Each
 emitted C Data array
 owns its own buffer references. Dropping the build, stream or exporter cannot
@@ -195,10 +196,11 @@ are implemented.
 The supported API lives in one new crate, `rust/crates/yamaa` (package name
 `yamaa`), a small facade over `yamaa-adapters` and `yamaa-core`. The owner
 decided this on 2026-10-16: a separate facade crate, not a module inside
-`yamaa-adapters`. Host crates depend only on the facade (plus their language
-runtime, and for the two bindings `yamaa-boundary`, which holds their
-interface handshake and no engine code), so the compiler enforces the
-boundary: the 69 `pub mod`s of
+`yamaa-adapters`. Host crates reach the engine only through the facade:
+the command line depends on it (plus its language runtime), and the two
+bindings link `yamaa-engine`, the facade behind a C ABI, and call it through
+the client of `yamaa-boundary`, which holds no engine code (D225 on #3030).
+So the compiler enforces the boundary: the 69 `pub mod`s of
 `yamaa-adapters` and the 107 of `yamaa-core` stay internal and cannot be
 reached past the facade. The facade re-exports no adapters or core type; every
 public type below is facade-owned, and adapters/core types are converted at

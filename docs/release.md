@@ -891,8 +891,8 @@ notices remain in the distributed `LICENSE-YAML.txt`.
 
 `tools/staging/engine_bundle.py` stages each host's engine source bundle,
 from which both source packages build (#3030 D55). The bundle holds the
-engine crates `yamaa-core`, `yamaa-adapters` and `yamaa` with `yamaa-boundary`
-and that host's binding crate; the canonical workspace manifest with `crates/*` as its
+engine crates `yamaa-core`, `yamaa-adapters` and `yamaa` with `yamaa-boundary`,
+`yamaa-engine` and that host's binding crate; the canonical workspace manifest with `crates/*` as its
 members, which in the bundle are exactly those crates, and with the profiles
 that the host builds with, so that the R bundle's leaves out
 `[profile.dist]`, which only the wheels and the command-line binaries
@@ -1232,8 +1232,10 @@ owns decoding behavior.
 - Generate both hosts' binding declarations from
   `rust/interface/bindings.yaml` and compare them in the repository check
   and the native qualification lane. Both hosts run the version and feature
-  handshake of `yamaa-boundary` before any other native call (#3679); an
-  engine that loads separately from the host packages is later work (#2870).
+  handshake of `yamaa-boundary` before any other native call (#3679), and
+  reach the engine they link only through its client, over the engine's
+  internal C ABI (D225 on #3030, #3702); an engine that loads separately
+  from the host packages, for tests only, is later work (#3702).
 - The `yamaa` facade crate is the only supported Rust surface;
   `yamaa-adapters` and `yamaa-core` are internal and may change in any
   release.

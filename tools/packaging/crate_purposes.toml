@@ -2,15 +2,17 @@
 # covering every locked release of that name.
 #
 # A host's source archive ships the crates of its trimmed lock, which
-# tools/staging/engine_bundle.py stages (#3030 D55): the engine crates, that
-# host's binding crate, the vendored YAML parser and every crates.io crate
+# tools/staging/engine_bundle.py stages (#3030 D55): the engine crates, the
+# boundary crates, that host's binding crate, the vendored YAML parser and
+# every crates.io crate
 # that they reach on any platform with any feature, all vendored. The crates
 # that only build scripts and procedural macros use are shipped and compiled
 # with the rest. The crates that Cargo locks for a platform or a feature that
 # no yamaa build selects are shipped as their manifests alone, never compiled
 # (tools/staging/vendor_crates.py). Each of them has a purpose too. The
 # command line has no source archive; its trimmed lock, with yamaa-cli in
-# place of a binding crate, is the graph that its binaries build from, and
+# place of the boundary and binding crates, is the graph that its binaries
+# build from, and
 # its inventory lists it too.
 #
 # A purpose is a short phrase written from the crate's place in yamaa's
@@ -59,12 +61,12 @@ alloc-no-stdlib = "transitive dependency of brotli: its allocator interface"
 alloc-stdlib = "transitive dependency of brotli: the standard library allocator behind that interface"
 android_system_properties = "not compiled: iana-time-zone's time zone lookup on Android"
 arraydeque = "transitive dependency of yamaa-saphyr-parser: the fixed-capacity buffer of its scanner"
-arrow-array = "Arrow arrays: the tables of yamaa-adapters and the Rust facade, and the Python hand-off through the Arrow C data interface"
+arrow-array = "Arrow arrays: the tables of yamaa-adapters and the Rust facade, and the Arrow C streams through which the engine hands tables to both bindings"
 arrow-buffer = "Arrow buffers that table columns are built from (yamaa-adapters)"
 arrow-cast = "transitive dependency of parquet: conversions between Parquet and Arrow types"
 arrow-data = "transitive dependency of arrow-array: the data layout of every Arrow array"
 arrow-ipc = "Arrow IPC streams of tables, and the Arrow schema embedded in Parquet files (yamaa-adapters)"
-arrow-schema = "Arrow schemas and data types of those tables (yamaa-adapters and the Rust facade)"
+arrow-schema = "Arrow schemas and data types of those tables (yamaa-adapters, the Rust facade and both bindings)"
 arrow-select = "transitive dependency of parquet and arrow-cast: Arrow selection kernels"
 atoi = "transitive dependency of arrow-cast: integer parsing"
 autocfg = "build script: compiler feature probes of num-traits, and of memoffset in the Python binding"
@@ -192,11 +194,12 @@ windows-strings = "not compiled: transitive dependency of windows-core"
 windows-sys = "handle-relative file IO and atomic publication on Windows (yamaa-adapters), and console Ctrl+C handling in the command line"
 winnow = "transitive dependency of toml and toml_parser: parser combinators"
 wit-bindgen = "not compiled: transitive dependency of wasip2 (WASI preview 2 only)"
-yamaa = "the Rust facade over yamaa-core and yamaa-adapters, which the host bindings and the command line depend on"
+yamaa = "the Rust facade over yamaa-core and yamaa-adapters, which the engine's C ABI and the command line depend on"
 yamaa-adapters = "the engine's codecs, storage formats, physical IO and filesystem environment capture"
-yamaa-boundary = "the engine boundary of the host bindings: the interface version and feature handshake, the gate every native call passes and the census of live native handles"
+yamaa-boundary = "the engine boundary of the host bindings: the interface version and feature handshake, the gate every native call passes, the census of live native handles and the client of the engine's C ABI"
 yamaa-cli = "the command line: the yamaa executable of the command-line archives"
 yamaa-core = "the language engine: specification admission, expressions, dataset execution, project lifecycle, verification and Define rendering"
+yamaa-engine = "the engine's C ABI over the Rust facade: the function table, handles and Arrow C streams that both bindings link and call through yamaa-boundary"
 yamaa-python = "the Python binding: the native extension module of the Python package"
 yamaa-r = "the R binding: the static library that the R package links"
 yamaa-saphyr-parser = "the YAML parser (the yaml feature): saphyr-parser 0.2.1 with the reviewed compact-flow fix and 0.2.2's raw NUL fix, vendored in rust/vendor"
