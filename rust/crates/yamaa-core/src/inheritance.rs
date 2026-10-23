@@ -98,11 +98,12 @@ pub enum Error<E> {
     /// A layer declares a header this traversal does not read: a version the
     /// engine does not read, 0.5 included, or a type other than `spec`
     /// (SCHEMA-2, LAYER-4), reported at the entry's header or at the field
-    /// `named` that names the layer, which the layer `declaring` writes.
+    /// `named` that names the layer, which the layer `declaring` writes. The
+    /// mismatch is boxed, so the error stays small.
     Header {
         source: String,
         entry: String,
-        mismatch: HeaderMismatch,
+        mismatch: Box<HeaderMismatch>,
         named: Named,
         /// The layer that writes the field `named`; none for the entry, which
         /// no field names.
@@ -180,29 +181,25 @@ impl<E> Error<E> {
             Self::Header {
                 source,
                 entry,
-                mismatch: HeaderMismatch::Version { version, reads },
+                mismatch,
                 named,
                 declaring,
-            } => F::LanguageVersion {
-                source,
-                entry,
-                version,
-                reads,
-                named: *named,
-                declaring: declaring.as_deref(),
-            },
-            Self::Header {
-                source,
-                entry,
-                mismatch: HeaderMismatch::FileType { file_type },
-                named,
-                declaring,
-            } => F::FileType {
-                source,
-                entry,
-                file_type,
-                named: *named,
-                declaring: declaring.as_deref(),
+            } => match mismatch.as_ref() {
+                HeaderMismatch::Version { version, reads } => F::LanguageVersion {
+                    source,
+                    entry,
+                    version,
+                    reads,
+                    named: *named,
+                    declaring: declaring.as_deref(),
+                },
+                HeaderMismatch::FileType { file_type } => F::FileType {
+                    source,
+                    entry,
+                    file_type,
+                    named: *named,
+                    declaring: declaring.as_deref(),
+                },
             },
             _ => return Ok(None),
         }
@@ -313,7 +310,7 @@ fn header_error<E>(
     Error::Header {
         source: source.identity,
         entry: entry.into(),
-        mismatch,
+        mismatch: Box::new(mismatch),
         named,
         declaring: declaring.map(str::to_owned),
     }

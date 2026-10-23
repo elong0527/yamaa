@@ -1724,9 +1724,9 @@ mod preparation {
                     Error::Header {
                         source: "f".into(),
                         entry: "entry".into(),
-                        mismatch: HeaderMismatch::FileType {
+                        mismatch: Box::new(HeaderMismatch::FileType {
                             file_type: "project".into()
-                        },
+                        }),
                         named: Named::Include(1),
                         declaring: Some(declaring.into()),
                     },
