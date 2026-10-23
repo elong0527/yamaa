@@ -102,6 +102,8 @@ installation of one release
     ```python
     from pathlib import Path
 
+    import yamaa
+
     Path("spec.schema.json").write_text(yamaa.schema("spec") + "\n")
     ```
 
