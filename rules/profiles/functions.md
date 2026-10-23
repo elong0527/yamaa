@@ -6,9 +6,7 @@ specification calls that name them. Project code runs in the host language
 through the statically named installed callable each function file names for
 it, its contract is closed, and its inline tests run before any study data is
 read. A build without project functions is unaffected, except that each listed
-function file is admitted under [FUNC-2](#func-2). A project file that declares
-`schema_version` links an environment file per host language instead, under
-the rules at the `yamaa-v0.5.0` tag ([Rules](../README.md)).
+function file is admitted under [FUNC-2](#func-2).
 
 ## Function files
 
@@ -25,8 +23,8 @@ name. The host running the build calls the callable that file's
 implementation for that host fails before any input is read. A specification
 cannot select, replace or override the project or its function files.
 
-Fails: `function_implementation_missing`, `project_binding_missing`, `project_environment_missing`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/project_functions.rs::function_implementation_missing`, `rust/crates/yamaa/tests/project_binding.rs::each_binding_of_a_specification_without_its_project_fails_before_any_input_is_read`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::a_1_0_host_reads_only_its_own_lock_and_every_listed_function_file`, `rust/crates/yamaa-adapters/tests/file_workflow.rs::unavailable_environment_precedes_bad_entry_and_valid_environment_is_retained_before_missing_entry`, `python/tests/installed/installed_public_environment.py::test_missing_environment_file_precedes_bad_or_absent_entry_without_activation`, `python/tests/installed/installed_public_environment.py::test_each_host_reads_only_its_own_environment_entry`.
+Fails: `function_implementation_missing`, `project_binding_missing`.
+Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/project_functions.rs::function_implementation_missing`, `rust/crates/yamaa/tests/project_binding.rs::each_binding_of_a_specification_without_its_project_fails_before_any_input_is_read`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::a_1_0_host_reads_only_its_own_lock_and_every_listed_function_file`, `rust/crates/yamaa-adapters/tests/file_workflow.rs::unavailable_environment_precedes_bad_entry_and_valid_environment_is_retained_before_missing_entry`, `python/tests/installed/installed_public_environment.py::test_missing_function_file_precedes_bad_or_absent_entry_without_activation`, `python/tests/installed/installed_public_environment.py::test_each_host_reads_only_its_own_lock`.
 
 No function file is discovered, and none is created by omission. A function
 file that names no implementation for the host is admitted, since another host
@@ -35,16 +33,8 @@ at the call's `name`, reported at each call with the function and the host
 language, while the specification is checked, before activation. A call when
 no project file is supplied fails with `project_binding_missing` at the call's
 `name`, with the function, before any input is read
-([CT-13](terminology.md#ct-13)).
-
-In a project file that declares `schema_version`, the project's `environments`
-entry for the host language links the one environment file the host reads
-([PROJECT-2](project.md#project-2)), and every path it declares resolves
-relative to it under the admitted resource policy of
-[File resolution](../reference/files.md). Each call fails with
-`project_environment_missing`, with the host language, when the project links
-no environment for it; a supplied project file that cannot be read fails as
-any path the caller passes ([FILE-1](../reference/files.md#file-1)).
+([CT-13](terminology.md#ct-13)). A supplied project file that cannot be read
+fails as any path the caller passes ([FILE-1](../reference/files.md#file-1)).
 
 <a id="func-2"></a>
 
@@ -59,8 +49,8 @@ study reads. An invalid definition or test, or a logical name that two listed
 files declare, fails, and static checking returns every independently
 inferable finding before activation.
 
-Fails: `function_file_invalid`, `project_environment_invalid`.
-Evidence: `schema-functions`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::function_file_findings_name_the_function_file_and_its_listing`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_function_file_without_the_1_0_header_fails_in_that_file`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_file_or_lock_that_cannot_be_read_fails_as_any_file_a_run_reads`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::an_unclassified_read_failure_refuses_the_preparation_opaquely`, `rust/crates/yamaa-core/tests/support/project_environment.rs::function_file_reached`, `rust/crates/yamaa-adapters/tests/file_workflow.rs::metadata_failures_name_each_written_dependency_and_cause_before_study_reads`, `rust/crates/yamaa-adapters/tests/project_diagnostics.rs::inline_scalars_report_alone_without_study_or_language_findings_and_unlinked_hosts_read_nothing`.
+Fails: `function_file_invalid`.
+Evidence: `schema-functions`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::function_file_findings_name_the_function_file_and_its_listing`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_function_file_without_the_1_0_header_fails_in_that_file`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_file_or_lock_that_cannot_be_read_fails_as_any_file_a_run_reads`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::an_unclassified_read_failure_refuses_the_preparation_opaquely`, `rust/crates/yamaa-core/tests/support/project_environment.rs::function_file_reached`, `rust/crates/yamaa-adapters/tests/file_workflow.rs::metadata_failures_name_each_written_dependency_and_cause_before_study_reads`.
 
 A function file declares `yamaa`, `type`, its own `name`, and the definition
 of [FUNC-4](#func-4). The project's `functions` checks the header of each
@@ -91,14 +81,6 @@ the field that names it, `functions[i]`, `codelists[i]` or
 exist fails at `functions[i]` with `resource_path_missing`. A host failure that
 FILE-11 does not classify is an engine refusal, `engine_rejected`.
 
-In a project file that declares `schema_version`, the environment file a
-project links declares `schema_version`, and its `lock` and `functions` declare
-installed code; its language comes from the `environments` key that links it,
-and its relative spellings start at that environment file. A missing or invalid
-declared metadata resource, including that environment file, fails with
-`project_environment_invalid`, reporting its written path, declaring field and
-concrete cause, and invalid YAML retains its line, column and parser reason.
-
 <a id="func-3"></a>
 
 ### FUNC-3. One host language applies to every function, and a declared lock pins the called packages
@@ -111,7 +93,7 @@ that calls a function with a declared lock, before any study read, the host
 verifies the installed version of yamaa and of every called function package
 against the captured lock.
 
-Fails: `runtime_artifact_mismatch`, `function_file_invalid`, `project_environment_invalid`.
+Fails: `runtime_artifact_mismatch`, `function_file_invalid`.
 Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/support/project_environment.rs::function_file_reached`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::lock_kind_and_function_findings_are_core_owned_after_capture_without_code_authority`, `rust/crates/yamaa-adapters/tests/project_run.rs::lock_and_actual_conformance_mismatches_keep_complete_zero_read_reports`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_lock_that_is_no_packaging_lock_fails_as_the_function_files_do`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::activation_reports_a_function_file_s_findings_in_that_file_and_its_lock_in_the_project`.
 
 Parallel bindings and per-function language choices are invalid:
@@ -128,17 +110,12 @@ holds it, and captured bytes that are no packaging lock, without importing
 project code or reading study data, and fails with `function_file_invalid` at
 `environments.<host>.lock`. Standard-library and base-package functions are
 exempt from the version check. This is a called-package check; a full
-environment audit belongs to uv or renv. In a project file that declares
-`schema_version`, the linked environment file declares the lock, the
-`environments` key that links that file states its language, and an
-incompatible lock format fails with `project_environment_invalid`.
+environment audit belongs to uv or renv.
 
 A missing, invalid, ambiguous or mismatched installed called-package version
 fails with `runtime_artifact_mismatch` at `environments.<host>.lock`; its
 context names the project file as the lock's source and identifies the
-package, the expected lock versions and the observed installed version. In a
-project file that declares `schema_version`, it is reported at the `lock` of
-the linked environment file.
+package, the expected lock versions and the observed installed version.
 
 ## Definitions and calls
 
@@ -169,10 +146,7 @@ A function file holds one definition and declares its own `name`, `yamaa` and
 `type`; the project holds no inline definition. A function file that names
 no callable at all fails with `function_file_invalid`
 ([FUNC-2](#func-2)). A definition is not split into contract, binding and
-conformance documents. In a project file that declares `schema_version`, the
-linked environment file's `functions` maps logical names to definitions,
-inline or through a path, and a definition file does not repeat its logical
-name or schema version.
+conformance documents.
 
 <a id="func-5"></a>
 
@@ -329,7 +303,7 @@ every parameter its applicable missing behavior, and both values of every
 Boolean parameter are covered. A nullable contract covers `nullable-output`,
 and a float-returning contract `numeric-comparison`.
 
-Fails: `function_file_invalid`, `project_environment_invalid`.
+Fails: `function_file_invalid`.
 Evidence: `schema-functions`, `schema-non-finite`, `rust/crates/yamaa-core/tests/support/project_environment.rs::function_file_reached`, `rust/crates/yamaa-adapters/tests/project_environment.rs::complete_static_report_keeps_semantics_alongside_original_opaque_capture_and_authored_holes`.
 
 Tests do not repeat a logical name or contract version. `covers` is a
@@ -347,10 +321,9 @@ non-empty list of unique obligations demonstrated by that case:
 | `numeric-comparison` | Non-missing `float` result tests decimal comparison |
 
 Static validation checks each tagged case for inferable evidence and rejects
-missing obligations with `function_file_invalid` (in an environment file a
-project that declares `schema_version` links, with
-`project_environment_invalid`). The contract author identifies which input is
-the contract semantic boundary. Activation checks the declared result.
+missing obligations with `function_file_invalid`. The contract author
+identifies which input is the contract semantic boundary. Activation checks
+the declared result.
 
 One function file serves every host language, with one set of parameter
 declarations, comparison policy and tests; only each host's callable and lock
@@ -374,9 +347,7 @@ A failed case is reported in the function file that defines it, at its
 `tests[i]`, naming that file as `source`, the project file as `entry` and the
 listing, such as `functions[0]`, as `environment_path`; a callable that cannot
 be bound fails under [FUNC-2](#func-2) at the function file's
-`implementations.<host>`. In a project file that declares `schema_version`, a
-definition the environment file declares inline is reported at its
-`functions.<name>` in that file.
+`implementations.<host>`.
 
 <a id="func-13"></a>
 
