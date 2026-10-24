@@ -630,8 +630,11 @@ expressions:
         - to:
             type: str
             required: true
-            values: [upper, lower, sentence, title]
-            description: Case to produce, one of upper, lower, sentence or title (TEXT-5).
+            values: [upper, lower, sentence, title, proper]
+            description: Case to produce, one of upper, lower, sentence, title or proper (TEXT-5).
+        - delimiters:
+            type: str
+            description: ASCII characters, each listed once, after which proper raises the next character, declared only with proper; without it they are the blank, slash, hyphen, open parenthesis, period and tab (TEXT-5).
         - missing:
             type: substitute_value
             description: Value returned when the source is missing; without it, a missing source gives missing (TEXT-5).
@@ -4199,9 +4202,16 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
                 "upper",
                 "lower",
                 "sentence",
-                "title"
+                "title",
+                "proper"
               ],
-              "description": "Case to produce, one of upper, lower, sentence or title (TEXT-5).",
+              "description": "Case to produce, one of upper, lower, sentence, title or proper (TEXT-5).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "str"
+            },
+            "delimiters": {
+              "type": "string",
+              "description": "ASCII characters, each listed once, after which proper raises the next character, declared only with proper; without it they are the blank, slash, hyphen, open parenthesis, period and tab (TEXT-5).",
               "x-yamaa-kind": "value",
               "x-yamaa-type": "str"
             },
@@ -6313,9 +6323,16 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
                 "upper",
                 "lower",
                 "sentence",
-                "title"
+                "title",
+                "proper"
               ],
-              "description": "Case to produce, one of upper, lower, sentence or title (TEXT-5).",
+              "description": "Case to produce, one of upper, lower, sentence, title or proper (TEXT-5).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "str"
+            },
+            "delimiters": {
+              "type": "string",
+              "description": "ASCII characters, each listed once, after which proper raises the next character, declared only with proper; without it they are the blank, slash, hyphen, open parenthesis, period and tab (TEXT-5).",
               "x-yamaa-kind": "value",
               "x-yamaa-type": "str"
             },

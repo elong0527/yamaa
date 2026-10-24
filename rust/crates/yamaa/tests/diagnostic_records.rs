@@ -139,44 +139,69 @@ fn evaluation_failures_carry_recorded_geometry() {
     }
 }
 
+/// A literal outside the int range is refused as `integer_overflow`
+/// (VALUE-5), and its context keeps the literal as an exact number: an
+/// integer that `i64` does not hold is a `Wide` spelling, whether `u64`
+/// holds it or not. The context's keys are the four the scalar literal's
+/// finding writes: `actual`, `value`, `minimum` and `maximum`. The seam is
+/// the facade's typed `ContextValue`, which the host fixtures' readers,
+/// reading JSON, cannot see.
 #[test]
-fn integer_tokens_beyond_sixty_four_bits_stay_exact_numbers() {
-    let (engine, token) = engine_with_columns(
-        "  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: 340282366920938463463374607431768211456}\n",
-        "[ID, VALUE]",
-    );
-    let diagnostics = engine
-        .spec("spec.yaml")
-        .cancel_with(&token)
-        .check()
-        .unwrap()
-        .diagnostics();
-    assert!(!diagnostics.is_empty());
-    if cfg!(feature = "yaml") {
-        let diagnostic = &diagnostics[0];
-        assert_eq!(diagnostic.phase.as_str(), "validation");
-        assert_eq!(diagnostic.code.as_str(), "integer_overflow");
-        assert_eq!(
-            diagnostic.message,
-            "340282366920938463463374607431768211456 is outside the int range \
-             -9223372036854775808 to 9223372036854775807"
+fn integer_tokens_outside_the_signed_range_stay_exact_numbers() {
+    for literal in [
+        "9223372036854775808",
+        "340282366920938463463374607431768211456",
+    ] {
+        let (engine, token) = engine_with_columns(
+            &format!(
+                "  - {{name: ID, type: int, derivation: SRC.ID}}\n  - {{name: VALUE, type: int, derivation: {literal}}}\n"
+            ),
+            "[ID, VALUE]",
         );
-        assert_eq!(
-            diagnostic.context.get("actual"),
-            Some(&ContextValue::Wide(
-                "340282366920938463463374607431768211456".into()
-            ))
-        );
-        assert_eq!(
-            diagnostic.context.get("minimum"),
-            Some(&ContextValue::Int(i64::MIN))
-        );
-        assert_eq!(
-            diagnostic.context.get("maximum"),
-            Some(&ContextValue::Int(i64::MAX))
-        );
-        assert_eq!(diagnostic.source_span, None);
-        assert_eq!(diagnostic.operand_route, None);
+        let diagnostics = engine
+            .spec("spec.yaml")
+            .cancel_with(&token)
+            .check()
+            .unwrap()
+            .diagnostics();
+        assert!(!diagnostics.is_empty(), "{literal}");
+        if cfg!(feature = "yaml") {
+            let diagnostic = &diagnostics[0];
+            let context = diagnostic
+                .context
+                .iter()
+                .map(|(key, value)| (key.as_str(), value.clone()))
+                .collect::<Vec<_>>();
+            assert_eq!(
+                (
+                    diagnostic.phase.as_str(),
+                    diagnostic.code.as_str(),
+                    diagnostic.rule.as_deref(),
+                    diagnostic.message.clone(),
+                    context,
+                    diagnostic.source_span,
+                    diagnostic.operand_route.clone(),
+                ),
+                (
+                    "validation",
+                    "integer_overflow",
+                    Some("VALUE-5"),
+                    format!(
+                        "{literal} is outside the int range -9223372036854775808 to \
+                         9223372036854775807"
+                    ),
+                    vec![
+                        ("actual", ContextValue::Wide(literal.into())),
+                        ("maximum", ContextValue::Int(i64::MAX)),
+                        ("minimum", ContextValue::Int(i64::MIN)),
+                        ("value", ContextValue::Text(literal.into())),
+                    ],
+                    None,
+                    None,
+                ),
+                "{literal}"
+            );
+        }
     }
 }
 

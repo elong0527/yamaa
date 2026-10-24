@@ -209,18 +209,42 @@ placeholder.
 `str_case` with `to: upper` replaces each of `U+0061` through `U+007A` with the
 scalar 32 positions earlier, and `to: lower` replaces each of `U+0041` through
 `U+005A` with the scalar 32 positions later. `sentence` applies the upward
-substitution to the first scalar and the downward one to every later scalar;
-`title` applies the upward one to the first letter of each maximal run of ASCII
-letters and the downward one to the rest of the run. Every other scalar is
-unchanged.
+substitution to the first scalar, `title` to the first letter of each maximal
+run of ASCII letters and `proper` to the first scalar and each scalar directly
+after a delimiter, and each applies the downward one to the rest. Every other
+scalar is unchanged.
 
-Evidence: `schema-sentence-case`, `schema-text-functions`, `rust/crates/yamaa-adapters/tests/fixtures/text_case_reference.json`.
+Fails: `unknown_field`, `invalid_field_type`.
+Evidence: `schema-sentence-case`, `schema-text-functions`, `adam-adae-proper-case-terms`, `negative-str-case-delimiters-mode`, `rust/crates/yamaa-adapters/tests/fixtures/text_case_reference.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_case_takes_delimiters_only_with_proper`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_case_refuses_delimiters_that_name_no_scalar_repeat_one_or_leave_ascii`.
+
+`proper` writes text as SAS `PROPCASE` does. Its delimiters are the scalars
+that `delimiters` lists, a non-empty string of ASCII scalars, each listed once;
+without it they are the blank `U+0020`, `/`, `-`, `(`, `.` and the tab
+`U+0009`, and a declared list replaces all six. `proper` first applies the
+downward substitution to every ASCII letter, then identifies delimiter
+positions in that lowered text before applying the upward substitution.
+Delimiters are compared as written: with `delimiters: "c"`, both `MCDONALD`
+and `mcdonald` give `McDonald`; with `"X"`, `AXBXC` gives `Axbxc`, and with
+`"x"` it gives `AxBxC`. So `INVESTIGATOR'S DECISION` gives
+`Investigator's Decision`, `2ND DEGREE BURN` gives `2nd Degree Burn` and
+`PAIN,BACK` gives `Pain,back`,
+where `title` gives `Investigator'S Decision`, `2Nd Degree Burn` and
+`Pain,Back`; a list that names the comma gives `Pain,Back` too.
+
+`delimiters` is declared only with `to: proper`. Beside another mode it fails
+as `unknown_field` at that field, naming the field and the mode, as a field
+that a temporal operation's declared type does not take fails under
+[TIME-1](temporal.md#time-1); an empty list, a repeated scalar or a scalar
+outside ASCII fails as `invalid_field_type`. Each fails where the specification
+is read, before any input is read.
 
 Every substitution preserves scalar count. None has a one-to-many mapping, a
 context rule, language tailoring or a Unicode-version dependency, and word
-detection for `title` is ASCII-only: a run is `[A-Za-z]+`, with no locale and
-no Unicode word-break rule. Non-ASCII scalars, including non-ASCII letters such
-as `U+00DF` and `U+0130`, pass through unchanged. A missing source returns
+detection is ASCII-only: a run for `title` is `[A-Za-z]+`, and a word for
+`proper` starts only at the first scalar or after one of its delimiters, with
+no locale and no Unicode word-break rule. Non-ASCII scalars, including
+non-ASCII letters such as `U+00DF` and `U+0130`, pass through unchanged. A
+missing source returns
 `missing`, or missing when it is omitted, counted under `missing`
 ([COLUMN-10](columns.md#column-10)).
 

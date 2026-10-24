@@ -4,7 +4,7 @@
 //!
 //! - A result prints its [`Summary`]: the summary line, a project run's member
 //!   lines, and the first issue's line.
-//! - A refusal's message is D39's error text: the [`Action`] that refused, the
+//! - A refusal's message is D39's error text: the call that refused, the
 //!   first issue's line and the count of the other issues.
 //! - An issue prints as one line, `<location>: <message> [<condition>,
 //!   <rule>]` ([`crate::Diagnostic::text`]). The location is
@@ -34,23 +34,25 @@ use crate::diagnostic::{Diagnostic, Location};
 use crate::table::Table;
 use yamaa_adapters::public_table::PublicColumn;
 
-/// A result's printed text (D37, P-PRINT-1), one line per field, in print
-/// order. Its [`Display`](fmt::Display) form joins the lines with LF and adds
-/// no final LF: what Python's `repr()` returns and what R's `format()` splits
-/// into lines. The command line prints the summary line and the member
-/// lines, then every issue's line instead of `first_issue`.
+/// A result's printed text (D37, P-PRINT-1), one line per part, in print
+/// order: the summary line, such as `yamaa run of ADAE: succeeded, 1234 rows
+/// x 7 columns, 0 issues`; the member lines, a project run's in run order or
+/// a selftest's `first failure:`, `not covered:` and information lines; and
+/// `first issue: <issue line>` exactly when the result has an issue.
+/// [`Summary::lines`] gives them, and its [`Display`](fmt::Display) form
+/// joins them with LF and adds no final LF: what Python's `repr()` returns
+/// and what R's `format()` splits into lines. The command line prints the
+/// lines before the first issue's, then every issue's line in its place.
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Summary {
-    /// The summary line, such as `yamaa run of ADAE: succeeded, 1234 rows x 7
-    /// columns, 0 issues`.
-    pub line: String,
-    /// The lines between the summary line and the first issue: a project
-    /// run's member lines, in run order, or a selftest's `first failure:`,
-    /// `not covered:` and information lines; empty for any other result.
-    pub members: Vec<String>,
+    /// The summary line.
+    pub(crate) line: String,
+    /// The lines between the summary line and the first issue; empty for a
+    /// result that is neither a project run nor a selftest.
+    pub(crate) members: Vec<String>,
     /// `first issue: <issue line>`, when the result has an issue.
-    pub first_issue: Option<String>,
+    pub(crate) first_issue: Option<String>,
 }
 
 impl Summary {
@@ -99,9 +101,8 @@ impl fmt::Display for Summary {
 /// set, since a failed run's `save()` refuses with the run's own issues and
 /// the first message alone would not say which call refused. Its
 /// [`Display`](fmt::Display) form is the prefix, such as `cannot save ADAE`.
-#[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Action<'a> {
+pub(crate) enum Action<'a> {
     /// `save()` of the result whose summary names this subject: a run's
     /// dataset name, or a project path with its section; or
     /// [`crate::Engine::save_table`] to this path, as given.

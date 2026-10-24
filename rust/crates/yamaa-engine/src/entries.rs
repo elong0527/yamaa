@@ -227,10 +227,9 @@ impl Owner<Str> for TextList {
     }
 }
 
-/// A nested value, the spellings made for it, and its nodes.
+/// A nested value and its nodes, which borrow its texts.
 struct Tree {
     _value: ContextValue,
-    _spellings: Vec<String>,
     nodes: Vec<abi::Node>,
 }
 
@@ -295,25 +294,13 @@ fn texts<S: Into<String>>(texts: impl IntoIterator<Item = S>) -> abi::Texts {
 
 /// `value`'s nodes in pre-order, borrowing its texts.
 fn tree(value: ContextValue) -> Answer<abi::Nodes> {
-    fn flatten(
-        value: &ContextValue,
-        key: Str,
-        nodes: &mut Vec<abi::Node>,
-        spellings: &mut Vec<String>,
-    ) -> Answer<()> {
+    fn flatten(value: &ContextValue, key: Str, nodes: &mut Vec<abi::Node>) -> Answer<()> {
         let (mut kind, mut int, mut float, mut text) = (abi::NODE_NULL, 0, 0.0, Str::NONE);
         let mut children: Vec<(Str, &ContextValue)> = Vec::new();
         match value {
             ContextValue::Null => {}
             ContextValue::Bool(value) => (kind, int) = (abi::NODE_BOOL, i64::from(*value)),
             ContextValue::Int(value) => (kind, int) = (abi::NODE_INT, *value),
-            ContextValue::Uint(value) => match i64::try_from(*value) {
-                Ok(value) => (kind, int) = (abi::NODE_INT, value),
-                Err(_) => {
-                    spellings.push(value.to_string());
-                    (kind, text) = (abi::NODE_NUMBER, Str::of(&spellings[spellings.len() - 1]));
-                }
-            },
             ContextValue::Wide(spelling) => (kind, text) = (abi::NODE_NUMBER, Str::of(spelling)),
             ContextValue::Float(value) => (kind, float) = (abi::NODE_FLOAT, *value),
             ContextValue::Text(value) => (kind, text) = (abi::NODE_TEXT, Str::of(value)),
@@ -341,13 +328,12 @@ fn tree(value: ContextValue) -> Answer<abi::Nodes> {
         });
         children
             .into_iter()
-            .try_for_each(|(key, item)| flatten(item, key, nodes, spellings))
+            .try_for_each(|(key, item)| flatten(item, key, nodes))
     }
-    let (mut nodes, mut spellings) = (Vec::new(), Vec::new());
-    flatten(&value, Str::NONE, &mut nodes, &mut spellings)?;
+    let mut nodes = Vec::new();
+    flatten(&value, Str::NONE, &mut nodes)?;
     Ok(handed(Tree {
         _value: value,
-        _spellings: spellings,
         nodes,
     }))
 }
@@ -811,7 +797,7 @@ entries! {
     }
 
     fn no_issues() -> Handle {
-        insert(Value::Table(yamaa::Report::default().table()))
+        insert(Value::Table(yamaa::diagnostic::issues(&[])))
     }
 
     fn conditions() -> Handle {
@@ -972,9 +958,8 @@ entries! {
 
     fn observations(result: Handle, include_measurements: u32) -> abi::Text {
         view(result, None, "observations", |view| match view {
-            View::Run(run) => Ok(run
-                .observations(include_measurements != 0)
-                .map_or_else(Buffer::empty, text)),
+            View::Run(run) if include_measurements != 0 => Ok(text(run.measured_observations())),
+            View::Run(run) => Ok(run.observations().map_or_else(Buffer::empty, text)),
             other => Err(another("observations", other.kind())),
         })
     }

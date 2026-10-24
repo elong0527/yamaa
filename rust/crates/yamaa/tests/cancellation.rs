@@ -14,11 +14,14 @@ use std::sync::{
     Arc, Mutex,
 };
 
+use yamaa::host::functions::{
+    Argument, CallError, FunctionError, FunctionHandle, FunctionIdentity, LockContext, Signature,
+};
+use yamaa::host::resolver::{ResolverFailure, ResolverReply, ResolverRequest};
+use yamaa::scalar::{Scalar, ScalarRef};
 use yamaa::{
-    Argument, CallError, CancellationToken, Engine, EngineOptions, Failure, FailureKind,
-    FunctionError, FunctionHandle, FunctionIdentity, HostLanguage, LockContext, MemoryResolver,
-    ProjectFunctions, ResolverFailure, ResolverReply, ResolverRequest, ResourceResolver, Scalar,
-    ScalarRef, Signature, SubmissionOptions,
+    CancellationToken, Engine, EngineOptions, Failure, FailureKind, HostLanguage, MemoryResolver,
+    ProjectFunctions, ResourceResolver, SubmissionOptions,
 };
 
 const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, key: [ID]}}\noutput: {path: out.csv, columns: [ID, NAME]}\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: SRC.ID}\n  - {name: NAME, type: str, label: Name, derivation: SRC.NAME}\n";

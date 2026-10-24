@@ -25,10 +25,12 @@
 use std::collections::BTreeSet;
 use std::f64::consts::{FRAC_2_SQRT_PI, LN_2, SQRT_2};
 
-use yamaa::{
-    Argument, CallError, ColumnType, FunctionError, FunctionHandle, FunctionIdentity, HostLanguage,
-    LockContext, LockFinding, LockKind, LockReason, ProjectFunctions, Scalar, ScalarRef, Signature,
+use yamaa::host::functions::{
+    Argument, CallError, ColumnType, FunctionError, FunctionHandle, FunctionIdentity, LockContext,
+    LockFinding, LockKind, LockReason, Signature,
 };
+use yamaa::scalar::{Scalar, ScalarRef};
+use yamaa::{HostLanguage, ProjectFunctions};
 
 /// The package the R environment files call, and the version this port
 /// implements (`rust/tests/project-programs/r/DESCRIPTION`).
@@ -437,7 +439,8 @@ impl ProjectFunctions for Benchmarks {
         if lock.language != HostLanguage::R || lock.kind != LockKind::Renv {
             return Err(FunctionError::Protocol);
         }
-        let locked = yamaa::decode_renv_lock(lock.bytes).map_err(FunctionError::LockSyntax)?;
+        let locked = yamaa::host::functions::decode_renv_lock(lock.bytes)
+            .map_err(FunctionError::LockSyntax)?;
         if functions.is_empty() {
             return Ok(());
         }

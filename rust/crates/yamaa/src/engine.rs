@@ -20,11 +20,11 @@ use yamaa_core::diagnostic::Diagnostic;
 
 use crate::cancel::{CancellationToken, Cancelled};
 use crate::diagnostic::{Locator, Report};
-use crate::error::{Failure, FunctionError};
-use crate::functions::{HostLanguage, ProjectFunctions};
+use crate::error::Failure;
+use crate::host::functions::{FunctionError, HostLanguage, ProjectFunctions};
+use crate::host::resolver::ResourceResolver;
 use crate::internal::EngineShared;
 use crate::plan::Plan;
-use crate::resolver::ResourceResolver;
 use crate::table::Table;
 
 /// Engine configuration. The struct is `#[non_exhaustive]`, so the `new`,
@@ -615,14 +615,14 @@ impl Build {
         )
     }
 
-    /// Render observations, optionally enveloped with timing measurements.
-    pub(crate) fn observations(&self, include_measurements: bool) -> Option<String> {
-        let observed = self.domain().map(|domain| domain.observations_json());
-        if include_measurements {
-            Some(self.measurements.envelope(observed))
-        } else {
-            observed
-        }
+    /// The build's observations as JSON; none when it never ran.
+    pub(crate) fn observations(&self) -> Option<String> {
+        self.domain().map(|domain| domain.observations_json())
+    }
+
+    /// The build's observations enveloped with its operation's measurements.
+    pub(crate) fn measured_observations(&self) -> String {
+        self.measurements.envelope(self.observations())
     }
 
     /// Whether a project function raised the host's interrupt, which cancels
@@ -650,7 +650,7 @@ impl ResolvedSpecification {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::resolver::MemoryResolver;
+    use crate::host::resolver::MemoryResolver;
 
     fn options() -> EngineOptions {
         EngineOptions::new(HostLanguage::Python, "test".into(), "0".into())
@@ -702,7 +702,7 @@ mod tests {
         assert!(run.output().is_none());
         assert!(run.report().is_none());
         assert!(!run.diagnostics().is_empty());
-        assert!(run.observations(false).is_none());
+        assert!(run.observations().is_none());
         assert!(!run.build.interrupted());
     }
 
@@ -774,8 +774,9 @@ mod plain_build_tests {
         assert_eq!(run.output().unwrap().rows(), 2);
         // One run, input, base and two column rows; no handler or check.
         assert_eq!(run.report().unwrap().rows(), 5);
-        assert!(run.observations(false).is_some());
-        assert!(run.observations(true).is_some());
+        // The measured observations hold the observations as they are.
+        let observed = run.observations().expect("a run that began observes");
+        assert!(run.measured_observations().contains(&observed));
         // The specification's run saves its one file and returns its path.
         let root = yamaa_adapters::canonical_path::canonicalize(&study.0).unwrap();
         let out = root.join("out.csv").to_str().unwrap().replace('\\', "/");

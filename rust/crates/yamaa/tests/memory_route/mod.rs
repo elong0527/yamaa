@@ -32,9 +32,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use yamaa::host::resolver::ResourceKind;
 use yamaa::{
     CancellationToken, Engine, EngineOptions, Failure, HostLanguage, MemoryResolver,
-    ProjectFunctions, ResourceKind, ResourceResolver, Run,
+    ProjectFunctions, ResourceResolver, Run,
 };
 use yamaa_core::json::Value as Json;
 

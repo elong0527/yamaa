@@ -88,11 +88,11 @@ status: approved
 measured_at: 1758ad145
 design: docs/design/interface-1.0.md
 summary:
-  entries: 650
-  changes: 81
+  entries: 652
+  changes: 83
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 35
+    new, decided: 37
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7377,6 +7377,33 @@ entries:
     parent nor include, and a file reaches one composition at most once (LAYER-3, LAYER-4). No 0.5 file
     declares it, so the converter wrote none.'
   field_kind: path
+  convert: {action: none}
+- id: new.spec.str_case.to=proper
+  file_type: spec
+  path: columns[].derivation.str_case.to
+  today: null
+  kind: new
+  proposed: proper
+  decision: decided (D264)
+  reason: 'An addition to the approved table under D27 (D264), spelled under D241: proper case as SAS PROPCASE
+    writes it, every ASCII letter lowered, then the first character and each character directly after a
+    delimiter raised; `title` keeps its meaning (TEXT-5). No 0.5 file declares it, so the converter wrote
+    none.'
+  field_kind: value
+  convert: {action: none}
+- id: new.spec.str_case.delimiters
+  file_type: spec
+  path: columns[].derivation.str_case.delimiters
+  today: null
+  kind: new
+  proposed: 'str_case: {to: proper, delimiters: " /-(.,["}'
+  decision: decided (D264)
+  reason: 'An addition to the approved table under D27 (D264), spelled under D241. Optional, with no schema
+    default (I5): the ASCII characters, each listed once, after which `to: proper` raises the next character;
+    without it `proper` takes SAS PROPCASE''s six, the blank, slash, hyphen, open parenthesis, period and
+    tab. Beside another mode it fails as unknown_field, and an empty list, a repeated character or one outside
+    ASCII as invalid_field_type (TEXT-5). No 0.5 file declares it, so the converter wrote none.'
+  field_kind: value
   convert: {action: none}
 - id: new.spec.expressions.duration_text
   file_type: spec

@@ -1,0 +1,5 @@
+lifecycle: draft
+standard: ADaM
+domain: ADAE
+covers:
+- str_case

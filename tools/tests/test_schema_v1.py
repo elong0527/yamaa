@@ -317,6 +317,12 @@ EXPECTED = {
     ],
     "new.spec.clear": [Field("root_class", "clear", "list[spec_path]")],
     "new.spec.include": [Field("root_class", "include", "list[project_path]")],
+    # D264: str_case writes proper case as SAS PROPCASE does, after the
+    # delimiters a declared list names (TEXT-5).
+    "new.spec.str_case.to=proper": [Values("expressions.str_case", "to", ("proper",))],
+    "new.spec.str_case.delimiters": [
+        Field("expressions.str_case", "delimiters", "str")
+    ],
     # D264: duration_text writes a number in a declared unit as ISO 8601
     # duration text, the inverse of duration_value (TIME-21).
     "new.spec.expressions.duration_text": [

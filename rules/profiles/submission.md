@@ -808,8 +808,8 @@ intermediate or, in a `case`, from an output column, is anything else.
 Anything else computes its value: arithmetic and rounding (text in an
 expression field that computes, and `round_half_away_from_zero`), every
 aggregation but an `ONLY` pivot, windows, temporal computation (the date and
-datetime operations other than `to_date` and `dtc`), `flag`, `cut`,
-`str_length`, `greatest` and `least`, `function`, and every read through a
+datetime operations other than `to_date`, `dtc` and `duration_text`), `flag`,
+`cut`, `str_length`, `greatest` and `least`, `function`, and every read through a
 named intermediate that is not a plain lookup: one that declares
 `derivations`, whose fields it computes, or one over `SELF`, the completed
 output rows. Each type it refutes asserts the value arrived as it stands, and
@@ -818,8 +818,10 @@ the specification shows it did not.
 The graph cannot tell an investigator-recorded value from a vendor-transmitted
 or protocol-fixed value, and it refutes only what the derivation proves. An
 SDTM recode of collected terminology (`SEX` from `Male` to `M` through
-`mapping`), a case normalization (`str_case`) and an ISO 8601 assembly of
-collected date parts (`dtc`, `str_template` or `to_date`) admit `Collected`. A value
+`mapping`), a case normalization (`str_case`), an ISO 8601 assembly of
+collected date parts (`dtc`, `str_template` or `to_date`) and a collected
+duration written as ISO 8601 duration text (`duration_text`) admit
+`Collected`. A value
 printed on the case report form, such as a unit or a test name, is written as
 a literal and admits `Collected`; a literal reads no input, so it refutes
 `Derived`. A vendor- or EDC-computed value read as stored, such as an

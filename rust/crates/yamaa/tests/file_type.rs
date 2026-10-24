@@ -8,10 +8,10 @@
 
 use std::sync::{Arc, Mutex};
 
-use yamaa::{
-    Engine, EngineOptions, Failure, FileType, MemoryResolver, ResolverFailure, ResolverKind,
-    ResolverOperation, ResolverReply, ResolverRequest, ResourceKind, ResourceResolver,
+use yamaa::host::resolver::{
+    ResolverFailure, ResolverKind, ResolverOperation, ResolverReply, ResolverRequest, ResourceKind,
 };
+use yamaa::{Engine, EngineOptions, Failure, FileType, MemoryResolver, ResourceResolver};
 
 struct Study(crate::support::Scratch);
 impl Study {

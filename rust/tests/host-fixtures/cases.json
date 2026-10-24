@@ -632,8 +632,8 @@
           "invalid_count": 0
         },
         {
-          "name": "duration_text_seconds_beyond_the_float_range",
-          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DAYS: float\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: str\n  label: RESULT\n  derivation:\n    duration_text:\n      source: RAW.DAYS\n      unit: day\n",
+          "name": "duration_text_overflow_is_not_output_conversion",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DAYS: float\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: str\n  label: RESULT\n  derivation:\n    value:\n      duration_text:\n        source: RAW.DAYS\n        unit: day\n    unconvertible: null\n",
           "inputs": {
             "input.csv": "ID,DAYS\n1,1e304\n"
           },
