@@ -96,6 +96,10 @@ aggregate_class:
         type: bool
         required: false
         description: When true, STR_JOIN writes each text once and COUNT(x) counts each value once; omitted, every value counts. Admitted only beside a bare STR_JOIN(x) or COUNT(x) (FORMULA-18).
+    - quantile:
+        type: float
+        required: false
+        description: Probability from 0 through 1 at which QUANTILE reads its quantile, R's default type 7; required beside QUANTILE and refused beside any other expression (FORMULA-18).
     - expr:
         type: aggregate_expression
         required: true
@@ -2116,6 +2120,12 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           "x-yamaa-kind": "value",
           "x-yamaa-type": "bool"
         },
+        "quantile": {
+          "type": "number",
+          "description": "Probability from 0 through 1 at which QUANTILE reads its quantile, R's default type 7; required beside QUANTILE and refused beside any other expression (FORMULA-18).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "float"
+        },
         "expr": {
           "$ref": "#/$defs/aggregate_expression",
           "description": "Closed reducer expression over the records of one relation (FORMULA-17).",
@@ -3068,6 +3078,12 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           "description": "When true, STR_JOIN writes each text once and COUNT(x) counts each value once; omitted, every value counts. Admitted only beside a bare STR_JOIN(x) or COUNT(x) (FORMULA-18).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "bool"
+        },
+        "quantile": {
+          "type": "number",
+          "description": "Probability from 0 through 1 at which QUANTILE reads its quantile, R's default type 7; required beside QUANTILE and refused beside any other expression (FORMULA-18).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "float"
         },
         "expr": {
           "$ref": "#/$defs/aggregate_expression",

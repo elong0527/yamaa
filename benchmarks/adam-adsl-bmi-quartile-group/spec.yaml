@@ -1,0 +1,79 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  SOURCE: {path: input/adsl.csv, types: {BMIBL: float}}
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, BMIBL, BMIBLQ1, BMIBLMED, BMIBLQ3, BMIBLGR1]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: SOURCE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: SOURCE.USUBJID
+
+  - name: BMIBL
+    type: float
+    label: Baseline BMI (kg/m2)
+    derivation: SOURCE.BMIBL
+
+  # The study's quartiles of baseline BMI, R's default (type 7): each lies
+  # between the two sorted values around its position, weighted by its
+  # distance from them. A missing BMI takes no part.
+  - name: BMIBLQ1
+    type: float
+    label: Baseline BMI First Quartile (kg/m2)
+    derivation:
+      aggregate:
+        group_by: [STUDYID]
+        expr: "Q1(BMIBL)"
+
+  - name: BMIBLMED
+    type: float
+    label: Baseline BMI Median (kg/m2)
+    derivation:
+      aggregate:
+        group_by: [STUDYID]
+        expr: "MEDIAN(BMIBL)"
+
+  - name: BMIBLQ3
+    type: float
+    label: Baseline BMI Third Quartile (kg/m2)
+    derivation:
+      aggregate:
+        group_by: [STUDYID]
+        expr: "Q3(BMIBL)"
+
+  # A value on a cutpoint falls in the lower group; a missing BMI in none.
+  - name: BMIBLGR1
+    type: str
+    label: Pooled Baseline BMI Group 1
+    derivation:
+      case:
+        - when: "BMIBL <= BMIBLQ1"
+          then: "'Quartile 1'"
+        - when: "BMIBL <= BMIBLMED"
+          then: "'Quartile 2'"
+        - when: "BMIBL <= BMIBLQ3"
+          then: "'Quartile 3'"
+        - when: "BMIBL > BMIBLQ3"
+          then: "'Quartile 4'"
+        - otherwise: null
+
+verifications:
+  - row_count:
+      min: 13
+      max: 13
+  - assert:
+      id: group-only-with-baseline-bmi
+      when: "BMIBLGR1 IS NOT NULL"
+      require: "BMIBL IS NOT NULL"

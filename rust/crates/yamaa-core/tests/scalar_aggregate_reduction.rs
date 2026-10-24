@@ -13,6 +13,7 @@ mod scalar {
         const PLAIN: ReductionFields<'static> = ReductionFields {
             separator: "",
             distinct: false,
+            quantile: 0.0,
         };
 
         #[test]
@@ -221,7 +222,8 @@ mod scalar {
                         Reducer::StrJoin,
                         ReductionFields {
                             separator,
-                            distinct
+                            distinct,
+                            ..PLAIN
                         },
                         "STR_JOIN(D.V)"
                     ),
@@ -281,8 +283,8 @@ mod scalar {
                 ("no record is missing", vec![], Value::Missing),
             ];
             let fields = ReductionFields {
-                separator: "",
                 distinct: true,
+                ..PLAIN
             };
             for (label, values, expected) in cases {
                 assert_eq!(
@@ -1860,6 +1862,8 @@ mod scalar {
     }
     mod reduction {
         use yamaa_core::{
+            aggregate_reduction::{reduce_values, AggregateReductionError, ReductionFields},
+            expression::Reducer,
             numeric::{ArithmeticErrorKind, Number},
             reduction::{
                 count_records, count_values, reduce_numeric, NumericReducer, ReductionError,
@@ -1916,53 +1920,79 @@ mod scalar {
             }
         }
 
+        /// A fixture reducer: its name, and for `QUANTILE` the probability
+        /// written after a colon, as the aggregate's `quantile` gives it.
+        fn reducer(token: &str) -> (Reducer, f64) {
+            let (name, quantile) = match token.split_once(':') {
+                Some((name, quantile)) => (name, quantile.parse().unwrap()),
+                None => (token, 0.0),
+            };
+            let reducer = Reducer::ALL
+                .into_iter()
+                .find(|reducer| reducer.name() == name)
+                .unwrap_or_else(|| panic!("bad reducer {token}"));
+            (reducer, quantile)
+        }
+
         #[test]
-        /// Pin all shared values, exact float bits and portable failure facts.
+        /// Pin all shared values, exact float bits and portable failure facts:
+        /// the ordered `SUM` and `MEAN` of FORMULA-19 and the statistical
+        /// reducers of FORMULA-18, each through the aggregate reduction.
         fn independent_ordered_reduction_truth_shared_with_python() {
             let mut count = 0;
             for row in include_str!("fixtures/reduction.tsv").lines().skip(1) {
                 let columns: Vec<_> = row.split('\t').collect();
                 assert_eq!(columns.len(), 4);
                 let (id, name, tokens, expected) = (columns[0], columns[1], columns[2], columns[3]);
-                let reducer = match name {
-                    "SUM" => NumericReducer::Sum,
-                    "MEAN" => NumericReducer::Mean,
-                    _ => panic!("bad reducer"),
-                };
-                assert_eq!(reducer.name(), name);
+                let (reducer, quantile) = reducer(name);
                 let values: Vec<_> = if tokens == "-" {
                     vec![]
                 } else {
                     tokens.split(',').map(value).collect()
                 };
                 let borrowed: Vec<_> = values.iter().map(ValueRef::from).collect();
-                let expression = format!("{name}(A)");
-                let actual = match reduce_numeric(&borrowed, reducer, &expression) {
-                    Ok(Number::Missing) => "missing".into(),
-                    Ok(Number::Int(value)) => format!("int:{value}"),
-                    Ok(Number::Float(value)) => format!("float:{:016x}", value.get().to_bits()),
-                    Err(ReductionError::IncompatibleInputType { argument, actual }) => {
-                        assert_eq!(borrowed[argument].value_type(), Some(actual));
+                let expression = format!("{}(A)", reducer.name());
+                let fields = ReductionFields {
+                    quantile,
+                    ..ReductionFields::default()
+                };
+                let actual = match reduce_values(&borrowed, reducer, fields, &expression) {
+                    Ok(Value::Missing) => "missing".into(),
+                    Ok(Value::Int(value)) => format!("int:{value}"),
+                    Ok(Value::Float(value)) => format!("float:{:016x}", value.get().to_bits()),
+                    Err(AggregateReductionError::Numeric(
+                        ReductionError::IncompatibleInputType { argument, actual },
+                    )) => {
+                        assert_eq!(borrowed[argument].value_type(), Some(actual), "{id}");
                         format!(
                             "error:incompatible_input_type:FORMULA-23:{}",
                             format!("{actual:?}").to_lowercase()
                         )
                     }
-                    Err(ReductionError::Arithmetic { argument, error }) => {
-                        assert_eq!(argument, 1, "{id}");
+                    Err(AggregateReductionError::Numeric(ReductionError::Arithmetic {
+                        argument,
+                        error,
+                    })) => {
+                        // The failure points at a present value it read.
+                        assert!(borrowed[argument].value_type().is_some(), "{id}");
                         assert_eq!(error.expression, expression);
                         assert_eq!(error.phase(), "derivation");
-                        let ArithmeticErrorKind::IntegerOverflow { value } = error.kind else {
-                            panic!("unexpected failure")
-                        };
-                        format!("error:{}:{}:{value}", error.condition(), error.rule())
+                        match error.kind {
+                            ArithmeticErrorKind::IntegerOverflow { value } => {
+                                format!("error:{}:{}:{value}", error.condition(), error.rule())
+                            }
+                            ArithmeticErrorKind::LnOfNonpositive => {
+                                format!("error:{}:{}", error.condition(), error.rule())
+                            }
+                            other => panic!("unexpected failure {other:?}"),
+                        }
                     }
                     other => panic!("unexpected result: {other:?}"),
                 };
                 assert_eq!(actual, expected, "{id}");
                 count += 1;
             }
-            assert_eq!(count, 32);
+            assert_eq!(count, 85);
         }
 
         #[test]
