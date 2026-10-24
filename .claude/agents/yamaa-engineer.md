@@ -45,7 +45,10 @@ Work this way.
    lists for the change: the tests nearest it, `cargo fmt --all --check`
    and Clippy on each touched crate
    (`cargo clippy --locked -p <crate> --all-targets --all-features -- -D warnings`
-   from `rust/`), and `make quick` only when generated files, rule cards,
+   from `rust/`, which also holds the function ceilings) and, after a Rust
+   change, the file ceiling
+   (`uv run --project python --no-sync python -m tools.validation.check_source_size`
+   from the root), and `make quick` only when generated files, rule cards,
    schemas, docs generators or Python changed. Never run
    `make check-equivalence` locally. Never dispatch native qualification
    on the branch or wait for a native run (D233): a change to packaging,
