@@ -57,7 +57,10 @@ fn issue(issue: &Diagnostic) -> yamaa_core::json::Value {
 #[test]
 fn row_operands_reading_a_column_phase_column_report_its_phase_boundary() {
     // SEQ is a window, so it is never row-local (SPEC-6): every row
-    // template leaves it to the column phase.
+    // template leaves it to the column phase. `negative-row-phase-flag`
+    // states the first issue of a flag condition's refusal, but its
+    // `error.yaml` leaves out that the issue is the only one; no benchmark
+    // pins the other operand forms.
     let specification = |operand: &str| {
         format!(
             "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, SEQ]\n\
@@ -113,7 +116,11 @@ fn row_operands_reading_a_column_phase_column_report_its_phase_boundary() {
 fn a_lookup_matching_on_a_column_phase_column_reports_its_phase_boundary() {
     // SEQ is a window, so only the column phase completes it. K matches on it
     // through its key, W through its range, and W2 through W's range value
-    // (LOOKUP-2).
+    // (LOOKUP-2). `negative-lookup-key-column-phase` and
+    // `negative-lookup-match-column-phase` state the first issue of K's and
+    // W's refusals, but their `error.yaml` leaves out that the issue is the
+    // only one. No benchmark pins a chained range value, a filter or a
+    // formula that reads the lookup, nor the column reads that build.
     let specification = |row: &str, filter: &str, column: &str| {
         format!(
             "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, VAL]\n\
@@ -226,6 +233,8 @@ fn a_chained_lookup_promotes_the_default_its_range_values_read() {
     // POS is row-local, so a row template that reads a lookup matching on
     // it derives it as a default (SPEC-6), whether the lookup reads it
     // directly (W) or through another lookup's range value (W2).
+    // `schema-lookup-source-range-default` pins the default a structured
+    // source's range reads; no benchmark pins a named lookup's.
     let specification = |value: &str| {
         format!(
             "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, VAL]\n\

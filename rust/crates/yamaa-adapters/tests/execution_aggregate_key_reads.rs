@@ -150,6 +150,8 @@ fn an_aggregate_key_reads_the_driver_of_every_row_that_evaluates_it() {
     let run = |text: String| Fixture::new(&text, &DEVICES).run();
     // Home rows have no clinic record to read the device from, and clinic
     // rows no home record; either key is reported at its pair.
+    // `negative-aggregate-key-other-template` states the clinic key's first
+    // issue, but its `error.yaml` leaves out that the issue is the only one.
     assert_eq!(
         run(specification(&column("CLINIC.DEVICE"), "", Some(""))),
         refused(
@@ -157,6 +159,9 @@ fn an_aggregate_key_reads_the_driver_of_every_row_that_evaluates_it() {
             "CLINIC.DEVICE"
         )
     );
+    // No benchmark pins the home key, a key in a case result, the builds
+    // that read the device, nor SPEC-6 for an aggregate in a case result
+    // (`negative-row-overrides-aggregate` pins a column's own aggregate).
     assert_eq!(
         run(specification(&column("HOME.DEVICE"), "", Some(""))),
         refused(
@@ -219,11 +224,11 @@ fn without_row_templates_an_aggregate_key_reads_the_base_record() {
         )
     };
     let run = |text: String| Fixture::new(&text, &DEVICES).run();
-    assert_eq!(
-        run(specification("CLINIC.DEVICE")),
-        Ok("ID,NCAL\na,2\nb,1\n".into())
-    );
-    // Every row is built from a clinic record, which no home record is.
+    // A key that reads the base record builds, as in
+    // `adam-adpp-carryover-exclusion`.
+    crate::support::benchmarks::reproduce("adam-adpp-carryover-exclusion");
+    // Every row is built from a clinic record, which no home record is. No
+    // benchmark pins a key that reads another input without row templates.
     assert_eq!(
         run(specification("HOME.DEVICE")),
         refused(
@@ -236,7 +241,8 @@ fn without_row_templates_an_aggregate_key_reads_the_base_record() {
 #[test]
 fn an_aggregate_over_the_first_input_serves_rows_another_input_builds() {
     // Only home rows evaluate NCAL: it counts the clinic records of the
-    // row's subject, a reduction of the first template's input.
+    // row's subject, a reduction of the first template's input. No
+    // benchmark pins an aggregate that only another template's rows read.
     let specification = "yamaa: \"1.0\"\ntype: spec\ndomain: VS\nkeys: [ID, ORIGIN]\n\
         input:\n  CLINIC: clinic.csv\n  HOME: home.csv\n\
         output: {path: out.csv, columns: [ID, ORIGIN, NCAL]}\n\
@@ -278,6 +284,8 @@ const WINDOWED: [(&str, &str); 2] = [
     ("cal.csv", "SEQN,LO,HI,W\n1,1,1,10\n1,1,5,5\n2,2,2,20\n"),
 ];
 
+// No benchmark pins this refusal, which public conformance marks
+// unsupported, nor the reads the stage split completes.
 #[test]
 fn an_aggregate_range_read_before_its_window_completes_is_unsupported() {
     let ranged = |value: &str| {
@@ -322,6 +330,8 @@ fn an_aggregate_range_read_before_its_window_completes_is_unsupported() {
     assert_eq!(run(keyed), Ok("ID,SEQ,WT\n1,1,15\n1,2,20\n2,1,15\n".into()));
 }
 
+// No benchmark pins this refusal, which public conformance marks
+// unsupported, nor the read the stage split completes.
 #[test]
 fn an_aggregate_derive_read_before_its_window_completes_is_unsupported() {
     // K selects the lightest calibration of the row's SEQ; each record of the
@@ -365,6 +375,8 @@ fn an_aggregate_derive_read_before_its_window_completes_is_unsupported() {
     );
 }
 
+// No benchmark pins this refusal, which public conformance marks
+// unsupported.
 #[test]
 fn an_unqualified_aggregate_key_beside_a_window_key_is_unsupported() {
     // N counts the rows of the row's ID, which row construction completes

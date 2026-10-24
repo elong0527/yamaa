@@ -99,8 +99,7 @@ const TERMS: &str = "USUBJID,AESEQ,R\nS1,1,HEADACHE\nS2,1,RASH\nS1,3,DIZZINESS\n
 
 /// One record-driven template over the serious events derives the keys; the
 /// column-level derivation of `R` completes every row after construction. AE
-/// and DM declare the keys their implicit joins match on, and SUBJ writes its
-/// key as a mapping, which states a match of its own beside DM's (LOOKUP-4).
+/// declares the keys its implicit join matches on.
 fn records(head: &str, kind: &str, derivation: &str) -> String {
     format!(
         "yamaa: \"1.0\"\n\
@@ -111,10 +110,8 @@ fn records(head: &str, kind: &str, derivation: &str) -> String {
          output: {{path: out.csv, columns: [USUBJID, AESEQ, R]}}\n\
          input:\n\
          \x20 AE: {{path: ae.csv, key: [USUBJID, AESEQ], types: {{AESEQ: int}}}}\n\
-         \x20 DM: {{path: dm.csv, key: [USUBJID]}}\n\
          intermediates:\n\
          \x20 - {{id: SER, dataset: AE, filter: \"AE.AESER = 'Y'\"}}\n\
-         \x20 - {{id: SUBJ, dataset: DM, key: {{USUBJID: USUBJID}}}}\n\
          rows:\n\
          \x20 - id: serious\n\
          \x20   dataset: SER\n\
@@ -134,30 +131,25 @@ fn serious(declaration: &str, kind: &str, derivation: &str) -> String {
     )
 }
 
+/// A literal, the driver's qualifier, which reads the record that built the
+/// row, another input's join on the keys it carries and a lookup selected
+/// through its key each complete every row the selection drives, as
+/// `schema-intermediate-driver-columns` states.
 #[test]
-fn literal_completes_every_intermediate_driven_row() {
-    Fixture::new(&records("", "str", "\"'X'\"")).saved("USUBJID,AESEQ,R\nS1,1,X\nS2,1,X\nS1,3,X\n");
-}
-
-#[test]
-fn driver_qualifier_reads_the_record_that_built_the_row() {
-    Fixture::new(&records("", "str", "SER.AETERM")).saved(TERMS);
+fn columns_stated_once_complete_every_intermediate_driven_row() {
+    crate::support::benchmarks::reproduce("schema-intermediate-driver-columns");
 }
 
 #[test]
 fn underlying_input_is_an_implicit_join_on_the_output_keys() {
-    // AE declares both output keys, so each row matches its own event.
+    // AE declares both output keys, so each row matches its own event. No
+    // benchmark pins the driver's own input joined on the output keys.
     Fixture::new(&records("", "str", "AE.AETERM")).saved(TERMS);
 }
 
 #[test]
-fn another_input_joins_on_the_keys_it_carries() {
-    // DM declares USUBJID only, so each row matches its subject.
-    Fixture::new(&records("", "str", "DM.SEX")).saved("USUBJID,AESEQ,R\nS1,1,F\nS2,1,M\nS1,3,F\n");
-}
-
-#[test]
 fn case_reads_the_driver_record_in_conditions_and_branches() {
+    // No benchmark pins a case over the driver's record.
     Fixture::new(&records(
         "",
         "str",
@@ -167,19 +159,16 @@ fn case_reads_the_driver_record_in_conditions_and_branches() {
 }
 
 #[test]
-fn keyed_lookup_selects_through_its_key() {
-    Fixture::new(&records("", "str", "SUBJ.SEX"))
-        .saved("USUBJID,AESEQ,R\nS1,1,F\nS2,1,M\nS1,3,F\n");
-}
-
-#[test]
 fn declared_base_keeps_the_intermediate_driver() {
+    // No benchmark pins a declared base beside an intermediate driver.
     Fixture::new(&records("base: AE\n", "str", "\"'X'\""))
         .saved("USUBJID,AESEQ,R\nS1,1,X\nS2,1,X\nS1,3,X\n");
 }
 
 #[test]
 fn window_orders_the_driver_records() {
+    // No benchmark pins a column's window over an intermediate driver's
+    // records.
     Fixture::new(&records(
         "",
         "int",
@@ -188,6 +177,7 @@ fn window_orders_the_driver_records() {
     .saved("USUBJID,AESEQ,R\nS1,1,1\nS2,1,1\nS1,3,2\n");
 }
 
+// No benchmark pins the fields an intermediate's `columns` leaves out.
 #[test]
 fn columns_list_limits_the_driver_fields() {
     let issue = Fixture::new(&serious("columns: [USUBJID, AESEQ]", "str", "SER.AETERM")).issue();
@@ -226,11 +216,13 @@ fn grouped(derivation: &str) -> String {
 #[test]
 fn grouped_intermediate_driver_reads_its_group_key() {
     // S1's two serious events are one group; its key is a single value
-    // (NAME-4), never a lookup that could match both events.
+    // (NAME-4), never a lookup that could match both events. No benchmark
+    // pins a column's read of a grouped intermediate driver.
     Fixture::new(&grouped("\"'X'\"")).saved("USUBJID,R\nS1,X\nS2,X\n");
     Fixture::new(&grouped("SER.USUBJID")).saved("USUBJID,R\nS1,S1\nS2,S2\n");
 }
 
+// No benchmark pins NAME-4 for a grouped intermediate driver.
 #[test]
 fn grouped_driver_field_outside_the_groups_fails_validation() {
     let issue = Fixture::new(&grouped("SER.AETERM")).issue();
@@ -272,6 +264,8 @@ fn mixed(derivation: &str) -> String {
     )
 }
 
+// No benchmark pins a column that only an intermediate's rows complete
+// beside an input's.
 #[test]
 fn mixed_specification_completes_only_the_intermediate_rows() {
     let all = "S1,1,ALL,OWN\nS1,2,ALL,OWN\nS2,1,ALL,OWN\nS1,3,ALL,OWN\n";
@@ -320,7 +314,8 @@ fn grouped_mixed(derivation: &str, own: &str) -> String {
 #[test]
 fn input_rows_read_their_own_record_beside_a_grouped_intermediate() {
     // Only the input-driven template completes R. The intermediate's groups
-    // are not groups of AE, so each AE row reads its own event.
+    // are not groups of AE, so each AE row reads its own event. No benchmark
+    // pins an input's rows beside a grouped intermediate.
     Fixture::new(&grouped_mixed("AE.AETERM", "subjects")).saved(
         "USUBJID,AESEQ,SRC,R\nS1,1,ALL,HEADACHE\nS1,2,ALL,NAUSEA\nS2,1,ALL,RASH\n\
          S1,3,ALL,DIZZINESS\nS1,1,SER,OWN\nS2,1,SER,OWN\n",
@@ -330,7 +325,7 @@ fn input_rows_read_their_own_record_beside_a_grouped_intermediate() {
 #[test]
 fn grouped_intermediate_rows_read_only_its_group_keys() {
     // Only the grouped template completes R, and S1's group holds two
-    // serious events.
+    // serious events. No benchmark pins this refusal.
     let issue = Fixture::new(&grouped_mixed("SER.AETERM", "all")).issue();
     assert_eq!(
         (issue.condition(), issue.rule(), issue.spec_paths.as_slice()),
@@ -348,11 +343,14 @@ fn grouped_intermediate_rows_read_only_its_group_keys() {
 
 const LOWER: &str = "derivations: {LOWER: {str_case: {source: AE.AETERM, to: lower}}}";
 
+// No benchmark pins a stored field of an intermediate that derives fields.
 #[test]
 fn stored_field_of_a_deriving_driver_is_read_from_its_record() {
     Fixture::new(&serious(LOWER, "str", "SER.AETERM")).saved(TERMS);
 }
 
+// No benchmark pins this refusal, which public conformance marks
+// unsupported.
 #[test]
 fn derived_driver_field_is_refused_before_reading_data() {
     Fixture::new(&serious(LOWER, "str", "SER.LOWER")).refused("columns.R.derivation.source");
@@ -367,7 +365,7 @@ fn derived_driver_field_is_refused_before_reading_data() {
 #[test]
 fn derived_field_read_in_the_template_feeds_a_column() {
     // The template reads the derived field into its own column, which the
-    // column-level derivation then reads.
+    // column-level derivation then reads. No benchmark pins it.
     Fixture::new(
         &serious(
             LOWER,
@@ -386,6 +384,8 @@ fn derived_field_read_in_the_template_feeds_a_column() {
     .saved("USUBJID,AESEQ,R\nS1,1,headache\nS2,1,SKIN\nS1,3,dizziness\n");
 }
 
+// No benchmark pins this refusal, which public conformance marks
+// unsupported.
 #[test]
 fn derived_field_in_an_imputation_bound_is_refused() {
     let fixture = Fixture::new(
@@ -414,12 +414,16 @@ const COUNT: &str = "{aggregate: {expr: \"COUNT(AE.AESEQ)\", key: [USUBJID]}}";
 #[test]
 fn aggregate_reduces_the_declared_input() {
     // The reduction reads AE itself, so S1's non-serious event counts too.
+    // No benchmark pins a keyed column aggregate on intermediate-driven rows.
     Fixture::new(&records("", "int", COUNT)).saved("USUBJID,AESEQ,R\nS1,1,3\nS2,1,1\nS1,3,3\n");
 }
 
 #[test]
 fn aggregate_never_reduces_the_intermediate() {
     // An aggregate reduces a declared input; the intermediate is none.
+    // `adam-adpp-accumulation-ratio` reduces an intermediate within the groups
+    // of the template it drives; no benchmark pins the refusal of a keyed
+    // column aggregate over an intermediate.
     let issue = Fixture::new(&records(
         "",
         "int",
@@ -435,6 +439,8 @@ fn aggregate_never_reduces_the_intermediate() {
     );
 }
 
+// No benchmark pins this refusal, which public conformance marks
+// unsupported.
 #[test]
 fn driver_read_beside_an_aggregate_is_refused() {
     Fixture::new(&records(
@@ -474,6 +480,8 @@ fn secondary(derivation: &str) -> String {
     )
 }
 
+// No benchmark pins an intermediate driver over an input other than the
+// first template's.
 #[test]
 fn driver_over_another_input_completes_reads_it_can_address() {
     let subjects = "S1,0,DM,OWN\nS2,0,DM,OWN\n";
@@ -489,7 +497,8 @@ fn driver_over_another_input_completes_reads_it_can_address() {
 fn driver_over_another_input_reads_the_record_that_built_the_row() {
     // The column phase reads each row through its own template's driver
     // port (#2829): the serious event in AE, not the DM record at the same
-    // position.
+    // position. No benchmark pins an intermediate driver over an input other
+    // than the first template's.
     Fixture::new(&secondary("SER.AETERM")).saved(
         "USUBJID,AESEQ,SRC,R\nS1,0,DM,OWN\nS2,0,DM,OWN\n\
          S1,1,SER,HEADACHE\nS2,1,SER,RASH\nS1,3,SER,DIZZINESS\n",
@@ -499,7 +508,8 @@ fn driver_over_another_input_reads_the_record_that_built_the_row() {
 #[test]
 fn failed_driver_intermediate_reports_only_its_own_finding() {
     // The intermediate's filter names a field AE lacks. Its template is
-    // skipped, and so is the column completed for that template's rows.
+    // skipped, and so is the column completed for that template's rows. No
+    // benchmark pins a failed intermediate driver.
     let issue =
         Fixture::new(&records("", "str", "\"'X'\"").edit("AE.AESER = 'Y'", "AE.SERIOUS = 'Y'"))
             .issue();
