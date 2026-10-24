@@ -514,8 +514,9 @@ adam:
 * `codelists`, not used here, lists the codelists files the specifications
   bind ([Codelists and terminology](terminology.md)).
 * `study`, and each section's `standards` and `define`, are the metadata
-  define.xml needs; `transport` adds one Dataset-JSON (`dataset_json`) or
-  SAS Transport (`xpt`) file for each dataset
+  define.xml needs; `transport` adds one Dataset-JSON (`dataset_json`, or
+  `dataset_ndjson` for its newline-delimited form) or SAS Transport (`xpt`)
+  file for each dataset
   ([Create define.xml](#create-definexml-and-submission-datasets)).
 
 A function file declares one project function: its parameters, what it
@@ -704,9 +705,10 @@ lists them), as the
 [sdtm-dm-metadata](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-metadata.html)
 benchmark does; the short `sdtm/dm.yaml` above declares too little, and its
 submission fails with `submission_metadata_missing`. With
-`transport: dataset_json` or `transport: xpt` in a section, it also writes
-each saved dataset as one Dataset-JSON or SAS Transport version 5 file next to
-define.xml.
+`transport: dataset_json`, `transport: dataset_ndjson` or `transport: xpt` in
+a section, it also writes each saved dataset as one Dataset-JSON file, in its
+single-object or its newline-delimited form, or one SAS Transport version 5
+file next to define.xml.
 Its `save()` writes each section's transport files, then its define.xml, and
 returns the paths it wrote. Its `created` is the creation time that the
 documents carry: the `created` you gave, or else the time the submission read
