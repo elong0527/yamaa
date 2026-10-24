@@ -1,0 +1,765 @@
+{
+  "about": "An int is a signed 64-bit integer (VALUE-5). A runtime literal outside that range fails as integer_overflow at validation, before any input is read, in the static check as in the build and for the Python and R hosts alike: as an int, float or str derivation, an allowed value, a range bound, a max_length bound or an unconvertible default, one past the maximum, one below the minimum, 2^64, the hexadecimal 0x8000000000000000 or a 401-digit number. Its context names the int range, the literal's value and its canonical text, so the hexadecimal literal's value is 9223372036854775808. A literal in a row template or in an unselected case branch reports at its authored path, also through a child. The endpoints, the hexadecimal maximum, a wide number quoted as text and a wide number written as a float still check and build, the float saved as 9223372036854776000, the double nearest 2^63, and a row-count bound beyond 64 bits stays mathematical. No benchmark refuses an integer literal beyond 64 bits in either host route: negative-integer-overflow overflows a product while the run derives it. Moved from execution_declarative_self.rs, whose tests compared each issue's phase, condition, rule, spec paths and context, from the template these cases replace, and the saved artifact.",
+  "documents": {
+    "literal": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: input.csv}\noutput: {path: out.csv, columns: [USUBJID, N]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n",
+    "child": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n"
+  },
+  "cases": [
+    {
+      "case": "an_int_derivation_of_one_past_the_maximum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: 9223372036854775808}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "an_int_derivation_of_one_past_the_maximum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: 9223372036854775808}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "a_float_derivation_of_one_past_the_maximum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: float, derivation: 9223372036854775808}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "a_float_derivation_of_one_past_the_maximum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: float, derivation: 9223372036854775808}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "a_str_derivation_of_one_past_the_maximum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: 9223372036854775808}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "a_str_derivation_of_one_past_the_maximum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: 9223372036854775808}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "an_allowed_value_of_one_past_the_maximum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{allowed_values: {values: [34, 9223372036854775808]}}]}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].allowed_values.values[1]"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "an_allowed_value_of_one_past_the_maximum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{allowed_values: {values: [34, 9223372036854775808]}}]}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].allowed_values.values[1]"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "a_range_minimum_of_one_past_the_maximum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{range: {min: 9223372036854775808}}]}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].range.min"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "a_range_minimum_of_one_past_the_maximum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{range: {min: 9223372036854775808}}]}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].range.min"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "a_range_maximum_of_one_past_the_maximum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{range: {max: 9223372036854775808}}]}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].range.max"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "a_range_maximum_of_one_past_the_maximum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{range: {max: 9223372036854775808}}]}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].range.max"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "a_max_length_of_one_past_the_maximum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: DM.USUBJID, verifications: [{max_length: {max: 9223372036854775808}}]}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].max_length.max"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "a_max_length_of_one_past_the_maximum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: DM.USUBJID, verifications: [{max_length: {max: 9223372036854775808}}]}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].max_length.max"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "an_unconvertible_default_of_one_past_the_maximum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: {value: DM.AGE, unconvertible: 9223372036854775808}}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation.unconvertible"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "an_unconvertible_default_of_one_past_the_maximum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: {value: DM.AGE, unconvertible: 9223372036854775808}}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation.unconvertible"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "an_int_derivation_of_one_below_the_minimum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: -9223372036854775809}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": -9223372036854775809, "value": "-9223372036854775809"}}]
+    },
+    {
+      "case": "an_int_derivation_of_one_below_the_minimum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: -9223372036854775809}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": -9223372036854775809, "value": "-9223372036854775809"}}]
+    },
+    {
+      "case": "a_float_derivation_of_one_below_the_minimum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: float, derivation: -9223372036854775809}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": -9223372036854775809, "value": "-9223372036854775809"}}]
+    },
+    {
+      "case": "a_float_derivation_of_one_below_the_minimum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: float, derivation: -9223372036854775809}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": -9223372036854775809, "value": "-9223372036854775809"}}]
+    },
+    {
+      "case": "a_str_derivation_of_one_below_the_minimum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: -9223372036854775809}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": -9223372036854775809, "value": "-9223372036854775809"}}]
+    },
+    {
+      "case": "a_str_derivation_of_one_below_the_minimum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: -9223372036854775809}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": -9223372036854775809, "value": "-9223372036854775809"}}]
+    },
+    {
+      "case": "an_allowed_value_of_one_below_the_minimum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{allowed_values: {values: [34, -9223372036854775809]}}]}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].allowed_values.values[1]"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": -9223372036854775809, "value": "-9223372036854775809"}}]
+    },
+    {
+      "case": "an_allowed_value_of_one_below_the_minimum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{allowed_values: {values: [34, -9223372036854775809]}}]}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].allowed_values.values[1]"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": -9223372036854775809, "value": "-9223372036854775809"}}]
+    },
+    {
+      "case": "a_range_minimum_of_one_below_the_minimum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{range: {min: -9223372036854775809}}]}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].range.min"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": -9223372036854775809, "value": "-9223372036854775809"}}]
+    },
+    {
+      "case": "a_range_minimum_of_one_below_the_minimum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{range: {min: -9223372036854775809}}]}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].range.min"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": -9223372036854775809, "value": "-9223372036854775809"}}]
+    },
+    {
+      "case": "a_range_maximum_of_one_below_the_minimum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{range: {max: -9223372036854775809}}]}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].range.max"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": -9223372036854775809, "value": "-9223372036854775809"}}]
+    },
+    {
+      "case": "a_range_maximum_of_one_below_the_minimum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{range: {max: -9223372036854775809}}]}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].range.max"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": -9223372036854775809, "value": "-9223372036854775809"}}]
+    },
+    {
+      "case": "a_max_length_of_one_below_the_minimum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: DM.USUBJID, verifications: [{max_length: {max: -9223372036854775809}}]}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].max_length.max"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": -9223372036854775809, "value": "-9223372036854775809"}}]
+    },
+    {
+      "case": "a_max_length_of_one_below_the_minimum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: DM.USUBJID, verifications: [{max_length: {max: -9223372036854775809}}]}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].max_length.max"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": -9223372036854775809, "value": "-9223372036854775809"}}]
+    },
+    {
+      "case": "an_unconvertible_default_of_one_below_the_minimum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: {value: DM.AGE, unconvertible: -9223372036854775809}}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation.unconvertible"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": -9223372036854775809, "value": "-9223372036854775809"}}]
+    },
+    {
+      "case": "an_unconvertible_default_of_one_below_the_minimum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: {value: DM.AGE, unconvertible: -9223372036854775809}}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation.unconvertible"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": -9223372036854775809, "value": "-9223372036854775809"}}]
+    },
+    {
+      "case": "an_int_derivation_of_two_to_the_64_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: 18446744073709551616}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 18446744073709551616, "value": "18446744073709551616"}}]
+    },
+    {
+      "case": "an_int_derivation_of_two_to_the_64_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: 18446744073709551616}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 18446744073709551616, "value": "18446744073709551616"}}]
+    },
+    {
+      "case": "a_float_derivation_of_two_to_the_64_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: float, derivation: 18446744073709551616}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 18446744073709551616, "value": "18446744073709551616"}}]
+    },
+    {
+      "case": "a_float_derivation_of_two_to_the_64_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: float, derivation: 18446744073709551616}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 18446744073709551616, "value": "18446744073709551616"}}]
+    },
+    {
+      "case": "a_str_derivation_of_two_to_the_64_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: 18446744073709551616}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 18446744073709551616, "value": "18446744073709551616"}}]
+    },
+    {
+      "case": "a_str_derivation_of_two_to_the_64_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: 18446744073709551616}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 18446744073709551616, "value": "18446744073709551616"}}]
+    },
+    {
+      "case": "an_allowed_value_of_two_to_the_64_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{allowed_values: {values: [34, 18446744073709551616]}}]}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].allowed_values.values[1]"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 18446744073709551616, "value": "18446744073709551616"}}]
+    },
+    {
+      "case": "an_allowed_value_of_two_to_the_64_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{allowed_values: {values: [34, 18446744073709551616]}}]}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].allowed_values.values[1]"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 18446744073709551616, "value": "18446744073709551616"}}]
+    },
+    {
+      "case": "a_range_minimum_of_two_to_the_64_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{range: {min: 18446744073709551616}}]}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].range.min"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 18446744073709551616, "value": "18446744073709551616"}}]
+    },
+    {
+      "case": "a_range_minimum_of_two_to_the_64_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{range: {min: 18446744073709551616}}]}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].range.min"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 18446744073709551616, "value": "18446744073709551616"}}]
+    },
+    {
+      "case": "a_range_maximum_of_two_to_the_64_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{range: {max: 18446744073709551616}}]}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].range.max"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 18446744073709551616, "value": "18446744073709551616"}}]
+    },
+    {
+      "case": "a_range_maximum_of_two_to_the_64_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{range: {max: 18446744073709551616}}]}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].range.max"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 18446744073709551616, "value": "18446744073709551616"}}]
+    },
+    {
+      "case": "a_max_length_of_two_to_the_64_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: DM.USUBJID, verifications: [{max_length: {max: 18446744073709551616}}]}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].max_length.max"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 18446744073709551616, "value": "18446744073709551616"}}]
+    },
+    {
+      "case": "a_max_length_of_two_to_the_64_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: DM.USUBJID, verifications: [{max_length: {max: 18446744073709551616}}]}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].max_length.max"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 18446744073709551616, "value": "18446744073709551616"}}]
+    },
+    {
+      "case": "an_unconvertible_default_of_two_to_the_64_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: {value: DM.AGE, unconvertible: 18446744073709551616}}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation.unconvertible"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 18446744073709551616, "value": "18446744073709551616"}}]
+    },
+    {
+      "case": "an_unconvertible_default_of_two_to_the_64_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: {value: DM.AGE, unconvertible: 18446744073709551616}}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation.unconvertible"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 18446744073709551616, "value": "18446744073709551616"}}]
+    },
+    {
+      "case": "an_int_derivation_of_a_hexadecimal_one_past_the_maximum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: 0x8000000000000000}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "an_int_derivation_of_a_hexadecimal_one_past_the_maximum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: 0x8000000000000000}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "a_float_derivation_of_a_hexadecimal_one_past_the_maximum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: float, derivation: 0x8000000000000000}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "a_float_derivation_of_a_hexadecimal_one_past_the_maximum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: float, derivation: 0x8000000000000000}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "a_str_derivation_of_a_hexadecimal_one_past_the_maximum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: 0x8000000000000000}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "a_str_derivation_of_a_hexadecimal_one_past_the_maximum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: 0x8000000000000000}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "an_allowed_value_of_a_hexadecimal_one_past_the_maximum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{allowed_values: {values: [34, 0x8000000000000000]}}]}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].allowed_values.values[1]"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "an_allowed_value_of_a_hexadecimal_one_past_the_maximum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{allowed_values: {values: [34, 0x8000000000000000]}}]}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].allowed_values.values[1]"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "a_range_minimum_of_a_hexadecimal_one_past_the_maximum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{range: {min: 0x8000000000000000}}]}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].range.min"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "a_range_minimum_of_a_hexadecimal_one_past_the_maximum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{range: {min: 0x8000000000000000}}]}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].range.min"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "a_range_maximum_of_a_hexadecimal_one_past_the_maximum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{range: {max: 0x8000000000000000}}]}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].range.max"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "a_range_maximum_of_a_hexadecimal_one_past_the_maximum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{range: {max: 0x8000000000000000}}]}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].range.max"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "a_max_length_of_a_hexadecimal_one_past_the_maximum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: DM.USUBJID, verifications: [{max_length: {max: 0x8000000000000000}}]}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].max_length.max"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "a_max_length_of_a_hexadecimal_one_past_the_maximum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: DM.USUBJID, verifications: [{max_length: {max: 0x8000000000000000}}]}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].max_length.max"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "an_unconvertible_default_of_a_hexadecimal_one_past_the_maximum_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: {value: DM.AGE, unconvertible: 0x8000000000000000}}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation.unconvertible"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "an_unconvertible_default_of_a_hexadecimal_one_past_the_maximum_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: {value: DM.AGE, unconvertible: 0x8000000000000000}}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation.unconvertible"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "an_int_derivation_of_a_401_digit_number_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, "value": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}}]
+    },
+    {
+      "case": "an_int_derivation_of_a_401_digit_number_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, "value": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}}]
+    },
+    {
+      "case": "a_float_derivation_of_a_401_digit_number_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: float, derivation: 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, "value": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}}]
+    },
+    {
+      "case": "a_float_derivation_of_a_401_digit_number_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: float, derivation: 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, "value": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}}]
+    },
+    {
+      "case": "a_str_derivation_of_a_401_digit_number_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, "value": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}}]
+    },
+    {
+      "case": "a_str_derivation_of_a_401_digit_number_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, "value": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}}]
+    },
+    {
+      "case": "an_allowed_value_of_a_401_digit_number_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{allowed_values: {values: [34, 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000]}}]}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].allowed_values.values[1]"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, "value": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}}]
+    },
+    {
+      "case": "an_allowed_value_of_a_401_digit_number_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{allowed_values: {values: [34, 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000]}}]}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].allowed_values.values[1]"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, "value": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}}]
+    },
+    {
+      "case": "a_range_minimum_of_a_401_digit_number_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{range: {min: 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}}]}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].range.min"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, "value": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}}]
+    },
+    {
+      "case": "a_range_minimum_of_a_401_digit_number_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{range: {min: 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}}]}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].range.min"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, "value": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}}]
+    },
+    {
+      "case": "a_range_maximum_of_a_401_digit_number_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{range: {max: 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}}]}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].range.max"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, "value": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}}]
+    },
+    {
+      "case": "a_range_maximum_of_a_401_digit_number_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE, verifications: [{range: {max: 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}}]}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].range.max"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, "value": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}}]
+    },
+    {
+      "case": "a_max_length_of_a_401_digit_number_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: DM.USUBJID, verifications: [{max_length: {max: 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}}]}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].max_length.max"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, "value": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}}]
+    },
+    {
+      "case": "a_max_length_of_a_401_digit_number_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: DM.USUBJID, verifications: [{max_length: {max: 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}}]}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.verifications[0].max_length.max"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, "value": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}}]
+    },
+    {
+      "case": "an_unconvertible_default_of_a_401_digit_number_overflows_before_study_access_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: {value: DM.AGE, unconvertible: 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation.unconvertible"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, "value": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}}]
+    },
+    {
+      "case": "an_unconvertible_default_of_a_401_digit_number_overflows_before_study_access_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: {value: DM.AGE, unconvertible: 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation.unconvertible"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, "value": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}}]
+    },
+    {
+      "case": "a_row_template_literal_keeps_its_authored_path_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int}\nrows:\n  - {id: record, dataset: DM, derivations: {N: 9223372036854775808}}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["rows.record.derivations.N"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "an_unselected_case_literal_keeps_its_authored_path_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: {case: [{when: 'FALSE', then: 9223372036854775808}, {otherwise: 0}]}}\n"}]}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation.case[0].then"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "an_unselected_case_literal_keeps_its_authored_path_through_a_child_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"parent.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: {case: [{when: 'FALSE', then: 9223372036854775808}, {otherwise: 0}]}}\n"}]}, "spec.yaml": {"base": "child"}}, "specification": "spec.yaml", "host": "python"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation.case[0].then"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "a_row_template_literal_keeps_its_authored_path_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int}\nrows:\n  - {id: record, dataset: DM, derivations: {N: 9223372036854775808}}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["rows.record.derivations.N"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "an_unselected_case_literal_keeps_its_authored_path_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: {case: [{when: 'FALSE', then: 9223372036854775808}, {otherwise: 0}]}}\n"}]}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation.case[0].then"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "an_unselected_case_literal_keeps_its_authored_path_through_a_child_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"parent.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: {case: [{when: 'FALSE', then: 9223372036854775808}, {otherwise: 0}]}}\n"}]}, "spec.yaml": {"base": "child"}}, "specification": "spec.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.N.derivation.case[0].then"], "context": {"minimum": -9223372036854775808, "maximum": 9223372036854775807, "actual": 9223372036854775808, "value": "9223372036854775808"}}]
+    },
+    {
+      "case": "the_int_minimum_checks_clean_in_python",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: -9223372036854775808}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "python"},
+      "issues": []
+    },
+    {
+      "case": "the_int_minimum_still_builds_in_python",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: -9223372036854775808}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "python"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,N\nS-001,-9223372036854775808\n"}
+    },
+    {
+      "case": "the_int_minimum_checks_clean_in_r",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: -9223372036854775808}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "r"},
+      "issues": []
+    },
+    {
+      "case": "the_int_minimum_still_builds_in_r",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: -9223372036854775808}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "r"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,N\nS-001,-9223372036854775808\n"}
+    },
+    {
+      "case": "the_int_maximum_checks_clean_in_python",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: 9223372036854775807}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "python"},
+      "issues": []
+    },
+    {
+      "case": "the_int_maximum_still_builds_in_python",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: 9223372036854775807}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "python"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,N\nS-001,9223372036854775807\n"}
+    },
+    {
+      "case": "the_int_maximum_checks_clean_in_r",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: 9223372036854775807}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "r"},
+      "issues": []
+    },
+    {
+      "case": "the_int_maximum_still_builds_in_r",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: 9223372036854775807}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "r"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,N\nS-001,9223372036854775807\n"}
+    },
+    {
+      "case": "the_hexadecimal_int_maximum_checks_clean_in_python",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: 0x7fffffffffffffff}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "python"},
+      "issues": []
+    },
+    {
+      "case": "the_hexadecimal_int_maximum_still_builds_in_python",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: 0x7fffffffffffffff}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "python"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,N\nS-001,9223372036854775807\n"}
+    },
+    {
+      "case": "the_hexadecimal_int_maximum_checks_clean_in_r",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: 0x7fffffffffffffff}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "r"},
+      "issues": []
+    },
+    {
+      "case": "the_hexadecimal_int_maximum_still_builds_in_r",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: 0x7fffffffffffffff}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "r"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,N\nS-001,9223372036854775807\n"}
+    },
+    {
+      "case": "a_wide_number_quoted_as_text_checks_clean_in_python",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: \"'9223372036854775808'\"}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "python"},
+      "issues": []
+    },
+    {
+      "case": "a_wide_number_quoted_as_text_still_builds_in_python",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: \"'9223372036854775808'\"}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "python"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,N\nS-001,9223372036854775808\n"}
+    },
+    {
+      "case": "a_wide_number_quoted_as_text_checks_clean_in_r",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: \"'9223372036854775808'\"}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "r"},
+      "issues": []
+    },
+    {
+      "case": "a_wide_number_quoted_as_text_still_builds_in_r",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: str, derivation: \"'9223372036854775808'\"}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "r"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,N\nS-001,9223372036854775808\n"}
+    },
+    {
+      "case": "a_wide_number_written_as_a_float_checks_clean_in_python",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: float, derivation: 9223372036854775808.0}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "python"},
+      "issues": []
+    },
+    {
+      "case": "a_wide_number_written_as_a_float_still_builds_in_python",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: float, derivation: 9223372036854775808.0}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "python"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,N\nS-001,9223372036854776000\n"}
+    },
+    {
+      "case": "a_wide_number_written_as_a_float_checks_clean_in_r",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: float, derivation: 9223372036854775808.0}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "r"},
+      "issues": []
+    },
+    {
+      "case": "a_wide_number_written_as_a_float_still_builds_in_r",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: float, derivation: 9223372036854775808.0}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "r"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,N\nS-001,9223372036854776000\n"}
+    },
+    {
+      "case": "a_row_count_maximum_of_one_past_the_int_maximum_still_checks_and_builds_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE}\nverifications:\n  - row_count: {max: 9223372036854775808}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "python"},
+      "issues": []
+    },
+    {
+      "case": "a_row_count_maximum_of_one_past_the_int_maximum_still_checks_and_builds_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE}\nverifications:\n  - row_count: {max: 9223372036854775808}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "r"},
+      "issues": []
+    },
+    {
+      "case": "a_row_count_maximum_of_a_401_digit_number_still_checks_and_builds_in_python",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE}\nverifications:\n  - row_count: {max: 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "python"},
+      "issues": []
+    },
+    {
+      "case": "a_row_count_maximum_of_a_401_digit_number_still_checks_and_builds_in_r",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "literal", "edits": [{"from": "DM.USUBJID}\n", "to": "DM.USUBJID}\n  - {name: N, type: int, derivation: DM.AGE}\nverifications:\n  - row_count: {max: 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}\n"}]}, "input.csv": "USUBJID,AGE\nS-001,34\n"}, "specification": "spec.yaml", "host": "r"},
+      "issues": []
+    }
+  ]
+}

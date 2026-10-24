@@ -1,0 +1,32 @@
+{
+  "about": "Verification witnesses from the retired Python evaluator's python/tests/verification/test_checks.py at c7b88a4f (#2110). A row_count fraction of an empty artifact is zero (CHECK-13): max_fraction 0 holds and the header saves, and min_fraction 0.1 fails as row_count_failed with count and denominator 0 and the one empty group. An assert's when exempts the rows where it is false or unknown, but its require must be true (CHECK-12): S-02's VAL 0 and S-03's missing VAL offend, while S-04's GATE N and S-05's missing GATE are exempt. No benchmark bounds the row count fraction of an empty artifact, and the rows the assert_failed benchmarks report fail a comparison of present values. The documents, which the tests built as JSON, are written here as YAML with the same members. Moved from execution_declarative_self.rs, whose tests compared the saved artifact, or the issue's condition, rule and spec paths and the context keys each case's compares names.",
+  "documents": {
+    "empty_artifact": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nbase: SRC\nkeys: [STUDYID, USUBJID]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: STUDYID, type: str, derivation: SRC.STUDYID}\n  - {name: USUBJID, type: str, derivation: SRC.USUBJID}\nverifications:\n  - row_count: {max_fraction: 0}\noutput: {path: out.csv, columns: [STUDYID, USUBJID]}\n",
+    "gated_assertion": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nbase: SRC\nkeys: [STUDYID, USUBJID]\ninput: {SRC: {path: input.csv, types: {VAL: int}}}\ncolumns:\n  - {name: STUDYID, type: str, derivation: SRC.STUDYID}\n  - {name: USUBJID, type: str, derivation: SRC.USUBJID}\n  - {name: GATE, type: str, derivation: SRC.GATE}\n  - {name: VAL, type: int, derivation: SRC.VAL}\nverifications:\n  - assert: {when: \"GATE = 'Y'\", require: 'VAL > 0'}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, GATE, VAL]}\n"
+  },
+  "cases": [
+    {
+      "case": "a_maximum_row_count_fraction_of_an_empty_artifact_holds",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "empty_artifact"}, "input.csv": "STUDYID,USUBJID\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID\n"}
+    },
+    {
+      "case": "fractional_row_count_on_an_empty_artifact_is_zero",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "empty_artifact", "edits": [{"from": "max_fraction: 0", "to": "min_fraction: 0.1"}]}, "input.csv": "STUDYID,USUBJID\n"}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context.denominator", "context.count", "context.keys"],
+      "issues": [{"condition": "row_count_failed", "rule": "CHECK-13", "spec_paths": ["verifications[0].row_count"], "context": {"denominator": 0, "count": 0, "keys": [{}]}}],
+      "saved": {}
+    },
+    {
+      "case": "assertion_when_exempts_false_and_unknown_rows_but_require_must_be_true",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "gated_assertion"}, "input.csv": "STUDYID,USUBJID,GATE,VAL\nS,S-01,Y,1\nS,S-02,Y,0\nS,S-03,Y,\nS,S-04,N,0\nS,S-05,,0\n"}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context.keys"],
+      "issues": [{"condition": "assert_failed", "rule": "CHECK-12", "spec_paths": ["verifications[0].assert"], "context": {"keys": [{"STUDYID": "S", "USUBJID": "S-02"}, {"STUDYID": "S", "USUBJID": "S-03"}]}}],
+      "saved": {}
+    }
+  ]
+}

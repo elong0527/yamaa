@@ -1,0 +1,30 @@
+{
+  "about": "Every order term places an undeclared missing value lowest, first ascending and last descending, and a declared nulls never flips (VALUE-22): in a window's order, the output's order, a structured source's order and an intermediate's. D holds 3, missing and 1, so the ascending row numbers run missing, 1, 3 and the descending ones 3, 1, missing; nulls: last puts the missing value after 3 ascending, and nulls: first before 3 descending. The output sorts by D ascending with the missing row first, and descending with it last. In selection, LOWEST keeps group A's missing D, HIGHEST the largest D, DATED, under nulls: last, the smallest present D, and TRAILING, the last by D descending, the missing one again. schema-ordering, adam-adae-review-order and adam-adae-serious-sequence place missing values in output and window order; no benchmark's window declares nulls: first under desc, and no benchmark's structured source orders by desc (adam-adsl-crossover-periods's declares nulls: last alone). Moved from execution_declarative_self.rs, whose tests compared the saved artifacts.",
+  "documents": {
+    "window_order": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [I]\ninput: {SRC: {path: input.csv, types: {I: int, D: int}}}\ncolumns:\n  - {name: I, type: int, derivation: SRC.I}\n  - {name: D, type: int, derivation: SRC.D}\n  - name: ASC\n    type: int\n    derivation: {row_number: {window: {order_by: [D]}}}\n  - name: DESC\n    type: int\n    derivation: {row_number: {window: {order_by: [{variable: D, direction: desc}]}}}\n  - name: LAST\n    type: int\n    derivation: {row_number: {window: {order_by: [{variable: D, nulls: last}]}}}\n  - name: FIRST\n    type: int\n    derivation:\n      row_number: {window: {order_by: [{variable: D, direction: desc, nulls: first}]}}\noutput: {path: out.csv, columns: [I, D, ASC, DESC, LAST, FIRST], order_by: [D]}\n",
+    "selection_order": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [G]\ninput: {SRC: {path: input.csv, types: {D: int}}}\nbase: SRC\nintermediates:\n  - id: LATEST\n    dataset: SRC\n    key: [G]\n    order_by: [{variable: SRC.D, direction: desc}]\n    keep: last\ncolumns:\n  - {name: G, type: str, derivation: SRC.G}\n  - name: LOWEST\n    type: str\n    derivation: {source: {variable: SRC.S, order_by: [SRC.D], keep: first}}\n  - name: HIGHEST\n    type: str\n    derivation:\n      source: {variable: SRC.S, order_by: [{variable: SRC.D, direction: desc}], keep: first}\n  - name: DATED\n    type: str\n    derivation:\n      source: {variable: SRC.S, order_by: [{variable: SRC.D, nulls: last}], keep: first}\n  - {name: TRAILING, type: str, derivation: LATEST.S}\noutput: {path: out.csv, columns: [G, LOWEST, HIGHEST, DATED, TRAILING]}\n"
+  },
+  "cases": [
+    {
+      "case": "windows_and_presentation_sort_an_undeclared_missing_value_lowest",
+      "operation": "save",
+      "input": {"files": {"input.csv": "I,D\n1,3\n2,\n3,1\n", "spec.yaml": {"base": "window_order"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "I,D,ASC,DESC,LAST,FIRST\n2,,1,3,3,1\n3,1,2,2,1,3\n1,3,3,1,2,2\n"}
+    },
+    {
+      "case": "a_descending_presentation_sorts_an_undeclared_missing_value_last",
+      "operation": "save",
+      "input": {"files": {"input.csv": "I,D\n1,3\n2,\n3,1\n", "spec.yaml": {"base": "window_order", "edits": [{"from": "order_by: [D]}\n", "to": "order_by: [{variable: D, direction: desc}]}\n"}]}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "I,D,ASC,DESC,LAST,FIRST\n1,3,3,1,2,2\n3,1,2,2,1,3\n2,,1,3,3,1\n"}
+    },
+    {
+      "case": "source_and_lookup_selection_sort_an_undeclared_missing_value_lowest",
+      "operation": "save",
+      "input": {"files": {"input.csv": "G,D,S\nA,3,a3\nA,,amiss\nA,1,a1\nB,2,b2\nB,,bmiss\n", "spec.yaml": {"base": "selection_order"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "G,LOWEST,HIGHEST,DATED,TRAILING\nA,amiss,a3,a1,amiss\nB,bmiss,b2,b2,bmiss\n"}
+    }
+  ]
+}
