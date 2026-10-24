@@ -176,8 +176,6 @@ fn partitioned(
     )
 }
 
-/// The plan runs whole and over every division of `input` with the one
-/// authored attempt.
 /// `attempt` as a whole-table run states it. A partitioned run also records
 /// the most rows one partition of its output holds (D264), which
 /// [`the_output_divides_into_partitions_as_large_as_the_largest_driver_partition`]
@@ -190,6 +188,8 @@ fn as_stated(mut attempt: ExecutionAttempt<Infallible>) -> ExecutionAttempt<Infa
     attempt
 }
 
+/// The plan runs whole and over every division of `input` with the one
+/// authored attempt.
 fn assert_every_division(
     plan: &DatasetPlan,
     input: &Rows,

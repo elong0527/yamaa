@@ -45,9 +45,13 @@ partitioned attempt `P` must have the same observable result as `W`:
   must not turn an unobserved failure into an observed one.
 - **Boundaries:** admission and limits apply to the same complete logical inputs
   and outputs. A batch cannot reset a table cap or admit a table that whole-table
-  execution refuses. The one exception is a driver input that a partitioned run
-  reads by partition (#3792, D264): the row and cell limits bound each of its
-  partitions instead of the whole input.
+  execution refuses. There are two exceptions, both D264's: a driver input that
+  a partitioned run reads by partition (#3792), and the output of a partitioned
+  run whose driver input is CSV or Parquet and whose plan divides every step
+  (#3793). The row and cell limits bound each of their partitions instead of
+  the whole table, so such a run can admit an input or an output that
+  whole-table execution refuses. A SAS or ODM driver input and its output stay
+  bounded whole.
   Keep phase entry/exit, outcome and refusal identity.
   Elapsed time and allocation measurements need not be equal. Incidental
   allocator/OS exhaustion cannot be made identical by a scheduling contract;
@@ -367,15 +371,20 @@ asked for, and a reader then reads the table it keeps.
 
 ### Partitioned publication
 
-A partitioned run whose plan has no step that needs the whole table under
-its partitions holds its output in partitions too (#3793, D264): consecutive
-output rows, in output order, each holding at most as many rows as the run's
-largest driver partition (`Execution::partition_rows`). Wherever the output
+A partitioned run whose driver input is CSV or Parquet, and whose plan has no
+step that needs the whole table under its partitions, admits, encodes and
+stages its output a partition at a time (#3793, D264): consecutive output
+rows, in output order, each holding at most as many rows as the run's largest
+driver partition (`Execution::partition_rows`). The run still holds its whole
+output: the dataset, its encoded bytes, the host view and the observations'
+copies. Only the admission, the encoding and the staging go a partition at a
+time, so the run's memory still follows the whole output. Wherever the output
 is admitted, each partition is admitted on its own rather than the whole
 output: the executor's row capacity, the output keys and the dataset checks'
 groupings, the encoders, the host view, a stream's batches and the run's
 observations. A fallback run that runs a whole-table step admits its output
-whole.
+whole, and so does a run over a SAS or ODM driver input, since the row and
+cell limits bound such an input whole, and its output with it (D264).
 
 - **CSV and Parquet, one partition at a time.** The build encodes the output
   one partition after another (`csv_artifact::render_partitions`,
@@ -443,7 +452,8 @@ benchmarks key-bounded partitions must admit, and `end_states.rs`, one test
 per cell of the end states. The partitioned publication's are the facade's
 `partitioned_publication.rs` and `partitioned_reading.rs`, the adapters'
 `table_parquet_bytes.rs` and `table_arrow_table.rs` for the encoders, and
-`file_application.rs`'s save that fails between two partitions. The schedule's classes under key-bounded
+`file_application.rs`'s save that fails or is cancelled between two
+partitions. The schedule's classes under key-bounded
 partitions are stated case by case in `dataset/resolved/tests.rs`. The streamed run's
 are the facade's `streaming.rs`, the adapters' `table_public_batches.rs`, whose
 counting source proves that a consumer that stops pulling stops production,

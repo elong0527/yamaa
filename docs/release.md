@@ -1349,12 +1349,14 @@ specification's only one and its plan is safe under consecutive partitions,
 and each table it reads whole. A run that also reads the source of a lookup,
 join or named relation reads every input whole.
 
-When no step of such a run needs the whole table, its output is admitted a
-partition at a time too, each holding at most as many rows as its largest
-driver partition, and a CSV or Parquet output file is written one partition
-after another, with the whole-table write's bytes, row groups included. The
-run report is admitted and written whole, as is every file of a submission: a
-SAS Transport or Dataset-JSON file states its record count in its header.
+When such a run's driver input is CSV or Parquet and no step of the run needs
+the whole table, its output is admitted a partition at a time too, each
+holding at most as many rows as its largest driver partition, and a CSV or
+Parquet output file is written one partition after another, with the
+whole-table write's bytes, row groups included. A run over a SAS or ODM driver
+input admits its output whole, as it admits that input. The run report is
+admitted and written whole, as is every file of a submission: a SAS Transport
+or Dataset-JSON file states its record count in its header.
 
 A MiB is 1,048,576 bytes; a GiB is 1,073,741,824 bytes. File readers check the
 encoded size before retaining bytes and check growth during reading. A
