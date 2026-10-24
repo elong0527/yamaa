@@ -177,6 +177,23 @@ pub struct Execution {
     pub partition_rows: Option<std::num::NonZeroUsize>,
 }
 
+impl Execution {
+    /// The output's partitions, in order (D264): consecutive ranges of at
+    /// most [`Self::partition_rows`] rows, the last holding the rest, or one
+    /// range of the whole output. An empty output is one empty partition, so
+    /// its columns are still admitted.
+    pub fn output_partitions(&self) -> Vec<std::ops::Range<usize>> {
+        let rows = self.dataset.row_count();
+        let size = self
+            .partition_rows
+            .map_or(rows.max(1), std::num::NonZeroUsize::get);
+        (0..rows.max(1))
+            .step_by(size)
+            .map(|start| start..rows.min(start.saturating_add(size)))
+            .collect()
+    }
+}
+
 /// One completed row template: the rows it emitted and the driver records it
 /// read, counted where its candidates become final.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

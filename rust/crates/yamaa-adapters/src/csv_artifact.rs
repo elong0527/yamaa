@@ -68,6 +68,22 @@ pub fn render<T: TableAccess>(
     projection: &[usize],
     decimals: Option<&str>,
 ) -> Result<Vec<u8>, Error<T::Error>> {
+    render_partitions(table, projection, decimals, &[0..table.row_count()]).map(|(bytes, _)| bytes)
+}
+
+/// [`render`] one partition of rows at a time (D264): the header once, then
+/// the records of each of `partitions`, the consecutive ranges that divide
+/// the table's rows in order. Every byte is row-local and CSV-9's display
+/// precision is per value, so the file equals the whole-table render's
+/// whatever the partitions. Each partition is admitted on its own, the file
+/// is checked before it grows, and the end of each partition's bytes is
+/// returned with them, the last at the file's length.
+pub fn render_partitions<T: TableAccess>(
+    table: &T,
+    projection: &[usize],
+    decimals: Option<&str>,
+    partitions: &[std::ops::Range<usize>],
+) -> Result<(Vec<u8>, Vec<usize>), Error<T::Error>> {
     if projection.is_empty()
         || projection
             .iter()
@@ -76,12 +92,6 @@ pub fn render<T: TableAccess>(
     {
         return Err(Error::Projection);
     }
-    Limits::table(table.row_count(), projection.len()).map_err(|error| Error::Limit {
-        resource: error.resource,
-        limit: error.limit,
-        actual: error.actual,
-        decimal_formatting: false,
-    })?;
     let mut writer = Writer { bytes: Vec::new() };
     for (index, &column) in projection.iter().enumerate() {
         if index > 0 {
@@ -90,21 +100,51 @@ pub fn render<T: TableAccess>(
         writer.field(&table.schema().columns()[column].name)?;
     }
     writer.write("\n")?;
-    let decimals = if table.row_count() > 0
-        && projection
-            .iter()
-            .any(|&c| table.schema().columns()[c].kind == ColumnType::Float)
-    {
+    let floats = projection
+        .iter()
+        .any(|&c| table.schema().columns()[c].kind == ColumnType::Float);
+    // The display precision is read with the first record, as a whole-table
+    // render reads it once the table holds one.
+    let mut precision = None;
+    let mut ends = Vec::with_capacity(partitions.len());
+    for rows in partitions {
+        Limits::table(rows.len(), projection.len()).map_err(|error| Error::Limit {
+            resource: error.resource,
+            limit: error.limit,
+            actual: error.actual,
+            decimal_formatting: false,
+        })?;
+        if !rows.is_empty() && precision.is_none() {
+            precision = Some(if floats {
+                writer.precision(decimals)?
+            } else {
+                None
+            });
+        }
+        let decimals = precision.flatten();
+        for row in rows.clone() {
+            writer.record(table, projection, decimals, row)?;
+        }
+        ends.push(writer.bytes.len());
+    }
+    Ok((writer.bytes, ends))
+}
+
+impl Writer {
+    /// The display precision `decimals` asks for, read once the table holds a
+    /// record and a float column: a count of digits whose narrowest value
+    /// still fits in the file.
+    fn precision<E>(&self, decimals: Option<&str>) -> Result<Option<usize>, Error<E>> {
         decimals
             .map(|text| {
                 text.parse::<usize>()
                     .ok()
                     .filter(|&n| {
                         if n == 0 {
-                            writer.bytes.len() < Limits::OUTPUT_BYTES
+                            self.bytes.len() < Limits::OUTPUT_BYTES
                         } else {
                             n.checked_add(2).is_some_and(|width| {
-                                width <= Limits::OUTPUT_BYTES - writer.bytes.len()
+                                width <= Limits::OUTPUT_BYTES - self.bytes.len()
                             })
                         }
                     })
@@ -115,19 +155,25 @@ pub fn render<T: TableAccess>(
                         decimal_formatting: true,
                     })
             })
-            .transpose()?
-    } else {
-        None
-    };
-    for row in 0..table.row_count() {
+            .transpose()
+    }
+
+    /// Write the projected cells of `row`, then its LF.
+    fn record<T: TableAccess>(
+        &mut self,
+        table: &T,
+        projection: &[usize],
+        decimals: Option<usize>,
+        row: usize,
+    ) -> Result<(), Error<T::Error>> {
         for (index, &column) in projection.iter().enumerate() {
             if index > 0 {
-                writer.write(",")?;
+                self.write(",")?;
             }
             if let Some(digits) = decimals {
                 let minimum = if digits == 0 { 1 } else { digits + 2 };
                 if table.schema().columns()[column].kind == ColumnType::Float
-                    && minimum > Limits::OUTPUT_BYTES - writer.bytes.len()
+                    && minimum > Limits::OUTPUT_BYTES - self.bytes.len()
                 {
                     return Err(Error::Limit {
                         resource: "output_bytes",
@@ -139,12 +185,12 @@ pub fn render<T: TableAccess>(
             }
             match table.cell(row, column).map_err(Error::Cell)? {
                 ValueRef::Missing => {}
-                ValueRef::Str(text) => writer.field(text)?,
-                ValueRef::Int(value) => writer.field(&value.to_string())?,
+                ValueRef::Str(text) => self.field(text)?,
+                ValueRef::Int(value) => self.field(&value.to_string())?,
                 ValueRef::Float(value) => {
                     let text = match decimals {
                         Some(digits) => {
-                            fixed_point(value, digits, Limits::OUTPUT_BYTES - writer.bytes.len())
+                            fixed_point(value, digits, Limits::OUTPUT_BYTES - self.bytes.len())
                                 .map_err(|_| Error::Limit {
                                     resource: "output_bytes",
                                     limit: Limits::OUTPUT_BYTES,
@@ -154,14 +200,13 @@ pub fn render<T: TableAccess>(
                         }
                         None => float_text(value),
                     };
-                    writer.field(&text)?;
+                    self.field(&text)?;
                 }
-                ValueRef::Date(value) => writer.field(&value.to_string())?,
-                ValueRef::DateTime(value) => writer.field(&value.to_string())?,
+                ValueRef::Date(value) => self.field(&value.to_string())?,
+                ValueRef::DateTime(value) => self.field(&value.to_string())?,
                 ValueRef::Bool(_) => return Err(Error::UnsupportedValue),
             }
         }
-        writer.write("\n")?;
+        self.write("\n")
     }
-    Ok(writer.bytes)
 }

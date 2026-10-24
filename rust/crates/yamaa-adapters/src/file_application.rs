@@ -398,15 +398,18 @@ impl Domain {
         let files = targets
             .iter()
             .zip(&items)
-            .map(|(target, (written, bytes, _))| crate::publication::File {
-                target,
-                written,
-                bytes,
-            })
+            .map(
+                |(target, (written, bytes, partitions, _))| crate::publication::File {
+                    target,
+                    written,
+                    bytes,
+                    partitions,
+                },
+            )
             .collect();
         let written = items
             .iter()
-            .map(|(written, _, _)| (*written).to_owned())
+            .map(|(written, _, _, _)| (*written).to_owned())
             .collect();
         Ok(Some((
             files,
@@ -482,6 +485,16 @@ impl Domain {
                     target_failure(&error, Some(&field), &written[file]),
                     attempt,
                 );
+                attempt.failure = Some(error);
+                issues
+            }
+            // A save cancelled between two partitions of the file (D264); a
+            // facade save fails as cancelled instead and records nothing.
+            Cause::Cancelled => {
+                attempt.entered = file + 1;
+                let error =
+                    crate::file_publication::Error::Host(crate::host_resources::Failure::Cancelled);
+                let issues = at(publication_failure(&error), attempt);
                 attempt.failure = Some(error);
                 issues
             }
@@ -668,10 +681,13 @@ fn result<E>(
 }
 
 /// Move the accepted dataset out of `attempt`, for a deferred build whose
-/// output is read as a stream (#3697); none when the attempt accepted no
-/// dataset. The attempt then holds no execution result, so read whatever
-/// else it holds, such as its host failures, first.
-pub fn take_dataset<C, E>(attempt: &mut Attempt<C, E>) -> Option<yamaa_core::dataset::Dataset> {
+/// output is read as a stream (#3697), with the most rows one partition of
+/// it holds when the run admitted it a partition at a time (D264); none when
+/// the attempt accepted no dataset. The attempt then holds no execution
+/// result, so read whatever else it holds, such as its host failures, first.
+pub fn take_dataset<C, E>(
+    attempt: &mut Attempt<C, E>,
+) -> Option<(yamaa_core::dataset::Dataset, Option<std::num::NonZeroUsize>)> {
     let result = std::mem::replace(
         &mut attempt.dataset.result,
         Err(yamaa_core::specification_run::PortError::Incomplete),
@@ -680,7 +696,7 @@ pub fn take_dataset<C, E>(attempt: &mut Attempt<C, E>) -> Option<yamaa_core::dat
         Ok(yamaa_core::dataset::ExecutionAttempt {
             result: Ok(execution),
             ..
-        }) => Some(execution.dataset),
+        }) => Some((execution.dataset, execution.partition_rows)),
         other => {
             attempt.dataset.result = other;
             None

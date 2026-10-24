@@ -133,7 +133,11 @@ impl Publisher {
     /// Stage and commit one file on its own, as a save of that one file.
     pub fn publish(&mut self, declared: &str, bytes: &[u8]) -> Result<(), file::Error> {
         let mut locks = file::Locks::default();
-        let staging = self.stage(&mut locks, declared, bytes)?;
+        let staging = match self.stage(&mut locks, declared, bytes, &[], &mut |_| Ok(())) {
+            Ok(staging) => staging,
+            Err(Interruption::Failed(error)) => return Err(error),
+            Err(Interruption::Cancelled) => unreachable!("a whole file is never interrupted"),
+        };
         self.commit(staging)
     }
     fn request<'a>(
@@ -164,32 +168,73 @@ impl Publisher {
             },
         ))
     }
+    /// Stage `bytes` one partition at a time, where `ends` marks each
+    /// partition's end (D264), calling `between` with each partition after
+    /// the first before it is written. The file publisher appends each
+    /// partition to the one staged file it opened, checking the saved-file
+    /// bound as the file grows; a caller's resolver stages complete bytes, so
+    /// it is asked once every partition has passed. A cancellation or a
+    /// failure between two partitions removes the partial staged file.
     fn stage(
         &self,
         locks: &mut file::Locks,
         declared: &str,
         bytes: &[u8],
-    ) -> Result<Staging, file::Error> {
+        ends: &[usize],
+        between: &mut dyn FnMut(usize) -> Result<(), Interruption>,
+    ) -> Result<Staging, Interruption> {
+        let failed = Interruption::Failed;
+        let pieces = pieces(bytes, ends);
         let (written, reference) = match self {
+            Self::File(publisher) if pieces.len() == 1 => {
+                return publisher
+                    .stage(locks, declared, bytes)
+                    .map(Staging::File)
+                    .map_err(failed);
+            }
             Self::File(publisher) => {
-                return publisher.stage(locks, declared, bytes).map(Staging::File)
+                yamaa_core::limits::Limits::output_bytes(bytes.len())
+                    .map_err(|error| failed(file::Error::Limit(error)))?;
+                let mut writing = publisher.open(locks, declared).map_err(failed)?;
+                for (partition, piece) in pieces.into_iter().enumerate() {
+                    if partition > 0 {
+                        match between(partition) {
+                            Ok(()) => {}
+                            // Dropped unfinished, the staged file is removed.
+                            Err(Interruption::Cancelled) => return Err(Interruption::Cancelled),
+                            Err(Interruption::Failed(error)) => {
+                                return Err(failed(writing.fail(error)))
+                            }
+                        }
+                    }
+                    if let Err(error) = writing.append(piece) {
+                        return Err(failed(writing.fail(error)));
+                    }
+                }
+                return writing.finish().map(Staging::File).map_err(failed);
             }
             Self::Host {
                 written, reference, ..
             } => (written, reference),
         };
         if written != declared {
-            return Err(file::Error::PathMismatch);
+            return Err(failed(file::Error::PathMismatch));
         }
-        yamaa_core::limits::Limits::output_bytes(bytes.len()).map_err(file::Error::Limit)?;
+        yamaa_core::limits::Limits::output_bytes(bytes.len())
+            .map_err(|error| failed(file::Error::Limit(error)))?;
+        for partition in 1..pieces.len() {
+            between(partition)?;
+        }
         let (resolver, request) = self
             .request(Operation::Stage, reference, Some(bytes))
             .expect("a host publisher");
-        let reply = resolver.request(request).map_err(file::Error::Host)?;
+        let reply = resolver
+            .request(request)
+            .map_err(|failure| failed(file::Error::Host(failure)))?;
         // Stage is atomic by contract: a failed Stage leaves nothing to abort,
         // and a reply without a staging token staged nothing.
         if reply.reference.is_empty() || reply.bytes.is_some() || reply.frame.is_some() {
-            return Err(file::Error::Host(Failure::Rejected));
+            return Err(failed(file::Error::Host(Failure::Rejected)));
         }
         Ok(Staging::Host(reply.reference))
     }
@@ -250,11 +295,39 @@ fn keeping(error: file::Error, leftover: Leftover) -> file::Error {
 }
 
 /// One file a save writes: its target, the path its specification or project
-/// file wrote, and its complete bytes.
+/// file wrote, its complete bytes, and where each partition of them ends,
+/// the last at their length, for a file published a partition at a time
+/// (D264); none for a file published whole.
 pub struct File<'a> {
     pub(crate) target: &'a AnchoredTarget,
     pub(crate) written: &'a str,
     pub(crate) bytes: &'a [u8],
+    pub(crate) partitions: &'a [usize],
+}
+
+/// `bytes` cut where `ends` marks each partition's end, in order; whole when
+/// `ends` marks no partition, or anything but consecutive pieces of `bytes`.
+fn pieces<'b>(bytes: &'b [u8], ends: &[usize]) -> Vec<&'b [u8]> {
+    if ends.last() != Some(&bytes.len()) || ends.windows(2).any(|pair| pair[0] > pair[1]) {
+        return vec![bytes];
+    }
+    let mut start = 0;
+    ends.iter()
+        .map(|&end| {
+            let piece = &bytes[start..end];
+            start = end;
+            piece
+        })
+        .collect()
+}
+
+/// What a save's call between two partitions of a file it stages asks
+/// ([`stage_with`]).
+pub enum Interruption {
+    /// The save was cancelled.
+    Cancelled,
+    /// The file cannot be staged, as a test injects a failure.
+    Failed(file::Error),
 }
 impl File<'_> {
     /// The path the save reports for the file once written.
@@ -278,6 +351,8 @@ pub enum Cause {
     Collision { earlier: usize },
     /// The file could not be staged.
     Stage(file::Error),
+    /// The save was cancelled between two partitions of the file (D264).
+    Cancelled,
     /// The file could not replace its target.
     Commit(file::Error),
     /// A caller's resolver unwound while staging or committing the file; the
@@ -293,6 +368,7 @@ impl std::fmt::Debug for Cause {
                 .field("earlier", earlier)
                 .finish(),
             Self::Stage(error) => formatter.debug_tuple("Stage").field(error).finish(),
+            Self::Cancelled => formatter.write_str("Cancelled"),
             Self::Commit(error) => formatter.debug_tuple("Commit").field(error).finish(),
             Self::Unwind(_) => formatter.write_str("Unwind"),
         }
@@ -326,6 +402,19 @@ pub struct Staged {
 /// cannot be staged stop the save before any target is replaced, and every
 /// file already staged is removed.
 pub fn stage(files: &[File<'_>]) -> Result<Staged, Stop> {
+    stage_with(files, |_, _| Ok(()))
+}
+
+/// [`stage`], calling `between` before each partition of a file after its
+/// first, with the file's position in save order and the partition's
+/// (D264): a save polls its cancellation there, and a test injects a
+/// failure. A cancellation or a failure stops the save there, before any
+/// target is replaced: the file's partial staged file and every file
+/// already staged are removed.
+pub fn stage_with(
+    files: &[File<'_>],
+    mut between: impl FnMut(usize, usize) -> Result<(), Interruption>,
+) -> Result<Staged, Stop> {
     let mut publishers: Vec<Publisher> = Vec::with_capacity(files.len());
     for (index, file) in files.iter().enumerate() {
         let stop = |cause| Stop {
@@ -352,8 +441,15 @@ pub fn stage(files: &[File<'_>]) -> Result<Staged, Stop> {
     };
     for (index, (publisher, file)) in publishers.into_iter().zip(files).enumerate() {
         let locks = &mut staged.locks;
+        let between = &mut between;
         let cause = match catch_unwind(AssertUnwindSafe(|| {
-            publisher.stage(locks, file.written, file.bytes)
+            publisher.stage(
+                locks,
+                file.written,
+                file.bytes,
+                file.partitions,
+                &mut |partition| between(index, partition),
+            )
         })) {
             Ok(Ok(staging)) => {
                 staged.files.push(StagedFile {
@@ -363,7 +459,8 @@ pub fn stage(files: &[File<'_>]) -> Result<Staged, Stop> {
                 });
                 continue;
             }
-            Ok(Err(error)) => Cause::Stage(error),
+            Ok(Err(Interruption::Failed(error))) => Cause::Stage(error),
+            Ok(Err(Interruption::Cancelled)) => Cause::Cancelled,
             Err(payload) => Cause::Unwind(payload),
         };
         return Err(staged.stop(index, 0, cause));

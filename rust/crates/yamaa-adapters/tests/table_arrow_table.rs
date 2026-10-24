@@ -1004,7 +1004,7 @@ mod table {
                     ],
                 ],
             );
-            let rows = yamaa_adapters::parquet_artifact::records(&table, &[0, 1, 2]).unwrap();
+            let rows = yamaa_adapters::parquet_artifact::records(&table, &[0, 1, 2], None).unwrap();
             assert_eq!(
                 rows,
                 [
@@ -1139,7 +1139,7 @@ mod table {
                 check!(csv_artifact::render(&table, &projection, None), CsvError);
                 check!(render(&table, &projection), Error);
                 check!(
-                    yamaa_adapters::parquet_artifact::records(&table, &projection),
+                    yamaa_adapters::parquet_artifact::records(&table, &projection, None),
                     Error
                 );
             }
@@ -1194,7 +1194,7 @@ mod table {
                 assert_eq!(row.get_timestamp_micros(1).unwrap(), 86_399_000_000);
             }
             assert_eq!(
-                yamaa_adapters::parquet_artifact::records(&table, &[0, 1]).unwrap(),
+                yamaa_adapters::parquet_artifact::records(&table, &[0, 1], None).unwrap(),
                 [
                     r#"["D", "T"]"#,
                     r#"["1970-02-28", "1970-01-01T23:59:59"]"#,
