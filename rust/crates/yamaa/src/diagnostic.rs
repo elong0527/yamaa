@@ -10,13 +10,13 @@
 //! line ([`Diagnostic::text`]), the error text and the JSON object. The
 //! registry gives every issue error severity: only error-severity findings
 //! become issues, while warning-severity findings surface as rows of the run
-//! report. Context numbers keep their exact identity: an integer token wider
-//! than both 64-bit machine types keeps its decimal spelling instead of
-//! passing through binary64. The canonical context text is retained
-//! privately so host data-frame conversion stays byte-identical; the public
-//! shape is the value map. Geometry and location are optional, and absent
-//! means unavailable: a present zero-width span or a present empty route is a
-//! recorded fact, never a default.
+//! report. Context numbers keep their exact identity: an integer token that
+//! `i64` does not hold keeps its decimal spelling instead of passing through
+//! binary64. The canonical context text is retained privately so host
+//! data-frame conversion stays byte-identical; the public shape is the value
+//! map. Geometry and location are optional, and absent means unavailable: a
+//! present zero-width span or a present empty route is a recorded fact, never
+//! a default.
 
 use std::collections::BTreeMap;
 
@@ -29,7 +29,7 @@ use crate::table::Table;
 // rust/interface/bindings.yaml declares each of these constants, and its
 // generator refuses a column or value that the declaration lacks.
 
-/// The columns of the issues table that [`Report::table`] builds, in order
+/// The columns of the issues table that [`issues`] builds, in order
 /// (D28): the frozen twelve of #3030 section 2.7.
 pub const ISSUE_COLUMNS: [&str; 12] = [
     "severity",
@@ -203,11 +203,10 @@ pub enum ContextValue {
     Bool(bool),
     /// An integer token within the signed 64-bit range.
     Int(i64),
-    /// An integer token above `i64::MAX` within the unsigned 64-bit range.
-    Uint(u64),
-    /// A number token no machine type here holds exactly, kept as its exact
-    /// spelling: an integer outside both 64-bit ranges, or a fraction or
-    /// exponent token outside binary64's finite range.
+    /// A number token that `i64` and `f64` do not hold exactly, kept as its
+    /// exact spelling: an integer token outside the signed 64-bit range, which
+    /// never passes through `f64`, or a fraction or exponent token outside
+    /// `f64`'s finite range.
     Wide(String),
     /// A fraction or exponent token, as binary64.
     Float(f64),
@@ -233,7 +232,6 @@ fn context_value_to_core(value: &ContextValue) -> yamaa_core::json::Value {
         ContextValue::Null => Value::Null,
         ContextValue::Bool(value) => Value::Bool(*value),
         ContextValue::Int(value) => Value::from(*value),
-        ContextValue::Uint(value) => Value::from(*value),
         ContextValue::Wide(text) => text
             .parse::<Number>()
             .map_or_else(|_| Value::String(text.clone()), Value::Number),
@@ -258,15 +256,12 @@ pub(crate) fn context_value_from_core(value: &yamaa_core::json::Value) -> Contex
         Value::Bool(value) => ContextValue::Bool(*value),
         Value::Number(value) => {
             // Integer tokens never pass through binary64: an integer that
-            // fits neither 64-bit type keeps its spelling.
+            // `i64` does not hold keeps its spelling.
             if value.is_integer() {
-                if let Some(number) = value.as_i64() {
-                    ContextValue::Int(number)
-                } else if let Some(number) = value.as_u64() {
-                    ContextValue::Uint(number)
-                } else {
-                    ContextValue::Wide(value.as_str().to_owned())
-                }
+                value.as_i64().map_or_else(
+                    || ContextValue::Wide(value.as_str().to_owned()),
+                    ContextValue::Int,
+                )
             } else if let Some(number) = value.as_f64() {
                 ContextValue::Float(number)
             } else {
@@ -482,11 +477,11 @@ impl Diagnostic {
     }
 }
 
-/// An owned diagnostic report, the public form of the issue-row collection.
-#[non_exhaustive]
+/// The issues of an operation as typed records, first issue first: what a
+/// result's `diagnostics()` and `issues()` read, and what a refusal carries.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct Report {
-    pub diagnostics: Vec<Diagnostic>,
+pub(crate) struct Report {
+    pub(crate) diagnostics: Vec<Diagnostic>,
 }
 
 impl Report {
@@ -510,84 +505,91 @@ impl Report {
     }
 
     /// Return whether the report holds no diagnostics.
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.diagnostics.is_empty()
     }
 
     /// Return the number of diagnostics in the report.
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.diagnostics.len()
     }
 
-    /// The issues table both hosts return (D28): one row per diagnostic, in
-    /// report order, with the [`ISSUE_COLUMNS`]. `message` is the rendered
-    /// message and `context` the canonical JSON text; `rule` is missing for
-    /// a condition that cites none; `file`, `line` and `column` are missing
-    /// where no location was recorded; `source_span` is `[start, end]` and,
-    /// like `operand_route`, missing when the failure site recorded no
-    /// geometry.
-    pub fn table(&self) -> Table {
-        use yamaa_adapters::public_table::{List, PublicColumn, PublicTable};
+    /// The issues table of the report's diagnostics, as [`issues`] builds
+    /// it.
+    pub(crate) fn table(&self) -> Table {
+        issues(&self.diagnostics)
+    }
+}
 
-        let int = |value: usize| i64::try_from(value).unwrap_or(i64::MAX);
-        let diagnostics = &self.diagnostics;
-        let text = |cell: fn(&Diagnostic) -> Option<&str>| {
-            PublicColumn::Str(diagnostics.iter().map(cell).collect())
-        };
-        let position = |diagnostic: &Diagnostic| {
+/// The issues table both hosts return (D28) for `diagnostics`: one row per
+/// issue, in order, with the [`ISSUE_COLUMNS`], as a result's `issues()`
+/// gives it for its `diagnostics()`. `message` is the rendered message and
+/// `context` the canonical JSON text; `rule` is missing for a condition that
+/// cites none; `file`, `line` and `column` are missing where no location was
+/// recorded; `source_span` is `[start, end]` and, like `operand_route`,
+/// missing when the failure site recorded no geometry. Given no issue, it is
+/// the table of no issues, which a host attaches to a refusal that no issue
+/// explains.
+pub fn issues(diagnostics: &[Diagnostic]) -> Table {
+    use yamaa_adapters::public_table::{List, PublicColumn, PublicTable};
+
+    let int = |value: usize| i64::try_from(value).unwrap_or(i64::MAX);
+    let text = |cell: fn(&Diagnostic) -> Option<&str>| {
+        PublicColumn::Str(diagnostics.iter().map(cell).collect())
+    };
+    let position = |diagnostic: &Diagnostic| {
+        diagnostic
+            .location
+            .as_ref()
+            .and_then(|location| location.position)
+    };
+    let lists = |list: List| PublicColumn::List(Box::new(list));
+    let columns: [PublicColumn; ISSUE_COLUMNS.len()] = [
+        text(|diagnostic| Some(diagnostic.severity.as_str())),
+        text(|diagnostic| Some(diagnostic.phase.as_str())),
+        text(|diagnostic| Some(diagnostic.code.as_str())),
+        text(|diagnostic| diagnostic.rule.as_deref()),
+        lists(List::text(diagnostics.iter().map(|diagnostic| {
+            Some(diagnostic.spec_path.iter().map(String::as_str).collect())
+        }))),
+        text(|diagnostic| {
             diagnostic
                 .location
                 .as_ref()
-                .and_then(|location| location.position)
-        };
-        let lists = |list: List| PublicColumn::List(Box::new(list));
-        let columns: [PublicColumn; ISSUE_COLUMNS.len()] = [
-            text(|diagnostic| Some(diagnostic.severity.as_str())),
-            text(|diagnostic| Some(diagnostic.phase.as_str())),
-            text(|diagnostic| Some(diagnostic.code.as_str())),
-            text(|diagnostic| diagnostic.rule.as_deref()),
-            lists(List::text(diagnostics.iter().map(|diagnostic| {
-                Some(diagnostic.spec_path.iter().map(String::as_str).collect())
-            }))),
-            text(|diagnostic| {
-                diagnostic
-                    .location
-                    .as_ref()
-                    .map(|location| location.file.as_str())
-            }),
-            PublicColumn::Int(
-                diagnostics
-                    .iter()
-                    .map(|diagnostic| position(diagnostic).map(|at| int(at.line)))
-                    .collect(),
-            ),
-            PublicColumn::Int(
-                diagnostics
-                    .iter()
-                    .map(|diagnostic| position(diagnostic).map(|at| int(at.column)))
-                    .collect(),
-            ),
-            text(|diagnostic| Some(&diagnostic.message)),
-            text(|diagnostic| Some(diagnostic.context.to_json())),
-            lists(List::int(diagnostics.iter().map(|diagnostic| {
-                diagnostic
-                    .source_span
-                    .map(|span| vec![int(span.start), int(span.end)])
-            }))),
-            lists(List::text(diagnostics.iter().map(|diagnostic| {
-                diagnostic
-                    .operand_route
-                    .as_ref()
-                    .map(|route| route.iter().map(String::as_str).collect())
-            }))),
-        ];
-        let columns = ISSUE_COLUMNS
-            .into_iter()
-            .map(str::to_owned)
-            .zip(columns)
-            .collect();
-        Table::from_public(PublicTable::new(columns).expect("the issue columns form one table"))
-    }
+                .map(|location| location.file.as_str())
+        }),
+        PublicColumn::Int(
+            diagnostics
+                .iter()
+                .map(|diagnostic| position(diagnostic).map(|at| int(at.line)))
+                .collect(),
+        ),
+        PublicColumn::Int(
+            diagnostics
+                .iter()
+                .map(|diagnostic| position(diagnostic).map(|at| int(at.column)))
+                .collect(),
+        ),
+        text(|diagnostic| Some(&diagnostic.message)),
+        text(|diagnostic| Some(diagnostic.context.to_json())),
+        lists(List::int(diagnostics.iter().map(|diagnostic| {
+            diagnostic
+                .source_span
+                .map(|span| vec![int(span.start), int(span.end)])
+        }))),
+        lists(List::text(diagnostics.iter().map(|diagnostic| {
+            diagnostic
+                .operand_route
+                .as_ref()
+                .map(|route| route.iter().map(String::as_str).collect())
+        }))),
+    ];
+    let columns = ISSUE_COLUMNS
+        .into_iter()
+        .map(str::to_owned)
+        .zip(columns)
+        .collect();
+    Table::from_public(PublicTable::new(columns).expect("the issue columns form one table"))
 }
 
 #[cfg(test)]
@@ -640,14 +642,14 @@ mod tests {
         );
         assert_eq!(
             diagnostic.context.get("beyond"),
-            Some(&ContextValue::Uint(u64::MAX))
+            Some(&ContextValue::Wide("18446744073709551615".into()))
         );
         assert_eq!(
             diagnostic.context.get("ratio"),
             Some(&ContextValue::Float(1.5))
         );
-        // Integers outside both 64-bit ranges keep their exact spelling and
-        // stay numbers, never text and never a rounded binary64.
+        // Integers outside the signed 64-bit range keep their exact
+        // spelling and stay numbers, never text and never a rounded binary64.
         assert_eq!(
             diagnostic.context.get("wide"),
             Some(&ContextValue::List(vec![
@@ -859,7 +861,7 @@ mod tests {
                 (
                     "e".to_owned(),
                     ContextValue::List(vec![
-                        ContextValue::Uint(u64::MAX),
+                        ContextValue::Wide("18446744073709551615".to_owned()),
                         ContextValue::Int(-1),
                         ContextValue::Text("\"é\"\n".to_owned()),
                         ContextValue::Bool(false),

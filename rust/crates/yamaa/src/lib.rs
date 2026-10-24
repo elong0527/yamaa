@@ -11,6 +11,17 @@
 //! use cases carry runnable examples, and `examples/memory.rs` runs one
 //! specification entirely from memory.
 //!
+//! An embedder looks at the crate root, which re-exports what configures an
+//! engine or comes back from one: the engine, its options and requests, the
+//! results, tables and diagnostics, the [`CancellationToken`], the
+//! [`ResourceResolver`] or [`MemoryResolver`] and the [`ProjectFunctions`]
+//! of a [`HostLanguage`] that an engine is configured with, the
+//! [`InputFrame`] a resolver serves, and, with the `arrow` feature, the
+//! Arrow types of a table's Arrow form. A binding author, who implements a
+//! port, looks in [`host`] and [`scalar`]: [`scalar`] holds the values
+//! project functions exchange, and [`host::functions`] and
+//! [`host::resolver`] every other type the two ports take and return.
+//!
 //! Adapters and core may change in any release without notice; their `pub`
 //! items are visibility for the workspace, not a public API. Every public
 //! type here is facade-owned, and adapters or core types are converted at the
@@ -58,11 +69,10 @@ pub mod diagnostic;
 pub mod engine;
 pub mod error;
 pub mod file_type;
-pub mod functions;
+pub mod host;
 pub mod info;
 pub mod lint;
 pub mod odm;
-pub mod resolver;
 pub mod scalar;
 pub mod schema;
 pub mod selftest;
@@ -82,28 +92,17 @@ pub use api::{
 pub use cancel::CancellationToken;
 pub use conditions::{conditions, Condition, ConditionCode, Conditions, CONDITION_COLUMNS};
 pub use diagnostic::{
-    ContextValue, Diagnostic, DiagnosticContext, Location, Phase, Position, Report, Severity,
-    SourceSpan, ISSUE_COLUMNS, PHASES, REPORT_COLUMNS, REPORT_KINDS, REPORT_OUTCOMES, SEVERITIES,
+    ContextValue, Diagnostic, DiagnosticContext, Location, Phase, Position, Severity, SourceSpan,
+    ISSUE_COLUMNS, PHASES, REPORT_COLUMNS, REPORT_KINDS, REPORT_OUTCOMES, SEVERITIES,
 };
 pub use engine::{Engine, EngineOptions, Partitions};
-pub use error::{
-    Failure, FailureKind, FunctionError, HostPayload, LockFinding, LockReason, LockSyntaxError,
-    ResolverFailure, TableError,
-};
+pub use error::{Failure, FailureKind, TableError};
 pub use file_type::{FileType, FILE_TYPES};
-pub use functions::{
-    decode_renv_lock, verify_uv_lock, Argument, BatchArgument, CallError, ColumnType,
-    FunctionHandle, FunctionIdentity, HostLanguage, InstalledDistributions, InstalledVersion,
-    LockContext, LockKind, Parameter, ProjectFunctions, RenvLock, Signature,
-};
+pub use host::functions::{HostLanguage, ProjectFunctions};
+pub use host::resolver::{MemoryResolver, ResourceResolver};
 pub use info::{info, Host, Info, FEATURES, HOSTS};
 pub use lint::{lint, Lint, LintFinding, LINT_COLUMNS, LINT_FINDINGS};
 pub use odm::{OdmOptions, ODM_COLUMNS};
-pub use resolver::{
-    MemoryResolver, ResolverKind, ResolverOperation, ResolverReply, ResolverRequest, ResourceKind,
-    ResourceResolver,
-};
-pub use scalar::{Date, DateTime, EncodedScalar, Scalar, ScalarDecodeError, ScalarRef};
 pub use schema::schema;
 pub use selftest::{selftest, SelfTest, SelfTestCase, SELFTEST_COLUMNS};
 #[cfg(feature = "arrow")]
@@ -115,7 +114,7 @@ pub use table::{
     TimestampSecondArray,
 };
 pub use table::{InputFrame, Table};
-pub use text::{Action, Summary};
+pub use text::Summary;
 
 /// Version of the shared core compiled into a native installation.
 pub const VERSION: &str = yamaa_core::VERSION;

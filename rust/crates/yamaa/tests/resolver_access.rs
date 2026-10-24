@@ -10,9 +10,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use yamaa::host::resolver::{
+    ResolverFailure, ResolverKind, ResolverOperation, ResolverReply, ResolverRequest,
+};
 use yamaa::{
     CancellationToken, Engine, EngineOptions, HostLanguage, MemoryResolver, OdmOptions,
-    ResolverFailure, ResolverKind, ResolverOperation, ResolverReply, ResolverRequest,
     ResourceResolver, SubmissionOptions,
 };
 

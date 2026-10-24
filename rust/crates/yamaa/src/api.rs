@@ -200,13 +200,24 @@ impl Run {
         self.build.save(token)
     }
 
-    /// The run's observations as JSON, enveloped with its timing measurements
-    /// when `include_measurements` is true: installed-run evidence for the
-    /// hosts' qualification suites, missing when the run never began. Its
-    /// text is not part of the interface.
-    #[doc(hidden)]
-    pub fn observations(&self, include_measurements: bool) -> Option<String> {
-        self.build.observations(include_measurements)
+    /// What the run observed, as JSON: what it read and what it built, the
+    /// project functions it called and the files its saves wrote; missing
+    /// when the run never began. This is installed-run evidence: the Python
+    /// and R qualification suites read it through the engine to prove a run
+    /// against its authored report. Its members are not part of the
+    /// interface.
+    pub fn observations(&self) -> Option<String> {
+        self.build.observations()
+    }
+
+    /// The run's [`observations`](Run::observations) beside the measurements
+    /// its operation took, as one JSON document: the time of each stage, the
+    /// project-function calls and save attempts it counted, and how the run
+    /// got its plan, which the hosts' plan-reuse suites read. Like the
+    /// observations, it is installed-run evidence, and its members are not
+    /// part of the interface.
+    pub fn measured_observations(&self) -> String {
+        self.build.measured_observations()
     }
 }
 
@@ -1436,10 +1447,12 @@ impl SubmissionOptions {
 #[cfg(all(test, feature = "yaml"))]
 mod plan_tests {
     use super::*;
-    use crate::{
-        Argument, CallError, EngineOptions, FunctionError, FunctionHandle, FunctionIdentity,
-        HostLanguage, LockContext, ProjectFunctions, Scalar, Signature,
+    use crate::host::functions::{
+        Argument, CallError, FunctionError, FunctionHandle, FunctionIdentity, HostLanguage,
+        LockContext, ProjectFunctions, Signature,
     };
+    use crate::scalar::Scalar;
+    use crate::EngineOptions;
 
     struct NoFunctions;
     impl ProjectFunctions for NoFunctions {

@@ -1,10 +1,17 @@
-//! Facade-owned host resource authority.
+//! The resource port: [`ResourceResolver`], the host resource authority, and
+//! every type its requests and replies carry, its failure included, beside
+//! the [`MemoryResolver`] that serves resources from memory.
 //!
 //! Every operation reads through one resolver: the engine's own local file
 //! resolver unless [`crate::EngineOptions::with_resolver`] supplies another.
 //! A resolver may serve local objects, opaque URI identities or warehouse
 //! data. References are immutable host identities, never content digests.
-//! Only public resource facts cross this boundary.
+//! Only public resource facts cross this boundary. A refused request is a
+//! [`ResolverFailure`], which the engine reports as an issue: of the result
+//! the operation builds, or of the `Rejected` [`Failure`](crate::Failure)
+//! that refuses an operation with no result to hold it, such as `read_odm`,
+//! `file_type` or a save. No `Failure` carries the `ResolverFailure`
+//! itself.
 
 use std::sync::Arc;
 
@@ -86,8 +93,6 @@ impl ResolverKind {
 /// any other entry that is not a regular file as
 /// `resource_path_not_regular_file` (FILE-7), and a missing name as
 /// `resource_path_missing`.
-///
-/// [`ResolverFailure::from_kind`]: crate::error::ResolverFailure::from_kind
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ResourceKind {
@@ -176,6 +181,87 @@ impl ResolverReply {
     }
 }
 
+/// A caller-supplied resolver failure, carrying its stable code and message.
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ResolverFailure {
+    code: &'static str,
+    message: String,
+}
+
+impl ResolverFailure {
+    /// Return the stable resolver failure code.
+    pub fn code(&self) -> &'static str {
+        self.code
+    }
+
+    /// Return the resolver failure message.
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    /// Build a resolver failure from its stable code. Unknown codes reject
+    /// the request, matching the engine boundary.
+    pub fn from_code(code: &str) -> Self {
+        Self::from_adapter_code(code)
+    }
+
+    /// Report that the requested name reaches an entry of `kind` instead of
+    /// a regular file; its code is the kind's name. The engine judges the
+    /// name from this report as [`ResourceKind`] describes.
+    pub fn from_kind(kind: ResourceKind) -> Self {
+        Self::from_adapter(yamaa_adapters::host_resources::Failure::from(
+            kind.into_core(),
+        ))
+    }
+
+    /// The kind this failure reports, when it reports one: a kind failure,
+    /// or `missing`.
+    pub fn kind(&self) -> Option<ResourceKind> {
+        yamaa_adapters::host_resources::Failure::from_name(self.code)
+            .resource_kind()
+            .map(ResourceKind::from_core)
+    }
+
+    pub(crate) fn from_adapter_code(code: &str) -> Self {
+        Self::from_adapter(yamaa_adapters::host_resources::Failure::from_name(code))
+    }
+
+    pub(crate) fn from_adapter(failure: yamaa_adapters::host_resources::Failure) -> Self {
+        use yamaa_adapters::host_resources::{Failure, ResourceKind as Kind};
+        let (code, message) = match failure {
+            Failure::Missing | Failure::Kind(Kind::Missing) => {
+                ("missing", "resolver reports the resource as missing")
+            }
+            Failure::Changed => ("changed", "resolver reports the resource as changed"),
+            Failure::Cancelled => ("cancelled", "resolver reports cancellation"),
+            Failure::Publication => ("publication", "resolver reports a publication failure"),
+            Failure::Cleanup => ("cleanup", "resolver reports a cleanup failure"),
+            Failure::Unreadable => ("unreadable", "resolver reports the resource as unreadable"),
+            Failure::Kind(kind) => (
+                kind.name(),
+                match kind {
+                    Kind::File => "resolver reports a file where a directory is required",
+                    Kind::Directory => "resolver reports a directory",
+                    Kind::SymbolicLink => "resolver reports a symbolic link",
+                    Kind::Junction => "resolver reports a junction",
+                    Kind::ReparsePoint => "resolver reports a reparse point",
+                    Kind::Other | Kind::Missing => {
+                        "resolver reports an entry that is not a regular file"
+                    }
+                },
+            ),
+            Failure::Rejected | Failure::Limit(_) | Failure::Path(_) => {
+                ("rejected", "resolver rejects the request")
+            }
+        };
+        Self {
+            code,
+            message: message.to_owned(),
+        }
+    }
+}
+
 /// Host resource authority. Implementations must return closed failures and
 /// must not panic. Inspect and capture serve a regular file or report the
 /// [`ResourceKind`] the name reaches. Stage creates a private provisional
@@ -183,10 +269,7 @@ impl ResolverReply {
 /// failed or interrupting stage or commit.
 pub trait ResourceResolver: Send + Sync {
     /// Serve one resource request on the calling thread of the operation.
-    fn request(
-        &self,
-        request: ResolverRequest<'_>,
-    ) -> Result<ResolverReply, crate::error::ResolverFailure>;
+    fn request(&self, request: ResolverRequest<'_>) -> Result<ResolverReply, ResolverFailure>;
 }
 
 /// Deterministic object store for tests and host-owned adapters. Replacing a
@@ -245,11 +328,7 @@ impl MemoryResolver {
 }
 
 impl ResourceResolver for MemoryResolver {
-    fn request(
-        &self,
-        request: ResolverRequest<'_>,
-    ) -> Result<ResolverReply, crate::error::ResolverFailure> {
-        use crate::error::ResolverFailure;
+    fn request(&self, request: ResolverRequest<'_>) -> Result<ResolverReply, ResolverFailure> {
         self.inner
             .request(yamaa_adapters::host_resources::Request {
                 operation: request.operation.into_core(),
@@ -350,5 +429,50 @@ mod tests {
             bytes: None,
         });
         assert_eq!(cancelled.unwrap_err().code(), "cancelled");
+    }
+
+    #[test]
+    fn resolver_failures_carry_stable_codes_and_messages() {
+        use yamaa_adapters::host_resources::Failure;
+        for (failure, code) in [
+            (Failure::Missing, "missing"),
+            (Failure::Changed, "changed"),
+            (Failure::Cancelled, "cancelled"),
+            (Failure::Rejected, "rejected"),
+            (Failure::Publication, "publication"),
+            (Failure::Cleanup, "cleanup"),
+            (Failure::Unreadable, "unreadable"),
+            (Failure::Limit(Some(9)), "rejected"),
+        ] {
+            let converted = ResolverFailure::from_adapter(failure);
+            assert_eq!(converted.code(), code);
+            assert!(!converted.message().is_empty());
+            assert_eq!(ResolverFailure::from_code(code), converted);
+        }
+    }
+
+    #[test]
+    fn resolver_kind_failures_round_trip_through_their_codes() {
+        for kind in [
+            ResourceKind::File,
+            ResourceKind::Directory,
+            ResourceKind::SymbolicLink,
+            ResourceKind::Junction,
+            ResourceKind::ReparsePoint,
+            ResourceKind::Other,
+            ResourceKind::Missing,
+        ] {
+            let failure = ResolverFailure::from_kind(kind);
+            assert_eq!(failure.code(), kind.name());
+            assert_eq!(failure.kind(), Some(kind));
+            assert_eq!(ResolverFailure::from_code(kind.name()), failure);
+            assert!(!failure.message().is_empty());
+        }
+        assert_eq!(
+            ResolverFailure::from_code("missing").kind(),
+            Some(ResourceKind::Missing)
+        );
+        assert_eq!(ResolverFailure::from_code("changed").kind(), None);
+        assert_eq!(ResolverFailure::from_code("link").code(), "rejected");
     }
 }

@@ -7,9 +7,12 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use arrow_array::{Array, ListArray, StringArray};
+use yamaa::host::functions::{
+    Argument, CallError, FunctionError, FunctionHandle, FunctionIdentity, LockContext, Signature,
+};
+use yamaa::scalar::Scalar;
 use yamaa::{
-    Argument, CallError, CancellationToken, Engine, EngineOptions, FunctionError, FunctionHandle,
-    FunctionIdentity, HostLanguage, LockContext, ProjectFunctions, Scalar, Signature, Status,
+    CancellationToken, Engine, EngineOptions, HostLanguage, ProjectFunctions, Status,
     SubmissionOptions, Table,
 };
 use yamaa_core::json::Value;
@@ -1213,7 +1216,7 @@ fn a_specification_runs_alike_alone_and_in_a_project_run_with_computed_statuses(
         member.report().unwrap().batches(),
         alone.report().unwrap().batches()
     );
-    assert_eq!(member.observations(false), alone.observations(false));
+    assert_eq!(member.observations(), alone.observations());
     // A failed input fails the run but not the check, which reads no data.
     study.write("raw/dm.csv", "USUBJID,AGE\nS1,thirty\n");
     assert_eq!(
