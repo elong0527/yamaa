@@ -610,6 +610,30 @@ fn execute_inner_into<R: Resolver, D: Decoder>(
         attempt.result = Err(PortError::Run(source_errors(errors)));
         return;
     }
+    execute_captured_into(
+        prepared,
+        decoder,
+        functions,
+        attempt,
+        (scope, input_finished),
+        by_partition,
+    );
+}
+
+/// Bind and execute inputs after every capture and admission succeeds.
+fn execute_captured_into<C, D: Decoder>(
+    prepared: &PreparedSpecification,
+    decoder: &mut D,
+    functions: &mut dyn crate::function_invocation::FunctionPort<
+        Error = <D::Table as TableAccess>::Error,
+    >,
+    attempt: &mut CapturedAttempt<C, D::Error, D::Table>,
+    (scope, input_finished): (
+        crate::application_observer::Scope<'_>,
+        &std::cell::Cell<bool>,
+    ),
+    by_partition: Option<(ByPartition, Vec<std::ops::Range<usize>>)>,
+) {
     let schemas = attempt
         .sources
         .iter()

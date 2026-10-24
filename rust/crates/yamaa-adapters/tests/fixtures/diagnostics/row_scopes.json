@@ -1,0 +1,340 @@
+{
+  "about": "The scopes a run reads within (CHECK-13, ROW-2, ROW-4, ROW-8, OUTPUT-3, LOOKUP-8, WINDOW-3, WINDOW-7). A row count's when binds the groups it counts without changing its fraction's denominator; a named intermediate drives rows from its filtered records in stored order and groups them in first-occurrence order, and its column projection hides the fields it leaves out from a derivation and from a group key; a filtered source keeps its selected record's missing value in every arrival order; reordered key names keep their typed values and dependencies, and a missing key is refused apart from text that spells the missing marker, in either record order; and a row lag reads its partition's previous row, keeps construction order when ordered by its partition key, lags within its own template, reads completed lags and scalars, and two windows of one case column keep their own orderings. Moved from execution_retired_odm_context.rs, its scoped_windows_checks module. The report's check row is the line the row-count test found in the saved report, at the columns from NAME on. Each row-window test compared one output column; its case states the whole output, whose GRP, SEQ and VAL copy each input record's G, S and X in the row order the test's own column gives, and whose PREV, in the chained cases, is the lag the first case states for the same window. A test that saved is a save case with the bytes it compared, one whose save failed states that it saved nothing, a test that compared some fields of the issues names them in compares, and one that found its issue among others is among. Every other value is its test's.",
+  "documents": {
+    "named_driver": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [I]\ninput: {SRC: {path: input.csv, types: {I: int, V: int}}}\nintermediates:\n  - {id: DRV, dataset: SRC, filter: \"SRC.K = 'Y'\"}\ncolumns:\n  - {name: I, type: int}\n  - {name: G, type: str}\n  - {name: V, type: int}\nrows:\n  - id: selected\n    dataset: DRV\n    derivations:\n      I: DRV.I\n      G: {str_case: {source: DRV.G, to: lower}}\n      V: DRV.V\noutput: {path: out.csv, columns: [I, G, V]}\n",
+    "driver_records": "I,G,V,K\n1,B,10,Y\n2,A,20,N\n3,A,30,Y\n4,B,40,Y\n5,C,50,N\n",
+    "projected_driver": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [I]\ninput: {SRC: {path: input.csv, types: {I: int, V: int}}}\nintermediates:\n  - {id: DRV, dataset: SRC, columns: [V]}\ncolumns:\n  - {name: I, type: int}\nrows:\n  - id: selected\n    dataset: DRV\n    derivations:\n      I: DRV.I\noutput: {path: out.csv, columns: [I]}\n",
+    "missing_targets": "yamaa: \"1.0\"\ntype: spec\ndomain: EXAMPLE\nkeys: [GROUP_ID]\ninput:\n  SOURCE: input.csv\noutput:\n  path: example.csv\n  columns: [GROUP_ID, TARGET_VALUE]\n  order_by: [GROUP_ID]\ncolumns:\n  - name: GROUP_ID\n    type: str\n    label: Group Identifier\n    derivation: SOURCE.GroupID\n  - name: TARGET_VALUE\n    type: str\n    label: Target Value\n    derivation:\n      source:\n        filter: \"SOURCE.RecordKind = 'TARGET'\"\n        variable: SOURCE.Value\n",
+    "key_identity": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\ninput: {SRC: {path: input.csv, types: {X: str, Y: str}}}\nkeys: [B, A]\noutput: {path: out.csv, columns: [A, B]}\ncolumns:\n  - {name: A, type: str, derivation: SRC.X}\n  - {name: B, type: str, derivation: SRC.Y}\n",
+    "visits": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nbase: SRC\ninput: {SRC: {path: input.csv, types: {G: str, X: float, S: int}}}\nkeys: [GRP, SEQ]\noutput: {path: out.csv, columns: [GRP, SEQ, VAL, PREV]}\ncolumns:\n  - {name: GRP, type: str}\n  - {name: SEQ, type: int}\n  - {name: VAL, type: float}\n  - {name: PREV, type: float}\nrows:\n  - id: visits\n    derivations:\n      GRP: SRC.G\n      SEQ: SRC.S\n      VAL: SRC.X\n      PREV: {row_value: {source: VAL, offset: -1, window: {group_by: [GRP], order_by: [SEQ]}}}\n",
+    "visit_records": "G,X,S\na,1,1\na,2,2\na,3,3\nb,10,1\nb,20,2\n"
+  },
+  "cases": [
+    {
+      "case": "when_binds_groups_without_changing_the_fraction_denominator",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [I]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: I, type: int, derivation: SRC.I}\n  - {name: G, type: str, derivation: SRC.G}\n  - {name: F, type: str, derivation: SRC.F}\n  - {name: B, type: str, derivation: SRC.B}\noutput: {path: out.csv, columns: [I, G, F, B], report: checks.csv}\nverifications:\n  - row_count: {group_by: [G], filter: \"F = 'Y'\", when: \"B = 'Y'\", min_fraction: 0.5, max_fraction: 0.5}\n",
+          "input.csv": "I,G,F,B\n1,A,Y,Y\n2,A,N,\n3,B,N,\n4,B,N,\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {"check": [["NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"], ["row_count", null, null, "CHECK-13", "error", "held", null, 0, 2, null, "{}"]]}
+    },
+    {
+      "case": "a_named_driver_reads_its_current_filtered_record",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "named_driver"}, "input.csv": {"base": "driver_records"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "I,G,V\n1,b,10\n3,a,30\n4,b,40\n"}
+    },
+    {
+      "case": "a_named_driver_groups_its_filtered_rows_in_first_occurrence_order",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "named_driver", "edits": [
+            {"from": "keys: [I]", "to": "keys: [G]"},
+            {"from": "    dataset: DRV\n    derivations:\n      I: DRV.I\n      G: {str_case: {source: DRV.G, to: lower}}\n      V: DRV.V\n", "to": "    dataset: DRV\n    group_by: [DRV.G]\n    derivations:\n      I: 0\n      G: DRV.G\n      V: {aggregate: 'SUM(DRV.V)'}\n"}
+          ]},
+          "input.csv": {"base": "driver_records"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "I,G,V\n0,B,50\n0,A,30\n"}
+    },
+    {
+      "case": "a_named_driver_s_projection_hides_a_field_from_a_derivation",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "projected_driver"}, "input.csv": "I,V\n1,10\n"}, "specification": "spec.yaml"},
+      "compares": ["condition", "spec_paths"],
+      "among": true,
+      "issues": [{"condition": "unknown_field", "spec_paths": ["rows.selected.derivations.I.source"]}]
+    },
+    {
+      "case": "a_named_driver_s_projection_hides_a_field_from_a_group_key",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "projected_driver", "edits": [{"from": "    dataset: DRV\n    derivations:\n      I: DRV.I\n", "to": "    dataset: DRV\n    group_by: [DRV.I]\n    derivations:\n      I: 1\n"}]},
+          "input.csv": "I,V\n1,10\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths"],
+      "among": true,
+      "issues": [{"condition": "unknown_field", "spec_paths": ["rows.selected.group_by[0]"]}]
+    },
+    {
+      "case": "filtered_missing_targets_keep_their_value_when_each_target_follows",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "missing_targets"}, "input.csv": "GroupID,RecordKind,Value\nG1,UNRELATED,g1-unrelated\nG1,TARGET,\nG2,UNRELATED,g2-unrelated\nG2,TARGET,g2-target\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"example.csv": "GROUP_ID,TARGET_VALUE\nG1,\nG2,g2-target\n"}
+    },
+    {
+      "case": "filtered_missing_targets_keep_their_value_when_each_target_leads",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "missing_targets"}, "input.csv": "GroupID,RecordKind,Value\nG1,TARGET,\nG1,UNRELATED,g1-unrelated\nG2,TARGET,g2-target\nG2,UNRELATED,g2-unrelated\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"example.csv": "GROUP_ID,TARGET_VALUE\nG1,\nG2,g2-target\n"}
+    },
+    {
+      "case": "filtered_missing_targets_keep_their_value_when_the_groups_interleave",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "missing_targets"}, "input.csv": "GroupID,RecordKind,Value\nG2,UNRELATED,g2-unrelated\nG1,UNRELATED,g1-unrelated\nG2,TARGET,g2-target\nG1,TARGET,\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"example.csv": "GROUP_ID,TARGET_VALUE\nG1,\nG2,g2-target\n"}
+    },
+    {
+      "case": "reordered_text_keys_preserve_their_values",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "key_identity"}, "input.csv": "X,Y\nfirst,second\nnext,third\nfirst,second\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "A,B\nfirst,second\nnext,third\n"}
+    },
+    {
+      "case": "a_reordered_integer_key_preserves_its_type",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "key_identity", "edits": [
+            {"from": "types: {X: str, Y: str}", "to": "types: {X: str, Y: int}"},
+            {"from": "{name: B, type: str, derivation: SRC.Y}", "to": "{name: B, type: int, derivation: SRC.Y}"}
+          ]},
+          "input.csv": "X,Y\nfirst,2\nnext,3\nfirst,2\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "A,B\nfirst,2\nnext,3\n"}
+    },
+    {
+      "case": "a_reordered_key_derived_from_another_preserves_its_dependency",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "key_identity", "edits": [
+            {"from": "types: {X: str, Y: str}", "to": "types: {X: int}"},
+            {"from": "  - {name: A, type: str, derivation: SRC.X}\n  - {name: B, type: str, derivation: SRC.Y}\n", "to": "  - {name: A, type: int, derivation: SRC.X}\n  - {name: B, type: int, derivation: 'A + 1'}\n"}
+          ]},
+          "input.csv": "X\n4\n2\n4\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "A,B\n4,5\n2,3\n"}
+    },
+    {
+      "case": "a_missing_text_key_is_refused_with_its_record",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "key_identity"}, "input.csv": "X,Y\n,present\n"}, "specification": "spec.yaml"},
+      "compares": ["condition", "spec_paths", "context"],
+      "issues": [{"condition": "missing_key", "spec_paths": ["keys[1]"], "context": {"column": "A", "missing_count": 1, "keys": [{"B": "present", "A": null}]}}],
+      "saved": {}
+    },
+    {
+      "case": "a_missing_key_is_distinct_from_text_written_as_the_missing_marker",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "key_identity", "edits": [
+            {"from": "types: {X: str, Y: str}", "to": "types: {X: int, Y: str}"},
+            {"from": "{name: A, type: str, derivation: SRC.X}", "to": "{name: A, type: int, derivation: SRC.X}"}
+          ]},
+          "input.csv": "X,Y\n1,__missing_key__\n,present\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context"],
+      "issues": [{"condition": "missing_key", "spec_paths": ["keys[1]"], "context": {"column": "A", "missing_count": 1, "keys": [{"B": "present", "A": null}]}}],
+      "saved": {}
+    },
+    {
+      "case": "a_missing_key_before_the_marker_text_keeps_its_identity",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "key_identity", "edits": [
+            {"from": "types: {X: str, Y: str}", "to": "types: {X: int, Y: str, Z: str}"},
+            {"from": "columns: [A, B]}", "to": "columns: [A, B, VALUE]}"},
+            {"from": "  - {name: A, type: str, derivation: SRC.X}\n  - {name: B, type: str, derivation: SRC.Y}\n", "to": "  - {name: A, type: int, derivation: SRC.X}\n  - {name: B, type: str, derivation: SRC.Y}\n  - {name: VALUE, type: str, derivation: SRC.Z}\n"}
+          ]},
+          "input.csv": "X,Y,Z\n,present,missing\n0,__missing_key__,valid\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context"],
+      "issues": [{"condition": "missing_key", "spec_paths": ["keys[1]"], "context": {"column": "A", "missing_count": 1, "keys": [{"B": "present", "A": null}]}}],
+      "saved": {}
+    },
+    {
+      "case": "a_missing_key_after_the_marker_text_keeps_its_identity",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "key_identity", "edits": [
+            {"from": "types: {X: str, Y: str}", "to": "types: {X: int, Y: str, Z: str}"},
+            {"from": "columns: [A, B]}", "to": "columns: [A, B, VALUE]}"},
+            {"from": "  - {name: A, type: str, derivation: SRC.X}\n  - {name: B, type: str, derivation: SRC.Y}\n", "to": "  - {name: A, type: int, derivation: SRC.X}\n  - {name: B, type: str, derivation: SRC.Y}\n  - {name: VALUE, type: str, derivation: SRC.Z}\n"}
+          ]},
+          "input.csv": "X,Y,Z\n1,__missing_key__,valid\n,present,missing\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context"],
+      "issues": [{"condition": "missing_key", "spec_paths": ["keys[1]"], "context": {"column": "A", "missing_count": 1, "keys": [{"B": "present", "A": null}]}}],
+      "saved": {}
+    },
+    {
+      "case": "a_row_lag_reads_the_previous_row_of_its_partition",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "visits"}, "input.csv": {"base": "visit_records"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "output": [
+        ["GRP", "SEQ", "VAL", "PREV"],
+        ["a", 1, 1.0, null],
+        ["a", 2, 2.0, 1.0],
+        ["a", 3, 3.0, 2.0],
+        ["b", 1, 10.0, null],
+        ["b", 2, 20.0, 10.0]
+      ]
+    },
+    {
+      "case": "a_row_lag_ordered_by_its_partition_key_keeps_construction_order",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "visits", "edits": [{"from": "window: {group_by: [GRP], order_by: [SEQ]}", "to": "window: {group_by: [GRP], order_by: [GRP]}"}]}, "input.csv": {"base": "visit_records"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "output": [
+        ["GRP", "SEQ", "VAL", "PREV"],
+        ["a", 1, 1.0, null],
+        ["a", 2, 2.0, 1.0],
+        ["a", 3, 3.0, 2.0],
+        ["b", 1, 10.0, null],
+        ["b", 2, 20.0, 10.0]
+      ]
+    },
+    {
+      "case": "each_row_template_lags_over_its_own_rows",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "visits", "edits": [
+            {"from": "window: {group_by: [GRP], order_by: [SEQ]}", "to": "window: {order_by: [SEQ]}"},
+            {"from": "  - id: visits\n", "to": "  - id: a_only\n    filter: \"SRC.G = 'a'\"\n"},
+            {"from": "      PREV: {row_value: {source: VAL, offset: -1, window: {order_by: [SEQ]}}}\n", "to": "      PREV: {row_value: {source: VAL, offset: -1, window: {order_by: [SEQ]}}}\n  - id: b_only\n    filter: \"SRC.G = 'b'\"\n    derivations:\n      GRP: SRC.G\n      SEQ: SRC.S\n      VAL: SRC.X\n      PREV: {row_value: {source: VAL, offset: -1, window: {order_by: [SEQ]}}}\n"}
+          ]},
+          "input.csv": {"base": "visit_records"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [
+        ["GRP", "SEQ", "VAL", "PREV"],
+        ["a", 1, 1.0, null],
+        ["a", 2, 2.0, 1.0],
+        ["a", 3, 3.0, 2.0],
+        ["b", 1, 10.0, null],
+        ["b", 2, 20.0, 10.0]
+      ]
+    },
+    {
+      "case": "a_row_lag_of_a_lag_reads_the_completed_lag",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "visits", "edits": [
+            {"from": "  - {name: PREV, type: float}\n", "to": "  - {name: PREV, type: float}\n  - {name: PREV2, type: float}\n"},
+            {"from": "      PREV: {row_value: {source: VAL, offset: -1, window: {group_by: [GRP], order_by: [SEQ]}}}\n", "to": "      PREV: {row_value: {source: VAL, offset: -1, window: {group_by: [GRP], order_by: [SEQ]}}}\n      PREV2: {row_value: {source: PREV, offset: -1, window: {group_by: [GRP], order_by: [SEQ]}}}\n"},
+            {"from": "columns: [GRP, SEQ, VAL, PREV]", "to": "columns: [GRP, SEQ, VAL, PREV, PREV2]"}
+          ]},
+          "input.csv": {"base": "visit_records"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [
+        ["GRP", "SEQ", "VAL", "PREV", "PREV2"],
+        ["a", 1, 1.0, null, null],
+        ["a", 2, 2.0, 1.0, null],
+        ["a", 3, 3.0, 2.0, 1.0],
+        ["b", 1, 10.0, null, null],
+        ["b", 2, 20.0, 10.0, null]
+      ]
+    },
+    {
+      "case": "a_scalar_over_a_lag_completes_before_a_later_scalar_reads_it",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "visits", "edits": [
+            {"from": "  - {name: PREV, type: float}\n", "to": "  - {name: PREV, type: float}\n  - {name: CHG, type: float}\n  - {name: DOUBLED, type: float}\n"},
+            {"from": "      PREV: {row_value: {source: VAL, offset: -1, window: {group_by: [GRP], order_by: [SEQ]}}}\n", "to": "      PREV: {row_value: {source: VAL, offset: -1, window: {group_by: [GRP], order_by: [SEQ]}}}\n      DOUBLED: 'CHG * 2'\n      CHG: 'VAL - PREV'\n"},
+            {"from": "columns: [GRP, SEQ, VAL, PREV]", "to": "columns: [GRP, SEQ, VAL, PREV, DOUBLED]"}
+          ]},
+          "input.csv": {"base": "visit_records"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [
+        ["GRP", "SEQ", "VAL", "PREV", "DOUBLED"],
+        ["a", 1, 1.0, null, null],
+        ["a", 2, 2.0, 1.0, 2.0],
+        ["a", 3, 3.0, 2.0, 2.0],
+        ["b", 1, 10.0, null, null],
+        ["b", 2, 20.0, 10.0, 20.0]
+      ]
+    },
+    {
+      "case": "a_lag_of_a_scalar_over_a_lag_reads_the_completed_scalar",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "visits", "edits": [
+            {"from": "  - {name: PREV, type: float}\n", "to": "  - {name: PREV, type: float}\n  - {name: DOUBLED, type: float}\n  - {name: BAD, type: float}\n"},
+            {"from": "      PREV: {row_value: {source: VAL, offset: -1, window: {group_by: [GRP], order_by: [SEQ]}}}\n", "to": "      PREV: {row_value: {source: VAL, offset: -1, window: {group_by: [GRP], order_by: [SEQ]}}}\n      DOUBLED: 'PREV * 2'\n      BAD: {row_value: {source: DOUBLED, offset: -1, window: {group_by: [GRP], order_by: [SEQ]}}}\n"},
+            {"from": "columns: [GRP, SEQ, VAL, PREV]", "to": "columns: [GRP, SEQ, VAL, PREV, BAD]"}
+          ]},
+          "input.csv": {"base": "visit_records"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [
+        ["GRP", "SEQ", "VAL", "PREV", "BAD"],
+        ["a", 1, 1.0, null, null],
+        ["a", 2, 2.0, 1.0, null],
+        ["a", 3, 3.0, 2.0, 2.0],
+        ["b", 1, 10.0, null, null],
+        ["b", 2, 20.0, 10.0, null]
+      ]
+    },
+    {
+      "case": "original_windows_in_one_case_column_keep_distinct_orderings",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "visits", "edits": [
+            {"from": "  - {name: PREV, type: float}", "to": "  - name: PREV\n    type: float\n    derivation:\n      case:\n        - when: SEQ = 1\n          then: {row_value: {source: VAL, offset: 1, window: {group_by: [GRP], order_by: [SEQ]}}}\n        - otherwise: {row_value: {source: VAL, offset: 1, window: {group_by: [GRP], order_by: [{variable: SEQ, direction: desc}]}}}"},
+            {"from": "      PREV: {row_value: {source: VAL, offset: -1, window: {group_by: [GRP], order_by: [SEQ]}}}\n", "to": ""}
+          ]},
+          "input.csv": {"base": "visit_records"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [
+        ["GRP", "SEQ", "VAL", "PREV"],
+        ["a", 1, 1.0, 2.0],
+        ["a", 2, 2.0, 1.0],
+        ["a", 3, 3.0, 2.0],
+        ["b", 1, 10.0, 20.0],
+        ["b", 2, 20.0, 10.0]
+      ]
+    }
+  ]
+}

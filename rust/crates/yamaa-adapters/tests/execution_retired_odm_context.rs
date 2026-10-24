@@ -1,13 +1,22 @@
 #![cfg(feature = "yaml")]
-//! Execution contracts: retired ODM context, row count lookups, row
-//! derivations, row intermediate operands, row join keys, scoped windows
-//! checks, temporal arithmetic and typed intermediate derivations.
+//! Execution contracts read from shared truth: retired ODM context, row
+//! count lookups, row derivations, row join keys, scoped windows checks,
+//! temporal arithmetic and typed intermediate derivations. The family's
+//! other cases are in `tests/fixtures/diagnostics/`: `odm_source_reads.json`,
+//! `row_derivations.json`, `row_intermediate_operands.json` and
+//! `row_scopes.json` (#3798). The tests left here read shared benchmark or
+//! host-fixture truth, or prove the API and observation seams their comments
+//! name. The remaining benchmark-copy cases predate benchmark staging in
+//! the replay (#3875) and remain a follow-up of #3798.
 mod execution {
     mod retired_odm_context {
         //! Original retired ODM-context operands through the shared public file engine.
         //! Generic source reads keep their ordinary relation semantics; only `odm`
         //! expressions select the fixed eleven-field ODM interpretation.
-        use crate::support::Edit as _;
+        //!
+        //! Its other cases are `odm_source_reads.json`'s (#3798). The two
+        //! tests here stay beside the replay, each for the seam its first
+        //! comment names.
         use std::fs;
         use yamaa_adapters::file_application;
         use yamaa_adapters::json;
@@ -52,166 +61,6 @@ mod execution {
             format!(
         "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [{key}]\ninput: {{ODM: {input}}}\noutput: {{path: out.csv, columns: [{key}, VALUE]}}\ncolumns:\n  - {{name: {key}, type: str, derivation: ODM.{key}}}\n  - {{name: VALUE, type: {kind}, derivation: {expression}}}\n"
     )
-        }
-        fn issue_rows(issues: &[Diagnostic]) -> Value {
-            Value::Array(
-                issues
-                    .iter()
-                    .map(|issue| {
-                        let mut value = yamaa_adapters::report_storage::diagnostic_value(issue);
-                        value["context"] = yamaa_core::json::Value::Object(issue.context.clone());
-                        value
-                    })
-                    .collect(),
-            )
-        }
-
-        const ITEMS: &str = "StudyOID,SubjectKey,ItemOID,Value\nS1,001,IT.DM.SEX,Male\nS1,001,IT.DM.AGE,34\nS1,001,IT.DM.ARM,Placebo\n";
-
-        /// `sdtm-dm-basic` reads a filtered source and maps one. No benchmark
-        /// that runs reads a filtered source in a `first_available`, or counts
-        /// the `absent` answer of a filtered source that selects no record.
-        #[test]
-        fn original_filters_mapping_and_first_available_read_their_own_collected_records() {
-            for (expression, expected) in [
-        ("{source: {variable: ODM.Value, filter: \"ODM.ItemOID = 'IT.DM.AGE'\"}}", "34"),
-        ("{mapping: {source: {variable: ODM.Value, filter: \"ODM.ItemOID = 'IT.DM.SEX'\"}, dict: {Male: M, Female: F}, missing: U}}", "M"),
-        ("{first_available: {sources: [{variable: ODM.Value, filter: \"ODM.ItemOID = 'IT.DM.ARM'\"}], missing: Unassigned}}", "Placebo"),
-        ("{first_available: {sources: [{variable: ODM.Value, filter: \"ODM.ItemOID = 'IT.DM.RACE'\"}], missing: Unassigned}}", "Unassigned"),
-    ] {
-        let fixture = Fixture::new(&specification("SubjectKey", "str", expression, "odm.csv"), ITEMS);
-        fixture.saved(&format!("SubjectKey,VALUE\n001,{expected}\n"));
-    }
-            let fixture = Fixture::new(
-        &specification("SubjectKey", "str", "{source: {variable: ODM.Value, filter: \"ODM.ItemOID = 'IT.DM.RACE'\", absent: fallback}}", "odm.csv"),
-        ITEMS,
-    );
-            let report = fixture.saved("SubjectKey,VALUE\n001,\n");
-            assert_eq!(
-                report["handler_counts"],
-                json!([{
-                    "spec_path":"columns.VALUE.derivation.source.absent", "handler":"absent", "count":0
-                }])
-            );
-        }
-
-        /// `negative-keys-conflict` states an unfiltered conflict, and
-        /// `negative-sex-duplicate` one that a mapping's filtered source
-        /// counts. Neither `error.yaml` states a plain filtered source's
-        /// conflict at its path, or that the conflict is the run's only issue.
-        #[test]
-        fn original_collected_conflicts_count_values_after_the_source_filter() {
-            for (expression, input, count) in [
-        ("ODM.Value", ITEMS, 3),
-        (
-            "{source: {variable: ODM.Value, filter: \"ODM.ItemOID = 'IT.DM.SEX'\"}}",
-            "StudyOID,SubjectKey,ItemOID,Value\nS1,001,IT.DM.SEX,Male\nS1,001,IT.DM.SEX,Female\n",
-            2,
-        ),
-    ] {
-        let fixture = Fixture::new(
-            &specification("SubjectKey", "str", expression, "odm.csv"),
-            input,
-        );
-        let mut domain = fixture.run().unwrap();
-        assert_eq!(
-            issue_rows(&domain.issues()),
-            json!([{
-                "phase":"derivation", "condition":"multiple_values_per_key", "rule":"COLUMN-2",
-                "spec_paths":["columns.VALUE.derivation.source"],
-                "context":{"identifier":"ODM.Value", "value_count":count, "keys":[{"SubjectKey":"001"}]}
-            }])
-        );
-        assert!(domain.output().is_none());
-        assert!(domain.save().is_err());
-        assert!(!fixture.0.join("out.csv").exists());
-    }
-        }
-
-        /// No benchmark arranges a selected record without a value in each
-        /// order among unselected records that hold one, or beside a second
-        /// selected record that holds one.
-        #[test]
-        fn original_selected_missing_values_never_fall_back_to_unselected_records() {
-            let expression =
-                "{source: {variable: ODM.Value, filter: \"ODM.RecordKind = 'TARGET'\"}}";
-            for (rows, expected) in [
-                ("G1,UNRELATED,unrelated\nG1,TARGET,\n", ""),
-                ("G1,UNRELATED,unrelated\nG1,TARGET,\nG1,TARGET,\n", ""),
-                (
-                    "G1,UNRELATED,unrelated\nG1,TARGET,\nG1,TARGET,target\n",
-                    "target",
-                ),
-                ("G1,OTHER,other\nG1,TARGET,\nG1,UNRELATED,x\n", ""),
-                ("G1,UNRELATED,x\nG1,TARGET,\nG1,OTHER,other\n", ""),
-                ("G1,TARGET,\nG1,UNRELATED,x\nG1,OTHER,other\n", ""),
-            ] {
-                let fixture = Fixture::new(
-                    &specification("GroupID", "str", expression, "odm.csv"),
-                    &format!("GroupID,RecordKind,Value\n{rows}"),
-                );
-                fixture.saved(&format!("GroupID,VALUE\nG1,{expected}\n"));
-            }
-        }
-
-        /// `negative-source-missing-field` refuses an output column in a
-        /// source filter. No benchmark refuses another relation's field there.
-        #[test]
-        fn original_source_filter_cannot_read_another_relation() {
-            let fixture = Fixture::new(
-                &specification(
-                    "SubjectKey",
-                    "str",
-                    "{source: {variable: ODM.Value, filter: \"OTHER.ItemOID = 'IT.DM.AGE'\"}}",
-                    "odm.csv",
-                ),
-                ITEMS,
-            );
-            let issues = match fixture.run() {
-                Ok(domain) => {
-                    assert!(domain.output().is_none());
-                    domain.issues().to_vec()
-                }
-                Err(issues) => issues,
-            };
-            assert_eq!(
-                issue_rows(&issues),
-                json!([{
-                    "phase":"validation", "condition":"unknown_field", "rule":"LOOKUP-8",
-                    "spec_paths":["columns.VALUE.derivation.source.filter"],
-                    "context":{"identifier":"OTHER.ItemOID", "dataset":"ODM"}
-                }])
-            );
-            assert!(!fixture.0.join("out.csv").exists());
-        }
-
-        /// `negative-keys-conflict` and `negative-sex-duplicate` refuse
-        /// conflicting integers and text. No benchmark refuses conflicting
-        /// dates.
-        #[test]
-        fn original_repeated_dates_are_one_value_and_distinct_dates_keep_the_exact_count() {
-            let specification = specification(
-                "SubjectKey",
-                "date",
-                "ODM.VISITDT",
-                "{path: odm.csv, types: {VISITDT: date}}",
-            );
-            let first = "StudyOID,SubjectKey,VISITDT,ItemOID,Value\nS1,001,2025-01-02,IT.A,a\nS1,001,2025-01-02,IT.B,b\n";
-            let fixture = Fixture::new(&specification, first);
-            fixture.saved("SubjectKey,VALUE\n001,2025-01-02\n");
-            let fixture = Fixture::new(
-                &specification,
-                &first.edit("2025-01-02,IT.B", "2025-01-03,IT.B"),
-            );
-            let domain = fixture.run().unwrap();
-            assert_eq!(
-                issue_rows(&domain.issues()),
-                json!([{
-                    "phase":"derivation", "condition":"multiple_values_per_key", "rule":"COLUMN-2",
-                    "spec_paths":["columns.VALUE.derivation.source"],
-                    "context":{"identifier":"ODM.VISITDT", "value_count":2, "keys":[{"SubjectKey":"001"}]}
-                }])
-            );
         }
 
         const HEADER: &str = "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value";
@@ -299,6 +148,8 @@ mod execution {
             }
         }
 
+        /// A seam the replay cannot reach: the source table the run's
+        /// observations record, which no replay operation reports.
         /// `schema-odm-item-sample` reads schema names written in capitals
         /// beside vendor fields. No benchmark states the source table a run
         /// reports: the eleven schema fields under their own names, the vendor
@@ -324,75 +175,13 @@ mod execution {
                     .collect::<Vec<_>>())
             );
         }
-
-        /// `negative-odm-schema-value`'s `error.yaml` states the first record
-        /// without a subject key, and leaves out how many records lack one
-        /// (`records`) and that the refusal is the run's only issue.
-        #[test]
-        fn original_missing_identifier_reports_first_csv_record_and_complete_failure_count() {
-            let missing = RECORD.replacen("001", "", 1);
-            let fixture = Fixture::new(
-                &specification("SubjectKey", "str", "{odm: ODM.IT.DM.AGE}", "odm.csv"),
-                &format!("{HEADER}\n{RECORD}\n{missing}\n{missing}\n"),
-            );
-            let issues = match fixture.run() {
-                Ok(domain) => {
-                    assert!(domain.output().is_none());
-                    domain.issues().to_vec()
-                }
-                Err(issues) => issues,
-            };
-            assert_eq!(
-                issue_rows(&issues),
-                json!([{
-                    "phase":"ingest", "condition":"odm_schema_value_missing", "rule":"NAME-9",
-                    "spec_paths":["input.ODM.path"],
-                    "context":{"dataset":"ODM", "field":"SubjectKey", "record":3, "records":2}
-                }])
-            );
-            assert!(!fixture.0.join("out.csv").exists());
-        }
-
-        /// A column `odm` read takes the ODM scope of the row template that
-        /// built each row, also when that template's driver is an ODM input
-        /// other than the base: the anchor record's item group occurrence
-        /// answers, read alone or in a case after the row's window (NAME-10,
-        /// NAME-11). No benchmark reads `odm` in a template driven by an ODM
-        /// input other than the base: `sdtm-lb-last-observation-before-exposure`
-        /// drives its template by the base.
-        #[test]
-        fn column_odm_reads_take_the_scope_of_an_odm_driver_other_than_the_base() {
-            for value in [
-                "{odm: SRC.IT.TEST.OID}",
-                "{case: [{when: 'SEQ > 0', then: {odm: SRC.IT.TEST.OID}}]}",
-            ] {
-                let fixture = Fixture::new(
-                    &format!(
-                        "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, SEQ]\nbase: BASE\n\
-                         input: {{BASE: base.csv, SRC: odm.csv}}\n\
-                         output: {{path: out.csv, columns: [ID, SEQ, VAL]}}\n\
-                         columns:\n\
-                         \x20 - {{name: ID, type: str}}\n\
-                         \x20 - {{name: SEQ, type: int, derivation: {{row_number: {{window: {{order_by: [ID]}}}}}}}}\n\
-                         \x20 - {{name: VAL, type: str, derivation: {value}}}\n\
-                         rows:\n\
-                         \x20 - id: occurrence\n\
-                         \x20   dataset: SRC\n\
-                         \x20   filter: \"SRC.ItemOID = 'IT.ANCHOR'\"\n\
-                         \x20   derivations: {{ID: \"'one'\"}}\n"
-                    ),
-                    &format!(
-                        "{HEADER}\nS,M,P,E,,F,,G,,IT.ANCHOR,anchor\nS,M,P,E,,F,,G,,IT.TEST.OID,Y\n"
-                    ),
-                );
-                // The base drives no row template.
-                fs::write(fixture.0.join("base.csv"), "ordinary\nunused\n").unwrap();
-                fixture.saved("ID,SEQ,VAL\none,1,Y\n");
-            }
-        }
     }
     mod row_count_lookups {
         //! Original row-count verification lookups and declaration ordering.
+        //!
+        //! This stays beside the replay (#3798): its truth is a host-fixture
+        //! family both installed hosts read, and it compares the observations'
+        //! verification records, which no replay operation reports.
         use std::fs;
         use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
@@ -487,518 +276,23 @@ mod execution {
         }
     }
     mod row_derivations {
-        use std::fs;
-        use yamaa_adapters::file_application;
-        use yamaa_core::domain_entry::Request;
-        struct Fixture(crate::support::Scratch);
-        impl Fixture {
-            fn new() -> Self {
-                Self(crate::support::Scratch::new("retired-odm-scalar"))
-            }
-            fn run(&self) -> file_application::Domain {
-                let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let identity = crate::support::study::identity("test", &specification);
-                crate::support::study::domain(
-                    yamaa_core::project_function::Language::Python,
-                    Request {
-                        specification: &specification,
-                        environment: None,
-                    },
-                    identity,
-                )
-                .unwrap_or_else(|issues| panic!("preparation {issues:?}"))
-            }
-            fn check(&self) -> Vec<yamaa_core::diagnostic::Diagnostic> {
-                let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-                file_application::check(
-                    yamaa_core::project_function::Language::Python,
-                    Request {
-                        specification: &specification,
-                        environment: None,
-                    },
-                    crate::support::study::identity("grouped-reducer-check", &specification),
-                )
-            }
-        }
-        fn bespoke(source: &str, input: &[u8]) -> Fixture {
-            let fixture = Fixture::new();
-            fs::write(fixture.0.join("spec.yaml"), source).unwrap();
-            fs::write(fixture.0.join("input.csv"), input).unwrap();
-            fixture
-        }
-        fn attempt(
-            fixture: &Fixture,
-        ) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>> {
-            let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-            crate::support::study::domain(
-                yamaa_core::project_function::Language::Python,
-                Request {
-                    specification: &specification,
-                    environment: None,
-                },
-                crate::support::study::identity("test", &specification),
-            )
-        }
-
-        fn specification(columns: &str, rows: &str, output: &str) -> String {
-            format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, SECTION]\ninput: {{SRC: {{path: input.csv, types: {{I: int, D: date, R: date}}}}}}\noutput: {{path: output.csv, columns: {output}}}\ncolumns:\n  - {{name: ID, type: str, derivation: SRC.ID}}\n  - {{name: SECTION, type: str}}\n{columns}rows:\n{rows}")
-        }
-        fn saved(fixture: &Fixture) -> Vec<u8> {
-            let mut result = fixture.run();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            fs::read(fixture.0.join("output.csv")).unwrap()
-        }
-        /// No benchmark writes a row template's derivation before one it
-        /// reads.
-        #[test]
-        fn row_cases_numeric_and_temporal_share_dependency_lowering() {
-            let columns="  - {name: VALUE, type: int}\n  - {name: PICK, type: str}\n  - {name: DAY, type: int}\n  - {name: LABEL, type: str}\n  - {name: TEXT, type: str}\n";
-            // Authored consumer-before-producer order proves that row-local reads use
-            // the dependency graph, and that nested branches see converted values.
-            let rows="  - id: one\n    derivations:\n      SECTION: \"'one'\"\n      TEXT: {str_template: '{LABEL}{PICK}'}\n      LABEL: {case: [{when: 'VALUE = 9', then: \"'nine'\"}, {otherwise: \"'other'\"}]}\n      DAY: {study_day: {source: SRC.D, reference: SRC.R}}\n      PICK: {first_available: {sources: [SRC.TEXT, ID], missing: none}}\n      VALUE: {case: [{when: 'SRC.I > 0', then: 'POWER(SRC.I, 2)'}, {otherwise: 0}]}\n";
-            let f = bespoke(
-                &specification(columns, rows, "[ID, SECTION, VALUE, PICK, DAY, TEXT]"),
-                b"ID,I,D,R,TEXT\na,3,2025-01-02,2025-01-01,x\nb,-2,2024-12-31,2025-01-01,\n",
-            );
-            assert_eq!(
-                saved(&f),
-                b"ID,SECTION,VALUE,PICK,DAY,TEXT\na,one,9,x,2,ninex\nb,one,0,b,-1,otherb\n"
-            );
-        }
-        /// No benchmark lags a value that a template derives from its own row
-        /// number.
-        #[test]
-        fn each_row_template_has_its_own_filtered_windows_and_chained_passes() {
-            let columns="  - {name: VALUE, type: int, derivation: SRC.I}\n  - {name: SEQ, type: int}\n  - {name: NEXT, type: int}\n  - {name: DOUBLE, type: int}\n";
-            let derivations="      VALUE: SRC.I\n      SEQ: {row_number: {window: {order_by: [VALUE]}}}\n      DOUBLE: 'SEQ * 2'\n      NEXT: {row_value: {source: DOUBLE, offset: 1, window: {order_by: [SEQ]}}}\n";
-            let rows=format!("  - id: one\n    filter: VALUE > 0\n    derivations:\n      SECTION: \"'one'\"\n{derivations}  - id: two\n    filter: VALUE > 1\n    derivations:\n      SECTION: \"'two'\"\n{derivations}");
-            let f = bespoke(
-                &specification(columns, &rows, "[ID, SECTION, VALUE, SEQ, DOUBLE, NEXT]"),
-                b"ID,I,D,R,TEXT\na,3,,,\nb,0,,,\nc,1,,,\nd,2,,,\n",
-            );
-            assert_eq!(saved(&f),b"ID,SECTION,VALUE,SEQ,DOUBLE,NEXT\na,one,3,3,6,\nc,one,1,1,2,4\nd,one,2,2,4,6\na,two,3,2,4,\nd,two,2,1,2,4\n");
-        }
-        /// A first_available source reads the window column its row template
-        /// completes for every row first (WINDOW-3, EXPR-9).
-        /// `adam-adae-worsening-emergence` reads a column's window through a
-        /// column's `first_available`. No benchmark reads one that a row
-        /// template derives, in that template.
-        #[test]
-        fn first_available_reads_the_completed_template_window() {
-            let columns = "  - {name: VALUE, type: int, derivation: SRC.I}\n  - {name: SEQ, type: int}\n  - {name: PICK, type: int}\n";
-            let rows = "  - id: one\n    derivations:\n      SECTION: \"'one'\"\n      VALUE: SRC.I\n      SEQ: {row_number: {window: {order_by: [VALUE]}}}\n      PICK: {first_available: {sources: [SEQ], missing: 99}}\n";
-            let f = bespoke(
-                &specification(columns, rows, "[ID, SECTION, VALUE, SEQ, PICK]"),
-                b"ID,I,D,R,TEXT\na,3,,,\nb,1,,,\nc,2,,,\n",
-            );
-            assert_eq!(
-                saved(&f),
-                b"ID,SECTION,VALUE,SEQ,PICK\na,one,3,3,3\nb,one,1,1,1\nc,one,2,2,2\n"
-            );
-        }
-        /// `adam-adqs-multi-scale-scoring` and others read a grouped
-        /// template's reductions in a case. No benchmark answers such a case
-        /// with a group key.
-        #[test]
-        fn grouped_row_case_reads_group_keys_and_converted_reductions() {
-            let columns = "  - {name: TOTAL, type: int}\n  - {name: TEXT, type: str}\n";
-            let rows="  - id: grouped\n    group_by: [SRC.ID]\n    derivations:\n      SECTION: \"'grouped'\"\n      TEXT: {case: [{when: 'TOTAL > 5', then: SRC.ID}, {otherwise: \"'low'\"}]}\n      TOTAL: {aggregate: 'SUM(SRC.I)'}\n";
-            let f = bespoke(
-                &specification(columns, rows, "[ID, SECTION, TOTAL, TEXT]"),
-                b"ID,I,D,R,TEXT\na,3,,,\nb,1,,,\na,4,,,\n",
-            );
-            assert_eq!(
-                saved(&f),
-                b"ID,SECTION,TOTAL,TEXT\na,grouped,7,a\nb,grouped,1,low\n"
-            );
-        }
-
-        /// `negative-sum-non-numeric` refuses a sum over a text column at
-        /// `check`. No benchmark reduces a text input field, which `check`
-        /// admits: missing values reduce to missing, and a present one is
-        /// refused in the run.
-        #[test]
-        fn grouped_numeric_reducers_skip_missing_arguments_and_still_reject_present_text() {
-            for reducer in ["SUM", "MEAN"] {
-                let source = format!(
-            "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: input.csv, types: {{V: str}}}}}}\noutput: {{path: output.csv, columns: [ID, VALUE]}}\ncolumns: [{{name: ID, type: str}}, {{name: VALUE, type: float}}]\nrows:\n  - id: groups\n    group_by: [SRC.ID]\n    derivations:\n      ID: SRC.ID\n      VALUE: {{aggregate: '{reducer}(SRC.V)'}}\n"
-        );
-                for (input, expected) in [
-                    (b"ID,V\na,\na,\n".as_slice(), b"ID,VALUE\na,\n".as_slice()),
-                    (b"ID,V\n".as_slice(), b"ID,VALUE\n".as_slice()),
-                ] {
-                    let fixture = bespoke(&source, input);
-                    assert!(fixture.check().is_empty());
-                    assert_eq!(saved(&fixture), expected, "{reducer}");
-                }
-                for input in [
-                    b"ID,V\na,text\n".as_slice(),
-                    b"ID,V\na,\na,text\n".as_slice(),
-                ] {
-                    let fixture = bespoke(&source, input);
-                    assert!(fixture.check().is_empty());
-                    let mut result = fixture.run();
-                    assert_eq!(result.issues().len(), 1, "{reducer}: {:?}", result.issues());
-                    let issue = &result.issues()[0];
-                    assert_eq!(issue.phase(), "validation");
-                    assert_eq!(issue.condition(), "incompatible_input_type");
-                    assert_eq!(issue.rule(), Some("FORMULA-23"));
-                    assert_eq!(
-                        issue.spec_paths,
-                        ["rows.groups.derivations.VALUE.aggregate"]
-                    );
-                    assert_eq!(
-                        yamaa_core::json::Value::Object(issue.context.clone()),
-                        yamaa_adapters::json!({"expr": format!("{reducer}(SRC.V)"),
-                    "reducer": reducer, "source": "SRC.V", "expected": "numeric", "actual": "str"})
-                    );
-                    assert!(result.output().is_none());
-                    assert!(matches!(result.save(), Err(file_application::FailedBuild)));
-                    assert!(!fixture.0.join("output.csv").exists());
-                }
-            }
-        }
-
-        /// `negative-row-ungrouped-second-template` and
-        /// `negative-row-window-ungrouped` refuse an ungrouped field that a
-        /// grouped template reads plainly or in a window, and
-        /// `negative-row-phase-flag` a template's read of a column window. No
-        /// benchmark refuses one in a case's predicate, or a template filter
-        /// that reads the template's own window.
-        #[test]
-        fn invalid_grouped_case_source_and_window_filter_refuse_publication() {
-            let columns = "  - {name: VALUE, type: int}\n";
-            let rows="  - id: grouped\n    group_by: [SRC.ID]\n    derivations:\n      SECTION: \"'grouped'\"\n      VALUE: {case: [{when: 'SRC.I > 0', then: 1}, {otherwise: 0}]}\n";
-            let f = bespoke(
-                &specification(columns, rows, "[ID, SECTION, VALUE]"),
-                b"ID,I,D,R,TEXT\na,3,,,\n",
-            );
-            // Non-grouped driver fields are statically bound after ingestion, never read by a predicate.
-            let issues =
-                attempt(&f).map_or_else(|issues| issues, |result| result.issues().to_vec());
-            assert_eq!(issues.len(), 1);
-            assert_eq!(issues[0].condition(), "ungrouped_driver_field");
-            assert!(!f.0.join("output.csv").exists());
-            let columns="  - {name: VALUE, type: int, derivation: SRC.I}\n  - {name: SEQ, type: int}\n  - {name: AFTER, type: int}\n";
-            let rows="  - id: one\n    filter: AFTER > 0\n    derivations:\n      SECTION: \"'one'\"\n      SEQ: {row_number: {window: {order_by: [VALUE]}}}\n      AFTER: 'SEQ + 1'\n";
-            let f = bespoke(
-                &specification(columns, rows, "[ID, SECTION, SEQ]"),
-                b"ID,I,D,R,TEXT\na,3,,,\n",
-            );
-            let issues =
-                attempt(&f).map_or_else(|issues| issues, |result| result.issues().to_vec());
-            assert_eq!(issues.len(), 1);
-            assert_eq!(issues[0].condition(), "phase_boundary");
-            assert_eq!(
-                issues[0].context.clone()["available_phase"],
-                "window_derivation"
-            );
-            assert!(!f.0.join("output.csv").exists());
-        }
-        /// `adam-adlb-bds` numbers a key by a column window over the rows of
-        /// several ungrouped templates, beside a keyed input's join, and
-        /// `sdtm-vs-collected-form` beside a named intermediate over grouped
-        /// templates. No benchmark reads a named intermediate beside such a
-        /// key over ungrouped templates.
-        #[test]
-        fn intermediate_identity_keeps_column_key_windows_over_all_constructed_templates() {
-            let body = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: input.csv, types: {VALUE: int}}\n  D: donor.csv\nintermediates: [{id: P, dataset: D, key: [ID]}]\noutput: {path: output.csv, columns: [ID, SEQ, VALUE, PICK]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: SRC.VALUE}\n  - {name: SEQ, type: int, derivation: {row_number: {window: {group_by: [ID], order_by: [VALUE]}}}}\n  - {name: PICK, type: str, derivation: P.PICK}\nrows:\n  - {id: first, dataset: SRC, filter: \"SRC.KIND = 'A'\"}\n  - {id: second, dataset: SRC, filter: \"SRC.KIND = 'B'\"}\n";
-            let f = bespoke(body, b"ID,KIND,VALUE\nx,A,4\nx,B,1\n");
-            fs::write(f.0.join("donor.csv"), b"ID,PICK\nx,kept\n").unwrap();
-            assert_eq!(saved(&f), b"ID,SEQ,VALUE,PICK\nx,2,4,kept\nx,1,1,kept\n");
-        }
-        /// `sdtm-sv-subject-visits` and others join a keyed input's column
-        /// onto a grouped template's rows, and `negative-source-duplicate-key`
-        /// refuses a repeated key without row templates. No benchmark repeats
-        /// a key of an input joined onto grouped rows.
-        #[test]
-        fn grouped_row_column_defaults_use_the_shared_secondary_source_key_binding() {
-            let body = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv, types: {VALUE: int}}\n  D: {path: donor.csv, key: [ID], types: {REFERENCE: int}}\noutput: {path: output.csv, columns: [ID, TOTAL, REFERENCE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: TOTAL, type: int}\n  - {name: REFERENCE, type: int, derivation: D.REFERENCE}\nrows:\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.ID]\n    derivations: {TOTAL: {aggregate: 'SUM(SRC.VALUE)'}}\n";
-            let f = bespoke(body, b"ID,VALUE\na,4\na,1\nb,2\n");
-            fs::write(f.0.join("donor.csv"), b"ID,REFERENCE\na,10\nb,20\n").unwrap();
-            assert_eq!(saved(&f), b"ID,TOTAL,REFERENCE\na,5,10\nb,2,20\n");
-            fs::write(f.0.join("donor.csv"), b"ID,REFERENCE\na,10\na,10\nb,20\n").unwrap();
-            let mut result = f.run();
-            assert!(result.output().is_none());
-            assert!(result.save().is_err());
-            assert_eq!(result.issues()[0].condition(), "multiple_matches");
-            assert_eq!(result.issues()[0].rule(), Some("LOOKUP-10"));
-        }
+        //! Its other cases are `row_derivations.json`'s (#3798). This test
+        //! stays a benchmark reader through `support::benchmarks`, which
+        //! checks that benchmark's own authored expected files.
         /// `sdtm-vs-units` builds its rows through row-template cases and
         /// numeric branches, and states the CSV it saves.
         #[test]
         fn unchanged_vs_units_benchmark_runs_row_cases_and_numeric_branches() {
             crate::support::benchmarks::reproduce("sdtm-vs-units");
         }
-
-        /// No benchmark fills a template in a case branch from a
-        /// `first_available` column.
-        #[test]
-        fn column_and_case_scopes_use_the_shared_dispatch_with_distinct_nested_values() {
-            let source="yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, VALUE, TEXT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: 'EXP(0) + LN(1) + POWER(3, 2)'}\n  - {name: PICK, type: str, derivation: {first_available: {sources: [ID], missing: fallback}}}\n  - name: TEXT\n    type: str\n    derivation:\n      case:\n        - when: VALUE = 10\n          then: {str_template: 'prefix:{PICK}'}\n        - otherwise: \"'wrong'\"\n";
-            let f = bespoke(source, b"ID\na\n");
-            assert_eq!(saved(&f), b"ID,VALUE,TEXT\na,10,prefix:a\n");
-        }
-
-        /// `sdtm-qs-questionnaire-items` numbers the rows of templates over
-        /// two inputs, one grouped, by one column window. No benchmark gives
-        /// such templates windows of their own.
-        #[test]
-        fn distinct_stored_drivers_group_in_their_own_schemas_and_complete_global_windows() {
-            let source = r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [ID, SECTION]
-input:
-  ALPHA: {path: input.csv, types: {ID: int, S: int}}
-  BETA: {path: beta.csv, types: {OTHER: int, AMOUNT: float}}
-output: {path: output.csv, columns: [ID, SECTION, SEQ, GLOBAL, TOTAL]}
-columns:
-- {name: ID, type: int}
-- {name: SECTION, type: str}
-- {name: SEQ, type: int}
-- {name: GLOBAL, type: int, derivation: {row_number: {window: {order_by: [ID, SECTION]}}}}
-- {name: TOTAL, type: float}
-rows:
-- id: records
-  dataset: ALPHA
-  filter: 'ID > 1'
-  derivations:
-    ID: ALPHA.ID
-    SECTION: "'A'"
-    SEQ: {row_number: {window: {order_by: [{variable: ID, direction: desc}]}}}
-    TOTAL: 0
-- id: groups
-  dataset: BETA
-  group_by: [BETA.OTHER]
-  derivations:
-    ID: BETA.OTHER
-    SECTION: "'B'"
-    SEQ: {row_number: {window: {order_by: [{variable: ID, direction: desc}]}}}
-    TOTAL: {aggregate: 'SUM(BETA.AMOUNT)'}
-"#;
-            let fixture = bespoke(source, b"ID,S\n3,7\n1,8\n2,9\n");
-            fs::write(
-                fixture.0.join("beta.csv"),
-                b"PAD,OTHER,AMOUNT\nx,10,3\ny,7,5\nz,10,4\n",
-            )
-            .unwrap();
-            assert_eq!(
-                saved(&fixture),
-                b"ID,SECTION,SEQ,GLOBAL,TOTAL\n3,A,1,2,0\n2,A,2,1,0\n10,B,1,4,7\n7,B,2,3,5\n"
-            );
-        }
-
-        /// No benchmark filters a template on a column's derivation, which the
-        /// filter promotes into the row phase with the key it reads.
-        #[test]
-        fn record_filter_promotes_numeric_defaults_and_their_complete_dependencies() {
-            let fixture = bespoke(
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [ID, SECTION]
-input: {SRC: {path: input.csv, types: {I: int}}}
-output: {path: output.csv, columns: [ID, SECTION, VALUE]}
-columns:
-- {name: ID, type: int}
-- {name: SECTION, type: str, derivation: "'S'"}
-- {name: VALUE, type: float, derivation: 'POWER(ID, 2)'}
-rows:
-- id: selected
-  filter: 'VALUE > 4'
-  derivations: {ID: SRC.I}
-"#,
-                b"I\n1\n3\n2\n4\n",
-            );
-            assert_eq!(saved(&fixture), b"ID,SECTION,VALUE\n3,S,9\n4,S,16\n");
-        }
-
-        /// No benchmark filters a grouped template on a window.
-        #[test]
-        fn grouped_filters_read_completed_candidate_windows() {
-            let fixture = bespoke(
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [ID]
-input: {SRC: {path: input.csv, types: {I: int, V: float}}}
-output: {path: output.csv, columns: [ID, TOTAL, SEQ]}
-columns:
-- {name: ID, type: int}
-- {name: TOTAL, type: float}
-- {name: SEQ, type: int}
-rows:
-- id: selected
-  group_by: [SRC.I]
-  filter: 'SEQ = 2 AND TOTAL = 7'
-  derivations:
-    ID: SRC.I
-    TOTAL: {aggregate: 'SUM(SRC.V)'}
-    SEQ: {row_number: {window: {order_by: [{variable: ID, direction: desc}]}}}
-"#,
-                b"I,V\n3,8\n2,3\n1,5\n2,4\n",
-            );
-            // COLUMN-3/COLUMN-4 run grouped filters after the complete row graph,
-            // including windows. ROW-6's pre-window restriction is ungrouped.
-            assert_eq!(saved(&fixture), b"ID,TOTAL,SEQ\n2,7,2\n");
-        }
-    }
-    mod row_intermediate_operands {
-        use crate::support::Edit as _;
-        use std::fs;
-        use yamaa_adapters::{file_application, specification_report::Identity};
-        use yamaa_core::domain_entry::Request;
-
-        struct Study(crate::support::Scratch);
-        impl Study {
-            fn new(source: &str) -> Self {
-                let path = crate::support::Scratch::canonical("row-intermediate-operands");
-                fs::write(path.join("spec.yaml"), source).unwrap();
-                fs::write(
-                    path.join("pp.csv"),
-                    "USUBJID,PPTESTCD,DATE\nS1,AUCLST,2030-01-03\nS2,CMAX,2030-02-04\n",
-                )
-                .unwrap();
-                fs::write(path.join("ex.csv"), "USUBJID,EXSPID,EXROUTE,DATE,DTM,N\nS1,PER1-D1,ORAL,2030-01-01,2030-01-01T08:00:00,1.25\nS2,PER2-D1,INTRAVENOUS,2030-02-01,2030-02-01T09:00:00,-2.25\n").unwrap();
-                Self(path)
-            }
-            fn path(&self) -> String {
-                self.0.join("spec.yaml").to_str().unwrap().into()
-            }
-            fn run(&self) -> file_application::Domain {
-                let path = self.path();
-                crate::support::study::domain(
-                    yamaa_core::project_function::Language::Python,
-                    Request {
-                        specification: &path,
-                        environment: None,
-                    },
-                    identity(&path),
-                )
-                .unwrap_or_else(|issues| panic!("preparation {issues:?}"))
-            }
-        }
-        fn identity(path: &str) -> Identity<'_> {
-            crate::support::study::identity("row-intermediate-operands", path)
-        }
-        fn specification(expression: &str, kind: &str, row_derivation: bool) -> String {
-            let declaration = if row_derivation {
-                format!("  - {{name: X, type: {kind}}}\nrows:\n  - id: pp_records\n    dataset: PP\n    derivations: {{X: {expression}}}\n")
-            } else {
-                format!("  - {{name: X, type: {kind}, derivation: {expression}}}\nrows:\n  - id: pp_records\n    dataset: PP\n")
-            };
-            format!("yamaa: \"1.0\"\ntype: spec\ndomain: ADPP\nkeys: [USUBJID]\ninput:\n  PP: {{path: pp.csv, types: {{DATE: date}}}}\n  EX: {{path: ex.csv, types: {{DATE: date, N: float}}}}\nintermediates:\n  - id: DOSE\n    dataset: EX\n    key: [USUBJID]\ncolumns:\n  - {{name: USUBJID, type: str, derivation: PP.USUBJID}}\n{declaration}output: {{path: output.csv, columns: [USUBJID, X]}}\n")
-        }
-
-        /// No benchmark reads a named intermediate's field through any of
-        /// these operations, in a row template or in a column.
-        #[test]
-        fn row_and_column_operations_read_named_intermediate_fields() {
-            for (expression, kind, values) in [
-                (
-                    "{str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}",
-                    "str",
-                    "S1,1\nS2,2\n",
-                ),
-                (
-                    "{str_template: '{PP.PPTESTCD}/{DOSE.EXROUTE}'}",
-                    "str",
-                    "S1,AUCLST/ORAL\nS2,CMAX/INTRAVENOUS\n",
-                ),
-                (
-                    "{str_case: {source: DOSE.EXROUTE, to: lower}}",
-                    "str",
-                    "S1,oral\nS2,intravenous\n",
-                ),
-                (
-                    "{str_pad: {source: DOSE.EXSPID, width: 9}}",
-                    "str",
-                    "S1,  PER1-D1\nS2,  PER2-D1\n",
-                ),
-                (
-                    "{to_date: {source: DOSE.DTM}}",
-                    "date",
-                    "S1,2030-01-01\nS2,2030-02-01\n",
-                ),
-                (
-                    "{impute: {type: datetime, source: DOSE.DTM, time: first}}",
-                    "datetime",
-                    "S1,2030-01-01T08:00:00\nS2,2030-02-01T09:00:00\n",
-                ),
-                (
-                    "{round_half_away_from_zero: {source: DOSE.N, digits: 1}}",
-                    "float",
-                    "S1,1.3\nS2,-2.3\n",
-                ),
-                (
-                    "{diff: {type: date, start: DOSE.DATE, end: PP.DATE, unit: day}}",
-                    "int",
-                    "S1,2\nS2,3\n",
-                ),
-            ] {
-                for row_derivation in [false, true] {
-                    let source = specification(expression, kind, row_derivation);
-                    let study = Study::new(&source);
-                    let path = study.path();
-                    assert!(file_application::check(
-                        yamaa_core::project_function::Language::Python,
-                        Request {
-                            specification: &path,
-                            environment: None
-                        },
-                        identity(&path)
-                    )
-                    .is_empty());
-                    let mut result = study.run();
-                    assert!(
-                        result.issues().is_empty(),
-                        "{expression}, row={row_derivation}: {:?}",
-                        result.issues()
-                    );
-                    assert!(result.save().unwrap());
-                    assert_eq!(
-                        fs::read_to_string(study.0.join("output.csv")).unwrap(),
-                        format!("USUBJID,X\n{values}"),
-                        "{expression}, row={row_derivation}"
-                    );
-                }
-            }
-        }
-
-        /// No benchmark reads a named intermediate's field through a text
-        /// operation, or refuses one for a field the intermediate lacks.
-        #[test]
-        fn lookup_scalar_operands_preserve_completed_keys_and_missing_field_findings() {
-            let source =
-                specification("{str_case: {source: DOSE.EXROUTE, to: lower}}", "str", true)
-                    .edit("derivations: {X:", "derivations: {USUBJID: PP.USUBJID, X:")
-                    .edit(
-                        "  - {name: USUBJID, type: str, derivation: PP.USUBJID}",
-                        "  - {name: USUBJID, type: str}",
-                    );
-            let study = Study::new(&source);
-            assert!(study.run().issues().is_empty());
-
-            let source = specification(
-                "{str_extract: {source: DOSE.MISSING, pattern: '(.)'}}",
-                "str",
-                false,
-            );
-            let study = Study::new(&source);
-            let issues = study.run().issues();
-            assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(issues[0].condition(), "unknown_field");
-            assert_eq!(
-                issues[0].spec_paths,
-                ["columns.X.derivation.str_extract.source"]
-            );
-            assert!(study.run().output().is_none());
-        }
     }
     mod row_join_keys {
         //! Implicit row joins read raw driver keys; column and named lookups retain their own key scope.
+        //!
+        //! This stays beside the replay (#3798): its truth is a host-fixture
+        //! family both installed hosts read, and it checks each specification
+        //! before and after its inputs exist and runs each case twice, where a
+        //! replay case writes its files once and runs once.
         use std::fs;
         use yamaa_adapters::file_application;
         use yamaa_core::diagnostic::Diagnostic;
@@ -1089,6 +383,11 @@ rows:
         }
     }
     mod scoped_windows_checks {
+        //! Its other cases are `row_scopes.json`'s (#3798). The tests here
+        //! stay as benchmark readers, benchmark-copy cases, or checks of the
+        //! observations' verification record, which no replay operation
+        //! reports. The replay can stage benchmarks since #3875; the four
+        //! benchmark-copy tests are a follow-up of #3798.
         use crate::support::Edit as _;
         use std::{fs, path::Path};
         use yamaa_adapters::file_application;
@@ -1132,6 +431,7 @@ rows:
                 .unwrap()
             }
         }
+        /// A benchmark reader (`support::benchmarks::reproduce`).
         /// `schema-row-count-fractions` states the dataset it saves and its
         /// report: row counts bounded by share, with and without groups, and
         /// one at `warning`.
@@ -1139,6 +439,7 @@ rows:
         fn original_row_count_fractions_keep_exact_primary_and_report_bytes() {
             crate::support::benchmarks::reproduce("schema-row-count-fractions");
         }
+        /// A run of a copy of the benchmark's own files.
         /// `negative-count-unnamed`'s `error.yaml` states the finding this run
         /// reports, and leaves out that it is the run's only issue.
         #[test]
@@ -1155,6 +456,7 @@ rows:
             assert_eq!(context["counts"], yamaa_adapters::json!([2, 0]));
             assert_eq!(context["keys"].as_array().unwrap().len(), 2);
         }
+        /// A benchmark reader (`support::benchmarks::reproduce`).
         /// Each benchmark builds its rows in its drivers' stored order,
         /// numbered by a window or a source ordinal where it numbers them, and
         /// states the CSV it saves.
@@ -1171,40 +473,10 @@ rows:
                 crate::support::benchmarks::reproduce(name);
             }
         }
-        /// `adam-adqs-missed-visit-locf` binds a grouped row count's groups by
-        /// `when` under bounds on counts, and states no report. No benchmark
-        /// binds a fraction's groups by `when`.
-        #[test]
-        fn when_binds_groups_without_changing_the_fraction_denominator() {
-            let study = Study::new();
-            fs::write(
-                study.0.join("input.csv"),
-                "I,G,F,B\n1,A,Y,Y\n2,A,N,\n3,B,N,\n4,B,N,\n",
-            )
-            .unwrap();
-            fs::write(study.0.join("spec.yaml"),r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [I]
-input: {SRC: input.csv}
-columns:
-  - {name: I, type: int, derivation: SRC.I}
-  - {name: G, type: str, derivation: SRC.G}
-  - {name: F, type: str, derivation: SRC.F}
-  - {name: B, type: str, derivation: SRC.B}
-output: {path: out.csv, columns: [I, G, F, B], report: checks.csv}
-verifications:
-  - row_count: {group_by: [G], filter: "F = 'Y'", when: "B = 'Y'", min_fraction: 0.5, max_fraction: 0.5}
-"#).unwrap();
-            let mut result = study.build();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            // One bound group held of the two groups evaluated.
-            assert!(fs::read_to_string(study.0.join("checks.csv"))
-                .unwrap()
-                .contains(",row_count,,,CHECK-13,error,held,,0,2,,{}\n"));
-        }
 
+        /// The observations' verification record, which no replay operation
+        /// reports: the counts its issue display samples beside the ones it
+        /// keeps.
         /// `schema-row-count-fractions` reports a warning row count without
         /// groups. No benchmark reports a grouped one, whose report keeps
         /// every group's count while its issue samples them.
@@ -1258,6 +530,7 @@ verifications:
                 .contains("[0,0,0,0,0,0]"));
         }
 
+        /// A benchmark reader (`support::benchmarks::reproduce`).
         /// Each benchmark filters a row template on a named lookup's state
         /// after the template's candidate derivations, and states the CSV it
         /// saves.
@@ -1268,6 +541,7 @@ verifications:
             }
         }
 
+        /// A benchmark reader (`support::benchmarks::reproduce`).
         /// `adam-adae-serious-events` builds rows from a filtered named
         /// intermediate in its records' stored order, and states the CSV it
         /// saves.
@@ -1276,148 +550,9 @@ verifications:
             crate::support::benchmarks::reproduce("adam-adae-serious-events");
         }
 
-        /// `adam-adae-serious-events` builds rows from a filtered named
-        /// intermediate, and `adam-adpp-accumulation-ratio` groups such rows
-        /// in an order that sorting would also give. No benchmark groups them
-        /// in a first-occurrence order that sorting would change.
-        #[test]
-        fn named_driver_reads_current_record_and_groups_filtered_rows_in_first_occurrence_order() {
-            for grouped in [false, true] {
-                let study = Study::new();
-                fs::write(
-                    study.0.join("input.csv"),
-                    "I,G,V,K\n1,B,10,Y\n2,A,20,N\n3,A,30,Y\n4,B,40,Y\n5,C,50,N\n",
-                )
-                .unwrap();
-                let keys = if grouped { "G" } else { "I" };
-                let (group, derivations, expected) = if grouped {
-                    (
-                        "    group_by: [DRV.G]\n",
-                        "      I: 0\n      G: DRV.G\n      V: {aggregate: 'SUM(DRV.V)'}\n",
-                        "I,G,V\n0,B,50\n0,A,30\n",
-                    )
-                } else {
-                    ("", "      I: DRV.I\n      G: {str_case: {source: DRV.G, to: lower}}\n      V: DRV.V\n", "I,G,V\n1,b,10\n3,a,30\n4,b,40\n")
-                };
-                fs::write(study.0.join("spec.yaml"), format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [{keys}]\ninput: {{SRC: {{path: input.csv, types: {{I: int, V: int}}}}}}\nintermediates:\n  - {{id: DRV, dataset: SRC, filter: \"SRC.K = 'Y'\"}}\ncolumns:\n  - {{name: I, type: int}}\n  - {{name: G, type: str}}\n  - {{name: V, type: int}}\nrows:\n  - id: selected\n    dataset: DRV\n{group}    derivations:\n{derivations}output: {{path: out.csv, columns: [I, G, V]}}\n")).unwrap();
-                let mut result = study.build();
-                assert!(
-                    result.issues().is_empty(),
-                    "grouped={grouped}: {:?}",
-                    result.issues()
-                );
-                assert!(result.save().unwrap());
-                assert_eq!(
-                    fs::read_to_string(study.0.join("out.csv")).unwrap(),
-                    expected
-                );
-            }
-        }
-
-        /// `schema-intermediate-driver-columns` builds rows from an
-        /// intermediate that projects its columns. No benchmark refuses a
-        /// field the projection leaves out.
-        #[test]
-        fn named_driver_column_projection_rejects_hidden_scalar_and_grouping_fields() {
-            for (group, derive, expected_path) in [
-                ("", "I: DRV.I", "rows.selected.derivations.I.source"),
-                (
-                    "    group_by: [DRV.I]\n",
-                    "I: 1",
-                    "rows.selected.group_by[0]",
-                ),
-            ] {
-                let study = Study::new();
-                fs::write(study.0.join("input.csv"), "I,V\n1,10\n").unwrap();
-                fs::write(study.0.join("spec.yaml"), format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [I]\ninput: {{SRC: {{path: input.csv, types: {{I: int, V: int}}}}}}\nintermediates:\n  - {{id: DRV, dataset: SRC, columns: [V]}}\ncolumns:\n  - {{name: I, type: int}}\nrows:\n  - id: selected\n    dataset: DRV\n{group}    derivations:\n      {derive}\noutput: {{path: out.csv, columns: [I]}}\n")).unwrap();
-                let result = study.build();
-                assert!(result.output().is_none());
-                assert!(
-                    result.issues().iter().any(|issue| {
-                        issue.condition() == "unknown_field"
-                            && issue.spec_paths.iter().any(|path| path == expected_path)
-                    }),
-                    "{:?}",
-                    result.issues()
-                );
-                assert!(!study.0.join("out.csv").exists());
-            }
-        }
-
         // Preserve the authored inputs and assertions from the runtime tests removed
         // with the Python evaluator. These cases exercise the shared public build;
         // they do not restore the retired Python planner or its extension hooks.
-        /// No benchmark reads a filtered source whose selected record holds
-        /// no value, in each order the group's records arrive.
-        #[test]
-        fn original_filtered_missing_targets_keep_their_value_in_every_arrival_order() {
-            let source = r#"yamaa: "1.0"
-type: spec
-domain: EXAMPLE
-keys: [GROUP_ID]
-input:
-  SOURCE: input.csv
-output:
-  path: example.csv
-  columns: [GROUP_ID, TARGET_VALUE]
-  order_by: [GROUP_ID]
-columns:
-  - name: GROUP_ID
-    type: str
-    label: Group Identifier
-    derivation: SOURCE.GroupID
-  - name: TARGET_VALUE
-    type: str
-    label: Target Value
-    derivation:
-      source:
-        filter: "SOURCE.RecordKind = 'TARGET'"
-        variable: SOURCE.Value
-"#;
-            for records in [
-                [
-                    "G1,UNRELATED,g1-unrelated",
-                    "G1,TARGET,",
-                    "G2,UNRELATED,g2-unrelated",
-                    "G2,TARGET,g2-target",
-                ],
-                [
-                    "G1,TARGET,",
-                    "G1,UNRELATED,g1-unrelated",
-                    "G2,TARGET,g2-target",
-                    "G2,UNRELATED,g2-unrelated",
-                ],
-                [
-                    "G2,UNRELATED,g2-unrelated",
-                    "G1,UNRELATED,g1-unrelated",
-                    "G2,TARGET,g2-target",
-                    "G1,TARGET,",
-                ],
-            ] {
-                let study = Study::new();
-                fs::write(study.0.join("spec.yaml"), source).unwrap();
-                fs::write(
-                    study.0.join("input.csv"),
-                    format!("GroupID,RecordKind,Value\n{}\n", records.join("\n")),
-                )
-                .unwrap();
-                let mut result = study.build();
-                assert!(result.issues().is_empty(), "{:?}", result.issues());
-                assert!(!study.0.join("example.csv").exists());
-                assert!(result.save().unwrap());
-                assert_eq!(
-                    fs::read(study.0.join("example.csv")).unwrap(),
-                    b"GROUP_ID,TARGET_VALUE\nG1,\nG2,g2-target\n"
-                );
-            }
-        }
-
-        fn original_key_identity(source: &str, columns: &str, types: &str) -> String {
-            format!(
-        "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\ninput: {{SRC: {{path: input.csv, types: {types}}}}}\nkeys: [B, A]\noutput: {{path: out.csv, columns: {columns}}}\ncolumns:\n{source}"
-    )
-        }
-
         fn save_csv(study: &Study, mut result: file_application::Domain, path: &str) -> Vec<u8> {
             assert!(result.issues().is_empty(), "{:?}", result.issues());
             assert!(!study.0.join(path).exists());
@@ -1425,223 +560,7 @@ columns:
             fs::read(study.0.join(path)).unwrap()
         }
 
-        /// `adam-advs-bsa` and others declare their keys in another order than
-        /// their output's. No benchmark derives one such key from another.
-        #[test]
-        fn original_reordered_key_names_preserve_typed_values_and_dependencies() {
-            for (source, types, input, expected) in [
-        (
-            "  - {name: A, type: str, derivation: SRC.X}\n  - {name: B, type: str, derivation: SRC.Y}\n",
-            "{X: str, Y: str}",
-            "X,Y\nfirst,second\nnext,third\nfirst,second\n",
-            "A,B\nfirst,second\nnext,third\n",
-        ),
-        (
-            "  - {name: A, type: str, derivation: SRC.X}\n  - {name: B, type: int, derivation: SRC.Y}\n",
-            "{X: str, Y: int}",
-            "X,Y\nfirst,2\nnext,3\nfirst,2\n",
-            "A,B\nfirst,2\nnext,3\n",
-        ),
-        (
-            "  - {name: A, type: int, derivation: SRC.X}\n  - {name: B, type: int, derivation: 'A + 1'}\n",
-            "{X: int}",
-            "X\n4\n2\n4\n",
-            "A,B\n4,5\n2,3\n",
-        ),
-    ] {
-        let study = Study::new();
-        fs::write(
-            study.0.join("spec.yaml"),
-            original_key_identity(source, "[A, B]", types),
-        )
-        .unwrap();
-        fs::write(study.0.join("input.csv"), input).unwrap();
-        let result = study.build();
-        assert!(result.issues().is_empty(), "{:?}", result.issues());
-        assert_eq!(save_csv(&study, result, "out.csv"), expected.as_bytes());
-    }
-        }
-
-        /// `negative-output-missing-key` refuses a missing key value, and its
-        /// `error.yaml` leaves out that the refusal is the run's only issue.
-        /// No benchmark sets one beside a key value written
-        /// `__missing_key__`, in either record order.
-        #[test]
-        fn original_missing_key_identity_is_distinct_from_user_text_and_record_order() {
-            for (source, columns, types, input) in [
-        (
-            "  - {name: A, type: str, derivation: SRC.X}\n  - {name: B, type: str, derivation: SRC.Y}\n",
-            "[A, B]",
-            "{X: str, Y: str}",
-            "X,Y\n,present\n",
-        ),
-        (
-            "  - {name: A, type: int, derivation: SRC.X}\n  - {name: B, type: str, derivation: SRC.Y}\n",
-            "[A, B]",
-            "{X: int, Y: str}",
-            "X,Y\n1,__missing_key__\n,present\n",
-        ),
-        (
-            "  - {name: A, type: int, derivation: SRC.X}\n  - {name: B, type: str, derivation: SRC.Y}\n  - {name: VALUE, type: str, derivation: SRC.Z}\n",
-            "[A, B, VALUE]",
-            "{X: int, Y: str, Z: str}",
-            "X,Y,Z\n,present,missing\n0,__missing_key__,valid\n",
-        ),
-        (
-            "  - {name: A, type: int, derivation: SRC.X}\n  - {name: B, type: str, derivation: SRC.Y}\n  - {name: VALUE, type: str, derivation: SRC.Z}\n",
-            "[A, B, VALUE]",
-            "{X: int, Y: str, Z: str}",
-            "X,Y,Z\n1,__missing_key__,valid\n,present,missing\n",
-        ),
-    ] {
-        let study = Study::new();
-        fs::write(
-            study.0.join("spec.yaml"),
-            original_key_identity(source, columns, types),
-        )
-        .unwrap();
-        fs::write(study.0.join("input.csv"), input).unwrap();
-        let mut result = study.build();
-        let issues = result.issues();
-        assert_eq!(issues.len(), 1, "{issues:?}");
-        assert_eq!(issues[0].condition(), "missing_key");
-        assert_eq!(issues[0].spec_paths, ["keys[1]"]);
-        assert_eq!(
- yamaa_core::json::Value::Object(issues[0].context.clone()),
-            yamaa_adapters::json!({"column": "A", "missing_count": 1,
-                "keys": [{"B": "present", "A": null}]})
-        );
-        assert!(result.output().is_none());
-        assert!(result.save().is_err());
-        assert!(!study.0.join("out.csv").exists());
-    }
-        }
-
-        fn original_window_spec(
-            extra_columns: &str,
-            extra_derivations: &str,
-            window: &str,
-        ) -> String {
-            format!(
-        "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nbase: SRC\ninput: {{SRC: {{path: input.csv, types: {{G: str, X: float, S: int}}}}}}\nkeys: [GRP, SEQ]\noutput: {{path: out.csv, columns: [GRP, SEQ, VAL, PREV]}}\ncolumns:\n  - {{name: GRP, type: str}}\n  - {{name: SEQ, type: int}}\n  - {{name: VAL, type: float}}\n  - {{name: PREV, type: float}}\n{extra_columns}rows:\n  - id: visits\n    derivations:\n      GRP: SRC.G\n      SEQ: SRC.S\n      VAL: SRC.X\n      PREV: {{row_value: {{source: VAL, offset: -1, window: {window}}}}}\n{extra_derivations}"
-    )
-        }
-
-        fn original_visits(study: &Study, source: &str) -> file_application::Domain {
-            fs::write(study.0.join("spec.yaml"), source).unwrap();
-            fs::write(
-                study.0.join("input.csv"),
-                "G,X,S\na,1,1\na,2,2\na,3,3\nb,10,1\nb,20,2\n",
-            )
-            .unwrap();
-            let result = study.build();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            result
-        }
-
-        fn float_column(result: &file_application::Domain, name: &str) -> Vec<Option<f64>> {
-            let table = result.output().unwrap();
-            let column = table
-                .columns()
-                .iter()
-                .position(|field| field.name() == name)
-                .unwrap();
-            table
-                .batches()
-                .iter()
-                .flat_map(|batch| {
-                    batch
-                        .column(column)
-                        .as_any()
-                        .downcast_ref::<arrow_array::Float64Array>()
-                        .unwrap()
-                        .iter()
-                })
-                .collect()
-        }
-
-        /// No benchmark lags in a window ordered only by its partition key,
-        /// which keeps construction order.
-        #[test]
-        fn original_row_window_lags_keep_partition_ties_and_template_ownership() {
-            let expected = vec![None, Some(1.0), Some(2.0), None, Some(10.0)];
-            for window in [
-                "{group_by: [GRP], order_by: [SEQ]}",
-                "{group_by: [GRP], order_by: [GRP]}",
-            ] {
-                let study = Study::new();
-                let result = original_visits(&study, &original_window_spec("", "", window));
-                assert_eq!(float_column(&result, "PREV"), expected);
-            }
-            let study = Study::new();
-            let source = original_window_spec("", "", "{order_by: [SEQ]}").edit(
-                "  - id: visits\n",
-                "  - id: a_only\n    filter: \"SRC.G = 'a'\"\n",
-            );
-            let second = source
-                .split_once("rows:\n")
-                .unwrap()
-                .1
-                .edit("a_only", "b_only")
-                .edit("SRC.G = 'a'", "SRC.G = 'b'");
-            let result = original_visits(&study, &format!("{source}{second}"));
-            assert_eq!(float_column(&result, "PREV"), expected);
-        }
-
-        /// `adam-adlbc-window-chain` lags a column derived from a column's
-        /// lag. No benchmark lags a lag directly, or chains lags in a row
-        /// template's derivations.
-        #[test]
-        fn original_row_window_chains_complete_scalars_before_later_window_reads() {
-            let window = "{group_by: [GRP], order_by: [SEQ]}";
-            for (columns, derivations, column, expected) in [
-        (
-            "  - {name: PREV2, type: float}\n",
-            "      PREV2: {row_value: {source: PREV, offset: -1, window: {group_by: [GRP], order_by: [SEQ]}}}\n",
-            "PREV2",
-            vec![None, None, Some(1.0), None, None],
-        ),
-        (
-            "  - {name: CHG, type: float}\n  - {name: DOUBLED, type: float}\n",
-            "      DOUBLED: 'CHG * 2'\n      CHG: 'VAL - PREV'\n",
-            "DOUBLED",
-            vec![None, Some(2.0), Some(2.0), None, Some(20.0)],
-        ),
-        (
-            "  - {name: DOUBLED, type: float}\n  - {name: BAD, type: float}\n",
-            "      DOUBLED: 'PREV * 2'\n      BAD: {row_value: {source: DOUBLED, offset: -1, window: {group_by: [GRP], order_by: [SEQ]}}}\n",
-            "BAD",
-            vec![None, None, Some(2.0), None, None],
-        ),
-    ] {
-        let study = Study::new();
-        let source = original_window_spec(columns, derivations, window)
-            .edit("columns: [GRP, SEQ, VAL, PREV]", &format!("columns: [GRP, SEQ, VAL, PREV, {column}]"));
-        let result = original_visits(&study, &source);
-        assert_eq!(float_column(&result, column), expected);
-    }
-        }
-
-        /// No benchmark orders two windows of one case column apart.
-        #[test]
-        fn original_windows_in_one_case_column_keep_distinct_orderings() {
-            let study = Study::new();
-            let source = original_window_spec("", "", "{group_by: [GRP], order_by: [SEQ]}")
-        .edit("  - {name: PREV, type: float}", r#"  - name: PREV
-    type: float
-    derivation:
-      case:
-        - when: SEQ = 1
-          then: {row_value: {source: VAL, offset: 1, window: {group_by: [GRP], order_by: [SEQ]}}}
-        - otherwise: {row_value: {source: VAL, offset: 1, window: {group_by: [GRP], order_by: [{variable: SEQ, direction: desc}]}}}"#)
-        .edit("      PREV: {row_value: {source: VAL, offset: -1, window: {group_by: [GRP], order_by: [SEQ]}}}\n", "");
-            let result = original_visits(&study, &source);
-            assert_eq!(
-                float_column(&result, "PREV"),
-                [Some(2.0), Some(1.0), Some(2.0), Some(20.0), Some(10.0)]
-            );
-        }
-
+        /// Runs of a copy of the benchmark's own files, edited.
         /// `schema-source-ordinal` numbers its records as stored. No benchmark
         /// swaps records to move their numbers, or orders rows by an ordinal
         /// it does not output.
@@ -1682,6 +601,7 @@ columns:
     );
         }
 
+        /// A run of a copy of the benchmark's own files, edited.
         /// `schema-source-ordinal` builds its rows in one template. No
         /// benchmark reads an ordinal input in a second template.
         #[test]
@@ -1700,6 +620,7 @@ columns:
     );
         }
 
+        /// A run of the benchmark's own input under another specification.
         /// No benchmark reduces an ordinal in a grouped template.
         #[test]
         fn original_ordinal_group_reductions_run_before_group_numbering() {
@@ -1740,6 +661,10 @@ rows:
     }
     mod temporal_arithmetic {
         //! The same authored conformance vectors run through Rust, installed Python and R.
+        //!
+        //! This stays beside the replay (#3798): its truth is a host-fixture
+        //! family both installed hosts read, and it checks each specification
+        //! before its inputs exist, then runs it with them.
         use std::fs;
         use yamaa_adapters::file_application;
         use yamaa_core::diagnostic::Diagnostic;
@@ -1838,6 +763,10 @@ rows:
     }
     mod typed_intermediate_derivations {
         //! Independent YAML, donor bytes and exact saved truth for per-record aggregates.
+        //!
+        //! These stay beside the replay (#3798): their truth is a host-fixture
+        //! family both installed hosts read, which the second test edits, and
+        //! the first checks each specification before its inputs exist.
         use crate::support::Edit as _;
         use std::fs;
         use yamaa_adapters::file_application;
