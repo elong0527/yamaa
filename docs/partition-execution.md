@@ -45,8 +45,8 @@ partitioned attempt `P` must have the same observable result as `W`:
 - **Boundaries:** admission and limits apply to the same complete logical inputs
   and outputs. A batch cannot reset a table cap or admit a table that whole-table
   execution refuses. The one exception is a driver input that a partitioned run
-  reads by partition (#3792, the owner's decision of 2026-10-24 on #3673): the
-  row and cell limits bound each of its partitions instead of the whole input.
+  reads by partition (#3792, D264): the row and cell limits bound each of its
+  partitions instead of the whole input.
   Keep phase entry/exit, outcome and refusal identity.
   Elapsed time and allocation measurements need not be equal. Incidental
   allocator/OS exhaustion cannot be made identical by a scheduling contract;
@@ -209,15 +209,19 @@ with no host surface.
   its own, before any record is read; every other source is admitted whole.
 - **Reading by partition.** A run whose specification reads one input, CSV
   or Parquet, and whose plan has no step that needs the whole table reads
-  that input by partition (#3792). The CSV reader scans every record once
-  and decodes one partition of records at a time; the Parquet reader decodes
-  one run of whole row groups at a time, a row group of more records than a
-  partition being a partition of its own. Each partition is admitted on its
+  that input by partition (#3792), every partition before any derivation.
+  The CSV reader scans every record once, then decodes and converts one
+  partition of records after another, so only one partition's intermediates
+  exist at a time. The Parquet reader divides the file into runs of whole row
+  groups, a row group of more records than a partition being a partition of
+  its own, and decodes every run before it builds any partition's table, so
+  its peak memory is the whole read's. Each partition is admitted on its
   own, its generated ordinal counts records in the whole input, and every
-  finding is the whole read's, at the same record, row and field. Every other
-  run reads each input whole and admits it whole, so a plan with a step that
-  needs the whole table, run with the fallback or not, refuses an input
-  beyond the limits as an unpartitioned run does.
+  finding is the whole read's, at the same record, row and field. Every
+  other run reads each input whole and admits it whole, a run with a lookup,
+  join or named relation's source included, so a plan with a step that needs
+  the whole table, run with the fallback or not, refuses an input beyond the
+  limits as an unpartitioned run does.
 - **Units, one partition at a time.** The schedule's units run in their
   order. A unit whose steps are all `Safe` or `CombineStep`, and whose rows
   come from the driver input, runs over each partition's rows in turn, each

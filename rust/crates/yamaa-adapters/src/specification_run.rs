@@ -475,8 +475,8 @@ fn producer_header(
 /// Decode `source`'s held bytes by partition (#3792): a CSV source in
 /// partitions of `rows` records, the last holding the rest, and a Parquet
 /// source in runs of whole row groups of at most `rows` records, a larger
-/// row group being a partition of its own. Only those two profiles are read
-/// by partition.
+/// row group being a partition of its own. Any other profile is read whole,
+/// as one partition.
 ///
 /// Every finding [`decode_source`] reports is reported in the same order, at
 /// the same record, row and field, and with the same context: the CSV scan
@@ -529,8 +529,9 @@ pub(crate) fn decode_partitions(
                     .collect::<Result<Vec<_>, _>>()?
             }
         }
+        // Every other profile is read whole: one partition.
         SourceProfile::Xport | SourceProfile::Sas7bdat | SourceProfile::OdmXml => {
-            unreachable!("only CSV and Parquet sources are read by partition")
+            return decode_source(source, bytes, interpretation, contract).map(|table| vec![table]);
         }
     };
     if let (Some(contract), Some(first)) = (contract, tables.first()) {

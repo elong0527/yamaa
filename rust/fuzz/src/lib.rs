@@ -62,7 +62,9 @@ pub fn decode(
 /// Decode held bytes by partition too (#3792), in partitions of each of a
 /// few sizes, and require the whole read's outcome: the same table, cell by
 /// cell, or the same finding. The one exception is a whole read refused for
-/// its table's size, which each partition may stay within.
+/// its table's size, which each partition may stay within. The schema the
+/// run binds to choose the read, from the header or footer alone, must be
+/// the decoded table's.
 pub fn partitioned_reads_match_the_whole_read(
     source: &SourceDeclaration,
     bytes: &[u8],
@@ -70,6 +72,14 @@ pub fn partitioned_reads_match_the_whole_read(
 ) {
     let mut decoder = Decoder::<Infallible>::default();
     let whole = decoder.table(source, bytes, interpretation, None);
+    if let Ok(table) = &whole {
+        assert_eq!(
+            decoder
+                .partition_schema(source, bytes, interpretation)
+                .as_ref(),
+            Some(table.schema())
+        );
+    }
     if whole.as_ref().err().is_some_and(table_size) {
         return;
     }

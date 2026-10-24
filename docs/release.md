@@ -1340,8 +1340,9 @@ as `failed` and includes the refusal's `issues`.
 
 In a run divided into partitions (`docs/partition-execution.md`), the row and
 cell limits bound each materialized partition of a CSV or Parquet driver input
-that the run reads by partition, and each source it reads whole, as it reads
-the source of a lookup, join or named relation, which every partition needs.
+that the run reads by partition, which it does when that input is the
+specification's only one, and each table it reads whole. A run that also reads
+the source of a lookup, join or named relation reads every input whole.
 
 A MiB is 1,048,576 bytes; a GiB is 1,073,741,824 bytes. File readers check the
 encoded size before retaining bytes and check growth during reading. A
