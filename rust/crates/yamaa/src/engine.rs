@@ -160,6 +160,7 @@ impl Partitions {
             rows: self.rows,
             leading_keys: self.leading_keys,
             whole_table_fallback: self.whole_table_fallback,
+            whole_output: false,
         }
     }
 }

@@ -1476,9 +1476,9 @@ mod tests {
             (
                 "an I/O failure",
                 || {
-                    Interruption::Failed(crate::file_publication::Error::Io(
-                        std::io::Error::other("disk full"),
-                    ))
+                    Interruption::Failed(crate::file_publication::Error::Io(std::io::Error::other(
+                        "disk full",
+                    )))
                 },
                 Fault::PublicationFailed,
             ),
@@ -1507,6 +1507,7 @@ mod tests {
                 rows: std::num::NonZeroUsize::MIN,
                 leading_keys: None,
                 whole_table_fallback: false,
+                whole_output: false,
             };
             let mut result = domain_observed(
                 Request {

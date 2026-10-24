@@ -2,15 +2,18 @@
 //! Partitioned publication (#3793, D264): a run divided into partitions
 //! admits, encodes and saves its output one partition at a time, each
 //! partition as large as the run's largest driver partition, and its saved
-//! files and run report are the whole-table run's.
+//! files and run report are the whole-table run's. A run over a SAS or ODM
+//! driver input admits its output whole.
 //!
 //! Every single-specification benchmark already saves its files over
-//! one-record partitions in `partitioned_corpus.rs`, so each output is
-//! written one record at a time there. Here a Parquet output of several row
-//! groups is saved in partitions that divide no row group of the writer's
-//! 1,024 rows, a run whose check fires in two partitions saves the
-//! whole-table run report, authored from the run report's columns, and an
-//! output beyond the row limit saves a partition at a time.
+//! one-record partitions in `partitioned_corpus.rs`, so each output of a CSV
+//! or Parquet driver is written one record at a time there. Here a Parquet
+//! output of several row groups is saved in partitions that divide no row
+//! group of the writer's 1,024 rows, a run whose check fires in two
+//! partitions saves the whole-table run report, authored from the run
+//! report's columns, an output beyond the row limit saves a partition at a
+//! time, and a SAS driver's output beyond it is refused as the whole-table
+//! run refuses it.
 //!
 //! The seam is the facade's partitioned engine mode, which neither the
 //! benchmark reader nor the host fixtures run before #3794.
@@ -154,4 +157,88 @@ fn an_output_beyond_the_row_limit_saves_a_partition_at_a_time() {
         (records, records + 1, vec!["10000002", "10000001"]),
         "the output's rows, the saved file's lines and its last two"
     );
+}
+
+/// Two row templates over a SAS driver input of 5,000,001 records would make
+/// an output of 10,000,002 rows, beyond the row limit. The row and cell
+/// limits bound a SAS or ODM input whole, and its output too (D264), so the
+/// partitioned run admits its output whole and refuses it where the
+/// whole-table run does, as the second template's rows would pass the
+/// limit: one `engine_rejected` issue of the execute step, `execution_limit`
+/// on `output_rows`, 10,000,002 rows required of 10,000,000. The input is a
+/// SAS Transport file the engine's transport writer writes. The runs take
+/// minutes unoptimized, so the test runs in the optimized `release-test`
+/// profile, as the native lane runs every test, and no other test beyond
+/// the row limit runs beside it (`support::beyond_the_row_limit`).
+#[cfg(feature = "readstat")]
+#[test]
+#[cfg_attr(
+    debug_assertions,
+    ignore = "a 10,000,002-row output runs in the optimized release-test profile"
+)]
+fn the_output_of_a_sas_driver_beyond_the_row_limit_is_refused_as_the_whole_table_run_refuses_it() {
+    use std::convert::Infallible;
+    use yamaa_adapters::submission_xpt::{render, XptDocument, XptKind, XptVariable};
+    use yamaa_core::table::{CellError, Column, TableAccess, TableSchema, ValueRef};
+    const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, COPY]\ninput: {SRC: {path: input.xpt, types: {ID: int}, encoding: ascii}}\noutput: {path: out.csv, columns: [ID, COPY]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: COPY, type: int}\nrows:\n  - {id: first, derivations: {COPY: \"1\"}}\n  - {id: second, derivations: {COPY: \"2\"}}\n";
+    /// The IDs 1 to `.1`, one record each.
+    struct Records(TableSchema, usize);
+    impl TableAccess for Records {
+        type Error = Infallible;
+        fn schema(&self) -> &TableSchema {
+            &self.0
+        }
+        fn row_count(&self) -> usize {
+            self.1
+        }
+        fn cell(&self, row: usize, _: usize) -> Result<ValueRef<'_>, CellError<Infallible>> {
+            Ok(ValueRef::Int(row as i64 + 1))
+        }
+    }
+    let _alone = crate::support::beyond_the_row_limit();
+    let records = Records(
+        TableSchema::new(vec![Column {
+            name: "ID".into(),
+            kind: yamaa_core::value::ColumnType::Int,
+        }])
+        .unwrap(),
+        yamaa_core::limits::Limits::TABLE_ROWS / 2 + 1,
+    );
+    let document = XptDocument {
+        path: "input.xpt".into(),
+        name: "SRC".into(),
+        label: "Source".into(),
+        created: "01JAN26:00:00:00".into(),
+        variables: vec![XptVariable {
+            name: "ID".into(),
+            label: "Identifier".into(),
+            kind: XptKind::Number,
+            width: 8,
+            format: None,
+        }],
+    };
+    let scratch = Scratch::new("partitioned-publication-sas");
+    scratch.write("spec.yaml", SPEC);
+    scratch.write("input.xpt", render(&document, &records).unwrap());
+    drop(records);
+    let spec = scratch.join("spec.yaml");
+    let refused = r#"Error engine engine_rejected None [] {"actual":10000002,"code":"execution_limit","limit":10000000,"resource":"output_rows","step":"execute"} None None"#;
+    let million = Partitions::new(NonZeroUsize::new(1_000_000).unwrap());
+    for (label, partitions) in [
+        ("the whole-table run", None),
+        ("partitions of 1,000,000 records", Some(million)),
+    ] {
+        let run = engine(partitions)
+            .spec(spec.to_str().unwrap())
+            .run()
+            .unwrap();
+        assert_eq!(
+            (
+                run.output().is_none(),
+                crate::support::issues(&run.diagnostics())
+            ),
+            (true, refused.to_owned()),
+            "{label}"
+        );
+    }
 }

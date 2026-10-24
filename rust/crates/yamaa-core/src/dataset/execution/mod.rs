@@ -62,11 +62,18 @@ pub enum ExecutionEvent {
 /// `rows` records, a Parquet input in runs of whole row groups of at most
 /// `rows` records, a larger row group being a partition of its own. A plan
 /// that only key-bounded partitions can divide reads the input whole.
+///
+/// A run that divides every step admits its output a partition at a time
+/// too (D264), unless `whole_output` admits it whole, so that the row and
+/// cell limits refuse it as they refuse the whole-table run's output. A run
+/// whose driver input is SAS or ODM sets it, since those limits bound such
+/// an input whole (`specification_run`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Partitioning {
     pub rows: std::num::NonZeroUsize,
     pub leading_keys: Option<std::num::NonZeroUsize>,
     pub whole_table_fallback: bool,
+    pub whole_output: bool,
 }
 
 /// Fixed boundary failures remain distinct from normative language conditions.

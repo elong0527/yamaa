@@ -147,6 +147,9 @@ pub(super) struct Partitions {
     pub keys: usize,
     /// Whether a step that needs the whole table runs over it.
     pub fallback: bool,
+    /// Whether the output is admitted whole even when every step divides,
+    /// as a run over a SAS or ODM driver input admits it (D264).
+    pub whole_output: bool,
     /// Whether some partition's schema is not the driver's.
     pub mismatched: bool,
     /// The partition fields and size of a key-bounded cut not yet made: the
@@ -160,6 +163,7 @@ impl Partitions {
             starts: input.starts.clone(),
             keys,
             fallback,
+            whole_output: false,
             mismatched: input.parts.iter().any(|part| part.schema() != input.schema),
             cut: None,
         }
@@ -452,7 +456,9 @@ impl ResolvedPlan {
     /// every unit of the schedule whose steps are partition-safe and whose
     /// rows come from the driver input runs over one partition's rows at a
     /// time, and the probe is polled between partitions as well as at every
-    /// checkpoint; a unit with a global step runs over the whole input.
+    /// checkpoint; a unit with a global step runs over the whole input. A
+    /// run that divides every step admits its output a partition at a time
+    /// too (D264): only a CSV or Parquet input is read by partition (#3792).
     ///
     /// A successful or failed attempt equals the whole-table attempt on the
     /// same input: the same dataset, failure, handler counts, verifications
@@ -493,7 +499,9 @@ impl ResolvedPlan {
     /// runs over consecutive partitions. Every partition-safe unit then runs
     /// one partition at a time, and a window or aggregate that groups by
     /// every partition key is partition-safe
-    /// ([`crate::dataset::resolved::StepInfo::class`]).
+    /// ([`crate::dataset::resolved::StepInfo::class`]). A run that divides
+    /// every step admits its output a partition at a time too (D264), unless
+    /// `partitioning.whole_output` admits it whole.
     pub fn execute_divided<T: TableAccess + ?Sized>(
         &self,
         partitioning: Option<Partitioning>,
@@ -532,6 +540,7 @@ impl ResolvedPlan {
             .collect();
         let input = Concatenated::new(&parts, self.driver_schema());
         let mut divided = Partitions::new(&input, keys, fallback);
+        divided.whole_output = partitioning.whole_output;
         if keys > 0 {
             divided.cut = self.partition_fields(keys).map(|fields| (fields, size));
         }

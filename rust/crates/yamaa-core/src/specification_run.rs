@@ -6,7 +6,9 @@ use crate::{
     decoder::Decoder,
     resolver::{Failure, Name, Origin, Resolver},
     resource::ResourceFailure,
-    specification::{BindError, PreparedSpecification, SourceDeclaration, SourceInterpretation},
+    specification::{
+        BindError, PreparedSpecification, SourceDeclaration, SourceInterpretation, SourceProfile,
+    },
     table::TableAccess,
 };
 use std::{sync::Arc, vec};
@@ -509,6 +511,13 @@ fn execute_inner_into<R: Resolver, D: Decoder>(
         }
     };
     let cancelled = || scope.cancelled();
+    // The row and cell limits bound a SAS or ODM driver input whole, and its
+    // output too (D264); only a CSV or Parquet driver's output is admitted a
+    // partition at a time.
+    let whole_output = !matches!(
+        prepared.sources()[prepared.driver_index()].profile,
+        SourceProfile::Csv | SourceProfile::Parquet
+    );
     attempt.result = Ok(match scope.partitioning().filter(|_| by_partition) {
         // The partitions the input was read in are the run's (#3792).
         Some(partitioning) => plan.execute_partitioned(
@@ -520,7 +529,12 @@ fn execute_inner_into<R: Resolver, D: Decoder>(
             partitioning.whole_table_fallback,
         ),
         None => plan.execute_divided(
-            scope.partitioning(),
+            scope
+                .partitioning()
+                .map(|partitioning| dataset::Partitioning {
+                    whole_output: partitioning.whole_output || whole_output,
+                    ..partitioning
+                }),
             primary,
             &secondary,
             &mut functions,
