@@ -765,8 +765,39 @@ pub struct StepInfo {
     /// it, sometimes once per current row (LOOKUP-15), so that step's
     /// checkpoint covers it.
     pub checkpoint: bool,
+    /// The step's class under partitions of consecutive records (#3697).
     pub partition: PartitionClass,
+    /// The step's class under key-bounded partitions (#3763).
+    pub keyed: KeyedClass,
     pub effects: Effects,
+}
+
+impl StepInfo {
+    /// The step's class when the partitions never split a group of the
+    /// leading `keys` declared keys, or, for zero keys, when they are
+    /// consecutive records (#3763).
+    pub fn class(&self, keys: usize) -> PartitionClass {
+        if keys > 0 && self.keyed.keys as usize >= keys {
+            self.keyed.class
+        } else {
+            self.partition
+        }
+    }
+}
+
+/// A step's class under key-bounded partitions (#3763). A window or an
+/// aggregate whose grouping includes every partition key reads only rows of
+/// one partition, so it is partition-safe there, while
+/// [`StepInfo::partition`] marks it global.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct KeyedClass {
+    /// How many leading declared keys every window and aggregate of the step
+    /// groups by, each a key the driver input holds; `u32::MAX` for a step
+    /// that reads none.
+    pub keys: u32,
+    /// The step's class when the partitions keep that many leading keys'
+    /// groups whole.
+    pub class: PartitionClass,
 }
 
 /// One step of the schedule, in the order a run visits it.
@@ -987,5 +1018,13 @@ impl ResolvedPlan {
     /// A region's column-phase columns, in the compiler's order.
     pub fn column_order(&self, id: RegionId) -> &[ColumnId] {
         &self.region(id).column_order
+    }
+    /// Whether a dataset template reads the driver input record by record:
+    /// it is driven neither by a secondary input nor by a named
+    /// intermediate, so its rows divide with the input's partitions (#3697).
+    pub fn reads_driver(&self, id: TemplateId) -> bool {
+        let driver = &self.template(id).driver;
+        driver.named.is_none()
+            && self.region_sources(RegionId::DATASET).next() == Some(driver.source)
     }
 }

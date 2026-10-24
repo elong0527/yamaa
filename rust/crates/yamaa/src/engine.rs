@@ -47,37 +47,103 @@ pub struct EngineOptions {
     pub partitions: Option<Partitions>,
 }
 
-/// Partitioned execution (#3697): each run divides its driver input into
-/// consecutive partitions of `rows` records, the last holding the rest, and
-/// runs every partition-safe step over one partition at a time. A run
+/// Partitioned execution: each run divides its driver input into partitions
+/// and runs every partition-safe step over one partition at a time. A run
 /// polls its token between partitions as well. Its result, output, issues
 /// and run report are the whole-table run's, and the partition boundaries
 /// change none of them.
 ///
+/// There are two strategies:
+///
+/// - [`Partitions::new`] divides the input into consecutive partitions of
+///   `rows` records, the last holding the rest (#3697).
+/// - [`Partitions::by_keys`] divides it into key-bounded partitions (#3763):
+///   consecutive partitions that never split a group of the specification's
+///   leading `keys` declared keys, each holding as many whole groups as fit
+///   in `rows` records, a larger group alone. The input is one partition
+///   when its records are not grouped by those keys, or when a row
+///   template that reads it derives one of those keys from anything but one
+///   of its fields, copied unchanged. A specification that declares no key
+///   runs over consecutive partitions of `rows` records.
+///
 /// The partitions divide only what the partition-safety inventory lets
-/// them divide. A step that needs the whole table, one that reads a window,
-/// an aggregate, a named or joined relation, SELF rows or a project
-/// function, or rows driven by an intermediate whose derivations do,
-/// refuses the run before derivation: the run fails with `engine_rejected`
-/// (`step: execute`, `code: partition_global`) at that step's spec path.
-/// With [`Partitions::with_whole_table_fallback`], such a step runs over the
+/// them divide. A step that needs the whole table refuses the run before
+/// derivation: the run fails with `engine_rejected` (`step: execute`,
+/// `code: partition_global`) at that step's spec path. Under consecutive
+/// partitions that is a step that reads a window, an aggregate, a named or
+/// joined relation, SELF rows or a project function, or rows driven by an
+/// intermediate whose derivations do. Under key-bounded partitions a window
+/// or an aggregate reads only rows of its own partition, so it does not
+/// refuse, when its grouping includes every partition key, each one the
+/// input holds as a field the row templates copy unchanged, and every row it
+/// reads is built from the input's records: a window whose `group_by` names
+/// each key, an aggregate whose `group_by` names each, a grouped row
+/// template's aggregate when the template groups by each, or a qualified
+/// aggregate whose `key` pairs each. Every other step that needs the whole
+/// table refuses as it does under consecutive partitions. With
+/// [`Partitions::with_whole_table_fallback`], such a step runs over the
 /// whole input instead.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Partitions {
-    /// The driver records of each partition.
+    /// The driver records of each partition; under key-bounded partitions,
+    /// the most a partition holds unless one group holds more.
     pub rows: NonZeroUsize,
+    /// How many leading declared keys no partition splits a group of, or
+    /// none for consecutive partitions.
+    pub leading_keys: Option<NonZeroUsize>,
     /// Whether a step that needs the whole table runs over the whole input
     /// instead of refusing the run.
     pub whole_table_fallback: bool,
 }
 
 impl Partitions {
-    /// Partitions of `rows` driver records, refusing a run that has a step
-    /// that needs the whole table.
+    /// Consecutive partitions of `rows` driver records, refusing a run that
+    /// has a step that needs the whole table.
     pub fn new(rows: NonZeroUsize) -> Self {
         Self {
             rows,
+            leading_keys: None,
+            whole_table_fallback: false,
+        }
+    }
+
+    /// Key-bounded partitions over the leading `keys` declared keys, each
+    /// holding at most `rows` driver records unless one group holds more,
+    /// refusing a run that has a step that needs the whole table (#3763).
+    ///
+    /// # Example
+    ///
+    /// The row number restarts for each `ID`, so the window groups by the
+    /// one partition key and each subject's records run as a partition of
+    /// their own.
+    ///
+    /// ```
+    /// use std::num::NonZeroUsize;
+    /// use std::sync::Arc;
+    ///
+    /// use yamaa::{Engine, EngineOptions, HostLanguage, MemoryResolver, Partitions};
+    ///
+    /// let resolver = Arc::new(MemoryResolver::new());
+    /// resolver.insert("/", "spec.yaml", "spec:1", Arc::from(
+    ///     &b"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, SEQ]\ninput: {SRC: {path: input.csv, types: {SEQ: int}}}\noutput: {path: out.csv, columns: [ID, SEQ, N]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: N, type: int, derivation: {row_number: {window: {group_by: [ID], order_by: [SEQ]}}}}\n"[..],
+    /// ));
+    /// resolver.insert("/spec.yaml", "input.csv", "input:1", Arc::from(&b"ID,SEQ\na,2\na,1\nb,1\n"[..]));
+    /// let engine = Engine::new(
+    ///     EngineOptions::new(HostLanguage::Python, "doctest".into(), "0".into())
+    ///         .with_resolver(resolver)
+    ///         .with_partitions(Partitions::by_keys(NonZeroUsize::MIN, NonZeroUsize::MIN)),
+    /// );
+    /// let run = engine.spec("spec.yaml").run().unwrap();
+    /// if cfg!(feature = "yaml") {
+    ///     assert!(run.diagnostics().is_empty(), "{:?}", run.diagnostics());
+    ///     assert_eq!(run.output().unwrap().rows(), 3);
+    /// }
+    /// ```
+    pub fn by_keys(keys: NonZeroUsize, rows: NonZeroUsize) -> Self {
+        Self {
+            rows,
+            leading_keys: Some(keys),
             whole_table_fallback: false,
         }
     }
@@ -92,6 +158,7 @@ impl Partitions {
     pub(crate) fn into_core(self) -> yamaa_core::dataset::Partitioning {
         yamaa_core::dataset::Partitioning {
             rows: self.rows,
+            leading_keys: self.leading_keys,
             whole_table_fallback: self.whole_table_fallback,
         }
     }
@@ -147,8 +214,8 @@ impl EngineOptions {
         self
     }
 
-    /// Run every build divided into `partitions` (#3697), an engine mode with
-    /// no host surface.
+    /// Run every build divided into `partitions` (#3697, #3763), an engine
+    /// mode with no host surface.
     ///
     /// # Example
     ///

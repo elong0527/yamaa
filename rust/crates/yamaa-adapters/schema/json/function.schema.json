@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "yamaa 1.0 function file",
+  "description": "One file of the 1.0 function type. Each field carries its kind as x-yamaa-kind and its schema-notation type as x-yamaa-type. Generated from yaml/ by tools/packaging/generate_json_schema.py.",
+  "$ref": "#/$defs/function_definition_class",
+  "$defs": {
+    "column_type": {
+      "type": "string",
+      "enum": [
+        "str",
+        "int",
+        "float",
+        "date",
+        "datetime"
+      ]
+    },
+    "function_case_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Name of one function test case (FUNC-11)."
+    },
+    "function_coverage": {
+      "type": "string",
+      "pattern": "^(normal|boundary|nullable-output|numeric-comparison|(default|accepted-missing|short-circuit-missing|boolean-true|boolean-false):[A-Za-z_][A-Za-z0-9_]*)$",
+      "description": "Obligation a function test case demonstrates (FUNC-11)."
+    },
+    "function_definition_class": {
+      "type": "object",
+      "properties": {
+        "yamaa": {
+          "$ref": "#/$defs/language_version",
+          "description": "Oldest language version this function file needs, always quoted (SCHEMA-2).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "language_version"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "function"
+          ],
+          "description": "File type of a function file, which defines one project function (FUNC-4).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "name": {
+          "$ref": "#/$defs/identifier",
+          "description": "Logical name a specification calls the function by (FUNC-4).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "identifier"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Description of what the function computes (FUNC-4).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "params": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/function_parameter_class"
+          },
+          "description": "Closed, ordered named parameters of the function (FUNC-5).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "list[function_parameter_class]"
+        },
+        "returns": {
+          "$ref": "#/$defs/column_type",
+          "description": "Column type of the one scalar the function returns (FUNC-9).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "column_type"
+        },
+        "may_return_missing": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether an invoked binding may return the missing value (FUNC-9).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
+        },
+        "comparison_decimals": {
+          "type": "integer",
+          "default": 4,
+          "description": "Decimal places at which numeric test results are compared (FUNC-13).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "int"
+        },
+        "implementations": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/host_language"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/qualified_callable"
+          },
+          "description": "Statically written fully qualified callable each host language binds, by language key (FUNC-8).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "dict[host_language, qualified_callable]"
+        },
+        "tests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/function_test_class"
+          },
+          "description": "Inline test cases activation runs before any study data is read (FUNC-11).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "list[function_test_class]"
+        }
+      },
+      "required": [
+        "yamaa",
+        "type",
+        "name",
+        "description",
+        "params",
+        "returns",
+        "implementations",
+        "tests"
+      ],
+      "additionalProperties": false
+    },
+    "function_param_type": {
+      "type": "string",
+      "enum": [
+        "str",
+        "int",
+        "float",
+        "bool",
+        "date",
+        "datetime"
+      ]
+    },
+    "function_parameter_class": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/identifier",
+          "description": "Parameter name, matching the callable's parameter exactly (FUNC-5).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "identifier"
+        },
+        "type": {
+          "$ref": "#/$defs/function_param_type",
+          "description": "Exact type every argument and default of this parameter has (FUNC-5).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "function_param_type"
+        },
+        "required": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether a call must supply this argument (FUNC-5).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
+        },
+        "default": {
+          "$ref": "#/$defs/function_value",
+          "description": "Value an omitted optional argument takes (FUNC-7).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "function_value"
+        },
+        "accepts_missing": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether a missing argument is passed to the binding instead of short-circuiting the call (FUNC-7).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "function_test_class": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/function_case_id",
+          "description": "Unique name of the test case (FUNC-11).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "function_case_id"
+        },
+        "covers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/function_coverage"
+          },
+          "description": "Obligations this case demonstrates (FUNC-11).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "list[function_coverage]"
+        },
+        "args": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/identifier"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/function_value"
+          },
+          "description": "Logical arguments the case passes, by parameter name (FUNC-11).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "dict[identifier, function_value]"
+        },
+        "result": {
+          "$ref": "#/$defs/function_value",
+          "description": "Result the call is expected to return (FUNC-11).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "function_value"
+        }
+      },
+      "required": [
+        "id",
+        "covers",
+        "args",
+        "result"
+      ],
+      "additionalProperties": false
+    },
+    "function_value": {
+      "$ref": "#/$defs/literal_value",
+      "description": "Constant of the declared parameter or return type, a date or datetime written as bare text and YAML null for missing (FUNC-5)."
+    },
+    "host_language": {
+      "type": "string",
+      "enum": [
+        "python",
+        "r"
+      ],
+      "description": "Host language a callable belongs to."
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+      "description": "Single-token identifier; the field's own description states which naming list it belongs to, such as a declared dataset, a declared column, a document or a function (SPEC-2)."
+    },
+    "language_version": {
+      "type": "string",
+      "enum": [
+        "1.0"
+      ],
+      "description": "Language version a file declares in `yamaa`, the oldest that admits every field it writes (SCHEMA-2)."
+    },
+    "literal_value": {
+      "type": [
+        "string",
+        "integer",
+        "number",
+        "boolean",
+        "null"
+      ],
+      "description": "Scalar constant in which YAML null is the missing value; a non-finite float becomes missing (VALUE-4)."
+    },
+    "qualified_callable": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Fully qualified callable name, such as projectbmi.bmi or projectbmi::bmi (FUNC-8)."
+    }
+  }
+}

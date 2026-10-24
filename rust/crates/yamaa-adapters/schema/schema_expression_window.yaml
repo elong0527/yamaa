@@ -1,0 +1,78 @@
+version: "1.0"
+
+# See WINDOW-3.
+
+window_selection:
+    type: [identifier, window_spec]
+    kind: structure
+    description: See WINDOW-1.
+
+window_spec:
+    - group_by:
+        type: "list[variable]"
+        description: Variables defining partitions; omission uses one partition (WINDOW-3).
+    - order_by:
+        type: "list[order_by_term]"
+        description: Terms ordering rows within each partition (WINDOW-3).
+    - filter:
+        type: predicate
+        description: Predicate selecting rows (WINDOW-4).
+
+expressions:
+    row_number: # See WINDOW-6.
+        - window:
+            type: window_selection
+            description: Partition, ordering and row selection for the window (WINDOW-6).
+    rank: # See WINDOW-6.
+        - method:
+            type: str
+            default: competition
+            values: [competition, dense]
+            description: Tie numbering; competition leaves position gaps and dense does not (WINDOW-6).
+        - window:
+            type: window_selection
+            description: Partition, ordering and row selection for the window (WINDOW-6).
+    row_value: # See WINDOW-7.
+        - source:
+            type: variable
+            required: true
+            description: Variable read from the offset row (WINDOW-7).
+        - offset:
+            type: int
+            required: true
+            description: Rows to move along the declared order; nonzero (WINDOW-7).
+        - window:
+            type: window_selection
+            description: Partition, ordering and row selection for the window (WINDOW-7).
+    locf: # See WINDOW-8.
+        - source:
+            type: variable
+            required: true
+            description: Completed observed variable to carry forward (WINDOW-8).
+        - include_current:
+            type: bool
+            default: true
+            description: Whether a present current source answers before earlier rows (WINDOW-8).
+        - window:
+            type: window_selection
+            description: Partition, ordering and optional row selection (WINDOW-8).
+    baseline_flag: # See WINDOW-9.
+        - date:
+            type: variable
+            required: true
+            description: Candidate baseline date or datetime (WINDOW-9).
+        - reference:
+            type: variable
+            required: true
+            description: Upper bound for the baseline date, of the same temporal type (WINDOW-9).
+        - source:
+            type: variable
+            required: true
+            description: Analysis value the baseline is for; a row whose value is missing is not eligible (WINDOW-9).
+        - inclusive:
+            type: bool
+            default: true
+            description: Whether a date equal to the reference date is eligible; false admits only earlier dates (WINDOW-9).
+        - window:
+            type: window_selection
+            description: Baseline-selection partitions, row filter and the order of eligible rows, whose last row is the baseline; order_by defaults to the date alone (WINDOW-9).

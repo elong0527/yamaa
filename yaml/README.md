@@ -97,9 +97,9 @@ Schema checks what one layer may write
 checks a complete specification. The engine embeds them byte for byte, and
 `schema(file_type)` gives each as canonical JSON text, one line with its
 members in key order. After changing a schema file, regenerate them, then
-the copy of the schema files and their JSON Schemas that the engine embeds
-and the field orders the lint reads from each file type's classes, which
-`make quick` also compares:
+the copies of the schema files and their JSON Schemas that the engine embeds,
+in `rust/crates/yamaa-adapters/schema/`, and the field orders the lint reads
+from each file type's classes, which `make quick` also compares:
 
 ```sh
 uv run --project python --no-sync python -m tools.packaging.generate_json_schema --write

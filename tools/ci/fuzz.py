@@ -153,6 +153,7 @@ TARGETS = {
         # The YAML reader, then schema admission, preparation and the
         # expression parser; the nightly run covers the rest of compilation.
         (
+            "rust/crates/yamaa-adapters/schema/",
             "rust/crates/yamaa-adapters/src/shipped_schema/",
             "rust/crates/yamaa-adapters/src/specification_run.rs",
             "rust/crates/yamaa-adapters/src/specification_source/",

@@ -14,8 +14,10 @@ that no supported target compiles, check_minimum_rust.TARGETS, keeps only its
 manifest), with the Cargo configuration that reads them instead of the
 network. The facade crate carries the selftest cases in its `selftest`
 directory, the files of the benchmarks that benchmarks/selftest.yaml names,
-which its build embeds (#3030 D108), so a build from the bundle reads nothing
-outside it. It holds no tests,
+which its build embeds (#3030 D108), and the adapters crate the schema files
+that it embeds in its `schema` directory, the copies of yaml/ that
+tools/packaging/generate_shipped_schema.py writes, so a build from the bundle
+reads nothing outside it. It holds no tests,
 examples, other benchmark fixtures or public-api.txt, and no Rust toolchain
 file anywhere, the vendored crates included. The command line has no source
 archive: its bundle, with the yamaa-cli crate in place of the boundary crates
@@ -54,6 +56,8 @@ from tools.staging import vendor_crates
 ENGINE = ("yamaa-core", "yamaa-adapters", "yamaa")
 # The facade crate, which embeds the selftest cases.
 FACADE = "yamaa"
+# The adapters crate's directory of the schema files that it embeds.
+SCHEMA = "schema"
 # The crates through which both host bindings reach the engine
 # (rust/interface/README.md): the boundary, with the client each binding
 # calls, and the engine's C ABI, which each binding links. The command line
@@ -85,7 +89,9 @@ def members(host):
 
 
 def member_sources(member_root: Path):
-    """Yield a member's manifest, build script, license files and Rust sources."""
+    """Yield a member's manifest, build script, license files and Rust sources,
+    the adapters' copies of the schema files they embed and their ReadStat
+    sources."""
     manifest = member_root / MANIFEST
     build_script = member_root / "build.rs"
     sources = member_root / "src"
@@ -108,6 +114,22 @@ def member_sources(member_root: Path):
             raise ValueError("workspace member sources must not be symlinks")
         if path.is_file() and path.suffix == ".rs":
             yield path
+    # The schema modules and JSON Schemas that the adapters embed with
+    # include_str! (src/shipped_schema/data.rs): the byte-identical copies of
+    # yaml/ that tools/packaging/generate_shipped_schema.py writes.
+    schema = member_root / SCHEMA
+    if schema.is_symlink():
+        raise ValueError("embedded schema files must not be symlinks")
+    if schema.exists():
+        if member_root.name != "yamaa-adapters":
+            raise ValueError("unreviewed embedded schema directory")
+        for path in sorted(schema.rglob("*")):
+            if path.is_symlink():
+                raise ValueError("embedded schema files must not be symlinks")
+            if path.is_file():
+                if path.suffix not in {".yaml", ".json"}:
+                    raise ValueError("unreviewed embedded schema file")
+                yield path
     # ReadStat is compiled from this exact licensed vendored source tree.
     vendor = member_root / "vendor" / "readstat"
     if (member_root / "vendor").is_symlink():

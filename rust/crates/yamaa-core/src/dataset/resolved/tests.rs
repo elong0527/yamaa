@@ -1316,3 +1316,408 @@ fn a_run_polls_before_each_batch_of_project_function_calls() {
     ));
     assert_eq!(calls, 1);
 }
+
+/// A source of S, U and P (text) and V (integer), with SEC, a secondary
+/// input of S, U and V, and an output of S, U, P, V and R (integer) keyed
+/// [S, U, P]. The record template copies the four fields, except that
+/// `literal_u` derives U from a literal, and R derives `shape`.
+fn keyed_plan(templates: Vec<RowTemplate>, columns: Vec<Assignment>) -> DatasetPlan {
+    let text = ColumnType::Str;
+    let int = ColumnType::Int;
+    DatasetPlan::new_with_intermediates(
+        SourceSchemas {
+            primary: schema(&[("S", text), ("U", text), ("P", text), ("V", int)]),
+            secondary: vec![SecondarySource {
+                name: "SEC".into(),
+                schema: schema(&[("S", text), ("U", text), ("V", int)]),
+            }],
+        },
+        vec![Intermediate {
+            identifier: "L".into(),
+            path: "intermediates[0]".into(),
+            source: IntermediateSource::Input(0),
+            keys: vec![pair(0, 0)],
+            filter: None,
+            selection: None,
+            nearest: None,
+            range: None,
+            columns: None,
+            no_match: Some(Value::Missing),
+            require_match: false,
+            unique: vec![],
+            derivations: None,
+            pending_schema: None,
+        }],
+        schema(&[
+            ("S", text),
+            ("U", text),
+            ("P", text),
+            ("V", int),
+            ("R", int),
+        ]),
+        templates,
+        columns,
+        vec![0, 1, 2],
+        vec![],
+    )
+}
+fn copies(mode: RowMode, literal_u: bool) -> RowTemplate {
+    let u = if literal_u {
+        Expression::Literal(Value::Str("u".into()))
+    } else {
+        Expression::Source(1)
+    };
+    RowTemplate {
+        mode,
+        assignments: vec![
+            assign(0, Expression::Source(0)),
+            assign(1, u),
+            assign(2, Expression::Source(2)),
+            assign(3, Expression::Source(3)),
+        ],
+        filter: None,
+    }
+}
+/// A template driven by SEC, whose rows belong to no partition: it copies
+/// SEC's S, U and V, writes P as a literal, and derives R from `r`, if any.
+fn from_sec(r: Option<Expression>) -> RowTemplate {
+    let mut assignments = vec![
+        assign(0, Expression::Source(0)),
+        assign(1, Expression::Source(1)),
+        assign(2, Expression::Literal(Value::Str("p".into()))),
+        assign(3, Expression::Source(2)),
+    ];
+    assignments.extend(r.map(|r| assign(4, r)));
+    RowTemplate {
+        mode: RowMode::Driver {
+            source: 1,
+            mode: Box::new(RowMode::Records),
+        },
+        assignments,
+        filter: None,
+    }
+}
+/// R derives `shape` in the column phase.
+fn column_shape(shape: Expression) -> DatasetPlan {
+    keyed_plan(
+        vec![copies(RowMode::Records, false)],
+        vec![assign(4, shape)],
+    )
+}
+/// R derives `shape` in the template's row stage.
+fn row_shape(mode: RowMode, shape: Expression) -> DatasetPlan {
+    let mut template = copies(mode, false);
+    template.assignments.push(assign(4, shape));
+    keyed_plan(vec![template], vec![])
+}
+/// A row number over V within the groups of the output columns `group_by`.
+fn numbered_by(group_by: Vec<usize>) -> Expression {
+    Expression::Window(Window {
+        kind: WindowKind::RowNumber,
+        group_by,
+        order_by: vec![OrderTerm {
+            column: 3,
+            descending: false,
+            nulls_first: false,
+        }],
+        filter: None,
+    })
+}
+/// A count of the records of `relation`.
+fn counted(relation: crate::dataset::AggregateRelation, row: bool) -> Expression {
+    let path = "columns.R.derivation.aggregate";
+    Expression::Aggregate(Box::new(
+        crate::dataset::BoundAggregate::new(
+            crate::expression::compile(
+                "COUNT(D.*)",
+                crate::expression::Context::Aggregate,
+                &format!("{path}.expr"),
+            )
+            .unwrap(),
+            relation,
+            vec![],
+            None,
+            if row {
+                crate::dataset::AggregatePhase::RowConstruction
+            } else {
+                crate::dataset::AggregatePhase::Derivation
+            },
+            None,
+            path,
+        )
+        .unwrap(),
+    ))
+}
+/// A key pairing the donor field `field` with the output column `column`.
+fn pair(field: usize, column: usize) -> IntermediateKey {
+    IntermediateKey {
+        source_column: field,
+        path: format!("key[{field}]"),
+        value: MatchValue::Variable(MatchRead::Output {
+            column,
+            identifier: ["S", "U", "P", "V", "R"][column].into(),
+        }),
+    }
+}
+/// A key pairing the donor field `field` with the driver field `record`.
+fn record_pair(field: usize, record: usize) -> IntermediateKey {
+    IntermediateKey {
+        source_column: field,
+        path: format!("key[{field}]"),
+        value: MatchValue::Variable(MatchRead::Record {
+            column: record,
+            identifier: format!("SRC.{}", ["S", "U", "P", "V"][record]),
+        }),
+    }
+}
+/// A qualified aggregate over `source` whose key pairs `keys`.
+fn matched(source: crate::dataset::AggregateSource, keys: &[(usize, usize)]) -> Expression {
+    counted(
+        crate::dataset::AggregateRelation::Matched {
+            source,
+            keys: keys
+                .iter()
+                .map(|&(field, column)| pair(field, column))
+                .collect(),
+            group_by: vec![],
+        },
+        false,
+    )
+}
+
+/// The class of the step that derives R, under consecutive partitions, then
+/// under key-bounded partitions over one, two and three keys.
+fn classes_of_r(plan: &DatasetPlan) -> [PartitionClass; 4] {
+    let resolved = plan.resolve().unwrap();
+    let (r, binding) = (
+        ColumnId(4),
+        resolved.cell(TemplateId(0), ColumnId(4)).unwrap(),
+    );
+    let step = match resolved.binding(binding).stage {
+        Stage::Column => Step::Column(r),
+        Stage::Window => Step::Window(binding),
+        Stage::Prewindow => Step::Row(binding),
+    };
+    let info = resolved.schedule()[position(&resolved, step)];
+    [0, 1, 2, 3].map(|keys| info.class(keys))
+}
+
+/// The schedule's classes under key-bounded partitions (#3763), a seam no
+/// run's output shows. Under such partitions over the leading k declared
+/// keys, a window or aggregate step is partition-safe exactly when its
+/// grouping includes each of those k keys, each a key the driver input
+/// holds as a field the record template copies; otherwise, and under
+/// consecutive partitions, it is global. Each expectation reads the keys
+/// [S, U, P] and the shape's grouping: the window's `group_by` (WINDOW-3),
+/// read as an output column or as the driver field the key copies (WINDOW-11);
+/// an unqualified aggregate's `group_by`, a grouped row template's group
+/// fields and a qualified aggregate's key (LOOKUP-18, LOOKUP-19), which over
+/// the driver input must pair each key with the field that holds it. A row
+/// of a template driven by SEC belongs to no partition, so a column window
+/// or qualified aggregate that reads one holds no key, while the record
+/// template's own row window still does. A named read needs the whole table
+/// under any partitions.
+#[test]
+fn a_window_or_aggregate_is_partition_safe_exactly_when_it_groups_by_every_partition_key() {
+    use crate::dataset::{AggregateRelation as Relation, AggregateSource as Source};
+    use PartitionClass::{Global as G, Safe as S};
+    let groups = |fields: Vec<usize>| RowMode::Groups(fields);
+    let cases: [(&str, DatasetPlan, [PartitionClass; 4]); 22] = [
+        (
+            "a column window over every row",
+            column_shape(numbered_by(vec![])),
+            [G, G, G, G],
+        ),
+        (
+            "a column window by S",
+            column_shape(numbered_by(vec![0])),
+            [G, S, G, G],
+        ),
+        (
+            "a column window by S and U",
+            column_shape(numbered_by(vec![0, 1])),
+            [G, S, S, G],
+        ),
+        (
+            "a column window by U",
+            column_shape(numbered_by(vec![1])),
+            [G, G, G, G],
+        ),
+        (
+            "a column window by S and the driver field U",
+            column_shape(Expression::ContextWindow(crate::dataset::ContextWindow {
+                window: Window {
+                    kind: WindowKind::RowNumber,
+                    group_by: vec![0, 5],
+                    order_by: vec![OrderTerm {
+                        column: 3,
+                        descending: false,
+                        nulls_first: false,
+                    }],
+                    filter: None,
+                },
+                sources: vec![("SRC.U".into(), 1)],
+            })),
+            [G, S, S, G],
+        ),
+        (
+            "a column window by V, U and S",
+            column_shape(numbered_by(vec![3, 1, 0])),
+            [G, S, S, G],
+        ),
+        (
+            "a column window by S, U and P",
+            column_shape(numbered_by(vec![0, 1, 2])),
+            [G, S, S, S],
+        ),
+        (
+            "a row template's window by S and U",
+            row_shape(RowMode::Records, numbered_by(vec![0, 1])),
+            [G, S, S, G],
+        ),
+        (
+            "an unqualified aggregate by S and U",
+            column_shape(counted(
+                Relation::Output {
+                    group_by: vec![0, 1],
+                },
+                false,
+            )),
+            [G, S, S, G],
+        ),
+        (
+            "an unqualified aggregate by U and P",
+            column_shape(counted(
+                Relation::Output {
+                    group_by: vec![1, 2],
+                },
+                false,
+            )),
+            [G, G, G, G],
+        ),
+        (
+            "an aggregate of rows grouped by S, U and P",
+            row_shape(groups(vec![0, 1, 2]), counted(Relation::CurrentGroup, true)),
+            [G, S, S, S],
+        ),
+        (
+            "an aggregate of rows grouped by S",
+            row_shape(groups(vec![0]), counted(Relation::CurrentGroup, true)),
+            [G, S, G, G],
+        ),
+        (
+            "a qualified aggregate of SEC keyed by S and U",
+            column_shape(matched(Source::Secondary(0), &[(0, 0), (1, 1)])),
+            [G, S, S, G],
+        ),
+        (
+            "a qualified aggregate of SEC keyed by U",
+            column_shape(matched(Source::Secondary(0), &[(1, 1)])),
+            [G, G, G, G],
+        ),
+        (
+            "a qualified aggregate of SEC keyed by the driver fields S and U",
+            column_shape(counted(
+                Relation::Matched {
+                    source: Source::Secondary(0),
+                    keys: vec![record_pair(0, 0), record_pair(1, 1)],
+                    group_by: vec![],
+                },
+                false,
+            )),
+            [G, S, S, G],
+        ),
+        (
+            "a qualified aggregate of the driver input pairing S and U with their fields",
+            column_shape(matched(Source::Primary, &[(0, 0), (1, 1)])),
+            [G, S, S, G],
+        ),
+        (
+            "a qualified aggregate of the driver input pairing U with the field P",
+            column_shape(matched(Source::Primary, &[(0, 0), (2, 1)])),
+            [G, S, G, G],
+        ),
+        (
+            "a column window by S and U where the template derives U from a literal",
+            keyed_plan(
+                vec![copies(RowMode::Records, true)],
+                vec![assign(4, numbered_by(vec![0, 1]))],
+            ),
+            [G, S, G, G],
+        ),
+        (
+            "a named intermediate's read",
+            column_shape(Expression::Intermediate {
+                index: 0,
+                column: 2,
+            }),
+            [G, G, G, G],
+        ),
+        (
+            "a column window by S and U over the rows of a template driven by SEC too",
+            keyed_plan(
+                vec![copies(RowMode::Records, false), from_sec(None)],
+                vec![assign(4, numbered_by(vec![0, 1]))],
+            ),
+            [G, G, G, G],
+        ),
+        (
+            "a qualified aggregate of SEC keyed by S and U, for a template driven by SEC too",
+            keyed_plan(
+                vec![copies(RowMode::Records, false), from_sec(None)],
+                vec![assign(4, matched(Source::Secondary(0), &[(0, 0), (1, 1)]))],
+            ),
+            [G, G, G, G],
+        ),
+        (
+            "a row template's window by S and U beside a template driven by SEC",
+            keyed_plan(
+                vec![
+                    {
+                        let mut template = copies(RowMode::Records, false);
+                        template
+                            .assignments
+                            .push(assign(4, numbered_by(vec![0, 1])));
+                        template
+                    },
+                    from_sec(Some(Expression::Literal(Value::Int(0)))),
+                ],
+                vec![],
+            ),
+            [G, S, S, G],
+        ),
+    ];
+    for (label, plan, expected) in cases {
+        assert_eq!(classes_of_r(&plan), expected, "{label}");
+    }
+}
+
+/// `ResolvedPlan::partition_fields`, a seam no run's output shows:
+/// key-bounded partitions cut the driver input by the field each of their
+/// keys copies (#3763), as many keys as the specification declares, and a
+/// key a template derives any other way leaves nothing to cut by.
+#[test]
+fn partition_fields_are_the_fields_every_driver_template_copies_into_the_keys() {
+    let copied = column_shape(numbered_by(vec![0, 1])).resolve().unwrap();
+    let literal = keyed_plan(
+        vec![copies(RowMode::Records, true)],
+        vec![assign(4, numbered_by(vec![0, 1]))],
+    )
+    .resolve()
+    .unwrap();
+    let cases = [
+        ("one key", &copied, 1, Some(vec![0])),
+        ("two keys", &copied, 2, Some(vec![0, 1])),
+        (
+            "more keys than the three declared",
+            &copied,
+            5,
+            Some(vec![0, 1, 2]),
+        ),
+        ("S before the literal U", &literal, 1, Some(vec![0])),
+        ("the literal U", &literal, 2, None),
+    ];
+    for (label, plan, keys, expected) in cases {
+        assert_eq!(plan.partition_fields(keys), expected, "{label}");
+    }
+}

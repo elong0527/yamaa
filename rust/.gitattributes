@@ -1,5 +1,7 @@
 # Embedded resource bytes are part of the installation probe on every platform.
 crates/yamaa-adapters/resources/* text eol=lf
+# The engine embeds the schema copies byte for byte, as include_str! reads them.
+crates/yamaa-adapters/schema/** text eol=lf
 # Reproduction compares pinned Unicode data, generated ranges and notices as bytes.
 crates/yamaa-core/unicode/**/*.txt text eol=lf
 crates/yamaa-core/unicode/LICENSE.txt text eol=lf
