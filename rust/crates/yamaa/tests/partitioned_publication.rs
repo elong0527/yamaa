@@ -8,9 +8,9 @@
 //! one-record partitions in `partitioned_corpus.rs`, so each output is
 //! written one record at a time there. Here a Parquet output of several row
 //! groups is saved in partitions that divide no row group of the writer's
-//! 1,024 rows, and a run whose check fires in two partitions saves the
-//! whole-table run report, authored from the run report's columns. An
-//! output beyond the row limit is `partitioned_reading.rs`'s.
+//! 1,024 rows, a run whose check fires in two partitions saves the
+//! whole-table run report, authored from the run report's columns, and an
+//! output beyond the row limit saves a partition at a time.
 //!
 //! The seam is the facade's partitioned engine mode, which neither the
 //! benchmark reader nor the host fixtures run before #3794.
@@ -123,7 +123,8 @@ fn a_check_that_fires_in_two_partitions_saves_the_whole_table_report() {
 /// saved file has a header and 10,000,002 lines, the last two the last two
 /// records' IDs. The one column keeps the run near 3 GB; the input and the
 /// run take minutes unoptimized, so the test runs in the optimized
-/// `release-test` profile, as the native lane runs every test.
+/// `release-test` profile, as the native lane runs every test, and no other
+/// test beyond the row limit runs beside it (`support::beyond_the_row_limit`).
 #[test]
 #[cfg_attr(
     debug_assertions,
@@ -132,6 +133,7 @@ fn a_check_that_fires_in_two_partitions_saves_the_whole_table_report() {
 fn an_output_beyond_the_row_limit_saves_a_partition_at_a_time() {
     use std::io::Write as _;
     const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+    let _alone = crate::support::beyond_the_row_limit();
     let records = yamaa_core::limits::Limits::TABLE_ROWS + 2;
     let scratch = Scratch::new("partitioned-publication-limit");
     scratch.write("spec.yaml", SPEC);

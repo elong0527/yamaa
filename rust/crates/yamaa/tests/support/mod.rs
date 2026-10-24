@@ -4,6 +4,18 @@ pub mod scratch;
 
 pub use scratch::Scratch;
 
+/// Held by each test that runs beyond the row limit, so no two of them run
+/// at once: each takes several gigabytes, and libtest runs the tests of this
+/// one binary side by side, which a 7 GB runner cannot hold for two (#3869).
+/// A test that panicked while holding it leaves it poisoned, and the next
+/// one takes it all the same.
+pub fn beyond_the_row_limit() -> std::sync::MutexGuard<'static, ()> {
+    static ALONE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    ALONE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 /// Project functions for specifications that call none: a call is a bug in
 /// the test.
 pub struct NoFunctions;
