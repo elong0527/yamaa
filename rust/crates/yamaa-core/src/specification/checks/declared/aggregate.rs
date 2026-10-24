@@ -144,7 +144,6 @@ impl Checks<'_> {
                         available: None,
                     };
                     let reads = super::donors::DonorReads::derive(
-                        spec,
                         self.prepared,
                         relation,
                         &derived,

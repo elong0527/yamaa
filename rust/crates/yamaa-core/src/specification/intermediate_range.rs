@@ -36,19 +36,22 @@ fn reference(path: &str, name: &str, intermediate: &str, code: C, findings: &mut
 /// derivations read this one (`contextual`), it stays contextual instead: a
 /// donor read takes the donor record's field of that name (LOOKUP-16), and
 /// every row that reads the intermediate refuses it ([`lookup_range::admit`]).
-#[allow(clippy::too_many_arguments)]
 pub(super) fn bind(
     declaration: &lookup_range::Declaration,
-    intermediate: &str,
-    donor: &TableSchema,
-    donor_kind: &impl Fn(usize) -> Option<ColumnType>,
-    admits: &impl Fn(usize) -> bool,
+    relation: &intermediates::Donor<'_>,
     catalog: &Catalog,
     contextual: bool,
     previous: &[Option<Intermediate>],
     secondary: &[crate::dataset::SecondarySource],
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<RelationRange>, BindError> {
+    let intermediates::Donor {
+        lookup: intermediate,
+        schema: donor,
+        kind: donor_kind,
+        admits,
+        ..
+    } = *relation;
     let owner = Owner::Intermediate(intermediate);
     let wrap = |diagnostic| BindFinding::Lookup(LookupFinding::from_diagnostic(diagnostic));
     let mut diagnostics = Vec::new();

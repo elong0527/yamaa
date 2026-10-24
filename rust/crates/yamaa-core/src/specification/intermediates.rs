@@ -77,47 +77,54 @@ struct NearestDeclaration {
 #[derive(Debug, Default)]
 pub(super) struct Declarations(std::sync::Arc<Vec<Declaration>>, Option<String>);
 type ResolveRef<'a> = &'a (dyn Fn(&str, &str, &mut Vec<BindFinding>) -> Option<usize> + 'a);
-type FinishedItem = (
-    Option<crate::dataset::RelationPredicate>,
-    Vec<OrderTerm>,
-    Option<Vec<usize>>,
-    Option<crate::dataset::RelationRange>,
-    Vec<crate::dataset::IntermediateUnique>,
-);
+/// What binding one lookup reads, built for each lookup in the order the
+/// lookups are derived ([`Declarations::bind`]) and borrowed down its walk:
+/// every lookup's declaration, the captured inputs, the output schema and
+/// the columns a SELF lookup reads, the project calls, the typed tree, the
+/// secondary sources, and the lookups bound before this one.
+#[derive(Clone, Copy)]
+pub(super) struct Context<'a> {
+    pub named: &'a Declarations,
+    pub inputs: binder::Inputs<'a>,
+    pub output: &'a TableSchema,
+    pub self_columns: Option<&'a [usize]>,
+    pub project: Option<&'a crate::project_calls::ProjectCalls>,
+    pub tree: &'a types::Tree,
+    pub secondary: &'a [SecondarySource],
+    pub previous: &'a [Option<Intermediate>],
+}
 
-#[allow(clippy::too_many_arguments)]
-fn finish_item(
+/// The relation a lookup reads, as its filter, range, nearest selection
+/// and `unique` checks probe it: the lookup's name, the dataset it reads,
+/// that dataset's schema once the lookup's derivations extend it, each
+/// field's kind, and whether the lookup may read a field.
+#[derive(Clone, Copy)]
+pub(super) struct Donor<'a> {
+    pub lookup: &'a str,
+    pub dataset: &'a str,
+    pub schema: &'a TableSchema,
+    pub kind: &'a dyn Fn(usize) -> Option<ColumnType>,
+    pub admits: &'a dyn Fn(usize) -> bool,
+}
+
+/// A lookup's filter over its relation: a read the relation does not
+/// answer refuses the lookup (LOOKUP-7), and a grammar failure is reported
+/// at the filter.
+fn bind_filter(
     item: &Declaration,
-    source_name: &str,
-    schema: &TableSchema,
-    donor_kind: &(dyn Fn(usize) -> Option<ColumnType> + '_),
-    admits: &(dyn Fn(usize) -> bool + '_),
-    resolve: ResolveRef<'_>,
-    catalog: &Catalog,
-    sources: &[SourceDeclaration],
-    schemas: &[&TableSchema],
-    driver: usize,
-    result: &[Option<Intermediate>],
-    secondary: &[SecondarySource],
+    relation: &Donor<'_>,
+    inputs: binder::Inputs<'_>,
     pairs: &[IntermediateKey],
-    contextual: bool,
     failed: &mut bool,
-    derivations: &Option<crate::dataset::IntermediateDerivations>,
     findings: &mut Vec<BindFinding>,
-) -> Result<FinishedItem, BindError> {
+) -> Result<Option<crate::dataset::RelationPredicate>, BindError> {
     let filter = match &item.filter {
         Some(Ok(plan)) => {
             let filter = relation_predicates::bind(
                 plan,
-                source_name,
-                schema,
-                &donor_kind,
+                relation,
                 matches!(item.source, self_relations::Relation::SelfRows),
-                &admits,
-                &item.name,
-                sources,
-                schemas,
-                driver,
+                inputs,
                 // Current source-key cardinality is resolved before
                 // selecting donor records. Its failure must precede
                 // the filter's operand types.
@@ -151,6 +158,16 @@ fn finish_item(
         Some(Err(error)) => return Err(BindError::ExpressionPolicy(error.clone())),
         None => None,
     };
+    Ok(filter)
+}
+
+/// A lookup's `order_by`, each term a field of its relation.
+fn bind_order(
+    item: &Declaration,
+    resolve: ResolveRef<'_>,
+    failed: &mut bool,
+    findings: &mut Vec<BindFinding>,
+) -> Vec<OrderTerm> {
     let mut order_by = Vec::new();
     for (index, (name, descending, nulls_first)) in item.order.iter().enumerate() {
         if let Some(column) = resolve(name, &format!("{}.order_by[{index}]", item.path), findings) {
@@ -163,38 +180,25 @@ fn finish_item(
             *failed = true;
         }
     }
-    let before = findings.len();
-    let columns = intermediate_range::bind_columns(
-        &item.columns,
-        source_name,
+    order_by
+}
+
+/// A lookup's `unique` checks (LOOKUP-17): each column a field of its
+/// relation, and none beside a filter or a derivation that reads the
+/// current row.
+fn bind_unique(
+    item: &Declaration,
+    relation: &Donor<'_>,
+    filter: &Option<crate::dataset::RelationPredicate>,
+    derivations: &Option<crate::dataset::IntermediateDerivations>,
+    findings: &mut Vec<BindFinding>,
+) -> Vec<crate::dataset::IntermediateUnique> {
+    let Donor {
+        dataset: source_name,
         schema,
-        &admits,
-        &item.path,
-        &item.name,
-        findings,
-    );
-    // A rejected projection retains donor names for subsequent checkpoints.
-    // Its owned finding still prevents final plan admission.
-    let columns = (findings.len() == before).then_some(columns).flatten();
-    let range = item
-        .range
-        .as_ref()
-        .map(|declaration| {
-            intermediate_range::bind(
-                declaration,
-                &item.name,
-                schema,
-                &donor_kind,
-                &admits,
-                catalog,
-                contextual,
-                result,
-                secondary,
-                findings,
-            )
-        })
-        .transpose()?
-        .flatten();
+        admits,
+        ..
+    } = *relation;
     let mut unique = Vec::new();
     for declared in &item.unique {
         let mut columns = Vec::new();
@@ -248,25 +252,28 @@ fn finish_item(
             findings.push(BindFinding::Lookup(finding));
         }
     }
-    Ok((filter, order_by, columns, range, unique))
+    unique
 }
 
 /// Bind a nearest selection (LOOKUP-26): its `source`, a `date` or
 /// `datetime` field of the lookup's relation; its `unit`, one that type
 /// counts in (TIME-4); and its `to`, of the source's type and read as a key
 /// match value is. The first finding refuses the selection.
-#[allow(clippy::too_many_arguments)]
 fn bind_nearest(
     declaration: &NearestDeclaration,
-    intermediate: &str,
-    schema: &TableSchema,
-    donor_kind: &dyn Fn(usize) -> Option<ColumnType>,
-    admits: &dyn Fn(usize) -> bool,
+    relation: &Donor<'_>,
     catalog: &Catalog,
     contextual: bool,
     context: match_values::Context<'_>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<crate::dataset::Nearest>, BindError> {
+    let Donor {
+        lookup: intermediate,
+        schema,
+        kind: donor_kind,
+        admits,
+        ..
+    } = *relation;
     use crate::diagnostic::lookup::{self, Owner};
     use crate::result_type::ResultType;
     let owner = Owner::Intermediate(intermediate);
@@ -355,21 +362,29 @@ fn bind_nearest(
     }))
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Bind one lookup over its relation: its derivations, its keys' types and
+/// fields, its key values and nearest reference in the current row, then
+/// its filter, order, projection, range and `unique` checks.
 fn bind_one(
-    named: &Declarations,
+    cx: Context<'_>,
     item: &Declaration,
-    sources: &[SourceDeclaration],
-    driver: usize,
-    schemas: &[&TableSchema],
-    output: &TableSchema,
-    self_columns: Option<&[usize]>,
-    project: Option<&crate::project_calls::ProjectCalls>,
-    tree: &types::Tree,
-    secondary: &[SecondarySource],
-    result: &[Option<Intermediate>],
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<Intermediate>, BindError> {
+    let Context {
+        named,
+        inputs,
+        output,
+        self_columns,
+        project,
+        tree,
+        secondary,
+        previous: result,
+    } = cx;
+    let binder::Inputs {
+        sources,
+        schemas,
+        driver,
+    } = inputs;
     let mut failed = false;
     let (schema, source_name) = match item.source {
         self_relations::Relation::Input(index) => (schemas[index], sources[index].name.as_str()),
@@ -377,21 +392,16 @@ fn bind_one(
     };
     let mut pending_schema = None;
     let derivations = intermediate_derivations::bind(
-        &item.derivations,
-        source_name,
-        &item.name,
+        cx,
+        intermediate_derivations::Lookup {
+            reader: &item.name,
+            declarations: &item.derivations,
+            dataset: source_name,
+            stored: schema,
+            stored_available: matches!(item.source, self_relations::Relation::SelfRows)
+                .then_some(self_columns.unwrap_or(&[])),
+        },
         &mut pending_schema,
-        schema,
-        matches!(item.source, self_relations::Relation::SelfRows)
-            .then_some(self_columns.unwrap_or(&[])),
-        sources,
-        schemas,
-        driver,
-        output,
-        named,
-        result,
-        project,
-        tree,
         findings,
     )?;
     let schema = pending_schema.as_ref().unwrap_or_else(|| {
@@ -444,81 +454,20 @@ fn bind_one(
         }
         field
     };
-    let output_fields = output
-        .columns()
-        .iter()
-        .map(|column| reference_binding::Field {
-            name: &column.name,
-            column_type: column.kind,
-        })
-        .collect::<Vec<_>>();
-    let current_sources = std::iter::once(driver)
-        .chain((0..sources.len()).filter(|&index| index != driver))
-        .collect::<Vec<_>>();
-    let source_fields = current_sources
-        .iter()
-        .map(|&index| {
-            schemas[index]
-                .columns()
-                .iter()
-                .map(|column| reference_binding::Field {
-                    name: &column.name,
-                    column_type: column.kind,
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
-    let datasets = current_sources
-        .iter()
-        .zip(&source_fields)
-        .map(|(&index, fields)| reference_binding::Dataset {
-            name: &sources[index].name,
-            fields,
-        })
-        .collect::<Vec<_>>();
-    let catalog = Catalog::compile(&output_fields, &datasets).map_err(BindError::Catalog)?;
+    let donor = Donor {
+        lookup: &item.name,
+        dataset: source_name,
+        schema,
+        kind: &donor_kind,
+        admits: &admits,
+    };
+    let catalog = current_catalog(output, inputs)?;
     // An intermediate without `key` drives rows and is never a keyed lookup
     // (ROW-2, LOOKUP-3); preparation refused every other.
     let no_keys = Vec::new();
     let pairs_declared = item.keys.as_ref().unwrap_or(&no_keys);
     // Result types and donor fields precede expression declarations and reads.
-    for (field, declaration) in pairs_declared {
-        if let Some(donor) = schema
-            .columns()
-            .iter()
-            .position(|column| column.name == *field)
-            .and_then(donor_kind)
-        {
-            let expected = declaration.result_type(tree, &catalog)?;
-            if !expected.comparable(donor.into()) {
-                findings.push(BindFinding::Lookup(LookupFinding::key_type(
-                    &format!("{}.key", item.path),
-                    &item.name,
-                    &declaration.display_name(field),
-                    expected,
-                    donor,
-                )));
-                failed = true;
-            }
-        }
-    }
-    for (field, _) in pairs_declared {
-        if !schema
-            .columns()
-            .iter()
-            .enumerate()
-            .any(|(index, column)| column.name == *field && admits(index))
-        {
-            findings.push(BindFinding::Lookup(LookupFinding::reference(
-                &format!("{}.key", item.path),
-                &format!("{source_name}.{field}"),
-                Some(&item.name),
-                ReferenceCause::DonorKey,
-                None,
-            )));
-            failed = true;
-        }
-    }
+    failed |= check_keys(item, &donor, pairs_declared, tree, &catalog, findings)?;
     let contextual_reader = named.0.iter().any(|reader| {
         reader.derivations.iter().any(|derive| {
             derive.references.iter().any(|reference| {
@@ -574,10 +523,7 @@ fn bind_one(
         Some(declaration) => {
             let nearest = bind_nearest(
                 declaration,
-                &item.name,
-                schema,
-                &donor_kind,
-                &admits,
+                &donor,
                 &catalog,
                 contextual_reader,
                 match_values::Context {
@@ -598,25 +544,38 @@ fn bind_one(
         }
         None => None,
     };
-    let (filter, order_by, columns, range, unique) = finish_item(
-        item,
+    let filter = bind_filter(item, &donor, inputs, &pairs, &mut failed, findings)?;
+    let order_by = bind_order(item, &resolve, &mut failed, findings);
+    let before = findings.len();
+    let columns = intermediate_range::bind_columns(
+        &item.columns,
         source_name,
         schema,
-        &donor_kind,
         &admits,
-        &resolve,
-        &catalog,
-        sources,
-        schemas,
-        driver,
-        result,
-        secondary,
-        &pairs,
-        contextual_reader,
-        &mut failed,
-        &derivations,
+        &item.path,
+        &item.name,
         findings,
-    )?;
+    );
+    // A rejected projection retains donor names for subsequent checkpoints.
+    // Its owned finding still prevents final plan admission.
+    let columns = (findings.len() == before).then_some(columns).flatten();
+    let range = item
+        .range
+        .as_ref()
+        .map(|declaration| {
+            intermediate_range::bind(
+                declaration,
+                &donor,
+                &catalog,
+                contextual_reader,
+                result,
+                secondary,
+                findings,
+            )
+        })
+        .transpose()?
+        .flatten();
+    let unique = bind_unique(item, &donor, &filter, &derivations, findings);
     // Range rejection owns its original cause without turning an existing
     // donor field into a second unknown-reference diagnostic.
     Ok((!failed).then(|| Intermediate {
@@ -654,6 +613,110 @@ fn bind_one(
         range,
         columns,
     }))
+}
+
+/// The current row's catalog that a lookup's key values, nearest reference
+/// and range value read: the output columns, and each input's fields, the
+/// driver's first.
+fn current_catalog(output: &TableSchema, inputs: binder::Inputs<'_>) -> Result<Catalog, BindError> {
+    let binder::Inputs {
+        sources,
+        schemas,
+        driver,
+    } = inputs;
+    let output_fields = output
+        .columns()
+        .iter()
+        .map(|column| reference_binding::Field {
+            name: &column.name,
+            column_type: column.kind,
+        })
+        .collect::<Vec<_>>();
+    let current_sources = std::iter::once(driver)
+        .chain((0..sources.len()).filter(|&index| index != driver))
+        .collect::<Vec<_>>();
+    let source_fields = current_sources
+        .iter()
+        .map(|&index| {
+            schemas[index]
+                .columns()
+                .iter()
+                .map(|column| reference_binding::Field {
+                    name: &column.name,
+                    column_type: column.kind,
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let datasets = current_sources
+        .iter()
+        .zip(&source_fields)
+        .map(|(&index, fields)| reference_binding::Dataset {
+            name: &sources[index].name,
+            fields,
+        })
+        .collect::<Vec<_>>();
+    Catalog::compile(&output_fields, &datasets).map_err(BindError::Catalog)
+}
+
+/// Each key's types and donor field, before any key value is read: a match
+/// value whose type cannot compare with its donor field's (LOOKUP-6), and a
+/// key field the relation lacks or the lookup may not read. Whether either
+/// refuses the lookup.
+fn check_keys(
+    item: &Declaration,
+    relation: &Donor<'_>,
+    pairs_declared: &[(String, match_values::Declaration)],
+    tree: &types::Tree,
+    catalog: &Catalog,
+    findings: &mut Vec<BindFinding>,
+) -> Result<bool, BindError> {
+    let Donor {
+        dataset: source_name,
+        schema,
+        kind: donor_kind,
+        admits,
+        ..
+    } = *relation;
+    let mut failed = false;
+    for (field, declaration) in pairs_declared {
+        if let Some(donor) = schema
+            .columns()
+            .iter()
+            .position(|column| column.name == *field)
+            .and_then(donor_kind)
+        {
+            let expected = declaration.result_type(tree, catalog)?;
+            if !expected.comparable(donor.into()) {
+                findings.push(BindFinding::Lookup(LookupFinding::key_type(
+                    &format!("{}.key", item.path),
+                    &item.name,
+                    &declaration.display_name(field),
+                    expected,
+                    donor,
+                )));
+                failed = true;
+            }
+        }
+    }
+    for (field, _) in pairs_declared {
+        if !schema
+            .columns()
+            .iter()
+            .enumerate()
+            .any(|(index, column)| column.name == *field && admits(index))
+        {
+            findings.push(BindFinding::Lookup(LookupFinding::reference(
+                &format!("{}.key", item.path),
+                &format!("{source_name}.{field}"),
+                Some(&item.name),
+                ReferenceCause::DonorKey,
+                None,
+            )));
+            failed = true;
+        }
+    }
+    Ok(failed)
 }
 
 impl Declarations {
@@ -1113,42 +1176,32 @@ impl Declarations {
         }
         Ok(result)
     }
-    #[allow(clippy::too_many_arguments)]
+    /// Bind each named intermediate over the inputs, in the order the
+    /// intermediates are derived, each reading those bound before it.
     pub fn bind(
         &self,
-        sources: &[SourceDeclaration],
-        driver: usize,
-        schemas: &[&TableSchema],
+        inputs: binder::Inputs<'_>,
         output: &TableSchema,
         self_columns: Option<&[usize]>,
         project: Option<&crate::project_calls::ProjectCalls>,
         tree: &types::Tree,
         findings: &mut Vec<BindFinding>,
     ) -> Result<(Vec<SecondarySource>, Vec<Option<Intermediate>>), BindError> {
-        let secondary = sources
-            .iter()
-            .zip(schemas)
-            .enumerate()
-            .filter(|(index, _)| *index != driver)
-            .map(|(_, (declaration, schema))| SecondarySource {
-                name: declaration.name.clone(),
-                schema: (**schema).clone(),
-            })
-            .collect::<Vec<_>>();
+        let secondary = inputs.secondary();
         let mut result = Vec::new();
         for item in self.0.iter() {
             let bound = bind_one(
-                self,
+                Context {
+                    named: self,
+                    inputs,
+                    output,
+                    self_columns,
+                    project,
+                    tree,
+                    secondary: &secondary,
+                    previous: &result,
+                },
                 item,
-                sources,
-                driver,
-                schemas,
-                output,
-                self_columns,
-                project,
-                tree,
-                &secondary,
-                &result,
                 findings,
             )?;
             result.push(bound);

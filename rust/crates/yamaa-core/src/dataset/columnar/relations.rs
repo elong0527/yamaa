@@ -1353,7 +1353,6 @@ fn correlated<E>(
 /// records, a completed value, or another intermediate's read. `row` is
 /// none for a probe, whose named reads are refused. A named read made for
 /// another relation is never a handler site.
-#[allow(clippy::too_many_arguments)]
 pub(super) fn current_value<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,

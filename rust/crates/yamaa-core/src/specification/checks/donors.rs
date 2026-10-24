@@ -58,9 +58,7 @@ pub(super) struct DonorReads<'a> {
 impl<'a> DonorReads<'a> {
     /// The reads of the derivation at `position` of the lookup `reader` over
     /// `relation`.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn lookup(
-        spec: &'a Spec,
         prepared: &'a PreparedSpecification,
         relation: &'a str,
         reader: &'a str,
@@ -70,7 +68,7 @@ impl<'a> DonorReads<'a> {
         typing: &'a Typing<'a>,
     ) -> Self {
         Self {
-            spec,
+            spec: prepared.tree.spec(),
             prepared,
             relation,
             reader: Some(reader),
@@ -84,7 +82,6 @@ impl<'a> DonorReads<'a> {
     /// The reads of the derive binding at `position` of an aggregate over
     /// `relation`.
     pub(super) fn derive(
-        spec: &'a Spec,
         prepared: &'a PreparedSpecification,
         relation: &'a str,
         derived: &'a [&'a str],
@@ -93,7 +90,7 @@ impl<'a> DonorReads<'a> {
         typing: &'a Typing<'a>,
     ) -> Self {
         Self {
-            spec,
+            spec: prepared.tree.spec(),
             prepared,
             relation,
             reader: None,

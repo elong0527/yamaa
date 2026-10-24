@@ -145,7 +145,6 @@ pub(super) fn join<E>(
 /// One row's read through a qualified implicit join: row templates match
 /// raw driver fields, column joins match completed output keys. `owner` is
 /// the node whose path names the read.
-#[allow(clippy::too_many_arguments)]
 pub(super) fn joined_value<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,

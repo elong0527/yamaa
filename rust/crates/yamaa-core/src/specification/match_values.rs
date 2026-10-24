@@ -238,7 +238,6 @@ impl Declaration {
     ) -> Result<Option<MatchValue>, BindError> {
         self.bind_in_context(path, intermediate, catalog, findings, true, context)
     }
-    #[allow(clippy::too_many_arguments)]
     fn bind_in_context(
         &self,
         path: &str,

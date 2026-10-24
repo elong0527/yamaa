@@ -1265,7 +1265,12 @@ impl PreparedSpecification {
         if schemas.len() != self.sources.len() {
             return Err(BindError::SourceCount);
         }
-        let plan = self.rows.bind(self, schemas)?;
+        let inputs = binder::Inputs {
+            sources: &self.sources,
+            schemas,
+            driver: self.driver,
+        };
+        let plan = self.rows.bind(self, inputs)?;
         // A plan the stage split cannot schedule is refused before resolution
         // with the operation it does not support.
         let unsupported = aggregates::late_reads(&plan);

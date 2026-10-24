@@ -80,6 +80,40 @@ pub(super) struct Donors<'a> {
     pub items: &'a [Option<Intermediate>],
 }
 
+/// The inputs binding reads: each declared input in authored order, with
+/// the schema its decoder captured, and the input whose records drive the
+/// rows. Built once where binding starts
+/// ([`PreparedSpecification::bind_sources`]); every binding layer reads an
+/// input's fields and their kinds through this one value, so another
+/// source of schemas can take the captured one's place (#3805).
+#[derive(Clone, Copy)]
+pub(super) struct Inputs<'a> {
+    pub sources: &'a [SourceDeclaration],
+    pub schemas: &'a [&'a TableSchema],
+    pub driver: usize,
+}
+
+impl<'a> Inputs<'a> {
+    /// The driver's captured schema, the primary port of the rows' plan.
+    pub(super) fn driver_schema(&self) -> &'a TableSchema {
+        self.schemas[self.driver]
+    }
+    /// Every input but the driver, in authored order: the secondary ports
+    /// of the rows' plan.
+    pub(super) fn secondary(&self) -> Vec<SecondarySource> {
+        self.sources
+            .iter()
+            .zip(self.schemas)
+            .enumerate()
+            .filter(|(index, _)| *index != self.driver)
+            .map(|(_, (declaration, schema))| SecondarySource {
+                name: declaration.name.clone(),
+                schema: (**schema).clone(),
+            })
+            .collect()
+    }
+}
+
 /// One derivation's binding: its scope, the lookups and fields it may read,
 /// and the column edges and findings it records.
 pub(super) struct BindContext<'a, 'f> {
@@ -171,21 +205,7 @@ impl<'a> BindContext<'a, '_> {
                     self.project.is_some(),
                 )
                 .map_err(internal)?;
-                aggregates::bind(
-                    &aggregate,
-                    self.catalog,
-                    self.scope.driver,
-                    self.row(),
-                    self.scope.phase,
-                    self.output,
-                    self.tree,
-                    self.donors.named,
-                    self.donors.secondary,
-                    self.donors.items,
-                    self.project,
-                    self.edges,
-                    self.findings,
-                )
+                aggregates::bind(&aggregate, self)
             }
             ExprKind::Odm(_) => {
                 // With record rows a key reads its row's one record, as an
@@ -450,19 +470,7 @@ impl<'a> BindContext<'a, '_> {
                 .split_once('.')
                 .is_none_or(|(owner, _)| owner != driver)
         {
-            return row_intermediates::bind(
-                name,
-                path,
-                self.donors.named,
-                self.donors.secondary,
-                self.donors.items,
-                self.output,
-                self.catalog,
-                self.row(),
-                self.scope.available,
-                self.edges,
-                self.findings,
-            );
+            return row_intermediates::bind(self, name, path);
         }
         self.direct_read(name, path)
     }

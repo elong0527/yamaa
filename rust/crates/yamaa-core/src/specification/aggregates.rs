@@ -594,7 +594,6 @@ fn finding(value: Finding<'_>, findings: &mut Vec<BindFinding>) -> Result<(), Bi
     ));
     Ok(())
 }
-#[allow(clippy::too_many_arguments)]
 fn validate_header<'a>(
     declaration: &'a Declaration,
     phase: Phase<'_>,
@@ -776,20 +775,36 @@ type ResolveRef<'a> = &'a (dyn Fn(&str, &str, &mut Vec<BindFinding>) -> Result<O
          + 'a);
 type GroupOperands = (Vec<usize>, Vec<AggregateBinding>);
 
-#[allow(clippy::too_many_arguments)]
+/// The relation an aggregate reduces, as its binding resolved it: the
+/// declaration and its compiled expression, the relation it names (`None`:
+/// the output rows) and that relation's port, the key its input declares
+/// when the aggregate writes none, and the schema its names bind to.
+#[derive(Clone, Copy)]
+struct Reduced<'a> {
+    declaration: &'a Declaration,
+    compiled: &'a CompiledExpression,
+    relation: Option<&'a str>,
+    donor: AggregateSource,
+    declared: Option<&'a [String]>,
+    schema: &'a TableSchema,
+}
+
 fn bind_groups_and_operands(
-    compiled: &CompiledExpression,
-    declaration: &Declaration,
-    declared: Option<&[String]>,
-    relation: Option<&str>,
-    catalog: &Catalog,
-    donor_schema: &TableSchema,
+    cx: &mut BindContext<'_, '_>,
+    reduced: &Reduced<'_>,
     grain: &[&str],
-    phase: Phase<'_>,
     resolve: ResolveRef<'_>,
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
 ) -> Result<Option<GroupOperands>, BindError> {
+    let Reduced {
+        declaration,
+        compiled,
+        relation,
+        declared,
+        schema: donor_schema,
+        ..
+    } = *reduced;
+    let (catalog, phase) = (cx.catalog, cx.scope.phase);
+    let (edges, findings) = (&mut *cx.edges, &mut *cx.findings);
     if matches!(phase, Phase::Row { .. })
         && grain.iter().any(|name| {
             !catalog.bind(name).is_some_and(|binding| {
@@ -926,7 +941,6 @@ fn binding_kind(
         })
 }
 
-#[allow(clippy::too_many_arguments)]
 fn bind_filter(
     declaration: &Declaration,
     resolve: ResolveRef<'_>,
@@ -1033,27 +1047,27 @@ fn record_catalog(
         .map_err(BindError::Catalog)
 }
 
-#[allow(clippy::too_many_arguments)]
 fn bound_relation(
-    phase: Phase<'_>,
-    relation: Option<&str>,
-    donor: AggregateSource,
+    cx: &mut BindContext<'_, '_>,
+    reduced: &Reduced<'_>,
     group_columns: Vec<usize>,
-    declaration: &Declaration,
-    declared: Option<&[String]>,
-    compiled: &CompiledExpression,
-    catalog: &Catalog,
-    secondary: &[SecondarySource],
-    output: &TableSchema,
-    driver: &str,
-    row: Option<&str>,
-    project: Option<&crate::project_calls::ProjectCalls>,
-    tree: &types::Tree,
-    named: &intermediates::Declarations,
-    intermediates: &[Option<crate::dataset::Intermediate>],
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
 ) -> Result<Option<AggregateRelation>, BindError> {
+    let Reduced {
+        declaration,
+        compiled,
+        relation,
+        donor,
+        declared,
+        ..
+    } = *reduced;
+    let (phase, driver, row) = (cx.scope.phase, cx.scope.driver, cx.row());
+    let (catalog, output, project, tree) = (cx.catalog, cx.output, cx.project, cx.tree);
+    let binder::Donors {
+        named,
+        secondary,
+        items: intermediates,
+    } = cx.donors;
+    let (edges, findings) = (&mut *cx.edges, &mut *cx.findings);
     Ok(Some(match phase {
         Phase::Row { .. } => AggregateRelation::CurrentGroup,
         Phase::Column { .. } if relation.is_none() => AggregateRelation::Output {
@@ -1242,24 +1256,18 @@ fn bound_relation(
     }))
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Bind an aggregate in the scope of `cx`: its header, the relation it
+/// reduces, its groups and operands, its filter, how it matches the current
+/// row, its range, its derive bindings and its order.
 pub(super) fn bind(
     declaration: &Declaration,
-    catalog: &Catalog,
-    driver: &str,
-    row: Option<&str>,
-    phase: Phase<'_>,
-    output: &TableSchema,
-    tree: &types::Tree,
-    named: &intermediates::Declarations,
-    secondary: &[SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-    project: Option<&crate::project_calls::ProjectCalls>,
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
+    cx: &mut BindContext<'_, '_>,
 ) -> Result<Option<Expression>, BindError> {
+    let (catalog, driver, row, phase) = (cx.catalog, cx.scope.driver, cx.row(), cx.scope.phase);
+    let (output, tree) = (cx.output, cx.tree);
+    let (secondary, intermediates) = (cx.donors.secondary, cx.donors.items);
     let Some((compiled, relations)) =
-        validate_header(declaration, phase, driver, intermediates, findings)?
+        validate_header(declaration, phase, driver, intermediates, cx.findings)?
     else {
         return Ok(None);
     };
@@ -1268,7 +1276,7 @@ pub(super) fn bind(
     } else {
         relations.first().map(String::as_str)
     };
-    let before = findings.len();
+    let before = cx.findings.len();
     let donor = if let Some(relation) = relation {
         if relation == driver {
             AggregateSource::Primary
@@ -1292,7 +1300,7 @@ pub(super) fn bind(
                     name.split_once('.')
                         .is_some_and(|(owner, _)| owner == relation)
                 });
-            findings.push(BindFinding::UnknownReference {
+            cx.findings.push(BindFinding::UnknownReference {
                 path: declaration.expression_path.clone(),
                 name: reference.map_or_else(|| format!("{relation}.*"), String::from),
             });
@@ -1372,47 +1380,30 @@ pub(super) fn bind(
             .map(|column| column.name.clone())
             .collect::<Vec<_>>()
     });
-    let Some((group_columns, bindings)) = bind_groups_and_operands(
-        compiled,
+    let reduced = Reduced {
         declaration,
-        declared.as_deref(),
-        relation,
-        catalog,
-        &donor_schema,
-        &grain,
-        phase,
-        &resolve,
-        edges,
-        findings,
-    )?
-    else {
-        return Ok(None);
-    };
-    let filter = bind_filter(declaration, &resolve, relation, before, edges, findings)?;
-    let Some(bound_relation) = bound_relation(
-        phase,
+        compiled,
         relation,
         donor,
-        group_columns,
-        declaration,
-        declared.as_deref(),
-        compiled,
-        catalog,
-        secondary,
-        output,
-        driver,
-        row,
-        project,
-        tree,
-        named,
-        intermediates,
-        edges,
-        findings,
-    )?
+        declared: declared.as_deref(),
+        schema: &donor_schema,
+    };
+    let Some((group_columns, bindings)) = bind_groups_and_operands(cx, &reduced, &grain, &resolve)?
     else {
         return Ok(None);
     };
-    if findings.len() != before {
+    let filter = bind_filter(
+        declaration,
+        &resolve,
+        relation,
+        before,
+        cx.edges,
+        cx.findings,
+    )?;
+    let Some(bound_relation) = bound_relation(cx, &reduced, group_columns)? else {
+        return Ok(None);
+    };
+    if cx.findings.len() != before {
         return Ok(None);
     }
     let row_context = if let Phase::Row {
@@ -1425,7 +1416,7 @@ pub(super) fn bind(
                 .iter()
                 .zip(grain.iter())
                 .map(|(name, _)| {
-                    resolve(name, &declaration.path, findings).map(|value| {
+                    resolve(name, &declaration.path, cx.findings).map(|value| {
                         (
                             name.split_once('.')
                                 .map_or(*name, |(_, field)| field)
@@ -1445,31 +1436,19 @@ pub(super) fn bind(
         &donor_schema,
         secondary,
         intermediates,
-        edges,
-        findings,
+        cx.edges,
+        cx.findings,
     )?;
-    let (derivations, derived_schema) = bind_derivations(
-        declaration,
-        relation,
-        &donor_schema,
-        output,
-        tree,
-        named,
-        secondary,
-        intermediates,
-        project,
-        edges,
-        findings,
-    )?;
+    let (derivations, derived_schema) = bind_derivations(cx, &reduced)?;
     let order = bind_order(
         declaration,
         &donor_schema,
         relation,
         &resolve,
-        edges,
-        findings,
+        cx.edges,
+        cx.findings,
     )?;
-    if findings.len() != before {
+    if cx.findings.len() != before {
         return Ok(None);
     }
     let typed = compiled.typed(|name| {
@@ -1707,7 +1686,6 @@ pub(super) fn late_reads(plan: &crate::dataset::DatasetPlan) -> Vec<BindFinding>
 /// relation and the value a value of the current row, admitted for every row
 /// the column is derived for ([`lookup_range::admit`]). A bare value that no
 /// column takes fails whatever the bounds bind.
-#[allow(clippy::too_many_arguments)]
 fn bind_range(
     declaration: &Declaration,
     catalog: &Catalog,
@@ -1762,19 +1740,12 @@ fn bind_range(
         }
     })
 }
-#[allow(clippy::too_many_arguments)]
+/// An aggregate's derive bindings, each bound over a record of the relation
+/// it reduces and converted to its declared type (VALUE-24), with the
+/// relation's schema that they extend.
 fn bind_derivations(
-    declaration: &Declaration,
-    relation: Option<&str>,
-    donor: &TableSchema,
-    output: &TableSchema,
-    tree: &types::Tree,
-    named: &intermediates::Declarations,
-    secondary: &[SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-    project: Option<&crate::project_calls::ProjectCalls>,
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
+    cx: &mut BindContext<'_, '_>,
+    reduced: &Reduced<'_>,
 ) -> Result<
     (
         Vec<crate::dataset::AggregateDerivation>,
@@ -1782,6 +1753,19 @@ fn bind_derivations(
     ),
     BindError,
 > {
+    let Reduced {
+        declaration,
+        relation,
+        schema: donor,
+        ..
+    } = *reduced;
+    let (output, tree, project) = (cx.output, cx.tree, cx.project);
+    let binder::Donors {
+        named,
+        secondary,
+        items: intermediates,
+    } = cx.donors;
+    let (edges, findings) = (&mut *cx.edges, &mut *cx.findings);
     let Some(derive) = &declaration.derive else {
         return Ok((Vec::new(), None));
     };

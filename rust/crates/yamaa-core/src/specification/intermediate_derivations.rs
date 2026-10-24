@@ -101,26 +101,60 @@ pub(super) fn prepare(
 /// each derivation's expression result type for its conversion check.
 type FieldKinds = (TableSchema, Vec<Option<ColumnType>>, Vec<ResultType>);
 
-#[allow(clippy::too_many_arguments)]
+/// A lookup's derivations as they bind: the lookup's name, its derivations
+/// in written order, and the records they extend: the dataset's name (`SELF`
+/// for the output rows), its stored schema, and the columns of it a SELF
+/// lookup reads (`None`: every stored column).
+#[derive(Clone, Copy)]
+pub(super) struct Lookup<'a> {
+    pub reader: &'a str,
+    pub declarations: &'a [Derivation],
+    pub dataset: &'a str,
+    pub stored: &'a TableSchema,
+    pub stored_available: Option<&'a [usize]>,
+}
+
+/// The plan a lookup's derivations bind in: the input it reads (`None` for
+/// SELF) and that dataset's name, its ports (the stored fields with each
+/// current read after them, then every other input), and its output, the
+/// stored fields with each derived field.
+#[derive(Clone, Copy)]
+struct DonorPlan<'a> {
+    donor: Option<usize>,
+    name: &'a str,
+    source: &'a TableSchema,
+    secondary: &'a [SecondarySource],
+    output: &'a TableSchema,
+}
+
 fn resolve_field_kinds(
-    declarations: &[Derivation],
-    dataset: &str,
-    reader: &str,
+    cx: intermediates::Context<'_>,
+    lookup: Lookup<'_>,
     pending_schema: &mut Option<TableSchema>,
-    stored: &TableSchema,
-    sources: &[SourceDeclaration],
-    schemas: &[&TableSchema],
-    driver: usize,
-    tree: &types::Tree,
-    named: &intermediates::Declarations,
-    previous: &[Option<Intermediate>],
     before: usize,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<FieldKinds>, BindError> {
+    let intermediates::Context {
+        named,
+        inputs,
+        tree,
+        previous,
+        ..
+    } = cx;
+    let binder::Inputs {
+        sources, schemas, ..
+    } = inputs;
+    let Lookup {
+        reader,
+        declarations,
+        dataset,
+        stored,
+        ..
+    } = lookup;
     let scope = tree.donor(reader)?;
     // Shared earlier donor plans do not recursively copy their expression trees.
     // Admit aggregate retained schema/catalog copies before making the first copy.
-    let original_secondary = outer_secondary(sources, schemas, driver);
+    let original_secondary = inputs.secondary();
     let mut fields = stored.columns().to_vec();
     let mut field_types = Vec::new();
     let mut operation_types = Vec::new();
@@ -195,15 +229,18 @@ fn resolve_field_kinds(
     )))
 }
 
-#[allow(clippy::too_many_arguments)]
-fn collect_current_fields(
-    declarations: &[Derivation],
-    dataset: &str,
-    named: &intermediates::Declarations,
-    sources: &[SourceDeclaration],
-    schemas: &[&TableSchema],
-    driver: usize,
-) -> Vec<CurrentField> {
+fn collect_current_fields(cx: intermediates::Context<'_>, lookup: Lookup<'_>) -> Vec<CurrentField> {
+    let named = cx.named;
+    let binder::Inputs {
+        sources,
+        schemas,
+        driver,
+    } = cx.inputs;
+    let Lookup {
+        declarations,
+        dataset,
+        ..
+    } = lookup;
     let mut current = Vec::new();
     for reference in declarations
         .iter()
@@ -249,17 +286,21 @@ fn collect_current_fields(
     current
 }
 
-#[allow(clippy::too_many_arguments)]
 fn build_catalog_context(
-    dataset: &str,
+    inputs: binder::Inputs<'_>,
+    lookup: Lookup<'_>,
     current: &[CurrentField],
-    sources: &[SourceDeclaration],
-    schemas: &[&TableSchema],
-    driver: usize,
-    stored: &TableSchema,
     output: &TableSchema,
     result_kinds: &[Option<ColumnType>],
 ) -> Result<(Option<usize>, Vec<SecondarySource>, TableSchema, Catalog), BindError> {
+    let binder::Inputs {
+        sources,
+        schemas,
+        driver,
+    } = inputs;
+    let Lookup {
+        dataset, stored, ..
+    } = lookup;
     let donor = sources.iter().position(|source| source.name == dataset);
     if donor.is_none() && dataset != "SELF" {
         return Err(BindError::Internal);
@@ -366,25 +407,14 @@ type EarlierSelection = (
     Catalog,
 );
 
-#[allow(clippy::too_many_arguments)]
 fn select_earlier(
-    declarations: &[Derivation],
-    previous: &[Option<Intermediate>],
-    sources: &[SourceDeclaration],
-    schemas: &[&TableSchema],
-    driver: usize,
-    donor: Option<usize>,
-    dataset: &str,
-    source: &TableSchema,
-    outer_output: &TableSchema,
-    output: &TableSchema,
-    tree: &types::Tree,
-    named: &intermediates::Declarations,
-    project: Option<&crate::project_calls::ProjectCalls>,
+    cx: intermediates::Context<'_>,
+    lookup: Lookup<'_>,
+    plan: DonorPlan<'_>,
     catalog: Catalog,
-    secondary: &[SecondarySource],
     findings: &mut Vec<BindFinding>,
 ) -> Result<EarlierSelection, BindError> {
+    let (previous, declarations, secondary) = (cx.previous, lookup.declarations, plan.secondary);
     let references = declarations
         .iter()
         .flat_map(|item| &item.references)
@@ -420,23 +450,12 @@ fn select_earlier(
     }
     let mut unavailable = BTreeMap::new();
     let earlier = rebase(
-        previous,
+        cx,
+        plan,
         &required,
         &direct,
         &mut unavailable,
-        sources,
-        schemas,
-        driver,
-        donor,
-        dataset,
-        source,
-        outer_output,
-        output,
-        tree,
-        named,
-        project,
         &catalog,
-        secondary,
         findings,
     )?;
     let mut selected = Vec::new();
@@ -476,75 +495,50 @@ fn select_earlier(
     Ok((earlier, unavailable, catalog))
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Bind a lookup's derivations over its donor's records, each in written
+/// order and reading those before it, into the donor plan the lookup reads
+/// (LOOKUP-16). `pending_schema` keeps the derived layout while a finding
+/// refuses the plan.
 pub(super) fn bind(
-    declarations: &[Derivation],
-    dataset: &str,
-    reader: &str,
+    cx: intermediates::Context<'_>,
+    lookup: Lookup<'_>,
     pending_schema: &mut Option<TableSchema>,
-    stored: &TableSchema,
-    stored_available: Option<&[usize]>,
-    sources: &[SourceDeclaration],
-    schemas: &[&TableSchema],
-    driver: usize,
-    outer_output: &TableSchema,
-    named: &intermediates::Declarations,
-    previous: &[Option<Intermediate>],
-    project: Option<&crate::project_calls::ProjectCalls>,
-    tree: &types::Tree,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<IntermediateDerivations>, BindError> {
+    let intermediates::Context {
+        named,
+        project,
+        tree,
+        previous,
+        ..
+    } = cx;
+    let Lookup {
+        reader,
+        declarations,
+        dataset,
+        stored,
+        stored_available,
+    } = lookup;
     if declarations.is_empty() {
         return Ok(None);
     }
     let before = findings.len();
-    let Some((output, result_kinds, operation_types)) = resolve_field_kinds(
-        declarations,
-        dataset,
-        reader,
-        pending_schema,
-        stored,
-        sources,
-        schemas,
-        driver,
-        tree,
-        named,
-        previous,
-        before,
-        findings,
-    )?
+    let Some((output, result_kinds, operation_types)) =
+        resolve_field_kinds(cx, lookup, pending_schema, before, findings)?
     else {
         return Ok(None);
     };
-    let current = collect_current_fields(declarations, dataset, named, sources, schemas, driver);
-    let (donor, secondary, source, catalog) = build_catalog_context(
-        dataset,
-        &current,
-        sources,
-        schemas,
-        driver,
-        stored,
-        &output,
-        &result_kinds,
-    )?;
-    let (earlier, unavailable, mut catalog) = select_earlier(
-        declarations,
-        previous,
-        sources,
-        schemas,
-        driver,
+    let current = collect_current_fields(cx, lookup);
+    let (donor, secondary, source, catalog) =
+        build_catalog_context(cx.inputs, lookup, &current, &output, &result_kinds)?;
+    let plan = DonorPlan {
         donor,
-        dataset,
-        &source,
-        outer_output,
-        &output,
-        tree,
-        named,
-        project,
-        catalog,
-        &secondary,
-        findings,
-    )?;
+        name: dataset,
+        source: &source,
+        secondary: &secondary,
+        output: &output,
+    };
+    let (earlier, unavailable, mut catalog) = select_earlier(cx, lookup, plan, catalog, findings)?;
     let mut assignments = Vec::new();
     let mut available = stored_available.map_or_else(
         || (0..stored.columns().len()).collect::<Vec<_>>(),
@@ -716,21 +710,6 @@ fn donor_scope_findings(
         }
     }
 }
-fn outer_secondary(
-    sources: &[SourceDeclaration],
-    schemas: &[&TableSchema],
-    driver: usize,
-) -> Vec<SecondarySource> {
-    sources
-        .iter()
-        .enumerate()
-        .filter(|&(index, _)| index != driver)
-        .map(|(index, source)| SecondarySource {
-            name: source.name.clone(),
-            schema: schemas[index].clone(),
-        })
-        .collect()
-}
 /// The slot of `item` in a donor plan that never reads it: its identifier,
 /// path and absence handler, and no matching work.
 fn unused_slot_placeholder(
@@ -768,7 +747,6 @@ fn unused_slot_placeholder(
 /// donor record, or its nearest reference, that reads no field of that
 /// record (LOOKUP-16, LOOKUP-26): a field of another input's record, or an
 /// output column or contextual name the donor record does not store.
-#[allow(clippy::too_many_arguments)]
 fn chained_key(
     item: &Intermediate,
     donor: Option<usize>,
@@ -805,29 +783,35 @@ fn chained_key(
     })
 }
 
-#[allow(clippy::too_many_arguments)]
+/// The lookups bound before this one, as its donor plan reads them: each
+/// one the derivations need keeps its slot, its reads rebased onto the
+/// donor plan's ports ([`rebase_keys`]); one they do not need keeps a
+/// placeholder; and one whose reads the donor record cannot answer is
+/// unavailable, with the name it cannot read.
 fn rebase(
-    previous: &[Option<Intermediate>],
+    cx: intermediates::Context<'_>,
+    plan: DonorPlan<'_>,
     required: &std::collections::BTreeSet<usize>,
     direct: &std::collections::BTreeSet<usize>,
     unavailable: &mut BTreeMap<usize, String>,
-    sources: &[SourceDeclaration],
-    schemas: &[&TableSchema],
-    driver: usize,
-    donor: Option<usize>,
-    donor_name: &str,
-    source: &TableSchema,
-    outer: &TableSchema,
-    output: &TableSchema,
-    tree: &types::Tree,
-    named: &intermediates::Declarations,
-    project: Option<&crate::project_calls::ProjectCalls>,
     catalog: &Catalog,
-    secondary: &[SecondarySource],
     findings: &mut Vec<BindFinding>,
 ) -> Result<Vec<Option<Intermediate>>, BindError> {
+    let binder::Inputs {
+        sources,
+        schemas,
+        driver,
+    } = cx.inputs;
+    let (previous, outer) = (cx.previous, cx.output);
+    let DonorPlan {
+        donor,
+        name: donor_name,
+        source,
+        output,
+        ..
+    } = plan;
     let mut result = previous.to_vec();
-    let original_secondary = outer_secondary(sources, schemas, driver);
+    let original_secondary = cx.inputs.secondary();
     // The authored input whose record a current read at record port `owner`
     // reads in the outer plan.
     let authored = |owner: usize| -> Result<usize, BindError> {
@@ -1009,139 +993,187 @@ fn rebase(
                 .map(&current_field)
                 .collect::<Result<Vec<_>, _>>()?;
         }
-        // The reference of a nearest selection reads the donor record as a
-        // key's match value does (LOOKUP-26), after the keys.
-        let reference = item.nearest.as_mut().map(|nearest| &mut nearest.reference);
-        let keys = item.keys.iter_mut().map(|key| (key, false));
-        for (key, reference) in keys.chain(reference.map(|key| (key, true))) {
-            if matches!(
-                key.value,
-                crate::dataset::MatchValue::Expression(_)
-                    | crate::dataset::MatchValue::Contextual(
-                        crate::dataset::ContextualMatch::Expression { .. }
-                    )
-            ) {
-                let declaration = if reference {
-                    named.reference_declaration(&item.identifier)
-                } else {
-                    let field = &donor_schema.columns()[key.source_column].name;
-                    named.match_declaration(&item.identifier, field)
-                }
-                .ok_or(BindError::Internal)?;
-                let bound = declaration.bind_deferred(
-                    &key.path,
-                    &item.identifier,
-                    catalog,
-                    findings,
-                    match_values::Context {
-                        output,
-                        driver: donor_name,
-                        row: None,
-                        phase: crate::reference_scope::Phase::Row { group_by: None },
-                        project,
-                        tree,
-                        named,
-                        secondary,
-                        intermediates: previous,
-                    },
-                )?;
-                // A declaration finding already owns this refusal. Do not
-                // invent an additional missing-dependency finding for a known
-                // operand whose scalar operation rejected its type.
-                key.value = bound.unwrap_or(crate::dataset::MatchValue::Literal(Value::Missing));
-                continue;
-            }
-            if let crate::dataset::MatchValue::Contextual(declaration) = &key.value {
-                let name = declaration.identifier();
-                let local = name
-                    .strip_prefix(&format!("{donor_name}."))
-                    .or_else(|| (!name.contains('.')).then_some(name));
-                if let Some(column) = local
-                    .and_then(|name| output.columns().iter().position(|field| field.name == name))
-                {
-                    key.value = declaration.bind(crate::dataset::MatchRead::Output {
-                        column,
-                        identifier: name.into(),
-                    });
-                }
-                continue;
-            }
-            let fallback = key.value.contextual();
-            let mut missing = None;
-            for bound in key.value.reads_mut() {
-                let read = bound.clone();
-                let read = match read {
-                    crate::dataset::MatchRead::Output { column, identifier } => {
-                        let name = &outer.columns()[column].name;
-                        let Some(column) = output
-                            .columns()
-                            .iter()
-                            .position(|field| field.name == *name)
-                        else {
-                            missing = Some(identifier);
-                            break;
-                        };
-                        crate::dataset::MatchRead::Output { column, identifier }
-                    }
-                    crate::dataset::MatchRead::SecondaryRecord {
-                        source: owner,
-                        column,
-                        identifier,
-                    } => {
-                        let name = &original_secondary[owner].name;
-                        let authored = sources
-                            .iter()
-                            .position(|source| source.name == *name)
-                            .ok_or(BindError::Internal)?;
-                        if Some(authored) == donor {
-                            crate::dataset::MatchRead::Record {
-                                column: source
-                                    .columns()
-                                    .iter()
-                                    .position(|field| {
-                                        field.name == schemas[authored].columns()[column].name
-                                    })
-                                    .ok_or(BindError::Internal)?,
-                                identifier,
-                            }
-                        } else {
-                            crate::dataset::MatchRead::SecondaryRecord {
-                                source: if donor.is_none_or(|donor| authored < donor) {
-                                    authored
-                                } else {
-                                    authored - 1
-                                },
-                                column,
-                                identifier,
-                            }
-                        }
-                    }
-                    crate::dataset::MatchRead::Record { column, identifier } => {
-                        if Some(driver) == donor {
-                            crate::dataset::MatchRead::Record { column, identifier }
-                        } else {
-                            crate::dataset::MatchRead::SecondaryRecord {
-                                source: if donor.is_none_or(|donor| driver < donor) {
-                                    driver
-                                } else {
-                                    driver - 1
-                                },
-                                column,
-                                identifier,
-                            }
-                        }
-                    }
-                };
-                *bound = read;
-            }
-            if let Some(identifier) = missing {
-                key.value = crate::dataset::MatchValue::Contextual(
-                    fallback.unwrap_or(crate::dataset::ContextualMatch::Source(identifier)),
-                );
-            }
-        }
+        rebase_keys(
+            cx,
+            plan,
+            &original_secondary,
+            item,
+            &donor_schema,
+            catalog,
+            findings,
+        )?;
     }
     Ok(result)
+}
+
+/// The key values and nearest reference of a lookup the donor plan reads,
+/// rebased onto the donor plan's ports: a value the outer plan binds as an
+/// expression binds again over the donor record, deferred; a contextual
+/// name reads the donor record's field of that name; and each other read
+/// moves to the port of its record in the donor plan, or stays contextual
+/// where the donor plan does not hold it.
+fn rebase_keys(
+    cx: intermediates::Context<'_>,
+    plan: DonorPlan<'_>,
+    original_secondary: &[SecondarySource],
+    item: &mut Intermediate,
+    donor_schema: &TableSchema,
+    catalog: &Catalog,
+    findings: &mut Vec<BindFinding>,
+) -> Result<(), BindError> {
+    let intermediates::Context {
+        named,
+        inputs,
+        output: outer,
+        project,
+        tree,
+        previous,
+        ..
+    } = cx;
+    let binder::Inputs {
+        sources,
+        schemas,
+        driver,
+    } = inputs;
+    let DonorPlan {
+        donor,
+        name: donor_name,
+        source,
+        secondary,
+        output,
+    } = plan;
+    // The reference of a nearest selection reads the donor record as a
+    // key's match value does (LOOKUP-26), after the keys.
+    let reference = item.nearest.as_mut().map(|nearest| &mut nearest.reference);
+    let keys = item.keys.iter_mut().map(|key| (key, false));
+    for (key, reference) in keys.chain(reference.map(|key| (key, true))) {
+        if matches!(
+            key.value,
+            crate::dataset::MatchValue::Expression(_)
+                | crate::dataset::MatchValue::Contextual(
+                    crate::dataset::ContextualMatch::Expression { .. }
+                )
+        ) {
+            let declaration = if reference {
+                named.reference_declaration(&item.identifier)
+            } else {
+                let field = &donor_schema.columns()[key.source_column].name;
+                named.match_declaration(&item.identifier, field)
+            }
+            .ok_or(BindError::Internal)?;
+            let bound = declaration.bind_deferred(
+                &key.path,
+                &item.identifier,
+                catalog,
+                findings,
+                match_values::Context {
+                    output,
+                    driver: donor_name,
+                    row: None,
+                    phase: crate::reference_scope::Phase::Row { group_by: None },
+                    project,
+                    tree,
+                    named,
+                    secondary,
+                    intermediates: previous,
+                },
+            )?;
+            // A declaration finding already owns this refusal. Do not
+            // invent an additional missing-dependency finding for a known
+            // operand whose scalar operation rejected its type.
+            key.value = bound.unwrap_or(crate::dataset::MatchValue::Literal(Value::Missing));
+            continue;
+        }
+        if let crate::dataset::MatchValue::Contextual(declaration) = &key.value {
+            let name = declaration.identifier();
+            let local = name
+                .strip_prefix(&format!("{donor_name}."))
+                .or_else(|| (!name.contains('.')).then_some(name));
+            if let Some(column) =
+                local.and_then(|name| output.columns().iter().position(|field| field.name == name))
+            {
+                key.value = declaration.bind(crate::dataset::MatchRead::Output {
+                    column,
+                    identifier: name.into(),
+                });
+            }
+            continue;
+        }
+        let fallback = key.value.contextual();
+        let mut missing = None;
+        for bound in key.value.reads_mut() {
+            let read = bound.clone();
+            let read = match read {
+                crate::dataset::MatchRead::Output { column, identifier } => {
+                    let name = &outer.columns()[column].name;
+                    let Some(column) = output
+                        .columns()
+                        .iter()
+                        .position(|field| field.name == *name)
+                    else {
+                        missing = Some(identifier);
+                        break;
+                    };
+                    crate::dataset::MatchRead::Output { column, identifier }
+                }
+                crate::dataset::MatchRead::SecondaryRecord {
+                    source: owner,
+                    column,
+                    identifier,
+                } => {
+                    let name = &original_secondary[owner].name;
+                    let authored = sources
+                        .iter()
+                        .position(|source| source.name == *name)
+                        .ok_or(BindError::Internal)?;
+                    if Some(authored) == donor {
+                        crate::dataset::MatchRead::Record {
+                            column: source
+                                .columns()
+                                .iter()
+                                .position(|field| {
+                                    field.name == schemas[authored].columns()[column].name
+                                })
+                                .ok_or(BindError::Internal)?,
+                            identifier,
+                        }
+                    } else {
+                        crate::dataset::MatchRead::SecondaryRecord {
+                            source: if donor.is_none_or(|donor| authored < donor) {
+                                authored
+                            } else {
+                                authored - 1
+                            },
+                            column,
+                            identifier,
+                        }
+                    }
+                }
+                crate::dataset::MatchRead::Record { column, identifier } => {
+                    if Some(driver) == donor {
+                        crate::dataset::MatchRead::Record { column, identifier }
+                    } else {
+                        crate::dataset::MatchRead::SecondaryRecord {
+                            source: if donor.is_none_or(|donor| driver < donor) {
+                                driver
+                            } else {
+                                driver - 1
+                            },
+                            column,
+                            identifier,
+                        }
+                    }
+                }
+            };
+            *bound = read;
+        }
+        if let Some(identifier) = missing {
+            key.value = crate::dataset::MatchValue::Contextual(
+                fallback.unwrap_or(crate::dataset::ContextualMatch::Source(identifier)),
+            );
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

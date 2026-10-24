@@ -480,22 +480,22 @@ impl Declaration {
     /// relation (LOOKUP-9): `Some(None)` without a range, and `None` when a
     /// finding refuses it. Whether a record read names the driver of every row
     /// that reads the join is admitted per context ([`lookup_range::admit`]).
-    /// `row` names the row template of a row-phase read, and `driver` the
-    /// driver whose records build the rows the binding is read for. A bare
+    /// The scope `cx` names the row template of a row-phase read, and `driver`
+    /// the driver whose records build the rows the binding is read for. A bare
     /// value that no column takes fails whatever the bounds bind.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn bind_range(
         &self,
+        cx: &mut BindContext<'_, '_>,
         donor: &TableSchema,
-        catalog: &Catalog,
-        secondary: &[crate::dataset::SecondarySource],
-        intermediates: &[Option<crate::dataset::Intermediate>],
-        row: Option<&str>,
         driver: Option<&str>,
-        available: Option<&[usize]>,
-        edges: &mut Vec<usize>,
-        findings: &mut Vec<BindFinding>,
     ) -> Result<Option<Option<crate::dataset::RelationRange>>, BindError> {
+        let binder::Donors {
+            secondary,
+            items: intermediates,
+            ..
+        } = cx.donors;
+        let (catalog, row, available) = (cx.catalog, cx.row(), cx.scope.available);
+        let (edges, findings) = (&mut *cx.edges, &mut *cx.findings);
         let Some(range) = &self.range else {
             return Ok(Some(None));
         };
@@ -736,17 +736,7 @@ fn bind_implicit_source(
                         }
                         let keys = pairs;
                         declaration
-                            .bind_range(
-                                &source.schema,
-                                catalog,
-                                secondary,
-                                items,
-                                None,
-                                None,
-                                None,
-                                cx.edges,
-                                cx.findings,
-                            )?
+                            .bind_range(cx, &source.schema, None)?
                             .map(|range| Expression::SourceLookup {
                                 lookup: crate::dataset::Lookup {
                                     source: source_index,

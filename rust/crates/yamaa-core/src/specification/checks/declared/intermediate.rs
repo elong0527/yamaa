@@ -623,7 +623,6 @@ impl Checks<'_> {
             for (at, (binding, &result)) in item.bindings.iter().zip(&donor.results).enumerate() {
                 let start = findings.len();
                 let reads = super::donors::DonorReads::lookup(
-                    spec,
                     self.prepared,
                     relation,
                     identifier,

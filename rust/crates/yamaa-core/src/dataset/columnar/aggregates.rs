@@ -190,7 +190,6 @@ fn filter<E>(
 
 /// The records of the current group, of the output rows sharing the row's
 /// group values, or of the donor relation matched on the row's keys.
-#[allow(clippy::too_many_arguments)]
 fn select<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
@@ -403,7 +402,6 @@ impl<T: TableAccess + ?Sized> ExpressionResolver for Fields<'_, T> {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn reduce_selected<E, T: TableAccess<Error = E> + ?Sized>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,

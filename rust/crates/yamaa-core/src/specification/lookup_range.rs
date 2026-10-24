@@ -460,10 +460,13 @@ mod tests {
         let mut findings = Vec::new();
         let range = intermediate_range::bind(
             &declaration,
-            "W",
-            &donor,
-            &|column| donor.columns().get(column).map(|column| column.kind),
-            &|_| true,
+            &intermediates::Donor {
+                lookup: "W",
+                dataset: "DONOR",
+                schema: &donor,
+                kind: &|column| donor.columns().get(column).map(|column| column.kind),
+                admits: &|_| true,
+            },
             &catalog,
             false,
             &[],
