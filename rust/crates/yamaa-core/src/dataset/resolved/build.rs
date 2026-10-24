@@ -71,6 +71,10 @@ struct Node {
     sites: Vec<NodeSite>,
 }
 
+/// A node's nested value assignments, each with its operand role and its
+/// demand, lowered after the node's own facts.
+type Values<'p> = Vec<(&'p Assignment, OperandRole, Demand)>;
+
 /// Handler sites interned by (path, kind), numbered provisionally until the
 /// registration walk fixes the report order.
 #[derive(Default)]
@@ -647,20 +651,17 @@ impl<'p> Builder<'p> {
 
     /// Lower one assignment and its nested assignments, children first.
     ///
-    /// This is one dispatch, an arm for each bound expression kind, so it
-    /// grows with the language rather than holding steps to name; a kind
-    /// whose lowering has steps of its own delegates them to a method
-    /// (`aggregate`, `odm`, `first_available`, `window`, `arguments`).
+    /// Each family of bound expression kinds lowers in a method of its own,
+    /// which gives the node its kind, operation, reads and handler sites;
+    /// the nested value assignments it names in `values` are lowered after
+    /// the node's own facts, and the node joins the arena after them.
     fn lower(
         &mut self,
         cx: &Cx<'p>,
         assignment: &'p Assignment,
         fields: Fields<'_>,
     ) -> Result<ExprId, ResolutionError> {
-        use Demand::{Always, Reached};
         use Expression as E;
-        use HandlerKind as H;
-        use OperandRole::Value;
         let path = assignment.path.as_str();
         let mut node = Node {
             kind: ExprKind::Literal,
@@ -671,358 +672,41 @@ impl<'p> Builder<'p> {
             sites: Vec::new(),
         };
         // Nested value assignments, lowered after the node's own facts.
-        let mut values: Vec<(&'p Assignment, OperandRole, Demand)> = Vec::new();
+        let mut values: Values<'p> = Vec::new();
         let mut call = None;
         match &assignment.expression {
             E::Literal(value) => node.op = Op::Literal(value.clone()),
-            E::Source(column) => {
-                node.kind = ExprKind::Source;
-                node.reads.push(self.source_read(cx, fields, *column)?);
-                if let Fields::Match(_) = fields {
-                    node.op = Op::MatchOperand { index: *column };
-                }
+            E::Source(_) | E::Column(_) | E::Collect { .. } => {
+                self.lower_read(cx, assignment, fields, &mut node)?;
             }
-            E::Column(column) => {
-                node.kind = ExprKind::Column;
-                node.reads.push(self.column_read(cx, fields, *column)?);
+            E::Compute(_) | E::Flag(_) | E::Case(_) => {
+                self.lower_formula(cx, assignment, fields, &mut node)?;
             }
-            E::Collect {
-                column,
-                identifier,
-                filter,
-                selection,
-            } => {
-                node.kind = ExprKind::Collect;
-                node.op = Op::Collect {
-                    identifier: identifier.clone(),
-                    selection: selection.clone(),
-                };
-                node.reads.push(self.source_read(cx, fields, *column)?);
-                if let Some(filter) = filter {
-                    let expr = self.predicate(cx, filter, fields)?;
-                    node.operands.push(Operand {
-                        expr,
-                        role: OperandRole::Filter,
-                        demand: Always,
-                    });
-                }
-                let site = format!("{path}.multiple_matches");
-                let selected = selection.is_some();
-                self.site(&mut node, selected, site, H::MultipleMatches);
+            E::MappingCut { .. }
+            | E::Round { .. }
+            | E::Imputation { .. }
+            | E::Temporal { .. }
+            | E::Extreme { .. } => {
+                self.lower_value_function(cx, assignment, &mut node, &mut values);
             }
-            E::Compute(numeric) => {
-                node.kind = ExprKind::Compute;
-                node.op = Op::Compute(numeric.clone());
-                for binding in numeric.bindings() {
-                    let read = self.bound_read(cx, fields, &binding.read, path)?;
-                    node.reads.push(read);
-                    self.observed(&mut node, &binding.read, path)?;
-                }
-                self.joined_operands(
-                    cx,
-                    &mut node,
-                    path,
-                    numeric.bindings().iter().map(|b| &b.read),
-                );
+            E::StrTemplate { .. }
+            | E::StrExtract { .. }
+            | E::StrReplace { .. }
+            | E::StrCase { .. }
+            | E::StrPad { .. }
+            | E::StrSubstr { .. }
+            | E::StrLength { .. }
+            | E::StrDecimal { .. } => {
+                self.lower_string_function(assignment, &mut node, &mut values);
             }
-            E::Flag(flag) => {
-                node.kind = ExprKind::Flag;
-                node.op = Op::Flag(flag.clone());
-                // A missing operand is counted whether or not `missing` is declared.
-                self.site(&mut node, true, flag.missing_path(), H::Missing);
-                for binding in flag.bindings() {
-                    let read = match &binding.read {
-                        FlagRead::Read(read) => self.bound_read(cx, fields, read, path)?,
-                        FlagRead::Collect { column, .. } => {
-                            self.source_read(cx, fields, *column)?
-                        }
-                    };
-                    node.reads.push(read);
-                }
+            E::SourceBinding { .. } | E::FirstAvailable(_) => {
+                self.lower_selection(cx, assignment, fields, &mut node, &mut values)?;
             }
-            E::Case(branches) => {
-                node.kind = ExprKind::Case;
-                node.op = Op::Case;
-                for (index, branch) in branches.iter().enumerate() {
-                    if let Some(when) = &branch.when {
-                        let expr = self.predicate(cx, when, fields)?;
-                        let demand = if index == 0 { Always } else { Reached };
-                        node.operands.push(Operand {
-                            expr,
-                            role: OperandRole::When,
-                            demand,
-                        });
-                    }
-                    let expr = self.lower(cx, &branch.assignment, fields)?;
-                    node.operands.push(Operand {
-                        expr,
-                        role: OperandRole::Branch,
-                        demand: Reached,
-                    });
-                }
-            }
-            E::MappingCut { source, operation } => {
-                node.kind = ExprKind::MappingCut;
-                node.op = Op::MappingCut {
-                    operation: operation.clone(),
-                    column: assignment.column,
-                    handled: cx.plan.conversion_handler(path).is_some(),
-                };
-                let base = operation.path();
-                let unmapped = operation.unmapped().is_some();
-                // A missing source is counted whether or not `missing` is declared.
-                self.site(&mut node, true, format!("{base}.missing"), H::Missing);
-                let site = format!("{base}.unmapped");
-                self.site(&mut node, unmapped, site, H::Unmapped);
-                values.push((source, Value, Always));
-            }
-            E::Round { source, rounding } => {
-                node.kind = ExprKind::Round;
-                node.op = Op::Round(rounding.clone());
-                values.push((source, Value, Always));
-            }
-            E::Imputation {
-                operands,
-                operation,
-            } => {
-                node.kind = ExprKind::Imputation;
-                node.op = Op::Imputation(operation.clone());
-                let base = operation.path();
-                // A missing source is counted at `fallback` when one is declared.
-                let missing = if operation.fallback().is_some() {
-                    "fallback"
-                } else {
-                    "missing"
-                };
-                let counts = operation.counts_missing_source();
-                let site = format!("{base}.{missing}");
-                self.site(&mut node, counts, site, H::Missing);
-                let declared = operation.handler("invalid").is_some();
-                let site = format!("{base}.invalid");
-                self.site(&mut node, declared, site, H::Invalid);
-                let crossed = operation.counts_crossed_bounds();
-                let site = format!("{base}.not_after");
-                self.site(&mut node, crossed, site, H::CrossedBounds);
-                let partial = matches!(operation.kind(), ImputationKind::ToDate);
-                let site = format!("{base}.partial");
-                self.site(&mut node, partial, site, H::Partial);
-                // Bounds are evaluated only after a partial source needs them.
-                for (index, operand) in operands.iter().enumerate() {
-                    values.push((operand, Value, if index == 0 { Always } else { Reached }));
-                }
-            }
-            E::Temporal {
-                operands,
-                operation,
-            } => {
-                node.kind = ExprKind::Temporal;
-                node.op = Op::Temporal(operation.clone());
-                let declared = operation.invalid_handler().is_some();
-                let site = format!("{}.invalid", operation.path());
-                self.site(&mut node, declared, site, H::Invalid);
-                // `dtc` reads a part only when every coarser part is present.
-                let stops = operation.kind().stops_at_missing();
-                for (index, operand) in operands.iter().enumerate() {
-                    let demand = if stops && index > 0 { Reached } else { Always };
-                    values.push((operand, Value, demand));
-                }
-            }
-            E::Extreme { operands, largest } => {
-                node.kind = ExprKind::Extreme;
-                node.op = Op::Extreme { largest: *largest };
-                values.extend(operands.iter().map(|operand| (operand, Value, Always)));
-            }
-            E::StrTemplate {
-                operands,
-                operation,
-            } => {
-                node.kind = ExprKind::StrTemplate;
-                node.op = Op::StrTemplate(operation.clone());
-                let declared = operation.missing().is_some();
-                let site = format!("{}.missing", operation.path());
-                self.site(&mut node, declared, site, H::Missing);
-                values.extend(operands.iter().map(|operand| (operand, Value, Always)));
-            }
-            E::StrExtract { source, operation } => {
-                node.kind = ExprKind::StrExtract;
-                node.op = Op::StrExtract(operation.clone());
-                let site = format!("{}.missing", operation.path());
-                self.site(&mut node, true, site, H::Missing);
-                let declared = operation.handler("no_match").is_some();
-                let site = format!("{}.no_match", operation.path());
-                self.site(&mut node, declared, site, H::NoMatch);
-                values.push((source, Value, Always));
-            }
-            E::StrReplace { source, operation } => {
-                node.kind = ExprKind::StrReplace;
-                node.op = Op::StrReplace(operation.clone());
-                let site = format!("{}.missing", operation.path());
-                self.site(&mut node, true, site, H::Missing);
-                values.push((source, Value, Always));
-            }
-            E::StrCase { source, operation } => {
-                node.kind = ExprKind::StrCase;
-                node.op = Op::StrCase(operation.clone());
-                let site = format!("{}.missing", operation.path());
-                self.site(&mut node, true, site, H::Missing);
-                values.push((source, Value, Always));
-            }
-            E::StrPad { source, operation } => {
-                node.kind = ExprKind::StrPad;
-                node.op = Op::StrPad(operation.clone());
-                values.push((source, Value, Always));
-            }
-            E::StrSubstr { source, operation } => {
-                node.kind = ExprKind::StrSubstr;
-                node.op = Op::StrSubstr(operation.clone());
-                let site = format!("{}.missing", operation.path());
-                self.site(&mut node, true, site, H::Missing);
-                values.push((source, Value, Always));
-            }
-            E::StrLength { source, operation } => {
-                node.kind = ExprKind::StrLength;
-                node.op = Op::StrLength(operation.clone());
-                let site = format!("{}.missing", operation.path());
-                self.site(&mut node, true, site, H::Missing);
-                values.push((source, Value, Always));
-            }
-            E::StrDecimal { source, operation } => {
-                node.kind = ExprKind::StrDecimal;
-                node.op = Op::StrDecimal(operation.clone());
-                let site = format!("{}.missing", operation.path());
-                self.site(&mut node, true, site, H::Missing);
-                values.push((source, Value, Always));
-            }
-            E::SourceBinding {
-                source,
-                absent,
-                selection_declared,
-                variable,
-                path: binding,
-            } => {
-                node.kind = ExprKind::SourceBinding;
-                node.op = Op::SourceBinding {
-                    absent: absent.clone(),
-                    variable: variable.clone(),
-                    path: binding.clone(),
-                };
-                let site = format!("{binding}.absent");
-                self.site(&mut node, absent.is_some(), site, H::Absent);
-                let site = format!("{}.multiple_matches", source.path);
-                let kind = H::MultipleMatches;
-                self.site(&mut node, *selection_declared, site, kind);
-                values.push((source, Value, Always));
-            }
-            E::FirstAvailable(selection) => {
-                node.kind = ExprKind::FirstAvailable;
-                node.op = Op::FirstAvailable {
-                    missing: selection.missing().clone(),
-                    missing_path: selection.missing_path(),
-                    sources: selection
-                        .sources()
-                        .iter()
-                        .map(|source| source.path.clone())
-                        .collect(),
-                };
-                let site = selection.missing_path();
-                self.site(&mut node, true, site, H::Missing);
-                self.first_available(cx, &mut node, selection, fields)?;
-            }
-            E::SourceLookup {
-                lookup,
-                range,
-                filter,
-                selection,
-                absence,
-            } => {
-                let keys = lookup
-                    .keys
-                    .iter()
-                    .map(|key| {
-                        let current = Read::Column(cx.column(key.output_column)?);
-                        Ok((key.source_column, current))
-                    })
-                    .collect::<Result<Vec<_>, ResolutionError>>()?;
-                let donor = cx.source(lookup.source + 1)?;
-                let relation = self.join(
-                    cx,
-                    path,
-                    donor,
-                    keys,
-                    JoinOptions {
-                        range: range.as_ref(),
-                        filter: filter.as_ref(),
-                        selection: selection.as_ref(),
-                    },
-                )?;
-                node.kind = ExprKind::SourceLookup(relation);
-                node.op = Op::SourceLookup {
-                    lookup: lookup.clone(),
-                    range: range.clone(),
-                    filter: filter.clone(),
-                    selection: selection.clone(),
-                    absence: absence.clone(),
-                };
-                node.reads
-                    .push(Read::Relation(relation, field(lookup.column)?));
-                let site = format!("{path}.multiple_matches");
-                let selected = selection.is_some();
-                self.site(&mut node, selected, site, H::MultipleMatches);
-                if let Some(absence) = absence {
-                    let input = &cx.plan.secondary()[lookup.source].name;
-                    self.absent(cx, &mut node, absence, input);
-                }
-            }
-            E::Joined(read) => {
-                let relation = self.joined(cx, path, read, None, None, None)?;
-                node.kind = ExprKind::Joined(relation);
-                node.op = Op::Joined(read.as_ref().clone());
-                node.reads
-                    .push(Read::Relation(relation, field(read.column)?));
-                self.absent(cx, &mut node, &JoinAbsence::operand(path), &read.name);
-            }
-            E::JoinedSource {
-                read,
-                range,
-                filter,
-                selection,
-                absence,
-            } => {
-                let relation = self.joined(
-                    cx,
-                    path,
-                    read,
-                    range.as_ref(),
-                    filter.as_ref(),
-                    selection.as_ref(),
-                )?;
-                node.kind = ExprKind::JoinedSource(relation);
-                node.op = Op::JoinedSource {
-                    read: read.as_ref().clone(),
-                    range: range.clone(),
-                    filter: filter.clone(),
-                    selection: selection.clone(),
-                    absence: absence.clone(),
-                };
-                node.reads
-                    .push(Read::Relation(relation, field(read.column)?));
-                let site = format!("{path}.multiple_matches");
-                let selected = selection.is_some();
-                self.site(&mut node, selected, site, H::MultipleMatches);
-                if let Some(absence) = absence {
-                    self.absent(cx, &mut node, absence, &read.name);
-                }
-            }
-            E::Intermediate { index, column } => {
-                let relation = cx.named(*index)?;
-                node.kind = ExprKind::Intermediate(relation);
-                node.op = Op::Intermediate { column: *column };
-                node.reads.push(Read::Relation(relation, field(*column)?));
-                let read = BoundRead::Intermediate {
-                    index: *index,
-                    column: *column,
-                };
-                self.observed(&mut node, &read, path)?;
+            E::SourceLookup { .. }
+            | E::Joined(_)
+            | E::JoinedSource { .. }
+            | E::Intermediate { .. } => {
+                self.lower_relation_read(cx, assignment, &mut node)?;
             }
             E::Aggregate(bound) => self.aggregate(cx, &mut node, bound)?,
             E::Odm(bound) => self.odm(cx, &mut node, bound)?,
@@ -1066,6 +750,462 @@ impl<'p> Builder<'p> {
             self.calls.push(call);
         }
         Ok(expr)
+    }
+
+    /// A read of the row: a source field, an output column, or a source
+    /// field's distinct readings across a key combination (`Collect`).
+    fn lower_read(
+        &mut self,
+        cx: &Cx<'p>,
+        assignment: &'p Assignment,
+        fields: Fields<'_>,
+        node: &mut Node,
+    ) -> Result<(), ResolutionError> {
+        use Demand::Always;
+        use Expression as E;
+        use HandlerKind as H;
+        let path = assignment.path.as_str();
+        match &assignment.expression {
+            E::Source(column) => {
+                node.kind = ExprKind::Source;
+                node.reads.push(self.source_read(cx, fields, *column)?);
+                if let Fields::Match(_) = fields {
+                    node.op = Op::MatchOperand { index: *column };
+                }
+            }
+            E::Column(column) => {
+                node.kind = ExprKind::Column;
+                node.reads.push(self.column_read(cx, fields, *column)?);
+            }
+            E::Collect {
+                column,
+                identifier,
+                filter,
+                selection,
+            } => {
+                node.kind = ExprKind::Collect;
+                node.op = Op::Collect {
+                    identifier: identifier.clone(),
+                    selection: selection.clone(),
+                };
+                node.reads.push(self.source_read(cx, fields, *column)?);
+                if let Some(filter) = filter {
+                    let expr = self.predicate(cx, filter, fields)?;
+                    node.operands.push(Operand {
+                        expr,
+                        role: OperandRole::Filter,
+                        demand: Always,
+                    });
+                }
+                let site = format!("{path}.multiple_matches");
+                let selected = selection.is_some();
+                self.site(node, selected, site, H::MultipleMatches);
+            }
+            _ => unreachable!("lower routes only reads of the row here"),
+        }
+        Ok(())
+    }
+
+    /// A formula: compiled arithmetic, a flag, or a `case`, whose branches
+    /// are lowered in authored order, each after its condition.
+    fn lower_formula(
+        &mut self,
+        cx: &Cx<'p>,
+        assignment: &'p Assignment,
+        fields: Fields<'_>,
+        node: &mut Node,
+    ) -> Result<(), ResolutionError> {
+        use Demand::{Always, Reached};
+        use Expression as E;
+        use HandlerKind as H;
+        let path = assignment.path.as_str();
+        match &assignment.expression {
+            E::Compute(numeric) => {
+                node.kind = ExprKind::Compute;
+                node.op = Op::Compute(numeric.clone());
+                for binding in numeric.bindings() {
+                    let read = self.bound_read(cx, fields, &binding.read, path)?;
+                    node.reads.push(read);
+                    self.observed(node, &binding.read, path)?;
+                }
+                self.joined_operands(cx, node, path, numeric.bindings().iter().map(|b| &b.read));
+            }
+            E::Flag(flag) => {
+                node.kind = ExprKind::Flag;
+                node.op = Op::Flag(flag.clone());
+                // A missing operand is counted whether or not `missing` is declared.
+                self.site(node, true, flag.missing_path(), H::Missing);
+                for binding in flag.bindings() {
+                    let read = match &binding.read {
+                        FlagRead::Read(read) => self.bound_read(cx, fields, read, path)?,
+                        FlagRead::Collect { column, .. } => {
+                            self.source_read(cx, fields, *column)?
+                        }
+                    };
+                    node.reads.push(read);
+                }
+            }
+            E::Case(branches) => {
+                node.kind = ExprKind::Case;
+                node.op = Op::Case;
+                for (index, branch) in branches.iter().enumerate() {
+                    if let Some(when) = &branch.when {
+                        let expr = self.predicate(cx, when, fields)?;
+                        let demand = if index == 0 { Always } else { Reached };
+                        node.operands.push(Operand {
+                            expr,
+                            role: OperandRole::When,
+                            demand,
+                        });
+                    }
+                    let expr = self.lower(cx, &branch.assignment, fields)?;
+                    node.operands.push(Operand {
+                        expr,
+                        role: OperandRole::Branch,
+                        demand: Reached,
+                    });
+                }
+            }
+            _ => unreachable!("lower routes only formulas here"),
+        }
+        Ok(())
+    }
+
+    /// A function of nested value assignments: a mapping cut, rounding, an
+    /// imputation, a temporal function or an extreme. It names its handler
+    /// sites and leaves its operands to `values`.
+    fn lower_value_function(
+        &mut self,
+        cx: &Cx<'p>,
+        assignment: &'p Assignment,
+        node: &mut Node,
+        values: &mut Values<'p>,
+    ) {
+        use Demand::{Always, Reached};
+        use Expression as E;
+        use HandlerKind as H;
+        use OperandRole::Value;
+        let path = assignment.path.as_str();
+        match &assignment.expression {
+            E::MappingCut { source, operation } => {
+                node.kind = ExprKind::MappingCut;
+                node.op = Op::MappingCut {
+                    operation: operation.clone(),
+                    column: assignment.column,
+                    handled: cx.plan.conversion_handler(path).is_some(),
+                };
+                let base = operation.path();
+                let unmapped = operation.unmapped().is_some();
+                // A missing source is counted whether or not `missing` is declared.
+                self.site(node, true, format!("{base}.missing"), H::Missing);
+                let site = format!("{base}.unmapped");
+                self.site(node, unmapped, site, H::Unmapped);
+                values.push((source, Value, Always));
+            }
+            E::Round { source, rounding } => {
+                node.kind = ExprKind::Round;
+                node.op = Op::Round(rounding.clone());
+                values.push((source, Value, Always));
+            }
+            E::Imputation {
+                operands,
+                operation,
+            } => {
+                node.kind = ExprKind::Imputation;
+                node.op = Op::Imputation(operation.clone());
+                let base = operation.path();
+                // A missing source is counted at `fallback` when one is declared.
+                let missing = if operation.fallback().is_some() {
+                    "fallback"
+                } else {
+                    "missing"
+                };
+                let counts = operation.counts_missing_source();
+                let site = format!("{base}.{missing}");
+                self.site(node, counts, site, H::Missing);
+                let declared = operation.handler("invalid").is_some();
+                let site = format!("{base}.invalid");
+                self.site(node, declared, site, H::Invalid);
+                let crossed = operation.counts_crossed_bounds();
+                let site = format!("{base}.not_after");
+                self.site(node, crossed, site, H::CrossedBounds);
+                let partial = matches!(operation.kind(), ImputationKind::ToDate);
+                let site = format!("{base}.partial");
+                self.site(node, partial, site, H::Partial);
+                // Bounds are evaluated only after a partial source needs them.
+                for (index, operand) in operands.iter().enumerate() {
+                    values.push((operand, Value, if index == 0 { Always } else { Reached }));
+                }
+            }
+            E::Temporal {
+                operands,
+                operation,
+            } => {
+                node.kind = ExprKind::Temporal;
+                node.op = Op::Temporal(operation.clone());
+                let declared = operation.invalid_handler().is_some();
+                let site = format!("{}.invalid", operation.path());
+                self.site(node, declared, site, H::Invalid);
+                // `dtc` reads a part only when every coarser part is present.
+                let stops = operation.kind().stops_at_missing();
+                for (index, operand) in operands.iter().enumerate() {
+                    let demand = if stops && index > 0 { Reached } else { Always };
+                    values.push((operand, Value, demand));
+                }
+            }
+            E::Extreme { operands, largest } => {
+                node.kind = ExprKind::Extreme;
+                node.op = Op::Extreme { largest: *largest };
+                values.extend(operands.iter().map(|operand| (operand, Value, Always)));
+            }
+            _ => unreachable!("lower routes only value functions here"),
+        }
+    }
+
+    /// A string function of nested value assignments. It names its handler
+    /// sites and leaves its operands to `values`.
+    fn lower_string_function(
+        &mut self,
+        assignment: &'p Assignment,
+        node: &mut Node,
+        values: &mut Values<'p>,
+    ) {
+        use Demand::Always;
+        use Expression as E;
+        use HandlerKind as H;
+        use OperandRole::Value;
+        match &assignment.expression {
+            E::StrTemplate {
+                operands,
+                operation,
+            } => {
+                node.kind = ExprKind::StrTemplate;
+                node.op = Op::StrTemplate(operation.clone());
+                let declared = operation.missing().is_some();
+                let site = format!("{}.missing", operation.path());
+                self.site(node, declared, site, H::Missing);
+                values.extend(operands.iter().map(|operand| (operand, Value, Always)));
+            }
+            E::StrExtract { source, operation } => {
+                node.kind = ExprKind::StrExtract;
+                node.op = Op::StrExtract(operation.clone());
+                let site = format!("{}.missing", operation.path());
+                self.site(node, true, site, H::Missing);
+                let declared = operation.handler("no_match").is_some();
+                let site = format!("{}.no_match", operation.path());
+                self.site(node, declared, site, H::NoMatch);
+                values.push((source, Value, Always));
+            }
+            E::StrReplace { source, operation } => {
+                node.kind = ExprKind::StrReplace;
+                node.op = Op::StrReplace(operation.clone());
+                let site = format!("{}.missing", operation.path());
+                self.site(node, true, site, H::Missing);
+                values.push((source, Value, Always));
+            }
+            E::StrCase { source, operation } => {
+                node.kind = ExprKind::StrCase;
+                node.op = Op::StrCase(operation.clone());
+                let site = format!("{}.missing", operation.path());
+                self.site(node, true, site, H::Missing);
+                values.push((source, Value, Always));
+            }
+            E::StrPad { source, operation } => {
+                node.kind = ExprKind::StrPad;
+                node.op = Op::StrPad(operation.clone());
+                values.push((source, Value, Always));
+            }
+            E::StrSubstr { source, operation } => {
+                node.kind = ExprKind::StrSubstr;
+                node.op = Op::StrSubstr(operation.clone());
+                let site = format!("{}.missing", operation.path());
+                self.site(node, true, site, H::Missing);
+                values.push((source, Value, Always));
+            }
+            E::StrLength { source, operation } => {
+                node.kind = ExprKind::StrLength;
+                node.op = Op::StrLength(operation.clone());
+                let site = format!("{}.missing", operation.path());
+                self.site(node, true, site, H::Missing);
+                values.push((source, Value, Always));
+            }
+            E::StrDecimal { source, operation } => {
+                node.kind = ExprKind::StrDecimal;
+                node.op = Op::StrDecimal(operation.clone());
+                let site = format!("{}.missing", operation.path());
+                self.site(node, true, site, H::Missing);
+                values.push((source, Value, Always));
+            }
+            _ => unreachable!("lower routes only string functions here"),
+        }
+    }
+
+    /// A selection: a source binding, which leaves its operand to `values`,
+    /// or the first available of authored operands.
+    fn lower_selection(
+        &mut self,
+        cx: &Cx<'p>,
+        assignment: &'p Assignment,
+        fields: Fields<'_>,
+        node: &mut Node,
+        values: &mut Values<'p>,
+    ) -> Result<(), ResolutionError> {
+        use Demand::Always;
+        use Expression as E;
+        use HandlerKind as H;
+        use OperandRole::Value;
+        match &assignment.expression {
+            E::SourceBinding {
+                source,
+                absent,
+                selection_declared,
+                variable,
+                path: binding,
+            } => {
+                node.kind = ExprKind::SourceBinding;
+                node.op = Op::SourceBinding {
+                    absent: absent.clone(),
+                    variable: variable.clone(),
+                    path: binding.clone(),
+                };
+                let site = format!("{binding}.absent");
+                self.site(node, absent.is_some(), site, H::Absent);
+                let site = format!("{}.multiple_matches", source.path);
+                let kind = H::MultipleMatches;
+                self.site(node, *selection_declared, site, kind);
+                values.push((source, Value, Always));
+            }
+            E::FirstAvailable(selection) => {
+                node.kind = ExprKind::FirstAvailable;
+                node.op = Op::FirstAvailable {
+                    missing: selection.missing().clone(),
+                    missing_path: selection.missing_path(),
+                    sources: selection
+                        .sources()
+                        .iter()
+                        .map(|source| source.path.clone())
+                        .collect(),
+                };
+                let site = selection.missing_path();
+                self.site(node, true, site, H::Missing);
+                self.first_available(cx, node, selection, fields)?;
+            }
+            _ => unreachable!("lower routes only selections here"),
+        }
+        Ok(())
+    }
+
+    /// A read through a relation: an implicit join on output keys, a join on
+    /// a declared port, or a named intermediate.
+    fn lower_relation_read(
+        &mut self,
+        cx: &Cx<'p>,
+        assignment: &'p Assignment,
+        node: &mut Node,
+    ) -> Result<(), ResolutionError> {
+        use Expression as E;
+        use HandlerKind as H;
+        let path = assignment.path.as_str();
+        match &assignment.expression {
+            E::SourceLookup {
+                lookup,
+                range,
+                filter,
+                selection,
+                absence,
+            } => {
+                let keys = lookup
+                    .keys
+                    .iter()
+                    .map(|key| {
+                        let current = Read::Column(cx.column(key.output_column)?);
+                        Ok((key.source_column, current))
+                    })
+                    .collect::<Result<Vec<_>, ResolutionError>>()?;
+                let donor = cx.source(lookup.source + 1)?;
+                let relation = self.join(
+                    cx,
+                    path,
+                    donor,
+                    keys,
+                    JoinOptions {
+                        range: range.as_ref(),
+                        filter: filter.as_ref(),
+                        selection: selection.as_ref(),
+                    },
+                )?;
+                node.kind = ExprKind::SourceLookup(relation);
+                node.op = Op::SourceLookup {
+                    lookup: lookup.clone(),
+                    range: range.clone(),
+                    filter: filter.clone(),
+                    selection: selection.clone(),
+                    absence: absence.clone(),
+                };
+                node.reads
+                    .push(Read::Relation(relation, field(lookup.column)?));
+                let site = format!("{path}.multiple_matches");
+                let selected = selection.is_some();
+                self.site(node, selected, site, H::MultipleMatches);
+                if let Some(absence) = absence {
+                    let input = &cx.plan.secondary()[lookup.source].name;
+                    self.absent(cx, node, absence, input);
+                }
+            }
+            E::Joined(read) => {
+                let relation = self.joined(cx, path, read, None, None, None)?;
+                node.kind = ExprKind::Joined(relation);
+                node.op = Op::Joined(read.as_ref().clone());
+                node.reads
+                    .push(Read::Relation(relation, field(read.column)?));
+                self.absent(cx, node, &JoinAbsence::operand(path), &read.name);
+            }
+            E::JoinedSource {
+                read,
+                range,
+                filter,
+                selection,
+                absence,
+            } => {
+                let relation = self.joined(
+                    cx,
+                    path,
+                    read,
+                    range.as_ref(),
+                    filter.as_ref(),
+                    selection.as_ref(),
+                )?;
+                node.kind = ExprKind::JoinedSource(relation);
+                node.op = Op::JoinedSource {
+                    read: read.as_ref().clone(),
+                    range: range.clone(),
+                    filter: filter.clone(),
+                    selection: selection.clone(),
+                    absence: absence.clone(),
+                };
+                node.reads
+                    .push(Read::Relation(relation, field(read.column)?));
+                let site = format!("{path}.multiple_matches");
+                let selected = selection.is_some();
+                self.site(node, selected, site, H::MultipleMatches);
+                if let Some(absence) = absence {
+                    self.absent(cx, node, absence, &read.name);
+                }
+            }
+            E::Intermediate { index, column } => {
+                let relation = cx.named(*index)?;
+                node.kind = ExprKind::Intermediate(relation);
+                node.op = Op::Intermediate { column: *column };
+                node.reads.push(Read::Relation(relation, field(*column)?));
+                let read = BoundRead::Intermediate {
+                    index: *index,
+                    column: *column,
+                };
+                self.observed(node, &read, path)?;
+            }
+            _ => unreachable!("lower routes only reads through a relation here"),
+        }
+        Ok(())
     }
 
     /// Operands in authored order; each later one is reached only when every

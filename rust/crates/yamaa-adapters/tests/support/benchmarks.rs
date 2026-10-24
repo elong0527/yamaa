@@ -96,6 +96,8 @@ pub fn error(name: &str) -> Value {
 /// recursively. A validation error's spec paths are each owned by a
 /// validation issue of its condition, whose spec paths lie at or below them,
 /// and no entry of a negative benchmark exposes or saves an output.
+// Over the 250-line ceiling until the follow-up of #3806 splits it.
+#[allow(clippy::too_many_lines)]
 #[track_caller]
 pub fn reproduce(name: &str) {
     fn stage(name: &str, from: &Path, to: &Path) {
