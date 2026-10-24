@@ -1030,4 +1030,42 @@ mod diagnostics {
             );
         }
     }
+
+    /// How the replay compares an authored case with what its operation
+    /// reports (#3691).
+    mod replay {
+        use crate::support::diagnostic::replay::among;
+        use yamaa_core::json::Value;
+
+        /// An `among` case's rows are some of the issues its operation
+        /// reports: each matches a distinct reported row, in any order, and
+        /// a row that matches none is named.
+        #[test]
+        fn among_rows_each_match_a_distinct_reported_row_in_any_order() {
+            let row = |condition: &str| {
+                Value::Object([("condition".into(), Value::String(condition.into()))].into())
+            };
+            let reported = [row("a"), row("b"), row("c")];
+            for (authored, expected, label) in [
+                (vec![row("b")], Ok(vec![1]), "one row among extra rows"),
+                (
+                    vec![row("c"), row("a")],
+                    Ok(vec![2, 0]),
+                    "rows in another order",
+                ),
+                (
+                    vec![row("d")],
+                    Err(vec![row("d")]),
+                    "a row reported nowhere",
+                ),
+                (
+                    vec![row("a"), row("a")],
+                    Err(vec![row("a")]),
+                    "a row written twice and reported once",
+                ),
+            ] {
+                assert_eq!(among(&authored, &reported), expected, "{label}");
+            }
+        }
+    }
 }

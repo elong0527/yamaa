@@ -13,9 +13,14 @@
 //!
 //! A case whose table compared only part of each record says which fields in
 //! `compares`, and its rows hold those alone; nothing a table did not compare
-//! is filled in. An input may take its `document` from one of the file's
-//! `documents`, by name (`base`), with `edits` that set or remove a member at
-//! a path of keys and list indexes.
+//! is filled in. A case whose table found its record by cause among several
+//! issues says `"among": true`: its rows are some of the issues reported,
+//! each equal to a distinct one after the `compares` projection, in any
+//! order, since the issues the table left unstated give its rows no authored
+//! position; the replay renders and counts only the issues they match. An
+//! input may take its `document` from one of the file's `documents`, by name
+//! (`base`), with `edits` that set or remove a member at a path of keys and
+//! list indexes.
 //!
 //! Every row was authored: in the Rust table it moved from, or from the rule
 //! card, registry entry or sibling record its pull request names. No run
@@ -49,6 +54,8 @@ pub struct Case {
     pub input: Json,
     /// The fields the case compares, when its table compared fewer than all.
     pub compares: Option<Vec<String>>,
+    /// Whether the rows are some of the issues reported, in any order.
+    pub among: bool,
     pub issues: Vec<Value>,
 }
 
@@ -78,7 +85,7 @@ pub fn cases() -> Vec<Case> {
         let fixture = json::read(file.text, name);
         let fixture = fixture.closed(&["about", "documents", "cases"]);
         for case in fixture.field("cases").items() {
-            let case = case.closed(&["case", "operation", "input", "compares", "issues"]);
+            let case = case.closed(&["case", "operation", "input", "compares", "among", "issues"]);
             let case_name = case.field("case").text();
             assert!(
                 names.insert(case_name.to_owned()),
@@ -104,6 +111,14 @@ pub fn cases() -> Vec<Case> {
                 fields
             });
             let issues = case.field("issues").items();
+            let among = case.get("among").is_some_and(|among| {
+                assert!(among.boolean(), "{label}: among is written only as true");
+                assert!(
+                    !issues.is_empty(),
+                    "{label}: an among case names at least one row"
+                );
+                true
+            });
             if let Some(fields) = &compares {
                 for issue in issues {
                     for (field, _) in issue.members() {
@@ -119,6 +134,7 @@ pub fn cases() -> Vec<Case> {
                 label,
                 operations,
                 compares,
+                among,
                 issues: issues.iter().map(Json::value).collect(),
             });
         }
@@ -175,8 +191,9 @@ pub fn row(diagnostic: &Diagnostic) -> Value {
 }
 
 /// Replay every case: the issues each of its operations reports must equal
-/// its rows, each issue renders its registered message from its own record
-/// (P-MSG-1), and the causes the cases reach are returned.
+/// its rows, or hold them when the case is `among`, each issue a row compares
+/// renders its registered message from its own record (P-MSG-1), and the
+/// causes the cases reach are returned.
 pub fn replay() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
     for case in cases() {
@@ -190,16 +207,49 @@ pub fn replay() -> BTreeSet<ConditionCode> {
             let rows = issues
                 .iter()
                 .map(|issue| compared(row(issue), case.compares.as_deref()))
-                .collect();
-            assert_eq!(
-                Value::Array(rows),
-                Value::Array(case.issues.clone()),
-                "{label}"
-            );
-            reached.extend(issues.iter().map(rendered));
+                .collect::<Vec<_>>();
+            let checked = if case.among {
+                match among(&case.issues, &rows) {
+                    Ok(matched) => matched.into_iter().map(|index| &issues[index]).collect(),
+                    Err(unmatched) => panic!(
+                        "{label}: the rows {unmatched:?} are not among the reported rows {rows:?}"
+                    ),
+                }
+            } else {
+                assert_eq!(
+                    Value::Array(rows),
+                    Value::Array(case.issues.clone()),
+                    "{label}"
+                );
+                issues.iter().collect::<Vec<_>>()
+            };
+            reached.extend(checked.into_iter().map(rendered));
         }
     }
     reached
+}
+
+/// Match each `authored` row of an `among` case to a distinct `reported`
+/// row equal to it, whatever their order: the indexes of the reported rows
+/// matched, in the authored order, or the authored rows that match none.
+pub fn among(authored: &[Value], reported: &[Value]) -> Result<Vec<usize>, Vec<Value>> {
+    let mut taken = vec![false; reported.len()];
+    let mut matched = Vec::new();
+    let mut unmatched = Vec::new();
+    for row in authored {
+        match (0..reported.len()).find(|&index| !taken[index] && reported[index] == *row) {
+            Some(index) => {
+                taken[index] = true;
+                matched.push(index);
+            }
+            None => unmatched.push(row.clone()),
+        }
+    }
+    if unmatched.is_empty() {
+        Ok(matched)
+    } else {
+        Err(unmatched)
+    }
 }
 
 /// `row` with only the fields `compares` names, or whole.
