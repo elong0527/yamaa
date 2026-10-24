@@ -1457,18 +1457,19 @@ mod tests {
         }
     }
 
-    /// A save that stops between two partitions of a run's output (D264), a
-    /// seam no facade input reaches: an I/O failure there, as a full disk
-    /// would give, or a cancellation publishes nothing. The file publisher
-    /// removes the output's partial staged file, through `Writing::fail` for
-    /// the failure and as the unfinished `Writing` is dropped for the
-    /// cancellation, and the save removes the staged report, so the
-    /// directory holds only what it held. The save's one issue is the
-    /// publication failure, or the cancelled publication, at the output, in
-    /// the output step, after entering both files and completing neither.
-    /// Its three records are three one-record partitions: the save asks
-    /// before the output's second and third, and stops at the third, asking
-    /// nothing after it. The same result then saves whole.
+    /// A save that stops between two partitions of a run's output (D264) on
+    /// the file publisher publishes nothing, stopped by an I/O failure there,
+    /// as a full disk would give, which no facade input reaches, or by a
+    /// cancellation. The file publisher removes the output's partial staged
+    /// file, through `Writing::fail` for the failure and as the unfinished
+    /// `Writing` is dropped for the cancellation, and the save removes the
+    /// staged report, so the directory holds only what it held. The save's
+    /// one issue is the publication failure, or the cancelled publication,
+    /// at the output, in the output step, after entering both files and
+    /// completing neither. Its three records are three one-record
+    /// partitions: the save asks before the output's second and third, and
+    /// stops at the third, asking nothing after it. The same result then
+    /// saves whole.
     #[test]
     fn a_failure_or_a_cancellation_between_two_partitions_of_the_output_publishes_nothing() {
         use crate::publication::Interruption;

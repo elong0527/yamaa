@@ -166,10 +166,11 @@ fn an_output_beyond_the_row_limit_saves_a_partition_at_a_time() {
 /// whole-table run does, as the second template's rows would pass the
 /// limit: one `engine_rejected` issue of the execute step, `execution_limit`
 /// on `output_rows`, 10,000,002 rows required of 10,000,000. The input is a
-/// SAS Transport file the engine's transport writer writes. The runs take
-/// minutes unoptimized, so the test runs in the optimized `release-test`
-/// profile, as the native lane runs every test, and no other test beyond
-/// the row limit runs beside it (`support::beyond_the_row_limit`).
+/// SAS Transport file the engine's transport writer writes. The input and
+/// the two runs take most of a minute unoptimized, so the test runs in the
+/// optimized `release-test` profile, as the native lane runs every test, and
+/// no other test beyond the row limit runs beside it
+/// (`support::beyond_the_row_limit`).
 #[cfg(feature = "readstat")]
 #[test]
 #[cfg_attr(
@@ -181,7 +182,7 @@ fn the_output_of_a_sas_driver_beyond_the_row_limit_is_refused_as_the_whole_table
     use yamaa_adapters::submission_xpt::{render, XptDocument, XptKind, XptVariable};
     use yamaa_core::table::{CellError, Column, TableAccess, TableSchema, ValueRef};
     const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, COPY]\ninput: {SRC: {path: input.xpt, types: {ID: int}, encoding: ascii}}\noutput: {path: out.csv, columns: [ID, COPY]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: COPY, type: int}\nrows:\n  - {id: first, derivations: {COPY: \"1\"}}\n  - {id: second, derivations: {COPY: \"2\"}}\n";
-    /// The IDs 1 to `.1`, one record each.
+    /// `.1` records of the one integer column `ID`, numbered from 1.
     struct Records(TableSchema, usize);
     impl TableAccess for Records {
         type Error = Infallible;
@@ -220,7 +221,6 @@ fn the_output_of_a_sas_driver_beyond_the_row_limit_is_refused_as_the_whole_table
     let scratch = Scratch::new("partitioned-publication-sas");
     scratch.write("spec.yaml", SPEC);
     scratch.write("input.xpt", render(&document, &records).unwrap());
-    drop(records);
     let spec = scratch.join("spec.yaml");
     let refused = r#"Error engine engine_rejected None [] {"actual":10000002,"code":"execution_limit","limit":10000000,"resource":"output_rows","step":"execute"} None None"#;
     let million = Partitions::new(NonZeroUsize::new(1_000_000).unwrap());
