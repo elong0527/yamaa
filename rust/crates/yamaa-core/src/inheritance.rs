@@ -243,7 +243,33 @@ pub fn included_diagnostic(
     path: &str,
 ) -> crate::diagnostic::Diagnostic {
     let field = Named::Include(index).field().expect("an include entry");
-    let mut diagnostic = failure.field_diagnostic(&field, path);
+    declared_diagnostic(failure, &field, declaring, path)
+}
+
+/// The finding for the parent that the layer `declaring` names, written
+/// `path`, which could not be read for `failure`: FILE-5's, FILE-7's,
+/// FILE-8's or FILE-10's condition at its `parent`, its context naming the
+/// path as written and the layer that writes it, which locates the field in
+/// that layer, not in another layer that also writes a `parent` (P-ISSUE-1).
+/// A resource limit is the engine's refusal at the field.
+pub fn parent_diagnostic(
+    failure: ResourceFailure,
+    declaring: &str,
+    path: &str,
+) -> crate::diagnostic::Diagnostic {
+    declared_diagnostic(failure, "parent", declaring, path)
+}
+
+/// `failure`'s finding at `field`, naming the path as written and, unless it
+/// is a resource limit, the layer `declaring` that writes the field as
+/// `source`.
+fn declared_diagnostic(
+    failure: ResourceFailure,
+    field: &str,
+    declaring: &str,
+    path: &str,
+) -> crate::diagnostic::Diagnostic {
+    let mut diagnostic = failure.field_diagnostic(field, path);
     if !matches!(failure, ResourceFailure::Boundary(_)) {
         diagnostic.context.insert(
             "source".into(),

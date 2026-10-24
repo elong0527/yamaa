@@ -222,12 +222,14 @@ fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dic
                 ..
             }
         ));
-        let (field, written) = match changed {
-            "project.yaml" => ("environment", environment_written.as_str()),
-            "python/uv.lock" => ("environments.python.lock", "python/uv.lock"),
-            "spec.yaml" => ("sdtm.specs[0]", "spec.yaml"),
-            "base.yaml" => ("parent", "base.yaml"),
-            "dict.yaml" => ("columns.ID.derivation.mapping.dict", "dict.yaml"),
+        // A `parent` also names the layer that writes it, the specification.
+        let layer = specification.source().identity.as_str();
+        let (field, written, source) = match changed {
+            "project.yaml" => ("environment", environment_written.as_str(), None),
+            "python/uv.lock" => ("environments.python.lock", "python/uv.lock", None),
+            "spec.yaml" => ("sdtm.specs[0]", "spec.yaml", None),
+            "base.yaml" => ("parent", "base.yaml", Some(layer)),
+            "dict.yaml" => ("columns.ID.derivation.mapping.dict", "dict.yaml", None),
             _ => unreachable!(),
         };
         let findings = issues(&failure, "");
@@ -238,7 +240,10 @@ fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dic
         assert_eq!(findings[0].spec_paths, [field]);
         assert_eq!(
             yamaa_core::json::Value::Object(findings[0].context.clone()),
-            crate::json!({"path":written})
+            match source {
+                Some(source) => crate::json!({"path":written,"source":source}),
+                None => crate::json!({"path":written}),
+            }
         );
         assert_eq!(reads.resources().capture_reads(), captured);
         assert_eq!(specification.source().bytes, spec.as_bytes());
