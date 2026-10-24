@@ -1,0 +1,338 @@
+{
+  "about": "A child inherits its parent's meaning (LAYER-5): an empty child saves what its parent saves and fails as its parent fails. An aggregate's derive bindings stay local to it, whether a later binding reads an earlier one or a binding shares an output column's name, so none becomes a column dependency: subject 1's exposures start on 2025-01-05 and 2025-01-02, so its earliest is 2025-01-02, epoch day 20090, and subject 2's is 2025-02-10, epoch day 20129. An intermediate whose verification is its only use stays in the run (LAYER-11), so when two donor records of kind X share code A, parent and empty child both fail as duplicate_intermediate_records (LOOKUP-17), whether or not a column reads it; #2189 pruned it, and the child saved. An intermediate with empty verifications that nothing reads keeps neither itself nor its input, whose file does not exist, in the run. An intermediate a child declares under an input's name collides with it as in a flat specification, in the check as in the build (SCHEMA-8, LOOKUP-3). No benchmark composes these through a child: the one empty layer, negative-cyclic-parent's layers/parent.yaml, sits in a refused cycle. negative-lookup-id-collision and negative-lookup-duplicate-intermediate refuse the flat collision and the duplicate records, and schema-inheritance keeps an unread inherited intermediate out of its run. Moved from execution_declarative_self.rs, whose tests compared the saved artifact, or each issue's phase, condition, rule, spec paths and context; the collision's spec paths are the intermediate's id, then the input, as negative-lookup-id-collision's error.yaml writes them.",
+  "documents": {
+    "child": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n",
+    "aggregate_parent": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: DM\ninput: {DM: dm.csv, EX: {path: ex.csv, key: [ID]}}\noutput: {path: result.csv, columns: [ID, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: DM.ID}\n  - name: RESULT\n    type: date\n    derivation:\n      aggregate:\n        expr: MIN(STDT)\n        derivations:\n          STDT: {type: date, derivation: {to_date: {source: EX.EXSTDTC}}}\n",
+    "collision_parent": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: OBS\ninput: {OBS: obs.csv, REF: ref.csv}\noutput: {path: result.csv, columns: [ID, TRT]}\ncolumns:\n  - {name: ID, type: str, derivation: OBS.ID}\n  - {name: TRT, type: str, derivation: REF.TRT}\n",
+    "verification_parent": "yamaa: \"1.0\"\ntype: spec\ndomain: PV\nkeys: [ID]\ninput: {OBS: obs.csv, REF: ref.csv}\nbase: OBS\nintermediates:\n  - id: REFCHK\n    dataset: REF\n    key: {CODE: CODE}\n    filter: \"REF.KIND = 'X'\"\n    verifications:\n      - unique: [CODE]\noutput: {path: result.csv, columns: [ID, CODE]}\ncolumns:\n  - {name: ID, type: str, derivation: OBS.ID}\n  - {name: CODE, type: str, derivation: OBS.CODE}\n",
+    "unread_parent": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: OBS\ninput: {OBS: obs.csv, UNUSED: absent.csv}\noutput: {path: result.csv, columns: [ID]}\nintermediates:\n  - id: UNREAD\n    dataset: UNUSED\n    key: [ID]\n    require_match: true\n    verifications: []\ncolumns:\n  - {name: ID, type: str, derivation: OBS.ID}\n"
+  },
+  "cases": [
+    {
+      "case": "a_reducer_binding_stays_local_in_the_parent",
+      "operation": "save",
+      "input": {
+        "files": {
+          "dm.csv": "ID\n1\n2\n",
+          "ex.csv": "ID,EXSTDTC\n1,2025-01-05\n1,2025-01-02\n2,2025-02-10\n",
+          "parent.yaml": {"base": "aggregate_parent"},
+          "child.yaml": {"base": "child"}
+        },
+        "specification": "parent.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT\n1,2025-01-02\n2,2025-02-10\n"}
+    },
+    {
+      "case": "a_reducer_binding_stays_local_through_an_empty_child",
+      "operation": "save",
+      "input": {
+        "files": {
+          "dm.csv": "ID\n1\n2\n",
+          "ex.csv": "ID,EXSTDTC\n1,2025-01-05\n1,2025-01-02\n2,2025-02-10\n",
+          "parent.yaml": {"base": "aggregate_parent"},
+          "child.yaml": {"base": "child"}
+        },
+        "specification": "child.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT\n1,2025-01-02\n2,2025-02-10\n"}
+    },
+    {
+      "case": "a_chained_binding_stays_local_in_the_parent",
+      "operation": "save",
+      "input": {
+        "files": {
+          "dm.csv": "ID\n1\n2\n",
+          "ex.csv": "ID,EXSTDTC\n1,2025-01-05\n1,2025-01-02\n2,2025-02-10\n",
+          "parent.yaml": {
+            "base": "aggregate_parent",
+            "edits": [
+              {"from": "    type: date\n", "to": "    type: int\n"},
+              {"from": "MIN(STDT)", "to": "MIN(DAYNUM)"},
+              {"from": "{source: EX.EXSTDTC}}}\n", "to": "{source: EX.EXSTDTC}}}\n          DAYNUM: {type: int, derivation: {to_epoch_day: {source: STDT}}}\n"}
+            ]
+          },
+          "child.yaml": {"base": "child"}
+        },
+        "specification": "parent.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT\n1,20090\n2,20129\n"}
+    },
+    {
+      "case": "a_chained_binding_stays_local_through_an_empty_child",
+      "operation": "save",
+      "input": {
+        "files": {
+          "dm.csv": "ID\n1\n2\n",
+          "ex.csv": "ID,EXSTDTC\n1,2025-01-05\n1,2025-01-02\n2,2025-02-10\n",
+          "parent.yaml": {
+            "base": "aggregate_parent",
+            "edits": [
+              {"from": "    type: date\n", "to": "    type: int\n"},
+              {"from": "MIN(STDT)", "to": "MIN(DAYNUM)"},
+              {"from": "{source: EX.EXSTDTC}}}\n", "to": "{source: EX.EXSTDTC}}}\n          DAYNUM: {type: int, derivation: {to_epoch_day: {source: STDT}}}\n"}
+            ]
+          },
+          "child.yaml": {"base": "child"}
+        },
+        "specification": "child.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT\n1,20090\n2,20129\n"}
+    },
+    {
+      "case": "a_binding_named_as_an_output_column_stays_local_in_the_parent",
+      "operation": "save",
+      "input": {
+        "files": {
+          "dm.csv": "ID\n1\n2\n",
+          "ex.csv": "ID,EXSTDTC\n1,2025-01-05\n1,2025-01-02\n2,2025-02-10\n",
+          "parent.yaml": {
+            "base": "aggregate_parent",
+            "edits": [
+              {"from": "columns: [ID, RESULT]}", "to": "columns: [ID, RESULT, STDT]}"},
+              {"from": "{source: EX.EXSTDTC}}}\n", "to": "{source: EX.EXSTDTC}}}\n  - {name: STDT, type: date, derivation: RESULT}\n"}
+            ]
+          },
+          "child.yaml": {"base": "child"}
+        },
+        "specification": "parent.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT,STDT\n1,2025-01-02,2025-01-02\n2,2025-02-10,2025-02-10\n"}
+    },
+    {
+      "case": "a_binding_named_as_an_output_column_stays_local_through_an_empty_child",
+      "operation": "save",
+      "input": {
+        "files": {
+          "dm.csv": "ID\n1\n2\n",
+          "ex.csv": "ID,EXSTDTC\n1,2025-01-05\n1,2025-01-02\n2,2025-02-10\n",
+          "parent.yaml": {
+            "base": "aggregate_parent",
+            "edits": [
+              {"from": "columns: [ID, RESULT]}", "to": "columns: [ID, RESULT, STDT]}"},
+              {"from": "{source: EX.EXSTDTC}}}\n", "to": "{source: EX.EXSTDTC}}}\n  - {name: STDT, type: date, derivation: RESULT}\n"}
+            ]
+          },
+          "child.yaml": {"base": "child"}
+        },
+        "specification": "child.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT,STDT\n1,2025-01-02,2025-01-02\n2,2025-02-10,2025-02-10\n"}
+    },
+    {
+      "case": "a_reachable_qualifier_collision_is_rejected_in_a_flat_spec",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "obs.csv": "ID\n1\n2\n",
+          "ref.csv": "ID,TRT\n1,DRUG A\n2,DRUG B\n",
+          "parent.yaml": {"base": "collision_parent"},
+          "child.yaml": {
+            "base": "collision_parent",
+            "edits": [
+              {"from": "  - {name: TRT, type: str, derivation: REF.TRT}\n", "to": "  - {name: TRT, type: str, derivation: REF.TRT}\nintermediates:\n  - {id: REF, dataset: REF, key: [ID], filter: \"REF.TRT = 'DRUG A'\", absent: NONE}\n"}
+            ]
+          }
+        },
+        "specification": "child.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "duplicate_identifier", "rule": "LOOKUP-3", "spec_paths": ["intermediates.REF.id", "input.REF"], "context": {"identifier": "REF"}}
+      ]
+    },
+    {
+      "case": "a_reachable_qualifier_collision_is_rejected_in_a_composed_spec",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "obs.csv": "ID\n1\n2\n",
+          "ref.csv": "ID,TRT\n1,DRUG A\n2,DRUG B\n",
+          "parent.yaml": {"base": "collision_parent"},
+          "child.yaml": {
+            "base": "child",
+            "edits": [
+              {"from": "parent: parent.yaml\n", "to": "parent: parent.yaml\nintermediates:\n  - {id: REF, dataset: REF, key: [ID], filter: \"REF.TRT = 'DRUG A'\", absent: NONE}\n"}
+            ]
+          }
+        },
+        "specification": "child.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "duplicate_identifier", "rule": "LOOKUP-3", "spec_paths": ["intermediates.REF.id", "input.REF"], "context": {"identifier": "REF"}}
+      ]
+    },
+    {
+      "case": "an_assertion_only_intermediate_over_unique_records_saves_the_parent",
+      "operation": "save",
+      "input": {
+        "files": {
+          "obs.csv": "ID,CODE\n1,A\n2,B\n",
+          "ref.csv": "CODE,KIND,LABEL\nA,X,Alpha\nB,X,Beta\nB,Y,Beta (Y)\n",
+          "parent.yaml": {"base": "verification_parent"},
+          "child.yaml": {"base": "child"}
+        },
+        "specification": "parent.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,CODE\n1,A\n2,B\n"}
+    },
+    {
+      "case": "an_assertion_only_intermediate_over_unique_records_saves_the_empty_child",
+      "operation": "save",
+      "input": {
+        "files": {
+          "obs.csv": "ID,CODE\n1,A\n2,B\n",
+          "ref.csv": "CODE,KIND,LABEL\nA,X,Alpha\nB,X,Beta\nB,Y,Beta (Y)\n",
+          "parent.yaml": {"base": "verification_parent"},
+          "child.yaml": {"base": "child"}
+        },
+        "specification": "child.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,CODE\n1,A\n2,B\n"}
+    },
+    {
+      "case": "a_read_intermediate_over_unique_records_saves_the_parent",
+      "operation": "save",
+      "input": {
+        "files": {
+          "obs.csv": "ID,CODE\n1,A\n2,B\n",
+          "ref.csv": "CODE,KIND,LABEL\nA,X,Alpha\nB,X,Beta\nB,Y,Beta (Y)\n",
+          "parent.yaml": {
+            "base": "verification_parent",
+            "edits": [
+              {"from": "columns: [ID, CODE]}", "to": "columns: [ID, CODE, LABEL]}"},
+              {"from": "  - {name: CODE, type: str, derivation: OBS.CODE}\n", "to": "  - {name: CODE, type: str, derivation: OBS.CODE}\n  - {name: LABEL, type: str, derivation: REFCHK.LABEL}\n"}
+            ]
+          },
+          "child.yaml": {"base": "child"}
+        },
+        "specification": "parent.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,CODE,LABEL\n1,A,Alpha\n2,B,Beta\n"}
+    },
+    {
+      "case": "a_read_intermediate_over_unique_records_saves_the_empty_child",
+      "operation": "save",
+      "input": {
+        "files": {
+          "obs.csv": "ID,CODE\n1,A\n2,B\n",
+          "ref.csv": "CODE,KIND,LABEL\nA,X,Alpha\nB,X,Beta\nB,Y,Beta (Y)\n",
+          "parent.yaml": {
+            "base": "verification_parent",
+            "edits": [
+              {"from": "columns: [ID, CODE]}", "to": "columns: [ID, CODE, LABEL]}"},
+              {"from": "  - {name: CODE, type: str, derivation: OBS.CODE}\n", "to": "  - {name: CODE, type: str, derivation: OBS.CODE}\n  - {name: LABEL, type: str, derivation: REFCHK.LABEL}\n"}
+            ]
+          },
+          "child.yaml": {"base": "child"}
+        },
+        "specification": "child.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,CODE,LABEL\n1,A,Alpha\n2,B,Beta\n"}
+    },
+    {
+      "case": "an_assertion_only_intermediate_s_duplicate_records_fail_the_parent",
+      "operation": "save",
+      "input": {
+        "files": {
+          "obs.csv": "ID,CODE\n1,A\n2,B\n",
+          "ref.csv": "CODE,KIND,LABEL\nA,X,Alpha\nA,X,Alpha again\nB,X,Beta\nB,Y,Beta (Y)\n",
+          "parent.yaml": {"base": "verification_parent"},
+          "child.yaml": {"base": "child"}
+        },
+        "specification": "parent.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "verification", "condition": "duplicate_intermediate_records", "rule": "LOOKUP-17", "spec_paths": ["intermediates.REFCHK.verifications[0].unique"], "context": {"columns": ["CODE"], "dataset": "REF", "duplicate_count": 1, "intermediate": "REFCHK"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "assertion_only_intermediate_keeps_its_check_through_inheritance",
+      "operation": "save",
+      "input": {
+        "files": {
+          "obs.csv": "ID,CODE\n1,A\n2,B\n",
+          "ref.csv": "CODE,KIND,LABEL\nA,X,Alpha\nA,X,Alpha again\nB,X,Beta\nB,Y,Beta (Y)\n",
+          "parent.yaml": {"base": "verification_parent"},
+          "child.yaml": {"base": "child"}
+        },
+        "specification": "child.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "verification", "condition": "duplicate_intermediate_records", "rule": "LOOKUP-17", "spec_paths": ["intermediates.REFCHK.verifications[0].unique"], "context": {"columns": ["CODE"], "dataset": "REF", "duplicate_count": 1, "intermediate": "REFCHK"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_read_intermediate_s_duplicate_records_fail_the_parent",
+      "operation": "save",
+      "input": {
+        "files": {
+          "obs.csv": "ID,CODE\n1,A\n2,B\n",
+          "ref.csv": "CODE,KIND,LABEL\nA,X,Alpha\nA,X,Alpha again\nB,X,Beta\nB,Y,Beta (Y)\n",
+          "parent.yaml": {
+            "base": "verification_parent",
+            "edits": [
+              {"from": "columns: [ID, CODE]}", "to": "columns: [ID, CODE, LABEL]}"},
+              {"from": "  - {name: CODE, type: str, derivation: OBS.CODE}\n", "to": "  - {name: CODE, type: str, derivation: OBS.CODE}\n  - {name: LABEL, type: str, derivation: REFCHK.LABEL}\n"}
+            ]
+          },
+          "child.yaml": {"base": "child"}
+        },
+        "specification": "parent.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "verification", "condition": "duplicate_intermediate_records", "rule": "LOOKUP-17", "spec_paths": ["intermediates.REFCHK.verifications[0].unique"], "context": {"columns": ["CODE"], "dataset": "REF", "duplicate_count": 1, "intermediate": "REFCHK"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_read_intermediate_s_duplicate_records_fail_the_empty_child",
+      "operation": "save",
+      "input": {
+        "files": {
+          "obs.csv": "ID,CODE\n1,A\n2,B\n",
+          "ref.csv": "CODE,KIND,LABEL\nA,X,Alpha\nA,X,Alpha again\nB,X,Beta\nB,Y,Beta (Y)\n",
+          "parent.yaml": {
+            "base": "verification_parent",
+            "edits": [
+              {"from": "columns: [ID, CODE]}", "to": "columns: [ID, CODE, LABEL]}"},
+              {"from": "  - {name: CODE, type: str, derivation: OBS.CODE}\n", "to": "  - {name: CODE, type: str, derivation: OBS.CODE}\n  - {name: LABEL, type: str, derivation: REFCHK.LABEL}\n"}
+            ]
+          },
+          "child.yaml": {"base": "child"}
+        },
+        "specification": "child.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "verification", "condition": "duplicate_intermediate_records", "rule": "LOOKUP-17", "spec_paths": ["intermediates.REFCHK.verifications[0].unique"], "context": {"columns": ["CODE"], "dataset": "REF", "duplicate_count": 1, "intermediate": "REFCHK"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "empty_intermediate_verifications_do_not_keep_an_unread_lookup_or_input_live",
+      "operation": "save",
+      "input": {
+        "files": {"obs.csv": "ID\n1\n2\n", "parent.yaml": {"base": "unread_parent"}, "child.yaml": {"base": "child"}},
+        "specification": "child.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID\n1\n2\n"}
+    }
+  ]
+}
