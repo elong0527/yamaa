@@ -18,7 +18,7 @@
 //! whole. A case whose test found its issues by their cause among others
 //! says `among`: each row equals a distinct reported issue, in any order, and
 //! the issues no row names are not compared. Nothing a test did not compare
-//! is filled in. Core's replay reads `compares` and `among` alike.
+//! is filled in. These are the `compares` and `among` core's replay reads.
 //!
 //! An input's files are written to a fresh study directory: a file is its
 //! text, or a document of the fixture's `documents` taken by name (`base`)
@@ -110,6 +110,10 @@ pub fn cases() -> Vec<Case> {
                 Some(other) => panic!("{label}: among is written only as true, not {other:?}"),
             };
             let issues = items(field(case, "issues"));
+            assert!(
+                !(among && issues.is_empty()),
+                "{label}: a case found among the issues names at least one"
+            );
             if let Some(fields) = &compares {
                 for issue in issues {
                     held_alone(issue, fields, &label);
