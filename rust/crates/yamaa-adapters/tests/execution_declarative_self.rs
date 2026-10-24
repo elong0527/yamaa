@@ -90,6 +90,10 @@ rows:
       SEQ: 9
       V: "P.V + 100"
 "#;
+        /// No benchmark's grouped row template reads a SELF intermediate
+        /// directly (`negative-self-window-first-template`'s grouped
+        /// `followup` reads one through a `between` value, in a run refused
+        /// earlier), and none pins the handler ledger of SELF reads.
         #[test]
         fn completed_templates_are_borrowed_and_republished_in_construction_order() {
             let fixture = Fixture::new();
@@ -115,6 +119,10 @@ rows:
             // The two third-template records both see completed value 15, never 115
             // from the first unfinished third-template record. The column sees all five.
         }
+        /// No benchmark's first template reads a SELF intermediate directly
+        /// in a derivation: `negative-self-window-first-template` reads one
+        /// through a `between` value, and `negative-self-filter-first-template`
+        /// in a filter.
         #[test]
         fn first_template_read_preserves_full_phase_context_before_study_access() {
             let fixture = Fixture::new();
@@ -129,6 +137,8 @@ rows:
             );
             assert!(!fixture.0.join("src.csv").exists());
         }
+        /// No benchmark refuses a later template's read of a column that the
+        /// SELF records do not carry (LOOKUP-11).
         #[test]
         fn column_only_donor_is_unavailable_to_later_templates() {
             let fixture = Fixture::new();
@@ -144,6 +154,8 @@ rows:
                 })]
             );
         }
+        /// No benchmark's later template reads through SELF a first template
+        /// that built no row.
         #[test]
         fn empty_completed_template_uses_literal_absence_in_later_templates() {
             let fixture = Fixture::new();
@@ -172,6 +184,8 @@ rows:
             );
         }
 
+        /// No benchmark declares an input named SELF, or a SELF intermediate
+        /// without row templates.
         #[test]
         fn reserved_input_collision_and_missing_row_phase_are_refused_before_study_access() {
             let fixture = Fixture::new();
@@ -202,6 +216,8 @@ rows:
             assert!(!fixture.0.join("src.csv").exists());
         }
 
+        /// No benchmark's first template reads a SELF intermediate in a case
+        /// result.
         #[test]
         fn hidden_first_template_alternative_preserves_its_authored_phase_path() {
             let fixture = Fixture::new();
@@ -216,6 +232,8 @@ rows:
             );
         }
 
+        /// No benchmark's first template reads a SELF intermediate in a
+        /// `first_available` source.
         #[test]
         fn hidden_first_template_first_available_source_preserves_its_authored_phase_path() {
             let fixture = Fixture::new();
@@ -233,6 +251,8 @@ rows:
             );
         }
 
+        /// No benchmark's first template reads a SELF intermediate in an
+        /// aggregate.
         #[test]
         fn aggregate_first_template_proof_keeps_full_references_including_record_star() {
             for (replacement, identifier, path) in [
@@ -267,6 +287,8 @@ rows:
             }
         }
 
+        /// No benchmark declares a base that builds no row beside a column
+        /// aggregate over a keyed input.
         #[test]
         fn donor_qualified_global_aggregate_does_not_require_the_primary_row_driver() {
             let fixture = Fixture::new();
@@ -304,6 +326,7 @@ columns:
             );
         }
 
+        /// No benchmark's mapping or cut reads a SELF donor field.
         #[test]
         fn mapping_and_cut_read_completed_self_donor_types() {
             for operation in [
@@ -325,6 +348,8 @@ columns:
             }
         }
 
+        /// No benchmark's first template reads a SELF intermediate in a
+        /// mapping or a cut.
         #[test]
         fn first_template_mapping_and_cut_self_reads_fail_before_study_access() {
             for operation in [
@@ -388,6 +413,11 @@ rows:
     dataset: SRC
     derivations: {SECTION: "'second'", WINDOW: W2.NAME}
 "#;
+        /// `negative-self-window-first-template` refuses a first template's
+        /// read through one `between` value, and its `error.yaml` states the
+        /// first issue; what no benchmark pins is that the refusal is the
+        /// run's only issue, a read through two windows, and one in a case
+        /// predicate.
         #[test]
         fn first_template_reads_through_between_values_fail_before_study_access() {
             for (window, paths) in [
@@ -430,6 +460,12 @@ rows:
         }
         /// The first template's row filter reads for its own rows, before any
         /// row is complete, directly or through `between` values (LOOKUP-7).
+        /// `negative-self-filter-first-template` refuses the direct read, and
+        /// its `error.yaml` states the first issue; what no benchmark pins is
+        /// that the refusal is the run's only issue, the reads through
+        /// `between` values, and the grouped first template's refusal
+        /// (ROW-6). `adam-advs-windows` reads the completed rows in a later
+        /// template's filter.
         #[test]
         fn first_template_filter_reads_of_self_fail_before_study_access() {
             let filtered = |filter: &str| {
@@ -484,24 +520,14 @@ rows:
                     "context":{"identifier":"P.DAY","row":"first","available_phase":"row_construction","required_phase":"grouped_row_filter"}
                 })]
             );
-            // In a later template the filter reads the completed first rows:
-            // each second-template row is kept only when its subject has no
-            // first-template row, so none is.
-            let fixture = Fixture::new();
-            fs::write(fixture.0.join("src.csv"), "ID,DAY\na,3\nb,12\n").unwrap();
-            fs::write(fixture.0.join("win.csv"), "ID,LO,HI,NAME\na,1,5,early\n").unwrap();
-            let later = WINDOWS.edit(
-                "  - id: second\n    dataset: SRC\n",
-                "  - id: second\n    dataset: SRC\n    filter: \"P.DAY IS NULL\"\n",
-            );
-            let mut result = fixture.run(&later).unwrap();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read_to_string(fixture.0.join("result.csv")).unwrap(),
-                "ID,SECTION,DAY,WINDOW\na,first,3,none\nb,first,12,none\n"
-            );
+            // In a later template the filter reads the completed rows:
+            // `adam-advs-windows` keeps an expected record only for a window
+            // that no collected record covers.
+            crate::support::benchmarks::reproduce("adam-advs-windows");
         }
+        /// No benchmark builds a later template that reads SELF through a
+        /// `between` value: the only one, `negative-self-window-first-template`'s
+        /// grouped `followup`, is in a run refused earlier.
         #[test]
         fn later_templates_read_completed_rows_through_between_values() {
             let fixture = Fixture::new();
@@ -699,15 +725,24 @@ rows:
             }
         }
 
+        /// Each case is an authored complete result, its typed table, issues,
+        /// handler ledger, capture order and retained save, which no benchmark
+        /// states.
         #[test]
         fn every_source_selection_case_keeps_exact_types_diagnostics_counts_and_saved_bytes() {
             verify_truth(include_str!("fixtures/source_selection.json"));
         }
+        /// Each case is an authored complete result, its typed table, issues,
+        /// handler ledger, capture order and retained save, which no benchmark
+        /// states.
         #[test]
         fn group_key_filters_have_complete_normative_findings_and_record_controls() {
             verify_truth(include_str!("fixtures/source_filter_scope.json"));
         }
 
+        /// Each case is an authored complete result, its typed table, issues,
+        /// handler ledger, capture order and retained save, which no benchmark
+        /// states.
         #[test]
         fn mixed_grouped_and_record_templates_preserve_only_shared_group_key_scalars() {
             verify_truth(include_str!("fixtures/source_filter_mixed.json"));
@@ -727,6 +762,9 @@ rows:
                 .map(crate::support::study::issue_row)
                 .collect()
         }
+        /// Reads the shared host-fixture family `diagnostic_sites`: authored
+        /// refusals, checked before and after their inputs exist, that no
+        /// benchmark states.
         #[test]
         fn unknown_references_preserve_original_identifiers_and_dataset_context() {
             let truth: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
@@ -861,6 +899,9 @@ rows:
             assert_eq!(child, parent, "{benchmark} empty child first issue");
         }
 
+        /// Reads `negative-odm-context`; no benchmark builds an empty child:
+        /// the one empty layer, `negative-cyclic-parent`'s
+        /// `layers/parent.yaml`, sits in a refused cycle.
         #[test]
         fn empty_child_of_negative_odm_context_reports_invalid_odm_context() {
             assert_empty_child_matches_parent(
@@ -869,6 +910,9 @@ rows:
             );
         }
 
+        /// Reads `negative-review-unknown-date`; no benchmark builds an empty
+        /// child: the one empty layer, `negative-cyclic-parent`'s
+        /// `layers/parent.yaml`, sits in a refused cycle.
         #[test]
         fn empty_child_of_negative_review_unknown_date_reports_unknown_field() {
             assert_empty_child_matches_parent(
@@ -877,6 +921,9 @@ rows:
             );
         }
 
+        /// Reads `negative-lookup-mismatched`; no benchmark builds an empty
+        /// child: the one empty layer, `negative-cyclic-parent`'s
+        /// `layers/parent.yaml`, sits in a refused cycle.
         #[test]
         fn empty_child_of_negative_lookup_mismatched_reports_unknown_field() {
             assert_empty_child_matches_parent(
@@ -887,7 +934,10 @@ rows:
 
         /// The child orders its columns before binding (LAYER-13), and an
         /// unbound reducer name of an aggregate with bindings is no column
-        /// that ordering could miss (#3593).
+        /// that ordering could miss (#3593). Reads
+        /// `negative-aggregate-unbound-variable`; no benchmark builds an empty
+        /// child: the one empty layer, `negative-cyclic-parent`'s
+        /// `layers/parent.yaml`, sits in a refused cycle.
         #[test]
         fn empty_child_of_negative_aggregate_unbound_variable_reports_unknown_derive_variable() {
             assert_empty_child_matches_parent(
@@ -923,6 +973,9 @@ rows:
                 .unwrap()
             }
         }
+        /// No benchmark composes an aggregate's bindings through an empty
+        /// child: the one empty layer, `negative-cyclic-parent`'s
+        /// `layers/parent.yaml`, sits in a refused cycle.
         #[test]
         fn reducer_and_chained_binding_names_do_not_become_global_column_dependencies() {
             for (chained, collision) in [(false, false), (true, false), (false, true)] {
@@ -1038,6 +1091,9 @@ rows:
                 built
             }
         }
+        /// `negative-lookup-id-collision` refuses the flat collision; no
+        /// benchmark composes it through a child, nor compares the check
+        /// route's findings with the build's.
         #[test]
         fn a_reachable_qualifier_collision_is_rejected_in_flat_and_composed_specs() {
             for inherited in [false, true] {
@@ -1108,6 +1164,9 @@ rows:
 
         const PARENT_HEAD: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: PV\nkeys: [ID]\ninput: {OBS: obs.csv, REF: ref.csv}\nbase: OBS\nintermediates:\n  - id: REFCHK\n    dataset: REF\n    key: {CODE: CODE}\n    filter: \"REF.KIND = 'X'\"\n    verifications:\n      - unique: [CODE]\n";
 
+        /// `negative-lookup-duplicate-intermediate` refuses an intermediate's
+        /// duplicate records in a flat specification; no benchmark's child
+        /// inherits an intermediate whose only use is its verification.
         #[test]
         fn assertion_only_intermediate_keeps_its_check_through_inheritance() {
             // `read` adds a column that reads the intermediate; the failure must be
@@ -1231,36 +1290,36 @@ rows:
             }
         }
 
+        /// In `schema-inheritance`, an inherited intermediate that nothing
+        /// reads, and that requires a match over an input with no file,
+        /// stays out of the run; no benchmark declares one with empty
+        /// `verifications`.
         #[test]
         fn empty_intermediate_verifications_do_not_keep_an_unread_lookup_or_input_live() {
-            for verifications in ["", "    verifications: []\n"] {
-                let fixture = Fixture::new();
-                fs::write(fixture.0.join("obs.csv"), "ID\n1\n2\n").unwrap();
-                fs::write(
-            fixture.0.join("parent.yaml"),
-            format!(
-                "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: OBS\ninput: {{OBS: obs.csv, UNUSED: absent.csv}}\noutput: {{path: result.csv, columns: [ID]}}\nintermediates:\n  - id: UNREAD\n    dataset: UNUSED\n    key: [ID]\n    require_match: true\n{verifications}columns:\n  - {{name: ID, type: str, derivation: OBS.ID}}\n"
-            ),
-        )
-        .unwrap();
-                fs::write(
-                    fixture.0.join("child.yaml"),
-                    "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n",
-                )
-                .unwrap();
-                let mut result = fixture.build("child.yaml");
-                assert!(
-                    result.issues().is_empty(),
-                    "{verifications:?}: {:?}",
-                    result.issues()
-                );
-                assert!(result.save().unwrap());
-                assert_eq!(
-                    fs::read_to_string(fixture.0.join("result.csv")).unwrap(),
-                    "ID\n1\n2\n"
-                );
-                assert!(!fixture.0.join("absent.csv").exists());
-            }
+            crate::support::benchmarks::reproduce("schema-inheritance");
+            let verifications = "    verifications: []\n";
+            let fixture = Fixture::new();
+            fs::write(fixture.0.join("obs.csv"), "ID\n1\n2\n").unwrap();
+            fs::write(
+                fixture.0.join("parent.yaml"),
+                format!(
+                    "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: OBS\ninput: {{OBS: obs.csv, UNUSED: absent.csv}}\noutput: {{path: result.csv, columns: [ID]}}\nintermediates:\n  - id: UNREAD\n    dataset: UNUSED\n    key: [ID]\n    require_match: true\n{verifications}columns:\n  - {{name: ID, type: str, derivation: OBS.ID}}\n"
+                ),
+            )
+            .unwrap();
+            fs::write(
+                fixture.0.join("child.yaml"),
+                "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n",
+            )
+            .unwrap();
+            let mut result = fixture.build("child.yaml");
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert!(result.save().unwrap());
+            assert_eq!(
+                fs::read_to_string(fixture.0.join("result.csv")).unwrap(),
+                "ID\n1\n2\n"
+            );
+            assert!(!fixture.0.join("absent.csv").exists());
         }
     }
     mod inherited_lookup_keys {
@@ -1298,6 +1357,9 @@ rows:
                 .unwrap()
             }
         }
+        /// No benchmark composes lookup and aggregate keys through an empty
+        /// child: the one empty layer, `negative-cyclic-parent`'s
+        /// `layers/parent.yaml`, sits in a refused cycle.
         #[test]
         fn lookup_and_aggregate_keys_survive_pruning_in_plain_case_and_row_derivations() {
             for key in ["[CODE]", "{CODE: CODE}"] {
@@ -1425,6 +1487,9 @@ rows:
             assert!(!fixture.0.join("out.csv").exists());
         }
 
+        /// No benchmark refuses an integer literal beyond 64 bits in either
+        /// host route: `negative-integer-overflow` overflows a product while
+        /// the run derives it.
         #[test]
         fn wide_runtime_literals_report_validation_before_missing_study_input() {
             let huge = format!("1{}", "0".repeat(400));
@@ -1452,6 +1517,8 @@ rows:
             }
         }
 
+        /// No benchmark refuses a wide literal in a row template or in an
+        /// unselected case branch, directly or through a child.
         #[test]
         fn row_and_unselected_case_literals_keep_their_authored_paths() {
             let wide = "9223372036854775808";
@@ -1474,6 +1541,8 @@ rows:
             assert_overflow(&case, "columns.N.derivation.case[0].then", wide);
         }
 
+        /// No benchmark writes the 64-bit integer endpoints, a hexadecimal
+        /// literal, or a wide number quoted as text or written as a float.
         #[test]
         fn integer_endpoints_quoted_identifiers_and_explicit_floats_still_build() {
             for (kind, written, expected) in [
@@ -1520,6 +1589,7 @@ rows:
             }
         }
 
+        /// No benchmark bounds a row count beyond 64 bits.
         #[test]
         fn wide_mathematical_count_bounds_still_check_and_build() {
             for maximum in [
@@ -1567,6 +1637,9 @@ rows:
                 .map(crate::support::study::issue_row)
                 .collect()
         }
+        /// Reads the shared host-fixture family `intermediate_dependencies`:
+        /// authored cycles and forward reads, checked before and after their
+        /// inputs exist, that no benchmark states.
         #[test]
         fn cyclic_donor_reads_preserve_original_findings_and_forward_dependencies_execute() {
             let truth: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
@@ -1678,6 +1751,9 @@ rows:
                 .map(crate::support::study::issue_row)
                 .collect::<Vec<_>>())
         }
+        /// Reads the shared host-fixture family `intermediate_row_drivers`:
+        /// authored row drivers over named intermediates, with their check
+        /// route, that no benchmark states.
         #[test]
         fn source_only_named_row_drivers_preserve_lookup_key_admission() {
             let truth: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
@@ -1766,6 +1842,9 @@ rows:
                 .map(crate::support::study::issue_row)
                 .collect()
         }
+        /// Reads the shared host-fixture family `key_expressions`: authored
+        /// expression keys, with their check route, handler ledgers and saved
+        /// bytes, that no benchmark states.
         #[test]
         fn scalar_and_window_keys_reuse_current_operands_types_handlers_and_independent_saved_truth(
         ) {
@@ -1902,6 +1981,10 @@ rows:
             }
         }
 
+        /// `negative-path-missing` and `negative-path-directory` refuse one
+        /// missing input and a directory in an input's place; no benchmark
+        /// meets either beside an ill-typed filter or an output declaration
+        /// fault left for a later checkpoint, nor reports two inputs at once.
         #[test]
         fn missing_sources_keep_filter_types_but_other_resource_and_output_checkpoints_stay_separate(
         ) {
@@ -1984,6 +2067,9 @@ rows:
 
         struct Fixture(crate::support::Scratch);
 
+        /// Reads the shared host-fixture family `namespace_admission`:
+        /// authored namespace refusals, compared between the check route and
+        /// the build, that no benchmark states.
         #[test]
         fn authored_namespace_refusals_precede_build_and_source_access() {
             let truth: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
@@ -2081,6 +2167,7 @@ rows:
                 fs::read_to_string(self.0.join("out.csv")).unwrap()
             }
         }
+        /// No benchmark nests a window operation in a case result.
         #[test]
         fn nested_case_windows_use_the_full_completed_context() {
             let study = Study::new(
@@ -2117,6 +2204,8 @@ output: {path: out.csv, columns: [I, N, C]}
                 "I,N,C\n1,-1,prior=skip\n2,1,prior=skip\n3,3,prior=a2\n4,1,prior=skip\n"
             );
         }
+        /// No benchmark nests a window operation in a row template's case
+        /// result.
         #[test]
         fn nested_windows_remain_template_local_and_observe_pre_window_row_filtering() {
             let study = Study::new(
@@ -2147,39 +2236,18 @@ output: {path: out.csv, columns: [T, I, N]}
             );
             assert_eq!(study.saved(), "T,I,N\nA,1,2\nA,2,1\nA,3,3\nB,2,1\nB,3,2\n");
         }
+        /// `adam-adlb-bds` keys its rows by `ASEQ`, a column window over the
+        /// rows of three filtered templates ordered by the `PARAMCD` each
+        /// template derives, and `sdtm-dm-race-ethnicity` keys `SUPPDM` by
+        /// `QNAM`, a `str_template` over a column copied from a window.
         #[test]
         fn output_key_template_keeps_transitive_window_defaults_over_all_constructed_rows() {
-            let study = Study::new(
-                "I\n1\n2\n3\n",
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [T, K]
-input: {SRC: {path: input.csv, types: {I: int}}}
-columns:
-  - {name: T, type: str}
-  - {name: I, type: int, derivation: SRC.I}
-  - name: N
-    type: int
-    derivation: {row_number: {window: {order_by: [T, I]}}}
-  - {name: NC, type: str, derivation: N}
-  - {name: K, type: str, derivation: {str_template: 'R{NC}'}}
-rows:
-  - id: first
-    dataset: SRC
-    derivations: {T: "'A'"}
-  - id: second
-    dataset: SRC
-    filter: 'SRC.I > 1'
-    derivations: {T: "'B'"}
-output: {path: out.csv, columns: [T, K, I, N]}
-"#,
-            );
-            assert_eq!(
-                study.saved(),
-                "T,K,I,N\nA,R1,1,1\nA,R2,2,2\nA,R3,3,3\nB,R4,2,4\nB,R5,3,5\n"
-            );
+            for benchmark in ["adam-adlb-bds", "sdtm-dm-race-ethnicity"] {
+                crate::support::benchmarks::reproduce(benchmark);
+            }
         }
+        /// No benchmark nests `baseline_flag` in a case result, reached or
+        /// not.
         #[test]
         fn unreachable_window_branch_has_no_runtime_failure_but_reached_branch_retains_it() {
             let specification = r#"yamaa: "1.0"
@@ -2212,6 +2280,7 @@ output: {path: out.csv, columns: [I, B]}
                 .iter()
                 .any(|path| path.contains("case[0].then.baseline_flag")));
         }
+        /// No benchmark offsets `row_value` beyond 64 bits.
         #[test]
         fn arbitrary_width_window_offsets_select_absent_neighbors_without_float_conversion() {
             let study = Study::new(
@@ -2236,6 +2305,7 @@ output: {path: out.csv, columns: [I, BEFORE, AFTER]}
             assert_eq!(study.saved(), "I,BEFORE,AFTER\n1,,\n2,,\n");
         }
 
+        /// No benchmark nests a grouped `baseline_flag` in a case result.
         #[test]
         fn selected_window_partition_does_not_evaluate_unselected_partition_failures() {
             let study = Study::new(
@@ -2346,6 +2416,7 @@ output: {path: out.csv, columns: [I, B]}
             })
         }
 
+        /// No benchmark reads a named window in a row template.
         #[test]
         fn shared_named_window_is_evaluated_in_each_filtered_row_template() {
             let study = Study::new();
@@ -2371,6 +2442,7 @@ output: {path: out.csv, columns: [I, B]}
             assert_eq!(study.saved(), "ID,PREV\n01,\n02,10\n03,\n04,30\n");
         }
 
+        /// No benchmark's child replaces a named window reference.
         #[test]
         fn replacing_named_selection_with_inline_or_another_name_is_atomic() {
             for replacement in [json!("OTHER"), json!({"order_by":["VAL"]})] {
@@ -2392,6 +2464,9 @@ output: {path: out.csv, columns: [I, B]}
             }
         }
 
+        /// `negative-unknown-window` refuses a misspelled window name; no
+        /// benchmark's child clears the definitions a surviving reference
+        /// names.
         #[test]
         fn clearing_named_definitions_rejects_the_surviving_reference_before_input_access() {
             let study = Study::new();
@@ -2412,7 +2487,8 @@ output: {path: out.csv, columns: [I, B]}
 
         /// A named window keeps each operation's restrictions where it is
         /// expanded: a `row_number` over a window without `order_by` is refused
-        /// (WINDOW-5).
+        /// (WINDOW-5). `negative-locf-no-order` refuses an inline window
+        /// without one; no benchmark refuses a named window for it.
         #[test]
         fn named_expansion_preserves_each_operations_window_restrictions() {
             let study = Study::new();
@@ -2495,6 +2571,7 @@ output: {path: out.csv, columns: [I, B]}
             ])
         }
 
+        /// No benchmark bounds the row count fraction of an empty artifact.
         #[test]
         fn fractional_row_count_on_an_empty_artifact_is_zero() {
             for (bound, passes) in [
@@ -2529,6 +2606,9 @@ output: {path: out.csv, columns: [I, B]}
             }
         }
 
+        /// No benchmark's assertion fails a row whose `require` is unknown:
+        /// the rows the `assert_failed` benchmarks report fail a comparison
+        /// of present values.
         #[test]
         fn assertion_when_exempts_false_and_unknown_rows_but_require_must_be_true() {
             let study = Study::new();
@@ -2573,6 +2653,9 @@ output: {path: out.csv, columns: [I, B]}
                 .map(crate::support::study::issue_row)
                 .collect::<Vec<_>>())
         }
+        /// Reads the shared host-fixture family `predicate_suggestions`:
+        /// authored suggestions and unknown names, with their check route,
+        /// that no benchmark states.
         #[test]
         fn original_predicate_suggestions_preserve_scopes_and_unknown_names() {
             let truth: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
@@ -2661,6 +2744,10 @@ output: {path: out.csv, columns: [I, B]}
             }
         }
 
+        /// `schema-ordering`, `adam-adae-review-order` and
+        /// `adam-adae-serious-sequence` place missing values in output and
+        /// window order; no benchmark's window declares `nulls: first` under
+        /// `desc`.
         #[test]
         fn windows_and_presentation_sort_an_undeclared_missing_value_lowest() {
             let specification = r#"yamaa: "1.0"
@@ -2702,6 +2789,8 @@ output: {path: out.csv, columns: [I, D, ASC, DESC, LAST, FIRST], order_by: [D]}
             );
         }
 
+        /// No benchmark's structured source orders by `desc`:
+        /// `adam-adsl-crossover-periods`'s declares `nulls: last` alone.
         #[test]
         fn source_and_lookup_selection_sort_an_undeclared_missing_value_lowest() {
             let study = Study::new(

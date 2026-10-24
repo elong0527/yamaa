@@ -12,6 +12,10 @@ mod execution {
                 value::{Value, ValueType},
             };
 
+            /// A unit seam no benchmark reaches: the diagnostic projection of
+            /// an `ExecutionError` borrows a host payload with neither `Debug`
+            /// nor `Clone`, keeps every identity, key and partition, and
+            /// leaves the host's error where it was.
             #[test]
             fn borrowed_failure_projection_retains_every_identity_key_partition_and_host_payload() {
                 // Projection compiles for a payload with neither Debug nor Clone.
