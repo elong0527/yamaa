@@ -1,9 +1,0 @@
-{
-  "phase": "validation",
-  "condition": "integer_overflow",
-  "rule": "VALUE-5",
-  "context": {
-    "minimum": -9223372036854775808,
-    "maximum": 9223372036854775807
-  }
-}

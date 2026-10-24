@@ -88,11 +88,20 @@ pub enum ArithmeticErrorKind {
     },
     DivisionByZero,
     SqrtOfNegative,
-    LnOfNonpositive,
+    /// A logarithm of a zero or negative argument, naming the function or
+    /// reducer that takes it as FORMULA-13 or FORMULA-18 spells it.
+    LnOfNonpositive {
+        function: &'static str,
+    },
     /// Promoted finite arguments retained as exact bits for future diagnostic transport.
     InvalidPower {
         base_bits: u64,
         exponent_bits: u64,
+    },
+    /// `NORM_INV` of a promoted argument outside the open interval (0, 1),
+    /// retained as exact bits.
+    InvalidProbability {
+        value_bits: u64,
     },
 }
 
@@ -277,15 +286,34 @@ pub fn sqrt(number: Number, expression: &str) -> Result<Number, ArithmeticError>
     Ok(Number::float(libm::sqrt(value)))
 }
 
-/// Portable unary math from pinned libm; this is not platform-Python bit parity.
+/// Portable unary math (FORMULA-13): the pinned libm, or a named algorithm
+/// over it, the same binary64 operations on every platform; this is not
+/// platform-Python bit parity.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MathFunction {
     Exp,
     Ln,
+    Log10,
+    NormCdf,
+    NormInv,
 }
 
-/// Apply the explicitly selected portable math policy (FORMULA-14, FORMULA-15 and VALUE-10).
-/// Promote before math, propagate missing, and normalize overflow to missing.
+impl MathFunction {
+    /// The FORMULA-13 spelling a domain failure names.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Exp => "EXP",
+            Self::Ln => "LN",
+            Self::Log10 => "LOG10",
+            Self::NormCdf => "NORM_CDF",
+            Self::NormInv => "NORM_INV",
+        }
+    }
+}
+
+/// Apply the explicitly selected portable math policy (FORMULA-13 to FORMULA-15
+/// and VALUE-10). Promote before math, propagate missing before the domain
+/// checks, and normalize overflow to missing.
 pub fn math(
     function: MathFunction,
     number: Number,
@@ -294,16 +322,134 @@ pub fn math(
     let Some(value) = number.as_float() else {
         return Ok(Number::Missing);
     };
-    if function == MathFunction::Ln && value <= 0.0 {
+    let refused = match function {
+        MathFunction::Ln | MathFunction::Log10 if value <= 0.0 => {
+            Some(ArithmeticErrorKind::LnOfNonpositive {
+                function: function.name(),
+            })
+        }
+        // 0 and 1 too: their quantiles are infinite.
+        MathFunction::NormInv if value <= 0.0 || value >= 1.0 => {
+            Some(ArithmeticErrorKind::InvalidProbability {
+                value_bits: value.to_bits(),
+            })
+        }
+        _ => None,
+    };
+    if let Some(kind) = refused {
         return Err(ArithmeticError {
             expression: expression.into(),
-            kind: ArithmeticErrorKind::LnOfNonpositive,
+            kind,
         });
     }
     Ok(Number::float(match function {
         MathFunction::Exp => libm::exp(value),
         MathFunction::Ln => libm::log(value),
+        MathFunction::Log10 => libm::log10(value),
+        MathFunction::NormCdf => 0.5 * libm::erfc(-value / std::f64::consts::SQRT_2),
+        MathFunction::NormInv => normal_quantile(value),
     }))
+}
+
+/// Wichura's algorithm AS 241, PPND16 (Applied Statistics 37(3), 1988,
+/// 477-484): the standard normal quantile of `p` in the open interval (0, 1),
+/// accurate to about 1 part in 10^16, as FORMULA-13 states it. Each
+/// polynomial holds the published coefficients from degree 0 to 7 and is
+/// evaluated by Horner's rule from degree 7, each step one binary64
+/// operation, with the pinned `log` and `sqrt`. The coefficients keep the
+/// paper's digits, so the transcription reads against it; each literal is
+/// the binary64 value nearest them.
+#[allow(clippy::excessive_precision)]
+fn normal_quantile(p: f64) -> f64 {
+    // Near 0.5: q * A(r) / B(r), r = 0.180625 - q * q.
+    const A: [f64; 8] = [
+        3.387_132_872_796_366_608,
+        1.331_416_678_917_843_774_5e2,
+        1.971_590_950_306_551_442_7e3,
+        1.373_169_376_550_946_112_5e4,
+        4.592_195_393_154_987_145_7e4,
+        6.726_577_092_700_870_085_3e4,
+        3.343_057_558_358_812_810_5e4,
+        2.509_080_928_730_122_672_7e3,
+    ];
+    const B: [f64; 8] = [
+        1.0,
+        4.231_333_070_160_091_125_2e1,
+        6.871_870_074_920_579_083e2,
+        5.394_196_021_424_751_107_7e3,
+        2.121_379_430_158_659_586_7e4,
+        3.930_789_580_009_271_061e4,
+        2.872_908_573_572_194_267_4e4,
+        5.226_495_278_852_854_561e3,
+    ];
+    // Neither near 0.5 nor in a tail: C(r - 1.6) / D(r - 1.6).
+    const C: [f64; 8] = [
+        1.423_437_110_749_683_577_34,
+        4.630_337_846_156_545_295_9,
+        5.769_497_221_460_691_405_5,
+        3.647_848_324_763_204_605_04,
+        1.270_458_252_452_368_382_58,
+        2.417_807_251_774_506_117_7e-1,
+        2.272_384_498_926_918_458_33e-2,
+        7.745_450_142_783_414_076_4e-4,
+    ];
+    const D: [f64; 8] = [
+        1.0,
+        2.053_191_626_637_758_821_87,
+        1.676_384_830_183_803_849_4,
+        6.897_673_349_851_000_045_5e-1,
+        1.481_039_764_274_800_745_9e-1,
+        1.519_866_656_361_645_719_66e-2,
+        5.475_938_084_995_344_946e-4,
+        1.050_750_071_644_416_843_24e-9,
+    ];
+    // In a tail, min(p, 1 - p) below exp(-25): E(r - 5) / F(r - 5).
+    const E: [f64; 8] = [
+        6.657_904_643_501_103_777_2,
+        5.463_784_911_164_114_369_9,
+        1.784_826_539_917_291_335_8,
+        2.965_605_718_285_048_912_3e-1,
+        2.653_218_952_657_612_309_3e-2,
+        1.242_660_947_388_078_438_6e-3,
+        2.711_555_568_743_487_578_15e-5,
+        2.010_334_399_292_288_132_65e-7,
+    ];
+    const F: [f64; 8] = [
+        1.0,
+        5.998_322_065_558_879_376_9e-1,
+        1.369_298_809_227_358_053_1e-1,
+        1.487_536_129_085_061_485_25e-2,
+        7.868_691_311_456_132_591e-4,
+        1.846_318_317_510_054_681_8e-5,
+        1.421_511_758_316_445_888_7e-7,
+        2.044_263_103_389_939_785_64e-15,
+    ];
+    fn horner(coefficients: &[f64; 8], r: f64) -> f64 {
+        coefficients[..7]
+            .iter()
+            .rev()
+            .fold(coefficients[7], |value, coefficient| {
+                value * r + coefficient
+            })
+    }
+    let q = p - 0.5;
+    if q.abs() <= 0.425 {
+        let r = 0.180_625 - q * q;
+        return q * horner(&A, r) / horner(&B, r);
+    }
+    let r = libm::sqrt(-libm::log(if q < 0.0 { p } else { 1.0 - p }));
+    let value = if r <= 5.0 {
+        let r = r - 1.6;
+        horner(&C, r) / horner(&D, r)
+    } else {
+        let r = r - 5.0;
+        horner(&E, r) / horner(&F, r)
+    };
+    if q < 0.0 {
+        -value
+    } else {
+        value
+    }
 }
 
 /// Apply portable POWER after both operands evaluate; missing precedes domain checks.

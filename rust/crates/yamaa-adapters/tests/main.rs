@@ -12,6 +12,7 @@ mod support;
 
 // The replay of the expected outcomes written as data (#3691, #3798), apart
 // from the families below.
+mod check_operation_contracts;
 mod diagnostics;
 
 mod arrow_host_bridge;
@@ -42,7 +43,6 @@ mod execution_implicit_join_absence;
 mod execution_intermediate_driver_columns;
 mod execution_key_lookup_reads;
 mod execution_key_selection_semantics;
-mod execution_lookup_model;
 mod execution_lookup_read_contexts;
 mod execution_no_rows_record_reads;
 mod execution_per_template_defaults;
@@ -57,7 +57,6 @@ mod file_project;
 mod file_resources;
 mod file_workflow;
 mod host_resources;
-mod intermediate_result_kinds;
 mod network_shares;
 mod odm_xml;
 mod project_diagnostics;

@@ -163,40 +163,9 @@ pub fn replay() {
                 study,
                 outcome,
             } = operations::run(operation, &case.input);
-            let actual = crate::support::rows(&issues);
-            let rendered = actual
-                .iter()
-                .map(yamaa_adapters::json_wire::encode)
-                .collect::<Vec<_>>()
-                .join("\n");
-            let projected = actual
-                .iter()
-                .map(|row| compared(row, case.compares.as_deref()))
-                .collect::<Vec<_>>();
-            let expected = case
-                .issues
-                .iter()
-                .map(|row| expanded(row, study.as_ref(), &label))
-                .collect::<Vec<_>>();
-            if case.among {
-                let mut unmatched = projected;
-                for row in &expected {
-                    let Some(at) = unmatched.iter().position(|reported| reported == row) else {
-                        panic!(
-                            "{label}: no reported issue is {}; the issues are\n{rendered}",
-                            yamaa_adapters::json_wire::encode(row)
-                        )
-                    };
-                    unmatched.remove(at);
-                }
-            } else {
-                assert_eq!(
-                    Value::Array(projected),
-                    Value::Array(expected),
-                    "{label}: the issues are\n{rendered}"
-                );
-            }
+            compare_issues(&case, &issues, study.as_ref(), &label);
             case.stated.compare(&outcome, operation, &label);
+            let actual = crate::support::rows(&issues);
             let complete = match &study {
                 Some(study) => actual
                     .iter()
@@ -207,6 +176,49 @@ pub fn replay() {
             reported.push((operation.as_str(), complete));
         }
         form::same_issues(&reported, &case.label);
+    }
+}
+
+/// Compare the issues of a call with the case's authored rows. API seams
+/// reuse this projection and path expansion when comparing a first issue.
+pub fn compare_issues(
+    case: &Case,
+    issues: &[yamaa_core::diagnostic::Diagnostic],
+    study: Option<&crate::support::Scratch>,
+    label: &str,
+) {
+    let actual = crate::support::rows(issues);
+    let rendered = actual
+        .iter()
+        .map(yamaa_adapters::json_wire::encode)
+        .collect::<Vec<_>>()
+        .join("\n");
+    let projected = actual
+        .iter()
+        .map(|row| compared(row, case.compares.as_deref()))
+        .collect::<Vec<_>>();
+    let expected = case
+        .issues
+        .iter()
+        .map(|row| expanded(row, study, label))
+        .collect::<Vec<_>>();
+    if case.among {
+        let mut unmatched = projected;
+        for row in &expected {
+            let Some(at) = unmatched.iter().position(|reported| reported == row) else {
+                panic!(
+                    "{label}: no reported issue is {}; the issues are\n{rendered}",
+                    yamaa_adapters::json_wire::encode(row)
+                )
+            };
+            unmatched.remove(at);
+        }
+    } else {
+        assert_eq!(
+            Value::Array(projected),
+            Value::Array(expected),
+            "{label}: the issues are\n{rendered}"
+        );
     }
 }
 
