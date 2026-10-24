@@ -232,13 +232,14 @@ fn the_output_of_a_sas_driver_beyond_the_row_limit_is_refused_as_the_whole_table
             .spec(spec.to_str().unwrap())
             .run()
             .unwrap();
+        let diagnostics = run.diagnostics();
         assert_eq!(
             (
-                run.output().is_none(),
-                crate::support::issues(&run.diagnostics())
+                run.output().map(|output| output.rows()),
+                (!diagnostics.is_empty()).then(|| crate::support::issues(&diagnostics))
             ),
-            (true, refused.to_owned()),
-            "{label}"
+            (None, Some(refused.to_owned())),
+            "{label}: the output's rows and the run's issues"
         );
     }
 }
