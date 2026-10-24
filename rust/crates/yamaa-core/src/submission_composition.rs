@@ -682,6 +682,17 @@ enum Level {
     Column,
     Value,
 }
+/// The column or value-level item an origin is admitted for: its
+/// `submission` path, its name, the derivations its origins are refuted on,
+/// and its level.
+#[derive(Clone, Copy)]
+struct ColumnSite<'c> {
+    path: &'c str,
+    name: &'c str,
+    derivations: &'c [ast::ExprId],
+    level: Level,
+}
+
 /// Admit the complete inherited column metadata for a base or per-value item.
 struct ColumnAdmission<'a> {
     doc: &'a Document,
@@ -809,15 +820,13 @@ impl ColumnAdmission<'_> {
             .enumerate()
             .map(|(index, declared)| {
                 let at = format!("{column_path}.origins[{index}]");
-                self.admit_origin(
-                    declared,
-                    &at,
-                    column_path,
+                let column = ColumnSite {
+                    path: column_path,
                     name,
                     derivations,
                     level,
-                    findings,
-                )
+                };
+                self.admit_origin(declared, &at, column, findings)
             })
             .collect();
         // SUB-18: a `Derived` origin anywhere needs the method that derives it.
@@ -953,17 +962,19 @@ impl ColumnAdmission<'_> {
     /// description (SUB-16), its annotated case report form reference
     /// (SUB-17) and the derivations its type claims (SUB-19, SUB-20), each
     /// refutation naming the refuted type.
-    #[allow(clippy::too_many_arguments)]
     fn admit_origin(
         &self,
         declared: &spec::OriginMetadata,
         at: &str,
-        column_path: &str,
-        name: &str,
-        derivations: &[ast::ExprId],
-        level: Level,
+        column: ColumnSite<'_>,
         findings: &mut Vec<Finding>,
     ) -> OriginDefinition {
+        let ColumnSite {
+            path: column_path,
+            name,
+            derivations,
+            level,
+        } = column;
         let Self {
             tree,
             section,
@@ -1713,21 +1724,35 @@ fn listed_model(tree: &ast::Spec, family: Submission, path: &str) -> Option<Find
     })
 }
 
+/// What composing a section's datasets reads besides each listed
+/// specification: the section and its implementation guides, never empty;
+/// the CT catalogue; every specification any submission section lists
+/// (`study`); the identifiers the document already takes; and the
+/// section's annotated CRFs.
+struct Composition<'a> {
+    section: &'a ast::Section,
+    guides: &'a [ast::ImplementationGuide],
+    catalogue: &'a ct::Catalogue,
+    study: &'a [&'a Document],
+    known: &'a BTreeSet<&'a str>,
+    acrfs: &'a [&'a ast::SupportingDocument],
+}
+
 /// Compose every captured dataset in order, collecting codelist bindings.
-/// `study` holds every specification any submission section lists, and
-/// `guides` the section's implementation guides, never empty.
-#[allow(clippy::too_many_arguments)]
 fn compose_datasets(
-    section: &ast::Section,
-    guides: &[ast::ImplementationGuide],
-    catalogue: &ct::Catalogue,
+    composition: &Composition<'_>,
     inputs: &[Input<'_>],
-    study: &[&Document],
-    known: &BTreeSet<&str>,
-    acrfs: &[&ast::SupportingDocument],
     findings: &mut Vec<Finding>,
     bound: &mut BTreeSet<String>,
 ) -> Vec<Dataset> {
+    let Composition {
+        section,
+        guides,
+        catalogue,
+        study,
+        known,
+        acrfs,
+    } = *composition;
     let family = family_name(section.family);
     let mut datasets = Vec::new();
     let mut ids = BTreeSet::new();
@@ -1760,46 +1785,7 @@ fn compose_datasets(
                 &id,
             ));
         }
-        // JSON-5: a transport re-reads the published artifact, so display digits
-        // the csv profile writes would become the submitted values.
-        if section.transport.is_some() {
-            if let Some(decimals) = doc
-                .field(doc.root(), "output")
-                .and_then(|output| doc.field(output, "decimals"))
-            {
-                let mut finding = Finding::cause(
-                    ConditionCode::SubmissionTransportDecimals,
-                    &format!("{path}.output.decimals"),
-                    "display precision would become the submitted values",
-                );
-                finding
-                    .context
-                    .insert("dataset".into(), crate::json::Value::String(id.clone()));
-                // The artifact the decimals would round, as `output.path`
-                // writes it (CSV-6).
-                let written = doc
-                    .field(doc.root(), "output")
-                    .and_then(|output| text(doc, output, "path"));
-                finding.context.insert(
-                    "path".into(),
-                    written.map_or(crate::json::Value::Null, crate::json::Value::String),
-                );
-                if let Some(written) = section.specs.get(index) {
-                    finding.context.insert(
-                        "specification".into(),
-                        crate::json::Value::String(written.text.clone()),
-                    );
-                }
-                if let N::Integer(value) = &doc.nodes()[decimals] {
-                    if let Ok(number) = value.parse() {
-                        finding
-                            .context
-                            .insert("decimals".into(), crate::json::Value::Number(number));
-                    }
-                }
-                findings.push(finding);
-            }
-        }
+        transport_decimals(section, doc, index, &path, &id, findings);
         let declarations = match spec::decode(doc, doc.root()) {
             Ok(value) => value,
             Err(_) => {
@@ -1835,77 +1821,8 @@ fn compose_datasets(
             &format!("{path}.submission.standard"),
             findings,
         );
-        if transport_limits(section) {
-            if !dataset_name(&id) {
-                findings.push(name_finding(&path, &id, DATASET_NAME));
-            }
-            if let Some(cause) = label_cause(&dataset.label.value) {
-                findings.push(label_finding(
-                    &format!("{path}.submission.label"),
-                    &id,
-                    None,
-                    &dataset.label.value,
-                    cause,
-                ));
-            }
-        }
-        if dataset.reference_data.value && dataset.repeating.value {
-            findings.push(
-                Finding::cause(
-                    ConditionCode::SubmissionReferenceRepeating,
-                    &format!("{path}.submission"),
-                    &id,
-                )
-                .with("dataset", id.as_str()),
-            );
-        }
-        let model = section_model(section.family).name();
-        if let Some(domain) = dataset
-            .domain
-            .as_ref()
-            .filter(|_| section.family == Submission::Adam)
-        {
-            findings.push(
-                Finding::cause(
-                    ConditionCode::SubmissionAdamField,
-                    &format!("{path}.submission.domain"),
-                    &id,
-                )
-                .with("value", domain.value.as_str())
-                .with("model", model),
-            );
-        }
-        // The domain build reads the family group from the class alone, so the
-        // class must belong to the family this document binds the dataset to.
+        admit_dataset(section, known, dataset, &path, &id, findings);
         let tabulation = dataset.class.value.tabulation();
-        if tabulation == (section.family == Submission::Adam) {
-            let class = dataset.class.value.name();
-            findings.push(
-                Finding::cause(
-                    ConditionCode::SubmissionClassFamily,
-                    &format!("{path}.submission.class"),
-                    class,
-                )
-                .with("value", class)
-                .with("model", model),
-            );
-        }
-        if dataset.has_no_data.value && dataset.comment.is_none() {
-            findings.push(
-                Finding::cause(
-                    ConditionCode::SubmissionNoDataComment,
-                    &format!("{path}.submission.comment"),
-                    &id,
-                )
-                .with("field", "comment"),
-            );
-        }
-        comment_references(
-            findings,
-            dataset.comment.as_ref(),
-            known,
-            &format!("{path}.submission.comment"),
-        );
         let output = doc.field(doc.root(), "output");
         let output_columns = output.map_or_else(Vec::new, |out| strings(doc, out, "columns"));
         let keys = strings(doc, doc.root(), "keys");
@@ -1922,49 +1839,7 @@ fn compose_datasets(
                 );
             }
         }
-        // OUTPUT-2: `keys` fails as checking the specification refuses it, with
-        // the specification's own refusal at its spec path under the listing:
-        // an empty list, and each key an earlier key repeats, no column
-        // declares, or `output.columns` leaves out. A missing list is the
-        // schema's to refuse.
-        let declared = |name: &String| {
-            columns
-                .value
-                .iter()
-                .any(|column| &column.name.value == name)
-        };
-        let written = doc.field(doc.root(), "keys").map(|node| &doc.nodes()[node]);
-        if matches!(written, Some(N::Sequence(items)) if items.is_empty()) {
-            findings.push(Finding::listed(
-                &path,
-                PreflightFinding::EmptyKeys.diagnostic(),
-            ));
-        }
-        for (position, key) in keys.iter().enumerate() {
-            if keys[..position].contains(key) {
-                let refusal = PreflightFinding::DuplicateKey {
-                    position,
-                    identifier: key.clone(),
-                };
-                findings.push(Finding::listed(&path, refusal.diagnostic()));
-            }
-            let refusal = if !declared(key) {
-                PreflightFinding::UndeclaredKey {
-                    position,
-                    column: key.clone(),
-                }
-                .diagnostic()
-            } else if !output_columns.contains(key) {
-                OutputFinding::InternalKey {
-                    position,
-                    name: key.clone(),
-                }
-                .diagnostic()
-            } else {
-                continue;
-            };
-            findings.push(Finding::listed(&path, refusal));
-        }
+        admit_keys(doc, columns, &keys, &output_columns, &path, findings);
         let mut selected = Vec::new();
         for column in &columns.value {
             reserved_metadata(
@@ -2049,27 +1924,7 @@ fn compose_datasets(
                 selected.push(column);
             }
         }
-        // A `unique` over exactly the keys restates their asserted identity.
-        let key_set: BTreeSet<_> = keys.iter().collect();
-        if let Some(N::Sequence(entries)) = doc
-            .field(doc.root(), "verifications")
-            .map(|v| &doc.nodes()[v])
-        {
-            for (index, &entry) in entries.iter().enumerate() {
-                let Some(payload) = doc.field(entry, "unique") else {
-                    continue;
-                };
-                let columns = strings(doc, payload, "columns");
-                if !columns.is_empty() && columns.iter().collect::<BTreeSet<_>>() == key_set {
-                    findings.push(redundant(
-                        ConditionCode::VerificationUniqueRedundant,
-                        &format!("{path}.verifications[{index}].unique"),
-                        &columns.join(", "),
-                        &format!("{path}.keys"),
-                    ));
-                }
-            }
-        }
+        redundant_unique(doc, &keys, &path, findings);
         compose_values(
             &admission,
             &declarations,
@@ -2090,6 +1945,219 @@ fn compose_datasets(
         });
     }
     datasets
+}
+
+/// JSON-5: a transport re-reads the published artifact, so display digits
+/// the csv profile writes would become the submitted values.
+fn transport_decimals(
+    section: &ast::Section,
+    doc: &Document,
+    index: usize,
+    path: &str,
+    id: &str,
+    findings: &mut Vec<Finding>,
+) {
+    if section.transport.is_some() {
+        if let Some(decimals) = doc
+            .field(doc.root(), "output")
+            .and_then(|output| doc.field(output, "decimals"))
+        {
+            let mut finding = Finding::cause(
+                ConditionCode::SubmissionTransportDecimals,
+                &format!("{path}.output.decimals"),
+                "display precision would become the submitted values",
+            );
+            finding
+                .context
+                .insert("dataset".into(), crate::json::Value::String(id.into()));
+            // The artifact the decimals would round, as `output.path`
+            // writes it (CSV-6).
+            let written = doc
+                .field(doc.root(), "output")
+                .and_then(|output| text(doc, output, "path"));
+            finding.context.insert(
+                "path".into(),
+                written.map_or(crate::json::Value::Null, crate::json::Value::String),
+            );
+            if let Some(written) = section.specs.get(index) {
+                finding.context.insert(
+                    "specification".into(),
+                    crate::json::Value::String(written.text.clone()),
+                );
+            }
+            if let N::Integer(value) = &doc.nodes()[decimals] {
+                if let Ok(number) = value.parse() {
+                    finding
+                        .context
+                        .insert("decimals".into(), crate::json::Value::Number(number));
+                }
+            }
+            findings.push(finding);
+        }
+    }
+}
+
+/// The declarations of a listed specification's dataset the section reads:
+/// its name and label in a regulator's transport (DEFINE-22, XPT-5), reference
+/// data that does not repeat, no ADaM `domain`, a class of the section's
+/// family, and a comment for a dataset without data, whose references name
+/// known documents.
+fn admit_dataset(
+    section: &ast::Section,
+    known: &BTreeSet<&str>,
+    dataset: &spec::Dataset,
+    path: &str,
+    id: &str,
+    findings: &mut Vec<Finding>,
+) {
+    if transport_limits(section) {
+        if !dataset_name(id) {
+            findings.push(name_finding(path, id, DATASET_NAME));
+        }
+        if let Some(cause) = label_cause(&dataset.label.value) {
+            findings.push(label_finding(
+                &format!("{path}.submission.label"),
+                id,
+                None,
+                &dataset.label.value,
+                cause,
+            ));
+        }
+    }
+    if dataset.reference_data.value && dataset.repeating.value {
+        findings.push(
+            Finding::cause(
+                ConditionCode::SubmissionReferenceRepeating,
+                &format!("{path}.submission"),
+                id,
+            )
+            .with("dataset", id),
+        );
+    }
+    let model = section_model(section.family).name();
+    if let Some(domain) = dataset
+        .domain
+        .as_ref()
+        .filter(|_| section.family == Submission::Adam)
+    {
+        findings.push(
+            Finding::cause(
+                ConditionCode::SubmissionAdamField,
+                &format!("{path}.submission.domain"),
+                id,
+            )
+            .with("value", domain.value.as_str())
+            .with("model", model),
+        );
+    }
+    // The domain build reads the family group from the class alone, so the
+    // class must belong to the family this document binds the dataset to.
+    let tabulation = dataset.class.value.tabulation();
+    if tabulation == (section.family == Submission::Adam) {
+        let class = dataset.class.value.name();
+        findings.push(
+            Finding::cause(
+                ConditionCode::SubmissionClassFamily,
+                &format!("{path}.submission.class"),
+                class,
+            )
+            .with("value", class)
+            .with("model", model),
+        );
+    }
+    if dataset.has_no_data.value && dataset.comment.is_none() {
+        findings.push(
+            Finding::cause(
+                ConditionCode::SubmissionNoDataComment,
+                &format!("{path}.submission.comment"),
+                id,
+            )
+            .with("field", "comment"),
+        );
+    }
+    comment_references(
+        findings,
+        dataset.comment.as_ref(),
+        known,
+        &format!("{path}.submission.comment"),
+    );
+}
+
+/// OUTPUT-2: `keys` fails as checking the specification refuses it, with
+/// the specification's own refusal at its spec path under the listing:
+/// an empty list, and each key an earlier key repeats, no column
+/// declares, or `output.columns` leaves out. A missing list is the
+/// schema's to refuse.
+fn admit_keys(
+    doc: &Document,
+    columns: &spec::Field<Vec<spec::Column>>,
+    keys: &[String],
+    output_columns: &[String],
+    path: &str,
+    findings: &mut Vec<Finding>,
+) {
+    let declared = |name: &String| {
+        columns
+            .value
+            .iter()
+            .any(|column| &column.name.value == name)
+    };
+    let written = doc.field(doc.root(), "keys").map(|node| &doc.nodes()[node]);
+    if matches!(written, Some(N::Sequence(items)) if items.is_empty()) {
+        findings.push(Finding::listed(
+            path,
+            PreflightFinding::EmptyKeys.diagnostic(),
+        ));
+    }
+    for (position, key) in keys.iter().enumerate() {
+        if keys[..position].contains(key) {
+            let refusal = PreflightFinding::DuplicateKey {
+                position,
+                identifier: key.clone(),
+            };
+            findings.push(Finding::listed(path, refusal.diagnostic()));
+        }
+        let refusal = if !declared(key) {
+            PreflightFinding::UndeclaredKey {
+                position,
+                column: key.clone(),
+            }
+            .diagnostic()
+        } else if !output_columns.contains(key) {
+            OutputFinding::InternalKey {
+                position,
+                name: key.clone(),
+            }
+            .diagnostic()
+        } else {
+            continue;
+        };
+        findings.push(Finding::listed(path, refusal));
+    }
+}
+
+/// A `unique` over exactly the keys restates their asserted identity.
+fn redundant_unique(doc: &Document, keys: &[String], path: &str, findings: &mut Vec<Finding>) {
+    let key_set: BTreeSet<_> = keys.iter().collect();
+    if let Some(N::Sequence(entries)) = doc
+        .field(doc.root(), "verifications")
+        .map(|v| &doc.nodes()[v])
+    {
+        for (index, &entry) in entries.iter().enumerate() {
+            let Some(payload) = doc.field(entry, "unique") else {
+                continue;
+            };
+            let columns = strings(doc, payload, "columns");
+            if !columns.is_empty() && columns.iter().collect::<BTreeSet<_>>() == key_set {
+                findings.push(redundant(
+                    ConditionCode::VerificationUniqueRedundant,
+                    &format!("{path}.verifications[{index}].unique"),
+                    &columns.join(", "),
+                    &format!("{path}.keys"),
+                ));
+            }
+        }
+    }
 }
 
 /// The source-system version Define-XML and Dataset-JSON metadata carry: the
@@ -2277,17 +2345,15 @@ pub fn compose(
         );
     }
     let mut bound = BTreeSet::new();
-    let datasets = compose_datasets(
+    let composition = Composition {
         section,
         guides,
         catalogue,
-        inputs,
-        &specifications,
-        &known,
-        &acrfs,
-        &mut findings,
-        &mut bound,
-    );
+        study: &specifications,
+        known: &known,
+        acrfs: &acrfs,
+    };
+    let datasets = compose_datasets(&composition, inputs, &mut findings, &mut bound);
     // The document lists every guide of the section in declaration order,
     // whether or not a dataset binds it, then the terminology standards
     // (DEFINE-6).
