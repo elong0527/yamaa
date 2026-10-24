@@ -1,10 +1,11 @@
 //! Imputation declarations read their declared type, literal handlers and
-//! named operand scope.
+//! named operand scope, and `date_text` its declared forms.
 use super::*;
 use crate::dataset::{
     completion_policy_findings, DatePolicyError, DayDeclaration, FlagPart, ImputationKind,
     TemporalType, TimeRule,
 };
+use crate::date_forms::DateForms;
 /// The completion policy of `impute`, or the month, day and time findings
 /// that refuse it, in declaration order.
 fn policy(
@@ -109,6 +110,18 @@ fn imputation(spec: &Spec, e: ExprId) -> Result<Imputation, Refusal> {
             seconds_collected: *seconds_collected,
         },
         ScalarOp::ToDate => ImputationKind::ToDate,
+        // The front end refuses a faulty list first (TIME-22); a tree it did
+        // not check reports the same findings here.
+        ScalarOp::DateText { forms } => {
+            ImputationKind::DateText(DateForms::new(forms).map_err(|faults| {
+                Refusal::Findings(
+                    faults
+                        .into_iter()
+                        .map(|fault| fault.diagnostic(&path))
+                        .collect(),
+                )
+            })?)
+        }
         _ => return Err(Refusal::Internal),
     };
     let operand = |slot| operand_name(spec, operands, slot).map(String::from);

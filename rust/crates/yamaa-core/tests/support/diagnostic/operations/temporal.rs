@@ -1,6 +1,7 @@
 //! The date and time entry points: civil arithmetic, `dtc` and
-//! `time_of_day` (TIME-4, TIME-14, TIME-17, TIME-19, TIME-20, TIME-21), and
-//! date completion (TIME-1 to TIME-18).
+//! `time_of_day` (TIME-4, TIME-14, TIME-17, TIME-19, TIME-20, TIME-21), date
+//! completion (TIME-1 to TIME-18), and the date forms `date_text` reads
+//! (TIME-22).
 use super::{text, value, File};
 use crate::support::diagnostic::json::Json;
 use yamaa_core::{
@@ -9,6 +10,7 @@ use yamaa_core::{
         ElapsedUnit, FlagPart, Imputation, ImputationKind, Temporal, TemporalKind, TemporalType,
         TimeRule,
     },
+    date_forms::{DateForm, DateForms},
     diagnostic::Diagnostic,
     table::ValueRef,
 };
@@ -118,7 +120,8 @@ fn impute_policy(input: &Json) -> Vec<Diagnostic> {
 
 /// A completion operation applied to `value`, `{kind, source, path, value}`:
 /// `kind` is `{"impute": <policy>}`, `{"precision": <type>}`, `{"flag":
-/// <part>, "seconds_collected": ...}` or `"to_date"`.
+/// <part>, "seconds_collected": ...}`, `"to_date"` or `{"date_text":
+/// [<form>, ...]}`.
 fn impute(input: &Json) -> Vec<Diagnostic> {
     let input = input.closed(&["kind", "source", "path", "value"]);
     let kind = match input.field("kind") {
@@ -130,6 +133,14 @@ fn impute(input: &Json) -> Vec<Diagnostic> {
             [(name, target)] if name == "precision" => ImputationKind::Precision {
                 target: temporal_type(target),
             },
+            [(name, forms)] if name == "date_text" => {
+                let forms = forms
+                    .items()
+                    .iter()
+                    .map(|form| DateForm::of(form.text()).expect("a date form"))
+                    .collect::<Vec<_>>();
+                ImputationKind::DateText(DateForms::new(&forms).expect("an admitted list"))
+            }
             [(name, part), (seconds, collected)]
                 if name == "flag" && seconds == "seconds_collected" =>
             {

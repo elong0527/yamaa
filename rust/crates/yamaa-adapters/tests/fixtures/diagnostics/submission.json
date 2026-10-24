@@ -586,6 +586,17 @@
       "issues": [{"phase": "validation", "condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.EXDUR.submission"], "context": {"column": "EXDUR", "origin_type": "Protocol", "admitted": ["Assigned", "Collected", "Derived", "Not Available", "Other"]}}]
     },
     {
+      "case": "date_text_is_a_recode_that_refutes_a_protocol_origin",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: CM\nkeys: [USUBJID, CMSEQ]\ninput: {SRC: {path: input.csv, types: {CMSEQ: int}}}\noutput: {path: output.csv, columns: [USUBJID, CMSEQ, CMSTDTC]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: SRC.USUBJID}\n  - {name: CMSEQ, type: int, derivation: SRC.CMSEQ}\n  - name: CMSTDTC\n    type: str\n    derivation: {date_text: {source: SRC.CMSTDAT, forms: [iso, ddmonyyyy]}}\n    submission: {origins: [{type: Protocol, source: Sponsor}]}\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.CMSTDTC.submission"], "context": {"column": "CMSTDTC", "origin_type": "Protocol", "admitted": ["Assigned", "Collected", "Derived", "Not Available", "Other"]}}]
+    },
+    {
       "case": "a_literal_refutes_a_derived_origin",
       "operation": "check",
       "input": {

@@ -359,6 +359,27 @@ EXPECTED = {
         Field("aggregate_class", "separator", "str")
     ],
     "new.spec.aggregate_class.distinct": [Field("aggregate_class", "distinct", "bool")],
+    # D264: date_text reads a declared, closed list of date forms (TIME-22).
+    "new.spec.expressions.date_text": [
+        Keyword("expressions", "date_text", "[]"),
+        Field("expressions.date_text", "source", "variable", True, kind="name"),
+        Field(
+            "expressions.date_text",
+            "forms",
+            "list[date_form]",
+            True,
+            kind="value",
+            values=(
+                "iso",
+                "ddmonyyyy",
+                "mdy_slash",
+                "dmy_slash",
+                "yyyymmdd",
+                "monyyyy",
+            ),
+        ),
+        Field("expressions.date_text", "invalid", "substitute_value", kind="value"),
+    ],
     # A lint suppression comment and a profile chosen by the path's
     # extension: neither is a schema field.
     "new.any.suppression_comment": [],

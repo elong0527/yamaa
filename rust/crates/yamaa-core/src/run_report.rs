@@ -286,6 +286,7 @@ pub fn handler_condition(path: &str, handler: &str) -> Option<ConditionCode> {
             "impute" | "precision" | "to_date" => C::ImputeInvalid,
             "duration_value" => C::DurationInvalid,
             "dtc" => C::DateTextInvalid,
+            "date_text" => C::DateFormsInvalid,
             _ => return None,
         },
         H::Partial | H::CrossedBounds => return None,

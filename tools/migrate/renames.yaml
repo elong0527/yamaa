@@ -88,11 +88,11 @@ status: approved
 measured_at: 1758ad145
 design: docs/design/interface-1.0.md
 summary:
-  entries: 652
-  changes: 83
+  entries: 653
+  changes: 84
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 37
+    new, decided: 38
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7481,6 +7481,20 @@ entries:
     once; omitted, every value counts. Beside anything but a bare STR_JOIN(x) or COUNT(x) it is refused as
     unpaired_fields (FORMULA-18). No 0.5 file declares it, so the converter wrote none.'
   field_kind: value
+  convert: {action: none}
+- id: new.spec.expressions.date_text
+  file_type: spec
+  path: columns[].derivation.date_text
+  today: null
+  kind: new
+  proposed: 'date_text: {source: VARIABLE, forms: [FORM, ...], invalid: VALUE}'
+  decision: decided (D264)
+  reason: 'An addition to the approved table under D27 (D264, from #3731), spelled under D241. A new verb:
+    `source`, the text read; `forms`, a required list of the closed date forms iso, ddmonyyyy, mdy_slash,
+    dmy_slash, yyyymmdd and monyyyy, at least one, each named once and with at most one of the two slash
+    orders; and the optional `invalid` handler. It returns the collected date text that the form reading
+    the whole source denotes, which impute then reads (TIME-22). No 0.5 file declares it, so the converter
+    wrote none.'
   convert: {action: none}
 conditions:
 - today: schema_version_mismatch

@@ -653,6 +653,7 @@ class DerivationShapeTests(unittest.TestCase):
             "dtc",
             "time_of_day",
             "duration_text",
+            "date_text",
         )
         raw = []
         for benchmark in sorted(BENCHMARKS.iterdir()):
@@ -975,6 +976,30 @@ class DerivationShapeTests(unittest.TestCase):
             mapping_doc.describe_derivation({"str_length": {"source": "COMMENT"}}),
             "Number of characters in COMMENT.",
         )
+
+    def test_date_text_names_each_declared_spelling_and_survives_none(self):
+        # An empty or absent list is refused before data (TIME-22), but the
+        # sheet still renders the specification that writes it.
+        for forms, spellings in [
+            (
+                ["iso", "mdy_slash"],
+                "ISO 8601 date text or month-first slashed dates such as "
+                "03/04/2001 for March 4",
+            ),
+            (["monyyyy"], "month-year text such as MAR2001 for a month alone"),
+            ([], "no declared spelling"),
+            (None, "no declared spelling"),
+        ]:
+            node = {"source": "CM.CMSTDAT"}
+            if forms is not None:
+                node["forms"] = forms
+            with self.subTest(forms=forms):
+                self.assertEqual(
+                    mapping_doc.describe_derivation({"date_text": node}),
+                    "Read CM.CMSTDAT as ISO 8601 date text from "
+                    + spellings
+                    + "; blank when it is blank; any other spelling is an error.",
+                )
 
     def test_cut_names_the_closed_side_of_each_interval(self):
         rule = method_column("adam-adsl-demographics")["AGEGR1"]

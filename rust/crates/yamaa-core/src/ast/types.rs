@@ -268,6 +268,16 @@ mod tests {
                 value("IMPUTED", temporal("impute", "date", "day")),
                 value("DATE", source("to_date")),
                 value(
+                    "READ",
+                    op(
+                        "date_text",
+                        fields(vec![
+                            ("source", Tree::text("SRC.T")),
+                            ("forms", Tree::list(vec![Tree::text("iso")])),
+                        ]),
+                    ),
+                ),
+                value(
                     "CASED",
                     op(
                         "str_case",
@@ -316,6 +326,7 @@ mod tests {
                 ResultType::STR,
                 ResultType::DATE,
                 ResultType::DATE,
+                ResultType::STR,
                 ResultType::STR,
                 ResultType::STR,
                 ResultType::INT,

@@ -117,7 +117,7 @@ profiles in `rules/profiles/`.
 | [Lookup and joins](lookup.md) | LOOKUP | Match declared keys, narrow and select records, answer absence, and scope aggregates to one relation. |
 | [Windows](windows.md) | WINDOW | Declare complete named windows and compute partitions, ranks, neighbors, carried values, and baseline flags. |
 | [Text](text.md) | TEXT | Pad, take pieces by position, count scalars, change case, interpolate templates, and extract and replace with portable regular expressions. |
-| [Dates and times](temporal.md) | TIME | Compute differences, study days and times of day, assemble and complete collected dates and times, report collected precision and imputation flags, and apply civil arithmetic. |
+| [Dates and times](temporal.md) | TIME | Compute differences, study days and times of day, read declared date forms, assemble and complete collected dates and times, report collected precision and imputation flags, and apply civil arithmetic. |
 | [Verification](verification.md) | CHECK | Apply assertions, severity, and grouped counts to completed values, and record what each run read, counted and checked in one run report. |
 | [Output](output.md) | OUTPUT | Select artifact columns, keys, profiles, and row order, and publish complete files atomically. |
 | [File resolution](reference/files.md) | FILE | Resolve declared local paths from their base, reach one regular file, and read one immutable snapshot per physical file. |

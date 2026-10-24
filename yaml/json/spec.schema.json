@@ -766,6 +766,18 @@
       "minProperties": 1,
       "maxProperties": 1
     },
+    "date_form": {
+      "type": "string",
+      "enum": [
+        "iso",
+        "ddmonyyyy",
+        "mdy_slash",
+        "dmy_slash",
+        "yyyymmdd",
+        "monyyyy"
+      ],
+      "description": "Form of date text that date_text reads, iso for collected date text, or else the fields in the order its name spells, mon being a three-letter month abbreviation (TIME-22)."
+    },
     "day_rule": {
       "type": "string",
       "enum": [
@@ -2404,6 +2416,33 @@
               "description": "Datetime whose calendar date is returned, or ISO 8601 date or datetime text whose date part is returned (TIME-2).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "variable"
+            }
+          },
+          "additionalProperties": false
+        },
+        "date_text": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "Text holding a date in one of the declared forms, read whole and untrimmed (TIME-22).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "forms": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/date_form"
+              },
+              "description": "Forms the source may take, at least one, each named once, and at most one of mdy_slash and dmy_slash, which fix the order of day and month (TIME-22).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "list[date_form]"
+            },
+            "invalid": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Result when the source is text in none of the declared forms (TIME-22).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
             }
           },
           "additionalProperties": false
@@ -4555,6 +4594,37 @@
           },
           "required": [
             "source"
+          ],
+          "additionalProperties": false
+        },
+        "date_text": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "Text holding a date in one of the declared forms, read whole and untrimmed (TIME-22).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "forms": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/date_form"
+              },
+              "description": "Forms the source may take, at least one, each named once, and at most one of mdy_slash and dmy_slash, which fix the order of day and month (TIME-22).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "list[date_form]"
+            },
+            "invalid": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Result when the source is text in none of the declared forms (TIME-22).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            }
+          },
+          "required": [
+            "source",
+            "forms"
           ],
           "additionalProperties": false
         },

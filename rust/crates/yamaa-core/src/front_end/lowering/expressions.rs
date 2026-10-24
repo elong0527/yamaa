@@ -17,6 +17,7 @@ use crate::ast::{
     Nulls, OdmRead, Operand, OrderTerm, RankMethod, Role, ScalarOp, Segment, Slot, SourceRead,
     TemporalType, Text, TextCase, TimeRule, TimeUnit, Window, WindowFunction,
 };
+use crate::date_forms::DateForm;
 use crate::expression::{compile, CompiledExpression, Context, NodeKind, TemporalKind};
 use crate::schema::DocumentNode as N;
 
@@ -583,6 +584,18 @@ impl Lower<'_> {
                 SOURCE,
             ),
             "to_date" => (ScalarOp::ToDate, SOURCE),
+            // The forms as written, a repeated form or both slash orders
+            // included, for the front end's refusal (TIME-22).
+            "date_text" => (
+                ScalarOp::DateText {
+                    forms: self
+                        .items(self.field(p, "forms")?)
+                        .iter()
+                        .map(|&item| self.text(item).and_then(DateForm::of))
+                        .collect::<Option<_>>()?,
+                },
+                SOURCE,
+            ),
             "str_case" => (
                 ScalarOp::StrCase {
                     to: match text("to")? {

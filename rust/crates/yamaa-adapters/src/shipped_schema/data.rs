@@ -319,6 +319,18 @@ expressions:
             type: variable
             required: true
             description: Datetime whose calendar date is returned, or ISO 8601 date or datetime text whose date part is returned (TIME-2).
+    date_text: # See TIME-22.
+        - source:
+            type: variable
+            required: true
+            description: Text holding a date in one of the declared forms, read whole and untrimmed (TIME-22).
+        - forms:
+            type: "list[date_form]"
+            required: true
+            description: Forms the source may take, at least one, each named once, and at most one of mdy_slash and dmy_slash, which fix the order of day and month (TIME-22).
+        - invalid:
+            type: substitute_value
+            description: Result when the source is text in none of the declared forms (TIME-22).
     study_day: # See TIME-6.
         - source:
             type: variable
@@ -419,6 +431,11 @@ time_rule:
     type: str
     values: [first, last]
     description: Earliest or latest civil moment the collected source admits, each missing time field taking its first or last value (TIME-8).
+
+date_form:
+    type: str
+    values: [iso, ddmonyyyy, mdy_slash, dmy_slash, yyyymmdd, monyyyy]
+    description: Form of date text that date_text reads, iso for collected date text, or else the fields in the order its name spells, mon being a three-letter month abbreviation (TIME-22).
 
 shift_days:
     type: [variable, int]
@@ -2786,6 +2803,18 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
       "minProperties": 1,
       "maxProperties": 1
     },
+    "date_form": {
+      "type": "string",
+      "enum": [
+        "iso",
+        "ddmonyyyy",
+        "mdy_slash",
+        "dmy_slash",
+        "yyyymmdd",
+        "monyyyy"
+      ],
+      "description": "Form of date text that date_text reads, iso for collected date text, or else the fields in the order its name spells, mon being a three-letter month abbreviation (TIME-22)."
+    },
     "day_rule": {
       "type": "string",
       "enum": [
@@ -4424,6 +4453,33 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
               "description": "Datetime whose calendar date is returned, or ISO 8601 date or datetime text whose date part is returned (TIME-2).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "variable"
+            }
+          },
+          "additionalProperties": false
+        },
+        "date_text": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "Text holding a date in one of the declared forms, read whole and untrimmed (TIME-22).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "forms": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/date_form"
+              },
+              "description": "Forms the source may take, at least one, each named once, and at most one of mdy_slash and dmy_slash, which fix the order of day and month (TIME-22).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "list[date_form]"
+            },
+            "invalid": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Result when the source is text in none of the declared forms (TIME-22).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
             }
           },
           "additionalProperties": false
@@ -6575,6 +6631,37 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           },
           "required": [
             "source"
+          ],
+          "additionalProperties": false
+        },
+        "date_text": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "Text holding a date in one of the declared forms, read whole and untrimmed (TIME-22).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "forms": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/date_form"
+              },
+              "description": "Forms the source may take, at least one, each named once, and at most one of mdy_slash and dmy_slash, which fix the order of day and month (TIME-22).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "list[date_form]"
+            },
+            "invalid": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Result when the source is text in none of the declared forms (TIME-22).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            }
+          },
+          "required": [
+            "source",
+            "forms"
           ],
           "additionalProperties": false
         },
