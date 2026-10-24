@@ -693,7 +693,9 @@ term has its own direction and placement:
 
 The same reading applies to every order term: a window's `order_by`,
 `baseline_flag`'s included ([WINDOW-9](windows.md#window-9)), the `order_by`
-beside `keep` in a named lookup or a source selection, and `output.order_by`.
+beside `keep` in a named lookup or a source selection, an aggregate's
+`order_by`, which orders the values `STR_JOIN` joins
+([LOOKUP-10](lookup.md#lookup-10)), and `output.order_by`.
 In `[{variable: A, direction: desc}, B]` a missing `A` sorts after every
 present `A` and a missing `B` before every present `B`.
 

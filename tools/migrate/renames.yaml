@@ -7385,12 +7385,12 @@ entries:
   kind: new
   proposed: 'aggregate: {order_by: [TERM, ...], separator: TEXT, expr: "STR_JOIN(x)"}'
   decision: decided (D264)
-  reason: 'An addition to the approved table under D27: the owner decided on 2026-10-24 that STR_JOIN ships
-    in 1.0.0 with order_by, separator and distinct as fields of the aggregate (#3774), on the board D264
-    sets. Optional, with no default (I5): the order STR_JOIN joins a group''s values in, VALUE-22 terms over
-    the relation''s fields and the derivations'' variables, ties in stored order; required beside STR_JOIN
-    and refused beside any other expression as unpaired_fields (FORMULA-18, LOOKUP-10). No 0.5 file declares
-    it, so the converter wrote none.'
+  reason: 'An addition to the approved table under D27 (D264): the owner decided on 2026-10-24 that STR_JOIN
+    ships in 1.0.0 with order_by, separator and distinct as fields of the aggregate (#3774). Optional, with
+    no default (I5): the order STR_JOIN joins a group''s values in, VALUE-22 terms over the relation''s fields
+    and the derivations'' variables, ties in stored order; required beside STR_JOIN and refused beside any
+    other expression as unpaired_fields (FORMULA-18, LOOKUP-10). No 0.5 file declares it, so the converter
+    wrote none.'
   field_kind: name
   convert: {action: none}
 - id: new.spec.aggregate_class.separator
@@ -7400,7 +7400,7 @@ entries:
   kind: new
   proposed: 'aggregate: {separator: ", "}'
   decision: decided (D264)
-  reason: 'An addition to the approved table under D27, as new.spec.aggregate_class.order_by (#3774, D264).
+  reason: 'An addition to the approved table under D27 (D264), as new.spec.aggregate_class.order_by (#3774).
     Optional, with no default (I5): the text STR_JOIN writes between two joined values, the empty string
     included; required beside STR_JOIN and refused beside any other expression as unpaired_fields
     (FORMULA-18). No 0.5 file declares it, so the converter wrote none.'
@@ -7413,7 +7413,7 @@ entries:
   kind: new
   proposed: 'aggregate: {distinct: true}'
   decision: decided (D264)
-  reason: 'An addition to the approved table under D27, as new.spec.aggregate_class.order_by (#3774, D264).
+  reason: 'An addition to the approved table under D27 (D264), as new.spec.aggregate_class.order_by (#3774).
     Optional, with no default (I5): STR_JOIN writes each text once and COUNT(x) counts each different value
     once; omitted, every value counts. Beside anything but a bare STR_JOIN(x) or COUNT(x) it is refused as
     unpaired_fields (FORMULA-18). No 0.5 file declares it, so the converter wrote none.'

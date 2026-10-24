@@ -15,8 +15,9 @@ STUDYID, USUBJID, CMSEQ, CMTRT, AESEQS, AETERMS, AETERMN
   whose RDOMAIN is "CM", whose IDVAR is "CMSEQ" and whose IDVARVAL is the
   medication's CMSEQ. Its related adverse events are the RELAE records of
   the same subject and relationship.
-- AESEQS lists the AESEQ values of the related adverse events in increasing
-  numeric order, separated by ", " (a comma and a space).
+- AESEQS lists the AESEQ values of the related adverse events as whole
+  numbers in increasing numeric order, separated by ", " (a comma and a
+  space).
 - AETERMS lists the AETERM values of the related adverse events in
   alphabetical order, each different term once, separated by ", ".
 - AETERMN is the number of different terms that AETERMS lists.

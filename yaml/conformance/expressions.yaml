@@ -2447,6 +2447,18 @@ cases:
       - [{S: "b"}, {S: "a"}]
     type: str
     values: ["ab"]
+  - id: str-join-joins-a-grouped-rows-records-in-declared-order
+    context: aggregate
+    covers: [STR_JOIN, declared-order]
+    text: "STR_JOIN(R.S)"
+    columns: {G: int, N: int, S: str}
+    group_by: [G]
+    order_by: [R.N]
+    separator: ", "
+    groups:
+      - [{G: 1, N: 2, S: "b"}, {G: 1, N: 1, S: "a"}]
+    type: str
+    values: ["a, b"]
   - id: count-with-distinct-counts-each-different-value-once
     context: aggregate
     covers: [COUNT, distinct, missing]

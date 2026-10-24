@@ -253,7 +253,7 @@ stored order, except that `STR_JOIN` joins them in the aggregate's `order_by`
 order.
 
 Fails: `unpaired_fields`, `multiple_matches`.
-Evidence: `negative-lookup-unordered`, `negative-lookup-empty-order`, `negative-lookup-unchosen`, `negative-source-duplicate-key`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `adam-adcm-related-events`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
+Evidence: `negative-lookup-unordered`, `negative-lookup-empty-order`, `negative-lookup-unchosen`, `negative-source-duplicate-key`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::fields_beside_a_reduction_that_reads_neither_share_one_finding_in_the_tables_order`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
 
 Declaring one of `order_by` and `keep` without the other fails as
 `unpaired_fields`, on a named intermediate and a source binding alike, and an
@@ -279,13 +279,13 @@ Its terms sort under [VALUE-22](values.md#value-22) and name fields of the
 aggregate's relation, in the scopes of [LOOKUP-8](#lookup-8), or a variable
 its `derivations` bind ([LOOKUP-22](#lookup-22)). Candidates equal on every
 term keep stored order ([VALUE-23](values.md#value-23)), so the joined text is
-the same on every run. A reducer field and the reducer that reads it are
-declared together, as FORMULA-18's table pairs them: `STR_JOIN` without
-`order_by` or `separator`, `order_by` or `separator` beside any other
-expression, and `distinct` beside anything but a bare `STR_JOIN(x)` or
-`COUNT(x)` fail as `unpaired_fields` at the aggregate, before any input is
-read. An aggregate's `order_by` that lists no term orders nothing either, so
-`STR_JOIN` beside it reports `order_by` missing.
+the same on every run. A field of the aggregate and a reducer that reads it
+are declared together, as the field table of
+[FORMULA-18](formulas.md#formula-18) pairs them: a field beside no reducer
+that reads it, and a reducer without a field it needs, fail as
+`unpaired_fields` at the aggregate, before any input is read. An aggregate's
+`order_by` that lists no term orders nothing either, so `STR_JOIN` beside it
+reports `order_by` missing.
 
 <a id="lookup-26"></a>
 

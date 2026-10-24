@@ -555,12 +555,12 @@ divides a reduction by a grouping column ([FORMULA-22](#formula-22)).
 A reduction applies one of the reducers below to one expression, or `COUNT` to
 `D.*`. Any other reducer name or argument count fails. `AVG` is not an alias:
 the reducer name is `MEAN`, and no median is registered. A field of the
-aggregate that a reducer reads is written only beside that reducer, and
-`STR_JOIN` needs its `order_by` and `separator`. Any new reduction amends this
-table.
+aggregate that a reducer reads is written only beside a reducer that reads
+it, and beside every reducer that needs it, as the field table below pairs
+them. Any new reduction amends this table.
 
 Fails: `prohibited_function`, `invalid_expression`, `unpaired_fields`.
-Evidence: `schema-aggregation`, `adam-adlb-mean`, `adam-adcm-related-events`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::str_join_writes_present_values_as_column_text_in_the_given_order`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::count_with_distinct_counts_each_different_present_value_once`.
+Evidence: `schema-aggregation`, `adam-adlb-mean`, `adam-adcm-related-events`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::str_join_writes_present_values_as_column_text_in_the_given_order`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::count_with_distinct_counts_each_different_present_value_once`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::a_str_join_without_its_fields_misses_each_in_the_tables_order`.
 
 | Reducer | Result |
 |---|---|
@@ -592,13 +592,20 @@ form this table writes it. Any new field of a reducer amends this table.
 | `separator` | `STR_JOIN(x)` | yes |
 | `distinct` | `STR_JOIN(x)` or `COUNT(x)` written as the whole expression | no; omitted, every value counts |
 
+A reducer that lacks fields it needs is declared, and `missing` lists every
+field it lacks. Fields written beside no reducer that reads them are
+declared together, one finding for the fields of the same readers, and
+`missing` lists every reader, since any one of them would pair them. Each
+list follows this table: fields in its row order, readers in the order its
+`Read by` column names them.
+
 `order_by` beside `SUM(AVAL)` reports `order_by` declared and `STR_JOIN(x)`
-missing, and `STR_JOIN(SEQN)` without `order_by` reports `STR_JOIN(x)`
-declared and `order_by` missing. `distinct` beside any other expression, such
-as `SUM(x)`, `COUNT(D.*)` or `COUNT(x) + 1`, reports `distinct` declared and
-`STR_JOIN(x)` and `COUNT(x)` missing. A `STR_JOIN` written inside arithmetic
-still reads `order_by` and `separator`, and the arithmetic fails under
-[FORMULA-23](#formula-23).
+missing, and `STR_JOIN(SEQN)` with neither field reports `STR_JOIN(x)`
+declared and `order_by` and `separator` missing. `distinct` beside any other
+expression, such as `SUM(x)`, `COUNT(D.*)` or `COUNT(x) + 1`, reports
+`distinct` declared and `STR_JOIN(x)` and `COUNT(x)` missing. A `STR_JOIN`
+written inside arithmetic still reads `order_by` and `separator`, and the
+arithmetic fails under [FORMULA-23](#formula-23).
 
 `STR_JOIN(x)` writes each non-missing value of `x` as the text a `str` column
 converts it to ([VALUE-3](values.md#value-3)): an `int` as decimal text, a
