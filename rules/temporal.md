@@ -22,7 +22,7 @@ another type fails rather than converting, and a temporal value never enters
 arithmetic.
 
 Fails: `incompatible_input_type`, `missing_required_field`, `unknown_field`.
-Evidence: `negative-study-day-datetime`, `negative-date-diff-endpoints`, `negative-epoch-day-non-date`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs::temporal_reached`.
+Evidence: `negative-study-day-datetime`, `negative-date-diff-endpoints`, `negative-epoch-day-non-date`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::temporal_declarations_report_their_refusals_before_the_imputations`.
 
 | Operation | Inputs |
 |---|---|

@@ -10,9 +10,6 @@ pub mod replay;
 // front end (A1), preflight and binding (A2), the other declarations (B1)
 // and the other findings (B2).
 
-pub mod binding;
-pub mod preflight;
-
 pub mod copy_entry;
 pub mod declarative_flags;
 pub mod intermediate_ranges;

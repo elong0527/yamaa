@@ -398,7 +398,7 @@ writes the report file for a failed run too; the report is diagnostic output,
 never an accepted artifact.
 
 Fails: `missing_report`.
-Evidence: `schema-adsl-age-quality`, `schema-verification-log`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `python/tests/installed/installed_run_report.py::test_fatal_check_saves_only_the_report_and_keeps_original_issues`, `rust/crates/yamaa-adapters/tests/specification_sources.rs::verification_declarations_preserve_completed_prefix_and_phase_precedence`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::an_intermediate_warning_needs_a_report_file`.
+Evidence: `schema-adsl-age-quality`, `schema-verification-log`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_warning_verification_needs_a_report_file`, `python/tests/installed/installed_run_report.py::test_fatal_check_saves_only_the_report_and_keeps_original_issues`, `rust/crates/yamaa-adapters/tests/specification_sources.rs::verification_declarations_preserve_completed_prefix_and_phase_precedence`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::an_intermediate_warning_needs_a_report_file`.
 
 A specification declaring a `warning` without `output.report` fails validation
 with `missing_report`, a `warning` on an intermediate's `unique`
