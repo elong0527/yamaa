@@ -5,8 +5,8 @@
 //! defaults of an output key, and predicate suggestions. The family's other
 //! cases are in `tests/fixtures/diagnostics/`: `declarative_self.json`,
 //! `inheritance.json`, `integer_literals.json`, `windows.json`,
-//! `verification.json` and `missing_order.json` (#3798); `refused_domains`
-//! holds the seam their refusals keep in Rust (#3845).
+//! `verification.json` and `missing_order.json` (#3798); `api_contracts`
+//! holds the build and save seams the replay cannot express.
 
 mod execution {
     mod declarative_source_selection {
@@ -1038,59 +1038,148 @@ mod execution {
             }
         }
     }
-    mod refused_domains {
-        //! A seam the replay cannot express (#3845): a refused build's absent
-        //! output table and its save's `FailedBuild`. Every authored refusal
-        //! that this file's families replay through `build` or `save` exposes
-        //! no output and fails its save whenever the build returns a domain;
-        //! a refused preparation returns none, and the replay compares its
-        //! complete issues.
+    mod api_contracts {
+        //! Seams the replay cannot express: required preparation routes,
+        //! output presence, save return values, publication timing and a
+        //! second save after input changes. Expectations come from the
+        //! original tests, independently of the replay's issue/byte checks.
         use crate::support::diagnostic::{operations, replay};
+        use std::{collections::BTreeSet, fs};
         use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
 
         #[test]
-        fn refused_domains_have_no_output_and_fail_their_save() {
+        fn migrated_cases_preserve_build_and_save_contracts() {
+            let contracts = yamaa_adapters::json_wire::decode(include_str!(
+                "fixtures/declarative_self_contracts.json"
+            ))
+            .unwrap();
+            replay::closed(&contracts, &["about", "cases"]);
+            let contracts = replay::field(&contracts, "cases").as_object().unwrap();
+            assert!(
+                !contracts.is_empty(),
+                "the migrated families have API contracts"
+            );
             let families = [
                 "declarative_self.json::",
                 "inheritance.json::",
                 "integer_literals.json::",
                 "verification.json::",
                 "windows.json::",
+                "missing_order.json::",
             ];
             let cases = replay::cases()
                 .into_iter()
                 .filter(|case| {
                     families.iter().any(|family| case.label.starts_with(family))
-                        && !case.issues.is_empty()
                         && case
                             .operations
                             .iter()
                             .any(|operation| matches!(operation.as_str(), "build" | "save"))
                 })
                 .collect::<Vec<_>>();
-            assert!(!cases.is_empty(), "the families have authored refusals");
+            assert_eq!(
+                cases
+                    .iter()
+                    .map(|case| &case.label)
+                    .collect::<BTreeSet<_>>(),
+                contracts.keys().collect::<BTreeSet<_>>(),
+                "every migrated build/save case has exactly one API contract"
+            );
             for case in cases {
+                let expected = &contracts[&case.label];
+                replay::closed(
+                    expected,
+                    &["route", "primary", "absent", "save", "retained"],
+                );
+                let route = replay::text(replay::field(expected, "route"));
+                assert!(matches!(route, "domain" | "refused" | "either"));
                 let study = operations::study(&case.input);
+                let primary = study.join(replay::text(replay::field(expected, "primary")));
+                let absent = || {
+                    assert!(
+                        !primary.try_exists().unwrap(),
+                        "{}: primary is absent",
+                        case.label
+                    );
+                    for input in replay::items(replay::field(expected, "absent")) {
+                        assert!(
+                            !study.join(replay::text(input)).try_exists().unwrap(),
+                            "{}: {input:?} stays absent",
+                            case.label
+                        );
+                    }
+                };
+                absent();
                 let name = case.input["specification"].as_str().unwrap();
                 let specification = study.join(name).to_str().unwrap().replace('\\', "/");
                 let host = case.input.get("host").and_then(|host| host.as_str());
-                if let Ok(mut result) = crate::support::study::domain(
+                let built = crate::support::study::domain(
                     crate::support::host(host.unwrap_or("python")),
                     Request {
                         specification: &specification,
                         environment: None,
                     },
-                    crate::support::study::identity("refused-domains", &specification),
-                ) {
-                    let has_output = result.output().is_some();
-                    let save_failed = matches!(result.save(), Err(file_application::FailedBuild));
-                    assert_eq!(
-                        (has_output, save_failed),
-                        (false, true),
-                        "{}: a refused domain has no output and fails its save",
-                        case.label
-                    );
+                    crate::support::study::identity("diagnostics", &specification),
+                );
+                let actual_route = if built.is_ok() { "domain" } else { "refused" };
+                assert!(
+                    route == "either" || route == actual_route,
+                    "{}: expected {route}, got {actual_route}",
+                    case.label
+                );
+                absent();
+                match built {
+                    Ok(mut result) => {
+                        replay::compare_issues(&case, &result.issues(), Some(&study), &case.label);
+                        assert_eq!(
+                            result.output().is_some(),
+                            case.issues.is_empty(),
+                            "{}: output presence",
+                            case.label
+                        );
+                        match expected["save"].as_str() {
+                            Some("true") => {
+                                assert!(
+                                    result.save().unwrap(),
+                                    "{}: successful save returns true",
+                                    case.label
+                                );
+                                if expected["retained"].as_bool().unwrap() {
+                                    fs::write(study.join("input.csv"), "changed after build")
+                                        .unwrap();
+                                    assert!(
+                                        result.save().unwrap(),
+                                        "{}: retained save returns true",
+                                        case.label
+                                    );
+                                    for (path, bytes) in
+                                        case.stated.saved.as_ref().expect("authored saved bytes")
+                                    {
+                                        assert_eq!(
+                                            Some(fs::read(study.join(path)).unwrap()),
+                                            *bytes,
+                                            "{}: retained {path}",
+                                            case.label
+                                        );
+                                    }
+                                }
+                            }
+                            Some("failed") => {
+                                assert!(
+                                    matches!(result.save(), Err(file_application::FailedBuild)),
+                                    "{}: refused save fails",
+                                    case.label
+                                );
+                                absent();
+                            }
+                            None => assert!(expected["save"].is_null()),
+                            other => panic!("{}: unknown save contract {other:?}", case.label),
+                        }
+                    }
+                    Err(issues) => {
+                        replay::compare_issues(&case, &issues, Some(&study), &case.label)
+                    }
                 }
             }
         }
