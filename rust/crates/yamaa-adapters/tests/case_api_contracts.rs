@@ -389,7 +389,22 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
                     // whole delta the replay compares. Without one, every
                     // staged path stays.
                     match case.stated.saved.as_ref().filter(|saved| !saved.is_empty()) {
-                        Some(report) => saved_bytes(&study, report, &case.label),
+                        Some(report) => {
+                            saved_bytes(&study, report, &case.label);
+                            let published = operations::state(&study);
+                            let again = domain.save();
+                            assert!(
+                                matches!(again, Err(file_application::FailedBuild)),
+                                "{}: repeated refused save: {again:?}",
+                                case.label
+                            );
+                            assert_eq!(
+                                operations::state(&study),
+                                published,
+                                "{}: repeated refused save preserves the report and every staged path",
+                                case.label
+                            );
+                        }
                         None => assert_eq!(
                             operations::state(&study),
                             before,
