@@ -480,7 +480,7 @@ converted to missing, and `NULLIF(denominator, 0)` chooses missing
 explicitly. A failure reports the expression and the operation that failed.
 
 Fails: `division_by_zero`, `sqrt_of_negative`, `ln_of_nonpositive`, `invalid_power`, `integer_overflow`.
-Evidence: `negative-zero-division`, `negative-negative-sqrt`, `negative-log-zero`, `negative-integer-overflow`, `negative-power-negative-base`.
+Evidence: `negative-zero-division`, `negative-negative-sqrt`, `negative-log-zero`, `negative-integer-overflow`, `negative-power-negative-base`, `negative-geomean-zero`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`.
 
 An invalid `POWER` fails with `invalid_power`, and an `int` result outside
 the range fails with `integer_overflow` under [VALUE-5](values.md#value-5).
@@ -492,8 +492,13 @@ In `aggregate.expr`, arithmetic over reductions and inside a reduction's
 argument fails the same way, and the failure reports the expression and the
 column that failed. `SUM` fails on integer overflow under the same condition,
 and `MEAN`, defined by `SUM`, fails on that intermediate overflow even when
-the mathematical mean would fit. The non-finite normalization of
-[Values](values.md) applies after every arithmetic or reduction result.
+the mathematical mean would fit, as `VARIANCE` and `STDDEV` do through their
+`MEAN`. A quantile fails when the `int` difference of the two values it
+interpolates between leaves the `int` range ([FORMULA-18](#formula-18)), and
+`GEOMEAN` fails with `ln_of_nonpositive` on a zero or negative value, which
+its `LN` reads ([FORMULA-19](#formula-19)). The non-finite normalization of
+[Values](values.md) applies after every arithmetic or reduction result, so a
+step of a statistical reducer that leaves binary64 makes its result missing.
 
 <a id="formula-16"></a>
 
@@ -551,17 +556,17 @@ divides a reduction by a grouping column ([FORMULA-22](#formula-22)).
 
 <a id="formula-18"></a>
 
-### FORMULA-18. The reducers are exactly SUM, COUNT, MIN, MAX, MEAN, ONLY and STR_JOIN
+### FORMULA-18. The reducers are exactly SUM, COUNT, MIN, MAX, MEAN, ONLY, STR_JOIN, MEDIAN, Q1, Q3, QUANTILE, STDDEV, VARIANCE and GEOMEAN
 
 A reduction applies one of the reducers below to one expression, or `COUNT` to
 `D.*`. Any other reducer name or argument count fails. `AVG` is not an alias:
-the reducer name is `MEAN`, and no median is registered. A field of the
-aggregate that a reducer reads is written only beside a reducer that reads
-it, and beside every reducer that needs it, as the field table below pairs
-them. Any new reduction amends this table.
+the reducer name is `MEAN`. A field of the aggregate that a reducer reads is
+written only beside a reducer that reads it, and beside every reducer that
+needs it, as the field table below pairs them. Any new reduction amends this
+table.
 
-Fails: `prohibited_function`, `invalid_expression`, `unpaired_fields`.
-Evidence: `schema-aggregation`, `adam-adlb-mean`, `adam-adcm-related-events`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::str_join_writes_present_values_as_column_text_in_the_given_order`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::count_with_distinct_counts_each_different_present_value_once`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::a_str_join_without_its_fields_misses_each_in_the_tables_order`.
+Fails: `prohibited_function`, `invalid_expression`, `unpaired_fields`, `invalid_field_type`.
+Evidence: `schema-aggregation`, `adam-adlb-mean`, `adam-adcm-related-events`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `adam-adsl-bmi-quartile-group`, `adam-adpp-geometric-mean-ratio`, `negative-quantile-out-of-range`, `negative-quantile-unset`, `negative-mean-quantile`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::str_join_writes_present_values_as_column_text_in_the_given_order`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::count_with_distinct_counts_each_different_present_value_once`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::a_str_join_without_its_fields_misses_each_in_the_tables_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::a_quantile_above_one_fails_at_the_field_before_any_record`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `yaml/conformance/expressions.yaml`.
 
 | Reducer | Result |
 |---|---|
@@ -573,6 +578,13 @@ Evidence: `schema-aggregation`, `adam-adlb-mean`, `adam-adcm-related-events`, `n
 | `MEAN(x)` | arithmetic mean of the non-missing numeric values |
 | `ONLY(x)` | value from the group's only record; more than one fails |
 | `STR_JOIN(x)` | the non-missing values of `x` as text, in the aggregate's `order_by` order, its `separator` between two; with `distinct`, each text once |
+| `MEDIAN(x)` | middle of the non-missing numeric values: `QUANTILE` at 0.5 |
+| `Q1(x)` | first quartile of the non-missing numeric values: `QUANTILE` at 0.25 |
+| `Q3(x)` | third quartile of the non-missing numeric values: `QUANTILE` at 0.75 |
+| `QUANTILE(x)` | quantile of the non-missing numeric values at the aggregate's `quantile`, R's default type 7 |
+| `STDDEV(x)` | sample standard deviation of the non-missing numeric values, with divisor `n - 1` |
+| `VARIANCE(x)` | sample variance of the non-missing numeric values, with divisor `n - 1` |
+| `GEOMEAN(x)` | geometric mean of the non-missing values, each greater than zero |
 
 A name outside the reducers and functions, such as `AVG(x)`, fails with
 `prohibited_function`. A reducer written with other than one argument, and a
@@ -592,6 +604,7 @@ form this table writes it. Any new field of a reducer amends this table.
 | `order_by` | `STR_JOIN(x)` | yes, with at least one term |
 | `separator` | `STR_JOIN(x)` | yes |
 | `distinct` | `STR_JOIN(x)` or `COUNT(x)` written as the whole expression | no; omitted, every value counts |
+| `quantile` | `QUANTILE(x)` | yes, a number from 0 through 1 |
 
 A reducer that lacks fields it needs is declared, and `missing` lists every
 field it lacks. Fields written beside no reducer that reads them are
@@ -644,6 +657,55 @@ The related records store the sequence numbers as text, `10` before `2`, and
 the column holds `2, 10`: the binding makes them numbers, which `order_by`
 sorts numerically.
 
+`MEDIAN`, `Q1`, `Q3`, `QUANTILE`, `STDDEV`, `VARIANCE` and `GEOMEAN` are the
+statistical reducers. Each has the one definition this card or
+[FORMULA-19](#formula-19) gives it, and returns a `float`
+([FORMULA-23](#formula-23)).
+
+`QUANTILE(x)` is R's default quantile, type 7 of Hyndman and Fan, at the
+probability `p` that the aggregate's `quantile` gives. Its `n` non-missing
+values sort ascending by exact value ([VALUE-19](values.md#value-19)), a
+stable sort that keeps equal values in relation record order, as `x[1]` to
+`x[n]`. With `h = (n - 1) * p + 1`, computed with the binary64 `*` and then
+`+`, `j` the integer part of `h` and `g = h - j`, the result is `x[j]` when
+`g` is 0, as it is when `j = n`, and otherwise `x[j] + g * (x[j+1] - x[j])`,
+evaluated in that written form with the numeric `-`, `*` and `+`
+([VALUE-10](values.md#value-10)). An `int` result widens to a `float`
+([VALUE-8](values.md#value-8)), and an `int` difference outside the `int`
+range fails ([FORMULA-15](#formula-15)). One value gives that value. Another
+implementation of type 7 may arrange the interpolation otherwise and round
+differently in the last place; this form is the one evaluated.
+
+`MEDIAN`, `Q1` and `Q3` are `QUANTILE` at 0.5, 0.25 and 0.75, written without
+the field. The median is the middle value, or for an even count
+`x[j] + 0.5 * (x[j+1] - x[j])`, between the two middle values. A `quantile`
+outside 0 through 1, such as `1.5`, fails validation as `invalid_field_type`
+at the field, before any input is read.
+
+```yaml
+- name: BMIQ1
+  type: float
+  derivation:
+    aggregate:
+      group_by: [STUDYID]
+      expr: "Q1(BMIBL)"
+
+- name: BMIP90
+  type: float
+  derivation:
+    aggregate:
+      group_by: [STUDYID]
+      quantile: 0.9
+      expr: "QUANTILE(BMIBL)"
+```
+
+On the values 2, 4, 5, 7, 9 and 10, `MEDIAN` is 6, `Q1` is 4.25 and `Q3` is
+8.5. SAS's five `PCTLDEF` definitions include none equal to type 7: its
+default, `PCTLDEF=5`, returns an observed value or the midpoint of two, so on
+those values it gives a first quartile of 4 and a third of 9. The median is the
+same value under both definitions for every n. No other definition is
+offered.
+
 `COUNT(D.*)` takes no other argument. `D` stands for the relation named by the
 expression's qualified identifiers, as in `COUNT(EX.*)`, and a `COUNT(D.*)`
 whose dataset is not the expression's relation fails. It is the one reducer
@@ -663,26 +725,47 @@ values, which compare chronologically under
 
 <a id="formula-19"></a>
 
-### FORMULA-19. SUM adds in relation record order, and MEAN divides that SUM by COUNT
+### FORMULA-19. SUM adds in relation record order, MEAN divides that SUM by COUNT, and VARIANCE, STDDEV and GEOMEAN add in the same order
 
 `SUM(x)` adds the non-missing argument values in relation record order,
 starting with the first such value and adding each later value with the
 numeric `+`. Summation is never reordered, reassociated or partitioned, and
 never compensated or correctly rounded. For a group with at least one
 non-missing value, `MEAN(x)` is that ordered `SUM(x)` divided by `COUNT(x)`
-with the numeric `/`, and it inherits the binary64 rounding of `SUM`. A
-reduction does not sort the records, except that `STR_JOIN` joins them in the
-aggregate's `order_by` order ([FORMULA-18](#formula-18)).
+with the numeric `/`, inheriting the binary64 rounding of `SUM`, and
+`VARIANCE`, `STDDEV` and `GEOMEAN` add in the same order. A reduction does not
+sort the records, except as `STR_JOIN` and the quantiles do
+([FORMULA-18](#formula-18)).
 
-Evidence: `adam-adlb-ordered-sum`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `rust/crates/yamaa-adapters/tests/execution_value_semantics.rs::sum_adds_matched_donor_records_in_stored_order_and_mean_divides_that_sum`.
+Evidence: `adam-adlb-ordered-sum`, `adam-adcm-related-events`, `adam-adpp-geometric-mean-ratio`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `rust/crates/yamaa-adapters/tests/execution_value_semantics.rs::sum_adds_matched_donor_records_in_stored_order_and_mean_divides_that_sum`.
+
+`VARIANCE(x)` takes two passes in relation record order. The first is the
+ordered `MEAN(x)` above, `m`, so a value that is not a number, or the `int`
+overflow of its sum, fails as `MEAN` does. The second adds the first squared
+deviation, `(x - m) * (x - m)`, and then each later one, with the numeric `-`,
+`*` and `+`, and divides the total by `n - 1` with the numeric `/`, `n` being
+the count of non-missing values. `STDDEV(x)` is the `SQRT` of that variance
+([FORMULA-13](#formula-13)). Fewer than two non-missing values give missing
+([FORMULA-24](#formula-24)). On 2, 4, 4, 4, 5, 5, 7 and 9 the mean is 5 and
+the squared deviations add to 32, so `VARIANCE` is `32 / 7` and `STDDEV` is
+`SQRT(32 / 7)`.
+
+`GEOMEAN(x)` is the `EXP` of the ordered mean of `LN(x)`: in relation record
+order, the first logarithm and then each later one added with the numeric
+`+`, and the total divided by their count with the numeric `/`, under the
+portable `LN` and `EXP` of [FORMULA-13](#formula-13). A zero or negative value
+fails as `LN` does ([FORMULA-15](#formula-15)). The geometric mean of 1, 10
+and 100 is `EXP((LN(1) + LN(10) + LN(100)) / 3)` in those binary64 steps,
+`10.000000000000002`.
 
 The `filter`, when present, removes records and keeps the order of the records
 that remain. [Inputs](inputs.md) defines stored-source
 record order, and [Column derivation](columns.md) defines
 constructed-output and grouped-input record order. `COUNT`, `MIN` and `MAX`
-are independent of record order, `COUNT(x)` with `distinct` too, and `ONLY`
-accepts no group in which an order could choose among records
-([FORMULA-20](#formula-20)). A rule that needs one record chosen by value
+are independent of record order, `COUNT(x)` with `distinct` too, a quantile
+too except for which of two equal values, such as `0.0` and `-0.0`, sorts
+first, and `ONLY` accepts no group in which an order could choose among
+records ([FORMULA-20](#formula-20)). A rule that needs one record chosen by value
 order uses a window or the `order_by` plus `keep` selection
 ([LOOKUP-10](lookup.md#lookup-10)), where the value order is declared.
 
@@ -690,8 +773,8 @@ order uses a window or the `order_by` plus `keep` selection
 `order_by` sorts them for it, records equal on every term keeping relation
 record order ([LOOKUP-10](lookup.md#lookup-10)). An `order_by` beside any
 other reducer is refused ([FORMULA-18](#formula-18)), and `STR_JOIN` stands
-only as the whole expression ([FORMULA-23](#formula-23)), so `SUM` and `MEAN`
-always add in relation record order.
+only as the whole expression ([FORMULA-23](#formula-23)), so `SUM`, `MEAN`,
+`VARIANCE`, `STDDEV` and `GEOMEAN` always add in relation record order.
 
 <a id="formula-20"></a>
 
@@ -763,19 +846,23 @@ in `group_by`.
 
 ### FORMULA-23. A reduction keeps the type it reduces, and arithmetic over reductions is numeric
 
-`COUNT` returns `int`, `MEAN` returns `float` and `STR_JOIN` returns `str`;
-`SUM` keeps its argument's numeric type, and `MIN`, `MAX` and `ONLY` keep the
-type they reduce, whatever it is. `SUM` and `MEAN` require a numeric argument,
-`MIN` and `MAX` mutually comparable values, and `COUNT`, `ONLY` and
-`STR_JOIN` accept any type. An expression using an operator or numeric
-function is numeric: every reduction and grouped identifier in it must be
-numeric, and [Values](values.md) promotion gives its type.
+`COUNT` returns `int`, `MEAN` and the statistical reducers return `float` and
+`STR_JOIN` returns `str`; `SUM` keeps its argument's numeric type, and `MIN`,
+`MAX` and `ONLY` keep the type they reduce, whatever it is. `SUM`, `MEAN` and
+the statistical reducers require a numeric argument, `MIN` and `MAX` mutually
+comparable values, and `COUNT`, `ONLY` and `STR_JOIN` accept any type. An
+expression using an operator or numeric function is numeric: every reduction
+and grouped identifier in it must be numeric, and [Values](values.md)
+promotion gives its type.
 
 Fails: `incompatible_input_type`, `incomparable_sources`.
-Evidence: `negative-sum-non-numeric`, `negative-join-arithmetic`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`.
+Evidence: `negative-sum-non-numeric`, `negative-join-arithmetic`, `negative-stddev-non-numeric`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::a_statistical_reducer_over_a_name_that_is_not_numeric_is_refused_before_any_record`.
 
-`SUM` or `MEAN` over a non-numeric argument fails, as does arithmetic over a
-non-numeric reduction or grouped identifier. `MIN` or `MAX` over incomparable
+`SUM`, `MEAN` or a statistical reducer over a non-numeric argument fails,
+naming the reducer, as does arithmetic over a non-numeric reduction or grouped
+identifier. A statistical reducer's result is a number, so it may stand inside
+arithmetic: `100 * STDDEV(AVAL) / MEAN(AVAL)` is a coefficient of variation in
+percent. `MIN` or `MAX` over incomparable
 values fails: a column mixing incomparable types is an error rather than an
 implementation-defined order. Their string order is that of
 [Values](values.md).
@@ -798,19 +885,24 @@ types of the relation's fields and of the aggregate's `derivations`, give
 Inside a reduction's argument a missing operand propagates, so a record whose
 operand is missing contributes a missing value rather than a zero:
 `SUM(EX.EXDOSE * EX.EXDUR)` skips a record missing either factor. `SUM`,
-`COUNT(x)`, `MIN`, `MAX`, `MEAN` and `STR_JOIN` then ignore missing values,
-while `ONLY` counts records ([FORMULA-20](#formula-20)). A group with no
-record after `filter` yields missing. When every value is missing, `SUM`,
-`MIN`, `MAX`, `MEAN` and `STR_JOIN` yield missing, never zero or empty text,
-and `COUNT(x)` yields `0`, with or without `distinct`.
+`COUNT(x)`, `MIN`, `MAX`, `MEAN`, `STR_JOIN` and the statistical reducers then
+ignore missing values, while `ONLY` counts records
+([FORMULA-20](#formula-20)). A group with no record after `filter` yields
+missing. When every value is missing, `COUNT(x)` yields `0`, with or without
+`distinct`, and the others missing, never zero or empty text, as `STDDEV` and
+`VARIANCE` do for one value.
 
-Evidence: `adam-adex-uncollected`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`.
+Evidence: `adam-adex-uncollected`, `adam-adcm-related-events`, `adam-adsl-bmi-quartile-group`, `adam-adpp-geometric-mean-ratio`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`.
 
 | Group | Result |
 |---|---|
 | No record in the group after `filter` | missing, uncounted: an aggregate declares no handler ([COLUMN-11](columns.md#column-11)) |
 | Every value missing -- `SUM`, `MIN`, `MAX`, `MEAN`, `STR_JOIN` | missing, never zero or empty text |
+| Every value missing -- `MEDIAN`, `Q1`, `Q3`, `QUANTILE`, `STDDEV`, `VARIANCE`, `GEOMEAN` | missing |
 | Every value missing -- `COUNT(x)`, with or without `distinct` | `0` |
+| One non-missing value -- `STDDEV(x)`, `VARIANCE(x)` | missing: a sample deviation needs two values |
+| One non-missing value -- `MEDIAN`, `Q1`, `Q3`, `QUANTILE` | that value, as a `float` |
+| One non-missing value -- `GEOMEAN(x)` | `EXP(LN(x))`, which can differ from the value in the last place |
 | No record in the group -- `COUNT(x)`, `COUNT(D.*)`, `STR_JOIN(x)` | missing |
 | No record in the group -- `ONLY(x)` | missing |
 | One record whose value is missing -- `ONLY(x)` | missing |
@@ -818,7 +910,8 @@ Evidence: `adam-adex-uncollected`, `adam-adcm-related-events`, `rust/crates/yama
 An absent record remains distinguishable from a collected missing value, and
 an uncollected quantity is never reported as a measured zero. `MEAN` returns
 missing before its division when no non-missing value remains, so an
-all-missing group does not fail with division by zero. Arithmetic over
+all-missing group does not fail with division by zero, and the statistical
+reducers return missing before any step that reads a value. Arithmetic over
 reduction results follows [FORMULA-14](#formula-14): a missing reduction
 propagates through an operator, and a formula that must yield missing rather
 than fail says so with `NULLIF`.

@@ -2,7 +2,7 @@
 use super::{ConditionCode as C, Context, Diagnostic, ProjectionError};
 use crate::json::Value as JsonValue;
 use crate::{
-    reduction::NumericReducer,
+    expression::Reducer,
     value::{Value, ValueType},
 };
 
@@ -37,7 +37,7 @@ pub enum DatasetFinding<'a> {
     ReductionInputType {
         path: &'a str,
         expression: &'a str,
-        reducer: NumericReducer,
+        reducer: Reducer,
         source: &'a str,
         actual: ValueType,
     },

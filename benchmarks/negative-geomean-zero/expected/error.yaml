@@ -1,0 +1,10 @@
+phase: derivation
+condition: ln_of_nonpositive
+spec_paths:
+  - columns.MRGM.derivation.aggregate.expr
+rule: FORMULA-15
+context:
+  expr: "GEOMEAN(PP.PPSTRESN)"
+  keys:
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-S02
