@@ -3,7 +3,8 @@
 //! evaluation route; all physical access goes through a resolver, and local
 //! files are just the default resolver.
 //!
-//! The use cases are [`Engine`]'s methods in [`crate::api`],
+//! The use cases are the operations of the requests [`Engine::spec`] and
+//! [`Engine::project`] give, in [`crate::api`], and [`Engine`]'s methods in
 //! [`crate::file_type`], [`crate::odm`] and [`crate::table`]. Each build, of a
 //! specification alone or of one member of a project run, is an owned build
 //! internal to the facade; a [`crate::Run`] is its public view, and a result
@@ -159,7 +160,7 @@ impl EngineOptions {
     /// use std::num::NonZeroUsize;
     /// use std::sync::Arc;
     ///
-    /// use yamaa::{CancellationToken, Engine, EngineOptions, HostLanguage, MemoryResolver, Partitions};
+    /// use yamaa::{Engine, EngineOptions, HostLanguage, MemoryResolver, Partitions};
     ///
     /// let resolver = Arc::new(MemoryResolver::new());
     /// resolver.insert("/", "spec.yaml", "spec:1", Arc::from(
@@ -171,7 +172,7 @@ impl EngineOptions {
     ///         .with_resolver(resolver)
     ///         .with_partitions(Partitions::new(NonZeroUsize::MIN)),
     /// );
-    /// let run = engine.spec_run("spec.yaml", None, &CancellationToken::new()).unwrap();
+    /// let run = engine.spec("spec.yaml").run().unwrap();
     /// if cfg!(feature = "yaml") {
     ///     assert!(run.diagnostics().is_empty(), "{:?}", run.diagnostics());
     ///     assert_eq!(run.output().unwrap().rows(), 3);
@@ -681,25 +682,19 @@ mod tests {
         let engine = Engine::new(options());
         let token = CancellationToken::new();
         token.cancel();
-        assert!(matches!(
-            engine.spec_run("spec", None, &token),
-            Err(Error::Cancelled)
-        ));
-        assert!(matches!(
-            engine.spec_check("spec", None, &token),
-            Err(Error::Cancelled)
-        ));
+        let request = engine.spec("spec").cancel_with(&token);
+        assert!(matches!(request.run(), Err(Error::Cancelled)));
+        assert!(matches!(request.check(), Err(Error::Cancelled)));
     }
 
     #[test]
     fn missing_entries_report_diagnostics_without_a_build_error() {
         let engine = Engine::new(options());
-        let token = CancellationToken::new();
         let missing = missing_spec();
-        let path = missing.to_str().unwrap();
-        let check = engine.spec_check(path, None, &token).unwrap();
+        let request = engine.spec(missing.to_str().unwrap());
+        let check = request.check().unwrap();
         assert!(!check.diagnostics().is_empty());
-        let run = engine.spec_run(path, None, &token).unwrap();
+        let run = request.run().unwrap();
         assert!(run.output().is_none());
         assert!(run.report().is_none());
         assert!(!run.diagnostics().is_empty());
@@ -710,11 +705,8 @@ mod tests {
     #[test]
     fn a_failed_run_saves_nothing_and_refuses_with_its_issues() {
         let engine = Engine::new(options());
-        let token = CancellationToken::new();
         let missing = missing_spec();
-        let mut run = engine
-            .spec_run(missing.to_str().unwrap(), None, &token)
-            .unwrap();
+        let mut run = engine.spec(missing.to_str().unwrap()).run().unwrap();
         let failure = run.save(&CancellationToken::new()).unwrap_err();
         // D39: a run whose file was not read names the path as given.
         assert_eq!(
@@ -770,10 +762,10 @@ mod plain_build_tests {
             "test".into(),
         ));
         let token = CancellationToken::new();
-        let path = entry.to_str().unwrap();
-        let check = engine.spec_check(path, None, &token).unwrap();
+        let request = engine.spec(entry.to_str().unwrap()).cancel_with(&token);
+        let check = request.check().unwrap();
         assert!(check.diagnostics().is_empty());
-        let mut run = engine.spec_run(path, None, &token).unwrap();
+        let mut run = request.run().unwrap();
         assert!(run.diagnostics().is_empty());
         assert_eq!(run.output().unwrap().rows(), 2);
         // One run, input, base and two column rows; no handler or check.

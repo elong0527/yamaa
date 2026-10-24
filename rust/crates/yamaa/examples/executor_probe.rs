@@ -264,7 +264,9 @@ fn run_case(shape: Shape, rows: usize) -> Result<Duration, String> {
     let token = CancellationToken::new();
     let started = Instant::now();
     let run = engine
-        .spec_run("spec.yaml", None, &token)
+        .spec("spec.yaml")
+        .cancel_with(&token)
+        .run()
         .map_err(|error| error.to_string())?;
     let elapsed = started.elapsed();
     validate(&run, shape, rows)?;

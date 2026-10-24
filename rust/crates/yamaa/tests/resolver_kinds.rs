@@ -74,7 +74,9 @@ fn every_reported_kind_raises_its_file_rule_condition() {
         resolver.insert_kind("/spec.yaml", "input/src.csv", kind);
         let token = CancellationToken::new();
         let run = engine(&resolver)
-            .spec_run("spec.yaml", None, &token)
+            .spec("spec.yaml")
+            .cancel_with(&token)
+            .run()
             .unwrap();
         assert!(run.output().is_none(), "{kind:?}");
         let found = issues(&run.issues());
@@ -89,7 +91,9 @@ fn every_reported_kind_raises_its_file_rule_condition() {
         // A check reads no study data, so it never asks about the input.
         assert_eq!(
             engine(&resolver)
-                .spec_check("spec.yaml", None, &token)
+                .spec("spec.yaml")
+                .cancel_with(&token)
+                .check()
                 .unwrap()
                 .issues()
                 .rows(),
@@ -121,9 +125,7 @@ fn a_caller_resolver_reports_kinds_through_its_failures() {
         EngineOptions::new(HostLanguage::Python, "kind-test".into(), "0".into())
             .with_resolver(Arc::new(Linked(inner))),
     );
-    let run = engine
-        .spec_run("spec.yaml", None, &CancellationToken::new())
-        .unwrap();
+    let run = engine.spec("spec.yaml").run().unwrap();
     let found = issues(&run.issues());
     assert_eq!(found.len(), 1, "{found:?}");
     assert_eq!(found[0].0, "resource_path_symlink");

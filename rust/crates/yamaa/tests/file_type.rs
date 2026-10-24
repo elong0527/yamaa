@@ -9,9 +9,8 @@
 use std::sync::{Arc, Mutex};
 
 use yamaa::{
-    CancellationToken, Engine, EngineOptions, Failure, FileType, MemoryResolver, ResolverFailure,
-    ResolverKind, ResolverOperation, ResolverReply, ResolverRequest, ResourceKind,
-    ResourceResolver,
+    Engine, EngineOptions, Failure, FileType, MemoryResolver, ResolverFailure, ResolverKind,
+    ResolverOperation, ResolverReply, ResolverRequest, ResourceKind, ResourceResolver,
 };
 
 struct Study(crate::support::Scratch);
@@ -157,10 +156,7 @@ fn a_1_x_header_is_refused_as_a_call_reading_its_type_refuses_it() {
         r#"{"language_versions":["1.0"],"version":"1.1"}"#,
     );
     assert_eq!(refused(&failure, &path), newer);
-    let check = engine
-        .spec_check(&path, None, &CancellationToken::new())
-        .unwrap()
-        .diagnostics();
+    let check = engine.spec(&path).check().unwrap().diagnostics();
     assert_eq!(
         (
             check[0].code.clone(),

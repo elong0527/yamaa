@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use yamaa::{
     CancellationToken, Engine, EngineOptions, HostLanguage, MemoryResolver, OdmOptions,
     ResolverFailure, ResolverKind, ResolverOperation, ResolverReply, ResolverRequest,
-    ResourceResolver,
+    ResourceResolver, SubmissionOptions,
 };
 
 const CREATED: &str = "2026-09-11T00:00:00";
@@ -218,7 +218,9 @@ fn a_check_reads_only_metadata_through_the_resolver() {
     let token = CancellationToken::new();
     assert_eq!(
         engine
-            .spec_check("spec.yaml", None, &token)
+            .spec("spec.yaml")
+            .cancel_with(&token)
+            .check()
             .unwrap()
             .issues()
             .rows(),
@@ -227,7 +229,9 @@ fn a_check_reads_only_metadata_through_the_resolver() {
     assert_eq!(case.accesses(), set(&SPEC));
     assert_eq!(
         engine
-            .project_check("project.yaml", &token)
+            .project("project.yaml")
+            .cancel_with(&token)
+            .check()
             .unwrap()
             .issues()
             .rows(),
@@ -235,11 +239,11 @@ fn a_check_reads_only_metadata_through_the_resolver() {
     );
     assert_eq!(case.accesses(), set(&[PROJECT, SPEC].concat()));
     assert_eq!(
-        engine.project_spec("project.yaml", "DM").unwrap(),
+        engine.project("project.yaml").spec("DM").unwrap().path(),
         "/spec.yaml"
     );
     assert_eq!(case.accesses(), set(&[PROJECT, SPEC].concat()));
-    assert_eq!(engine.project_names("project.yaml").unwrap(), ["DM"]);
+    assert_eq!(engine.project("project.yaml").names().unwrap(), ["DM"]);
     assert_eq!(case.accesses(), set(&[PROJECT, SPEC].concat()));
 }
 
@@ -273,9 +277,9 @@ fn project_names_read_no_input_data_and_name_what_a_run_builds() {
     for (benchmark, project) in &projects {
         let case = Case::new(benchmark, &[]);
         let engine = case.neutral();
-        let names = engine.project_names(project);
+        let names = engine.project(project).names();
         assert_eq!(case.inputs(), Vec::<String>::new(), "{benchmark}");
-        let runs = engine.project_run(project, None, &token).unwrap();
+        let runs = engine.project(project).cancel_with(&token).run().unwrap();
         reading += usize::from(!case.inputs().is_empty());
         match names {
             // A name shared by two listings refuses the names too, so only
@@ -288,7 +292,7 @@ fn project_names_read_no_input_data_and_name_what_a_run_builds() {
                 );
                 for name in &names {
                     assert!(
-                        engine.project_spec(project, name).is_ok(),
+                        engine.project(project).spec(name).is_ok(),
                         "{benchmark}: {name}"
                     );
                 }
@@ -317,7 +321,12 @@ fn project_names_read_no_input_data_and_name_what_a_run_builds() {
 fn a_run_reads_and_saves_only_through_the_resolver() {
     let case = Case::new("sdtm-dm-xpt", &[]);
     let token = CancellationToken::new();
-    let mut run = case.engine().spec_run("spec.yaml", None, &token).unwrap();
+    let mut run = case
+        .engine()
+        .spec("spec.yaml")
+        .cancel_with(&token)
+        .run()
+        .unwrap();
     assert_eq!(run.issues().rows(), 0);
     assert_eq!(
         case.accesses(),
@@ -334,7 +343,9 @@ fn a_project_run_reads_and_saves_only_through_the_resolver() {
     let token = CancellationToken::new();
     let mut runs = case
         .engine()
-        .project_run("project.yaml", None, &token)
+        .project("project.yaml")
+        .cancel_with(&token)
+        .run()
         .unwrap();
     assert_eq!(runs.issues().rows(), 0);
     assert_eq!(runs.names(), ["DM"]);
@@ -355,7 +366,10 @@ fn a_submission_reads_and_saves_only_through_the_resolver() {
     let token = CancellationToken::new();
     let mut submission = case
         .engine()
-        .project_submission("project.yaml", Some("sdtm"), Some(CREATED), "0.4.0", &token)
+        .project("project.yaml")
+        .section("sdtm")
+        .cancel_with(&token)
+        .submission(&SubmissionOptions::new("0.4.0").with_created(CREATED))
         .unwrap();
     assert_eq!(submission.issues().rows(), 0);
     assert_eq!(
@@ -390,7 +404,7 @@ fn a_submission_reads_and_saves_only_through_the_resolver() {
 #[test]
 fn resolve_reads_only_the_specification_through_the_resolver() {
     let case = Case::new("sdtm-dm-xpt", &[]);
-    let resolved = case.engine().spec_resolve("spec.yaml", None).unwrap();
+    let resolved = case.engine().spec("spec.yaml").resolve().unwrap();
     assert_eq!(case.accesses(), set(&SPEC));
     let yamaa::ContextValue::Map(fields) = resolved else {
         panic!("resolved facts are an object");

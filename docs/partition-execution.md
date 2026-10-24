@@ -238,7 +238,7 @@ with no host surface.
 
 ### Streamed runs
 
-`Engine::spec_stream` runs a specification whose output its consumer reads as
+`SpecRequest::stream` runs a specification whose output its consumer reads as
 a stream of Arrow batches (#3697), and the hosts' `run(stream = TRUE)` returns
 such a run. The consumer's pull drives it:
 

@@ -18,7 +18,7 @@ use yamaa::{
     Argument, CallError, CancellationToken, Engine, EngineOptions, Error, FunctionError,
     FunctionHandle, FunctionIdentity, HostLanguage, LockContext, MemoryResolver, ProjectFunctions,
     ResolverFailure, ResolverReply, ResolverRequest, ResourceResolver, Scalar, ScalarRef,
-    Signature,
+    Signature, SubmissionOptions,
 };
 
 const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, key: [ID]}}\noutput: {path: out.csv, columns: [ID, NAME]}\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: SRC.ID}\n  - {name: NAME, type: str, label: Name, derivation: SRC.NAME}\n";
@@ -131,18 +131,51 @@ fn a_cancelled_token_fails_every_operation_before_it_reads_anything() {
     let engine = engine(resolver.clone());
     let token = CancellationToken::new();
     token.cancel();
-    assert!(cancelled(engine.spec_check("spec.yaml", None, &token)));
-    assert!(cancelled(engine.spec_run("spec.yaml", None, &token)));
-    assert!(cancelled(engine.project_check("project.yaml", &token)));
-    assert!(cancelled(engine.project_run("project.yaml", None, &token)));
-    assert!(cancelled(engine.project_submission(
-        "project.yaml",
-        None,
-        Some("2026-01-01T00:00:00"),
-        "0",
-        &token
-    )));
+    assert!(cancelled(
+        engine.spec("spec.yaml").cancel_with(&token).check()
+    ));
+    assert!(cancelled(
+        engine
+            .spec("spec.yaml")
+            .cancel_with(&token)
+            .check_on("parent.yaml")
+    ));
+    assert!(cancelled(
+        engine.spec("spec.yaml").cancel_with(&token).run()
+    ));
+    assert!(cancelled(
+        engine.project("project.yaml").cancel_with(&token).check()
+    ));
+    assert!(cancelled(
+        engine.project("project.yaml").cancel_with(&token).run()
+    ));
+    assert!(cancelled(
+        engine
+            .project("project.yaml")
+            .cancel_with(&token)
+            .submission(&SubmissionOptions::new("0").with_created("2026-01-01T00:00:00"))
+    ));
     assert!(resolver.requests.lock().unwrap().is_empty());
+}
+
+/// The request of a specification a project lists polls the project
+/// request's token: once that token is cancelled, so is each of its
+/// operations.
+#[test]
+fn a_listed_specifications_request_polls_its_project_requests_token() {
+    let polls = Arc::new(AtomicUsize::new(0));
+    let engine = engine(Recording::new(&polls, SPEC, PROJECT));
+    let token = CancellationToken::new();
+    let listed = engine
+        .project("project.yaml")
+        .cancel_with(&token)
+        .spec("TEST")
+        .unwrap();
+    assert_eq!(listed.run().unwrap().output().unwrap().rows(), 2);
+    token.cancel();
+    assert!(cancelled(listed.check()));
+    assert!(cancelled(listed.check_on("parent.yaml")));
+    assert!(cancelled(listed.run()));
 }
 
 /// Whichever poll of a run finds its token cancelled, the run returns
@@ -154,7 +187,9 @@ fn a_run_cancelled_at_any_poll_returns_no_result() {
     let polls = Arc::new(AtomicUsize::new(0));
     let engine = engine(Recording::new(&polls, SPEC, PROJECT));
     let run = engine
-        .spec_run("spec.yaml", None, &counting(&polls, None))
+        .spec("spec.yaml")
+        .cancel_with(&counting(&polls, None))
+        .run()
         .unwrap();
     assert!(run.diagnostics().is_empty(), "{:?}", run.diagnostics());
     assert_eq!(run.output().unwrap().rows(), 2);
@@ -166,7 +201,7 @@ fn a_run_cancelled_at_any_poll_returns_no_result() {
         polls.store(0, Ordering::SeqCst);
         let token = counting(&polls, Some(from));
         assert!(
-            cancelled(engine.spec_run("spec.yaml", None, &token)),
+            cancelled(engine.spec("spec.yaml").cancel_with(&token).run()),
             "cancelled at poll {from}"
         );
         assert_eq!(polls.load(Ordering::SeqCst), from, "asked after {from}");
@@ -180,7 +215,9 @@ fn a_project_run_cancelled_between_members_never_reads_the_next() {
     let polls = Arc::new(AtomicUsize::new(0));
     let resolver = Recording::new(&polls, SPEC, PROJECT);
     let runs = engine(resolver.clone())
-        .project_run("project.yaml", None, &counting(&polls, None))
+        .project("project.yaml")
+        .cancel_with(&counting(&polls, None))
+        .run()
         .unwrap();
     assert_eq!(runs.names(), ["TEST", "OTHER"]);
     assert!(runs.diagnostics().is_empty(), "{:?}", runs.diagnostics());
@@ -191,11 +228,12 @@ fn a_project_run_cancelled_between_members_never_reads_the_next() {
     let resolver = Recording::new(&polls, SPEC, PROJECT);
     polls.store(0, Ordering::SeqCst);
     let token = counting(&polls, Some(before));
-    assert!(cancelled(engine(resolver.clone()).project_run(
-        "project.yaml",
-        None,
-        &token
-    )));
+    assert!(cancelled(
+        engine(resolver.clone())
+            .project("project.yaml")
+            .cancel_with(&token)
+            .run()
+    ));
     assert!(resolver.first("input.csv").is_some());
     assert_eq!(resolver.first("other.csv"), None);
     assert!(token.is_cancelled());
@@ -208,9 +246,7 @@ fn a_project_run_cancelled_between_members_never_reads_the_next() {
 fn a_save_cancelled_after_staging_writes_nothing_and_the_result_saves_later() {
     let polls = Arc::new(AtomicUsize::new(0));
     let resolver = Recording::new(&polls, SPEC, PROJECT);
-    let mut run = engine(resolver.clone())
-        .spec_run("spec.yaml", None, &CancellationToken::new())
-        .unwrap();
+    let mut run = engine(resolver.clone()).spec("spec.yaml").run().unwrap();
     let token = counting(&polls, Some(1));
     let failure = run.save(&token).unwrap_err();
     assert_eq!(polls.load(Ordering::SeqCst), 1);
@@ -237,7 +273,8 @@ fn a_cancelled_project_run_save_writes_no_member() {
     let polls = Arc::new(AtomicUsize::new(0));
     let resolver = Recording::new(&polls, SPEC, PROJECT);
     let mut runs = engine(resolver.clone())
-        .project_run("project.yaml", None, &CancellationToken::new())
+        .project("project.yaml")
+        .run()
         .unwrap();
     let token = CancellationToken::new();
     token.cancel();
@@ -334,15 +371,19 @@ fn a_project_function_interrupt_cancels_the_call() {
     let functions = Echo::new(true);
     let (engine, _) = function_study(functions.clone());
     let token = CancellationToken::new();
-    assert!(cancelled(engine.spec_run(
-        "spec.yaml",
-        Some("project.yaml"),
-        &token
-    )));
+    assert!(cancelled(
+        engine
+            .spec("spec.yaml")
+            .project("project.yaml")
+            .cancel_with(&token)
+            .run()
+    ));
     assert_eq!(functions.rows(), ["alpha"]);
     let functions = Echo::new(true);
     let (engine, resolver) = function_study(functions.clone());
-    assert!(cancelled(engine.project_run("project.yaml", None, &token)));
+    assert!(cancelled(
+        engine.project("project.yaml").cancel_with(&token).run()
+    ));
     assert_eq!(functions.rows(), ["alpha"]);
     assert_eq!(functions.binds.load(Ordering::SeqCst), 1);
     assert_eq!(resolver.first("other.csv"), None);
@@ -359,17 +400,21 @@ fn a_token_a_call_cancels_stops_the_run_before_the_next_call() {
     let (engine, _) = function_study(functions.clone());
     let cancel = Arc::clone(&functions.cancel);
     let token = CancellationToken::with_probe(move || cancel.load(Ordering::SeqCst));
-    assert!(cancelled(engine.spec_run(
-        "spec.yaml",
-        Some("project.yaml"),
-        &token
-    )));
+    assert!(cancelled(
+        engine
+            .spec("spec.yaml")
+            .project("project.yaml")
+            .cancel_with(&token)
+            .run()
+    ));
     assert_eq!(functions.rows(), ["alpha"]);
     // Uncancelled, both rows call it.
     let functions = Echo::new(false);
     let (engine, _) = function_study(functions.clone());
     let run = engine
-        .spec_run("spec.yaml", Some("project.yaml"), &CancellationToken::new())
+        .spec("spec.yaml")
+        .project("project.yaml")
+        .run()
         .unwrap();
     assert!(run.diagnostics().is_empty(), "{:?}", run.diagnostics());
     assert_eq!(functions.rows(), ["alpha", "beta"]);

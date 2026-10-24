@@ -10,7 +10,7 @@ use arrow_array::{Array, ListArray, StringArray};
 use yamaa::{
     Argument, CallError, CancellationToken, Engine, EngineOptions, FunctionError, FunctionHandle,
     FunctionIdentity, HostLanguage, LockContext, ProjectFunctions, Scalar, Signature, Status,
-    Table,
+    SubmissionOptions, Table,
 };
 use yamaa_core::json::Value;
 
@@ -175,32 +175,28 @@ fn project_names_list_the_run_order_and_refuse_as_a_read() {
         "project.yaml",
         "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [adam/adsl.yaml, sdtm/dm.yaml, sdtm/ae.yaml]\n",
     );
-    let names = engine.project_names(&study.project()).unwrap();
+    let names = engine.project(&study.project()).names().unwrap();
     assert_eq!(names, ["DM", "ADSL", "AE"]);
-    let runs = engine
-        .project_run(&study.project(), None, &CancellationToken::new())
-        .unwrap();
+    let runs = engine.project(&study.project()).run().unwrap();
     assert_eq!(runs.names(), names);
 
     // AE writes DM's file, so the run refuses before any specification
     // builds and names nothing, yet each name still selects its listing.
     study.write("project.yaml", PROJECT);
     study.write("sdtm/ae.yaml", AE.replace("../out/ae.csv", "../out/dm.csv"));
-    let names = engine.project_names(&study.project()).unwrap();
+    let names = engine.project(&study.project()).names().unwrap();
     assert_eq!(names, ["DM", "AE", "ADSL"]);
     for (name, listing) in names
         .iter()
         .zip(["sdtm/dm.yaml", "sdtm/ae.yaml", "adam/adsl.yaml"])
     {
         assert_eq!(
-            Path::new(&engine.project_spec(&study.project(), name).unwrap()),
+            Path::new(engine.project(&study.project()).spec(name).unwrap().path()),
             study.0.join(listing),
             "{name}"
         );
     }
-    let runs = engine
-        .project_run(&study.project(), None, &CancellationToken::new())
-        .unwrap();
+    let runs = engine.project(&study.project()).run().unwrap();
     assert!(runs.names().is_empty());
     assert_eq!(conditions(&runs.issues()), ["artifact_path_collision"]);
     study.write("sdtm/ae.yaml", AE);
@@ -210,7 +206,7 @@ fn project_names_list_the_run_order_and_refuse_as_a_read() {
         PROJECT.replace("sdtm/ae.yaml", "sdtm/absent.yaml"),
     );
     assert_eq!(
-        engine.project_names(&study.project()).unwrap(),
+        engine.project(&study.project()).names().unwrap(),
         ["DM", "ADSL"]
     );
 
@@ -219,9 +215,9 @@ fn project_names_list_the_run_order_and_refuse_as_a_read() {
         "project.yaml",
         PROJECT.replace("[adam/adsl.yaml]", "[adam/adsl.yaml, adam/dm.yaml]"),
     );
-    let duplicate = engine.project_names(&study.project()).unwrap_err();
+    let duplicate = engine.project(&study.project()).names().unwrap_err();
     // Listing and selecting report the same located duplicate-name finding.
-    let selected = engine.project_spec(&study.project(), "DM").unwrap_err();
+    let selected = engine.project(&study.project()).spec("DM").unwrap_err();
     assert_eq!(duplicate.diagnostics, selected.diagnostics);
     assert!(
         duplicate.message.starts_with(&format!("cannot read {}: ", study.project()))
@@ -238,7 +234,7 @@ fn project_names_list_the_run_order_and_refuse_as_a_read() {
     assert!(duplicate.paths.is_empty());
 
     let absent = study.path("absent.yaml");
-    let missing = engine.project_names(&absent).unwrap_err();
+    let missing = engine.project(&absent).names().unwrap_err();
     assert!(
         missing
             .message
@@ -249,13 +245,34 @@ fn project_names_list_the_run_order_and_refuse_as_a_read() {
     assert_eq!(rows(&missing.issues).len(), 1);
 }
 
+/// A request's section scopes its run alone among these operations: its
+/// names, the specifications it selects and its check are the whole
+/// project's, so a field AE does not declare, listed in SDTM, is a finding of
+/// the check of a request scoped to ADaM (`unknown_field`, SCHEMA-13).
+#[test]
+fn a_project_requests_section_leaves_its_names_selection_and_check_whole() {
+    let study = study();
+    let engine = engine();
+    let project = study.project();
+    let adam = engine.project(&project).section("adam");
+    assert_eq!(adam.names().unwrap(), ["DM", "AE", "ADSL"]);
+    assert_eq!(adam.spec("AE").unwrap().path(), study.path("sdtm/ae.yaml"));
+    assert_eq!(adam.run().unwrap().names(), ["ADSL"]);
+    study.write("sdtm/ae.yaml", format!("{AE}bogus: 1\n"));
+    assert_eq!(
+        conditions(&adam.check().unwrap().issues()),
+        ["unknown_field"]
+    );
+}
+
 #[test]
 fn names_select_listed_specifications_and_refuse_unknown_or_shared_names() {
     let study = study();
     let engine = engine();
-    let path = engine.project_spec(&study.project(), "ADSL").unwrap();
-    assert_eq!(Path::new(&path), study.0.join("adam/adsl.yaml"));
-    let unknown = engine.project_spec(&study.project(), "ADXX").unwrap_err();
+    let project = study.project();
+    let adsl = engine.project(&project).spec("ADSL").unwrap();
+    assert_eq!(Path::new(adsl.path()), study.0.join("adam/adsl.yaml"));
+    let unknown = engine.project(&study.project()).spec("ADXX").unwrap_err();
     // D39: the call, then the issue, which lists the names in its context.
     assert_eq!(
         unknown.message,
@@ -279,7 +296,7 @@ fn names_select_listed_specifications_and_refuse_unknown_or_shared_names() {
         PROJECT.replace("[adam/adsl.yaml]", "[adam/adsl.yaml, adam/dm.yaml]"),
     );
     let token = CancellationToken::new();
-    let duplicate = engine.project_spec(&study.project(), "AE").unwrap_err();
+    let duplicate = engine.project(&study.project()).spec("AE").unwrap_err();
     let issues = rows(&duplicate.issues);
     assert_eq!(issues.len(), 1);
     assert_eq!(issues[0].condition, "duplicate_specification_name");
@@ -288,17 +305,25 @@ fn names_select_listed_specifications_and_refuse_unknown_or_shared_names() {
     assert_eq!(issues[0].context["name"], text("DM"));
     let check = conditions(
         &engine
-            .project_check(&study.project(), &token)
+            .project(&study.project())
+            .cancel_with(&token)
+            .check()
             .unwrap()
             .issues(),
     );
     assert!(check.iter().any(|c| c == "duplicate_specification_name"));
-    let mut run = engine.project_run(&study.project(), None, &token).unwrap();
+    let mut run = engine
+        .project(&study.project())
+        .cancel_with(&token)
+        .run()
+        .unwrap();
     assert!(run.names().is_empty());
     assert_eq!(conditions(&run.issues()), ["duplicate_specification_name"]);
     assert!(run.save(&CancellationToken::new()).is_err());
     let mut submission = engine
-        .project_submission(&study.project(), None, None, "0.4.0", &token)
+        .project(&study.project())
+        .cancel_with(&token)
+        .submission(&SubmissionOptions::new("0.4.0"))
         .unwrap();
     assert_eq!(
         conditions(&submission.issues()),
@@ -330,27 +355,33 @@ fn a_project_spelled_through_a_linked_directory_keeps_its_authority() {
     let project = link.0.join("project.yaml").to_str().unwrap().to_owned();
     let engine = engine();
     let token = CancellationToken::new();
-    let check = engine.project_check(&project, &token).unwrap().issues();
-    assert_eq!(check.rows(), 0, "{:?}", rows(&check));
-    let run = engine.project_run(&project, None, &token).unwrap();
-    assert_eq!(run.names(), ["DM", "AE", "ADSL"]);
-    assert_eq!(run.issues().rows(), 0, "{:?}", rows(&run.issues()));
-    // A selected specification is checked and run as the caller named it.
-    let path = engine.project_spec(&project, "DM").unwrap();
-    assert_eq!(path, study.path("sdtm/dm.yaml"));
     let check = engine
-        .spec_check(&path, Some(&project), &token)
+        .project(&project)
+        .cancel_with(&token)
+        .check()
         .unwrap()
         .issues();
     assert_eq!(check.rows(), 0, "{:?}", rows(&check));
-    let run = engine.spec_run(&path, Some(&project), &token).unwrap();
+    let run = engine.project(&project).cancel_with(&token).run().unwrap();
+    assert_eq!(run.names(), ["DM", "AE", "ADSL"]);
+    assert_eq!(run.issues().rows(), 0, "{:?}", rows(&run.issues()));
+    // A selected specification is checked and run as the caller named it.
+    let dm = engine
+        .project(&project)
+        .cancel_with(&token)
+        .spec("DM")
+        .unwrap();
+    assert_eq!(dm.path(), study.path("sdtm/dm.yaml"));
+    let check = dm.check().unwrap().issues();
+    assert_eq!(check.rows(), 0, "{:?}", rows(&check));
+    let run = dm.run().unwrap();
     assert_eq!(run.issues().rows(), 0, "{:?}", rows(&run.issues()));
     assert_eq!(run.output().unwrap().rows(), 2);
     // The authority is the caller's own: a specification that declares the
     // linked spelling still walks it from the filesystem root and refuses it.
     let linked = link.0.join("raw/dm.csv").to_str().unwrap().to_owned();
     study.write("sdtm/dm.yaml", DM.replace("../raw/dm.csv", &linked));
-    let run = engine.spec_run(&path, None, &token).unwrap();
+    let run = engine.spec(dm.path()).cancel_with(&token).run().unwrap();
     assert!(run.output().is_none());
     assert_eq!(conditions(&run.issues()), ["resource_path_symlink"]);
 }
@@ -393,13 +424,21 @@ fn a_section_the_project_does_not_declare_refuses_the_call() {
     let project = study.project();
     for section in ["send", "adm", "SDTM"] {
         assert_unknown_section(
-            engine.project_run(&project, Some(section), &token).err(),
+            engine
+                .project(&project)
+                .section(section)
+                .cancel_with(&token)
+                .run()
+                .err(),
             section,
             &["adam", "sdtm"],
         );
         assert_unknown_section(
             engine
-                .project_submission(&project, Some(section), None, "0.4.0", &token)
+                .project(&project)
+                .section(section)
+                .cancel_with(&token)
+                .submission(&SubmissionOptions::new("0.4.0"))
                 .err(),
             section,
             &["adam", "sdtm"],
@@ -413,20 +452,38 @@ fn a_section_the_project_does_not_declare_refuses_the_call() {
         "yamaa: \"1.0\"\ntype: project\nsend: {specs: []}\nadam: {specs: []}\n",
     );
     assert_unknown_section(
-        engine.project_run(&project, Some("sdtm"), &token).err(),
+        engine
+            .project(&project)
+            .section("sdtm")
+            .cancel_with(&token)
+            .run()
+            .err(),
         "sdtm",
         &["adam", "send"],
     );
-    let send = engine.project_run(&project, Some("send"), &token).unwrap();
+    let send = engine
+        .project(&project)
+        .section("send")
+        .cancel_with(&token)
+        .run()
+        .unwrap();
     assert!(send.names().is_empty());
     assert_eq!(send.issues().rows(), 0);
     // The project file is read first: one that cannot be read reports its
     // own findings as the result's issues, and no section is checked.
     let absent = study.path("absent.yaml");
-    let run = engine.project_run(&absent, Some("adm"), &token).unwrap();
+    let run = engine
+        .project(&absent)
+        .section("adm")
+        .cancel_with(&token)
+        .run()
+        .unwrap();
     assert_eq!(conditions(&run.issues()), ["resource_path_missing"]);
     let submission = engine
-        .project_submission(&absent, Some("adm"), None, "0.4.0", &token)
+        .project(&absent)
+        .section("adm")
+        .cancel_with(&token)
+        .submission(&SubmissionOptions::new("0.4.0"))
         .unwrap();
     assert_eq!(conditions(&submission.issues()), ["resource_path_missing"]);
 }
@@ -480,7 +537,7 @@ fn a_user_interrupt_cancels_the_project_run() {
         EngineOptions::new(HostLanguage::Python, "project-test".into(), "0".into())
             .with_functions(functions.clone()),
     );
-    let run = engine.project_run(&study.project(), None, &CancellationToken::new());
+    let run = engine.project(&study.project()).run();
     assert!(matches!(run, Err(yamaa::Error::Cancelled)));
     // TWO never builds, so no more project code runs after the interrupt.
     assert_eq!(functions.0.load(Ordering::Relaxed), 1);
@@ -515,7 +572,10 @@ fn a_save_that_would_write_nothing_fails() {
     let engine = engine();
     let token = CancellationToken::new();
     let mut send = engine
-        .project_run(&study.project(), Some("send"), &token)
+        .project(&study.project())
+        .section("send")
+        .cancel_with(&token)
+        .run()
         .unwrap();
     assert!(send.names().is_empty());
     assert_eq!(send.issues().rows(), 0);
@@ -533,7 +593,9 @@ fn a_save_that_would_write_nothing_fails() {
     assert_nothing_to_save(&failure.issues, "PROJECT-12");
     // No section names `define`: the submission composes nothing.
     let mut submission = engine
-        .project_submission(&study.project(), None, None, "0.4.0", &token)
+        .project(&study.project())
+        .cancel_with(&token)
+        .submission(&SubmissionOptions::new("0.4.0"))
         .unwrap();
     assert_eq!(submission.issues().rows(), 0);
     assert_eq!(submission.status(), Status::Succeeded);
@@ -557,7 +619,10 @@ fn a_project_run_refuses_a_name_it_did_not_build() {
     let token = CancellationToken::new();
     // The SDTM run builds DM and AE. ADSL is listed too, in another section.
     let sdtm = engine
-        .project_run(&study.project(), Some("sdtm"), &token)
+        .project(&study.project())
+        .section("sdtm")
+        .cancel_with(&token)
+        .run()
         .unwrap();
     assert_eq!(sdtm.names(), ["DM", "AE"]);
     for name in ["ADSL", "ADXX"] {
@@ -585,7 +650,10 @@ fn a_project_run_refuses_a_name_it_did_not_build() {
     // A run that built nothing has no name to offer.
     study.write("project.yaml", format!("{PROJECT}send:\n  specs: []\n"));
     let send = engine
-        .project_run(&study.project(), Some("send"), &token)
+        .project(&study.project())
+        .section("send")
+        .cancel_with(&token)
+        .run()
         .unwrap();
     let failure = send.member("DM").err().unwrap();
     assert_eq!(
@@ -611,23 +679,34 @@ fn a_cancelled_call_returns_no_result_and_no_issue() {
     let project = study.project();
     let path = study.path("sdtm/dm.yaml");
     assert!(matches!(
-        engine.spec_check(&path, Some(&project), &token),
+        engine
+            .spec(&path)
+            .project(&project)
+            .cancel_with(&token)
+            .check(),
         Err(yamaa::Error::Cancelled)
     ));
     assert!(matches!(
-        engine.project_check(&project, &token),
+        engine.project(&project).cancel_with(&token).check(),
         Err(yamaa::Error::Cancelled)
     ));
     assert!(matches!(
-        engine.spec_run(&path, Some(&project), &token),
+        engine
+            .spec(&path)
+            .project(&project)
+            .cancel_with(&token)
+            .run(),
         Err(yamaa::Error::Cancelled)
     ));
     assert!(matches!(
-        engine.project_run(&project, None, &token),
+        engine.project(&project).cancel_with(&token).run(),
         Err(yamaa::Error::Cancelled)
     ));
     assert!(matches!(
-        engine.project_submission(&project, None, None, "0.4.0", &token),
+        engine
+            .project(&project)
+            .cancel_with(&token)
+            .submission(&SubmissionOptions::new("0.4.0")),
         Err(yamaa::Error::Cancelled)
     ));
     assert_eq!(std::fs::read_dir(study.0.join("out")).unwrap().count(), 0);
@@ -652,10 +731,7 @@ fn project_check_reports_every_specification_and_the_project_findings() {
         "project.yaml",
         PROJECT.replace("[adam/adsl.yaml]", "[adam/adsl.yaml, adam/adae.yaml]"),
     );
-    let table = engine()
-        .project_check(&study.project(), &CancellationToken::new())
-        .unwrap()
-        .issues();
+    let table = engine().project(&study.project()).check().unwrap().issues();
     let issues = rows(&table);
     let ae = study.path("sdtm/ae.yaml");
     let adae = study.path("adam/adae.yaml");
@@ -688,7 +764,10 @@ fn a_section_run_builds_only_its_scope_and_a_full_run_hands_producers_over_in_me
     let engine = engine();
     let token = CancellationToken::new();
     let sdtm = engine
-        .project_run(&study.project(), Some("sdtm"), &token)
+        .project(&study.project())
+        .section("sdtm")
+        .cancel_with(&token)
+        .run()
         .unwrap();
     assert_eq!(sdtm.names(), ["DM", "AE"]);
     assert!(sdtm.get("ADSL").is_none());
@@ -705,7 +784,11 @@ fn a_section_run_builds_only_its_scope_and_a_full_run_hands_producers_over_in_me
         "project.yaml",
         PROJECT.replace("[adam/adsl.yaml]", "[adam/adadd.yaml, adam/adsl.yaml]"),
     );
-    let mut run = engine.project_run(&study.project(), None, &token).unwrap();
+    let mut run = engine
+        .project(&study.project())
+        .cancel_with(&token)
+        .run()
+        .unwrap();
     assert_eq!(run.names(), ["DM", "AE", "ADSL", "ADADD"]);
     assert_eq!(run.issues().rows(), 0, "{:?}", rows(&run.issues()));
     // No producer artifact existed on disk: ADSL and ADADD read the held
@@ -771,7 +854,10 @@ fn a_producer_outside_the_scope_is_read_from_its_saved_artifact_and_checked() {
     let token = CancellationToken::new();
     // No saved DM artifact: a clear missing-file failure.
     let adam = engine
-        .project_run(&study.project(), Some("adam"), &token)
+        .project(&study.project())
+        .section("adam")
+        .cancel_with(&token)
+        .run()
         .unwrap();
     assert_eq!(adam.names(), ["ADSL"]);
     assert!(adam.get("ADSL").unwrap().output().is_none());
@@ -787,7 +873,10 @@ fn a_producer_outside_the_scope_is_read_from_its_saved_artifact_and_checked() {
     study.write("out/dm.csv", DM_CSV);
     std::fs::remove_file(study.0.join("raw/dm.csv")).unwrap();
     let adam = engine
-        .project_run(&study.project(), Some("adam"), &token)
+        .project(&study.project())
+        .section("adam")
+        .cancel_with(&token)
+        .run()
         .unwrap();
     assert_eq!(adam.issues().rows(), 0, "{:?}", rows(&adam.issues()));
     assert_eq!(adam.get("ADSL").unwrap().output().unwrap().rows(), 2);
@@ -795,7 +884,10 @@ fn a_producer_outside_the_scope_is_read_from_its_saved_artifact_and_checked() {
     // A saved artifact that breaks the producer's column contract fails.
     study.write("out/dm.csv", "AGE,USUBJID\n30,S1\n");
     let adam = engine
-        .project_run(&study.project(), Some("adam"), &token)
+        .project(&study.project())
+        .section("adam")
+        .cancel_with(&token)
+        .run()
         .unwrap();
     assert!(adam.get("ADSL").unwrap().output().is_none());
     assert_eq!(conditions(&adam.issues()), ["producer_contract_mismatch"]);
@@ -818,7 +910,10 @@ fn a_specification_may_not_write_the_saved_artifact_it_reads() {
         };
         study.write("adam/adsl.yaml", ADSL.replace(target, path));
         let mut adam = engine
-            .project_run(&study.project(), Some("adam"), &token)
+            .project(&study.project())
+            .section("adam")
+            .cancel_with(&token)
+            .run()
             .unwrap();
         assert!(adam.get("ADSL").unwrap().output().is_none());
         let issues = rows(&adam.issues());
@@ -839,7 +934,11 @@ fn an_input_that_reads_a_run_scope_artifact_without_a_link_fails_alone() {
     );
     let engine = engine();
     let token = CancellationToken::new();
-    let run = engine.project_run(&study.project(), None, &token).unwrap();
+    let run = engine
+        .project(&study.project())
+        .cancel_with(&token)
+        .run()
+        .unwrap();
     assert_eq!(run.names(), ["DM", "AE", "ADSL"]);
     assert!(run.get("DM").unwrap().output().is_some());
     let adsl = run.get("ADSL").unwrap();
@@ -858,7 +957,10 @@ fn an_input_that_reads_a_run_scope_artifact_without_a_link_fails_alone() {
     // Outside a run scope that builds DM, the same input is an ordinary source.
     study.write("out/dm.csv", DM_CSV);
     let adam = engine
-        .project_run(&study.project(), Some("adam"), &token)
+        .project(&study.project())
+        .section("adam")
+        .cancel_with(&token)
+        .run()
         .unwrap();
     assert_eq!(adam.issues().rows(), 0, "{:?}", rows(&adam.issues()));
 }
@@ -869,7 +971,11 @@ fn a_failed_specification_stops_only_its_consumers_and_saves_reports_alone() {
     study.write("raw/dm.csv", "USUBJID,AGE\nS1,thirty\n");
     let engine = engine();
     let token = CancellationToken::new();
-    let mut run = engine.project_run(&study.project(), None, &token).unwrap();
+    let mut run = engine
+        .project(&study.project())
+        .cancel_with(&token)
+        .run()
+        .unwrap();
     assert_eq!(run.names(), ["DM", "AE", "ADSL"]);
     let dm = run.get("DM").unwrap();
     assert!(dm.output().is_none());
@@ -927,7 +1033,10 @@ fn a_failed_specification_stops_only_its_consumers_and_saves_reports_alone() {
     // refuses with the run's issues and names what it wrote.
     std::fs::remove_file(study.0.join("out/dm-report.csv")).unwrap();
     let mut alone = engine
-        .spec_run(&study.path("sdtm/dm.yaml"), Some(&study.project()), &token)
+        .spec(&study.path("sdtm/dm.yaml"))
+        .project(&study.project())
+        .cancel_with(&token)
+        .run()
         .unwrap();
     let failure = alone.save(&CancellationToken::new()).unwrap_err();
     // D39: the run names its dataset, read before the run failed.
@@ -947,7 +1056,11 @@ fn every_target_is_validated_before_the_first_file_is_written() {
         "adam/adsl.yaml",
         ADSL.replace("../out/adsl.csv", "../missing/adsl.csv"),
     );
-    let mut run = engine.project_run(&study.project(), None, &token).unwrap();
+    let mut run = engine
+        .project(&study.project())
+        .cancel_with(&token)
+        .run()
+        .unwrap();
     assert_eq!(run.issues().rows(), 0, "{:?}", rows(&run.issues()));
     let failure = run.save(&CancellationToken::new()).unwrap_err();
     // D39: the call names the project run; the issue names ADSL's
@@ -964,7 +1077,11 @@ fn every_target_is_validated_before_the_first_file_is_written() {
         "sdtm/ae.yaml",
         AE.replace("../out/ae.csv", "../out/dm-report.csv"),
     );
-    let mut run = engine.project_run(&study.project(), None, &token).unwrap();
+    let mut run = engine
+        .project(&study.project())
+        .cancel_with(&token)
+        .run()
+        .unwrap();
     assert!(run.names().is_empty());
     let issues = rows(&run.issues());
     assert_eq!(issues.len(), 1);
@@ -996,7 +1113,9 @@ fn a_file_that_cannot_be_staged_stops_the_save_before_any_target_is_replaced() {
     }
     let token = CancellationToken::new();
     let mut run = engine()
-        .project_run(&study.project(), None, &token)
+        .project(&study.project())
+        .cancel_with(&token)
+        .run()
         .unwrap();
     assert_eq!(run.status(), Status::Succeeded);
     let failure = run.save(&CancellationToken::new()).unwrap_err();
@@ -1028,15 +1147,30 @@ fn a_specification_runs_alike_alone_and_in_a_project_run_with_computed_statuses(
     let token = CancellationToken::new();
     let project = study.project();
     let dm = study.path("sdtm/dm.yaml");
-    let check = engine.spec_check(&dm, Some(&project), &token).unwrap();
+    let check = engine
+        .spec(&dm)
+        .project(&project)
+        .cancel_with(&token)
+        .check()
+        .unwrap();
     assert_eq!(check.status(), Status::Succeeded);
     assert_eq!(
-        engine.project_check(&project, &token).unwrap().status(),
+        engine
+            .project(&project)
+            .cancel_with(&token)
+            .check()
+            .unwrap()
+            .status(),
         Status::Succeeded
     );
-    let alone = engine.spec_run(&dm, Some(&project), &token).unwrap();
+    let alone = engine
+        .spec(&dm)
+        .project(&project)
+        .cancel_with(&token)
+        .run()
+        .unwrap();
     assert_eq!(alone.status(), Status::Succeeded);
-    let runs = engine.project_run(&project, None, &token).unwrap();
+    let runs = engine.project(&project).cancel_with(&token).run().unwrap();
     assert_eq!(runs.status(), Status::Succeeded);
     for name in runs.names() {
         assert_eq!(
@@ -1061,25 +1195,41 @@ fn a_specification_runs_alike_alone_and_in_a_project_run_with_computed_statuses(
     study.write("raw/dm.csv", "USUBJID,AGE\nS1,thirty\n");
     assert_eq!(
         engine
-            .spec_run(&dm, Some(&project), &token)
+            .spec(&dm)
+            .project(&project)
+            .cancel_with(&token)
+            .run()
             .unwrap()
             .status(),
         Status::Failed
     );
     assert_eq!(
         engine
-            .spec_check(&dm, Some(&project), &token)
+            .spec(&dm)
+            .project(&project)
+            .cancel_with(&token)
+            .check()
             .unwrap()
             .status(),
         Status::Succeeded
     );
     // A finding of the specification itself fails its check too.
     study.write("sdtm/dm.yaml", DM.replace("RAW.AGE", "RAW.AGE +"));
-    let check = engine.spec_check(&dm, Some(&project), &token).unwrap();
+    let check = engine
+        .spec(&dm)
+        .project(&project)
+        .cancel_with(&token)
+        .check()
+        .unwrap();
     assert_ne!(check.issues().rows(), 0);
     assert_eq!(check.status(), Status::Failed);
     assert_eq!(
-        engine.project_check(&project, &token).unwrap().status(),
+        engine
+            .project(&project)
+            .cancel_with(&token)
+            .check()
+            .unwrap()
+            .status(),
         Status::Failed
     );
     // A save's refusal joins the issues but describes the save, not the run.
@@ -1088,7 +1238,10 @@ fn a_specification_runs_alike_alone_and_in_a_project_run_with_computed_statuses(
         AE.replace("../out/ae.csv", "../missing/ae.csv"),
     );
     let mut ae = engine
-        .spec_run(&study.path("sdtm/ae.yaml"), Some(&project), &token)
+        .spec(&study.path("sdtm/ae.yaml"))
+        .project(&project)
+        .cancel_with(&token)
+        .run()
         .unwrap();
     assert_eq!(ae.issues().rows(), 0);
     assert_eq!(ae.status(), Status::Succeeded);
@@ -1117,9 +1270,19 @@ fn an_engine_without_functions_runs_every_build_that_calls_no_project_function()
     let token = CancellationToken::new();
     let project = study.project();
     let dm = study.path("sdtm/dm.yaml");
-    let alone = bare.spec_run(&dm, None, &token).unwrap();
-    let member = bare.spec_run(&dm, Some(&project), &token).unwrap();
-    let hosted = engine().spec_run(&dm, Some(&project), &token).unwrap();
+    let alone = bare.spec(&dm).cancel_with(&token).run().unwrap();
+    let member = bare
+        .spec(&dm)
+        .project(&project)
+        .cancel_with(&token)
+        .run()
+        .unwrap();
+    let hosted = engine()
+        .spec(&dm)
+        .project(&project)
+        .cancel_with(&token)
+        .run()
+        .unwrap();
     for run in [&alone, &member, &hosted] {
         assert_eq!(run.issues().rows(), 0);
         assert_eq!(run.status(), Status::Succeeded);
@@ -1131,7 +1294,7 @@ fn an_engine_without_functions_runs_every_build_that_calls_no_project_function()
         member.report().unwrap().batches(),
         hosted.report().unwrap().batches()
     );
-    let runs = bare.project_run(&project, None, &token).unwrap();
+    let runs = bare.project(&project).cancel_with(&token).run().unwrap();
     assert_eq!(runs.status(), Status::Succeeded);
     assert_eq!(runs.names(), ["DM", "AE", "ADSL"]);
 
@@ -1152,7 +1315,10 @@ fn an_engine_without_functions_runs_every_build_that_calls_no_project_function()
         "yamaa: \"1.0\"\ntype: project\nfunctions: [functions/double.yaml]\nadam: {specs: [one.yaml]}\n",
     );
     let calls = bare
-        .spec_run(&study.path("one.yaml"), Some(&study.project()), &token)
+        .spec(&study.path("one.yaml"))
+        .project(&study.project())
+        .cancel_with(&token)
+        .run()
         .unwrap();
     assert_eq!(calls.status(), Status::Failed);
     assert!(calls.output().is_none());
@@ -1228,14 +1394,29 @@ fn an_engine_without_a_host_language_reads_no_lock_and_refuses_each_function_cal
     let project = study.project();
     let (plain, calls) = (study.path("plain.yaml"), study.path("calls.yaml"));
 
-    let run = neutral.spec_run(&plain, Some(&project), &token).unwrap();
+    let run = neutral
+        .spec(&plain)
+        .project(&project)
+        .cancel_with(&token)
+        .run()
+        .unwrap();
     assert_eq!(conditions(&run.issues()), Vec::<String>::new());
     assert_eq!(run.status(), Status::Succeeded);
     assert_eq!(run.output().unwrap().rows(), 1);
-    let check = neutral.spec_check(&calls, Some(&project), &token).unwrap();
+    let check = neutral
+        .spec(&calls)
+        .project(&project)
+        .cancel_with(&token)
+        .check()
+        .unwrap();
     assert_eq!(conditions(&check.issues()), Vec::<String>::new());
-    assert!(neutral.spec_resolve(&calls, Some(&project)).is_ok());
-    let refused = neutral.spec_run(&calls, Some(&project), &token).unwrap();
+    assert!(neutral.spec(&calls).project(&project).resolve().is_ok());
+    let refused = neutral
+        .spec(&calls)
+        .project(&project)
+        .cancel_with(&token)
+        .run()
+        .unwrap();
     assert_eq!(refused.status(), Status::Failed);
     assert!(refused.output().is_none() && refused.report().is_none());
     // D110's refusal names the first derivation that calls a project
@@ -1271,7 +1452,7 @@ fn an_engine_without_a_host_language_reads_no_lock_and_refuses_each_function_cal
         (calls.clone(), Some((9, 42))),
         "the refusal's location"
     );
-    let runs = neutral.project_run(&project, None, &token).unwrap();
+    let runs = neutral.project(&project).cancel_with(&token).run().unwrap();
     assert_eq!(runs.names(), ["PLAIN", "CALLS"]);
     assert_eq!(runs.get("PLAIN").unwrap().status(), Status::Succeeded);
     assert_eq!(
@@ -1286,7 +1467,12 @@ fn an_engine_without_a_host_language_reads_no_lock_and_refuses_each_function_cal
         "0".into(),
     ));
     for spec in [&plain, &calls] {
-        let check = python.spec_check(spec, Some(&project), &token).unwrap();
+        let check = python
+            .spec(spec)
+            .project(&project)
+            .cancel_with(&token)
+            .check()
+            .unwrap();
         let found = rows(&check.issues());
         assert_eq!(found.len(), 1, "{found:?}");
         assert_eq!(found[0].condition, "resource_path_missing");
@@ -1319,13 +1505,10 @@ fn a_submission_composes_the_selected_section() {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks/sdtm-dm-metadata");
     let token = CancellationToken::new();
     let mut submission = engine()
-        .project_submission(
-            &study.project(),
-            Some("sdtm"),
-            Some("2026-09-11T00:00:00"),
-            "0.4.0",
-            &token,
-        )
+        .project(&study.project())
+        .section("sdtm")
+        .cancel_with(&token)
+        .submission(&SubmissionOptions::new("0.4.0").with_created("2026-09-11T00:00:00"))
         .unwrap();
     assert_eq!(
         submission.issues().rows(),
@@ -1356,7 +1539,9 @@ fn a_submission_without_a_section_composes_each_section_that_names_define_in_ord
     // ADaM lists no specification yet and names no define: it is skipped.
     study.write("project.yaml", format!("{project}adam:\n  specs: []\n"));
     let mut submission = engine
-        .project_submission(&study.project(), None, None, "0.4.0", &token)
+        .project(&study.project())
+        .cancel_with(&token)
+        .submission(&SubmissionOptions::new("0.4.0"))
         .unwrap();
     assert_eq!(
         submission.issues().rows(),
@@ -1375,7 +1560,9 @@ fn a_submission_without_a_section_composes_each_section_that_names_define_in_ord
         format!("{project}adam:\n  specs: []\n  define: adam-define.xml\n"),
     );
     let mut submission = engine
-        .project_submission(&study.project(), None, None, "0.4.0", &token)
+        .project(&study.project())
+        .cancel_with(&token)
+        .submission(&SubmissionOptions::new("0.4.0"))
         .unwrap();
     let issues = rows(&submission.issues());
     assert!(!issues.is_empty());
@@ -1431,13 +1618,8 @@ fn a_submission_gives_every_section_one_creation_time_and_records_it() {
         format!("{project}{}", adam_section(&project)),
     );
     let mut submission = engine()
-        .project_submission(
-            &study.project(),
-            None,
-            None,
-            "0.4.0",
-            &CancellationToken::new(),
-        )
+        .project(&study.project())
+        .submission(&SubmissionOptions::new("0.4.0"))
         .unwrap();
     assert_eq!(
         submission.issues().rows(),
@@ -1482,13 +1664,10 @@ fn a_submission_records_its_creation_time_whatever_it_composed() {
     let engine = engine();
     let token = CancellationToken::new();
     let refused = engine
-        .project_submission(
-            &study.project(),
-            Some("sdtm"),
-            Some("2026-09-11"),
-            "0.4.0",
-            &token,
-        )
+        .project(&study.project())
+        .section("sdtm")
+        .cancel_with(&token)
+        .submission(&SubmissionOptions::new("0.4.0").with_created("2026-09-11"))
         .unwrap();
     assert_eq!(refused.created(), "2026-09-11");
     let issues = rows(&refused.issues());
@@ -1499,12 +1678,16 @@ fn a_submission_records_its_creation_time_whatever_it_composed() {
 
     let missing = study.path("missing.yaml");
     let unread = engine
-        .project_submission(&missing, None, Some("2026-09-11T00:00:00"), "0.4.0", &token)
+        .project(&missing)
+        .cancel_with(&token)
+        .submission(&SubmissionOptions::new("0.4.0").with_created("2026-09-11T00:00:00"))
         .unwrap();
     assert_eq!(unread.status(), Status::Failed);
     assert_eq!(unread.created(), "2026-09-11T00:00:00");
     let unread = engine
-        .project_submission(&missing, None, None, "0.4.0", &token)
+        .project(&missing)
+        .cancel_with(&token)
+        .submission(&SubmissionOptions::new("0.4.0"))
         .unwrap();
     assert_eq!(unread.created().len(), "2026-09-11T00:00:00".len());
 }
@@ -1526,13 +1709,9 @@ fn two_sections_that_write_one_file_save_neither() {
         .replace("  transport: dataset_json\n", "");
     study.write("project.yaml", format!("{project}{adam}"));
     let mut submission = engine
-        .project_submission(
-            &study.project(),
-            None,
-            Some("2026-09-11T00:00:00"),
-            "0.4.0",
-            &token,
-        )
+        .project(&study.project())
+        .cancel_with(&token)
+        .submission(&SubmissionOptions::new("0.4.0").with_created("2026-09-11T00:00:00"))
         .unwrap();
     assert_eq!(
         submission.issues().rows(),
@@ -1562,13 +1741,9 @@ fn a_later_section_whose_target_cannot_be_written_saves_nothing() {
         format!("{project}{}", adam_section(&project)),
     );
     let mut submission = engine
-        .project_submission(
-            &study.project(),
-            None,
-            Some("2026-09-11T00:00:00"),
-            "0.4.0",
-            &token,
-        )
+        .project(&study.project())
+        .cancel_with(&token)
+        .submission(&SubmissionOptions::new("0.4.0").with_created("2026-09-11T00:00:00"))
         .unwrap();
     assert_eq!(
         submission.issues().rows(),
@@ -1734,21 +1909,22 @@ fn a_submission_composes_the_artifacts_their_run_reports_record_and_refuses_stal
     let engine = engine();
     let token = CancellationToken::new();
     let build = |section: Option<&str>| {
-        let mut run = engine
-            .project_run(&study.project(), section, &token)
-            .unwrap();
+        let project = study.project();
+        let request = engine.project(&project).cancel_with(&token);
+        let mut run = match section {
+            Some(section) => request.section(section),
+            None => request,
+        }
+        .run()
+        .unwrap();
         assert_eq!(run.issues().rows(), 0, "{:?}", rows(&run.issues()));
         run.save(&CancellationToken::new()).unwrap();
     };
     let submit = || {
         let submission = engine
-            .project_submission(
-                &study.project(),
-                None,
-                Some("2026-09-11T00:00:00"),
-                "0.4.0",
-                &token,
-            )
+            .project(&study.project())
+            .cancel_with(&token)
+            .submission(&SubmissionOptions::new("0.4.0").with_created("2026-09-11T00:00:00"))
             .unwrap();
         rows(&submission.issues())
     };

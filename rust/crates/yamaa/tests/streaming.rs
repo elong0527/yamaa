@@ -18,7 +18,7 @@ use arrow_array::ffi_stream::ArrowArrayStreamReader;
 use arrow_array::{Array, Int64Array, RecordBatchReader, StringArray};
 use yamaa::{
     CancellationToken, Engine, EngineOptions, Error, HostLanguage, MemoryResolver, Partitions,
-    Plans, RecordBatch, StreamProgress, Streamed,
+    RecordBatch, StreamProgress, Streamed,
 };
 
 use crate::support::NoFunctions;
@@ -92,7 +92,9 @@ fn streamed_batches_hold_the_whole_table_output_in_its_order() {
     let token = CancellationToken::new();
     let whole_resolver = resolver(true);
     let mut whole = engine(whole_resolver.clone(), None)
-        .spec_run("spec.yaml", None, &token)
+        .spec("spec.yaml")
+        .cancel_with(&token)
+        .run()
         .unwrap();
     let table = whole.output().unwrap().clone();
     for (rows, expected) in [
@@ -118,7 +120,9 @@ fn streamed_batches_hold_the_whole_table_output_in_its_order() {
         let label = format!("partitions of {rows:?} records");
         let streamed_resolver = resolver(true);
         let streamed = engine(streamed_resolver.clone(), rows)
-            .spec_stream("spec.yaml", None, &Plans::new(), &token)
+            .spec("spec.yaml")
+            .cancel_with(&token)
+            .stream()
             .unwrap();
         assert_eq!(streamed.schema(), Some(table.schema()), "{label}");
         let batches = streamed.reader().collect::<Result<Vec<_>, _>>().unwrap();
@@ -174,7 +178,8 @@ fn streamed_batches_hold_the_whole_table_output_in_its_order() {
 fn a_streamed_run_reads_its_input_at_its_first_pull() {
     let resolver = resolver(false);
     let streamed = engine(resolver.clone(), None)
-        .spec_stream("spec.yaml", None, &Plans::new(), &CancellationToken::new())
+        .spec("spec.yaml")
+        .stream()
         .unwrap();
     assert_eq!(streamed.progress(), StreamProgress::Unread);
     insert_input(&resolver);
@@ -199,7 +204,9 @@ fn a_consumer_that_stops_pulling_stops_production() {
     // The polls of the build and of the first batch, counted on a stream
     // that is read whole.
     let read = engine(resolver(true), Some(1))
-        .spec_stream("spec.yaml", None, &Plans::new(), &token)
+        .spec("spec.yaml")
+        .cancel_with(&token)
+        .stream()
         .unwrap();
     let mut reader = read.reader();
     reader.next().unwrap().unwrap();
@@ -211,7 +218,9 @@ fn a_consumer_that_stops_pulling_stops_production() {
         "one poll per later batch"
     );
     let streamed = engine(resolver(true), Some(1))
-        .spec_stream("spec.yaml", None, &Plans::new(), &token)
+        .spec("spec.yaml")
+        .cancel_with(&token)
+        .stream()
         .unwrap();
     let mut reader = streamed.reader();
     reader.next().unwrap().unwrap();
@@ -229,7 +238,9 @@ fn a_consumer_that_stops_pulling_stops_production() {
 fn an_unread_run_runs_whole_when_its_result_is_asked_for() {
     let token = CancellationToken::new();
     let streamed = engine(resolver(true), Some(2))
-        .spec_stream("spec.yaml", None, &Plans::new(), &token)
+        .spec("spec.yaml")
+        .cancel_with(&token)
+        .stream()
         .unwrap();
     let table = streamed.run().unwrap().output().unwrap().clone();
     assert_eq!(table.rows(), 5);
@@ -245,7 +256,8 @@ fn an_unread_run_runs_whole_when_its_result_is_asked_for() {
 #[test]
 fn a_started_stream_belongs_to_its_reader_until_it_ends() {
     let streamed = engine(resolver(true), Some(2))
-        .spec_stream("spec.yaml", None, &Plans::new(), &CancellationToken::new())
+        .spec("spec.yaml")
+        .stream()
         .unwrap();
     let mut first = streamed.reader();
     first.next().unwrap().unwrap();
@@ -288,7 +300,10 @@ fn a_run_that_can_call_its_host_is_built_only_on_its_own_thread() {
             .with_functions(Arc::new(NoFunctions)),
     );
     let streamed = host
-        .spec_stream("spec.yaml", Some("project.yaml"), &Plans::new(), &token)
+        .spec("spec.yaml")
+        .project("project.yaml")
+        .cancel_with(&token)
+        .stream()
         .unwrap();
     std::thread::scope(|scope| {
         scope.spawn(|| {
@@ -316,7 +331,9 @@ fn a_run_that_can_call_its_host_is_built_only_on_its_own_thread() {
     assert_eq!(streamed.progress(), StreamProgress::Unread);
     assert_eq!(streamed.reader().count(), 1, "on its own thread");
     let free = engine(resolver(true), None)
-        .spec_stream("spec.yaml", None, &Plans::new(), &token)
+        .spec("spec.yaml")
+        .cancel_with(&token)
+        .stream()
         .unwrap();
     let rows = std::thread::scope(|scope| {
         scope
@@ -339,7 +356,9 @@ fn a_run_that_can_call_its_host_is_built_only_on_its_own_thread() {
 fn a_reader_exported_as_a_c_stream_pulls_as_the_reader_does() {
     let token = CancellationToken::new();
     let streamed = engine(resolver(true), Some(2))
-        .spec_stream("spec.yaml", None, &Plans::new(), &token)
+        .spec("spec.yaml")
+        .cancel_with(&token)
+        .stream()
         .unwrap();
     let stream = ArrowArrayStreamReader::try_new(streamed.reader().into_stream()).unwrap();
     assert_eq!(Some(&stream.schema()), streamed.schema());
@@ -349,7 +368,9 @@ fn a_reader_exported_as_a_c_stream_pulls_as_the_reader_does() {
     assert_eq!(rows, [2, 2, 1]);
     let cancelled = CancellationToken::new();
     let streamed = engine(resolver(true), Some(2))
-        .spec_stream("spec.yaml", None, &Plans::new(), &cancelled)
+        .spec("spec.yaml")
+        .cancel_with(&cancelled)
+        .stream()
         .unwrap();
     cancelled.cancel();
     let mut stream = ArrowArrayStreamReader::try_new(streamed.reader().into_stream()).unwrap();
@@ -367,7 +388,9 @@ fn a_reader_released_after_the_last_batch_leaves_the_run_its_result() {
     let token = CancellationToken::new();
     let resolver = resolver(true);
     let streamed = engine(resolver.clone(), Some(2))
-        .spec_stream("spec.yaml", None, &Plans::new(), &token)
+        .spec("spec.yaml")
+        .cancel_with(&token)
+        .stream()
         .unwrap();
     let mut reader = streamed.reader();
     let rows = (0..3)
@@ -400,7 +423,9 @@ fn a_panic_while_a_c_stream_pulls_ends_the_stream() {
         false
     });
     let streamed = engine(resolver(true), Some(2))
-        .spec_stream("spec.yaml", None, &Plans::new(), &token)
+        .spec("spec.yaml")
+        .cancel_with(&token)
+        .stream()
         .unwrap();
     let mut stream = ArrowArrayStreamReader::try_new(streamed.reader().into_stream()).unwrap();
     let first = stream.next().unwrap().unwrap().num_rows();
@@ -437,7 +462,9 @@ fn progress_is_read_without_waiting_for_a_pull() {
     });
     let streamed = Arc::new(
         engine(resolver(true), Some(2))
-            .spec_stream("spec.yaml", None, &Plans::new(), &token)
+            .spec("spec.yaml")
+            .cancel_with(&token)
+            .stream()
             .unwrap(),
     );
     cell.set(Arc::downgrade(&streamed)).unwrap();

@@ -9,7 +9,7 @@
 
 use std::sync::Arc;
 
-use yamaa::{CancellationToken, ContextValue, Engine, EngineOptions, HostLanguage, MemoryResolver};
+use yamaa::{ContextValue, Engine, EngineOptions, HostLanguage, MemoryResolver};
 
 /// A specification with one column, its `output` written as `output`, and
 /// its `verifications` as `verifications`.
@@ -39,7 +39,8 @@ fn engine(specification: &str) -> Engine {
 /// The verifications the specification resolves to.
 fn verifications(specification: &str) -> ContextValue {
     let resolved = engine(specification)
-        .spec_resolve("spec.yaml", None)
+        .spec("spec.yaml")
+        .resolve()
         .unwrap_or_else(|failure| panic!("{failure}"));
     let ContextValue::Map(artifact) = resolved else {
         panic!("a resolved specification is a map");
@@ -119,7 +120,8 @@ fn mismatched_or_missing_closers_are_refused_without_panicking() {
         "[row_count: {min: 1, max: 9}, all_or_none: [ID}",
     ] {
         let check = engine(&specification(OUTPUT, &format!(" {flow}")))
-            .spec_check("spec.yaml", None, &CancellationToken::new())
+            .spec("spec.yaml")
+            .check()
             .unwrap();
         let conditions = check
             .diagnostics()
@@ -136,8 +138,6 @@ fn mismatched_or_missing_closers_are_refused_without_panicking() {
 #[test]
 fn check_admits_a_compact_flow_verification_in_a_block_specification() {
     let specification = "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput:\n  DM: input/dm.csv\noutput:\n  path: adsl.csv\n  columns: [USUBJID]\ncolumns:\n  - name: USUBJID\n    type: str\n    derivation: DM.USUBJID\nverifications: [row_count: {min: 3, max: 3}]\n";
-    let check = engine(specification)
-        .spec_check("spec.yaml", None, &CancellationToken::new())
-        .unwrap();
+    let check = engine(specification).spec("spec.yaml").check().unwrap();
     assert!(check.diagnostics().is_empty(), "{:?}", check.diagnostics());
 }

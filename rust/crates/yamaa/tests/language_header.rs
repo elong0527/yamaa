@@ -6,7 +6,9 @@
 #![cfg(feature = "yaml")]
 
 use arrow_array::{Array, ListArray, StringArray};
-use yamaa::{CancellationToken, ContextValue, Engine, EngineOptions, HostLanguage, Table};
+use yamaa::{
+    CancellationToken, ContextValue, Engine, EngineOptions, HostLanguage, SubmissionOptions, Table,
+};
 use yamaa_core::json::Value;
 
 struct Study(crate::support::Scratch);
@@ -95,10 +97,17 @@ fn every_specification_call_reads_a_1_0_specification() {
     let engine = engine();
     let token = CancellationToken::new();
     assert_eq!(
-        rows(&engine.spec_check(&spec, None, &token).unwrap().issues()),
+        rows(
+            &engine
+                .spec(&spec)
+                .cancel_with(&token)
+                .check()
+                .unwrap()
+                .issues()
+        ),
         []
     );
-    let mut run = engine.spec_run(&spec, None, &token).unwrap();
+    let mut run = engine.spec(&spec).cancel_with(&token).run().unwrap();
     assert_eq!(rows(&run.issues()), []);
     assert_eq!(run.output().unwrap().rows(), 2);
     assert_eq!(
@@ -108,7 +117,7 @@ fn every_specification_call_reads_a_1_0_specification() {
     assert_eq!(study.read("dm.csv"), b"USUBJID,SITE\nP1,S01\nP2,S01\n");
     // The resolved artifact records the language version, never
     // `schema_version` (D84).
-    let resolved = engine.spec_resolve(&spec, None).unwrap();
+    let resolved = engine.spec(&spec).resolve().unwrap();
     let ContextValue::List(entries) = field(&resolved, "entries") else {
         panic!("entries")
     };
@@ -140,13 +149,20 @@ fn every_project_call_reads_a_1_0_project() {
     let engine = engine();
     let token = CancellationToken::new();
     assert_eq!(
-        rows(&engine.project_check(&project, &token).unwrap().issues()),
+        rows(
+            &engine
+                .project(&project)
+                .cancel_with(&token)
+                .check()
+                .unwrap()
+                .issues()
+        ),
         []
     );
-    let run = engine.project_run(&project, None, &token).unwrap();
+    let run = engine.project(&project).cancel_with(&token).run().unwrap();
     assert_eq!(rows(&run.issues()), []);
     assert_eq!(
-        engine.project_spec(&project, "DM").unwrap(),
+        engine.project(&project).spec("DM").unwrap().path(),
         study.path("dm.yaml")
     );
     // A project file that declares `schema_version` is written in language
@@ -157,7 +173,14 @@ fn every_project_call_reads_a_1_0_project() {
         "schema_version: '1.0'\nsdtm: {specs: [dm.yaml]}\n",
     );
     assert_eq!(
-        rows(&engine.project_check(&project, &token).unwrap().issues()),
+        rows(
+            &engine
+                .project(&project)
+                .cancel_with(&token)
+                .check()
+                .unwrap()
+                .issues()
+        ),
         [(
             "unsupported_language_version".to_owned(),
             Some("SCHEMA-2".to_owned()),
@@ -174,7 +197,8 @@ fn a_newer_language_version_fails_at_yamaa() {
     study.write("spec.yaml", &SPEC.replace("\"1.0\"", "\"1.1\""));
     let issues = rows(
         &engine()
-            .spec_check(&study.path("spec.yaml"), None, &CancellationToken::new())
+            .spec(&study.path("spec.yaml"))
+            .check()
             .unwrap()
             .issues(),
     );
@@ -212,7 +236,8 @@ fn absent_does_not_answer_a_variable_the_input_does_not_hold() {
     );
     let issues = rows(
         &engine()
-            .spec_run(&study.path("spec.yaml"), None, &CancellationToken::new())
+            .spec(&study.path("spec.yaml"))
+            .run()
             .unwrap()
             .issues(),
     );
@@ -250,13 +275,10 @@ fn a_1_0_project_composes_its_submission() {
     let token = CancellationToken::new();
     let submit = || {
         engine
-            .project_submission(
-                &project,
-                Some("sdtm"),
-                Some("2026-09-11T00:00:00"),
-                "0.4.0",
-                &token,
-            )
+            .project(&project)
+            .section("sdtm")
+            .cancel_with(&token)
+            .submission(&SubmissionOptions::new("0.4.0").with_created("2026-09-11T00:00:00"))
             .unwrap()
     };
     let mut submission = submit();
@@ -281,7 +303,9 @@ fn submission_metadata_needs_a_model() {
     let token = CancellationToken::new();
     let issues = rows(
         &engine
-            .spec_check(&study.path("dm.yaml"), None, &token)
+            .spec(&study.path("dm.yaml"))
+            .cancel_with(&token)
+            .check()
             .unwrap()
             .issues(),
     );
@@ -297,13 +321,10 @@ fn submission_metadata_needs_a_model() {
     // composes it, as it reports any other fault of its own.
     let listed = rows(
         &engine
-            .project_submission(
-                &study.path("project.yaml"),
-                Some("sdtm"),
-                Some("2026-09-11T00:00:00"),
-                "0.4.0",
-                &token,
-            )
+            .project(&study.path("project.yaml"))
+            .section("sdtm")
+            .cancel_with(&token)
+            .submission(&SubmissionOptions::new("0.4.0").with_created("2026-09-11T00:00:00"))
             .unwrap()
             .issues(),
     );
@@ -313,7 +334,9 @@ fn submission_metadata_needs_a_model() {
     assert_eq!(
         rows(
             &engine
-                .spec_check(&study.path("spec.yaml"), None, &token)
+                .spec(&study.path("spec.yaml"))
+                .cancel_with(&token)
+                .check()
                 .unwrap()
                 .issues()
         ),
@@ -333,13 +356,10 @@ fn a_section_lists_only_specifications_of_its_model() {
     let submit = || {
         rows(
             &engine
-                .project_submission(
-                    &project,
-                    Some("sdtm"),
-                    Some("2026-09-11T00:00:00"),
-                    "0.4.0",
-                    &token,
-                )
+                .project(&project)
+                .section("sdtm")
+                .cancel_with(&token)
+                .submission(&SubmissionOptions::new("0.4.0").with_created("2026-09-11T00:00:00"))
                 .unwrap()
                 .issues(),
         )
@@ -425,7 +445,9 @@ fn a_column_declares_several_origins() {
     let check = || {
         rows(
             &engine
-                .spec_check(&study.path("dm.yaml"), None, &token)
+                .spec(&study.path("dm.yaml"))
+                .cancel_with(&token)
+                .check()
                 .unwrap()
                 .issues(),
         )
@@ -444,13 +466,10 @@ fn a_column_declares_several_origins() {
     );
     assert_eq!(check(), []);
     let mut submission = engine
-        .project_submission(
-            &study.path("project.yaml"),
-            Some("sdtm"),
-            Some("2026-09-11T00:00:00"),
-            "0.4.0",
-            &token,
-        )
+        .project(&study.path("project.yaml"))
+        .section("sdtm")
+        .cancel_with(&token)
+        .submission(&SubmissionOptions::new("0.4.0").with_created("2026-09-11T00:00:00"))
         .unwrap();
     assert_eq!(rows(&submission.issues()), []);
     submission.save(&CancellationToken::new()).unwrap();
@@ -510,7 +529,9 @@ fn not_available_is_an_origin_of_send_alone() {
     let check = |name: &str| {
         rows(
             &engine
-                .spec_check(&study.path(name), None, &token)
+                .spec(&study.path(name))
+                .cancel_with(&token)
+                .check()
                 .unwrap()
                 .issues(),
         )
@@ -564,7 +585,9 @@ fn a_value_level_entry_selects_the_rows_that_hold_none_of_its_values() {
     let check = || {
         rows(
             &engine
-                .spec_check(&study.path("xx.yaml"), None, &token)
+                .spec(&study.path("xx.yaml"))
+                .cancel_with(&token)
+                .check()
                 .unwrap()
                 .issues(),
         )
@@ -579,14 +602,18 @@ fn a_value_level_entry_selects_the_rows_that_hold_none_of_its_values() {
     // value there.
     study.write("raw.csv", "USUBJID,KIND,VALUE\nP1,X,A\nP2,,B\nP3,Y,C\n");
     let mut run = engine
-        .spec_run(&study.path("xx.yaml"), None, &token)
+        .spec(&study.path("xx.yaml"))
+        .cancel_with(&token)
+        .run()
         .unwrap();
     assert_eq!(rows(&run.issues()), []);
     run.save(&CancellationToken::new()).unwrap();
     study.write("raw.csv", "USUBJID,KIND,VALUE\nP1,X,A\nP2,,\nP3,Y,C\n");
     let issues = rows(
         &engine
-            .spec_run(&study.path("xx.yaml"), None, &token)
+            .spec(&study.path("xx.yaml"))
+            .cancel_with(&token)
+            .run()
             .unwrap()
             .issues(),
     );
@@ -599,13 +626,10 @@ fn a_value_level_entry_selects_the_rows_that_hold_none_of_its_values() {
     );
     // The document writes each comparator.
     let mut submission = engine
-        .project_submission(
-            &study.path("project.yaml"),
-            Some("sdtm"),
-            Some("2026-09-11T00:00:00"),
-            "0.4.0",
-            &token,
-        )
+        .project(&study.path("project.yaml"))
+        .section("sdtm")
+        .cancel_with(&token)
+        .submission(&SubmissionOptions::new("0.4.0").with_created("2026-09-11T00:00:00"))
         .unwrap();
     assert_eq!(rows(&submission.issues()), []);
     submission.save(&CancellationToken::new()).unwrap();
@@ -692,7 +716,9 @@ fn a_1_0_root_metadata_reserves_standard() {
     let check = |spec: &str| {
         rows(
             &engine
-                .spec_check(&study.path(spec), None, &token)
+                .spec(&study.path(spec))
+                .cancel_with(&token)
+                .check()
                 .unwrap()
                 .issues(),
         )
@@ -726,13 +752,10 @@ fn a_dataset_binds_the_section_standard_it_selects() {
     let token = CancellationToken::new();
     let define = || {
         let mut submission = engine
-            .project_submission(
-                &study.path("project.yaml"),
-                Some("sdtm"),
-                Some("2026-09-11T00:00:00"),
-                "0.4.0",
-                &token,
-            )
+            .project(&study.path("project.yaml"))
+            .section("sdtm")
+            .cancel_with(&token)
+            .submission(&SubmissionOptions::new("0.4.0").with_created("2026-09-11T00:00:00"))
             .unwrap();
         assert_eq!(rows(&submission.issues()), []);
         submission.save(&CancellationToken::new()).unwrap();
@@ -756,7 +779,9 @@ fn a_dataset_binds_the_section_standard_it_selects() {
     assert_eq!(
         rows(
             &engine
-                .spec_check(&study.path("dm.yaml"), None, &token)
+                .spec(&study.path("dm.yaml"))
+                .cancel_with(&token)
+                .check()
                 .unwrap()
                 .issues()
         ),
@@ -783,13 +808,10 @@ fn a_dataset_binds_the_section_standard_it_selects() {
     );
     let issues = rows(
         &engine
-            .project_submission(
-                &study.path("project.yaml"),
-                Some("sdtm"),
-                Some("2026-09-11T00:00:00"),
-                "0.4.0",
-                &token,
-            )
+            .project(&study.path("project.yaml"))
+            .section("sdtm")
+            .cancel_with(&token)
+            .submission(&SubmissionOptions::new("0.4.0").with_created("2026-09-11T00:00:00"))
             .unwrap()
             .issues(),
     );
@@ -858,13 +880,10 @@ fn missing_submission_metadata_is_reported_at_the_listing_or_the_column_submissi
         }
         study.write("dm.yaml", &edited);
         let submission = engine
-            .project_submission(
-                &study.path("project.yaml"),
-                Some("sdtm"),
-                Some("2026-09-11T00:00:00"),
-                "0.4.0",
-                &token,
-            )
+            .project(&study.path("project.yaml"))
+            .section("sdtm")
+            .cancel_with(&token)
+            .submission(&SubmissionOptions::new("0.4.0").with_created("2026-09-11T00:00:00"))
             .unwrap();
         let issues: Vec<_> = submission
             .diagnostics()

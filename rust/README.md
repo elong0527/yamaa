@@ -51,7 +51,7 @@ other configuration.
 | `parquet` | Parquet source and artifact encoding, schema metadata, and Brotli, Gzip, LZ4, Snappy and Zstd codecs. Zstd builds native C through `zstd-sys` and `cc`. |
 | `readstat` | Bundled read-only C backend and direct `cc` build dependency for `.sas7bdat` and `.xpt` input. |
 | `odm` | The `quick-xml` tokenizer and the pure-Rust Gzip codec; reads CDISC ODM 1.3 and 2.0 XML clinical items from plain XML or plain/Gzip TAR files into the fixed clinical-item table, for `read_odm` and for a specification's `.xml` inputs. |
-| `arrow` | Not a format: the Arrow form of tables at the hosts' edge. The facade's re-exported Arrow types, `Table::columns`, `schema`, `batches` and `stream`, and `InputFrame::import`, plus `Engine::spec_stream` and its streamed-run types, through `arrow-array` and `arrow-schema`. `parquet` builds the adapter's Arrow code too. |
+| `arrow` | Not a format: the Arrow form of tables at the hosts' edge. The facade's re-exported Arrow types, `Table::columns`, `schema`, `batches` and `stream`, and `InputFrame::import`, plus `SpecRequest::stream` and its streamed-run types, through `arrow-array` and `arrow-schema`. `parquet` builds the adapter's Arrow code too. |
 | No optional features | The CSV route and the engine's own tables remain; a table has its rows and its preview, and `save_table` writes it. No YAML parser, Parquet codec, ODM XML reader, ReadStat, native compression build or Arrow crate is selected. |
 
 The engine's own tables are columnar (`column_table.rs` over `columns.rs`):
@@ -198,7 +198,8 @@ before implementation; it changes no language semantics and no benchmark data.
 The facade crate and host migration (#2733), the committed API inventory
 `crates/yamaa/public-api.txt` and its check (#2734), and the rustdoc examples
 with the in-memory example program `crates/yamaa/examples/memory.rs` (#2735)
-are implemented.
+are implemented, and it describes the API as built, with the one request per
+operation of #3765.
 
 ### Facade location and boundary
 
@@ -225,11 +226,14 @@ local files are just the default resolver.
 ### Operations and signatures
 
 An embedder configures one `Engine` and calls its use cases, the verbs in
-section 2.8 of #3030, beside a few free functions. The options are a
-`#[non_exhaustive]` struct so fields can be added without breaking callers.
-There is no public compile-once plan handle and no progress port (#3030 D22,
-D72): a host's lazy object keeps its compiled plans in a `Plans` holder, and
-progress reporting is later and additive.
+section 2.8 of #3030, beside a few free functions. A specification's and a
+project's use cases are the operations of one request each, which
+`Engine::spec` and `Engine::project` give, as a host's lazy object holds one
+path (#3765). The options and the requests are `#[non_exhaustive]` structs,
+so fields can be added without breaking callers. There is no public
+compile-once plan handle and no progress port (#3030 D22, D72): a host's
+lazy object keeps its compiled plans in a `Plans` holder, and progress
+reporting is later and additive.
 
 ```rust
 pub struct Engine { /* resolver + host configuration, Arc-shared */ }
@@ -241,6 +245,7 @@ pub struct EngineOptions {
     pub runtime_name: String,      // folds in specification_report::Identity
     pub runtime_version: String,
     pub functions: Option<Arc<dyn ProjectFunctions>>,
+    pub partitions: Option<Partitions>,       // none: every run whole
 }
 
 impl EngineOptions {
@@ -252,36 +257,58 @@ impl EngineOptions {
     pub fn neutral(runtime_name: String, runtime_version: String) -> Self;
     pub fn with_resolver(mut self, resolver: Arc<dyn ResourceResolver>) -> Self;
     pub fn with_functions(mut self, functions: Arc<dyn ProjectFunctions>) -> Self;
+    pub fn with_partitions(mut self, partitions: Partitions) -> Self;
 }
 
 impl Engine {
     pub fn new(options: EngineOptions) -> Engine;
-    // A specification, alone or with its project file.
-    pub fn spec_check(&self, specification: &str, project: Option<&str>,
-        token: &CancellationToken) -> Result<Check, Error>;
-    pub fn spec_check_on(&self, specification: &str, project: Option<&str>,
-        parent: &str, token: &CancellationToken) -> Result<Check, Error>;
-    pub fn spec_run(&self, specification: &str, project: Option<&str>,
-        token: &CancellationToken) -> Result<Run, Error>;
-    pub fn spec_run_reusing(&self, specification: &str, project: Option<&str>,
-        plans: &Plans, token: &CancellationToken) -> Result<Run, Error>;
-    pub fn spec_resolve(&self, specification: &str, project: Option<&str>)
-        -> Result<ContextValue, Failure>;
-    // A project file.
-    pub fn project_spec(&self, project: &str, name: &str) -> Result<String, Failure>;
-    pub fn project_check(&self, project: &str, token: &CancellationToken)
-        -> Result<Check, Error>;
-    pub fn project_run(&self, project: &str, section: Option<&str>,
-        token: &CancellationToken) -> Result<ProjectRun, Error>;
-    pub fn project_run_reusing(&self, project: &str, section: Option<&str>,
-        plans: &Plans, token: &CancellationToken) -> Result<ProjectRun, Error>;
-    pub fn project_submission(&self, project: &str, section: Option<&str>,
-        created: Option<&str>, installed: &str, token: &CancellationToken)
-        -> Result<Submission, Error>;
+    // A specification, alone or with its project file, and a project file.
+    pub fn spec<'a>(&'a self, path: &'a str) -> SpecRequest<'a>;
+    pub fn project<'a>(&'a self, path: &'a str) -> ProjectRequest<'a>;
     // Single files.
     pub fn file_type(&self, path: &str) -> Result<FileType, Failure>;
     pub fn read_odm(&self, source: &str, options: &OdmOptions) -> Result<Table, Error>;
     pub fn save_table(&self, table: &Table, out: &str) -> Result<Vec<String>, Failure>;
+}
+
+#[non_exhaustive]
+pub struct SpecRequest<'a> { /* engine, path, project, plans, token */ }
+
+impl<'a> SpecRequest<'a> {
+    pub fn project(mut self, project: &'a str) -> Self;       // none: alone
+    pub fn reusing(mut self, plans: &'a Plans) -> Self;       // none: an empty holder
+    pub fn cancel_with(mut self, token: &'a CancellationToken) -> Self;  // none: never
+    pub fn path(&self) -> &str;
+    pub fn check(&self) -> Result<Check, Error>;
+    pub fn check_on(&self, parent: &str) -> Result<Check, Error>;
+    pub fn run(&self) -> Result<Run, Error>;
+    pub fn stream(&self) -> Result<Streamed, Error>;          // the `arrow` feature
+    pub fn resolve(&self) -> Result<ContextValue, Failure>;
+}
+
+#[non_exhaustive]
+pub struct ProjectRequest<'a> { /* engine, path, section, plans, token */ }
+
+impl<'a> ProjectRequest<'a> {
+    pub fn section(mut self, section: &'a str) -> Self;       // none: every section
+    pub fn reusing(mut self, plans: &'a Plans) -> Self;
+    pub fn cancel_with(mut self, token: &'a CancellationToken) -> Self;
+    pub fn spec(&self, name: &str) -> Result<SpecRequest<'a>, Failure>;
+    pub fn names(&self) -> Result<Vec<String>, Failure>;
+    pub fn check(&self) -> Result<Check, Error>;
+    pub fn run(&self) -> Result<ProjectRun, Error>;
+    pub fn submission(&self, options: &SubmissionOptions) -> Result<Submission, Error>;
+}
+
+#[non_exhaustive]
+pub struct SubmissionOptions {
+    pub installed_version: String,  // the source-system version (DEFINE-12)
+    pub created: Option<String>,    // none: the current UTC time, read once
+}
+
+impl SubmissionOptions {
+    pub fn new(installed_version: impl Into<String>) -> Self;
+    pub fn with_created(mut self, created: impl Into<String>) -> Self;
 }
 
 impl Run {  // and ProjectRun and Submission, whose save is one save too
@@ -290,6 +317,7 @@ impl Run {  // and ProjectRun and Submission, whose save is one save too
 
 pub fn lint(paths: &[String], fix: bool) -> Result<Lint, Failure>;
 pub fn schema(file_type: &str) -> Result<String, Failure>;
+pub fn conditions() -> Conditions;
 pub fn info(host: Host, host_version: Option<&str>) -> Info;
 pub fn selftest(host: Host, host_version: Option<&str>) -> SelfTest;
 ```
@@ -304,13 +332,33 @@ pub fn selftest(host: Host, host_version: Option<&str>) -> SelfTest;
   lock and activates nothing; a build that calls a project function is refused
   before any input is read as `unsupported_operation` with operation
   `environment`, and every other build runs as a host runs it.
+- A request holds what a host's lazy object holds and reads nothing until one
+  of its operations runs; each operation rereads the files, so one request
+  runs any of its operations any number of times. Its builders take and
+  return the request: the project file a specification is read with, the
+  section a project's run and submission take, the `Plans` holder its runs
+  reuse and the `CancellationToken` its operations poll. Without them a
+  specification is read alone, a project run builds and a submission composes
+  every section, every run compiles through an empty holder, and the
+  operations poll a token that nothing cancels. `check`, `check_on`, `run`,
+  `stream` and `submission` poll the token; `resolve`, `names` and `spec` read files alone
+  and poll none. A project request's `check`, `names` and `spec` read the
+  whole project, whichever section it names. `ProjectRequest::spec(name)`
+  gives the request of the listed specification, read with that project file
+  and polling the project request's token; it reuses none of the project
+  request's plans, as each host object keeps a holder of its own. Both
+  requests are `#[non_exhaustive]` and `#[must_use]`, and only
+  `Engine::spec`, `Engine::project` and `ProjectRequest::spec` build them. A
+  request borrows the engine, holder, token and paths it is given; a request
+  that `ProjectRequest::spec` gives owns the listed path it read instead.
+  Either is cheap to clone.
 - A check reports admission and preparation failures as the issues of its
   `Check`, never as a second error channel, and a run returns a `Run` for
   every adjudicated outcome, with its output, issues and run report. Only
   cancellation fails either: a cancelled call returns `Error::Cancelled`, with
   no result and no issue, as every cancellable operation does.
-- `spec_check_on` checks a fragment on the specification `parent` names, a
-  caller path read as `specification` is: the fragment composes as it would
+- `SpecRequest::check_on(parent)` checks a fragment on the specification
+  `parent` names, a caller path read as the request's path is: the fragment composes as it would
   in a file that names `parent` as its parent, includes the fragment and
   writes nothing else (LAYER-4, #3694). A specification that declares
   `parent` or `include` is no fragment, so the call refuses the given parent
@@ -335,7 +383,7 @@ pub fn selftest(host: Host, host_version: Option<&str>) -> SelfTest;
   extension, and the save's `engine_rejected` codes for a target that cannot
   be written (#3030 D134).
 - Every use case goes through the engine's resolver: checks, runs,
-  project reads and submissions, `spec_resolve`, `read_odm`, `save_table` and
+  project reads and submissions, `resolve`, `read_odm`, `save_table` and
   `file_type`. Without one, the engine's local file resolver serves the same requests, so a
   resolver that records them sees every access. A resolver serves a regular
   file or reports what else a name reaches with
@@ -356,24 +404,25 @@ pub fn selftest(host: Host, host_version: Option<&str>) -> SelfTest;
   dispatches on (#3030 D122). A file that declares `schema_version` has no
   type and is refused as `unsupported_language_version` at `schema_version`
   (D125).
-- `spec_resolve` returns the specification after its layers compose, as one
-  `ContextValue` tree: the internal `ResolvedArtifact` (above) is its
-  implementation and wire format, and no public type stands for it (#2725).
+- `SpecRequest::resolve` returns the specification after its layers
+  compose, as one `ContextValue` tree: the internal `ResolvedArtifact`
+  (above) is its implementation and wire format, and no public type stands
+  for it (#2725).
 - The hosts' lazy objects keep a `Plans` holder each (#2821), so `Plans`
   stays public: an embedder using the facade reuses what a run compiled through
-  this holder (#3030 D72). `Engine::spec_run_reusing` and
-  `Engine::project_run_reusing` first resolve the request's paths as
-  compilation does: absolute against the current working directory, with each
-  parent directory canonical. They run the plan kept for those identities when
-  the run-start check finds every file it was compiled from unchanged (#3069):
-  the specification, its layers, dictionaries and linked producing
-  specifications, the project file and the function files, lock and codelists
-  it declares. Otherwise they compile again and keep the new plan; a refused
-  compilation keeps nothing. A plan reads no study data and keeps nothing a
-  run captures, activates or produces, so a failed run leaves it ready for the
-  next. A kept plan holds no project functions. It runs through the calling
-  engine's, so each host call activates its own capabilities afresh.
-  `spec_run` and `project_run` run through an empty holder.
+  this holder (#3030 D72). The run of a request given a holder with `reusing`
+  first resolves the request's paths as compilation does: absolute against
+  the current working directory, with each parent directory canonical. It
+  runs the plan kept for those identities when the run-start check finds
+  every file it was compiled from unchanged (#3069): the specification, its
+  layers, dictionaries and linked producing specifications, the project file
+  and the function files, lock and codelists it declares. Otherwise it
+  compiles again and keeps the new plan; a refused compilation keeps nothing.
+  A plan reads no study data and keeps nothing a run captures, activates or
+  produces, so a failed run leaves it ready for the next. A kept plan holds
+  no project functions. It runs through the calling engine's, so each host
+  call activates its own capabilities afresh. A request given no holder runs
+  through an empty one.
 - Every host operation produces one outcome: its members in run order and
   the project-level issues that refused the whole operation. A specification
   run is a producer graph of one member; a project run is a graph of every
@@ -389,6 +438,7 @@ pub fn selftest(host: Host, host_version: Option<&str>) -> SelfTest;
 | Handle | Ownership | `Send` | `Sync` | Notes |
 | --- | --- | --- | --- | --- |
 | `Engine` | Owned, cheap to clone (shared `Arc` state) | Yes | Yes | Operations take `&self`; concurrent calls are independent attempts. |
+| `SpecRequest`, `ProjectRequest` | Borrows the engine, holder, token and paths it was given (a listed specification's request owns its path); cheap to clone | Yes | Yes | Builders take and return the request, and operations take `&self`, so one request runs any operation any number of times. |
 | `Run`, `ProjectRun`, `Submission` | Owned, one attempt | Yes | No | `save(&mut self, token)` publishes once, as today; a result outlives its engine. |
 | `Plans` | Owned by one host object, interior lock | Yes | Yes | Keeps one compiled plan per resolved specification and project identity. The lock is held only to read or replace a kept plan, never across a compilation, a run or a callback, so a run started from a callback or another thread proceeds as any other. |
 | `Table` | Owned, immutable columns, cheap to clone | Yes | Yes | Clones share the columns and the Arrow form, which borrowed views borrow. |
@@ -495,18 +545,21 @@ impl CancellationToken {
 }
 ```
 
-An operation polls its token on its calling thread; nothing runs in the
-background. It polls when it starts, before each member of a project run or
-check and after each member it builds, before each submission section, at
-every step of a dataset's schedule marked `checkpoint` and before each batch
-of project-function calls (`ResolvedPlan::execute`, #2822 step 1), and once in
-a save, after every file is staged and before the first commit (D74). A
-cancelled operation returns `Error::Cancelled`, with no result and no issue:
-a cancelled run keeps nothing it built, and a cancelled save removes what it
-staged and fails with `cannot save <subject>: operation cancelled`. A save
-writes either nothing or everything it planned, and nothing is rolled back
-once committed. A project function that raises the host's interrupt, as
-`ProjectFunctions::is_interrupt` classifies it, cancels the call the same way.
+An operation polls its token on its calling thread: the token its request
+was given with `cancel_with`, or the one a save takes; the operations of a
+request given none poll a token that nothing cancels. Nothing runs in the
+background. An operation polls when it starts, before each member of a
+project run or check and after each member it builds, before each submission
+section, at every step of a dataset's schedule marked `checkpoint` and before
+each batch of project-function calls (`ResolvedPlan::execute`, #2822 step 1),
+and once in a save, after every file is staged and before the first commit
+(D74). A cancelled operation returns `Error::Cancelled`, with no result and
+no issue: a cancelled run keeps nothing it built, and a cancelled save
+removes what it staged and fails with `cannot save <subject>: operation
+cancelled`. A save writes either nothing or everything it planned, and
+nothing is rolled back once committed. A project function that raises the
+host's interrupt, as `ProjectFunctions::is_interrupt` classifies it, cancels
+the call the same way.
 
 Each host call makes its token with `with_probe`: the probe asks the
 interpreter whether an interrupt is pending, keeps that interrupt and answers
@@ -593,7 +646,7 @@ was removed. Any module not listed here is internal by default.
 | `arrow_table` | Removed -- `column_table`, the engine's own columnar table, replaced it; `Table` is the public form. |
 | `callback` | Facade -- the `ProjectFunctions` trait and `FunctionError`; `BoundaryError`/`CallbackError` convert into `FunctionError`. |
 | `file_application` | Facade -- the one route behind every check, run and project operation: a specification alone and each member of a project run prepare, run and report there. |
-| `file_define` | Internal -- each section's composition behind `Engine::project_submission`, which `Submission::save` publishes. |
+| `file_define` | Internal -- each section's composition behind `ProjectRequest::submission`, which `Submission::save` publishes. |
 | `file_preparation` | Internal -- `FileSpecification`, the one prepared specification, alone or with its project, behind each run and the kept plans of a `Plans` holder. |
 | `file_project` | Internal -- project environment capture for preparation. |
 | `file_resources` | Internal -- its `Error` converts into `ResolverFailure`/`Error::Internal`. |
@@ -607,7 +660,7 @@ was removed. Any module not listed here is internal by default.
 | `project_report` | Internal -- the activation and project-function half of the one result builder; `Classified` stays an internal constructor. |
 | `project_run` | Removed -- `specification_run::PreparedRun` is the one prepared run, alone or with a project; a kept plan wraps it (#2821), and it stays internal with its `Attempt`. |
 | `public_table` | Facade -- `Table`. |
-| `resolved_artifact` | Facade -- the tree `Engine::spec_resolve` returns (#2725); the artifact type stays internal. |
+| `resolved_artifact` | Facade -- the tree `SpecRequest::resolve` returns (#2725); the artifact type stays internal. |
 | `scalar_bytes` | Internal -- scalar decoding is a conversion detail; project functions exchange facade `Scalar` values. |
 | `specification_report` | Facade -- the one result builder behind `Run`; its `Identity` folds into `EngineOptions` (`runtime_name`/`runtime_version`); the module is internal. |
 | `style_values` | Internal -- the value comparison that proves `lint`'s fixes. |
