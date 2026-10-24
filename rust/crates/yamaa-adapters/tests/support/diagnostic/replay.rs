@@ -17,10 +17,13 @@
 //! context written `context.<key>`, which every row's `context` then holds,
 //! with no other key. A compared field that a row leaves out asserts its
 //! absence; a case naming a key of the context does not name the context
-//! whole. A case whose test found its issues by their cause among others
-//! says `among`: each row equals a distinct reported issue, in any order, and
-//! the issues no row names are not compared. Nothing a test did not compare
-//! is filled in. These are the `compares` and `among` core's replay reads.
+//! whole. A case whose test read the first of several issues by position
+//! says `prefix`: its rows are the first issues reported, in order, and the
+//! issues after them are not compared. A case whose test found its issues by
+//! their cause among others says `among`: each row equals a distinct
+//! reported issue, in any order, and the issues no row names are not
+//! compared. Nothing a test did not compare is filled in. These are the
+//! `compares` and [`form::Order`] core's replay reads.
 //!
 //! An input's files are written to a fresh study directory: a file is its
 //! text, a document of the fixture's `documents` taken by name (`base`), or
@@ -67,8 +70,8 @@ pub struct Case {
     pub input: Value,
     /// The fields the case compares, when its test compared fewer than all.
     pub compares: Option<Vec<String>>,
-    /// Whether the rows are some of the issues, found by their cause.
-    pub among: bool,
+    /// How the rows stand to the issues reported.
+    pub order: form::Order,
     pub issues: Vec<Value>,
     /// The tables and files the case states beside its issues.
     pub stated: Stated,
@@ -118,16 +121,8 @@ pub fn cases() -> Vec<Case> {
             let compares = case
                 .get("compares")
                 .map(|fields| compared_fields(fields, &label));
-            let among = match case.get("among") {
-                None => false,
-                Some(Value::Bool(true)) => true,
-                Some(other) => panic!("{label}: among is written only as true, not {other:?}"),
-            };
             let issues = items(field(case, "issues"));
-            assert!(
-                !(among && issues.is_empty()),
-                "{label}: a case found among the issues names at least one"
-            );
+            let order = form::Order::read(case, issues.len(), &label);
             if let Some(fields) = &compares {
                 for issue in issues {
                     held_alone(issue, fields, &label);
@@ -139,7 +134,7 @@ pub fn cases() -> Vec<Case> {
                 label,
                 operations,
                 compares,
-                among,
+                order,
                 issues: issues.to_vec(),
             });
         }
@@ -148,10 +143,10 @@ pub fn cases() -> Vec<Case> {
 }
 
 /// Replay every case: the issues each of its operations reports must equal
-/// its rows, or, for a case found `among` them, include each of its rows,
-/// the tables and files the operation reports must be the ones the case
-/// states, and the operations of a case that names several must report the
-/// same complete rows.
+/// its rows, begin with them for a `prefix`, or, for a case found `among`
+/// them, include each of its rows, the tables and files the operation
+/// reports must be the ones the case states, and the operations of a case
+/// that names several must report the same complete rows.
 pub fn replay() {
     for case in cases() {
         let mut reported = Vec::new();
@@ -205,7 +200,7 @@ pub fn compare_issues(
         .iter()
         .map(|row| expanded(row, study, label))
         .collect::<Vec<_>>();
-    if case.among {
+    if case.order == form::Order::Among {
         let mut unmatched = projected;
         for row in &expected {
             let Some(at) = unmatched.iter().position(|reported| reported == row) else {
@@ -217,8 +212,9 @@ pub fn compare_issues(
             unmatched.remove(at);
         }
     } else {
+        let compared = case.order.compared(&projected, expected.len());
         assert_eq!(
-            Value::Array(projected),
+            Value::Array(compared.to_vec()),
             Value::Array(expected),
             "{label}: the issues are\n{rendered}"
         );

@@ -499,8 +499,8 @@ made to both, and `make check-repository` fails while they differ
   cites as `<file>::<case>`), the operations that reach it (`operation`),
   their `input`, and the complete issue rows they report (`issues`, in the
   shape `assert_issues` compares). Several operations must each report the
-  same complete rows, compared with each other whatever `compares` and
-  `among` leave out. Core's input holds a specification as
+  same complete rows, compared with each other whatever `compares`,
+  `prefix` and `among` leave out. Core's input holds a specification as
   a JSON object, or a document of the file's `documents` with edits that
   set or remove a member. The adapters' input holds the `files` its
   operation writes to a fresh study directory, each its text, a
@@ -552,11 +552,14 @@ made to both, and `make check-repository` fails while they differ
 - A case whose source compared only part of each record names the fields
   it compares in `compares`, and a case whose source compared some keys of
   a context names each as `context.<key>` in place of `context`, its rows'
-  contexts holding exactly those keys. A case whose source found its
-  record by cause among several issues writes `"among": true`: its rows
-  need only be among the issues reported, in any order, since the issues
-  its source left unstated give its rows no authored position. It is the
-  one exception to comparing the whole issue list.
+  contexts holding exactly those keys. A case whose source read the first
+  of several issues by position writes `"prefix": true`: its rows are the
+  first issues reported, in order, and the issues after them are not
+  compared. A case whose source found its record by cause among several
+  issues writes `"among": true`: its rows need only be among the issues
+  reported, in any order, since the issues its source left unstated give
+  its rows no authored position. These are the two exceptions to comparing
+  the whole issue list, and a case writes at most one (`form::Order`).
 - A variant of a document comes from an exact-once edit,
   `document.edit(from, to)` through the adapters' `support::Edit`, never
   from `str::replace`, which does nothing when its pattern is missing.
