@@ -89,9 +89,14 @@ pub fn partitioned_reads_match_the_whole_read(
         let rows = NonZeroUsize::new(rows).expect("a positive partition size");
         let mut visited = Vec::new();
         let divided = decoder
-            .partitioned(source, bytes, interpretation, None, rows, &mut |part, first| {
-                visited.push(first..first + part.row_count())
-            })
+            .partitioned(
+                source,
+                bytes,
+                interpretation,
+                None,
+                rows,
+                &mut |part, first| visited.push(first..first + part.row_count()),
+            )
             .expect("a CSV or Parquet input scans by partition");
         match (&whole, &divided) {
             (Ok(whole), Ok(scanned)) => {
