@@ -71,7 +71,7 @@ pub fn files() -> impl Iterator<Item = &'static File> {
 /// A fresh study directory holding the input's `files` (each relative path
 /// and its text) and `directories` (empty ones), named canonically, as the
 /// engine spells the paths it reports.
-fn study(input: &Value) -> Scratch {
+pub fn study(input: &Value) -> Scratch {
     let study = Scratch::canonical("diagnostics");
     for (name, file) in object(field(input, "files")) {
         study.write(name, text(file));
