@@ -928,7 +928,11 @@ and the ReadStat sources; and the crates.io crates of that lock, as
 that `tools/staging/vendor_crates.py` leaves out, described below. The
 facade crate carries the selftest cases in its `selftest/` directory: the
 files of the benchmarks that `benchmarks/selftest.yaml` names, which the
-facade's build embeds (#3030 D108), so a build from the bundle reads nothing
+facade's build embeds (#3030 D108). The adapters crate carries the schema
+files that it embeds in its `schema/` directory: the copies of the schema
+modules and JSON Schemas of `yaml/` that
+`tools/packaging/generate_shipped_schema.py` writes and
+`make check-repository` compares. A build from the bundle thus reads nothing
 outside it. It holds no tests, examples, other benchmark fixtures or
 `public-api.txt`, and no `rust-toolchain.toml` or `rust-toolchain` file
 anywhere, the vendored crates included. Cargo writes the trimmed lock from a

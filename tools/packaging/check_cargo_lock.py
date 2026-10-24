@@ -435,8 +435,9 @@ def check_bundle_archive(path: Path, workspace=WORKSPACE):
 
     The archive must hold no Rust toolchain file anywhere, the vendored crates
     included. It must carry exactly the bundle's Rust sources, the selftest
-    cases that the facade embeds, its manifest and Cargo configuration, a
-    lock that verifies against the canonical lock, and each crates.io crate
+    cases that the facade embeds, the copies of the schema files that the
+    adapters embed, its manifest and Cargo configuration, a lock that
+    verifies against the canonical lock, and each crates.io crate
     of that lock, with every file that its `.cargo-checksum.json` lists and
     no other, apart from the empty library root of a crate that keeps only
     its manifest: in vendor/ in a Python source archive, and in

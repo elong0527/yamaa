@@ -1,9 +1,10 @@
 //! The JSON Schema of each 1.0 file type (#3030 section 2.12): the file
 //! `tools/packaging/generate_json_schema.py` commits in `yaml/json/`,
-//! which the package embeds byte for byte when it is built, so nothing is
-//! read at run time. The committed file is indented for review; the engine
-//! gives the same document as canonical JSON text, the encoding of every
-//! JSON text it writes: one line, members in key order, numbers as written.
+//! which the package embeds byte for byte from its copy in the crate's
+//! `schema/json/` when it is built, so nothing is read at run time. The
+//! committed file is indented for review; the engine gives the same document
+//! as canonical JSON text, the encoding of every JSON text it writes: one
+//! line, members in key order, numbers as written.
 
 use yamaa_core::language::FileType;
 

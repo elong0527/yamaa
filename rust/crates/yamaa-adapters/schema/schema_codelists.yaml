@@ -1,0 +1,19 @@
+version: "1.0"
+
+# See CT-1.
+
+includes:
+    - schema_shared.yaml
+    - schema_terminology.yaml
+
+codelist_file_class:
+    - yamaa:
+        type: language_version
+        required: true
+        description: Oldest language version this codelist file needs, always quoted (SCHEMA-2).
+    - type:
+        type: str
+        required: true
+        values: [codelists]
+        description: File type of a codelist file, which holds the codelists of one source (CT-1).
+    - fields_from: codelist_source_class
