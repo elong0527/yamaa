@@ -489,7 +489,9 @@ made to both, and `make check-repository` fails while they differ
   behaviour it proves (`case`, unique across the files, which a rule card
   cites as `<file>::<case>`), the operations that reach it (`operation`),
   their `input`, and the complete issue rows they report (`issues`, in the
-  shape `assert_issues` compares). Core's input holds a specification as
+  shape `assert_issues` compares). Several operations must each report the
+  same complete rows, compared with each other whatever `compares` and
+  `among` leave out. Core's input holds a specification as
   a JSON object, or a document of the file's `documents` with edits that
   set or remove a member. The adapters' input holds the `files` its
   operation writes to a fresh study directory, each its text or a

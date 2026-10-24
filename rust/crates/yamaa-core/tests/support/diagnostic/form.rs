@@ -6,10 +6,11 @@
 //!
 //! A fixture file holds `about`, its `documents` and its `cases`. A case
 //! names the behaviour it proves (`case`), the operation that reaches it
-//! (`operation`, or a list of several that must each report the same), that
-//! operation's `input`, and the issue rows it reports (`issues`, which each
-//! replay reads with `compares` and `among`). A positive case also states
-//! what its operation built and saved:
+//! (`operation`, or a list of several that must each report the same issues,
+//! their complete rows compared with each other whatever `compares` and
+//! `among` leave out), that operation's `input`, and the issue rows it
+//! reports (`issues`, which each replay reads with `compares` and `among`).
+//! A positive case also states what its operation built and saved:
 //!
 //! - `output`, the output table, whole: a header row of its column names,
 //!   then one row per record, each holding one cell per column;
@@ -164,6 +165,29 @@ pub fn saved(staged: &Files, now: &Files) -> Saved {
         .filter(|(name, bytes)| staged.get(*name) != Some(*bytes))
         .map(|(name, bytes)| (name.clone(), Some(bytes.clone())));
     removed.chain(written).collect()
+}
+
+/// The operations of the case `label` names each reported the same complete
+/// issue rows, which `reported` holds by operation, in order: a case that
+/// names several states that each reports the same issues, so the rows are
+/// compared whole, whatever its own rows compare. A failure names the first
+/// row that differs.
+pub fn same_issues(reported: &[(&str, Vec<Value>)], label: &str) {
+    let Some(((first, rows), others)) = reported.split_first() else {
+        return;
+    };
+    for (operation, other) in others {
+        let row = |rows: &[Value], at: usize| rows.get(at).map_or_else(|| "no row".into(), json);
+        if let Some(at) = (0..rows.len().max(other.len())).find(|&at| rows.get(at) != other.get(at))
+        {
+            panic!(
+                "{label}: {first} and {operation} report different issues, first at index {at}:\n\
+                 {first}: {}\n{operation}: {}",
+                row(rows, at),
+                row(other, at)
+            );
+        }
+    }
 }
 
 /// A table's rows as an operation reports them: the header of its `names`,
@@ -369,6 +393,28 @@ fn lines(rows: &[Value]) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// `value` as JSON text, its strings quoted as Rust quotes them, for a
+/// failure message.
+fn json(value: &Value) -> String {
+    let joined = |items: Vec<String>| items.join(", ");
+    match value {
+        Value::Null => "null".to_owned(),
+        Value::Bool(value) => value.to_string(),
+        Value::Number(number) => number.to_string(),
+        Value::String(text) => format!("{text:?}"),
+        Value::Array(items) => format!("[{}]", joined(items.iter().map(json).collect())),
+        Value::Object(members) => format!(
+            "{{{}}}",
+            joined(
+                members
+                    .iter()
+                    .map(|(key, value)| format!("{key:?}: {}", json(value)))
+                    .collect()
+            )
+        ),
+    }
 }
 
 /// Each file's path and its text, or `null` for a file removed, for a failure
