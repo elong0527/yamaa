@@ -310,10 +310,13 @@ struct Planned {
 ///    define.xml (JSON-14). A section that did not compose ends the plan: the
 ///    save stops at it, after the sections before it (PROJECT-13).
 /// 2. Open every target, refusing a target that cannot be written and two
-///    files that name one target, then stage every file beside its target.
-///    Nothing is visible yet, so a save stopped here writes nothing.
-/// 3. Poll `token`, once (D74): a cancelled save removes every staged file
-///    and fails with the cancellation's error text, writing nothing.
+///    files that name one target, then stage every file beside its target,
+///    a run's output one partition at a time (D264), polling `token` before
+///    each partition after the first. Nothing is visible yet, so a save
+///    stopped here writes nothing; a cancelled one removes every staged file
+///    and fails with the cancellation's error text.
+/// 3. Poll `token` once more (D74): a cancelled save removes every staged
+///    file and fails with the cancellation's error text, writing nothing.
 /// 4. Commit the files in order. The first that cannot replace its target
 ///    stops the save: the files before it stay, and the rest are removed.
 ///
@@ -390,11 +393,17 @@ pub(crate) fn save(
             admitted,
         });
     }
-    // 2. Open and stage every file.
+    // 2. Open and stage every file, polling between two partitions of one.
     let staged = match unplanned {
         // A run whose report cannot be recorded refuses the save unstaged.
         Some(_) => None,
-        None => Some(publication::stage(&files)),
+        None => Some(publication::stage_with(&files, |_, _| {
+            if token.is_cancelled() {
+                Err(publication::Interruption::Cancelled)
+            } else {
+                Ok(())
+            }
+        })),
     };
     let paths = files
         .iter()
@@ -409,7 +418,11 @@ pub(crate) fn save(
         return Err(parts[position].refusal(subject, Vec::new()));
     }
     let staged = staged.expect("a planned save stages");
-    // 3. D74: poll once, after every file is staged and before the first
+    // A save cancelled while it staged has removed what it staged.
+    if matches!(&staged, Err(stop) if matches!(stop.cause, Cause::Cancelled)) {
+        return Err(Failure::cancelled(action));
+    }
+    // 3. D74: poll once more, after every file is staged and before the first
     // commit; a cancelled save aborts what it staged and writes nothing.
     if staged.is_ok() && token.is_cancelled() {
         if let Ok(staged) = staged {

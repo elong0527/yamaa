@@ -232,13 +232,11 @@ impl PreparedRun {
             .map_or(&[][..], |lock| &lock.source.bytes[..]);
         attempt.boundary = match catch_unwind(AssertUnwindSafe(|| {
             self.checked.build_into(
-                functions,
-                lock,
+                (functions, lock),
                 source,
                 &mut Decoder::<A::Error>::default(),
                 &mut attempt.dataset,
-                Some(&mut attempt.activation),
-                scope,
+                (Some(&mut attempt.activation), scope),
             )
         })) {
             Ok(result) => result.map_err(BoundaryFailure::Activation),

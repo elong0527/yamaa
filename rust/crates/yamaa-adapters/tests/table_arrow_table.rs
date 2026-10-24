@@ -493,6 +493,61 @@ mod table {
             );
         }
 
+        /// The encoder's partitions (D264), a seam no benchmark reaches: a
+        /// file written a partition at a time has the whole render's bytes,
+        /// the display precision read with the first record even when an
+        /// empty partition comes first. Each partition ends where its records
+        /// do in the bytes above: the header is 6 bytes and the records 10,
+        /// 13, 4 and 9.
+        #[test]
+        fn a_file_written_a_partition_at_a_time_has_the_whole_renders_bytes() {
+            let table = Table {
+                schema: TableSchema::new(vec![
+                    Column {
+                        name: "I".into(),
+                        kind: ColumnType::Int,
+                    },
+                    Column {
+                        name: "F".into(),
+                        kind: ColumnType::Float,
+                    },
+                    Column {
+                        name: "S".into(),
+                        kind: ColumnType::Str,
+                    },
+                ])
+                .unwrap(),
+                rows: vec![
+                    vec![Value::Int(1), Value::float(0.125), Value::Str("".into())],
+                    vec![Value::Int(2), Value::float(2.675), Value::Str("a,b".into())],
+                    vec![Value::Int(3), Value::Missing, Value::Missing],
+                    vec![Value::Int(4), Value::float(-0.004), Value::Str("z".into())],
+                ],
+            };
+            let expected = b"S,F,I\n\"\",0.13,1\n\"a,b\",2.68,2\n,,3\nz,0.00,4\n".to_vec();
+            let cases = [
+                ("one partition", std::iter::once(0..4).collect(), vec![42]),
+                (
+                    "one record each",
+                    vec![0..1, 1..2, 2..3, 3..4],
+                    vec![16, 29, 33, 42],
+                ),
+                (
+                    "an empty first partition",
+                    vec![0..0, 0..3, 3..4],
+                    vec![6, 33, 42],
+                ),
+            ];
+            for (label, partitions, ends) in cases {
+                assert_eq!(
+                    csv_artifact::render_partitions(&table, &[2, 1, 0], Some("2"), &partitions)
+                        .unwrap(),
+                    (expected.clone(), ends),
+                    "{label}"
+                );
+            }
+        }
+
         #[test]
         fn excessive_precision_refuses_before_the_first_projected_cell_read() {
             struct NoCells(TableSchema);
@@ -1004,7 +1059,7 @@ mod table {
                     ],
                 ],
             );
-            let rows = yamaa_adapters::parquet_artifact::records(&table, &[0, 1, 2]).unwrap();
+            let rows = yamaa_adapters::parquet_artifact::records(&table, &[0, 1, 2], None).unwrap();
             assert_eq!(
                 rows,
                 [
@@ -1139,7 +1194,7 @@ mod table {
                 check!(csv_artifact::render(&table, &projection, None), CsvError);
                 check!(render(&table, &projection), Error);
                 check!(
-                    yamaa_adapters::parquet_artifact::records(&table, &projection),
+                    yamaa_adapters::parquet_artifact::records(&table, &projection, None),
                     Error
                 );
             }
@@ -1194,7 +1249,7 @@ mod table {
                 assert_eq!(row.get_timestamp_micros(1).unwrap(), 86_399_000_000);
             }
             assert_eq!(
-                yamaa_adapters::parquet_artifact::records(&table, &[0, 1]).unwrap(),
+                yamaa_adapters::parquet_artifact::records(&table, &[0, 1], None).unwrap(),
                 [
                     r#"["D", "T"]"#,
                     r#"["1970-02-28", "1970-01-01T23:59:59"]"#,

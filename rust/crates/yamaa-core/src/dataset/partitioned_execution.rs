@@ -179,6 +179,18 @@ fn partitioned(
 
 /// The plan runs whole and over every division of `input` with the one
 /// authored attempt.
+/// `attempt` as a whole-table run states it. A partitioned run also records
+/// the most rows one partition of its output holds (D264), which
+/// [`the_output_divides_into_partitions_as_large_as_the_largest_driver_partition`]
+/// proves, so a comparison with the authored whole-table attempt sets it
+/// aside.
+fn as_stated(mut attempt: ExecutionAttempt<Infallible>) -> ExecutionAttempt<Infallible> {
+    if let Ok(execution) = &mut attempt.result {
+        execution.partition_rows = None;
+    }
+    attempt
+}
+
 fn assert_every_division(
     plan: &DatasetPlan,
     input: &Rows,
@@ -189,7 +201,7 @@ fn assert_every_division(
     let whole = resolved.execute(input, secondary, &mut NoFunctions::new(), None, &|| false);
     assert_eq!(&whole, expected, "the whole-table run");
     for sizes in divisions(input.rows.len()) {
-        let attempt = partitioned(&resolved, input, secondary, &sizes, false);
+        let attempt = as_stated(partitioned(&resolved, input, secondary, &sizes, false));
         assert_eq!(&attempt, expected, "partitions {sizes:?}");
     }
 }
@@ -316,6 +328,7 @@ fn graded_attempt() -> ExecutionAttempt<Infallible> {
     range.offending_rows = vec![identity(3, 4)];
     ExecutionAttempt {
         result: Ok(Execution {
+            partition_rows: None,
             dataset: Dataset::from_rows(
                 output,
                 vec![
@@ -406,6 +419,7 @@ fn a_group_that_spans_partitions_is_one_candidate_at_its_first_occurrence() {
     );
     let expected = ExecutionAttempt {
         result: Ok(Execution {
+            partition_rows: None,
             dataset: Dataset::from_rows(
                 output,
                 vec![
@@ -475,6 +489,7 @@ fn equal_keys_in_different_partitions_build_one_key_grain_candidate() {
     );
     let expected = ExecutionAttempt {
         result: Ok(Execution {
+            partition_rows: None,
             dataset: Dataset::from_rows(output, vec![vec![int(1), int(5)], vec![int(2), int(6)]]),
             verifications: vec![record(
                 "verifications[0]",
@@ -842,6 +857,7 @@ fn a_step_that_needs_the_whole_table_refuses_the_run_unless_it_falls_back() {
     ]);
     let numbered = ExecutionAttempt {
         result: Ok(Execution {
+            partition_rows: None,
             dataset: Dataset::from_rows(
                 output,
                 vec![
@@ -956,7 +972,7 @@ fn a_run_cancelled_between_partitions_keeps_nothing_and_names_its_phase() {
         false,
         0,
     );
-    assert_eq!(attempt, graded_attempt(), "uncancelled");
+    assert_eq!(as_stated(attempt), graded_attempt(), "uncancelled");
     assert_eq!(probe.polls.get(), total, "polls of an uncancelled run");
     for from in 1..=total {
         let probe = Probe::new(Some(from));
@@ -1102,6 +1118,7 @@ fn a_project_function_runs_only_under_the_fallback_and_then_once_per_record() {
             3,
             ExecutionAttempt {
                 result: Ok(Execution {
+                    partition_rows: None,
                     dataset: Dataset::from_rows(
                         output.clone(),
                         vec![
@@ -1312,6 +1329,7 @@ fn visits_attempt() -> ExecutionAttempt<Infallible> {
     };
     ExecutionAttempt {
         result: Ok(Execution {
+            partition_rows: None,
             dataset: Dataset::from_rows(
                 schema(&[
                     ("S", ColumnType::Str),
@@ -1360,7 +1378,12 @@ fn subject_windows_and_aggregates_have_their_whole_table_results_over_key_bounde
     for (keys, rows) in [(1, 1), (1, 6), (2, 1), (2, 3), (2, 4), (2, 6), (3, 1)] {
         let fallback = keys == 3;
         assert_eq!(
-            divided_run(&resolved, &input, by_keys(keys, rows, fallback), &|| false),
+            as_stated(divided_run(
+                &resolved,
+                &input,
+                by_keys(keys, rows, fallback),
+                &|| false
+            )),
             expected,
             "{keys} keys, at most {rows} records, fallback {fallback}"
         );
@@ -1466,6 +1489,7 @@ fn grouped_and_qualified_subject_aggregates_have_their_whole_table_results_over_
     };
     let expected = ExecutionAttempt {
         result: Ok(Execution {
+            partition_rows: None,
             dataset: Dataset::from_rows(
                 schema(&[
                     ("S", ColumnType::Str),
@@ -1489,7 +1513,12 @@ fn grouped_and_qualified_subject_aggregates_have_their_whole_table_results_over_
     assert_eq!(whole, expected, "the whole-table run");
     for (keys, rows) in [(1, 1), (2, 1), (2, 4), (2, 6)] {
         assert_eq!(
-            divided_run(&resolved, &input, by_keys(keys, rows, false), &|| false),
+            as_stated(divided_run(
+                &resolved,
+                &input,
+                by_keys(keys, rows, false),
+                &|| false
+            )),
             expected,
             "{keys} keys, at most {rows} records"
         );
@@ -1664,7 +1693,7 @@ fn a_run_cancelled_between_key_bounded_partitions_keeps_nothing_and_names_its_ph
     let attempt = divided_run(&resolved, &input, by_keys(2, 1, false), &|| {
         probe.cancelled()
     });
-    assert_eq!(attempt, visits_attempt(), "uncancelled");
+    assert_eq!(as_stated(attempt), visits_attempt(), "uncancelled");
     assert_eq!(probe.polls.get(), total, "polls of an uncancelled run");
     for from in 1..=total {
         let probe = Probe::new(Some(from));
@@ -1712,4 +1741,65 @@ fn a_run_cancelled_between_key_bounded_partitions_keeps_nothing_and_names_its_ph
             "the phase cancelled at poll {from}"
         );
     }
+}
+
+/// A partitioned run that divides every step records the most rows one
+/// partition of its output holds, as many as its largest driver partition
+/// holds and at least one (D264); the adapters encode, admit and publish the
+/// output in partitions of that many rows. Over [`graded`]'s five records,
+/// consecutive partitions of 5, of 1 each, of 0, 5 and 0, of 2, 0 and 3,
+/// and of 4 and 1 hold at most 5, 1, 5, 3 and 4. Over [`visits`]' subjects
+/// a, b and c, of 2, 3 and 1 records, key-bounded partitions by S and U of
+/// at most one record are a, b and c, so at most 3, and of at most four, a
+/// then b with c, so 4. A whole-table run, and a run whose fallback runs
+/// the windows that need the whole table, admit their output whole and
+/// record none.
+#[test]
+fn the_output_divides_into_partitions_as_large_as_the_largest_driver_partition() {
+    let rows = |attempt: ExecutionAttempt<Infallible>| {
+        attempt
+            .result
+            .ok()
+            .and_then(|execution| execution.partition_rows)
+            .map(std::num::NonZeroUsize::get)
+    };
+    let (plan, input) = graded();
+    let resolved = plan.resolve().unwrap();
+    let consecutive: [(&[usize], usize); 5] = [
+        (&[5], 5),
+        (&[1; 5], 1),
+        (&[0, 5, 0], 5),
+        (&[2, 0, 3], 3),
+        (&[4, 1], 4),
+    ];
+    for (sizes, largest) in consecutive {
+        assert_eq!(
+            rows(partitioned(&resolved, &input, &[], sizes, false)),
+            Some(largest),
+            "consecutive partitions {sizes:?}"
+        );
+    }
+    let whole = resolved.execute(&input, &[], &mut NoFunctions::new(), None, &|| false);
+    assert_eq!(rows(whole), None, "the whole-table run");
+    let (plan, input) = visits();
+    let resolved = plan.resolve().unwrap();
+    for (records, largest) in [(1, 3), (4, 4)] {
+        assert_eq!(
+            rows(divided_run(
+                &resolved,
+                &input,
+                by_keys(2, records, false),
+                &|| false
+            )),
+            Some(largest),
+            "key-bounded partitions of at most {records} records"
+        );
+    }
+    assert_eq!(
+        rows(divided_run(&resolved, &input, by_keys(3, 1, true), &|| {
+            false
+        })),
+        None,
+        "the fallback runs the windows over the whole input"
+    );
 }

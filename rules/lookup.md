@@ -25,7 +25,7 @@ one candidate, or an aggregate reduces them ([LOOKUP-10](#lookup-10)). With no
 candidate, absence is answered ([LOOKUP-24](#lookup-24)). Candidates keep
 stored record order. The kinds differ only in the steps they enable.
 
-Evidence: `schema-lookup-source-range`, `schema-lookup-filters`, `schema-aggregation`, `schema-lookup-inner-join-pairs`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
+Evidence: `schema-lookup-source-range`, `schema-lookup-filters`, `schema-aggregation`, `schema-lookup-inner-join-pairs`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json`.
 
 | Step | Implicit join | Named intermediate | Qualified aggregate | Pair relation |
 | --- | --- | --- | --- | --- |
@@ -78,7 +78,7 @@ no record, and a record missing a key or a stated bound does not match.
 `between` names a current-row value and at least one bound field.
 
 Fails: `incompatible_input_type`, `incomparable_range_types`, `invalid_field_type`, `prohibited_construct`, `unknown_field`.
-Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-lookup-range-bare-field`, `negative-source-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`, `rust/tests/host-fixtures/cases.json`.
+Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-lookup-range-bare-field`, `negative-source-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`, `rust/tests/host-fixtures/cases.json`.
 
 The key pairs are those of [LOOKUP-5](#lookup-5). Every pair is compared on
 every record offered, so a record value whose type cannot compare with its
@@ -183,7 +183,7 @@ relation, whichever it reduces. A filter on a construct with no records to
 select among fails.
 
 Fails: `unknown_field`, `prohibited_construct`.
-Evidence: `schema-lookup-filters`, `negative-source-missing-field`, `negative-source-trivial-filter`, `negative-row-filter-lookup-scope`, `schema-aggregation`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/fixtures/row_reductions.json`.
+Evidence: `schema-lookup-filters`, `negative-source-missing-field`, `negative-source-trivial-filter`, `negative-row-filter-lookup-scope`, `schema-aggregation`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/fixtures/row_reductions.json`.
 
 For an input dataset, `order_by` names qualified fields of that dataset only,
 `columns` lists bare field names, and every `filter` field is qualified. The
@@ -260,7 +260,7 @@ stored order, except that `STR_JOIN` joins them in the aggregate's `order_by`
 order.
 
 Fails: `unpaired_fields`, `multiple_matches`.
-Evidence: `negative-lookup-unordered`, `negative-lookup-empty-order`, `negative-lookup-unchosen`, `negative-source-duplicate-key`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::fields_beside_a_reduction_that_reads_neither_share_one_finding_in_the_tables_order`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
+Evidence: `negative-lookup-unordered`, `negative-lookup-empty-order`, `negative-lookup-unchosen`, `negative-source-duplicate-key`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::fields_beside_a_reduction_that_reads_neither_share_one_finding_in_the_tables_order`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json`.
 
 A lookup never multiplies rows: of several matching partners, `order_by` with
 `keep` reads one, which is a choice, not a join, and the other partners take no
@@ -312,7 +312,7 @@ chosen, a tie going to the earlier `source` and then to the earlier stored
 record; a candidate whose distance is missing is never chosen.
 
 Fails: `prohibited_construct`, `incompatible_input_type`, `unknown_field`.
-Evidence: `schema-lookup-nearest-datetime`, `schema-lookup-nearest-date`, `schema-lookup-nearest-missing`, `negative-lookup-nearest-keep`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_nearest_selection_refuses_a_keep_written_beside_it`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_nearest_selection_refuses_an_order_and_a_keep_written_beside_it_naming_the_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_nearest_source_names_a_field_of_the_donor`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_nearest_source_is_a_date_or_a_datetime`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_nearest_reference_has_the_type_of_its_source`.
+Evidence: `schema-lookup-nearest-datetime`, `schema-lookup-nearest-date`, `schema-lookup-nearest-missing`, `negative-lookup-nearest-keep`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_nearest_selection_refuses_a_keep_written_beside_it`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_nearest_selection_refuses_an_order_and_a_keep_written_beside_it_naming_the_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_nearest_source_names_a_field_of_the_donor`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_nearest_source_is_a_date_or_a_datetime`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_nearest_reference_has_the_type_of_its_source`.
 
 `nearest` declares `source`, `to` and `unit`, each required. It is the
 select step of a named intermediate ([LOOKUP-25](#lookup-25)) and replaces
@@ -706,7 +706,7 @@ template. A match value must be available during row construction; one
 available only during column derivation fails.
 
 Fails: `ungrouped_driver_field`, `unknown_field`, `phase_boundary`.
-Evidence: `negative-grouped-lookup-ungrouped-key`, `negative-grouped-range-ungrouped-value`, `negative-lookup-key-column-phase`, `negative-lookup-match-column-phase`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`, `schema-lookup-source-range-driver`, `schema-lookup-source-range-default`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_row_phase_reads.rs`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_template_s_join_matches_the_driver_on_the_declared_key`.
+Evidence: `negative-grouped-lookup-ungrouped-key`, `negative-grouped-range-ungrouped-value`, `negative-lookup-key-column-phase`, `negative-lookup-match-column-phase`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`, `schema-lookup-source-range-driver`, `schema-lookup-source-range-default`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_row_phase_reads.rs`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_template_s_join_matches_the_driver_on_the_declared_key`.
 
 In ungrouped row construction each retained input record builds one candidate
 row ([ROW-3](rows.md#row-3)). The input record's fields are
@@ -1543,7 +1543,7 @@ read as an input is. Its select and absence steps are none
 ([LOOKUP-25](#lookup-25)).
 
 Fails: `prohibited_construct`, `missing_required_field`, `invalid_field_type`, `duplicate_identifier`, `invalid_intermediate_driver`, `unknown_intermediate_driver_type`, `unknown_field`, `incompatible_input_type`.
-Evidence: `schema-lookup-inner-join-pairs`, `schema-lookup-inner-join-aggregate`, `schema-lookup-inner-join-filter`, `schema-lookup-inner-join-missing-key`, `negative-lookup-inner-join-keep`, `negative-lookup-inner-join-no-key`, `negative-lookup-inner-join-self`, `schema-lookup-inner-join-lookup`, `schema-lookup-inner-join-grouped`, `schema-lookup-inner-join-expression-key`, `schema-lookup-inner-join-unconvertible`, `negative-lookup-inner-join-duplicate-pairs`, `negative-lookup-inner-join-key-type`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_refuses_an_order_and_a_keep_written_beside_inner_join_naming_the_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_refuses_self_as_its_right_side`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_pairs_two_relations`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_is_no_side_of_another`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_pair_relation_without_derivations_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_pair_relation_key_pair_compares_its_two_types`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_pair_relation_side_reads_no_other_record`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_pair_relation_exposes_fields_of_one_type`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_read_through_a_pair_relation_s_implicit_join_has_no_applicable_keys`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_keyless_aggregate_over_a_pair_relation_has_no_applicable_keys`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_pair_relation_side_may_read_a_lookup_keyed_by_its_own_record`, `rust/tests/host-fixtures/cases.json::a_pair_relation_key_beyond_the_key_limit`.
+Evidence: `schema-lookup-inner-join-pairs`, `adam-adaecm-related-pairs`, `schema-lookup-inner-join-aggregate`, `schema-lookup-inner-join-filter`, `schema-lookup-inner-join-missing-key`, `negative-lookup-inner-join-keep`, `negative-lookup-inner-join-no-key`, `negative-lookup-inner-join-self`, `schema-lookup-inner-join-lookup`, `schema-lookup-inner-join-grouped`, `schema-lookup-inner-join-expression-key`, `schema-lookup-inner-join-unconvertible`, `negative-lookup-inner-join-duplicate-pairs`, `negative-lookup-inner-join-key-type`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_refuses_an_order_and_a_keep_written_beside_inner_join_naming_the_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_refuses_self_as_its_right_side`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_pairs_two_relations`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_is_no_side_of_another`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_pair_relation_without_derivations_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_pair_relation_key_pair_compares_its_two_types`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_pair_relation_side_reads_no_other_record`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_pair_relation_exposes_fields_of_one_type`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_read_through_a_pair_relation_s_implicit_join_has_no_applicable_keys`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_keyless_aggregate_over_a_pair_relation_has_no_applicable_keys`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_pair_relation_side_may_read_a_lookup_keyed_by_its_own_record`, `rust/tests/host-fixtures/cases.json::a_pair_relation_key_beyond_the_key_limit`.
 
 ```yaml
 intermediates:

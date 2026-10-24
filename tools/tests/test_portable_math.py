@@ -56,7 +56,7 @@ class PublicPortableMath(unittest.TestCase):
     def test_public_values_preserve_bits_missingness_and_integer_promotion(self):
         fixture = WORKSPACE / "crates/yamaa-core/tests/fixtures/portable_math.tsv"
         rows = fixture.read_text().splitlines()
-        self.assertEqual(len(rows), 58)
+        self.assertEqual(len(rows), 100)
         for row in rows:
             name, function, left, right, expected = row.split()
             expression = function + ("(A, B)" if function == "POWER" else "(A)")
@@ -71,7 +71,11 @@ class PublicPortableMath(unittest.TestCase):
                 )
             with self.subTest(case=name):
                 result = self.build(self.specification(expression, operands))
-                if expected in {"ln_of_nonpositive", "invalid_power"}:
+                if expected in {
+                    "ln_of_nonpositive",
+                    "invalid_probability",
+                    "invalid_power",
+                }:
                     self.assertEqual(
                         result.issues.to_polars()["condition"].to_list(), [expected]
                     )
@@ -89,6 +93,12 @@ class PublicPortableMath(unittest.TestCase):
                     context = json.loads(result.issues.to_polars()["context"][0])
                     self.assertEqual(context["expr"], expression)
                     self.assertEqual(context["keys"], [{"ID": 1}])
+                    if expected != "invalid_power":
+                        self.assertEqual(context["function"], function)
+                    if expected == "invalid_probability":
+                        self.assertEqual(
+                            struct.pack(">d", context["value"]).hex(), left
+                        )
                     if function == "POWER":
                         self.assertEqual(struct.pack(">d", context["base"]).hex(), left)
                         self.assertEqual(

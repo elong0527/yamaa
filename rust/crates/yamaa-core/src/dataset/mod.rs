@@ -754,11 +754,6 @@ impl DatasetPlan {
         keys: Vec<usize>,
         verifications: Vec<Verification>,
     ) -> Self {
-        let output_kinds = output
-            .columns()
-            .iter()
-            .map(|column| Some(column.kind))
-            .collect();
         Self::assemble(
             sources,
             intermediates,
@@ -767,12 +762,11 @@ impl DatasetPlan {
             columns,
             keys,
             verifications,
-            output_kinds,
         )
     }
 
     /// A donor plan has no publication key gate, and a derived column of its
-    /// output may have no declared type.
+    /// output may have no declared type (`output_kinds`).
     pub(crate) fn new_donor(
         sources: SourceSchemas,
         intermediates: Vec<Intermediate>,
@@ -785,19 +779,21 @@ impl DatasetPlan {
             .into_iter()
             .map(|assignment| ColumnBinding::every_template(assignment, &templates))
             .collect();
-        Self::assemble(
-            sources,
-            intermediates,
-            output,
-            templates,
-            columns,
-            Vec::new(),
-            Vec::new(),
+        Self {
             output_kinds,
-        )
+            ..Self::assemble(
+                sources,
+                intermediates,
+                output,
+                templates,
+                columns,
+                Vec::new(),
+                Vec::new(),
+            )
+        }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    /// A plan whose output columns each have their declared type.
     fn assemble(
         sources: SourceSchemas,
         intermediates: Vec<Intermediate>,
@@ -806,8 +802,12 @@ impl DatasetPlan {
         columns: Vec<ColumnBinding>,
         keys: Vec<usize>,
         verifications: Vec<Verification>,
-        output_kinds: Vec<Option<crate::value::ColumnType>>,
     ) -> Self {
+        let output_kinds = output
+            .columns()
+            .iter()
+            .map(|column| Some(column.kind))
+            .collect();
         Self {
             source: sources.primary,
             secondary: sources.secondary,

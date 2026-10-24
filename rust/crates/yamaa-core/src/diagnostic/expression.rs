@@ -8,7 +8,7 @@ use crate::expression::{
     TypeFinding,
 };
 use crate::json::Value as V;
-use crate::numeric::ArithmeticErrorKind;
+use crate::numeric::{ArithmeticErrorKind, MathFunction};
 use crate::temporal::TemporalError;
 use crate::value::{Value, ValueType};
 
@@ -284,9 +284,14 @@ impl Condition {
                         insert("minimum", V::from(Value::Int(i64::MIN)));
                         insert("maximum", V::from(Value::Int(i64::MAX)));
                     }
-                    ArithmeticErrorKind::DivisionByZero
-                    | ArithmeticErrorKind::SqrtOfNegative
-                    | ArithmeticErrorKind::LnOfNonpositive => {}
+                    ArithmeticErrorKind::LnOfNonpositive { function } => {
+                        insert("function", text(function));
+                    }
+                    ArithmeticErrorKind::InvalidProbability { value_bits } => {
+                        insert("function", text(MathFunction::NormInv.name()));
+                        insert("value", V::from(Value::float(f64::from_bits(*value_bits))));
+                    }
+                    ArithmeticErrorKind::DivisionByZero | ArithmeticErrorKind::SqrtOfNegative => {}
                 }
             }
         }

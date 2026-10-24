@@ -26,13 +26,33 @@ pub enum Error<E> {
 
 /// Artifact encoding retains a capability boundary without the codec dependency.
 pub fn render<T: TableAccess>(table: &T, projection: &[usize]) -> Result<Vec<u8>, Error<T::Error>> {
+    let whole = 0..table.row_count();
+    render_partitions(table, projection, std::slice::from_ref(&whole)).map(|(bytes, _)| bytes)
+}
+
+/// An encoded file, and where each of its partitions' bytes end, the last at
+/// its length.
+pub type Partitioned = (Vec<u8>, Vec<usize>);
+
+/// [`render`] one partition of rows at a time (D264), over `partitions`, the
+/// consecutive ranges that divide the table's rows in order. The writer
+/// holds rows until its row group is full and writes the last group when
+/// the file ends, so the row groups, and so the bytes, equal the
+/// whole-table render's whatever the partitions (D160). Each partition is
+/// admitted on its own; the end of each partition's bytes is returned with
+/// them, the last at the file's length.
+pub fn render_partitions<T: TableAccess>(
+    table: &T,
+    projection: &[usize],
+    partitions: &[std::ops::Range<usize>],
+) -> Result<Partitioned, Error<T::Error>> {
     #[cfg(feature = "parquet")]
     {
-        encode::render(table, projection)
+        encode::render_partitions(table, projection, partitions)
     }
     #[cfg(not(feature = "parquet"))]
     {
-        let _ = (table, projection);
+        let _ = (table, projection, partitions);
         Err(Error::Unavailable)
     }
 }
@@ -68,10 +88,13 @@ impl RecordText {
 }
 
 /// Portable report records use the reference JSON spelling, independently of
-/// Parquet's binary encoding. Dates name complete stored calendar fields.
+/// Parquet's binary encoding. Dates name complete stored calendar fields. The
+/// table is admitted whole, or each of its partitions of at most `partition`
+/// rows for an output held in partitions (D264).
 pub fn records<T: TableAccess>(
     table: &T,
     projection: &[usize],
+    partition: Option<std::num::NonZeroUsize>,
 ) -> Result<Vec<String>, Error<T::Error>> {
     if projection.is_empty()
         || projection
@@ -80,10 +103,12 @@ pub fn records<T: TableAccess>(
     {
         return Err(Error::Projection);
     }
-    Limits::table(table.row_count(), projection.len()).map_err(|error| Error::Limit {
-        resource: error.resource,
-        limit: error.limit,
-        actual: error.actual,
+    Limits::partitioned(table.row_count(), partition, projection.len()).map_err(|error| {
+        Error::Limit {
+            resource: error.resource,
+            limit: error.limit,
+            actual: error.actual,
+        }
     })?;
     let mut text = RecordText {
         current: String::new(),

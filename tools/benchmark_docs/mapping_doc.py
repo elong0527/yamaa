@@ -1438,6 +1438,7 @@ def submission(col):
 ADAM_DATASETS = frozenset(
     {
         "ADAE",
+        "ADAECM",
         "ADCE",
         "ADCM",
         "ADEG",
@@ -1446,6 +1447,7 @@ ADAM_DATASETS = frozenset(
         "ADFA",
         "ADICE",
         "ADINC",
+        "ADIS",
         "ADLB",
         "ADLBC",
         "ADOE",

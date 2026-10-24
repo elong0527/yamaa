@@ -2,8 +2,9 @@
 //! case's `input` as the arguments of one adapters entry point, refusing a
 //! member it does not take, calls it and returns every issue it reports, in
 //! order, or none when it accepts the input, with the output table and run
-//! report it built and the files it saved. A reader asserts nothing about
-//! what it returns: the replay compares that with the case's authored rows.
+//! report it built and the files its save created, changed or removed. A
+//! reader asserts nothing about what it returns: the replay compares that
+//! with the case's authored rows.
 //! A reader may refuse an input whose setup fails, such as a producer named
 //! under `built` that does not build.
 //!
@@ -43,7 +44,8 @@ mod project_scope;
 pub struct Reported {
     pub issues: Vec<Diagnostic>,
     pub study: Option<Scratch>,
-    /// The tables the operation built and the files it saved.
+    /// The tables the operation built and the files its save created,
+    /// changed or removed.
     pub outcome: Outcome,
 }
 
@@ -71,7 +73,7 @@ pub fn files() -> impl Iterator<Item = &'static File> {
 /// A fresh study directory holding the input's `files` (each relative path
 /// and its text) and `directories` (empty ones), named canonically, as the
 /// engine spells the paths it reports.
-fn study(input: &Value) -> Scratch {
+pub fn study(input: &Value) -> Scratch {
     let study = Scratch::canonical("diagnostics");
     for (name, file) in object(field(input, "files")) {
         study.write(name, text(file));
@@ -91,20 +93,41 @@ fn path(study: &Scratch, name: &str) -> String {
 /// Every file of `study` and its bytes, by its path there with forward
 /// slashes.
 fn contents(study: &Scratch) -> Files {
-    fn walk(root: &std::path::Path, directory: &std::path::Path, files: &mut Files) {
+    state(study).files
+}
+
+/// A staged study's files and directories, including empty ones, so API
+/// seams retain the original path-existence assertions too.
+#[derive(Debug, PartialEq, Eq)]
+pub struct StudyState {
+    files: Files,
+    directories: std::collections::BTreeSet<String>,
+}
+
+pub fn state(study: &Scratch) -> StudyState {
+    fn walk(root: &std::path::Path, directory: &std::path::Path, state: &mut StudyState) {
         for entry in std::fs::read_dir(directory).unwrap() {
             let path = entry.unwrap().path();
+            let name = path
+                .strip_prefix(root)
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .replace('\\', "/");
             if path.is_dir() {
-                walk(root, &path, files);
+                state.directories.insert(name);
+                walk(root, &path, state);
             } else {
-                let name = path.strip_prefix(root).unwrap().to_str().unwrap();
-                files.insert(name.replace('\\', "/"), std::fs::read(&path).unwrap());
+                state.files.insert(name, std::fs::read(&path).unwrap());
             }
         }
     }
-    let mut files = Files::new();
-    walk(study, study, &mut files);
-    files
+    let mut state = StudyState {
+        files: Files::new(),
+        directories: Default::default(),
+    };
+    walk(study, study, &mut state);
+    state
 }
 
 /// The rows of a public table as a case writes them.

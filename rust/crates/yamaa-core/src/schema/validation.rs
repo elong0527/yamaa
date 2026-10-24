@@ -5,6 +5,7 @@ use super::{
     SchemaField, SchemaShape, SchemaStructure, TypeError, TypeExpression, TypeNode,
 };
 use crate::diagnostic::{ConditionCode, Definition};
+use crate::expression_table::Verb;
 use std::vec;
 
 /// Value types whose bare string is the source shorthand `{source: <string>}`
@@ -167,6 +168,16 @@ pub(super) enum Surface {
     #[default]
     Legacy,
     Versioned,
+}
+
+/// How a document is read: how YAML null reads in it, whether as its author
+/// wrote it or as normalization or composition produced it, and the
+/// surface it is written in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct Mode {
+    pub nulls: NullPolicy,
+    pub written: bool,
+    pub surface: Surface,
 }
 
 /// Root fields whose members compose by identifier from a mapping; each member
@@ -1106,9 +1117,9 @@ impl Run<'_> {
                     if !diagnostics.is_empty() || registry.name != "expressions" {
                         return Ok(diagnostics);
                     }
-                    match entry.name.as_str() {
-                        "case" => self.case_items(payload),
-                        "source" => Ok(self.restated_read(site, payload)),
+                    match Verb::from_name(&entry.name) {
+                        Some(Verb::Case) => self.case_items(payload),
+                        Some(Verb::Source) => Ok(self.restated_read(site, payload)),
                         _ => Ok(diagnostics),
                     }
                 }
@@ -1326,11 +1337,16 @@ impl SchemaStructure {
         path: &str,
         fragment: bool,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
-        self.validate_types_on(types, input, value, path, fragment, true, Surface::Legacy)
+        let mode = Mode {
+            nulls: NullPolicy::Value,
+            written: true,
+            surface: Surface::Legacy,
+        };
+        self.validate_types_on(types, input, value, path, fragment, mode)
     }
-    /// Validate a projected type union written in `surface`, as an author
-    /// wrote it or, when `written` is false, as normalization produced it.
-    #[allow(clippy::too_many_arguments)]
+    /// Validate a projected type union read in `mode`: in its surface, as an
+    /// author wrote it or, when it is not `written`, as normalization
+    /// produced it.
     pub(super) fn validate_types_on(
         &self,
         types: &[TypeExpression],
@@ -1338,9 +1354,13 @@ impl SchemaStructure {
         value: usize,
         path: &str,
         fragment: bool,
-        written: bool,
-        surface: Surface,
+        mode: Mode,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
+        let Mode {
+            nulls,
+            written,
+            surface,
+        } = mode;
         if value >= input.nodes().len() {
             return Err(ValidationError::InvalidDescriptor);
         }
@@ -1348,7 +1368,7 @@ impl SchemaStructure {
             schema: self,
             input,
             active: Vec::new(),
-            nulls: NullPolicy::Value,
+            nulls,
             written,
             surface,
             sites: None,
@@ -1422,16 +1442,12 @@ impl SchemaStructure {
         fragment: bool,
         nulls: NullPolicy,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
-        self.validate_descriptor_mode(
-            descriptor,
-            input,
-            value,
-            path,
-            fragment,
+        let mode = Mode {
             nulls,
-            true,
-            Surface::Legacy,
-        )
+            written: true,
+            surface: Surface::Legacy,
+        };
+        self.validate_descriptor_mode(descriptor, input, value, path, fragment, mode)
     }
     /// Interpret a descriptor over a 1.x document as its author wrote it, in
     /// which YAML null is an ordinary value its type admits or refuses.
@@ -1545,18 +1561,13 @@ impl SchemaStructure {
         fragment: bool,
         nulls: NullPolicy,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
-        self.validate_descriptor_mode(
-            descriptor,
-            input,
-            value,
-            path,
-            fragment,
+        let mode = Mode {
             nulls,
-            false,
-            Surface::Legacy,
-        )
+            written: false,
+            surface: Surface::Legacy,
+        };
+        self.validate_descriptor_mode(descriptor, input, value, path, fragment, mode)
     }
-    #[allow(clippy::too_many_arguments)]
     fn validate_descriptor_mode(
         &self,
         descriptor: usize,
@@ -1564,10 +1575,13 @@ impl SchemaStructure {
         value: usize,
         path: &str,
         fragment: bool,
-        nulls: NullPolicy,
-        written: bool,
-        surface: Surface,
+        mode: Mode,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
+        let Mode {
+            nulls,
+            written,
+            surface,
+        } = mode;
         if descriptor >= self.descriptors().len() || value >= input.nodes().len() {
             return Err(ValidationError::InvalidDescriptor);
         }

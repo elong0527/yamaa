@@ -94,7 +94,7 @@ position of the data record in stored record order, assigned before any
 filter, join, grouping or window reads the input dataset; filtering keeps the
 original positions. Without the declaration, ingestion adds no field.
 
-Evidence: `schema-source-ordinal`, `rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs::source_ordinals_precede_filtering_and_count_multiline_records_once`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_linked_ordinal_is_local_to_the_consumer_and_never_part_of_the_contract`, `rust/crates/yamaa/tests/odm_input.rs::an_xml_input_no_odm_read_names_may_declare_an_ordinal`.
+Evidence: `schema-source-ordinal`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_case_predicates.json::source_ordinals_precede_filtering_and_count_multiline_records_once`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_case_predicates.json::an_ordinal_input_with_no_record_saves_its_header_alone`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_linked_ordinal_is_local_to_the_consumer_and_never_part_of_the_contract`, `rust/crates/yamaa/tests/odm_input.rs::an_xml_input_no_odm_read_names_may_declare_an_ordinal`.
 
 ```yaml
 input:
@@ -132,7 +132,7 @@ of [NAME-8](names.md#name-8), and the declaration fails
 validation with `odm_schema_field_type`.
 
 Fails: `ordinal_field_collision`, `odm_schema_field_type`.
-Evidence: `negative-source-ordinal-collision`, `rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs::ordinal_collision_and_fixed_odm_schema_have_complete_public_diagnostics`.
+Evidence: `negative-source-ordinal-collision`, `rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs::ordinal_collision_and_fixed_odm_schema_have_complete_public_diagnostics`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_case_predicates.json::an_ordinal_on_the_fixed_odm_schema_is_refused_before_capture`.
 
 `ordinal_field_collision` reports the input dataset, the generated field name
 and the `input.<dataset>.ordinal` specification path. `odm_schema_field_type`
@@ -266,7 +266,7 @@ fields only. A delimited source must not declare `present`; the declaration
 fails validation.
 
 Fails: `empty_string_present_unsupported`.
-Evidence: `rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs::csv_present_empty_is_rejected_before_study_bytes_are_requested`.
+Evidence: `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_case_predicates.json::csv_present_empty_is_rejected_before_study_bytes_are_requested`.
 
 Handlers answer for a collected empty string like any other string. The
 container profiles keep their own distinction -- a Parquet null and a
@@ -294,7 +294,7 @@ artifact like any other input, so the caller builds and saves the producer
 first. A link cannot name the consuming specification.
 
 Fails: `invalid_producer_contract`.
-Evidence: `adam-results-ae-incidence`, `sdtm-dm-race-ethnicity`, `adam-adae-exposure-adjusted-incidence`, `schema-linked-csv-types`, `rust/crates/yamaa/tests/copy_entry.rs::a_copy_reads_a_producer_that_copies_in_turn_and_refuses_a_cycle`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::callers_build_and_save_the_producer_before_its_consumer_reads_the_artifact`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::the_producing_specification_is_read_but_never_compiled_or_executed`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/producers.json::a_producer_whose_stored_field_has_no_label_is_no_valid_contract`.
+Evidence: `adam-results-ae-incidence`, `sdtm-dm-race-ethnicity`, `adam-adae-exposure-adjusted-incidence`, `schema-linked-csv-types`, `rust/crates/yamaa/tests/copy_entry.rs::a_copy_reads_a_producer_that_copies_in_turn_and_refuses_a_cycle`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_consumer_of_a_csv_artifact_checks_against_its_producers_specification_without_data`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_consumer_of_a_parquet_artifact_checks_against_its_producers_specification_without_data`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_consumer_reads_the_csv_artifact_its_producer_saved_first`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_consumer_reads_the_parquet_artifact_its_producer_saved_first`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_consumer_reads_the_stored_artifact_after_its_producers_source_is_gone`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::the_producing_specification_is_read_but_never_compiled_or_executed`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/producers.json::a_producer_whose_stored_field_has_no_label_is_no_valid_contract`.
 
 ```yaml
 input:
@@ -346,7 +346,7 @@ producer's declared type. Missing, extra, reordered, duplicate or undeclared
 fields fail.
 
 Fails: `producer_contract_mismatch`.
-Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/producers.json::a_stored_header_out_of_its_producer_s_output_order_mismatches_the_contract`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_stored_header_must_equal_the_producer_output_columns_in_order`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_stored_header_in_another_order_mismatches_the_producer_contract`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_stored_header_without_a_contract_column_mismatches_the_producer_contract`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_stored_header_with_an_extra_column_mismatches_the_producer_contract`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_stored_parquet_schema_must_equal_the_producer_output_types`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_stored_parquet_column_of_another_type_mismatches_the_producer_contract`.
+Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/producers.json::a_stored_header_out_of_its_producer_s_output_order_mismatches_the_contract`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_stored_header_in_another_order_mismatches_the_producer_contract`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_stored_header_without_a_contract_column_mismatches_the_producer_contract`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_stored_header_with_an_extra_column_mismatches_the_producer_contract`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_stored_parquet_column_of_another_type_mismatches_the_producer_contract`.
 
 A stored artifact whose field names, order or self-describing types do not
 exactly match the producer's output contract fails with

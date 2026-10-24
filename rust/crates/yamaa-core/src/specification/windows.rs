@@ -1,5 +1,6 @@
 //! Compile original output-window declarations into the existing shared evaluator.
 use super::*;
+use crate::expression_table::Verb;
 use crate::{
     bound_expression::BoundPredicate,
     dataset::{OrderTerm, Window, WindowKind},
@@ -120,14 +121,14 @@ impl Declaration {
                 .ok_or(PrepareError::Internal)
         };
         let operand = |slot| checks::operand(&window.operands, slot).ok_or(PrepareError::Internal);
-        let (kind, operation, order) = match &window.function {
-            WindowFunction::RowNumber => (Kind::RowNumber, "row_number", &window.order_by[..]),
+        let operation = window.function.verb().name();
+        let (kind, order) = match &window.function {
+            WindowFunction::RowNumber => (Kind::RowNumber, &window.order_by[..]),
             WindowFunction::Rank { method } => (
                 match method {
                     RankMethod::Competition => Kind::Competition,
                     RankMethod::Dense => Kind::Dense,
                 },
-                "rank",
                 &window.order_by[..],
             ),
             WindowFunction::RowValue { offset } => (
@@ -143,7 +144,6 @@ impl Declaration {
                         }
                     }),
                 },
-                "row_value",
                 &window.order_by[..],
             ),
             WindowFunction::Locf { include_current } => (
@@ -151,7 +151,6 @@ impl Declaration {
                     source: name(operand(Slot::Source)?)?,
                     include_current: *include_current,
                 },
-                "locf",
                 &window.order_by[..],
             ),
             WindowFunction::BaselineFlag { inclusive, .. } => {
@@ -170,7 +169,6 @@ impl Declaration {
                             .map(|term| tree_order_term(spec, term))
                             .collect::<Result<_, _>>()?,
                     },
-                    "baseline_flag",
                     &[][..],
                 )
             }
@@ -568,11 +566,9 @@ pub(super) fn admit(spec: &ast::Spec, e: ExprId) -> Result<(), PrepareError> {
     };
     let path = checks::path(spec, e);
     let (tie_break, order) = match &window.function {
-        ast::WindowFunction::BaselineFlag {
-            window_order_by, ..
-        } => (
+        ast::WindowFunction::BaselineFlag { .. } => (
             window.order_by.len().saturating_sub(1),
-            window_order_by.len(),
+            window.window_order_by.len(),
         ),
         _ => (0, window.order_by.len()),
     };
@@ -650,7 +646,7 @@ impl Declaration {
             crate::diagnostic::ConditionCode::WindowBaselineInputType,
         );
         for (name, value) in [
-            ("operation", "baseline_flag"),
+            ("operation", Verb::BaselineFlag.name()),
             ("source", source.as_str()),
             ("expected", expected),
             ("actual", type_name(actual)),

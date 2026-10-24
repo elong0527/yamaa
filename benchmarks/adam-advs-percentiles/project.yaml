@@ -10,4 +10,4 @@ environments:
 
 adam:
   specs:
-  - spec.yaml
+  - spec_function.yaml

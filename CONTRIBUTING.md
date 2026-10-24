@@ -207,8 +207,8 @@ Rust consumer reads it.
 
 | Behaviour | Data form | Generated or checked by |
 | --- | --- | --- |
-| A file type's fields, types and defaults; an expression function's arguments | `yaml/schema_*.yaml` | `tools.packaging.generate_json_schema`, `tools.packaging.generate_shipped_schema` |
-| The expression grammar, its closed function and reducer lists, its parse cases | `yaml/grammar/*.yaml` | `tools.validation.check_expression_conformance` and the core replay of its cases |
+| A file type's fields, types and defaults; an expression function's arguments | `yaml/schema_*.yaml` | `tools.packaging.generate_json_schema`, `tools.packaging.generate_shipped_schema`, `tools.packaging.generate_expression_table` |
+| The expression grammar, its closed function and reducer lists, its parse cases | `yaml/grammar/*.yaml` | `tools.packaging.generate_expression_table`, `tools.validation.check_expression_conformance` and the core replay of its cases |
 | A condition, its phases and its message | `yaml/conditions.yaml` | `tools.packaging.generate_message_templates`, `tools.validation.check_diagnostics` |
 | A CDISC closed list | `yaml/vocabulary/cdisc.yaml` | `tools.packaging.generate_cdisc_vocabulary` and the vocabulary checks |
 | What an expression evaluates to | `yaml/conformance/expressions.yaml`, `yaml/conformance/regex.yaml` | `tools.validation.check_expression_conformance` |
@@ -230,8 +230,8 @@ is one function over an abstraction with two sources, and the findings
 and their order are defined once. Where two copies of one thing must
 exist (a list in Rust and in a YAML file; a schema and its shipped bytes),
 one is the source and the other is generated from it and checked current
-in `make check-repository`, as the vocabulary (#3701) and the message
-templates are.
+in `make check-repository`, as the vocabulary (#3701), the message
+templates and the expression table (#3800) are.
 
 **A fixture before a test function.** A test that writes files or
 documents, makes one call and compares rows or bytes is a case in one of
@@ -489,7 +489,9 @@ made to both, and `make check-repository` fails while they differ
   behaviour it proves (`case`, unique across the files, which a rule card
   cites as `<file>::<case>`), the operations that reach it (`operation`),
   their `input`, and the complete issue rows they report (`issues`, in the
-  shape `assert_issues` compares). Core's input holds a specification as
+  shape `assert_issues` compares). Several operations must each report the
+  same complete rows, compared with each other whatever `compares` and
+  `among` leave out. Core's input holds a specification as
   a JSON object, or a document of the file's `documents` with edits that
   set or remove a member. The adapters' input holds the `files` its
   operation writes to a fresh study directory, each its text or a
@@ -517,11 +519,13 @@ made to both, and `make check-repository` fails while they differ
   cell is `null` when the value is missing, its text, its integer, `true`
   or `false`, a float in the shortest spelling that reads back as the same
   double, as a diagnostic context spells one (`2.5`, `10.0`, `1e16`), or a
-  date or datetime as its ISO text. `saved` maps each file the save
-  created or changed, by its path in the study directory, to its text or
-  to `{"file": path}`, an authored expected file named by its path from the
-  repository root, such as a benchmark's `expected/` file; `{}` states
-  that the save wrote nothing. A case states a table only when its
+  date or datetime as its ISO text. `saved` states what the operation did
+  to the study directory the case staged, whether it was refused or not:
+  it maps each file created or changed, by its path in the study
+  directory, to its text or to `{"file": path}`, an authored expected file
+  named by its path from the repository root, such as a benchmark's
+  `expected/` file, and each file removed to `null`; `{}` states that
+  nothing was created, changed or removed. A case states a table only when its
   operation reports one, and `saved` exactly when its operation saves: the
   adapters' `build` reports the tables a built result holds, and `save`
   builds as `build` does, then saves; core's operations report issues

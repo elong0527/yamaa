@@ -147,12 +147,11 @@ struct BoundSide {
 /// What binding reads besides the pair relation's own declaration.
 pub(super) struct Context<'a> {
     pub named: &'a intermediates::Declarations,
-    /// The inputs, then a pseudo-input for each pair relation.
-    pub sources: &'a [SourceDeclaration],
-    /// How many of `sources` are inputs.
+    /// The inputs, then a pseudo-input for each pair relation, with their
+    /// captured schemas and the driver.
+    pub relations: binder::Inputs<'a>,
+    /// How many of the `relations` are inputs.
     pub inputs: usize,
-    pub schemas: &'a [&'a TableSchema],
-    pub driver: usize,
     pub secondary: &'a [SecondarySource],
     /// The intermediates bound before this one, in derivation order.
     pub result: &'a [Option<Intermediate>],
@@ -168,11 +167,11 @@ fn side(
     cx: &Context<'_>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<BoundSide>, BindError> {
-    if let Some(index) = cx.sources[..cx.inputs]
+    if let Some(index) = cx.relations.sources[..cx.inputs]
         .iter()
         .position(|source| source.name == declared.name)
     {
-        let fields = cx.schemas[index]
+        let fields = cx.relations.schemas[index]
             .columns()
             .iter()
             .enumerate()
@@ -182,7 +181,7 @@ fn side(
                 kind: field.kind,
             })
             .collect();
-        let port = match index.cmp(&cx.driver) {
+        let port = match index.cmp(&cx.relations.driver) {
             std::cmp::Ordering::Equal => 0,
             std::cmp::Ordering::Less => index + 1,
             std::cmp::Ordering::Greater => index,

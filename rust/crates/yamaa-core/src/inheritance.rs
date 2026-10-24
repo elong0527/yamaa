@@ -727,7 +727,11 @@ pub fn traverse_versioned<R: Resolver, D: Decoder>(
     decoder: &mut D,
 ) -> Result<Traversal<D::Raw>, Error<ReadFailure<R, D>>> {
     let mut parents = Vec::new();
-    let given_parent = parent.map(|parent| parent.given);
+    let admission = LayerAdmission {
+        schema,
+        reads,
+        given_parent: parent.map(|parent| parent.given),
+    };
     let layers = walk(
         entry,
         entry_document,
@@ -736,16 +740,7 @@ pub fn traverse_versioned<R: Resolver, D: Decoder>(
         decoder,
         &mut parents,
         |entry, source, input, named, declaring| {
-            admit_versioned(
-                schema,
-                reads,
-                entry,
-                source,
-                input,
-                named,
-                declaring,
-                given_parent,
-            )
+            admit_versioned(admission, entry, source, input, named, declaring)
         },
     )?;
     let version = layers
@@ -759,20 +754,33 @@ pub fn traverse_versioned<R: Resolver, D: Decoder>(
     })
 }
 
-/// Admit one layer at the version it declares, named by the field `named` of
-/// the layer `declaring`; `given_parent`, the parent a caller names as the
-/// caller gave it, says the entry is a fragment checked on it.
-#[allow(clippy::too_many_arguments)]
-fn admit_versioned<E>(
-    schema: &SchemaStructure,
+/// What admits every layer of one versioned traversal: the 1.0
+/// specification closure each layer is checked against, the newest version
+/// the engine reads, and the parent a caller names, as the caller gave it,
+/// for an entry checked as a fragment on it.
+#[derive(Clone, Copy)]
+struct LayerAdmission<'a> {
+    schema: &'a SchemaStructure,
     reads: LanguageVersion,
+    given_parent: Option<&'a str>,
+}
+
+/// Admit one layer at the version it declares, named by the field `named` of
+/// the layer `declaring`; the admission's `given_parent` says the entry is a
+/// fragment checked on it.
+fn admit_versioned<E>(
+    admission: LayerAdmission<'_>,
     entry: &str,
     source: Source,
     input: Document,
     named: Named,
     declaring: Option<&str>,
-    given_parent: Option<&str>,
 ) -> Result<(VersionedLayer, Links), Error<E>> {
+    let LayerAdmission {
+        schema,
+        reads,
+        given_parent,
+    } = admission;
     let header = match language::read_header(&input, Some(reads), FileType::Spec) {
         Ok(header) => header,
         Err(fault) => return Err(header_error(fault, entry, source, input, named, declaring)),

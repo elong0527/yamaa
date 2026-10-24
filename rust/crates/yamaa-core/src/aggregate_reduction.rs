@@ -3,7 +3,10 @@
 use crate::{
     conversion::{convert, ConversionError},
     expression::Reducer,
-    numeric::{binary, math, sqrt, BinaryOperator, MathFunction, Number},
+    numeric::{
+        binary, math, sqrt, ArithmeticError, ArithmeticErrorKind, BinaryOperator, MathFunction,
+        Number,
+    },
     reduction::{count_distinct, count_values, reduce_numeric, NumericReducer, ReductionError},
     table::ValueRef,
     value::{compare_present_refs, ColumnType, Value, ValueType},
@@ -151,6 +154,15 @@ fn arithmetic(
     move |error| AggregateReductionError::Numeric(ReductionError::Arithmetic { argument, error })
 }
 
+/// A logarithm that fails inside a reducer names the reducer that takes it,
+/// as FORMULA-18 spells it (FORMULA-15).
+fn within(reducer: Reducer, mut error: ArithmeticError) -> ArithmeticError {
+    if let ArithmeticErrorKind::LnOfNonpositive { function } = &mut error.kind {
+        *function = reducer.name();
+    }
+    error
+}
+
 /// R's default quantile, type 7 of Hyndman and Fan, at probability `p`
 /// from 0 to 1 (FORMULA-18). The n present values sort ascending by exact
 /// value (VALUE-19), a stable sort keeping equal values in the order given,
@@ -270,7 +282,8 @@ fn geometric_mean(
             continue;
         };
         let failed = arithmetic(argument);
-        let logarithm = math(MathFunction::Ln, present, expression).map_err(&failed)?;
+        let logarithm = math(MathFunction::Ln, present, expression)
+            .map_err(|error| failed(within(Reducer::GeoMean, error)))?;
         total = Some(match total {
             None => logarithm,
             Some(previous) => {

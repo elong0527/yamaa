@@ -1,3 +1,12 @@
 lifecycle: reviewed
 standard: ADaM
 domain: ADVS
+entries:
+  python:
+  - specification: spec_function.yaml
+  - specification: spec_norm_cdf.yaml
+    environment: null
+  r:
+  - specification: spec_function.yaml
+  - specification: spec_norm_cdf.yaml
+    environment: null
