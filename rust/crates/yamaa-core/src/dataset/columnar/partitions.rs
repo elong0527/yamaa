@@ -43,6 +43,7 @@
 //! the whole-table fallback runs it over the whole input.
 use super::frame::Frame;
 use super::{group, Fail, Run, Table};
+use crate::dataset::cut::{consecutive, PartitionCut};
 use crate::dataset::execution::{ExecutionAttempt, ExecutionError, ExecutionEvent};
 use crate::dataset::resolved::{PartitionClass, RegionId, ResolvedPlan, Step, TemplateId};
 use crate::dataset::Partitioning;
@@ -51,6 +52,7 @@ use crate::limits::Limits;
 use crate::table::{CellError, TableAccess, TableSchema, ValueRef};
 use crate::table_grouping::GroupingError;
 use std::collections::BTreeMap;
+use std::num::NonZeroUsize;
 use std::ops::Range;
 
 /// The partitions of a driver input, read as the one table they divide.
@@ -151,7 +153,7 @@ pub(super) struct Partitions {
     pub mismatched: bool,
     /// The partition fields and size of a key-bounded cut not yet made: the
     /// run makes it once admission has passed (#3763).
-    cut: Option<(Vec<usize>, usize)>,
+    cut: Option<(Vec<usize>, NonZeroUsize)>,
 }
 
 impl Partitions {
@@ -186,55 +188,21 @@ impl Partitions {
     }
 }
 
-/// Partitions of `rows` consecutive records of an input of `len` records,
-/// the last holding the rest (#3697). An empty input is one empty
-/// partition, so admission still checks its schema.
-fn consecutive(len: usize, rows: usize) -> Vec<Range<usize>> {
-    (0..len.max(1))
-        .step_by(rows)
-        .map(|start| start..start + rows.min(len.saturating_sub(start)))
-        .collect()
-}
-
 /// The key-bounded partitions of `table` (#3763): the runs of consecutive
 /// records whose `fields` hold equal values, as `table_grouping::Key`
 /// compares them, packed in order into partitions of at most `rows` records,
 /// a longer run alone. None when a value of the fields recurs after its run
 /// has ended, so the input is not grouped by them, or when a field cannot be
-/// read: the input is then one partition.
+/// read: the input is then one partition. A reader that holds one partition
+/// at a time makes the same cut (`dataset::cut`).
 fn key_bounded<T: TableAccess + ?Sized>(
     table: &T,
     fields: &[usize],
-    rows: usize,
+    rows: NonZeroUsize,
 ) -> Option<Vec<Range<usize>>> {
-    let len = table.row_count();
-    let width = fields.len();
-    let mut values: Vec<ValueRef<'_>> = Vec::new();
-    values.try_reserve_exact(len.checked_mul(width)?).ok()?;
-    for row in 0..len {
-        for &field in fields {
-            values.push(table.cell(row, field).ok()?);
-        }
-    }
-    let groups =
-        group::partition(len, width, |item, position| values[item * width + position]).ok()?;
-    let mut bounds = Vec::new();
-    let (mut start, mut size) = (0, 0);
-    // Groups come in first-occurrence order, so a grouped input's groups are
-    // its runs, in record order.
-    for members in groups.iter() {
-        let first = members[0];
-        if members[members.len() - 1] - first + 1 != members.len() {
-            return None;
-        }
-        if size > 0 && size + members.len() > rows {
-            bounds.push(start..first);
-            (start, size) = (first, 0);
-        }
-        size += members.len();
-    }
-    bounds.push(start..len);
-    Some(bounds)
+    let mut cut = PartitionCut::new(fields.to_vec(), rows);
+    cut.read(table);
+    cut.finish()
 }
 
 /// `len` items split into consecutive runs of equal keys, in order. No
@@ -454,9 +422,15 @@ impl ResolvedPlan {
     /// time, and the probe is polled between partitions as well as at every
     /// checkpoint; a unit with a global step runs over the whole input.
     ///
+    /// Partitions that never split a group of the leading `keys` declared
+    /// keys, as a reader cuts them (#3830), divide a window or an aggregate
+    /// that groups by every one of those keys; zero `keys` asks for
+    /// partitions of consecutive records.
+    ///
     /// A successful or failed attempt equals the whole-table attempt on the
     /// same input: the same dataset, failure, handler counts, verifications
     /// and template rows. A cancelled one keeps nothing.
+    #[allow(clippy::too_many_arguments)]
     pub fn execute_partitioned<E>(
         &self,
         partitions: &[&dyn TableAccess<Error = E>],
@@ -465,9 +439,10 @@ impl ResolvedPlan {
         observer: Option<&mut dyn FnMut(ExecutionEvent)>,
         cancelled: &dyn Fn() -> bool,
         whole_table_fallback: bool,
+        keys: usize,
     ) -> ExecutionAttempt<E> {
         let input = Concatenated::new(partitions, self.driver_schema());
-        let divided = Partitions::new(&input, 0, whole_table_fallback);
+        let divided = Partitions::new(&input, keys.min(self.keys().len()), whole_table_fallback);
         self.attempt(
             &input,
             Some(divided),
@@ -507,14 +482,14 @@ impl ResolvedPlan {
             return self.execute(table, secondary, functions, observer, cancelled);
         };
         let rows = table.row_count();
-        let size = partitioning.rows.get();
+        let size = partitioning.rows;
         let fallback = partitioning.whole_table_fallback;
         let keys = partitioning
             .leading_keys
             .map_or(0, |keys| keys.get().min(self.keys().len()));
         // Until admission has passed, key-bounded partitions are one.
         let bounds = if keys == 0 {
-            consecutive(rows, size)
+            consecutive(rows, size.get())
         } else {
             std::iter::once(0..rows).collect()
         };
@@ -561,6 +536,7 @@ mod tests {
     use crate::table::{CellError, Column, TableAccess, TableSchema, ValueRef};
     use crate::value::{ColumnType, Value};
     use std::convert::Infallible;
+    use std::num::NonZeroUsize;
     use std::ops::Range;
 
     /// Records of two fields, K and J. The cut reads their cells and never
@@ -631,13 +607,13 @@ mod tests {
         ];
         for (rows, expected) in cases {
             assert_eq!(
-                key_bounded(&records, &[0], rows),
+                key_bounded(&records, &[0], NonZeroUsize::new(rows).unwrap()),
                 Some(expected),
                 "partitions of at most {rows} records"
             );
         }
         assert_eq!(
-            key_bounded(&keyed(&[]), &[0], 1),
+            key_bounded(&keyed(&[]), &[0], NonZeroUsize::MIN),
             Some(whole(0..0)),
             "an empty input is one empty partition"
         );
@@ -710,7 +686,7 @@ mod tests {
         ];
         for (label, rows, fields, expected) in cases {
             assert_eq!(
-                key_bounded(&Records::new(rows), &fields, 1),
+                key_bounded(&Records::new(rows), &fields, NonZeroUsize::MIN),
                 expected,
                 "{label}"
             );

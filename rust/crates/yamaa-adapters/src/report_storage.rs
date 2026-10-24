@@ -72,59 +72,104 @@ pub(crate) fn encode_partitions<T: TableAccess>(
     table: &T,
     partitions: &[usize],
 ) -> Result<Arc<RawValue>, Error> {
-    use std::io::Write;
     for &rows in partitions {
-        yamaa_core::limits::Limits::table(rows, table.schema().columns().len()).map_err(
-            |error| {
-                Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                    error.resource,
-                    error.limit,
-                    error.actual,
-                    Vec::new(),
-                ))
-            },
-        )?;
+        admit(rows, table.schema().columns().len())?;
     }
-    let mut bytes = Vec::new();
-    bytes
-        .write_all(b"[")
-        .map_err(|_| Error::InvalidObservation)?;
-    for row in 0..table.row_count() {
-        if row != 0 {
+    let mut writer = RowWriter::default();
+    writer.table(table)?;
+    writer.finish()
+}
+
+/// Admit `rows` records of `columns` fields within the fixed limits.
+fn admit(rows: usize, columns: usize) -> Result<(), Error> {
+    yamaa_core::limits::Limits::table(rows, columns).map_err(|error| {
+        Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+            error.resource,
+            error.limit,
+            error.actual,
+            Vec::new(),
+        ))
+    })
+}
+
+/// Report rows written a table after another, in order: the rows of an
+/// input read by partition are written a partition at a time (#3830).
+#[derive(Default)]
+pub(crate) struct RowWriter {
+    bytes: Vec<u8>,
+    rows: usize,
+}
+
+impl RowWriter {
+    /// Write every record of `table`, after the records written before.
+    pub(crate) fn table<T: TableAccess>(&mut self, table: &T) -> Result<(), Error> {
+        use std::io::Write;
+        let bytes = &mut self.bytes;
+        for row in 0..table.row_count() {
             bytes
-                .write_all(b",")
+                .write_all(if self.rows == 0 { b"[[" } else { b",[" })
                 .map_err(|_| Error::InvalidObservation)?;
-        }
-        bytes
-            .write_all(b"[")
-            .map_err(|_| Error::InvalidObservation)?;
-        for column in 0..table.schema().columns().len() {
-            if column != 0 {
-                bytes
-                    .write_all(b",")
+            self.rows += 1;
+            for column in 0..table.schema().columns().len() {
+                if column != 0 {
+                    bytes
+                        .write_all(b",")
+                        .map_err(|_| Error::InvalidObservation)?;
+                }
+                let value = table
+                    .cell(row, column)
+                    .map_err(|_| Error::InvalidObservation)?;
+                serde_json::to_writer(&mut *bytes, &WireCell(value))
                     .map_err(|_| Error::InvalidObservation)?;
             }
-            let value = table
-                .cell(row, column)
-                .map_err(|_| Error::InvalidObservation)?;
-            serde_json::to_writer(&mut bytes, &WireCell(value))
+            bytes
+                .write_all(b"]")
                 .map_err(|_| Error::InvalidObservation)?;
         }
-        bytes
-            .write_all(b"]")
-            .map_err(|_| Error::InvalidObservation)?;
+        Ok(())
     }
-    bytes
-        .write_all(b"]")
-        .map_err(|_| Error::InvalidObservation)?;
-    let string = String::from_utf8(bytes).map_err(|_| Error::InvalidObservation)?;
-    let rows = RawValue::from_string(string).map_err(|_| Error::InvalidObservation)?;
-    Ok(Arc::from(rows))
+
+    /// The rows written, as one array.
+    pub(crate) fn finish(mut self) -> Result<Arc<RawValue>, Error> {
+        self.bytes
+            .extend_from_slice(if self.rows == 0 { b"[]" } else { b"]" });
+        let string = String::from_utf8(self.bytes).map_err(|_| Error::InvalidObservation)?;
+        let rows = RawValue::from_string(string).map_err(|_| Error::InvalidObservation)?;
+        Ok(Arc::from(rows))
+    }
+}
+
+/// The rows of one table of a report: encoded once, or, for an input read
+/// by partition, encoded from its held bytes whenever the report is
+/// serialized, so the run keeps no copy of its records (#3830).
+#[derive(Clone)]
+pub(crate) enum Rows {
+    Encoded(Arc<RawValue>),
+    Deferred(Arc<dyn Fn() -> Result<Arc<RawValue>, Error> + Send + Sync>),
+}
+
+impl Rows {
+    /// The rows, encoded.
+    fn encoded(&self) -> Result<Arc<RawValue>, Error> {
+        match self {
+            Self::Encoded(rows) => Ok(Arc::clone(rows)),
+            Self::Deferred(encode) => encode(),
+        }
+    }
+}
+
+impl fmt::Debug for Rows {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Encoded(rows) => formatter.debug_tuple("Encoded").field(rows).finish(),
+            Self::Deferred(_) => formatter.write_str("Deferred(..)"),
+        }
+    }
 }
 
 pub(crate) struct StoredTable {
     pub(crate) metadata: Value,
-    pub(crate) rows: Arc<RawValue>,
+    pub(crate) rows: Rows,
 }
 
 /// The report's form of one diagnostic: phase, condition, rule,
@@ -188,7 +233,7 @@ pub fn diagnostic_value(diagnostic: &Diagnostic) -> Value {
 #[derive(Clone, Debug)]
 pub struct StoredReport {
     metadata: Value,
-    rows: Vec<Arc<RawValue>>,
+    rows: Vec<Rows>,
     diagnostics: Vec<Diagnostic>,
 }
 impl PartialEq for StoredReport {
@@ -196,11 +241,12 @@ impl PartialEq for StoredReport {
         self.metadata == other.metadata
             && self.diagnostics == other.diagnostics
             && self.rows.len() == other.rows.len()
-            && self
-                .rows
-                .iter()
-                .zip(&other.rows)
-                .all(|(left, right)| left.get() == right.get())
+            && self.rows.iter().zip(&other.rows).all(|(left, right)| {
+                match (left.encoded(), right.encoded()) {
+                    (Ok(left), Ok(right)) => left.get() == right.get(),
+                    _ => false,
+                }
+            })
     }
 }
 impl StoredReport {
@@ -334,13 +380,19 @@ impl Serialize for ReportView<'_> {
 }
 struct TablesView<'a> {
     tables: &'a [Value],
-    rows: &'a [Arc<RawValue>],
+    rows: &'a [Rows],
 }
 impl Serialize for TablesView<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut sequence = serializer.serialize_seq(Some(self.tables.len()))?;
         for (metadata, rows) in self.tables.iter().zip(self.rows) {
-            sequence.serialize_element(&TableView { metadata, rows })?;
+            let rows = rows
+                .encoded()
+                .map_err(|_| serde::ser::Error::custom("report rows"))?;
+            sequence.serialize_element(&TableView {
+                metadata,
+                rows: &rows,
+            })?;
         }
         sequence.end()
     }
@@ -538,11 +590,16 @@ mod tests {
             crate::json!({"tables":[],"artifacts":[{"path":"out.csv"}]}),
             vec![StoredTable {
                 metadata: crate::json!({"name":"ROOT","rows":null}),
-                rows: Arc::clone(&rows),
+                rows: Rows::Encoded(Arc::clone(&rows)),
             }],
         );
         let clone = first.clone();
-        assert!(Arc::ptr_eq(&first.rows[0], &clone.rows[0]));
+        match (&first.rows[0], &clone.rows[0]) {
+            (Rows::Encoded(first_rows), Rows::Encoded(clone_rows)) => {
+                assert!(Arc::ptr_eq(first_rows, clone_rows))
+            }
+            _ => panic!("encoded rows"),
+        }
         drop(first);
         let value = clone.observations_value(true);
         assert_eq!(

@@ -151,6 +151,23 @@ pub fn missing_values<T: crate::table::TableAccess + ?Sized>(
     }
     Ok(findings)
 }
+/// Add `found`, the findings [`missing_values`] reports for the next records
+/// of a table read by partition (#3830), to `findings`, those of the records
+/// before them: each field keeps its first missing record and counts every
+/// missing one, in field order, as [`missing_values`] reports the whole table.
+pub fn add_missing_values(findings: &mut Vec<MissingValues>, found: Vec<MissingValues>) {
+    for value in found {
+        match findings
+            .iter_mut()
+            .find(|finding| finding.field == value.field)
+        {
+            Some(finding) => finding.records = finding.records.saturating_add(value.records),
+            None => findings.push(value),
+        }
+    }
+    findings.sort_by_key(|finding| FIELDS.iter().position(|field| *field == finding.field));
+}
+
 impl FieldBinding {
     pub fn stored(&self) -> &[usize; 11] {
         &self.stored

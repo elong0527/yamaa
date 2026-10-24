@@ -13,7 +13,7 @@ use parquet::file::metadata::ParquetMetaData;
 use std::{borrow::Cow, sync::Arc};
 use yamaa_core::{table::TableSchema, value::ColumnType};
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(super) enum Error {
     Malformed,
     Representation,
@@ -73,20 +73,59 @@ pub(super) struct Decoded {
     pub batches: Vec<RecordBatch>,
 }
 
+/// Where a finding of one partition's checks falls in the whole read's
+/// order (#3830): its stage, the column the stage was checking, and the step
+/// of that column's check. The whole read runs each stage over every
+/// partition before the next stage, a column at a time where it checks
+/// columns, so findings order by position, then by partition.
+pub(super) type Position = (u8, usize, u8);
+
+/// The ODM fields' text (ODM-1).
+const ODM_TEXT: u8 = 12;
+/// Temporal values (PARQUET-5).
+const TEMPORAL: u8 = 14;
+/// Each column's arrays: its text, then its offsets, then its length.
+const ARRAYS: u8 = 15;
+/// Each partition's record batch.
+const BATCH: u8 = 16;
+
+/// A held file read by partition (#3792): what its footer and pages admit,
+/// and what decodes one partition's row groups at a time, each partition
+/// once for its checks and again whenever a run reads it (#3830).
+pub(super) struct Runs {
+    /// The pages, as the native decoder is shown them.
+    source: bytes::Bytes,
+    metadata: Arc<ParquetMetaData>,
+    keep: Vec<bool>,
+    arrow_schema: arrow_schema::Schema,
+    /// The ODM fields' stored columns, or the profile's table: what each
+    /// partition's stored columns become.
+    shape: Result<Shape, Error>,
+    /// Whether the row groups hold the records the file declares.
+    groups_hold_rows: bool,
+    /// The row groups of each partition, and its records.
+    partitions: Vec<(std::ops::Range<usize>, usize)>,
+}
+
+enum Shape {
+    Odm([usize; 11]),
+    Ordinary(TableSchema),
+}
+
 pub(super) fn read(bytes: &[u8]) -> Result<Decoded, Error> {
-    whole(read_partitions(bytes, false, None)?)
+    whole(bytes, false)
 }
 
 pub(super) fn read_odm(bytes: &[u8]) -> Result<Decoded, Error> {
-    whole(read_partitions(bytes, true, None)?)
+    whole(bytes, true)
 }
 
-/// The one partition of a whole read.
-fn whole(mut partitions: Vec<Decoded>) -> Result<Decoded, Error> {
-    match (partitions.pop(), partitions.is_empty()) {
-        (Some(decoded), true) => Ok(decoded),
-        _ => Err(Error::Malformed),
-    }
+/// The whole read: the file as one partition.
+fn whole(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
+    let runs = Runs::open(bytes, odm, None)?;
+    let raw = runs.raw(0)?;
+    runs.deferred()?;
+    runs.decoded(raw, 0, 0).map_err(|(_, error)| error)
 }
 
 /// The table schema the held file decodes to, from its footer alone
@@ -278,151 +317,245 @@ fn odm_schema() -> Result<TableSchema, Error> {
     .map_err(|_| Error::Malformed)
 }
 
-/// Read the held file by partition (#3792): its row groups divided into
-/// partitions of at most `rows` records each, or, without `rows`, one
-/// partition holding the whole file. Every finding of the whole read is
-/// reported in the same order, because each check runs over every partition
-/// before the next check starts, and a value's row is its row in the whole
-/// file. Only the row and cell limits differ: each partition, not the whole
-/// file, is admitted within them.
-pub(super) fn read_partitions(
-    bytes: &[u8],
-    odm: bool,
-    rows: Option<std::num::NonZeroUsize>,
-) -> Result<Vec<Decoded>, Error> {
-    let frame = framing::admit_partitioned(bytes, rows)?;
-    let metadata = Arc::new(row_groups::decode(frame.metadata, &frame.footer)?);
-    let hint = metadata::admit(metadata.file_metadata().key_value_metadata())?;
-    let held_hint = hint.as_ref().map(|hint| &hint.schema);
-    let columns = metadata.file_metadata().schema_descr().columns();
-    let annotated = |column: usize| frame.annotated.contains(&column);
-    // ODM field admission uses metadata alone. Ordinary profile findings keep
-    // their existing precedence after all physical chunks have been decoded.
-    let odm_stored = if odm {
-        Some(odm_fields(&metadata, hint.as_ref(), &frame.annotated)?)
-    } else {
-        None
-    };
-    admit_page_counts(&frame, &metadata)?;
-    let mut payloads = payload::Validation::new();
-    let mut pages = frame.pages.iter().peekable();
-    for (row_group, group) in metadata.row_groups().iter().enumerate() {
-        let expected = usize::try_from(group.num_rows()).map_err(|_| Error::Malformed)?;
-        for column in 0..group.num_columns() {
-            let descriptor = columns.get(column).ok_or(Error::Malformed)?;
-            let mut rows = payload::Rows::new(expected);
-            while pages
-                .peek()
-                .is_some_and(|page| page.row_group == row_group && page.column == column)
-            {
-                let page = pages.next().unwrap();
-                let decoded = compression::decode(page)?;
-                rows.admit(page, &decoded, descriptor)?;
-                payloads.admit(page, &decoded, descriptor)?;
-            }
-            rows.finish()?;
-        }
-    }
-    let row_count =
-        usize::try_from(metadata.file_metadata().num_rows()).map_err(|_| Error::Malformed)?;
-    let arrow = native_schema(&metadata, hint.as_ref())?;
-    // A whole read admits the rows the file declares; a read by partition
-    // admits each partition's rows, which its row groups hold.
-    let partition_rows = match rows {
-        None => {
-            yamaa_core::limits::Limits::table(row_count, columns.len())?;
+impl Runs {
+    /// Admit the held file for a read by partition (#3792): its row groups
+    /// divided into partitions of at most `rows` records each, or, without
+    /// `rows`, one partition holding the whole file. Every page is decoded
+    /// and checked here, as the whole read checks it before any column is
+    /// built, and dropped; each partition, not the whole file, is admitted
+    /// within the row and cell limits. The checks the whole read makes after
+    /// every partition's columns are decoded wait for [`Self::deferred`].
+    pub(super) fn open(
+        bytes: &[u8],
+        odm: bool,
+        rows: Option<std::num::NonZeroUsize>,
+    ) -> Result<Self, Error> {
+        let frame = framing::admit_partitioned(bytes, rows)?;
+        let metadata = Arc::new(row_groups::decode(frame.metadata, &frame.footer)?);
+        let hint = metadata::admit(metadata.file_metadata().key_value_metadata())?;
+        let held_hint = hint.as_ref().map(|hint| &hint.schema);
+        let columns = metadata.file_metadata().schema_descr().columns();
+        let annotated = |column: usize| frame.annotated.contains(&column);
+        // ODM field admission uses metadata alone. Ordinary profile findings
+        // keep their existing precedence after all physical chunks have been
+        // decoded.
+        let odm_stored = if odm {
+            Some(odm_fields(&metadata, hint.as_ref(), &frame.annotated)?)
+        } else {
             None
+        };
+        admit_page_counts(&frame, &metadata)?;
+        let mut payloads = payload::Validation::new();
+        let mut pages = frame.pages.iter().peekable();
+        for (row_group, group) in metadata.row_groups().iter().enumerate() {
+            let expected = usize::try_from(group.num_rows()).map_err(|_| Error::Malformed)?;
+            for column in 0..group.num_columns() {
+                let descriptor = columns.get(column).ok_or(Error::Malformed)?;
+                let mut rows = payload::Rows::new(expected);
+                while pages
+                    .peek()
+                    .is_some_and(|page| page.row_group == row_group && page.column == column)
+                {
+                    let page = pages.next().unwrap();
+                    let decoded = compression::decode(page)?;
+                    rows.admit(page, &decoded, descriptor)?;
+                    payloads.admit(page, &decoded, descriptor)?;
+                }
+                rows.finish()?;
+            }
         }
-        Some(_) => {
-            let partition_rows = frame
-                .partitions
-                .iter()
-                .map(|groups| {
-                    let groups = metadata
-                        .row_groups()
-                        .get(groups.clone())
-                        .ok_or(Error::Malformed)?;
-                    groups.iter().try_fold(0usize, |sum, group| {
-                        sum.checked_add(
-                            usize::try_from(group.num_rows()).map_err(|_| Error::Malformed)?,
-                        )
-                        .ok_or(Error::Malformed)
+        let row_count =
+            usize::try_from(metadata.file_metadata().num_rows()).map_err(|_| Error::Malformed)?;
+        let arrow = native_schema(&metadata, hint.as_ref())?;
+        // A whole read admits the rows the file declares; a read by
+        // partition admits each partition's rows, which its row groups hold.
+        let partitions = frame
+            .partitions
+            .iter()
+            .map(|groups| {
+                let groups_metadata = metadata
+                    .row_groups()
+                    .get(groups.clone())
+                    .ok_or(Error::Malformed)?;
+                let records = groups_metadata.iter().try_fold(0usize, |sum, group| {
+                    sum.checked_add(
+                        usize::try_from(group.num_rows()).map_err(|_| Error::Malformed)?,
+                    )
+                    .ok_or(Error::Malformed)
+                })?;
+                Ok((groups.clone(), records))
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+        match rows {
+            None => yamaa_core::limits::Limits::table(row_count, columns.len())?,
+            Some(_) => {
+                for &(_, records) in &partitions {
+                    yamaa_core::limits::Limits::table(records, columns.len())?;
+                }
+            }
+        }
+        let arrow_schema = schema::normalize(&arrow, held_hint);
+        // Determine retention only. Profile errors remain deferred until
+        // every physical chunk has been decoded, including fields outside the
+        // profile.
+        let keep: Vec<_> = columns
+            .iter()
+            .enumerate()
+            .map(|(index, column)| {
+                if let Some(stored) = &odm_stored {
+                    return stored.contains(&index);
+                }
+                arrow_schema.fields().len() == columns.len()
+                    && arrow_schema.fields().get(index).is_some_and(|field| {
+                        column.max_rep_level() == 0
+                            && column.path().string() == *field.name()
+                            && profile::column_type(column, field.data_type(), annotated(index))
+                                .is_some()
                     })
-                })
-                .collect::<Result<Vec<_>, Error>>()?;
-            for &records in &partition_rows {
-                yamaa_core::limits::Limits::table(records, columns.len())?;
+            })
+            .collect();
+        let source = native_pages(bytes, &frame)?;
+        let group_rows = metadata
+            .row_groups()
+            .iter()
+            .try_fold(0usize, |sum, group| {
+                sum.checked_add(usize::try_from(group.num_rows()).map_err(|_| Error::Malformed)?)
+                    .ok_or(Error::Malformed)
+            })?;
+        let shape = match odm_stored {
+            Some(stored) => Ok(Shape::Odm(stored)),
+            None => {
+                let later = hint.as_ref().map_or(&[][..], |hint| &hint.later);
+                profile::columns(
+                    &arrow_schema,
+                    metadata.file_metadata().schema_descr(),
+                    &frame.annotated,
+                    later,
+                )
+                .map(Shape::Ordinary)
+                .map_err(Error::Profile)
             }
-            Some(partition_rows)
+        };
+        Ok(Self {
+            source,
+            groups_hold_rows: group_rows == row_count,
+            metadata,
+            keep,
+            arrow_schema,
+            shape,
+            partitions,
+        })
+    }
+
+    /// The number of partitions, at least one.
+    pub(super) fn len(&self) -> usize {
+        self.partitions.len()
+    }
+
+    /// The records of partition `partition`.
+    pub(super) fn records(&self, partition: usize) -> usize {
+        self.partitions[partition].1
+    }
+
+    /// Partition `partition`'s stored columns, decoded from its row groups.
+    /// The whole read decodes every partition's before any later check, so
+    /// the first partition that does not decode is its finding.
+    pub(super) fn raw(&self, partition: usize) -> Result<Vec<physical::Column>, Error> {
+        self.groups(self.partitions[partition].0.clone())
+    }
+
+    /// The stored columns of row groups `groups`.
+    fn groups(&self, groups: std::ops::Range<usize>) -> Result<Vec<physical::Column>, Error> {
+        physical::read(
+            self.source.clone(),
+            &self.metadata,
+            &self.keep,
+            &self.arrow_schema,
+            groups,
+        )
+    }
+
+    /// The checks of the whole file the whole read makes once every
+    /// partition's stored columns are decoded: the row groups hold the
+    /// records the file declares, and the profile admits its fields.
+    pub(super) fn deferred(&self) -> Result<(), Error> {
+        if !self.groups_hold_rows {
+            return Err(Error::Malformed);
         }
-    };
-    let arrow_schema = schema::normalize(&arrow, held_hint);
-    // Determine retention only. Profile errors remain deferred until every
-    // physical chunk has been decoded, including fields outside the profile.
-    let keep: Vec<_> = columns
-        .iter()
-        .enumerate()
-        .map(|(index, column)| {
-            if let Some(stored) = &odm_stored {
-                return stored.contains(&index);
+        match &self.shape {
+            Ok(_) => Ok(()),
+            Err(error) => Err(error.clone()),
+        }
+    }
+
+    /// Partition `partition`'s table from its stored columns `raw`, whose
+    /// first record is record `before` of the file, or its first finding
+    /// with the finding's [`Position`]. A value's row is its row in the
+    /// whole file. Call it only once [`Self::deferred`] admits the file.
+    pub(super) fn decoded(
+        &self,
+        raw: Vec<physical::Column>,
+        partition: usize,
+        before: usize,
+    ) -> Result<Decoded, (Position, Error)> {
+        let records = self.records(partition);
+        match &self.shape {
+            Ok(Shape::Odm(stored)) => odm_decoded(raw, *stored, records),
+            Ok(Shape::Ordinary(schema)) => self.ordinary(raw, schema, records, before),
+            Err(error) => Err(((0, 0, 0), error.clone())),
+        }
+    }
+
+    /// The table of the row groups that hold records `range` of the file,
+    /// and the position of the range's first record in it, once the scan
+    /// has admitted the file (#3830).
+    pub(super) fn range(&self, range: std::ops::Range<usize>) -> Result<(Decoded, usize), Error> {
+        let (mut start, mut groups, mut offset, mut records) = (0usize, None, 0, 0);
+        for (index, group) in self.metadata.row_groups().iter().enumerate() {
+            let rows = usize::try_from(group.num_rows()).map_err(|_| Error::Malformed)?;
+            let end = start.checked_add(rows).ok_or(Error::Malformed)?;
+            if start < range.end && end > range.start {
+                match &mut groups {
+                    None => {
+                        groups = Some(index..index + 1);
+                        offset = range.start - start;
+                    }
+                    Some(groups) => groups.end = index + 1,
+                }
+                records += rows;
             }
-            arrow_schema.fields().len() == columns.len()
-                && arrow_schema.fields().get(index).is_some_and(|field| {
-                    column.max_rep_level() == 0
-                        && column.path().string() == *field.name()
-                        && profile::column_type(column, field.data_type(), annotated(index))
-                            .is_some()
-                })
-        })
-        .collect();
-    let source = native_pages(bytes, &frame)?;
-    let raws = frame
-        .partitions
-        .iter()
-        .map(|groups| {
-            physical::read(
-                source.clone(),
-                &metadata,
-                &keep,
-                &arrow_schema,
-                groups.clone(),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let group_rows = metadata
-        .row_groups()
-        .iter()
-        .try_fold(0usize, |sum, group| {
-            sum.checked_add(usize::try_from(group.num_rows()).map_err(|_| Error::Malformed)?)
-                .ok_or(Error::Malformed)
-        })?;
-    if group_rows != row_count {
-        return Err(Error::Malformed);
+            start = end;
+        }
+        let raw = self.groups(groups.unwrap_or(0..0))?;
+        let decoded = match &self.shape {
+            Ok(Shape::Odm(stored)) => odm_decoded(raw, *stored, records),
+            Ok(Shape::Ordinary(schema)) => self.ordinary(raw, schema, records, 0),
+            Err(error) => return Err(error.clone()),
+        }
+        .map_err(|(_, error)| error)?;
+        Ok((decoded, offset))
     }
-    let partition_rows = partition_rows.unwrap_or_else(|| vec![row_count]);
-    if let Some(stored) = odm_stored {
-        return odm_decoded(&raws, stored, &partition_rows);
-    }
-    let later = hint.as_ref().map_or(&[][..], |hint| &hint.later);
-    let schema = profile::columns(
-        &arrow_schema,
-        metadata.file_metadata().schema_descr(),
-        &frame.annotated,
-        later,
-    )
-    .map_err(Error::Profile)?;
-    // Temporal values, a column at a time over every partition, as the whole
-    // read checks its one column.
-    for (index, field) in schema.columns().iter().enumerate() {
-        let mut before = 0usize;
-        for (raw, &records) in raws.iter().zip(&partition_rows) {
+
+    /// An ordinary partition's table: its temporal values, then its arrays a
+    /// column at a time, then its record batch, as the whole read checks its
+    /// one partition.
+    fn ordinary(
+        &self,
+        raw: Vec<physical::Column>,
+        schema: &TableSchema,
+        records: usize,
+        before: usize,
+    ) -> Result<Decoded, (Position, Error)> {
+        let columns = self.metadata.file_metadata().schema_descr().columns();
+        for (index, field) in schema.columns().iter().enumerate() {
+            let at = |error| ((TEMPORAL, index, 0), Error::Profile(error));
             match (field.kind, raw.get(index)) {
                 (ColumnType::Date, Some(physical::Column::Int32(values))) => {
                     for (row, value) in values.iter().enumerate() {
                         if let Some(value) = value {
                             let row = before + row + 1;
                             profile::temporal(field.kind, i64::from(*value), &field.name, row)
-                                .map_err(Error::Profile)?;
+                                .map_err(at)?;
                         }
                     }
                 }
@@ -430,222 +563,176 @@ pub(super) fn read_partitions(
                     for (row, value) in values.iter().enumerate() {
                         if let Some(value) = value {
                             let row = before + row + 1;
-                            profile::temporal(field.kind, *value, &field.name, row)
-                                .map_err(Error::Profile)?;
+                            profile::temporal(field.kind, *value, &field.name, row).map_err(at)?;
                         }
                     }
                 }
                 _ => {}
             }
-            before += records;
         }
-    }
-    // The reference validates text when constructing its typed table, after
-    // field and temporal findings. Never construct unchecked Arrow strings.
-    // Each column is built over every partition before the next column.
-    let mut arrays: Vec<Vec<ArrayRef>> = partition_rows.iter().map(|_| Vec::new()).collect();
-    let mut raws: Vec<_> = raws.into_iter().map(Vec::into_iter).collect();
-    for (index, field) in schema.columns().iter().enumerate() {
-        // As the whole read's columns end with the shorter list.
-        let Some(stored) = raws
-            .iter_mut()
-            .map(Iterator::next)
-            .collect::<Option<Vec<_>>>()
-        else {
-            break;
-        };
-        let large = || matches!(arrow_schema.field(index).data_type(), DataType::LargeUtf8);
-        let declared = columns.get(index).and_then(|c| profile::declared_width(c));
-        let built = column_arrays(field.kind, stored, large, declared)?;
-        for ((partition, array), &records) in arrays.iter_mut().zip(built).zip(&partition_rows) {
+        // The reference validates text when constructing its typed table,
+        // after field and temporal findings. Never construct unchecked Arrow
+        // strings.
+        let mut arrays = Vec::new();
+        let mut raw = raw.into_iter();
+        for (index, field) in schema.columns().iter().enumerate() {
+            // As the whole read's columns end with the shorter list.
+            let Some(stored) = raw.next() else {
+                break;
+            };
+            let large = || {
+                matches!(
+                    self.arrow_schema.field(index).data_type(),
+                    DataType::LargeUtf8
+                )
+            };
+            let declared = columns.get(index).and_then(|c| profile::declared_width(c));
+            let array = column_array(field.kind, stored, large, declared)
+                .map_err(|(step, error)| ((ARRAYS, index, step), error))?;
             if array.len() != records {
-                return Err(Error::Malformed);
+                return Err(((ARRAYS, index, 2), Error::Malformed));
             }
-            partition.push(array);
+            arrays.push(array);
         }
-    }
-
-    // Normalization can make a required stored float missing. The language's
-    // typed table admits missing values for every column, regardless of storage.
-    // Each field takes its array's type: a view or dictionary hint names only a
-    // layout (PARQUET-7), and the values above are already plain.
-    arrays
-        .into_iter()
-        .map(|arrays| {
-            let output_schema = Arc::new(arrow_schema::Schema::new(
-                arrow_schema
-                    .fields()
-                    .iter()
-                    .zip(&arrays)
-                    .map(|(field, array)| {
-                        arrow_schema::Field::new(field.name(), array.data_type().clone(), true)
-                    })
-                    .collect::<Vec<_>>(),
-            ));
-            let batch =
-                RecordBatch::try_new(output_schema, arrays).map_err(|_| Error::Malformed)?;
-            Ok(Decoded {
-                schema: schema.clone(),
-                batches: vec![batch],
-            })
+        // Normalization can make a required stored float missing. The
+        // language's typed table admits missing values for every column,
+        // regardless of storage. Each field takes its array's type: a view or
+        // dictionary hint names only a layout (PARQUET-7), and the values
+        // above are already plain.
+        let output_schema = Arc::new(arrow_schema::Schema::new(
+            self.arrow_schema
+                .fields()
+                .iter()
+                .zip(&arrays)
+                .map(|(field, array)| {
+                    arrow_schema::Field::new(field.name(), array.data_type().clone(), true)
+                })
+                .collect::<Vec<_>>(),
+        ));
+        let batch = RecordBatch::try_new(output_schema, arrays)
+            .map_err(|_| ((BATCH, 0, 0), Error::Malformed))?;
+        Ok(Decoded {
+            schema: schema.clone(),
+            batches: vec![batch],
         })
-        .collect()
+    }
 }
 
-/// One column's arrays, one for each partition, from its stored values. Text
-/// is validated in every partition before any partition's offsets are
-/// checked, as the whole read validates its one column.
-fn column_arrays(
+/// One column's array from one partition's stored values, or the step of
+/// its check that failed, with the finding: text is validated (step 0)
+/// before its offsets are checked (step 1), and the whole read validates
+/// every partition's text before any partition's offsets.
+fn column_array(
     kind: ColumnType,
-    stored: Vec<physical::Column>,
+    stored: physical::Column,
     large: impl Fn() -> bool,
     declared: Option<u8>,
-) -> Result<Vec<ArrayRef>, Error> {
+) -> Result<ArrayRef, (u8, Error)> {
     if kind == ColumnType::Str {
-        let texts = stored
+        let physical::Column::Bytes(values) = &stored else {
+            return Err((0, Error::Malformed));
+        };
+        let strings = values
             .iter()
-            .map(|column| match column {
-                physical::Column::Bytes(values) => values
-                    .iter()
-                    .map(|v| {
-                        v.as_ref()
-                            .map(|b| std::str::from_utf8(b.data()).map_err(|_| Error::Malformed))
-                            .transpose()
-                    })
-                    .collect::<Result<Vec<_>, _>>(),
-                _ => Err(Error::Malformed),
+            .map(|v| {
+                v.as_ref()
+                    .map(|b| std::str::from_utf8(b.data()).map_err(|_| (0, Error::Malformed)))
+                    .transpose()
             })
             .collect::<Result<Vec<_>, _>>()?;
-        if texts.iter().any(|strings| {
-            !crate::column_table::fits_utf8_offsets(strings.iter().flatten().map(|text| text.len()))
-        }) {
-            return Err(Error::Representation);
+        if !crate::column_table::fits_utf8_offsets(strings.iter().flatten().map(|text| text.len()))
+        {
+            return Err((1, Error::Representation));
         }
-        let large = large();
-        return Ok(texts
-            .into_iter()
-            .map(|strings| -> ArrayRef {
-                if large {
-                    Arc::new(LargeStringArray::from(strings))
-                } else {
-                    Arc::new(StringArray::from(strings))
-                }
-            })
-            .collect());
+        return Ok(if large() {
+            Arc::new(LargeStringArray::from(strings))
+        } else {
+            Arc::new(StringArray::from(strings))
+        });
     }
-    stored
-        .into_iter()
-        .map(|column| -> Result<ArrayRef, Error> {
-            Ok(match (kind, column) {
-                (ColumnType::Int, physical::Column::Int64(values)) => {
-                    Arc::new(Int64Array::from(values))
+    Ok(match (kind, stored) {
+        (ColumnType::Int, physical::Column::Int64(values)) => Arc::new(Int64Array::from(values)),
+        // A signed annotation declares the width of every stored value. The
+        // format forbids writing a value outside it and leaves reading one
+        // to each reader, so such a value fails rather than reads as one of
+        // their answers. Every stored value fits 32 bits, with or without an
+        // annotation that says so.
+        (ColumnType::Int, physical::Column::Int32(values)) => {
+            if let Some(bits @ (8 | 16)) = declared {
+                let bound = 1i64 << (bits - 1);
+                if values
+                    .iter()
+                    .flatten()
+                    .any(|value| !(-bound..bound).contains(&i64::from(*value)))
+                {
+                    return Err((0, Error::Malformed));
                 }
-                // A signed annotation declares the width of every stored value.
-                // The format forbids writing a value outside it and leaves
-                // reading one to each reader, so such a value fails rather than
-                // reads as one of their answers. Every stored value fits 32 bits,
-                // with or without an annotation that says so.
-                (ColumnType::Int, physical::Column::Int32(values)) => {
-                    if let Some(bits @ (8 | 16)) = declared {
-                        let bound = 1i64 << (bits - 1);
-                        if values
-                            .iter()
-                            .flatten()
-                            .any(|value| !(-bound..bound).contains(&i64::from(*value)))
-                        {
-                            return Err(Error::Malformed);
-                        }
-                    }
-                    Arc::new(Int64Array::from_iter(
-                        values.into_iter().map(|value| value.map(i64::from)),
-                    ))
-                }
-                (ColumnType::Float, physical::Column::Double(values)) => {
-                    Arc::new(Float64Array::from_iter(values.into_iter().map(|v| {
-                        v.and_then(yamaa_core::value::FiniteFloat::new)
-                            .map(yamaa_core::value::FiniteFloat::get)
-                    })))
-                }
-                (ColumnType::Date, physical::Column::Int32(values)) => {
-                    Arc::new(Date32Array::from(values))
-                }
-                (ColumnType::DateTime, physical::Column::Int64(values)) => {
-                    Arc::new(TimestampMicrosecondArray::from(values))
-                }
-                _ => return Err(Error::Malformed),
-            })
-        })
-        .collect()
+            }
+            Arc::new(Int64Array::from_iter(
+                values.into_iter().map(|value| value.map(i64::from)),
+            ))
+        }
+        (ColumnType::Float, physical::Column::Double(values)) => {
+            Arc::new(Float64Array::from_iter(values.into_iter().map(|v| {
+                v.and_then(yamaa_core::value::FiniteFloat::new)
+                    .map(yamaa_core::value::FiniteFloat::get)
+            })))
+        }
+        (ColumnType::Date, physical::Column::Int32(values)) => Arc::new(Date32Array::from(values)),
+        (ColumnType::DateTime, physical::Column::Int64(values)) => {
+            Arc::new(TimestampMicrosecondArray::from(values))
+        }
+        _ => return Err((0, Error::Malformed)),
+    })
 }
 
-/// The ODM read's partitions: its eleven fields' text, a field at a time
-/// over every partition, as the whole read checks its one column.
+/// One partition of an ODM read: its eleven fields' text, a field at a
+/// time, each field's text validated (step 0), then its length (step 1),
+/// then its offsets (step 2), as the whole read checks each field over
+/// every partition before the next step.
 fn odm_decoded(
-    raws: &[Vec<physical::Column>],
+    raw: Vec<physical::Column>,
     stored: [usize; 11],
-    partition_rows: &[usize],
-) -> Result<Vec<Decoded>, Error> {
+    records: usize,
+) -> Result<Decoded, (Position, Error)> {
     use yamaa_core::odm_source::FIELDS;
-    let schema = odm_schema()?;
-    let mut arrays: Vec<Vec<ArrayRef>> = partition_rows
-        .iter()
-        .map(|_| Vec::with_capacity(FIELDS.len()))
-        .collect();
-    for index in stored {
-        let texts = raws
+    let schema = odm_schema().map_err(|error| ((ODM_TEXT, 0, 0), error))?;
+    let mut arrays: Vec<ArrayRef> = Vec::with_capacity(FIELDS.len());
+    for (position, index) in stored.into_iter().enumerate() {
+        let malformed = |step| ((ODM_TEXT, position, step), Error::Malformed);
+        let Some(physical::Column::Bytes(values)) = raw.get(index) else {
+            return Err(malformed(0));
+        };
+        let strings = values
             .iter()
-            .map(|raw| {
-                let physical::Column::Bytes(values) = raw.get(index).ok_or(Error::Malformed)?
-                else {
-                    return Err(Error::Malformed);
-                };
-                values
-                    .iter()
-                    .map(|value| {
-                        value
-                            .as_ref()
-                            .map(|bytes| {
-                                std::str::from_utf8(bytes.data()).map_err(|_| Error::Malformed)
-                            })
-                            .transpose()
-                    })
-                    .collect::<Result<Vec<_>, _>>()
+            .map(|value| {
+                value
+                    .as_ref()
+                    .map(|bytes| std::str::from_utf8(bytes.data()).map_err(|_| malformed(0)))
+                    .transpose()
             })
             .collect::<Result<Vec<_>, _>>()?;
-        if texts
-            .iter()
-            .zip(partition_rows)
-            .any(|(strings, &records)| strings.len() != records)
+        if strings.len() != records {
+            return Err(malformed(1));
+        }
+        if !crate::column_table::fits_utf8_offsets(strings.iter().flatten().map(|text| text.len()))
         {
-            return Err(Error::Malformed);
+            return Err(((ODM_TEXT, position, 2), Error::Representation));
         }
-        if texts.iter().any(|strings| {
-            !crate::column_table::fits_utf8_offsets(strings.iter().flatten().map(|text| text.len()))
-        }) {
-            return Err(Error::Representation);
-        }
-        for (partition, strings) in arrays.iter_mut().zip(texts) {
-            partition.push(Arc::new(StringArray::from(strings)));
-        }
+        arrays.push(Arc::new(StringArray::from(strings)));
     }
-
     let output_schema = Arc::new(arrow_schema::Schema::new(
         FIELDS
             .iter()
             .map(|name| arrow_schema::Field::new(*name, DataType::Utf8, true))
             .collect::<Vec<_>>(),
     ));
-    arrays
-        .into_iter()
-        .map(|arrays| {
-            let batch = RecordBatch::try_new(output_schema.clone(), arrays)
-                .map_err(|_| Error::Malformed)?;
-            Ok(Decoded {
-                schema: schema.clone(),
-                batches: vec![batch],
-            })
-        })
-        .collect()
+    let batch = RecordBatch::try_new(output_schema, arrays)
+        .map_err(|_| ((BATCH, 0, 0), Error::Malformed))?;
+    Ok(Decoded {
+        schema,
+        batches: vec![batch],
+    })
 }
 
 #[cfg(test)]
