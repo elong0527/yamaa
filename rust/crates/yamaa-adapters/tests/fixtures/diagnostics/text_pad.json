@@ -1,0 +1,34 @@
+{
+  "about": "The str_pad verb in a specification (TEXT-2). A positive width beyond any representable length is admitted. A missing source gives missing without needing the width, while padding a present value, even the empty text, cannot be allocated and refuses the whole run. str_pad declares no handler, so the successful run reports no handler row. Moved from the declarative_text_pad module of scalar_declarative_rounding.rs, whose test compared the handler counts, the saved bytes, and the refused run's one issue at its phase, condition, rule, spec paths and context.",
+  "cases": [
+    {
+      "case": "missing_skips_an_unrepresentable_positive_width",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TEXT, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: TEXT, type: str, derivation: null}\n  - {name: RESULT, type: str, derivation: {str_pad: {source: TEXT, width: 999999999999999999999999999999999999999999999999999999999999999999999999999999999}}}\n",
+          "input.csv": "ID\nrow1\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [["SPEC_PATH", "NAME", "COUNT"]]
+      },
+      "saved": {"output.csv": "ID,TEXT,RESULT\nrow1,,\n"}
+    },
+    {
+      "case": "a_present_value_refuses_the_whole_output_at_an_unrepresentable_width",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TEXT, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: TEXT, type: str, derivation: \"''\"}\n  - {name: RESULT, type: str, derivation: {str_pad: {source: TEXT, width: 999999999999999999999999999999999999999999999999999999999999999999999999999999999}}}\n",
+          "input.csv": "ID\nrow1\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": [], "context": {"step": "build", "code": "result_projection"}}]
+    }
+  ]
+}
