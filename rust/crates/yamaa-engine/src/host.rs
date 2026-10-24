@@ -18,11 +18,13 @@ use std::collections::BTreeMap;
 use std::ffi::{c_int, c_void};
 use std::sync::Arc;
 
-use yamaa::{
-    Argument, BatchArgument, CallError, CancellationToken, ColumnType, FunctionError,
-    FunctionHandle, FunctionIdentity, HostLanguage, HostPayload, InstalledDistributions,
-    InstalledVersion, LockContext, LockFinding, LockKind, LockReason, ProjectFunctions, ScalarRef,
+use yamaa::host::functions::{
+    Argument, BatchArgument, CallError, ColumnType, FunctionError, FunctionHandle,
+    FunctionIdentity, HostPayload, InstalledDistributions, InstalledVersion, LockContext,
+    LockFinding, LockKind, LockReason,
 };
+use yamaa::scalar::ScalarRef;
+use yamaa::{CancellationToken, HostLanguage, ProjectFunctions};
 use yamaa_boundary::abi::{self, Reply, Str};
 
 /// A host object the engine keeps, released once when it drops.
@@ -315,25 +317,26 @@ fn scalar_record(value: ScalarRef<'_>) -> Result<abi::Scalar, CallError> {
 /// # Safety
 ///
 /// The record's text is valid, as [`text`] asks.
-unsafe fn scalar(record: &abi::Scalar) -> Result<yamaa::Scalar, FunctionError> {
+unsafe fn scalar(record: &abi::Scalar) -> Result<yamaa::scalar::Scalar, FunctionError> {
     let outside = |kind| rejected(&format!("a returned {kind} is outside the years 1 to 9999"));
     Ok(match record.kind {
-        abi::SCALAR_MISSING => yamaa::Scalar::Missing,
+        abi::SCALAR_MISSING => yamaa::scalar::Scalar::Missing,
         // SAFETY: the caller's contract.
-        abi::SCALAR_TEXT => yamaa::Scalar::Str(
+        abi::SCALAR_TEXT => yamaa::scalar::Scalar::Str(
             unsafe { text(record.text) }
                 .ok_or_else(|| rejected("a returned string is not valid UTF-8"))?,
         ),
-        abi::SCALAR_INT => yamaa::Scalar::Int(record.int),
-        abi::SCALAR_FLOAT => yamaa::Scalar::float(record.float),
+        abi::SCALAR_INT => yamaa::scalar::Scalar::Int(record.int),
+        abi::SCALAR_FLOAT => yamaa::scalar::Scalar::float(record.float),
         abi::SCALAR_BOOL if record.int == 0 || record.int == 1 => {
-            yamaa::Scalar::Bool(record.int == 1)
+            yamaa::scalar::Scalar::Bool(record.int == 1)
         }
-        abi::SCALAR_DATE => yamaa::Scalar::Date(
-            yamaa::Date::from_epoch_days(record.int).ok_or_else(|| outside("date"))?,
+        abi::SCALAR_DATE => yamaa::scalar::Scalar::Date(
+            yamaa::scalar::Date::from_epoch_days(record.int).ok_or_else(|| outside("date"))?,
         ),
-        abi::SCALAR_DATETIME => yamaa::Scalar::DateTime(
-            yamaa::DateTime::from_epoch_seconds(record.int).ok_or_else(|| outside("datetime"))?,
+        abi::SCALAR_DATETIME => yamaa::scalar::Scalar::DateTime(
+            yamaa::scalar::DateTime::from_epoch_seconds(record.int)
+                .ok_or_else(|| outside("datetime"))?,
         ),
         _ => return Err(FunctionError::Protocol),
     })
@@ -359,7 +362,7 @@ impl Port {
         function: *mut c_void,
         arguments: &[abi::Argument],
         batch: Option<(usize, &[abi::BatchArgument])>,
-    ) -> Result<Vec<yamaa::Scalar>, CallError> {
+    ) -> Result<Vec<yamaa::scalar::Scalar>, CallError> {
         let (invoke, call_batch) = (self.0.callbacks.invoke, self.0.callbacks.call_batch);
         self.0.answer(
             // SAFETY: see the module documentation.
@@ -406,7 +409,8 @@ impl Port {
     ) -> Result<(), FunctionError> {
         let compare = self.0.callbacks.compare_locked;
         let compare = compare.ok_or(FunctionError::Protocol)?;
-        let locked = yamaa::decode_renv_lock(lock).map_err(FunctionError::LockSyntax)?;
+        let locked =
+            yamaa::host::functions::decode_renv_lock(lock).map_err(FunctionError::LockSyntax)?;
         let packages: Vec<Str> = locked
             .packages
             .iter()
@@ -456,7 +460,7 @@ impl ProjectFunctions for Port {
     ) -> Result<(), FunctionError> {
         match (lock.language, lock.kind) {
             (HostLanguage::Python, LockKind::Uv) => {
-                yamaa::verify_uv_lock(lock.bytes, functions, &Installed(&self.0))
+                yamaa::host::functions::verify_uv_lock(lock.bytes, functions, &Installed(&self.0))
             }
             (HostLanguage::R, LockKind::Renv) => self.compare_locked(lock.bytes, functions),
             _ => Err(FunctionError::Protocol),
@@ -466,7 +470,7 @@ impl ProjectFunctions for Port {
     fn bind(
         &self,
         identity: &FunctionIdentity,
-        signature: &yamaa::Signature,
+        signature: &yamaa::host::functions::Signature,
     ) -> Result<FunctionHandle, FunctionError> {
         let bind = self.0.callbacks.bind.ok_or(FunctionError::Protocol)?;
         let parameters: Vec<Str> = signature
@@ -545,7 +549,7 @@ impl ProjectFunctions for Port {
         &self,
         handle: &FunctionHandle,
         arguments: &[Argument<'_>],
-    ) -> Result<yamaa::Scalar, CallError> {
+    ) -> Result<yamaa::scalar::Scalar, CallError> {
         let arguments = arguments
             .iter()
             .map(|argument| {
@@ -566,7 +570,7 @@ impl ProjectFunctions for Port {
         handle: &FunctionHandle,
         rows: usize,
         arguments: &[BatchArgument],
-    ) -> Result<Vec<yamaa::Scalar>, CallError> {
+    ) -> Result<Vec<yamaa::scalar::Scalar>, CallError> {
         let function = Port::function(handle)?;
         let values = arguments
             .iter()
@@ -628,7 +632,7 @@ impl InstalledDistributions for Installed<'_> {
         // SAFETY: the host filled the reply.
         self.0.query(callback, &[Str::of(module)], |reply| unsafe {
             match scalar(&reply.scalar)? {
-                yamaa::Scalar::Bool(answer) => Ok(answer),
+                yamaa::scalar::Scalar::Bool(answer) => Ok(answer),
                 _ => Err(FunctionError::Protocol),
             }
         })
@@ -670,8 +674,8 @@ impl InstalledDistributions for Installed<'_> {
             .query(self.0.callbacks.integer_digits, &[], |reply| unsafe {
                 match scalar(&reply.scalar)? {
                     // Zero turns the limit off.
-                    yamaa::Scalar::Int(0) => Ok(None),
-                    yamaa::Scalar::Int(digits) => usize::try_from(digits)
+                    yamaa::scalar::Scalar::Int(0) => Ok(None),
+                    yamaa::scalar::Scalar::Int(digits) => usize::try_from(digits)
                         .map(Some)
                         .map_err(|_| FunctionError::Protocol),
                     _ => Err(FunctionError::Protocol),

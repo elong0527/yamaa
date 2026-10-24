@@ -10,9 +10,11 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use yamaa::host::resolver::{
+    ResolverFailure, ResolverOperation, ResolverReply, ResolverRequest, ResourceKind,
+};
 use yamaa::{
     CancellationToken, Diagnostic, Engine, EngineOptions, Failure, HostLanguage, MemoryResolver,
-    ResolverFailure, ResolverOperation, ResolverReply, ResolverRequest, ResourceKind,
     ResourceResolver, SubmissionOptions,
 };
 

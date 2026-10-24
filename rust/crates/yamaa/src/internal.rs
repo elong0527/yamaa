@@ -21,12 +21,15 @@ use yamaa_core::host_functions::{Empty, HostFunctions, Lock};
 use crate::cancel::{CancellationToken, Cancelled};
 use crate::diagnostic::Locator;
 use crate::engine::Build;
-use crate::error::{Failure, FunctionError, ResolverFailure};
-use crate::functions::{
-    Argument, BatchArgument, CallError, FunctionHandle, FunctionIdentity, HostLanguage,
-    LockContext, LockKind, ProjectFunctions, Signature,
+use crate::error::Failure;
+use crate::host::functions::{
+    Argument, BatchArgument, CallError, FunctionError, FunctionHandle, FunctionIdentity,
+    HostLanguage, LockContext, LockKind, ProjectFunctions, Signature,
 };
-use crate::resolver::{ResolverReply, ResolverRequest, ResourceResolver};
+use crate::host::resolver::{
+    ResolverFailure, ResolverKind, ResolverOperation, ResolverReply, ResolverRequest,
+    ResourceResolver,
+};
 use crate::scalar::{Scalar, ScalarRef};
 use crate::text::Action;
 
@@ -42,17 +45,17 @@ impl yamaa_adapters::host_resources::Resolver for ResolverBridge {
     {
         use yamaa_adapters::host_resources::{Kind, Operation};
         let operation = match request.operation {
-            Operation::Inspect => crate::resolver::ResolverOperation::Inspect,
-            Operation::Capture => crate::resolver::ResolverOperation::Capture,
-            Operation::Target => crate::resolver::ResolverOperation::Target,
-            Operation::Stage => crate::resolver::ResolverOperation::Stage,
-            Operation::Commit => crate::resolver::ResolverOperation::Commit,
-            Operation::Abort => crate::resolver::ResolverOperation::Abort,
+            Operation::Inspect => ResolverOperation::Inspect,
+            Operation::Capture => ResolverOperation::Capture,
+            Operation::Target => ResolverOperation::Target,
+            Operation::Stage => ResolverOperation::Stage,
+            Operation::Commit => ResolverOperation::Commit,
+            Operation::Abort => ResolverOperation::Abort,
         };
         let kind = match request.kind {
-            Kind::Metadata => crate::resolver::ResolverKind::Metadata,
-            Kind::Input => crate::resolver::ResolverKind::Input,
-            Kind::Output => crate::resolver::ResolverKind::Output,
+            Kind::Metadata => ResolverKind::Metadata,
+            Kind::Input => ResolverKind::Input,
+            Kind::Output => ResolverKind::Output,
         };
         self.inner
             .request(ResolverRequest {

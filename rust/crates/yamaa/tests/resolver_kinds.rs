@@ -8,10 +8,8 @@
 use std::sync::Arc;
 
 use arrow_array::{Array, ListArray, StringArray};
-use yamaa::{
-    CancellationToken, Engine, EngineOptions, HostLanguage, MemoryResolver, ResolverFailure,
-    ResourceKind, Table,
-};
+use yamaa::host::resolver::{ResolverFailure, ResourceKind};
+use yamaa::{CancellationToken, Engine, EngineOptions, HostLanguage, MemoryResolver, Table};
 
 const SPEC: &[u8] = b"yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input/src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
 
@@ -111,8 +109,8 @@ fn a_caller_resolver_reports_kinds_through_its_failures() {
     impl yamaa::ResourceResolver for Linked {
         fn request(
             &self,
-            request: yamaa::ResolverRequest<'_>,
-        ) -> Result<yamaa::ResolverReply, ResolverFailure> {
+            request: yamaa::host::resolver::ResolverRequest<'_>,
+        ) -> Result<yamaa::host::resolver::ResolverReply, ResolverFailure> {
             if request.written == "input/src.csv" {
                 return Err(ResolverFailure::from_kind(ResourceKind::Junction));
             }

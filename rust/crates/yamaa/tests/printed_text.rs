@@ -100,7 +100,6 @@ fn a_run_prints_its_dataset_name_size_and_issue_count() {
         run.summary().to_string(),
         "yamaa run of ADSL: succeeded, 2 rows x 2 columns, 0 issues"
     );
-    assert_eq!(run.summary().first_issue, None);
 
     let run = engine()
         .spec(&study.path("adam/adae.yaml"))
@@ -121,15 +120,12 @@ fn a_run_whose_file_was_not_read_names_the_path_as_given() {
     let study = study();
     let given = study.path("adam/missing.yaml");
     let run = engine().spec(&given).run().unwrap();
-    let summary = run.summary();
     assert_eq!(
-        summary.line,
-        format!("yamaa run of {given}: failed, no output, 1 issue")
-    );
-    let first = summary.first_issue.expect("the missing file is an issue");
-    assert_eq!(
-        first,
-        format!("first issue: {}", run.diagnostics()[0].text())
+        run.summary().to_string(),
+        format!(
+            "yamaa run of {given}: failed, no output, 1 issue\nfirst issue: {}",
+            run.diagnostics()[0].text()
+        )
     );
 }
 
@@ -193,7 +189,6 @@ fn a_project_run_lists_its_members_between_the_two_lines() {
             forward(&study)
         )
     );
-    assert_eq!(summary.members.len(), 3);
     assert_eq!(summary.lines().count(), 5);
     // A member prints as a run, under its name.
     let member = runs.member("ADTTE").unwrap();
@@ -251,23 +246,24 @@ fn a_member_whose_listing_was_not_read_is_named_by_the_path_listed() {
         runs.members()[0].1,
         runs.member("ADSL").unwrap()
     ));
-    let summary = runs.summary();
     assert_eq!(
-        summary.line,
-        format!("yamaa project run of {project}, section adam: failed, 3 specifications, 2 issues")
-    );
-    assert_eq!(
-        summary.members,
-        [
-            "  ADSL               succeeded  2 rows x 2 columns, 0 issues",
-            "  adam/missing.yaml  failed     no output, 1 issue",
-            "  adam//adae.yaml    failed     no output, 1 issue",
-        ]
+        runs.summary().to_string(),
+        format!(
+            "yamaa project run of {project}, section adam: failed, 3 specifications, 2 issues\n\
+             \x20 ADSL               succeeded  2 rows x 2 columns, 0 issues\n\
+             \x20 adam/missing.yaml  failed     no output, 1 issue\n\
+             \x20 adam//adae.yaml    failed     no output, 1 issue\n\
+             first issue: {}",
+            runs.diagnostics()[0].text()
+        )
     );
     let (_, missing) = runs.members()[1];
     assert_eq!(
-        missing.summary().line,
-        "yamaa run of adam/missing.yaml: failed, no output, 1 issue"
+        missing.summary().to_string(),
+        format!(
+            "yamaa run of adam/missing.yaml: failed, no output, 1 issue\nfirst issue: {}",
+            missing.diagnostics()[0].text()
+        )
     );
     let failure = runs.member("adam/missing.yaml").err().unwrap();
     assert_eq!(
@@ -281,7 +277,7 @@ fn a_project_run_without_a_section_names_only_the_path() {
     let study = study();
     let project = study.path("project.yaml");
     let runs = engine().project(&project).run().unwrap();
-    assert!(runs.summary().line.starts_with(&format!(
+    assert!(runs.summary().to_string().starts_with(&format!(
         "yamaa project run of {project}: failed, 3 specifications"
     )));
 }

@@ -1,5 +1,7 @@
-//! Facade-owned scalar values exchanged with project functions.
-//
+//! Facade-owned scalar values exchanged with project functions: the
+//! arguments a function of the [`crate::host::functions`] port is called
+//! with and the values it returns.
+//!
 //! This is the public form of `yamaa_core::value::Value` (owned) and
 //! `yamaa_core::table::ValueRef` (borrowed). There is no boolean column type
 //! in the public schema vocabulary, but booleans remain valid function
@@ -193,57 +195,6 @@ impl DateTime {
     }
 }
 
-/// A byte-carried host scalar: tag 0 missing, 1 int, 2 float, 3 str, 4 bool.
-/// Tags 5/6 carry whole epoch days/seconds as exact binary64 little-endian
-/// bytes. Integers use canonical ASCII decimal; float bits use eight
-/// little-endian bytes. This is the public form of the adapter scalar bytes.
-#[non_exhaustive]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct EncodedScalar {
-    pub tag: i32,
-    pub payload: Vec<u8>,
-}
-
-impl EncodedScalar {
-    /// Admit a byte payload with no locale or sentinel assumption.
-    pub fn decode(tag: i32, bytes: &[u8]) -> Result<Scalar, ScalarDecodeError> {
-        let value = yamaa_adapters::scalar_bytes::decode(tag, bytes)
-            .map_err(|reason| ScalarDecodeError { reason })?;
-        Ok(Scalar::from_core(value))
-    }
-
-    /// Encode a normalized host value; temporal precision is dropped only here.
-    pub fn encode(value: Scalar) -> Self {
-        let encoded = yamaa_adapters::scalar_bytes::encode(value.into_core());
-        Self {
-            tag: encoded.tag,
-            payload: encoded.payload,
-        }
-    }
-}
-
-/// A scalar byte-payload admission failure, carrying its stable reason.
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ScalarDecodeError {
-    reason: &'static str,
-}
-
-impl ScalarDecodeError {
-    /// Return the stable admission reason without host text.
-    pub fn reason(self) -> &'static str {
-        self.reason
-    }
-}
-
-impl std::fmt::Display for ScalarDecodeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.reason)
-    }
-}
-
-impl std::error::Error for ScalarDecodeError {}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -342,49 +293,5 @@ mod tests {
         );
         assert!(DateTime::from_epoch_seconds(last.epoch_seconds() + 1).is_none());
         assert!(DateTime::from_epoch_seconds(i64::MIN).is_none());
-    }
-
-    #[test]
-    fn encoded_scalars_round_trip() {
-        let values = vec![
-            Scalar::Missing,
-            Scalar::Int(-9223372036854775808),
-            Scalar::Float(0.5),
-            Scalar::Str("héllo".into()),
-            Scalar::Bool(false),
-            Scalar::Date(Date::new(2024, 2, 29).unwrap()),
-            Scalar::DateTime(DateTime::new(2024, 1, 1, 12, 30, 45).unwrap()),
-        ];
-        for value in values {
-            let encoded = EncodedScalar::encode(value.clone());
-            assert_eq!(
-                EncodedScalar::decode(encoded.tag, &encoded.payload).unwrap(),
-                value
-            );
-        }
-    }
-
-    #[test]
-    fn encoded_scalar_rejections_carry_stable_reasons() {
-        assert_eq!(
-            EncodedScalar::decode(0, b"nope").unwrap_err().reason(),
-            "invalid scalar payload"
-        );
-        assert_eq!(
-            EncodedScalar::decode(1, b"01").unwrap_err().reason(),
-            "invalid integer scalar"
-        );
-        assert_eq!(
-            EncodedScalar::decode(9, b"").unwrap_err().reason(),
-            "invalid scalar payload"
-        );
-        assert_eq!(
-            EncodedScalar::decode(2, &0.0f64.to_le_bytes()).unwrap(),
-            Scalar::Float(0.0)
-        );
-        assert_eq!(
-            EncodedScalar::decode(2, &f64::NAN.to_le_bytes()).unwrap(),
-            Scalar::Missing
-        );
     }
 }
