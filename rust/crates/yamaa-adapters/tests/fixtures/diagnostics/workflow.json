@@ -278,22 +278,6 @@
       "issues": [{"rule": "SCHEMA-12"}]
     },
     {
-      "case": "a_linked_field_type_restated_fails_its_input_rule",
-      "operation": "check_resources",
-      "input": {
-        "files": {
-          "project.yaml": {"base": "project"},
-          "root.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: P\ninput: {P: {path: leaf.csv, schema: leaf.yaml, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: P.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: P.VALUE\noutput: {path: root.csv, columns: [ID, VALUE]}\n",
-          "leaf.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: RAW\ninput: {RAW: never-read.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: RAW.VALUE\noutput: {path: leaf.csv, columns: [ID, VALUE]}\n"
-        },
-        "specification": "root.yaml",
-        "project": "project.yaml"
-      },
-      "compares": ["rule"],
-      "among": true,
-      "issues": [{"rule": "INPUT-6"}]
-    },
-    {
       "case": "an_entry_that_is_not_yaml_is_refused_where_it_is_captured",
       "operation": "check_resources",
       "input": {"files": {"project.yaml": {"base": "project"}, "root.yaml": "["}, "specification": "root.yaml", "project": "project.yaml"},

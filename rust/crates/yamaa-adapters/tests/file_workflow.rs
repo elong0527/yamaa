@@ -1085,6 +1085,9 @@ mod file {
             };
             assert_eq!(entry.capture_reads(), 2);
             assert!(entry.document().is_none());
+            // The shipped schema's finding is `workflow.json`'s; it outlives the
+            // study, and projecting it again reads nothing more.
+            let findings = preparation_issues(&rejection).unwrap();
             drop(study);
             let retained = entry.retained_sources();
             assert_eq!(retained.len(), 2);
@@ -1092,9 +1095,7 @@ mod file {
                 .iter()
                 .any(|(name, bytes)| name.ends_with("/root.yaml")
                     && bytes.as_ref() == original.as_bytes()));
-            // The shipped schema's finding is `workflow.json`'s; projecting it
-            // reads nothing more.
-            preparation_issues(&rejection).unwrap();
+            assert_eq!(preparation_issues(&rejection).unwrap(), findings);
             assert_eq!(entry.capture_reads(), 2);
         }
 

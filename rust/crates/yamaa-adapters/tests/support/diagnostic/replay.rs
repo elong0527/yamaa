@@ -1,14 +1,16 @@
 //! The replay of the expected diagnostics written as data (#3691).
 //!
 //! Each file of `tests/fixtures/diagnostics/` holds the cases of one family,
-//! and the reader module that owns the file declares it. A case names the
-//! behaviour it proves (`case`), the operation that reaches it (`operation`,
-//! read by [`super::operations`]; a list names several that must each report
-//! the same issues), that operation's `input`, and the issues it reports, in
-//! order. An issue row is the record a run report renders: `phase`,
-//! `condition`, `rule` (`null` when the cause cites no card), `spec_paths`
-//! and `context`, and `source_span` and `operand_route` only when the issue
-//! carries them, so a row without them asserts their absence.
+//! and the reader module that owns the file declares it. A member name
+//! written twice in one object is refused, as core's reader refuses it. A
+//! case names the behaviour it proves (`case`), the operation that reaches it
+//! (`operation`, read by [`super::operations`]; a list names several that
+//! must each report the same issues), that operation's `input`, and the
+//! issues it reports, in order. An issue row is the record a run report
+//! renders: `phase`, `condition`, `rule` (`null` when the cause cites no
+//! card), `spec_paths` and `context`, and `source_span` and `operand_route`
+//! only when the issue carries them, so a row without them asserts their
+//! absence.
 //!
 //! A case whose test compared only part of each record says which fields in
 //! `compares`, and its rows hold those alone: a field, or one key of the
@@ -84,6 +86,7 @@ pub fn cases() -> Vec<Case> {
         let _reading = Naming(format!("while reading {name}"));
         let fixture = yamaa_adapters::json_wire::decode(file.text)
             .unwrap_or_else(|error| panic!("{name}: {error}"));
+        unique_members(file.text, name);
         closed(&fixture, &["about", "documents", "cases"]);
         let documents = fixture.get("documents");
         for case in items(field(&fixture, "cases")) {
@@ -191,10 +194,10 @@ fn compared_fields(fields: &Value, label: &str) -> Vec<String> {
         let known = FIELDS.contains(&field.as_str())
             || field
                 .strip_prefix("context.")
-                .is_some_and(|key| !key.is_empty());
+                .is_some_and(|key| !key.is_empty() && !key.contains('.'));
         assert!(
             known,
-            "{label}: compares names a field of {FIELDS:?} or a context key, not {field:?}"
+            "{label}: compares names a field of {FIELDS:?} or one key of the context, not {field:?}"
         );
     }
     assert_eq!(
@@ -340,6 +343,45 @@ fn edited(documents: Option<&Value>, document: &Value, label: &str) -> String {
         text = text.replacen(from, to, 1);
     }
     text
+}
+
+/// Refuse a member name written twice in one object of the fixture `name`:
+/// `json_wire` keeps the last value, so a repeated `issues` would replay as
+/// whichever came last. A member name is a string followed by `:`; `json`
+/// is JSON that `json_wire` has admitted.
+fn unique_members(json: &str, name: &str) {
+    let bytes = json.as_bytes();
+    // One entry per open container: the names of an object, or none for an
+    // array.
+    let mut open: Vec<Option<BTreeSet<String>>> = Vec::new();
+    let mut at = 0;
+    while at < bytes.len() {
+        match bytes[at] {
+            b'{' => open.push(Some(BTreeSet::new())),
+            b'[' => open.push(None),
+            b'}' | b']' => {
+                open.pop();
+            }
+            b'"' => {
+                let start = at;
+                at += 1;
+                while bytes[at] != b'"' {
+                    at += if bytes[at] == b'\\' { 2 } else { 1 };
+                }
+                let after = json[at + 1..].trim_start();
+                if let (true, Some(Some(names))) = (after.starts_with(':'), open.last_mut()) {
+                    let member = yamaa_adapters::json_wire::decode(&json[start..=at]).unwrap();
+                    let member = text(&member);
+                    assert!(
+                        names.insert(member.to_owned()),
+                        "{name}: the member {member:?} is written twice in one object, at byte {start}"
+                    );
+                }
+            }
+            _ => {}
+        }
+        at += 1;
+    }
 }
 
 /// Names the file being read or the case being replayed when a reader, a

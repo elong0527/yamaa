@@ -346,7 +346,7 @@ producer's declared type. Missing, extra, reordered, duplicate or undeclared
 fields fail.
 
 Fails: `producer_contract_mismatch`.
-Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-core/tests/support/diagnostic/producer.rs`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_stored_header_must_equal_the_producer_output_columns_in_order`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_stored_parquet_schema_must_equal_the_producer_output_types`.
+Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-core/tests/support/diagnostic/producer.rs`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_stored_header_must_equal_the_producer_output_columns_in_order`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_stored_header_in_another_order_mismatches_the_producer_contract`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_stored_header_without_a_contract_column_mismatches_the_producer_contract`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_stored_header_with_an_extra_column_mismatches_the_producer_contract`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_stored_parquet_schema_must_equal_the_producer_output_types`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_stored_parquet_column_of_another_type_mismatches_the_producer_contract`.
 
 A stored artifact whose field names, order or self-describing types do not
 exactly match the producer's output contract fails with
