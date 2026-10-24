@@ -9,6 +9,7 @@ use super::{
     SchemaDiagnostic, SchemaField, SchemaShape, SchemaStructure, TypeExpression, TypeNode,
     ValidationError,
 };
+use crate::expression_table::Verb;
 use std::vec;
 
 /// Original decoded bytes remain in the caller's input or admitted schema module.
@@ -462,7 +463,7 @@ impl Run<'_> {
     fn source(&mut self, text: &str) -> Result<Document, NormalizationError> {
         Document::new(
             vec![
-                N::Text("source".into()),
+                N::Text(Verb::Source.name().into()),
                 N::Text(text.into()),
                 N::Mapping(vec![(0, 1)]),
             ],

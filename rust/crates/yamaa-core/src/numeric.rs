@@ -3,6 +3,7 @@
 //! Parsing, operand evaluation order, callbacks and handler application belong
 //! to later layers. These functions do not skip evaluating an expression tree.
 
+use crate::expression_table::Function;
 use crate::value::{compare_present, FiniteFloat, Value, ValueType};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -299,15 +300,20 @@ pub enum MathFunction {
 }
 
 impl MathFunction {
-    /// The FORMULA-13 spelling a domain failure names.
-    pub fn name(self) -> &'static str {
+    /// The grammar function this computes (FORMULA-13).
+    pub const fn function(self) -> Function {
         match self {
-            Self::Exp => "EXP",
-            Self::Ln => "LN",
-            Self::Log10 => "LOG10",
-            Self::NormCdf => "NORM_CDF",
-            Self::NormInv => "NORM_INV",
+            Self::Exp => Function::Exp,
+            Self::Ln => Function::Ln,
+            Self::Log10 => Function::Log10,
+            Self::NormCdf => Function::NormCdf,
+            Self::NormInv => Function::NormInv,
         }
+    }
+
+    /// The function's spelling, which a domain failure names.
+    pub const fn name(self) -> &'static str {
+        self.function().name()
     }
 }
 

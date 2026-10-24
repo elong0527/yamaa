@@ -48,8 +48,9 @@ pub(in crate::specification) fn limits(spec: &Spec) -> Result<(), PrepareError> 
                     Limits::SOURCE_OPERANDS,
                     Some(sources.len()),
                     Some(&format!(
-                        "columns.{}.derivation.first_available.sources",
-                        column.name.name
+                        "columns.{}.derivation.{}.sources",
+                        column.name.name,
+                        Verb::FirstAvailable.name()
                     )),
                 ));
             }
@@ -134,7 +135,7 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
                         findings.push(PreflightFinding::DuplicateRowDefault {
                             column: name.into(),
                             rows: overridden,
-                            not_row_local: "aggregate".into(),
+                            not_row_local: Verb::Aggregate.name().into(),
                         });
                     }
                 }

@@ -430,10 +430,9 @@ impl Binder<'_> {
             }
             return Err(self.prohibited_function(name, None));
         };
-        match function.result() {
-            // str_contains, the one truth-valued function: a value and a
-            // pattern literal (FORMULA-8).
-            FunctionResult::Boolean => {
+        match (function, function.result()) {
+            // A value, then a pattern literal (FORMULA-8).
+            (Function::StrContains, _) => {
                 if !function.admits(arguments.len()) {
                     for &argument in arguments {
                         self.visit(argument, Need::Value)?;
@@ -444,7 +443,7 @@ impl Binder<'_> {
                 self.pattern(id, arguments[1])?;
                 self.truth(id, need)
             }
-            FunctionResult::Numeric => {
+            (_, FunctionResult::Numeric) => {
                 for &argument in arguments {
                     self.visit(argument, Need::Number)?;
                 }
@@ -453,18 +452,29 @@ impl Binder<'_> {
                 }
                 self.value(id, need)
             }
+            // A truth-valued function whose arguments the binder has not
+            // learned to read is not admitted, rather than read as another
+            // function's arguments.
+            (_, FunctionResult::Boolean) => {
+                for &argument in arguments {
+                    self.visit(argument, Need::Value)?;
+                }
+                Err(self.prohibited_function(name, None))
+            }
         }
     }
 
     /// A `str_contains` pattern is a string literal holding a portable regex,
     /// compiled once here.
     fn pattern(&mut self, call: usize, pattern: usize) -> Result<(), CompileError> {
+        // The messages write the function as its lower-case spelling.
+        let function = Function::StrContains.name().to_ascii_lowercase();
         let node = &self.syntax.nodes()[pattern];
         let NodeKind::String(text) = &node.kind else {
             return Err(self.invalid(
                 node.site,
                 Failure::PatternNotLiteral,
-                "str_contains pattern must be a string literal",
+                format!("{function} pattern must be a string literal"),
             ));
         };
         let site = node.span.start;
@@ -472,7 +482,7 @@ impl Binder<'_> {
             portable_regex::CompileError::Invalid { byte, reason } => self.invalid(
                 site,
                 Failure::InvalidRegex { byte, reason },
-                format!("invalid regex in str_contains pattern: {reason}"),
+                format!("invalid regex in {function} pattern: {reason}"),
             ),
             portable_regex::CompileError::Limit { resource, limit } => CompileError::Limit {
                 position: self.syntax.position(site),

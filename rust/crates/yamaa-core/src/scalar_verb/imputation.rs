@@ -2,8 +2,8 @@
 //! named operand scope, and `date_text` its declared forms.
 use super::*;
 use crate::dataset::{
-    completion_policy_findings, DatePolicyError, DayDeclaration, FlagPart, ImputationKind,
-    TemporalType, TimeRule,
+    completion_policy_findings, DatePolicyError, DayDeclaration, ImputationKind, TemporalType,
+    TimeRule,
 };
 use crate::date_forms::DateForms;
 /// The completion policy of `impute`, or the month, day and time findings
@@ -36,13 +36,6 @@ fn policy(
         Err(DatePolicyError::Shape) => Err(Refusal::Internal),
     }
 }
-fn tree_type(kind: ast::TemporalType) -> TemporalType {
-    match kind {
-        ast::TemporalType::Date => TemporalType::Date,
-        ast::TemporalType::DateTime => TemporalType::DateTime,
-    }
-}
-
 /// `impute`'s completion policy from the tree, collecting month, day and
 /// time findings in declaration order.
 fn tree_completion(
@@ -52,14 +45,10 @@ fn tree_completion(
     time: Option<ast::TimeRule>,
     path: &str,
 ) -> Result<ImputationKind, Refusal> {
-    let target = tree_type(kind);
+    let target = kind;
     let day = day.map(|day| match day {
         ast::ImputeDay::Int(value) => DayDeclaration::Number(value),
         ast::ImputeDay::DayRule(rule) => DayDeclaration::Position(rule.name()),
-    });
-    let time = time.map(|time| match time {
-        ast::TimeRule::First => TimeRule::First,
-        ast::TimeRule::Last => TimeRule::Last,
     });
     policy(target, month, day, time, path)
 }
@@ -95,17 +84,12 @@ fn imputation(spec: &Spec, e: ExprId) -> Result<Imputation, Refusal> {
             day,
             time,
         } => tree_completion(*kind, month.as_deref(), day.as_ref(), *time, &path)?,
-        ScalarOp::Precision { kind } => ImputationKind::Precision {
-            target: tree_type(*kind),
-        },
+        ScalarOp::Precision { kind } => ImputationKind::Precision { target: *kind },
         ScalarOp::ImputationFlag {
             part,
             seconds_collected,
         } => ImputationKind::Flag {
-            part: match part {
-                ast::FlagPart::Date => FlagPart::Date,
-                ast::FlagPart::Time => FlagPart::Time,
-            },
+            part: *part,
             seconds_collected: *seconds_collected,
         },
         ScalarOp::ToDate => ImputationKind::ToDate,

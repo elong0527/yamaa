@@ -5,7 +5,7 @@ use super::{
     SchemaField, SchemaShape, SchemaStructure, TypeError, TypeExpression, TypeNode,
 };
 use crate::diagnostic::{ConditionCode, Definition};
-use crate::expression_table::Verb;
+use crate::expression_table::{TemporalType, Verb};
 use std::vec;
 
 /// Value types whose bare string is the source shorthand `{source: <string>}`
@@ -835,7 +835,7 @@ impl Run<'_> {
         let source_text = |node: usize| match &self.input.nodes()[node] {
             N::Mapping(items) => match items.as_slice() {
                 &[(key, value)]
-                    if matches!(&self.input.nodes()[key], N::Text(name) if name == "source")
+                    if matches!(&self.input.nodes()[key], N::Text(name) if name == Verb::Source.name())
                         && matches!(self.input.nodes()[value], N::Text(_)) =>
                 {
                     Some(value)
@@ -1086,18 +1086,24 @@ impl Run<'_> {
                             ("operation", Self::text(&operation)),
                         ];
                         if registry.name == "expressions" {
+                            // A retired name, and the verb and type that
+                            // replace it.
                             let hint = match operation.as_str() {
-                                "date_diff" => Some("write diff with type: date"),
-                                "datetime_diff" => Some("write diff with type: datetime"),
-                                "date_shift" => Some("write shift with type: date"),
-                                "datetime_shift" => Some("write shift with type: datetime"),
-                                "date_impute" => Some("write impute with type: date"),
-                                "datetime_impute" => Some("write impute with type: datetime"),
-                                "date_precision" => Some("write precision with type: date"),
-                                "datetime_precision" => Some("write precision with type: datetime"),
+                                "date_diff" => Some((Verb::Diff, TemporalType::Date)),
+                                "datetime_diff" => Some((Verb::Diff, TemporalType::DateTime)),
+                                "date_shift" => Some((Verb::Shift, TemporalType::Date)),
+                                "datetime_shift" => Some((Verb::Shift, TemporalType::DateTime)),
+                                "date_impute" => Some((Verb::Impute, TemporalType::Date)),
+                                "datetime_impute" => Some((Verb::Impute, TemporalType::DateTime)),
+                                "date_precision" => Some((Verb::Precision, TemporalType::Date)),
+                                "datetime_precision" => {
+                                    Some((Verb::Precision, TemporalType::DateTime))
+                                }
                                 _ => None,
                             };
-                            if let Some(hint) = hint {
+                            if let Some((verb, kind)) = hint {
+                                let hint =
+                                    format!("write {} with type: {}", verb.name(), kind.name());
                                 context.push(("hint", Self::text(hint)));
                             }
                         }

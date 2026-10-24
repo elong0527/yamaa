@@ -49,8 +49,8 @@ expressions read.
 | [`schema_expression_date.yaml`](../../yaml/schema_expression_date.yaml) | `diff`, `impute`, `precision`, `imputation_flag`, `to_date`, `date_text`, `study_day`, `to_epoch_day`, `dtc`, `time_of_day`, `shift`, `duration_value` and `duration_text` |
 | [`schema_expression_window.yaml`](../../yaml/schema_expression_window.yaml) | `row_number`, `rank`, `row_value`, `locf` and `baseline_flag` |
 | [`schema_expression_aggregate.yaml`](../../yaml/schema_expression_aggregate.yaml) | `aggregate` |
-| [`schema_expression_odm.yaml`](../../yaml/schema_expression_odm.yaml) | `odm` |
-| [`schema_expression_function.yaml`](../../yaml/schema_expression_function.yaml) | `function` |
+| [`schema_expression_odm.yaml`](../../yaml/schema_expression_odm.yaml) | `odm`, which reads an item of the collected ODM data |
+| [`schema_expression_function.yaml`](../../yaml/schema_expression_function.yaml) | `function`, which calls a project function |
 
 <!-- expression-modules:end -->
 

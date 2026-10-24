@@ -3,7 +3,8 @@
 //! each collected field. `date_text` reads text written in one of its
 //! declared date forms into such text; no other operation here reads any
 //! other form.
-use crate::expression_table::Verb;
+use crate::expression_table::{DayRule as DeclaredDayRule, Verb};
+pub use crate::expression_table::{FlagPart, TemporalType, TimeRule};
 use crate::json::Value as V;
 use crate::{
     date_forms::DateForms,
@@ -13,20 +14,9 @@ use crate::{
     value::{ColumnType, Value},
 };
 
-/// The temporal type an operation declares with `type`, never inferred from text.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TemporalType {
-    Date,
-    DateTime,
-}
-
+/// The temporal type an operation declares with `type`, never inferred
+/// from text, holds values of its column type.
 impl TemporalType {
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Date => "date",
-            Self::DateTime => "datetime",
-        }
-    }
     pub fn column_type(self) -> ColumnType {
         match self {
             Self::Date => ColumnType::Date,
@@ -45,11 +35,6 @@ pub enum DayRule {
 pub enum DayDeclaration<'a> {
     Number(&'a str),
     Position(&'a str),
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TimeRule {
-    First,
-    Last,
 }
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum DatePolicyError {
@@ -162,19 +147,26 @@ pub(crate) fn completion_policy_findings(
             vec![("field", V::String("day".into()))],
         )),
         None => Ok(None),
-        Some(DayDeclaration::Position("first")) => Ok(Some(DayRule::First)),
-        Some(DayDeclaration::Position("last")) => Ok(Some(DayRule::Last)),
-        Some(DayDeclaration::Position(value)) => Err(error(
-            C::ImputationDayRule,
-            &format!("{path}.day"),
-            vec![
-                ("value", V::String(value.into())),
-                (
-                    "permitted",
-                    V::Array(vec![V::String("first".into()), V::String("last".into())]),
-                ),
-            ],
-        )),
+        Some(DayDeclaration::Position(value)) => match DeclaredDayRule::from_name(value) {
+            Some(DeclaredDayRule::First) => Ok(Some(DayRule::First)),
+            Some(DeclaredDayRule::Last) => Ok(Some(DayRule::Last)),
+            None => Err(error(
+                C::ImputationDayRule,
+                &format!("{path}.day"),
+                vec![
+                    ("value", V::String(value.into())),
+                    (
+                        "permitted",
+                        V::Array(
+                            DeclaredDayRule::ALL
+                                .iter()
+                                .map(|rule| V::String(rule.name().into()))
+                                .collect(),
+                        ),
+                    ),
+                ],
+            )),
+        },
         Some(DayDeclaration::Number(value)) => value
             .parse::<u8>()
             .ok()
@@ -202,13 +194,6 @@ pub(crate) fn completion_policy_findings(
         })),
         (month, day) => Ok(Err(month.err().into_iter().chain(day.err()).collect())),
     }
-}
-
-/// The ADaM imputation flag an `imputation_flag` derives: `*DTF` or `*TMF`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FlagPart {
-    Date,
-    Time,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

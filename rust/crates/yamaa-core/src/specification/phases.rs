@@ -27,6 +27,7 @@
 
 use super::{PreflightFinding, PrepareError};
 use crate::ast::{ExprId, ExprKind, JoinKey, Read, Scope, Spec, Step, Template};
+use crate::expression_table::Verb;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Why a default cannot complete in the row phase (SPEC-6).
@@ -40,7 +41,7 @@ enum NotRowLocal {
 impl NotRowLocal {
     fn name(self) -> &'static str {
         match self {
-            Self::Aggregate => "aggregate",
+            Self::Aggregate => Verb::Aggregate.name(),
             Self::Window => "window",
             Self::SelfIntermediate => "self_intermediate",
         }
