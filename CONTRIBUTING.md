@@ -494,10 +494,15 @@ made to both, and `make check-repository` fails while they differ
   `among` leave out. Core's input holds a specification as
   a JSON object, or a document of the file's `documents` with edits that
   set or remove a member. The adapters' input holds the `files` its
-  operation writes to a fresh study directory, each its text or a
-  `documents` entry with edits that each replace text occurring once, and
-  an issue row's text that starts with `{study}/` names one of those files
-  as the engine spells its path. Each crate's
+  operation writes to a fresh study directory, each its text, a
+  `documents` entry (`base`) or an authored file named by its path from
+  the repository root (`file`), such as a benchmark's `expected/` dataset,
+  the last two with edits that each replace text occurring once. Its
+  `benchmark` stages a benchmark's files first, each at its path there
+  but the `expected/` directory, `README.md` and `benchmark.yaml`, and
+  its `edits` map each staged file to its edits; `files` names none of
+  them. An issue row's text that starts with `{study}/` names one of
+  those files as the engine spells its path. Each crate's
   `support::diagnostic::replay` replays every case once: core's inside
   `diagnostics.rs`'s registry walk, which renders each issue's message,
   and the adapters' in `diagnostics.rs`. A case of an existing operation
@@ -527,8 +532,10 @@ made to both, and `make check-repository` fails while they differ
   `expected/` file, and each file removed to `null`; `{}` states that
   nothing was created, changed or removed. A case states a table only when its
   operation reports one, and `saved` exactly when its operation saves: the
-  adapters' `build` reports the tables a built result holds, and `save`
-  builds as `build` does, then saves; core's operations report issues
+  adapters' `build` reports the tables a built result holds, `save`
+  builds as `build` does, then saves, and `define` composes a project's
+  submission section, then saves it, each reporting its issues after the
+  save, a save's own refusal included; core's operations report issues
   alone. The members a case may write, and the reading and comparing of
   the positive ones, are `support::diagnostic::form`, one file both crates'
   support trees hold byte for byte. A case the form cannot state yet

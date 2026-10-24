@@ -31,6 +31,17 @@
 //!   it removed, as `null`. `{}` states that it created, changed and removed
 //!   nothing.
 //!
+//! The adapters' `input` stages a study directory: its `files`, each its
+//! text, a document of the fixture's `documents` (`base`) or an authored
+//! file named by its path from the repository root (`file`), as `saved`
+//! names one, the last two with `edits`; the files of the benchmark
+//! `benchmark` names, each at its path there but its `expected/` directory,
+//! `README.md` and `benchmark.yaml`, which the input's `edits` map to their
+//! edits; and empty `directories`. An edit replaces text that occurs exactly
+//! once, and a file of `files` is never one the benchmark stages. The
+//! adapters' `define` composes a project's submission section and saves it,
+//! as `save` builds and saves, so each reports the issues of its save too.
+//!
 //! A cell is `null` when the value is missing, its text for `str`, its
 //! integer for `int`, `true` or `false` for `bool`, and for `float` the
 //! shortest number that reads back as the same double, spelt as a

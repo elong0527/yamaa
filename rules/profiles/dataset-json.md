@@ -27,7 +27,7 @@ extension `.json`, `.ndjson` or `.xpt`. Omission produces only the Define-XML
 document. The extension mapping of [OUTPUT-5](../output.md#output-5) stays
 closed at `.csv` and `.parquet`.
 
-Evidence: `sdtm-dm-metadata`, `schema-transport-dataset-ndjson`, `sdtm-dm-xpt`, `adam-adsl-xpt`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_project_lists_function_files_and_holds_each_host_lock`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `python/tests/installed/installed_public_define.py::test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes`.
+Evidence: `sdtm-dm-metadata`, `schema-transport-dataset-ndjson`, `sdtm-dm-xpt`, `adam-adsl-xpt`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_project_lists_function_files_and_holds_each_host_lock`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::a_transport_file_is_published_beside_the_document_wherever_its_dataset_is`, `python/tests/installed/installed_public_define.py::test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes`.
 
 One section requests one transport. The file's place depends on the document
 and the dataset name alone, not on where the artifact is published: a `DM`
@@ -123,7 +123,7 @@ An unpublished artifact, one that does not match its producing specification,
 or a composed `output.decimals` fails.
 
 Fails: `producer_contract_mismatch`, `decimals_not_applicable`.
-Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `negative-transport-display-decimals`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::display_decimals_are_not_applicable_under_a_transport`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
+Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `negative-transport-display-decimals`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::display_decimals_are_not_applicable_under_a_transport`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::a_published_dataset_with_reordered_columns_fails_its_producer_contract`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::a_published_dataset_missing_a_declared_column_fails_its_producer_contract`, `rust/crates/yamaa-adapters/tests/file_resources.rs::a_published_value_outside_its_codelist_keeps_the_verification_phase_and_row_key`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
 
 The artifact is read:
 
@@ -225,7 +225,7 @@ every value is written in the spelling its own type fixes.
 Dataset-JSON file and [DEFINE-2](define-xml.md#define-2) names. The reference
 therefore never leaves that directory.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `rust/crates/yamaa-adapters/tests/file_resources.rs::inherited_original_output_supplies_both_json_capture_and_publication_target`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::a_transport_file_is_published_beside_the_document_wherever_its_dataset_is`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::inherited_original_output_supplies_both_json_capture_and_publication_target`.
 
 The pair travels together: the file names the document its `itemOID`s point
 into, and [JSON-12](#json-12) has that document name the file.
@@ -339,7 +339,7 @@ When the selected section sets `transport: dataset_json` or
 path. When no transport is requested, the leaf names the specification's
 published `output.path` ([DEFINE-16](define-xml.md#define-16)).
 
-Evidence: `sdtm-dm-metadata`, `schema-transport-dataset-ndjson`, `rust/crates/yamaa-adapters/tests/file_resources.rs::entry_relative_inherited_output_supplies_json_capture_and_publication_targets`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
+Evidence: `sdtm-dm-metadata`, `schema-transport-dataset-ndjson`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::entry_relative_inherited_output_supplies_json_capture_and_publication_targets`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
 
 <a id="json-13"></a>
 
@@ -420,7 +420,7 @@ in entry order, and the document last, applying
 publishes nothing further and leaves every untouched target as it was.
 
 Fails: `publication_failed`.
-Evidence: `rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-adapters/tests/file_resources.rs::semantic_failure_and_target_admission_have_zero_writes`, `rust/crates/yamaa-adapters/tests/file_resources.rs::dm_both_goldens_without_input_execution_and_save_uses_held_bytes`.
+Evidence: `rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::a_semantic_failure_writes_nothing`, `rust/crates/yamaa-adapters/tests/file_resources.rs::a_target_refused_at_save_stops_the_composition_with_zero_writes`, `rust/crates/yamaa-adapters/tests/file_resources.rs::dm_both_goldens_without_input_execution_and_save_uses_held_bytes`.
 
 A visible document therefore never points at a data file that is not there yet,
 which is the order of [OUTPUT-10](../output.md#output-10) applied to
