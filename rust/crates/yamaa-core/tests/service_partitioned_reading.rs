@@ -375,6 +375,7 @@ mod service {
                 rows: NonZeroUsize::new(rows).unwrap(),
                 leading_keys: leading_keys.map(|keys| NonZeroUsize::new(keys).unwrap()),
                 whole_table_fallback,
+                whole_output: false,
             })
         }
 
