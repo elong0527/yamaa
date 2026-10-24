@@ -1,0 +1,50 @@
+yamaa: "1.0"
+type: spec
+domain: AECM
+keys: [USUBJID, AESEQ, CMSEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int}}
+  CM: {path: input/cm.csv, types: {CMSEQ: int}}
+
+output:
+  path: aecm.csv
+  columns: [USUBJID, AESEQ, CMSEQ, VISIT]
+
+intermediates:
+  # Each adverse event paired with each medication of the same subject
+  # recorded at the same visit; a record missing either pairs with none.
+  - id: SAMEVISIT
+    dataset: AE
+    inner_join: CM
+    key: [USUBJID, VISIT]
+    derivations:
+      USUBJID: AE.USUBJID
+      AESEQ: AE.AESEQ
+      CMSEQ: CM.CMSEQ
+      VISIT: AE.VISIT
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number of the Adverse Event
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number of the Medication
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+
+rows:
+  - id: pairs
+    dataset: SAMEVISIT
+    derivations:
+      USUBJID: SAMEVISIT.USUBJID
+      AESEQ: SAMEVISIT.AESEQ
+      CMSEQ: SAMEVISIT.CMSEQ
+      VISIT: SAMEVISIT.VISIT

@@ -1,0 +1,10 @@
+phase: validation
+condition: prohibited_construct
+spec_paths:
+  - intermediates.PAIRS.order_by
+  - intermediates.PAIRS.keep
+  - intermediates.PAIRS.inner_join
+rule: LOOKUP-27
+context:
+  intermediate: PAIRS
+  construct: order_by

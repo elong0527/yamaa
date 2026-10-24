@@ -323,6 +323,20 @@ impl<'a> Live<'a> {
     /// bare order term there is (LOOKUP-7).
     fn matching(&self, index: usize, out: &mut Vec<Reading>) -> Result<(), Error> {
         let item = &self.spec.intermediates[index];
+        // A pair relation matches its left record, not a current row: its key
+        // values and its filter read its sides' records (LOOKUP-27).
+        if item.pairs() {
+            let donor = Scope::Donor(index);
+            if let Some(JoinKey::Pairs { pairs, .. }) = &item.key {
+                for &(_, value) in pairs {
+                    self.read(value, donor, out)?;
+                }
+            }
+            if let Some(filter) = item.filter {
+                self.read(filter, donor, out)?;
+            }
+            return Ok(());
+        }
         if let Some(JoinKey::Columns { columns, .. }) = &item.key {
             out.extend(columns.iter().map(Reading::variable));
         }
@@ -532,6 +546,16 @@ impl<'a> Live<'a> {
                 intermediates[index] = true;
                 if !item.dataset.name.is_empty() {
                     self.inputs.insert(item.dataset.name.clone());
+                }
+                // A live intermediate keeps the intermediates whose records it
+                // reads: a pair relation its sides, and an intermediate over a
+                // pair relation that relation (LOOKUP-27).
+                for relation in std::iter::once(&item.dataset).chain(&item.inner_join) {
+                    if self.intermediate(&relation.name).is_some() {
+                        changed |= self.intermediates.insert(relation.name.clone());
+                    } else if !relation.name.is_empty() {
+                        self.inputs.insert(relation.name.clone());
+                    }
                 }
                 let mut readings = Vec::new();
                 self.matching(index, &mut readings)?;

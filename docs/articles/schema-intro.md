@@ -264,7 +264,7 @@ in its short form is listed under the field it fills.
 | `output` | | `order_by` | `columns` | `relative_to`, `decimals` | `path`, `report` | |
 | An order term written in full | | `variable` | | `direction`, `nulls` | | |
 | A window: `windows.<name>`, or a verb's `window` written in full | `filter` | `group_by`, `order_by` | | | | |
-| A named intermediate | `key`, `filter`, `derivations` | `order_by` | `id`, `dataset`, `columns` | `keep`, `absent`, `require_match` | | `between`, `nearest`, `verifications` |
+| A named intermediate | `key`, `filter`, `derivations` | `order_by` | `id`, `dataset`, `inner_join`, `columns` | `keep`, `absent`, `require_match` | | `between`, `nearest`, `verifications` |
 | `between`, in a named intermediate, `source` or `aggregate` | | `value` | `lower`, `upper` | | | |
 | `nearest`, in a named intermediate | `to` | | `source` | `unit` | | |
 | A named intermediate's derivation written in full | `derivation` | | | `type`, `unconvertible` | | |

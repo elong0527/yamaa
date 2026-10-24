@@ -200,6 +200,7 @@ fn relation(region: RegionId, kind: RelationKind, path: &str, donor: Donor) -> R
         selection: None,
         no_match: None,
         derivations: None,
+        pair_values: None,
         windowed: false,
         scan: Vec::new(),
         named: None,
@@ -1352,6 +1353,7 @@ impl<'p> Builder<'p> {
             IntermediateSource::Input(source) => Donor::Source(cx.source(source + 1)?),
             IntermediateSource::Primary { .. } => Donor::Source(cx.source(0)?),
             IntermediateSource::SelfRows { .. } => Donor::SelfRows,
+            IntermediateSource::Pairs(_) => Donor::Pairs,
         };
         let mut node = relation(
             cx.region,
@@ -1383,6 +1385,13 @@ impl<'p> Builder<'p> {
                 &derived.typed_columns,
             )?;
             node.derivations = Some(region);
+        }
+        // A pair relation's key values are evaluated over its left records
+        // before the pairing (LOOKUP-27).
+        if let Some(values) = item.source.pairs().and_then(|join| join.values.as_ref()) {
+            let region =
+                self.donor_region(&values.plan, values.stored_columns, &values.typed_columns)?;
+            node.pair_values = Some(region);
         }
         // A contextual range value is no value of these rows: binding
         // refuses every row's read of it, and only a donor plan, which rebases

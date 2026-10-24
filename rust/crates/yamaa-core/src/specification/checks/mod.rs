@@ -182,9 +182,14 @@ pub(super) fn keyless(spec: &Spec, owner: &str) -> bool {
 /// The refusal at `path` of a read of the keyless input `dataset` through
 /// its implicit join (`no_applicable_keys`, LOOKUP-5, D111), as binding
 /// reports it ([`crate::reference_binding::JoinedFinding::key_diagnostic`]).
-pub(super) fn undeclared_key(path: &str, dataset: &str) -> BindFinding {
+pub(super) fn undeclared_key(spec: &Spec, path: &str, dataset: &str) -> BindFinding {
     BindFinding::Source(source_expressions::SourceFinding::from_diagnostic(
-        crate::diagnostic::lookup::undeclared_input_key(path, dataset, false),
+        crate::diagnostic::lookup::undeclared_input_key(
+            path,
+            dataset,
+            false,
+            spec.pair_relation(dataset).is_some(),
+        ),
     ))
 }
 
@@ -432,8 +437,14 @@ pub(super) fn donor_read(spec: &Spec, index: usize) -> bool {
 /// Whether `owner` qualifies nothing declared, no input or lookup, so a
 /// field it qualifies binds nothing, whatever any input stores.
 pub(super) fn undeclared(prepared: &PreparedSpecification, owner: &str) -> bool {
-    !prepared.intermediates.contains(owner)
-        && !prepared.sources.iter().any(|input| input.name == owner)
+    !prepared.intermediates.contains(owner) && !reads_as_input(prepared, owner)
+}
+
+/// Whether `name` is read as an input is: a declared input, or a pair
+/// relation, whose records its port holds (LOOKUP-27).
+pub(super) fn reads_as_input(prepared: &PreparedSpecification, name: &str) -> bool {
+    prepared.sources.iter().any(|input| input.name == name)
+        || prepared.tree.spec().pair_relation(name).is_some()
 }
 
 /// The names the filter of the intermediate `item` qualifies by nothing
@@ -476,6 +487,6 @@ pub(super) fn unknown_match_value(
 ) -> bool {
     match name.split_once('.') {
         None => !spec.columns.iter().any(|column| column.name.name == name),
-        Some((owner, _)) => !prepared.sources.iter().any(|input| input.name == owner),
+        Some((owner, _)) => !reads_as_input(prepared, owner),
     }
 }

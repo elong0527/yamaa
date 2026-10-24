@@ -7,14 +7,14 @@ use crate::{
 
 /// One `unique` check of an intermediate (LOOKUP-17).
 #[derive(Debug)]
-struct UniqueDeclaration {
-    path: String,
+pub(super) struct UniqueDeclaration {
+    pub(super) path: String,
     /// Each column as written, with its path.
-    columns: Vec<(String, String)>,
-    identity: Option<String>,
-    severity: crate::dataset::VerificationSeverity,
+    pub(super) columns: Vec<(String, String)>,
+    pub(super) identity: Option<String>,
+    pub(super) severity: crate::dataset::VerificationSeverity,
 }
-type UniqueDeclarations = Vec<UniqueDeclaration>;
+pub(super) type UniqueDeclarations = Vec<UniqueDeclaration>;
 
 /// An intermediate's `unique` check, as its run-report row names it: the
 /// intermediate, the dataset it reads and the columns the check lists
@@ -29,25 +29,27 @@ pub struct IntermediateCheck<'a> {
 }
 
 #[derive(Debug)]
-struct Declaration {
-    name: String,
-    path: String,
+pub(super) struct Declaration {
+    pub(super) name: String,
+    pub(super) path: String,
     /// The intermediate's position among those the specification declares.
-    declared: usize,
+    pub(super) declared: usize,
     source: self_relations::Relation,
     keys: Option<Vec<(String, match_values::Declaration)>>,
-    filter_text: Option<String>,
-    filter: Option<Result<CompiledExpression, CompileError>>,
+    pub(super) filter_text: Option<String>,
+    pub(super) filter: Option<Result<CompiledExpression, CompileError>>,
     order: Vec<(String, bool, bool)>,
     keep: Option<Keep>,
     nearest: Option<NearestDeclaration>,
     no_match: Option<Value>,
     require_match: bool,
     range: Option<lookup_range::Declaration>,
-    columns: Option<Vec<String>>,
-    unique: UniqueDeclarations,
-    derivations: Vec<intermediate_derivations::Derivation>,
+    pub(super) columns: Option<Vec<String>>,
+    pub(super) unique: UniqueDeclarations,
+    pub(super) derivations: Vec<intermediate_derivations::Derivation>,
     driver_prohibited: Vec<String>,
+    /// The sides and key of a pair relation (LOOKUP-27).
+    pub(super) pair: Option<pairs::PairDeclaration>,
     /// The `key` path of a row driver, which declares no key, so a read of it
     /// as a lookup is refused there (LOOKUP-3, ROW-2).
     key_required: Option<String>,
@@ -75,7 +77,11 @@ struct NearestDeclaration {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct Declarations(std::sync::Arc<Vec<Declaration>>, Option<String>);
+/// Each named intermediate, in derivation order; the intermediate whose
+/// derivations read, when there is one; and how many inputs the
+/// specification declares, after which each pair relation's records take
+/// a position (LOOKUP-27).
+pub(super) struct Declarations(std::sync::Arc<Vec<Declaration>>, Option<String>, usize);
 type ResolveRef<'a> = &'a (dyn Fn(&str, &str, &mut Vec<BindFinding>) -> Option<usize> + 'a);
 type FinishedItem = (
     Option<crate::dataset::RelationPredicate>,
@@ -374,6 +380,8 @@ fn bind_one(
     let (schema, source_name) = match item.source {
         self_relations::Relation::Input(index) => (schemas[index], sources[index].name.as_str()),
         self_relations::Relation::SelfRows => (output, "SELF"),
+        // A pair relation binds its two sides ([`pairs::bind`]).
+        self_relations::Relation::Pair => return Err(BindError::Internal),
     };
     let mut pending_schema = None;
     let derivations = intermediate_derivations::bind(
@@ -411,6 +419,7 @@ fn bind_one(
                 self_relations::Relation::SelfRows => {
                     output.columns().get(column).map(|column| column.kind)
                 }
+                self_relations::Relation::Pair => None,
             }
         }
     };
@@ -619,28 +628,30 @@ fn bind_one(
     )?;
     // Range rejection owns its original cause without turning an existing
     // donor field into a second unknown-reference diagnostic.
+    let source = match item.source {
+        self_relations::Relation::Input(index) if index == driver => {
+            crate::dataset::IntermediateSource::Primary {
+                schema: schemas[index].clone(),
+                name: sources[index].name.clone(),
+            }
+        }
+        self_relations::Relation::Input(index) => {
+            crate::dataset::IntermediateSource::Input(if index > driver {
+                index - 1
+            } else {
+                index
+            })
+        }
+        self_relations::Relation::SelfRows => crate::dataset::IntermediateSource::SelfRows {
+            schema: output.clone(),
+            columns: self_columns.unwrap_or(&[]).to_vec(),
+        },
+        self_relations::Relation::Pair => return Err(BindError::Internal),
+    };
     Ok((!failed).then(|| Intermediate {
         identifier: item.name.clone(),
         path: item.path.clone(),
-        source: match item.source {
-            self_relations::Relation::Input(index) if index == driver => {
-                crate::dataset::IntermediateSource::Primary {
-                    schema: schemas[index].clone(),
-                    name: sources[index].name.clone(),
-                }
-            }
-            self_relations::Relation::Input(index) => {
-                crate::dataset::IntermediateSource::Input(if index > driver {
-                    index - 1
-                } else {
-                    index
-                })
-            }
-            self_relations::Relation::SelfRows => crate::dataset::IntermediateSource::SelfRows {
-                schema: output.clone(),
-                columns: self_columns.unwrap_or(&[]).to_vec(),
-            },
-        },
+        source,
         keys: pairs,
         filter,
         selection: item.keep.map(|keep| SourceSelection { order_by, keep }),
@@ -682,7 +693,7 @@ impl Declarations {
         self.0.iter().map(|item| item.name.as_str())
     }
     pub(super) fn for_reader(&self, reader: &str) -> Self {
-        Self(std::sync::Arc::clone(&self.0), Some(reader.into()))
+        Self(std::sync::Arc::clone(&self.0), Some(reader.into()), self.2)
     }
     pub(super) fn reader(&self) -> Option<&str> {
         self.1.as_deref()
@@ -708,14 +719,18 @@ impl Declarations {
             .get(index)
             .is_some_and(|item| matches!(item.source, self_relations::Relation::SelfRows))
     }
+    /// Whether `name` is a named intermediate read as a lookup: every one but
+    /// a pair relation, which is read as an input is (LOOKUP-27).
     pub fn contains(&self, name: &str) -> bool {
-        self.0.iter().any(|item| item.name == name)
+        self.0
+            .iter()
+            .any(|item| item.name == name && item.pair.is_none())
     }
     /// The input a named intermediate reads; a row it drives reads that input's records.
     pub(super) fn input(&self, name: &str) -> Option<usize> {
         match self.0.iter().find(|item| item.name == name)?.source {
-            self_relations::Relation::Input(index) => Some(index),
-            self_relations::Relation::SelfRows => None,
+            self_relations::Relation::Input(index) if index < self.2 => Some(index),
+            _ => None,
         }
     }
     /// Whether `name` selects one record for each row: it declares `keep`
@@ -799,11 +814,13 @@ impl Declarations {
         }
         Ok(())
     }
+    /// The lookup a qualified `name` reads and its field. A pair relation is
+    /// read as an input is, never as a lookup (LOOKUP-27).
     pub fn reference<'a>(&self, name: &'a str) -> Option<(usize, &'a str)> {
         let (relation, field) = name.split_once('.')?;
         self.0
             .iter()
-            .position(|item| item.name == relation)
+            .position(|item| item.name == relation && item.pair.is_none())
             .map(|index| (index, field))
     }
     pub(super) fn match_declaration(
@@ -843,7 +860,9 @@ impl Declarations {
     }
     /// Whether `name` is an intermediate derived before the reading one.
     pub(super) fn earlier_contains(&self, name: &str) -> bool {
-        self.earlier().iter().any(|item| item.name == name)
+        self.earlier()
+            .iter()
+            .any(|item| item.name == name && item.pair.is_none())
     }
     /// Whether `name` is an intermediate derived before the reading one that
     /// selects one record: it declares `keep` or `nearest` (LOOKUP-22).
@@ -901,8 +920,23 @@ impl Declarations {
             Some(IntermediateCheck {
                 intermediate: &item.name,
                 dataset: match item.source {
-                    self_relations::Relation::Input(index) => &sources.get(index)?.name,
+                    self_relations::Relation::Input(index) => match sources.get(index) {
+                        Some(source) => &source.name,
+                        // An intermediate over a pair relation, whose
+                        // records are the relation's (LOOKUP-27).
+                        None => self
+                            .0
+                            .iter()
+                            .find(|pair| {
+                                pair.pair
+                                    .as_ref()
+                                    .is_some_and(|pair| pair.slot == index - sources.len())
+                            })?
+                            .name
+                            .as_str(),
+                    },
                     self_relations::Relation::SelfRows => "SELF",
+                    self_relations::Relation::Pair => &item.name,
                 },
                 columns: check
                     .columns
@@ -945,6 +979,10 @@ impl Declarations {
             return Err(PrepareError::Invalid(findings));
         }
         let calls = project.is_some();
+        result.2 = sources.len();
+        // Each pair relation takes the next position after the inputs, in the
+        // order the intermediates are derived (LOOKUP-27).
+        let mut slots: Vec<&str> = Vec::new();
         for index in derivation_order(spec, calls)? {
             let item = &spec.intermediates[index];
             let path = checks::render(spec, item.meta);
@@ -952,10 +990,17 @@ impl Declarations {
             let range = intermediate_range::prepare(spec, item)?;
             let columns = intermediate_range::prepare_columns(item)?;
             let dataset = item.dataset.name.as_str();
-            let source = if dataset == "SELF" && !spec.rows.templates.is_empty() {
+            let mut pair = None;
+            let source = if item.pairs() {
+                pair = Some(pairs::prepare(spec, item, slots.len(), project, extra)?);
+                slots.push(name);
+                self_relations::Relation::Pair
+            } else if dataset == "SELF" && !spec.rows.templates.is_empty() {
                 self_relations::Relation::SelfRows
             } else if let Some(source) = sources.iter().position(|source| source.name == dataset) {
                 self_relations::Relation::Input(source)
+            } else if let Some(slot) = slots.iter().position(|&slot| slot == dataset) {
+                self_relations::Relation::Input(sources.len() + slot)
             } else {
                 reject(
                     extra,
@@ -964,37 +1009,39 @@ impl Declarations {
                 );
                 continue;
             };
+            // Every key names at most `Limits::KEYS` pairs, a pair relation's
+            // among them, in either form.
+            let written = match &item.key {
+                Some(ast::JoinKey::Columns { columns, meta }) => Some((columns.len(), meta)),
+                Some(ast::JoinKey::Pairs { pairs, meta }) => Some((pairs.len(), meta)),
+                _ => None,
+            };
+            if let Some((count, meta)) =
+                written.filter(|&(count, _)| count > crate::limits::Limits::KEYS)
+            {
+                return Err(PrepareError::limit(
+                    "intermediate_keys",
+                    crate::limits::Limits::KEYS,
+                    Some(count),
+                    Some(&checks::render(spec, *meta)),
+                ));
+            }
+            // A pair relation's key pairs its sides, not a current row's values
+            // ([`pairs::prepare`]).
             let keys = match &item.key {
-                Some(ast::JoinKey::Columns { columns, meta }) => {
-                    if columns.len() > crate::limits::Limits::KEYS {
-                        return Err(PrepareError::limit(
-                            "intermediate_keys",
-                            crate::limits::Limits::KEYS,
-                            Some(columns.len()),
-                            Some(&checks::render(spec, *meta)),
-                        ));
-                    }
-                    Some(
-                        columns
-                            .iter()
-                            .map(|column| {
-                                (
-                                    column.name.clone(),
-                                    match_values::Declaration::Variable(column.name.clone()),
-                                )
-                            })
-                            .collect(),
-                    )
-                }
+                _ if pair.is_some() => None,
+                Some(ast::JoinKey::Columns { columns, .. }) => Some(
+                    columns
+                        .iter()
+                        .map(|column| {
+                            (
+                                column.name.clone(),
+                                match_values::Declaration::Variable(column.name.clone()),
+                            )
+                        })
+                        .collect(),
+                ),
                 Some(ast::JoinKey::Pairs { pairs, meta }) => {
-                    if pairs.len() > crate::limits::Limits::KEYS {
-                        return Err(PrepareError::limit(
-                            "intermediate_keys",
-                            crate::limits::Limits::KEYS,
-                            Some(pairs.len()),
-                            Some(&checks::render(spec, *meta)),
-                        ));
-                    }
                     if pairs.is_empty() {
                         reject(extra, "intermediate_key", checks::render(spec, *meta));
                     }
@@ -1105,6 +1152,7 @@ impl Declarations {
                     unique,
                     derivations,
                     driver_prohibited,
+                    pair,
                     key_required: item
                         .key
                         .is_none()
@@ -1125,7 +1173,7 @@ impl Declarations {
         tree: &types::Tree,
         findings: &mut Vec<BindFinding>,
     ) -> Result<(Vec<SecondarySource>, Vec<Option<Intermediate>>), BindError> {
-        let secondary = sources
+        let mut secondary = sources
             .iter()
             .zip(schemas)
             .enumerate()
@@ -1135,14 +1183,66 @@ impl Declarations {
                 schema: (**schema).clone(),
             })
             .collect::<Vec<_>>();
+        // Each pair relation's records follow the inputs once it binds, read
+        // as an input's by every intermediate derived after it (LOOKUP-27).
+        let mut relations = sources.to_vec();
+        let mut relation_schemas = schemas
+            .iter()
+            .map(|&schema| schema.clone())
+            .collect::<Vec<_>>();
         let mut result = Vec::new();
         for item in self.0.iter() {
+            let schemas = relation_schemas.iter().collect::<Vec<_>>();
+            if let Some(pair) = &item.pair {
+                let (bound, fields) = pairs::bind(
+                    item,
+                    pair,
+                    &pairs::Context {
+                        named: self,
+                        sources: &relations,
+                        inputs: sources.len(),
+                        schemas: &schemas,
+                        driver,
+                        secondary: &secondary,
+                        result: &result,
+                        project,
+                        tree,
+                    },
+                    findings,
+                )?;
+                // A relation that does not bind keeps its position, with no
+                // field; its findings are reported.
+                let fields = match fields {
+                    Some(fields) => fields,
+                    None => TableSchema::new(Vec::new()).map_err(|_| BindError::Internal)?,
+                };
+                relations.push(pairs::pseudo_input(&item.name));
+                relation_schemas.push(fields.clone());
+                secondary.push(SecondarySource {
+                    name: item.name.clone(),
+                    schema: fields,
+                });
+                result.push(bound);
+                continue;
+            }
+            // An intermediate over a pair relation that did not bind reads
+            // nothing; the relation's findings are reported.
+            if let self_relations::Relation::Input(index) = item.source {
+                if index >= sources.len()
+                    && self.0.iter().zip(&result).any(|(other, bound)| {
+                        other.name == relations[index].name && bound.is_none()
+                    })
+                {
+                    result.push(None);
+                    continue;
+                }
+            }
             let bound = bind_one(
                 self,
                 item,
-                sources,
+                &relations,
                 driver,
-                schemas,
+                &schemas,
                 output,
                 self_columns,
                 project,
@@ -1154,6 +1254,10 @@ impl Declarations {
             result.push(bound);
         }
         Ok((secondary, result))
+    }
+    /// The position of the intermediate `name`, a pair relation included.
+    pub(super) fn position(&self, name: &str) -> Option<usize> {
+        self.0.iter().position(|item| item.name == name)
     }
 }
 
@@ -1193,6 +1297,22 @@ fn derivation_order(spec: &ast::Spec, calls: bool) -> Result<Vec<usize>, Prepare
                 };
                 graph[index].push(dependency);
                 sites[index].push((dependency, path.clone()));
+            }
+        }
+        // A pair relation reads the records of the intermediates its sides
+        // name, and an intermediate over a pair relation reads the
+        // relation's records (LOOKUP-27).
+        let relations = match &item.inner_join {
+            Some(right) => vec![&item.dataset, right],
+            None if spec.pair_relation(&item.dataset.name).is_some() => vec![&item.dataset],
+            None => Vec::new(),
+        };
+        for relation in relations {
+            if let Some(&dependency) = indices.get(relation.name.as_str()) {
+                if dependency != index {
+                    graph[index].push(dependency);
+                    sites[index].push((dependency, checks::render(spec, relation.meta)));
+                }
             }
         }
     }
