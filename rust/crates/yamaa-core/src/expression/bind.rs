@@ -6,7 +6,9 @@
 //! Literals are decoded and regular-expression literals compiled once.
 
 use super::syntax::{parse, NodeKind, Parsed, SourceSpan, TemporalKind};
-use super::{CompileError, Construct, Context, Failure, Function, Reducer, Resource};
+use super::{
+    CompileError, Construct, Context, Failure, Function, FunctionResult, Reducer, Resource,
+};
 use crate::portable_regex::{self, Pattern};
 use crate::value::Value;
 
@@ -418,10 +420,21 @@ impl Binder<'_> {
         arguments: &[usize],
         need: Need,
     ) -> Result<(), CompileError> {
-        let function = Function::lookup(self.syntax.slice(name));
-        match function {
-            Some(Function::StrContains) if self.context == Context::Predicate => {
-                if arguments.len() != Function::StrContains.arity() {
+        // An unknown name, or a function its declaration does not admit in
+        // this context, such as str_contains outside a predicate.
+        let Some(function) = Function::lookup(self.syntax.slice(name))
+            .filter(|function| function.contexts().contains(&self.context))
+        else {
+            for &argument in arguments {
+                self.visit(argument, Need::Value)?;
+            }
+            return Err(self.prohibited_function(name, None));
+        };
+        match function.result() {
+            // str_contains, the one truth-valued function: a value and a
+            // pattern literal (FORMULA-8).
+            FunctionResult::Boolean => {
+                if !function.admits(arguments.len()) {
                     for &argument in arguments {
                         self.visit(argument, Need::Value)?;
                     }
@@ -431,21 +444,14 @@ impl Binder<'_> {
                 self.pattern(id, arguments[1])?;
                 self.truth(id, need)
             }
-            Some(function) if function.is_numeric() => {
+            FunctionResult::Numeric => {
                 for &argument in arguments {
                     self.visit(argument, Need::Number)?;
                 }
-                if arguments.len() != function.arity() {
+                if !function.admits(arguments.len()) {
                     return Err(self.prohibited_function(name, Some(arguments.len())));
                 }
                 self.value(id, need)
-            }
-            // An unknown name, or str_contains outside a predicate.
-            _ => {
-                for &argument in arguments {
-                    self.visit(argument, Need::Value)?;
-                }
-                Err(self.prohibited_function(name, None))
             }
         }
     }

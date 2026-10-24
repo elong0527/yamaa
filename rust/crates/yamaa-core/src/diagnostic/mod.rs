@@ -253,6 +253,7 @@ conditions! {
     SqrtOfNegative => ("derivation", "sqrt_of_negative", Some("FORMULA-15")),
     LnOfNonpositive => ("derivation", "ln_of_nonpositive", Some("FORMULA-15")),
     InvalidPower => ("derivation", "invalid_power", Some("FORMULA-15")),
+    InvalidProbability => ("derivation", "invalid_probability", Some("FORMULA-15")),
     ConversionInput => ("convert", "conversion_failed", Some("VALUE-3")),
     ConversionInteger => ("convert", "conversion_failed", Some("VALUE-7")),
     ConversionTemporal => ("convert", "conversion_failed", Some("VALUE-15")),

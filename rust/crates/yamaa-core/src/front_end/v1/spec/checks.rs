@@ -173,11 +173,9 @@ pub fn findings(spec: &Spec) -> Vec<SchemaDiagnostic> {
         // and its later terms break ties (WINDOW-5); the lowering keeps any
         // other declared order as written, for this refusal.
         if let ExprKind::Window(Window {
-            function:
-                WindowFunction::BaselineFlag {
-                    window_order_by, ..
-                },
+            function: WindowFunction::BaselineFlag { .. },
             order_by,
+            window_order_by,
             ..
         }) = &expr.kind
         {

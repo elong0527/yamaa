@@ -70,6 +70,114 @@ mod execution {
                 case.label
             );
         }
+        /// Seams the replay cannot express: the original build route, an
+        /// absent output table, the save's return value and unchanged primary
+        /// bytes. Their authored contracts live beside the original fixtures.
+        #[test]
+        fn refused_case_predicate_domains_have_no_output_and_fail_saves() {
+            use std::collections::BTreeSet;
+
+            use crate::support::diagnostic::{operations, replay};
+            use yamaa_core::json::Value;
+
+            fn primary_bytes(path: &std::path::Path, label: &str) -> Option<Vec<u8>> {
+                match fs::read(path) {
+                    Ok(bytes) => Some(bytes),
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+                    Err(error) => panic!("{label}: reading {}: {error}", path.display()),
+                }
+            }
+
+            let contracts = yamaa_adapters::json_wire::decode(include_str!(
+                "fixtures/case_predicate_refusals.json"
+            ))
+            .unwrap();
+            replay::closed(&contracts, &["about", "cases"]);
+            let contracts = replay::field(&contracts, "cases").as_object().unwrap();
+            assert!(!contracts.is_empty(), "the family has authored refusals");
+
+            let cases = replay::cases()
+                .into_iter()
+                .filter(|case| {
+                    case.label.starts_with("declarative_case_predicates.json::")
+                        && !case.issues.is_empty()
+                        && case
+                            .operations
+                            .iter()
+                            .any(|operation| matches!(operation.as_str(), "build" | "save"))
+                })
+                .collect::<Vec<_>>();
+            let name = |label: &str| {
+                label
+                    .strip_prefix("declarative_case_predicates.json::")
+                    .unwrap()
+                    .to_owned()
+            };
+            assert_eq!(
+                cases
+                    .iter()
+                    .map(|case| name(&case.label))
+                    .collect::<BTreeSet<_>>(),
+                contracts.keys().cloned().collect::<BTreeSet<_>>(),
+                "every authored refusal has exactly one API contract"
+            );
+            for case in cases {
+                let expected = &contracts[&name(&case.label)];
+                replay::closed(expected, &["route", "primary", "before"]);
+                let route = replay::text(replay::field(expected, "route"));
+                assert!(
+                    matches!(route, "domain" | "refused" | "either"),
+                    "{}: unknown route {route}",
+                    case.label
+                );
+                let fixture = Fixture(operations::study(&case.input));
+                let primary = fixture
+                    .0
+                    .join(replay::text(replay::field(expected, "primary")));
+                let before = match replay::field(expected, "before") {
+                    Value::Null => None,
+                    Value::String(text) => Some(text.as_bytes().to_vec()),
+                    other => panic!(
+                        "{}: expected initial primary bytes or null, not {other:?}",
+                        case.label
+                    ),
+                };
+                assert_eq!(
+                    primary_bytes(&primary, &case.label),
+                    before,
+                    "{}: authored initial primary state",
+                    case.label
+                );
+                let body = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
+                let built = fixture.run(&body);
+                let actual_route = if built.is_ok() { "domain" } else { "refused" };
+                assert!(
+                    route == "either" || route == actual_route,
+                    "{}: expected {route}, got {actual_route}",
+                    case.label
+                );
+                let after_build = primary_bytes(&primary, &case.label);
+                match built {
+                    Ok(mut result) => {
+                        let has_output = result.output().is_some();
+                        let save_failed =
+                            matches!(result.save(), Err(file_application::FailedBuild));
+                        let after_save = primary_bytes(&primary, &case.label);
+                        assert_eq!(
+                            (has_output, save_failed, after_build, after_save),
+                            (false, true, before.clone(), before),
+                            "{}: a refused domain exposes no output, fails its save and preserves its primary",
+                            case.label
+                        );
+                    }
+                    Err(_) => assert_eq!(
+                        after_build, before,
+                        "{}: preparation preserves its primary",
+                        case.label
+                    ),
+                }
+            }
+        }
         /// A seam the replay cannot reach: these benchmarks' own files, run
         /// by `support::benchmarks::reproduce`. They pin case predicates and
         /// filtered sources in the bytes they save.

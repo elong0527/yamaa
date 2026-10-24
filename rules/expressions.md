@@ -66,7 +66,7 @@ in `derivation` or `handled_expression_class.value`, is not restricted by
 this rule. That text and fields typed `string_template` and
 `aggregate_expression` are leaves whose identifiers their own rules resolve.
 
-Evidence: `schema-expressions`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs::the_reference_may_be_a_literal_or_an_expression_over_the_current_row`.
+Evidence: `schema-expressions`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json::a_literal_nearest_reference_checks_clean`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json::a_literal_nearest_reference_is_the_same_for_every_ecg`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json::an_expression_nearest_reference_checks_clean`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json::an_expression_nearest_reference_reads_the_current_row`.
 
 `case` selects among expressions, a key match value computes the operand it
 matches, and a nearest selection's `to`, read as a key match value is,
@@ -92,7 +92,7 @@ expression's type is one type. Key matching, intermediate fields and drivers,
 aggregate derivations, range bounds, operand checks, extremes and column
 conversion all read that type.
 
-Evidence: `rust/crates/yamaa-core/src/ast/types.rs::verbs_fix_or_set_their_result_type`, `rust/crates/yamaa-core/src/specification/types/tests.rs::numeric_and_aggregate_result_types_follow_their_operands`, `rust/crates/yamaa-core/src/specification/types/tests.rs::declared_types_follow_each_inputs_type_authority`, `rust/crates/yamaa-core/tests/relations_aggregate_compiler.rs::key_expressions_compare_by_their_one_result_type_before_matching`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs::a_driving_intermediate_exposes_each_derived_field_as_its_one_result_type`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::a_driving_intermediate_field_whose_type_is_decided_per_value_has_no_layout`, `rust/crates/yamaa-adapters/tests/project_run.rs::callback_derived_fields_expose_their_declared_result_type_to_row_drivers`, `rust/crates/yamaa-adapters/tests/intermediate_result_kinds.rs::nullif_over_an_int_and_a_float_is_refused_as_integer_days_when_bound`.
+Evidence: `rust/crates/yamaa-core/src/ast/types.rs::verbs_fix_or_set_their_result_type`, `rust/crates/yamaa-core/src/specification/types/tests.rs::numeric_and_aggregate_result_types_follow_their_operands`, `rust/crates/yamaa-core/src/specification/types/tests.rs::declared_types_follow_each_inputs_type_authority`, `rust/crates/yamaa-core/tests/relations_aggregate_compiler.rs::key_expressions_compare_by_their_one_result_type_before_matching`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs::a_driving_intermediate_exposes_each_derived_field_as_its_one_result_type`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::a_driving_intermediate_field_whose_type_is_decided_per_value_has_no_layout`, `rust/crates/yamaa-adapters/tests/project_run.rs::callback_derived_fields_expose_their_declared_result_type_to_row_drivers`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/completed_intermediates.json::nullif_over_an_int_and_a_float_checks_clean_as_integer_days`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/completed_intermediates.json::nullif_over_an_int_and_a_float_is_refused_as_integer_days_when_bound`.
 
 | Expression | Class | Result type |
 | --- | --- | --- |

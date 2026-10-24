@@ -49,7 +49,10 @@
         "specification": "spec.yaml"
       },
       "compares": ["condition", "spec_paths", "context"],
-      "issues": [{"condition": "unknown_field", "spec_paths": ["columns.RND1.derivation.round_half_away_from_zero.source"], "context": {"identifier": "OTHER.VAL1"}}]
+      "issues": [{"condition": "unknown_field", "spec_paths": ["columns.RND1.derivation.round_half_away_from_zero.source"], "context": {"identifier": "OTHER.VAL1"}}],
+      "report": {
+        "check": [["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"]]
+      }
     },
     {
       "case": "a_driver_qualified_rounding_source_checks_clean",

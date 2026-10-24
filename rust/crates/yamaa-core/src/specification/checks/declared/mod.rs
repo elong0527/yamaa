@@ -39,6 +39,7 @@ use crate::diagnostic::{
     lookup::{self, Owner},
     ConditionCode as C, Diagnostic,
 };
+use crate::expression_table::Verb;
 use crate::reference_scope::Phase;
 use crate::result_type::ResultType;
 use crate::scalar_verb::{CheckTyping, Operation, Read};
@@ -196,9 +197,9 @@ pub(in crate::specification) fn key_record(
         .into_iter()
         .filter_map(|e| match &spec.expr(e).kind {
             ExprKind::Aggregate(aggregate) => {
-                Some(("aggregate", e, reduces_output(spec, aggregate)))
+                Some((Verb::Aggregate.name(), e, reduces_output(spec, aggregate)))
             }
-            ExprKind::Odm(_) => Some(("odm", e, false)),
+            ExprKind::Odm(_) => Some((Verb::Odm.name(), e, false)),
             _ => None,
         })
         .collect::<Vec<_>>();

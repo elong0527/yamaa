@@ -1,0 +1,1472 @@
+{
+  "about": "Completed intermediates and the scalar kinds of untyped intermediate derivations (LOOKUP-5, LOOKUP-7, LOOKUP-9, LOOKUP-15 to LOOKUP-18, FORMULA-5, TIME-14, VALUE-10, COLUMN-14). An intermediate no column reads still runs its checks and derivations; an earlier intermediate's key or filter reads the record of the donor that reads it; a SELF intermediate's derivations read completed rows; a range, or an aggregate's range, reads a qualified value only where that value's input drives the reading row or donor record; a case branch counts the handlers of the reads it selects; and an untyped selector, choice, alias or key keeps its date, number or unknown kind for the reads after it, which check and build judge alike. Moved from execution_completed_intermediates.rs, which keeps its benchmark reads and the reader of completed_lookup_assertions.json, and from intermediate_result_kinds.rs. A case whose test projected each issue to its phase, condition, rule, spec paths and context names those in compares, and a case whose test read some fields of each issue names those. Where a test read only a prefix or the first of an issue's spec paths, the whole list is derived: an overflow in the unread intermediate's derivation NEXT is at that derivation's path alone, as lookup_matched_derivations.json states for SHIFTED, and each correlated unique refusal has the one path that negative-unique-correlated-filter and negative-unique-correlated-derivation state. A check case writes the specification alone, since a check reads no study input, as the kinds tests checked before writing ex.csv. A test that checked and built one specification is a check case and a build or save case, or one case of both operations where both report the same issues, as for the refusal of a first template's read, which its test required before the run. A handler ledger is the report's handler rows at SPEC_PATH, NAME and COUNT (CHECK-23, CHECK-24), the spec_path, handler and count its test compared. The documents are the specifications several cases edit: kinds writes the derivation EXENDT as DERIVATION, which each case replaces, kinds_anchored also compares EXENDT with the date ANCHOR and writes TRTEDT as text, and kinds_shift shifts EXSTDT by the days SELECTED derives, SELECTED written as DERIVATION.",
+  "documents": {
+    "earlier_later": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: EARLIER\n    dataset: SRC\n    key: {ID: DONOR.NEWKEY}\n  - id: LATER\n    dataset: DONOR\n    key: {KEY: ID}\n    derivations:\n      NEWKEY: KEY\n      LOOKED_UP: EARLIER.VAL\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: LATER.LOOKED_UP}\n",
+    "foreign_key": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID]}\nintermediates:\n  - id: P\n    dataset: SRC\n    key: {ID: DONOR.KEY}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n",
+    "self": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, STAGE]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}}\noutput: {path: out.csv, columns: [ID, STAGE, VALUE]}\nintermediates:\n  - id: P\n    dataset: SELF\n    key: [ID]\n    derivations:\n      TWICE: 'SELF.VALUE * 2'\n      PLUS: 'TWICE + 1'\n    order_by: [SELF.STAGE]\n    keep: last\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: STAGE, type: int}\n  - {name: VALUE, type: int}\nrows:\n  - id: first\n    derivations: {STAGE: 1, VALUE: SRC.VAL}\n  - id: second\n    derivations: {STAGE: 2, VALUE: P.PLUS}\n  - id: third\n    derivations: {STAGE: 3, VALUE: P.PLUS}\n",
+    "last_dose": "yamaa: \"1.0\"\ntype: spec\ndomain: ADPC\nkeys: [USUBJID, PCSEQ]\nbase: PC\ninput:\n  PC: {path: pc.csv, types: {PCSEQ: int, PCDTC: datetime}}\n  EX: {path: ex.csv, types: {EXSTDTC: datetime}}\n  DM: dm.csv\nintermediates:\n  - id: LAST_DOSE\n    dataset: EX\n    key: [USUBJID]\n    between: {value: ADTM, lower: EXSTDTC}\n    order_by: [EX.EXSTDTC]\n    keep: last\n  - id: SUBJ\n    dataset: DM\n    key: [USUBJID]\n    derivations:\n      SEXL: {str_case: {source: SEX, to: lower}}\ncolumns:\n  - {name: USUBJID, type: str, derivation: PC.USUBJID}\n  - {name: PCSEQ, type: int, derivation: PC.PCSEQ}\n  - {name: ADTM, type: datetime, derivation: PC.PCDTC}\n  - {name: LDOSEDTM, type: datetime, derivation: LAST_DOSE.EXSTDTC}\n  - {name: X, type: str, derivation: SUBJ.SEXL}\noutput: {path: out.csv, columns: [USUBJID, PCSEQ, ADTM, LDOSEDTM, X]}\n",
+    "last_dose_reader": "yamaa: \"1.0\"\ntype: spec\ndomain: ADPC\nkeys: [USUBJID, PCSEQ]\nbase: PC\ninput:\n  PC: {path: pc.csv, types: {PCSEQ: int, PCDTC: datetime}}\n  EX: {path: ex.csv, types: {EXSTDTC: datetime}}\n  DM: dm.csv\nintermediates:\n  - id: LAST_DOSE\n    dataset: EX\n    key: [USUBJID]\n    between: {value: ADTM, lower: EXSTDTC}\n    order_by: [EX.EXSTDTC]\n    keep: last\n  - id: SUBJ\n    dataset: DM\n    key: [USUBJID]\n    derivations:\n      LD: LAST_DOSE.EXSTDTC\ncolumns:\n  - {name: USUBJID, type: str, derivation: PC.USUBJID}\n  - {name: PCSEQ, type: int, derivation: PC.PCSEQ}\n  - {name: ADTM, type: datetime, derivation: PC.PCDTC}\n  - {name: LDOSEDTM, type: datetime, derivation: LAST_DOSE.EXSTDTC}\n  - {name: X, type: datetime, derivation: SUBJ.LD}\noutput: {path: out.csv, columns: [USUBJID, PCSEQ, ADTM, LDOSEDTM, X]}\n",
+    "dose_pc": "USUBJID,PCSEQ,PCDTC\nS1,1,2030-01-01T09:00:00\nS1,2,2030-01-02T09:00:00\nS2,1,2030-01-01T10:00:00\n",
+    "dose_ex": "USUBJID,EXTRT,EXSTDTC\nS1,DRUG A,2030-01-01T07:00:00\nS1,DRUG B,2030-01-02T07:00:00\nS2,DRUG A,2030-01-01T07:30:00\n",
+    "dose_dm": "USUBJID,SEX\nS1,F\nS2,M\n",
+    "dose_dm_timed": "USUBJID,SEX,ADTM\nS1,F,2030-01-02T09:00:00\nS2,M,2030-01-01T10:00:00\n",
+    "qualified_range": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\ninput:\n  SUBJ: {path: subj.csv, types: {SUBJDAY: int}}\n  REF: {path: ref.csv, types: {REFDAY: int}}\n  WIN: {path: win.csv, types: {LO: int, HI: int}}\n  EVT: {path: evt.csv, key: [USUBJID], types: {EVDAY: int}}\nkeys: [USUBJID]\nbase: SUBJ\noutput: {path: out.csv, columns: [USUBJID, WINDOW]}\nintermediates:\n  - id: W\n    dataset: WIN\n    key: [USUBJID]\n    between: {value: REF.REFDAY, lower: LO, upper: HI}\n    order_by: [WIN.LO]\n    keep: first\ncolumns:\n  - {name: USUBJID, type: str, derivation: SUBJ.USUBJID}\n  - {name: WINDOW, type: str, derivation: W.NAME}\n",
+    "qualified_range_rows": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\ninput:\n  SUBJ: {path: subj.csv, types: {SUBJDAY: int}}\n  REF: {path: ref.csv, types: {REFDAY: int}}\n  WIN: {path: win.csv, types: {LO: int, HI: int}}\n  EVT: {path: evt.csv, key: [USUBJID], types: {EVDAY: int}}\nkeys: [USUBJID, ORIGIN]\noutput: {path: out.csv, columns: [USUBJID, ORIGIN, WINDOW]}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: ORIGIN, type: str}\n  - {name: WINDOW, type: str}\nrows:\n  - id: subj\n    dataset: SUBJ\n    derivations: {USUBJID: SUBJ.USUBJID, ORIGIN: \"'SUBJ'\", WINDOW: \"'NONE'\"}\n  - id: ref\n    dataset: REF\n    derivations: {USUBJID: REF.USUBJID, ORIGIN: \"'REF'\", WINDOW: W.NAME}\nintermediates:\n  - id: W\n    dataset: WIN\n    key: [USUBJID]\n    between: {value: REF.REFDAY, lower: LO, upper: HI}\n    order_by: [WIN.LO]\n    keep: first\n",
+    "aggregate_range": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\ninput:\n  SUBJ: {path: subj.csv, types: {SUBJDAY: int}}\n  REF: {path: ref.csv, key: [USUBJID], types: {REFDAY: int}}\n  WIN: {path: win.csv, types: {LO: int, HI: int}}\n  EVT: {path: evt.csv, key: [USUBJID], types: {EVDAY: int}}\nkeys: [USUBJID]\nbase: SUBJ\noutput: {path: out.csv, columns: [USUBJID, N]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: SUBJ.USUBJID}\n  - {name: RDAY, type: int, derivation: REF.REFDAY}\n  - {name: N, type: int, derivation: {aggregate: {between: {value: REF.REFDAY, upper: EVDAY}, expr: 'COUNT(EVT.*)'}}}\n",
+    "aggregate_range_rows": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\ninput:\n  SUBJ: {path: subj.csv, types: {SUBJDAY: int}}\n  REF: {path: ref.csv, key: [USUBJID], types: {REFDAY: int}}\n  WIN: {path: win.csv, types: {LO: int, HI: int}}\n  EVT: {path: evt.csv, key: [USUBJID], types: {EVDAY: int}}\nkeys: [USUBJID, ORIGIN]\noutput: {path: out.csv, columns: [USUBJID, ORIGIN, N]}\ncolumns:\n  - {name: USUBJID, type: str}\n  - {name: ORIGIN, type: str}\n  - {name: N, type: int, derivation: {aggregate: {between: {value: SUBJ.SUBJDAY, upper: EVDAY}, expr: 'COUNT(EVT.*)'}}}\nrows:\n  - id: subj\n    dataset: SUBJ\n    derivations: {USUBJID: SUBJ.USUBJID, ORIGIN: \"'SUBJ'\"}\n  - id: ref\n    dataset: REF\n    derivations: {USUBJID: REF.USUBJID, ORIGIN: \"'REF'\"}\n",
+    "range_subj": "USUBJID,SUBJDAY\nS1,5\nS2,50\n",
+    "range_ref": "USUBJID,REFDAY\nS2,5\nS1,50\n",
+    "range_win": "USUBJID,NAME,LO,HI\nS1,EARLY,1,10\nS1,LATE,11,100\nS2,EARLY,1,10\nS2,LATE,11,100\n",
+    "range_evt": "USUBJID,EVDAY\nS1,3\nS2,3\n",
+    "aggregate_evt": "USUBJID,EVDAY\nS1,3\nS1,10\nS1,60\nS2,3\nS2,10\nS2,60\n",
+    "kinds": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {EX: ex.csv}\nbase: EX\noutput: {path: out.csv, columns: [USUBJID, TRTSDT, TRTEDT]}\nintermediates:\n  - id: EXP\n    dataset: EX\n    key: [USUBJID]\n    derivations:\n      EXSTDT: {to_date: {source: EXSTDTC}}\n      EXENDT0: {to_date: {source: EXENDTC}}\n      EXENDT: DERIVATION\n    filter: 'EX.EXENDT >= EX.EXSTDT'\ncolumns:\n  - {name: USUBJID, type: str, derivation: EX.USUBJID}\n  - {name: TRTSDT, type: date, derivation: EXP.EXSTDT}\n  - {name: TRTEDT, type: date, derivation: EXP.EXENDT}\n",
+    "kinds_ex": "USUBJID,EXSTDTC,EXENDTC\nS01,2024-01-01,2024-01-10\nS02,2024-01-05,\nS03,2024-01-03,2024-01-02\n",
+    "kinds_anchored": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {EX: ex.csv}\nbase: EX\noutput: {path: out.csv, columns: [USUBJID, TRTSDT, TRTEDT]}\nintermediates:\n  - id: EXP\n    dataset: EX\n    key: [USUBJID]\n    derivations:\n      EXSTDT: {to_date: {source: EXSTDTC}}\n      EXENDT0: {to_date: {source: EXENDTC}}\n      ANCHOR: {to_date: {source: REFDTC}}\n      EXENDT: DERIVATION\n    filter: 'EX.EXENDT >= EX.ANCHOR'\ncolumns:\n  - {name: USUBJID, type: str, derivation: EX.USUBJID}\n  - {name: TRTSDT, type: date, derivation: EXP.EXSTDT}\n  - {name: TRTEDT, type: str, derivation: EXP.EXENDT}\n",
+    "kinds_shift": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {EX: {path: ex.csv, types: {EXINT: int, EXFLOAT: float}}}\nbase: EX\noutput: {path: out.csv, columns: [USUBJID, TRTSDT, TRTEDT]}\nintermediates:\n  - id: EXP\n    dataset: EX\n    key: [USUBJID]\n    derivations:\n      EXSTDT: {to_date: {source: EXSTDTC}}\n      EXENDT0: {to_date: {source: EXENDTC}}\n      SELECTED: DERIVATION\n      EXENDT: {shift: {type: date, source: EXSTDT, days: SELECTED}}\n    filter: 'EX.EXENDT >= EX.EXSTDT'\ncolumns:\n  - {name: USUBJID, type: str, derivation: EX.USUBJID}\n  - {name: TRTSDT, type: date, derivation: EXP.EXSTDT}\n  - {name: TRTEDT, type: date, derivation: EXP.EXENDT}\n",
+    "nullif": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {EX: {path: ex.csv, types: {EXINT: int, EXFLOAT: float}}}\nbase: EX\noutput: {path: out.csv, columns: [USUBJID, VALUE]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: EX.USUBJID}\n  - {name: EXINT, type: int, derivation: EX.EXINT}\n  - {name: EXFLOAT, type: float, derivation: EX.EXFLOAT}\n  - {name: VALUE, type: str, derivation: 'NULLIF(EXINT, EXFLOAT)'}\n",
+    "nested": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [USUBJID]\ninput: {EX: ex.csv}\nbase: EX\noutput: {path: out.csv, columns: [USUBJID, SELECTED]}\nintermediates:\n  - id: DATES\n    dataset: EX\n    derivations:\n      DATE: {to_date: {source: EXENDTC}}\n    key: {DATE: EX.CHOICE}\n  - id: RESULT\n    dataset: EX\n    key: [USUBJID]\n    derivations:\n      DATE: {to_date: {source: EXSTDTC}}\n      CHOICE: {first_available: {sources: [DATE], missing: 17}}\n      SELECTED: DATES.DATE\ncolumns:\n  - {name: USUBJID, type: str, derivation: EX.USUBJID}\n  - {name: SELECTED, type: date, derivation: RESULT.SELECTED}\n"
+  },
+  "cases": [
+    {
+      "case": "unused_unique_checks_are_eager_and_retain_all_failed_declarations",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int}}, DONOR: {path: donor.csv, types: {ID: int, X: int}}}\noutput: {path: out.csv, columns: [ID]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    verifications:\n      - unique: {columns: [ID], id: donor-id}\n      - unique: [X]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n",
+          "source.csv": "ID\n1\n",
+          "donor.csv": "ID,X\n1,2\n1,2\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "verification", "condition": "duplicate_intermediate_records", "rule": "LOOKUP-17", "spec_paths": ["intermediates.P.verifications[0].unique"], "context": {"intermediate": "P", "dataset": "DONOR", "columns": ["ID"], "duplicate_count": 1, "verification_id": "donor-id"}},
+        {"phase": "verification", "condition": "duplicate_intermediate_records", "rule": "LOOKUP-17", "spec_paths": ["intermediates.P.verifications[1].unique"], "context": {"intermediate": "P", "dataset": "DONOR", "columns": ["X"], "duplicate_count": 1}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "unused_donor_derivation_failure_is_not_hidden_by_an_unread_lookup",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int}}, DONOR: {path: donor.csv, types: {ID: int, X: int}}}\noutput: {path: out.csv, columns: [ID]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    derivations: {NEXT: 'X + 1'}\n    verifications: [{unique: [ID]}]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n",
+          "source.csv": "ID\n1\n",
+          "donor.csv": "ID,X\n1,9223372036854775807\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "integer_overflow", "spec_paths": ["intermediates.P.derivations.NEXT"]}],
+      "saved": {}
+    },
+    {
+      "case": "current_row_correlation_cannot_turn_a_unique_check_into_a_lazy_check",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int}}, DONOR: {path: donor.csv, types: {ID: int, X: int}}}\noutput: {path: out.csv, columns: [ID]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    filter: 'DONOR.X > SRC.ID'\n    derivations: {NEXT: 'X + SRC.ID'}\n    verifications: [{unique: [ID]}]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n",
+          "source.csv": "ID\n1\n",
+          "donor.csv": "ID,X\n1,2\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [
+        {"condition": "correlated_filter_with_unique_verification", "spec_paths": ["intermediates.P.verifications[0].unique"]},
+        {"condition": "correlated_derivation_with_unique_verification", "spec_paths": ["intermediates.P.verifications[0].unique"]}
+      ]
+    },
+    {
+      "case": "an_earlier_selector_key_uses_the_later_donor_current_record_owner",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: EARLIER\n    dataset: SRC\n    key: {ID: DONOR.KEY}\n  - id: LATER\n    dataset: DONOR\n    key: {KEY: ID}\n    derivations: {LOOKED_UP: EARLIER.VAL}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: LATER.LOOKED_UP}\n",
+          "source.csv": "ID,VAL\n1,100\n2,200\n",
+          "donor.csv": "KEY\n2\n1\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,VALUE\n1,100\n2,200\n"}
+    },
+    {
+      "case": "a_retained_foreign_key_is_valid_while_no_template_reads_it",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "foreign_key"}, "source.csv": "ID\n1\n", "donor.csv": "KEY\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID\n1\n"}
+    },
+    {
+      "case": "a_retained_foreign_key_read_in_the_wrong_current_scope_is_refused",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "foreign_key",
+            "edits": [
+              {"from": "columns: [ID]", "to": "columns: [ID, VALUE]"},
+              {"from": "  - {name: ID, type: int, derivation: SRC.ID}\n", "to": "  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: P.ID}\n"}
+            ]
+          },
+          "source.csv": "ID\n1\n",
+          "donor.csv": "KEY\n2\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["intermediates.P.key"], "context": {"identifier": "DONOR.KEY", "intermediate": "P"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_foreign_row_driver_owns_its_qualified_selector_keys",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: SRC\n    key: {ID: DONOR.KEY}\ncolumns:\n  - {name: ID, type: int}\n  - {name: VALUE, type: int}\nrows:\n  - id: donor\n    dataset: DONOR\n    derivations: {ID: DONOR.KEY, VALUE: P.VAL}\n",
+          "source.csv": "ID,VAL\n1,100\n2,200\n",
+          "donor.csv": "KEY\n2\n1\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,VALUE\n2,200\n1,100\n"}
+    },
+    {
+      "case": "an_earlier_selectors_filter_uses_the_reading_donor_current_fields",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int, MIN: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: EARLIER\n    dataset: SRC\n    key: {ID: DONOR.KEY}\n    filter: 'SRC.VAL > DONOR.MIN'\n    absent: -1\n  - id: LATER\n    dataset: DONOR\n    key: {KEY: ID}\n    derivations: {LOOKED_UP: EARLIER.VAL}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: LATER.LOOKED_UP}\n",
+          "source.csv": "ID,VAL\n1,100\n2,200\n",
+          "donor.csv": "KEY,MIN\n2,50\n1,150\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,VALUE\n1,-1\n2,200\n"}
+    },
+    {
+      "case": "named_match_keys_bind_an_earlier_derived_field_of_the_reading_donor",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "earlier_later"}, "source.csv": "ID,VAL\n1,100\n2,200\n", "donor.csv": "KEY\n2\n1\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,VALUE\n1,100\n2,200\n"}
+    },
+    {
+      "case": "a_contextual_key_rejects_a_field_its_donor_derives_later",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "earlier_later", "edits": [{"from": "      NEWKEY: KEY\n      LOOKED_UP: EARLIER.VAL", "to": "      LOOKED_UP: EARLIER.VAL\n      NEWKEY: KEY"}]},
+          "source.csv": "ID,VAL\n1,100\n",
+          "donor.csv": "KEY\n2\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-16", "spec_paths": ["intermediates.LATER.derivations.LOOKED_UP.source"], "context": {"identifier": "DONOR.NEWKEY", "intermediate": "LATER", "read": "EARLIER"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_contextual_key_rejects_a_field_its_donor_lacks",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "earlier_later", "edits": [{"from": "ID: DONOR.NEWKEY", "to": "ID: DONOR.ABSENT"}]},
+          "source.csv": "ID,VAL\n1,100\n",
+          "donor.csv": "KEY\n2\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-16", "spec_paths": ["intermediates.LATER.derivations.LOOKED_UP.source"], "context": {"identifier": "DONOR.ABSENT", "intermediate": "LATER", "read": "EARLIER"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_contextual_key_rejects_a_field_of_another_owner",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "earlier_later", "edits": [{"from": "ID: DONOR.NEWKEY", "to": "ID: WRONG.NEWKEY"}]},
+          "source.csv": "ID,VAL\n1,100\n",
+          "donor.csv": "KEY\n2\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-16", "spec_paths": ["intermediates.LATER.derivations.LOOKED_UP.source"], "context": {"identifier": "WRONG.NEWKEY", "intermediate": "LATER", "read": "EARLIER"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_contextual_key_rejects_a_known_field_of_another_type",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "earlier_later", "edits": [{"from": "NEWKEY: KEY", "to": "NEWKEY: \"'wrong-type'\""}]},
+          "source.csv": "ID,VAL\n1,100\n",
+          "donor.csv": "KEY\n2\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["intermediates.EARLIER.key"], "context": {"intermediate": "EARLIER", "source": "DONOR.NEWKEY", "expected": "str", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "self_derivations_read_completed_rows_and_publish_each_template_snapshot",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "self"}, "source.csv": "ID,VAL\n1,10\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,STAGE,VALUE\n1,1,10\n1,2,21\n1,3,43\n"}
+    },
+    {
+      "case": "a_self_derivation_rejects_a_later_qualified_derivation",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "self", "edits": [{"from": "SELF.VALUE * 2", "to": "SELF.PLUS"}]}, "source.csv": "ID,VAL\n1,10\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.TWICE.source"], "context": {"intermediate": "P", "identifier": "SELF.PLUS"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_self_derivation_rejects_a_later_derivation",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "self", "edits": [{"from": "SELF.VALUE * 2", "to": "PLUS"}]}, "source.csv": "ID,VAL\n1,10\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.TWICE.source"], "context": {"intermediate": "P", "identifier": "PLUS"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_self_derivation_rejects_an_unknown_qualified_field",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "self", "edits": [{"from": "SELF.VALUE * 2", "to": "SELF.ABSENT"}]}, "source.csv": "ID,VAL\n1,10\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.TWICE.source"], "context": {"intermediate": "P", "identifier": "SELF.ABSENT"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_self_derivation_rejects_an_unknown_field",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "self", "edits": [{"from": "SELF.VALUE * 2", "to": "ABSENT"}]}, "source.csv": "ID,VAL\n1,10\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.TWICE.source"], "context": {"intermediate": "P", "identifier": "ABSENT"}}],
+      "saved": {}
+    },
+    {
+      "case": "self_derivations_cannot_shadow_completed_stored_fields",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "self", "edits": [{"from": "TWICE:", "to": "VALUE:"}, {"from": "TWICE + 1", "to": "VALUE + 1"}]}, "source.csv": "ID,VAL\n1,10\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "duplicate_derivation", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.VALUE"], "context": {"intermediate": "P", "derivation": "VALUE", "identifier": "SELF.VALUE"}}],
+      "saved": {}
+    },
+    {
+      "case": "self_derived_unique_checks_are_eager_after_a_completed_template",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "self",
+            "edits": [
+              {"from": "    key: [ID]", "to": "    key: [ID]\n    verifications: [{unique: [TWICE]}]"},
+              {"from": "{STAGE: 2, VALUE: P.PLUS}", "to": "{STAGE: 2, VALUE: '9223372036854775807 + 1'}"},
+              {"from": "{STAGE: 3, VALUE: P.PLUS}", "to": "{STAGE: 3, VALUE: '9223372036854775807 + 1'}"}
+            ]
+          },
+          "source.csv": "ID,VAL\n1,10\n2,10\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "verification", "condition": "duplicate_intermediate_records", "rule": "LOOKUP-17", "spec_paths": ["intermediates.P.verifications[0].unique"], "context": {"intermediate": "P", "dataset": "SELF", "columns": ["TWICE"], "duplicate_count": 1}}],
+      "saved": {}
+    },
+    {
+      "case": "a_first_template_cannot_read_a_self_derived_field_from_future_rows",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "self", "edits": [{"from": "VALUE: SRC.VAL", "to": "VALUE: P.PLUS"}]}, "source.csv": "ID,VAL\n1,10\n"}, "specification": "spec.yaml"},
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "phase_boundary", "spec_paths": ["rows.first.derivations.VALUE.source"]}]
+    },
+    {
+      "case": "a_self_donor_derived_key_can_read_an_input_backed_selector",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "self",
+            "edits": [
+              {"from": "  - id: P", "to": "  - id: INPUT\n    dataset: SRC\n    key: {ID: SELF.NEWKEY}\n  - id: P"},
+              {"from": "      TWICE: 'SELF.VALUE * 2'", "to": "      NEWKEY: ID\n      TWICE: 'INPUT.VAL * 2'"}
+            ]
+          },
+          "source.csv": "ID,VAL\n1,10\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,STAGE,VALUE\n1,1,10\n1,2,21\n1,3,21\n"}
+    },
+    {
+      "case": "a_range_before_another_intermediates_derivations_reads_the_row",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "last_dose"}, "pc.csv": {"base": "dose_pc"}, "ex.csv": {"base": "dose_ex"}, "dm.csv": {"base": "dose_dm"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,PCSEQ,ADTM,LDOSEDTM,X\nS1,1,2030-01-01T09:00:00,2030-01-01T07:00:00,f\nS1,2,2030-01-02T09:00:00,2030-01-02T07:00:00,f\nS2,1,2030-01-01T10:00:00,2030-01-01T07:30:00,m\n"}
+    },
+    {
+      "case": "a_range_after_another_intermediates_derivations_reads_the_row",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "last_dose",
+            "edits": [
+              {"from": "    keep: last\n  - id: SUBJ\n    dataset: DM\n    key: [USUBJID]\n    derivations:\n      SEXL: {str_case: {source: SEX, to: lower}}\n", "to": "    keep: last\n"},
+              {"from": "intermediates:\n", "to": "intermediates:\n  - id: SUBJ\n    dataset: DM\n    key: [USUBJID]\n    derivations:\n      SEXL: {str_case: {source: SEX, to: lower}}\n"}
+            ]
+          },
+          "pc.csv": {"base": "dose_pc"},
+          "ex.csv": {"base": "dose_ex"},
+          "dm.csv": {"base": "dose_dm"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,PCSEQ,ADTM,LDOSEDTM,X\nS1,1,2030-01-01T09:00:00,2030-01-01T07:00:00,f\nS1,2,2030-01-02T09:00:00,2030-01-02T07:00:00,f\nS2,1,2030-01-01T10:00:00,2030-01-01T07:30:00,m\n"}
+    },
+    {
+      "case": "a_qualified_range_value_beside_another_intermediates_derivations_reads_the_row",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "last_dose", "edits": [{"from": "value: ADTM", "to": "value: PC.PCDTC"}]},
+          "pc.csv": {"base": "dose_pc"},
+          "ex.csv": {"base": "dose_ex"},
+          "dm.csv": {"base": "dose_dm"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,PCSEQ,ADTM,LDOSEDTM,X\nS1,1,2030-01-01T09:00:00,2030-01-01T07:00:00,f\nS1,2,2030-01-02T09:00:00,2030-01-02T07:00:00,f\nS2,1,2030-01-01T10:00:00,2030-01-01T07:30:00,m\n"}
+    },
+    {
+      "case": "a_range_beside_an_intermediate_that_derives_nothing_reads_the_row",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "last_dose",
+            "edits": [
+              {"from": "    key: [USUBJID]\n    derivations:\n      SEXL: {str_case: {source: SEX, to: lower}}\n", "to": "    key: [USUBJID]\n"},
+              {"from": "SUBJ.SEXL", "to": "SUBJ.SEX"}
+            ]
+          },
+          "pc.csv": {"base": "dose_pc"},
+          "ex.csv": {"base": "dose_ex"},
+          "dm.csv": {"base": "dose_dm"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,PCSEQ,ADTM,LDOSEDTM,X\nS1,1,2030-01-01T09:00:00,2030-01-01T07:00:00,F\nS1,2,2030-01-02T09:00:00,2030-01-02T07:00:00,F\nS2,1,2030-01-01T10:00:00,2030-01-01T07:30:00,M\n"}
+    },
+    {
+      "case": "a_range_before_another_ranges_derivations_reads_the_row",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "last_dose",
+            "edits": [
+              {"from": "  - id: SUBJ\n    dataset: DM\n    key: [USUBJID]\n    derivations:\n      SEXL: {str_case: {source: SEX, to: lower}}\n", "to": "  - id: LAST_TRT\n    dataset: EX\n    key: [USUBJID]\n    between: {value: ADTM, lower: EXSTDTC}\n    derivations:\n      TRT: EX.EXTRT\n    order_by: [EX.EXSTDTC]\n    keep: last\n"},
+              {"from": "SUBJ.SEXL", "to": "LAST_TRT.TRT"}
+            ]
+          },
+          "pc.csv": {"base": "dose_pc"},
+          "ex.csv": {"base": "dose_ex"},
+          "dm.csv": {"base": "dose_dm"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,PCSEQ,ADTM,LDOSEDTM,X\nS1,1,2030-01-01T09:00:00,2030-01-01T07:00:00,DRUG A\nS1,2,2030-01-02T09:00:00,2030-01-02T07:00:00,DRUG B\nS2,1,2030-01-01T10:00:00,2030-01-01T07:30:00,DRUG A\n"}
+    },
+    {
+      "case": "a_range_after_another_ranges_derivations_reads_the_row",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "last_dose",
+            "edits": [
+              {"from": "  - id: SUBJ\n    dataset: DM\n    key: [USUBJID]\n    derivations:\n      SEXL: {str_case: {source: SEX, to: lower}}\n", "to": ""},
+              {"from": "intermediates:\n", "to": "intermediates:\n  - id: LAST_TRT\n    dataset: EX\n    key: [USUBJID]\n    between: {value: ADTM, lower: EXSTDTC}\n    derivations:\n      TRT: EX.EXTRT\n    order_by: [EX.EXSTDTC]\n    keep: last\n"},
+              {"from": "SUBJ.SEXL", "to": "LAST_TRT.TRT"}
+            ]
+          },
+          "pc.csv": {"base": "dose_pc"},
+          "ex.csv": {"base": "dose_ex"},
+          "dm.csv": {"base": "dose_dm"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,PCSEQ,ADTM,LDOSEDTM,X\nS1,1,2030-01-01T09:00:00,2030-01-01T07:00:00,DRUG A\nS1,2,2030-01-02T09:00:00,2030-01-02T07:00:00,DRUG B\nS2,1,2030-01-01T10:00:00,2030-01-01T07:30:00,DRUG A\n"}
+    },
+    {
+      "case": "a_donor_read_of_a_range_refuses_a_value_only_the_row_carries",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "last_dose_reader"}, "pc.csv": {"base": "dose_pc"}, "ex.csv": {"base": "dose_ex"}, "dm.csv": {"base": "dose_dm"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-16", "spec_paths": ["intermediates.SUBJ.derivations.LD.source"], "context": {"intermediate": "SUBJ", "identifier": "ADTM", "read": "LAST_DOSE"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_donor_read_of_a_range_takes_the_value_the_donor_carries",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "last_dose_reader", "edits": [{"from": "DM: dm.csv", "to": "DM: {path: dm.csv, types: {ADTM: datetime}}"}]},
+          "pc.csv": {"base": "dose_pc"},
+          "ex.csv": {"base": "dose_ex"},
+          "dm.csv": {"base": "dose_dm_timed"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,PCSEQ,ADTM,LDOSEDTM,X\nS1,1,2030-01-01T09:00:00,2030-01-01T07:00:00,2030-01-02T07:00:00\nS1,2,2030-01-02T09:00:00,2030-01-02T07:00:00,2030-01-02T07:00:00\nS2,1,2030-01-01T10:00:00,2030-01-01T07:30:00,2030-01-01T07:30:00\n"}
+    },
+    {
+      "case": "a_range_value_two_reads_away_refuses_a_name_its_donor_lacks",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "last_dose_reader",
+            "edits": [
+              {"from": "    keep: last\n  - id: SUBJ\n", "to": "    keep: last\n  - id: SECOND\n    dataset: EX\n    key: [USUBJID]\n    between: {value: LAST_DOSE.EXSTDTC, lower: EXSTDTC}\n    order_by: [EX.EXSTDTC]\n    keep: last\n  - id: SUBJ\n"},
+              {"from": "LD: LAST_DOSE.EXSTDTC", "to": "LD: SECOND.EXSTDTC"}
+            ]
+          },
+          "pc.csv": {"base": "dose_pc"},
+          "ex.csv": {"base": "dose_ex"},
+          "dm.csv": {"base": "dose_dm"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-16", "spec_paths": ["intermediates.SUBJ.derivations.LD.source"], "context": {"intermediate": "SUBJ", "identifier": "ADTM", "read": "SECOND"}}]
+    },
+    {
+      "case": "a_range_value_two_reads_away_takes_the_value_the_donor_carries",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "last_dose_reader",
+            "edits": [
+              {"from": "    keep: last\n  - id: SUBJ\n", "to": "    keep: last\n  - id: SECOND\n    dataset: EX\n    key: [USUBJID]\n    between: {value: LAST_DOSE.EXSTDTC, lower: EXSTDTC}\n    order_by: [EX.EXSTDTC]\n    keep: last\n  - id: SUBJ\n"},
+              {"from": "LD: LAST_DOSE.EXSTDTC", "to": "LD: SECOND.EXSTDTC"},
+              {"from": "DM: dm.csv", "to": "DM: {path: dm.csv, types: {ADTM: datetime}}"}
+            ]
+          },
+          "pc.csv": {"base": "dose_pc"},
+          "ex.csv": {"base": "dose_ex"},
+          "dm.csv": {"base": "dose_dm_timed"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,PCSEQ,ADTM,LDOSEDTM,X\nS1,1,2030-01-01T09:00:00,2030-01-01T07:00:00,2030-01-02T07:00:00\nS1,2,2030-01-02T09:00:00,2030-01-02T07:00:00,2030-01-02T07:00:00\nS2,1,2030-01-01T10:00:00,2030-01-01T07:30:00,2030-01-01T07:30:00\n"}
+    },
+    {
+      "case": "a_qualified_range_value_read_from_the_base_drivers_rows_is_refused",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "qualified_range"}, "subj.csv": {"base": "range_subj"}, "ref.csv": {"base": "range_ref"}, "win.csv": {"base": "range_win"}, "evt.csv": {"base": "range_evt"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["intermediates.W.between.value"], "context": {"intermediate": "W", "identifier": "REF.REFDAY"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_qualified_range_value_read_through_another_ranges_value_is_refused",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "qualified_range",
+            "edits": [
+              {"from": "value: REF.REFDAY", "to": "value: W2.LO"},
+              {"from": "intermediates:\n", "to": "intermediates:\n  - id: W2\n    dataset: WIN\n    key: [USUBJID]\n    between: {value: REF.REFDAY, lower: LO, upper: HI}\n    order_by: [WIN.LO]\n    keep: first\n"}
+            ]
+          },
+          "subj.csv": {"base": "range_subj"},
+          "ref.csv": {"base": "range_ref"},
+          "win.csv": {"base": "range_win"},
+          "evt.csv": {"base": "range_evt"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["intermediates.W2.between.value"], "context": {"intermediate": "W2", "identifier": "REF.REFDAY"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_qualified_range_value_read_from_an_aggregates_derive_step_is_refused",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "qualified_range", "edits": [{"from": "{name: WINDOW, type: str, derivation: W.NAME}", "to": "{name: WINDOW, type: int, derivation: {aggregate: {key: [USUBJID], derivations: {DAY: {type: int, derivation: EVT.EVDAY}, LOW: {type: int, derivation: W.LO}}, expr: 'MAX(LOW)'}}}"}]},
+          "subj.csv": {"base": "range_subj"},
+          "ref.csv": {"base": "range_ref"},
+          "win.csv": {"base": "range_win"},
+          "evt.csv": {"base": "range_evt"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["intermediates.W.between.value"], "context": {"intermediate": "W", "identifier": "REF.REFDAY"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_qualified_range_value_read_through_an_aggregates_range_is_refused",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "qualified_range", "edits": [{"from": "{name: WINDOW, type: str, derivation: W.NAME}", "to": "{name: WINDOW, type: int, derivation: {aggregate: {between: {value: W.LO, lower: EVDAY}, expr: 'COUNT(EVT.EVDAY)'}}}"}]},
+          "subj.csv": {"base": "range_subj"},
+          "ref.csv": {"base": "range_ref"},
+          "win.csv": {"base": "range_win"},
+          "evt.csv": {"base": "range_evt"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["intermediates.W.between.value"], "context": {"intermediate": "W", "identifier": "REF.REFDAY"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_donor_record_of_the_qualifying_input_supplies_the_range_value",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "qualified_range",
+            "edits": [
+              {"from": "derivation: W.NAME}", "to": "derivation: R.WINNAME}"},
+              {"from": "    keep: first\n", "to": "    keep: first\n  - id: R\n    dataset: REF\n    key: [USUBJID]\n    derivations: {WINNAME: W.NAME}\n"}
+            ]
+          },
+          "subj.csv": {"base": "range_subj"},
+          "ref.csv": {"base": "range_ref"},
+          "win.csv": {"base": "range_win"},
+          "evt.csv": {"base": "range_evt"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,WINDOW\nS1,LATE\nS2,EARLY\n"}
+    },
+    {
+      "case": "the_row_template_the_qualifying_input_drives_supplies_the_range_value",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "qualified_range_rows"}, "subj.csv": {"base": "range_subj"}, "ref.csv": {"base": "range_ref"}, "win.csv": {"base": "range_win"}, "evt.csv": {"base": "range_evt"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,ORIGIN,WINDOW\nS1,SUBJ,NONE\nS2,SUBJ,NONE\nS2,REF,EARLY\nS1,REF,LATE\n"}
+    },
+    {
+      "case": "the_row_template_the_qualifying_input_drives_supplies_a_correlated_filter",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "qualified_range_rows", "edits": [{"from": "between: {value: REF.REFDAY, lower: LO, upper: HI}", "to": "filter: 'WIN.LO <= REF.REFDAY AND REF.REFDAY <= WIN.HI'"}]},
+          "subj.csv": {"base": "range_subj"},
+          "ref.csv": {"base": "range_ref"},
+          "win.csv": {"base": "range_win"},
+          "evt.csv": {"base": "range_evt"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,ORIGIN,WINDOW\nS1,SUBJ,NONE\nS2,SUBJ,NONE\nS2,REF,EARLY\nS1,REF,LATE\n"}
+    },
+    {
+      "case": "an_aggregate_range_value_read_from_the_base_drivers_rows_is_refused",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "aggregate_range"}, "subj.csv": {"base": "range_subj"}, "ref.csv": {"base": "range_ref"}, "win.csv": {"base": "range_win"}, "evt.csv": {"base": "aggregate_evt"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["columns.N.derivation.aggregate.between.value"], "context": {"identifier": "REF.REFDAY"}}]
+    },
+    {
+      "case": "an_aggregate_range_value_in_a_case_alternative_is_refused",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "aggregate_range", "edits": [{"from": "{aggregate: {between: {value: REF.REFDAY, upper: EVDAY}, expr: 'COUNT(EVT.*)'}}", "to": "{case: [{when: 'USUBJID IS NOT NULL', then: {aggregate: {between: {value: REF.REFDAY, upper: EVDAY}, expr: 'COUNT(EVT.*)'}}}, {otherwise: null}]}"}]},
+          "subj.csv": {"base": "range_subj"},
+          "ref.csv": {"base": "range_ref"},
+          "win.csv": {"base": "range_win"},
+          "evt.csv": {"base": "aggregate_evt"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["columns.N.derivation.case[0].then.aggregate.between.value"], "context": {"identifier": "REF.REFDAY"}}]
+    },
+    {
+      "case": "an_output_row_reduction_refuses_its_range_rather_than_its_value",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "aggregate_range", "edits": [{"from": "{aggregate: {between: {value: REF.REFDAY, upper: EVDAY}, expr: 'COUNT(EVT.*)'}}", "to": "{aggregate: {group_by: [USUBJID], between: {value: REF.REFDAY, upper: RDAY}, expr: 'MAX(RDAY)'}}"}]},
+          "subj.csv": {"base": "range_subj"},
+          "ref.csv": {"base": "range_ref"},
+          "win.csv": {"base": "range_win"},
+          "evt.csv": {"base": "aggregate_evt"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_aggregate_context", "rule": "LOOKUP-18", "spec_paths": ["columns.N.derivation.aggregate.between"], "context": {"expr": "MAX(RDAY)", "reason": "between narrows a qualified right side only"}}]
+    },
+    {
+      "case": "an_aggregate_range_value_of_the_base_drivers_record_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "aggregate_range", "edits": [{"from": "value: REF.REFDAY", "to": "value: SUBJ.SUBJDAY"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "an_aggregate_range_value_of_the_base_drivers_record_counts_later_events",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "aggregate_range", "edits": [{"from": "value: REF.REFDAY", "to": "value: SUBJ.SUBJDAY"}]},
+          "subj.csv": {"base": "range_subj"},
+          "ref.csv": {"base": "range_ref"},
+          "win.csv": {"base": "range_win"},
+          "evt.csv": {"base": "aggregate_evt"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,N\nS1,2\nS2,1\n"}
+    },
+    {
+      "case": "an_aggregate_range_value_of_a_row_column_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "aggregate_range", "edits": [{"from": "value: REF.REFDAY", "to": "value: RDAY"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "an_aggregate_range_value_of_a_row_column_counts_later_events",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "aggregate_range", "edits": [{"from": "value: REF.REFDAY", "to": "value: RDAY"}]},
+          "subj.csv": {"base": "range_subj"},
+          "ref.csv": {"base": "range_ref"},
+          "win.csv": {"base": "range_win"},
+          "evt.csv": {"base": "aggregate_evt"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,N\nS1,1\nS2,2\n"}
+    },
+    {
+      "case": "an_aggregate_range_value_through_an_intermediate_is_refused_at_the_intermediate",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "aggregate_range",
+            "edits": [
+              {"from": "value: REF.REFDAY", "to": "value: W.LO"},
+              {"from": "keys: [USUBJID]\n", "to": "intermediates:\n  - id: W\n    dataset: WIN\n    key: [USUBJID]\n    between: {value: REF.REFDAY, lower: LO, upper: HI}\n    order_by: [WIN.LO]\n    keep: first\nkeys: [USUBJID]\n"}
+            ]
+          },
+          "subj.csv": {"base": "range_subj"},
+          "ref.csv": {"base": "range_ref"},
+          "win.csv": {"base": "range_win"},
+          "evt.csv": {"base": "aggregate_evt"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["intermediates.W.between.value"], "context": {"intermediate": "W", "identifier": "REF.REFDAY"}}],
+      "saved": {}
+    },
+    {
+      "case": "an_aggregate_range_value_of_the_first_of_two_template_drivers_is_refused",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "aggregate_range_rows"}, "subj.csv": {"base": "range_subj"}, "ref.csv": {"base": "range_ref"}, "win.csv": {"base": "range_win"}, "evt.csv": {"base": "aggregate_evt"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["columns.N.derivation.aggregate.between.value"], "context": {"identifier": "SUBJ.SUBJDAY"}}]
+    },
+    {
+      "case": "an_aggregate_range_value_of_the_second_of_two_template_drivers_is_refused",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "aggregate_range_rows", "edits": [{"from": "value: SUBJ.SUBJDAY", "to": "value: REF.REFDAY"}]},
+          "subj.csv": {"base": "range_subj"},
+          "ref.csv": {"base": "range_ref"},
+          "win.csv": {"base": "range_win"},
+          "evt.csv": {"base": "aggregate_evt"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["columns.N.derivation.aggregate.between.value"], "context": {"identifier": "REF.REFDAY"}}]
+    },
+    {
+      "case": "an_aggregate_range_value_of_the_one_template_driver_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "aggregate_range_rows", "edits": [{"from": "  - id: ref\n    dataset: REF\n    derivations: {USUBJID: REF.USUBJID, ORIGIN: \"'REF'\"}\n", "to": ""}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "an_aggregate_range_value_of_the_one_template_driver_counts_later_events",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "aggregate_range_rows", "edits": [{"from": "  - id: ref\n    dataset: REF\n    derivations: {USUBJID: REF.USUBJID, ORIGIN: \"'REF'\"}\n", "to": ""}]},
+          "subj.csv": {"base": "range_subj"},
+          "ref.csv": {"base": "range_ref"},
+          "win.csv": {"base": "range_win"},
+          "evt.csv": {"base": "aggregate_evt"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,ORIGIN,N\nS1,SUBJ,2\nS2,SUBJ,1\n"}
+    },
+    {
+      "case": "selected_case_fields_share_kept_donors_and_unselected_branches_have_no_handlers",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {ID: int}}\n  DONOR: {path: donor.csv, types: {ID: int, SEQ: int}}\noutput: {path: result.csv, columns: [ID, A, B]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SELECT, type: str, derivation: SRC.SELECT}\n  - name: A\n    type: str\n    derivation:\n      case:\n        - when: \"SELECT = 'Y'\"\n          then: P.A\n        - otherwise: \"'skip'\"\n  - name: B\n    type: str\n    derivation:\n      case:\n        - when: \"SELECT = 'Y'\"\n          then: P.B\n        - otherwise: \"'skip'\"\n",
+          "src.csv": "ID,SELECT\n1,Y\n2,N\n3,Y\n",
+          "donor.csv": "ID,SEQ,A,B\n1,1,first,\n1,2,second,present\n2,1,hidden,hidden\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.A.derivation.case[0].then.source.multiple_matches", "multiple_matches", 1],
+          ["columns.A.derivation.case[0].then.source.absent", "absent", 1],
+          ["columns.B.derivation.case[0].then.source.multiple_matches", "multiple_matches", 1],
+          ["columns.B.derivation.case[0].then.source.absent", "absent", 1]
+        ]
+      },
+      "saved": {"result.csv": "ID,A,B\n1,first,\n2,skip,skip\n3,,\n"}
+    },
+    {
+      "case": "an_untyped_first_available_of_dates_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "kinds", "edits": [{"from": "DERIVATION", "to": "{first_available: {sources: [EXENDT0, EXSTDT]}}"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "an_untyped_first_available_of_dates_selects_a_date",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "kinds", "edits": [{"from": "DERIVATION", "to": "{first_available: {sources: [EXENDT0, EXSTDT]}}"}]}, "ex.csv": {"base": "kinds_ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT\nS01,2024-01-01,2024-01-10\nS02,2024-01-05,2024-01-05\nS03,,\n"}
+    },
+    {
+      "case": "a_typed_first_available_of_dates_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "kinds", "edits": [{"from": "DERIVATION", "to": "{type: date, derivation: {first_available: {sources: [EXENDT0, EXSTDT]}}}"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_typed_first_available_of_dates_selects_a_date",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "kinds", "edits": [{"from": "DERIVATION", "to": "{type: date, derivation: {first_available: {sources: [EXENDT0, EXSTDT]}}}"}]}, "ex.csv": {"base": "kinds_ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT\nS01,2024-01-01,2024-01-10\nS02,2024-01-05,2024-01-05\nS03,,\n"}
+    },
+    {
+      "case": "an_untyped_greatest_of_dates_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "kinds", "edits": [{"from": "DERIVATION", "to": "{greatest: {sources: [EXENDT0, EXSTDT]}}"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "an_untyped_greatest_of_dates_selects_a_date",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "kinds", "edits": [{"from": "DERIVATION", "to": "{greatest: {sources: [EXENDT0, EXSTDT]}}"}]}, "ex.csv": {"base": "kinds_ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT\nS01,2024-01-01,2024-01-10\nS02,2024-01-05,2024-01-05\nS03,2024-01-03,2024-01-03\n"}
+    },
+    {
+      "case": "a_typed_greatest_of_dates_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "kinds", "edits": [{"from": "DERIVATION", "to": "{type: date, derivation: {greatest: {sources: [EXENDT0, EXSTDT]}}}"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_typed_greatest_of_dates_selects_a_date",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "kinds", "edits": [{"from": "DERIVATION", "to": "{type: date, derivation: {greatest: {sources: [EXENDT0, EXSTDT]}}}"}]}, "ex.csv": {"base": "kinds_ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT\nS01,2024-01-01,2024-01-10\nS02,2024-01-05,2024-01-05\nS03,2024-01-03,2024-01-03\n"}
+    },
+    {
+      "case": "an_untyped_least_of_dates_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "kinds", "edits": [{"from": "DERIVATION", "to": "{least: {sources: [EXENDT0, EXSTDT]}}"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "an_untyped_least_of_dates_selects_a_date",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "kinds", "edits": [{"from": "DERIVATION", "to": "{least: {sources: [EXENDT0, EXSTDT]}}"}]}, "ex.csv": {"base": "kinds_ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT\nS01,2024-01-01,2024-01-01\nS02,2024-01-05,2024-01-05\nS03,,\n"}
+    },
+    {
+      "case": "a_typed_least_of_dates_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "kinds", "edits": [{"from": "DERIVATION", "to": "{type: date, derivation: {least: {sources: [EXENDT0, EXSTDT]}}}"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_typed_least_of_dates_selects_a_date",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "kinds", "edits": [{"from": "DERIVATION", "to": "{type: date, derivation: {least: {sources: [EXENDT0, EXSTDT]}}}"}]}, "ex.csv": {"base": "kinds_ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT\nS01,2024-01-01,2024-01-01\nS02,2024-01-05,2024-01-05\nS03,,\n"}
+    },
+    {
+      "case": "a_first_available_kind_checks_clean_in_later_source_objects",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "kinds", "edits": [{"from": "EXENDT: DERIVATION", "to": "EXCHOICE: {first_available: {sources: [EX.EXENDT0, EX.EXSTDT]}}\n      EXENDT: {first_available: {sources: [{variable: EX.EXCHOICE, filter: 'EX.EXSTDT IS NOT NULL'}, EX.EXSTDT], missing: null}}"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_first_available_kind_flows_to_later_source_objects",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "kinds", "edits": [{"from": "EXENDT: DERIVATION", "to": "EXCHOICE: {first_available: {sources: [EX.EXENDT0, EX.EXSTDT]}}\n      EXENDT: {first_available: {sources: [{variable: EX.EXCHOICE, filter: 'EX.EXSTDT IS NOT NULL'}, EX.EXSTDT], missing: null}}"}]}, "ex.csv": {"base": "kinds_ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT\nS01,2024-01-01,2024-01-10\nS02,2024-01-05,2024-01-05\nS03,,\n"}
+    },
+    {
+      "case": "a_greatest_kind_checks_clean_in_later_source_objects",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "kinds", "edits": [{"from": "EXENDT: DERIVATION", "to": "EXCHOICE: {greatest: {sources: [EX.EXENDT0, EX.EXSTDT]}}\n      EXENDT: {first_available: {sources: [{variable: EX.EXCHOICE, filter: 'EX.EXSTDT IS NOT NULL'}, EX.EXSTDT], missing: null}}"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_greatest_kind_flows_to_later_source_objects",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "kinds", "edits": [{"from": "EXENDT: DERIVATION", "to": "EXCHOICE: {greatest: {sources: [EX.EXENDT0, EX.EXSTDT]}}\n      EXENDT: {first_available: {sources: [{variable: EX.EXCHOICE, filter: 'EX.EXSTDT IS NOT NULL'}, EX.EXSTDT], missing: null}}"}]}, "ex.csv": {"base": "kinds_ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT\nS01,2024-01-01,2024-01-10\nS02,2024-01-05,2024-01-05\nS03,2024-01-03,2024-01-03\n"}
+    },
+    {
+      "case": "a_least_kind_checks_clean_in_later_source_objects",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "kinds", "edits": [{"from": "EXENDT: DERIVATION", "to": "EXCHOICE: {least: {sources: [EX.EXENDT0, EX.EXSTDT]}}\n      EXENDT: {first_available: {sources: [{variable: EX.EXCHOICE, filter: 'EX.EXSTDT IS NOT NULL'}, EX.EXSTDT], missing: null}}"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_least_kind_flows_to_later_source_objects",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "kinds", "edits": [{"from": "EXENDT: DERIVATION", "to": "EXCHOICE: {least: {sources: [EX.EXENDT0, EX.EXSTDT]}}\n      EXENDT: {first_available: {sources: [{variable: EX.EXCHOICE, filter: 'EX.EXSTDT IS NOT NULL'}, EX.EXSTDT], missing: null}}"}]}, "ex.csv": {"base": "kinds_ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT\nS01,2024-01-01,2024-01-01\nS02,2024-01-05,2024-01-05\nS03,,\n"}
+    },
+    {
+      "case": "first_available_without_sources_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "kinds",
+            "edits": [
+              {"from": "DERIVATION", "to": "{first_available: {sources: [], missing: 17}}"},
+              {"from": "EX.EXENDT >= EX.EXSTDT", "to": "EX.EXENDT >= 17"},
+              {"from": "type: date, derivation: EXP.EXENDT", "to": "type: int, derivation: EXP.EXENDT"}
+            ]
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "first_available_infers_the_declared_missing_result_without_sources",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "kinds",
+            "edits": [
+              {"from": "DERIVATION", "to": "{first_available: {sources: [], missing: 17}}"},
+              {"from": "EX.EXENDT >= EX.EXSTDT", "to": "EX.EXENDT >= 17"},
+              {"from": "type: date, derivation: EXP.EXENDT", "to": "type: int, derivation: EXP.EXENDT"}
+            ]
+          },
+          "ex.csv": {"base": "kinds_ex"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT\nS01,2024-01-01,17\nS02,2024-01-05,17\nS03,2024-01-03,17\n"}
+    },
+    {
+      "case": "a_first_available_date_choice_refuses_a_text_filter_operand",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "kinds", "edits": [{"from": "DERIVATION", "to": "{first_available: {sources: [EXENDT0, EXSTDT]}}"}, {"from": "filter: 'EX.EXENDT >= EX.EXSTDT'", "to": "filter: \"EX.EXENDT >= 'not a date'\""}]},
+          "ex.csv": {"base": "kinds_ex"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "incompatible_input_type", "rule": "FORMULA-5", "spec_paths": ["intermediates.EXP.filter"], "context": {"actual": "str", "left_type": "date", "right_type": "str"}}]
+    },
+    {
+      "case": "a_greatest_date_choice_refuses_a_text_filter_operand",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "kinds", "edits": [{"from": "DERIVATION", "to": "{greatest: {sources: [EXENDT0, EXSTDT]}}"}, {"from": "filter: 'EX.EXENDT >= EX.EXSTDT'", "to": "filter: \"EX.EXENDT >= 'not a date'\""}]},
+          "ex.csv": {"base": "kinds_ex"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "incompatible_input_type", "rule": "FORMULA-5", "spec_paths": ["intermediates.EXP.filter"], "context": {"actual": "str", "left_type": "date", "right_type": "str"}}]
+    },
+    {
+      "case": "a_least_date_choice_refuses_a_text_filter_operand",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "kinds", "edits": [{"from": "DERIVATION", "to": "{least: {sources: [EXENDT0, EXSTDT]}}"}, {"from": "filter: 'EX.EXENDT >= EX.EXSTDT'", "to": "filter: \"EX.EXENDT >= 'not a date'\""}]},
+          "ex.csv": {"base": "kinds_ex"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "incompatible_input_type", "rule": "FORMULA-5", "spec_paths": ["intermediates.EXP.filter"], "context": {"actual": "str", "left_type": "date", "right_type": "str"}}]
+    },
+    {
+      "case": "an_unknown_first_available_choice_checks_clean_beside_a_date",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "kinds_anchored", "edits": [{"from": "DERIVATION", "to": "{first_available: {sources: [EXENDT0, EXSTDT], missing: 17}}"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "an_unknown_first_available_choice_compares_the_actual_date",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "kinds_anchored", "edits": [{"from": "DERIVATION", "to": "{first_available: {sources: [EXENDT0, EXSTDT], missing: 17}}"}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,2024-01-01,2024-01-10,2024-01-01\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT\nS01,2024-01-01,2024-01-10\n"}
+    },
+    {
+      "case": "an_unknown_first_available_choice_reports_the_actual_integer",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "kinds_anchored", "edits": [{"from": "DERIVATION", "to": "{first_available: {sources: [EXENDT0, EXSTDT], missing: 17}}"}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,,,2024-01-01\n"}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5", "spec_paths": ["intermediates.EXP.filter"], "context": {"actual": "date", "left_type": "int", "right_type": "date"}, "operand_route": []}]
+    },
+    {
+      "case": "an_unknown_case_choice_checks_clean_beside_a_date",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "kinds_anchored", "edits": [{"from": "DERIVATION", "to": "{case: [{when: 'EX.EXENDT0 IS NOT NULL', then: EXENDT0}, {otherwise: 17}]}"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "an_unknown_case_choice_compares_the_actual_date",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "kinds_anchored", "edits": [{"from": "DERIVATION", "to": "{case: [{when: 'EX.EXENDT0 IS NOT NULL', then: EXENDT0}, {otherwise: 17}]}"}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,2024-01-01,2024-01-10,2024-01-01\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT\nS01,2024-01-01,2024-01-10\n"}
+    },
+    {
+      "case": "an_unknown_case_choice_reports_the_actual_integer",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "kinds_anchored", "edits": [{"from": "DERIVATION", "to": "{case: [{when: 'EX.EXENDT0 IS NOT NULL', then: EXENDT0}, {otherwise: 17}]}"}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,,,2024-01-01\n"}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5", "spec_paths": ["intermediates.EXP.filter"], "context": {"actual": "date", "left_type": "int", "right_type": "date"}, "operand_route": []}]
+    },
+    {
+      "case": "a_first_available_numeric_choice_checks_clean_as_integer_days",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "kinds_shift", "edits": [{"from": "DERIVATION", "to": "{first_available: {sources: [EXINT, EXFLOAT]}}"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_first_available_numeric_choice_shifts_by_a_selected_integer",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "kinds_shift", "edits": [{"from": "DERIVATION", "to": "{first_available: {sources: [EXINT, EXFLOAT]}}"}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC,EXINT,EXFLOAT\nS01,2024-01-01,,1,1.0\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT\nS01,2024-01-01,2024-01-02\n"}
+    },
+    {
+      "case": "a_first_available_numeric_choice_refuses_a_selected_float_as_days",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "kinds_shift", "edits": [{"from": "DERIVATION", "to": "{first_available: {sources: [EXINT, EXFLOAT]}}"}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC,EXINT,EXFLOAT\nS01,2024-01-01,,,1.0\n"}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-14", "spec_paths": ["intermediates.EXP.derivations.EXENDT.shift.days"], "context": {"source": "SELECTED", "expected": "int", "actual": "float"}}]
+    },
+    {
+      "case": "a_greatest_numeric_choice_checks_clean_as_integer_days",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "kinds_shift", "edits": [{"from": "DERIVATION", "to": "{greatest: {sources: [EXINT, EXFLOAT]}}"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_greatest_numeric_choice_shifts_by_a_selected_integer",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "kinds_shift", "edits": [{"from": "DERIVATION", "to": "{greatest: {sources: [EXINT, EXFLOAT]}}"}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC,EXINT,EXFLOAT\nS01,2024-01-01,,1,1.0\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT\nS01,2024-01-01,2024-01-02\n"}
+    },
+    {
+      "case": "a_greatest_numeric_choice_refuses_a_selected_float_as_days",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "kinds_shift", "edits": [{"from": "DERIVATION", "to": "{greatest: {sources: [EXINT, EXFLOAT]}}"}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC,EXINT,EXFLOAT\nS01,2024-01-01,,,1.0\n"}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-14", "spec_paths": ["intermediates.EXP.derivations.EXENDT.shift.days"], "context": {"source": "SELECTED", "expected": "int", "actual": "float"}}]
+    },
+    {
+      "case": "a_least_numeric_choice_checks_clean_as_integer_days",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "kinds_shift", "edits": [{"from": "DERIVATION", "to": "{least: {sources: [EXINT, EXFLOAT]}}"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_least_numeric_choice_shifts_by_a_selected_integer",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "kinds_shift", "edits": [{"from": "DERIVATION", "to": "{least: {sources: [EXINT, EXFLOAT]}}"}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC,EXINT,EXFLOAT\nS01,2024-01-01,,1,1.0\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT\nS01,2024-01-01,2024-01-02\n"}
+    },
+    {
+      "case": "a_least_numeric_choice_refuses_a_selected_float_as_days",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "kinds_shift", "edits": [{"from": "DERIVATION", "to": "{least: {sources: [EXINT, EXFLOAT]}}"}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC,EXINT,EXFLOAT\nS01,2024-01-01,,,1.0\n"}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-14", "spec_paths": ["intermediates.EXP.derivations.EXENDT.shift.days"], "context": {"source": "SELECTED", "expected": "int", "actual": "float"}}]
+    },
+    {
+      "case": "a_case_numeric_choice_checks_clean_as_integer_days",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "kinds_shift", "edits": [{"from": "DERIVATION", "to": "{case: [{when: 'EX.EXINT IS NOT NULL', then: EXINT}, {otherwise: EXFLOAT}]}"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_case_numeric_choice_shifts_by_a_selected_integer",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "kinds_shift", "edits": [{"from": "DERIVATION", "to": "{case: [{when: 'EX.EXINT IS NOT NULL', then: EXINT}, {otherwise: EXFLOAT}]}"}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC,EXINT,EXFLOAT\nS01,2024-01-01,,1,1.0\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT\nS01,2024-01-01,2024-01-02\n"}
+    },
+    {
+      "case": "a_case_numeric_choice_refuses_a_selected_float_as_days",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "kinds_shift", "edits": [{"from": "DERIVATION", "to": "{case: [{when: 'EX.EXINT IS NOT NULL', then: EXINT}, {otherwise: EXFLOAT}]}"}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC,EXINT,EXFLOAT\nS01,2024-01-01,,,1.0\n"}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-14", "spec_paths": ["intermediates.EXP.derivations.EXENDT.shift.days"], "context": {"source": "SELECTED", "expected": "int", "actual": "float"}}]
+    },
+    {
+      "case": "nullif_over_an_int_and_a_float_checks_clean_as_integer_days",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "kinds_shift", "edits": [{"from": "DERIVATION", "to": "'NULLIF(EXINT, EXFLOAT)'"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "nullif_over_an_int_and_a_float_is_refused_as_integer_days_when_bound",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "kinds_shift", "edits": [{"from": "DERIVATION", "to": "'NULLIF(EXINT, EXFLOAT)'"}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC,EXINT,EXFLOAT\nS01,2024-01-01,,1,\n"}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-14", "spec_paths": ["intermediates.EXP.derivations.EXENDT.shift.days"], "context": {"source": "SELECTED", "expected": "int", "actual": "float"}}]
+    },
+    {
+      "case": "nullif_of_an_int_and_a_float_column_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "nullif"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "nullif_widens_its_int_result_when_the_float_argument_is_missing",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "nullif"}, "ex.csv": "USUBJID,EXINT,EXFLOAT\nS01,9007199254740993,\nS02,9007199254740993,0.5\nS03,3,3.0\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,VALUE\nS01,9007199254740992\nS02,9007199254740992\nS03,\n"}
+    },
+    {
+      "case": "an_alias_of_an_unknown_first_available_choice_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "kinds_anchored", "edits": [{"from": "DERIVATION", "to": "{first_available: {sources: [EXENDT0, EXSTDT], missing: 17}}"}, {"from": "    filter:", "to": "      ALIAS: EXENDT\n    filter:"}, {"from": "EX.EXENDT >= EX.ANCHOR", "to": "EX.ALIAS >= 17"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "an_alias_of_an_unknown_first_available_choice_keeps_its_unknown_kind",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "kinds_anchored", "edits": [{"from": "DERIVATION", "to": "{first_available: {sources: [EXENDT0, EXSTDT], missing: 17}}"}, {"from": "    filter:", "to": "      ALIAS: EXENDT\n    filter:"}, {"from": "EX.EXENDT >= EX.ANCHOR", "to": "EX.ALIAS >= 17"}]},
+          "ex.csv": "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,,,2024-01-01\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT\nS01,,17\n"}
+    },
+    {
+      "case": "a_choice_over_an_unknown_first_available_choice_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "kinds_anchored", "edits": [{"from": "DERIVATION", "to": "{first_available: {sources: [EXENDT0, EXSTDT], missing: 17}}"}, {"from": "    filter:", "to": "      ALIAS: {first_available: {sources: [EXENDT, EXSTDT]}}\n    filter:"}, {"from": "EX.EXENDT >= EX.ANCHOR", "to": "EX.ALIAS >= 17"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_choice_over_an_unknown_first_available_choice_keeps_its_unknown_kind",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "kinds_anchored", "edits": [{"from": "DERIVATION", "to": "{first_available: {sources: [EXENDT0, EXSTDT], missing: 17}}"}, {"from": "    filter:", "to": "      ALIAS: {first_available: {sources: [EXENDT, EXSTDT]}}\n    filter:"}, {"from": "EX.EXENDT >= EX.ANCHOR", "to": "EX.ALIAS >= 17"}]},
+          "ex.csv": "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,,,2024-01-01\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT\nS01,,17\n"}
+    },
+    {
+      "case": "an_alias_of_an_unknown_case_choice_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "kinds_anchored", "edits": [{"from": "DERIVATION", "to": "{case: [{when: 'EX.EXENDT0 IS NOT NULL', then: EXENDT0}, {otherwise: 17}]}"}, {"from": "    filter:", "to": "      ALIAS: EXENDT\n    filter:"}, {"from": "EX.EXENDT >= EX.ANCHOR", "to": "EX.ALIAS >= 17"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "an_alias_of_an_unknown_case_choice_keeps_its_unknown_kind",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "kinds_anchored", "edits": [{"from": "DERIVATION", "to": "{case: [{when: 'EX.EXENDT0 IS NOT NULL', then: EXENDT0}, {otherwise: 17}]}"}, {"from": "    filter:", "to": "      ALIAS: EXENDT\n    filter:"}, {"from": "EX.EXENDT >= EX.ANCHOR", "to": "EX.ALIAS >= 17"}]},
+          "ex.csv": "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,,,2024-01-01\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT\nS01,,17\n"}
+    },
+    {
+      "case": "a_choice_over_an_unknown_case_choice_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "kinds_anchored", "edits": [{"from": "DERIVATION", "to": "{case: [{when: 'EX.EXENDT0 IS NOT NULL', then: EXENDT0}, {otherwise: 17}]}"}, {"from": "    filter:", "to": "      ALIAS: {first_available: {sources: [EXENDT, EXSTDT]}}\n    filter:"}, {"from": "EX.EXENDT >= EX.ANCHOR", "to": "EX.ALIAS >= 17"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_choice_over_an_unknown_case_choice_keeps_its_unknown_kind",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "kinds_anchored", "edits": [{"from": "DERIVATION", "to": "{case: [{when: 'EX.EXENDT0 IS NOT NULL', then: EXENDT0}, {otherwise: 17}]}"}, {"from": "    filter:", "to": "      ALIAS: {first_available: {sources: [EXENDT, EXSTDT]}}\n    filter:"}, {"from": "EX.EXENDT >= EX.ANCHOR", "to": "EX.ALIAS >= 17"}]},
+          "ex.csv": "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,,,2024-01-01\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT\nS01,,17\n"}
+    },
+    {
+      "case": "an_unknown_kind_read_through_an_earlier_selector_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "kinds_anchored",
+            "edits": [
+              {"from": "DERIVATION", "to": "{first_available: {sources: [EXENDT0, EXSTDT], missing: 17}}"},
+              {"from": "    filter: 'EX.EXENDT >= EX.ANCHOR'\n", "to": ""},
+              {"from": "intermediates:\n", "to": "intermediates:\n  - id: EXP2\n    dataset: EX\n    key: [USUBJID]\n    derivations:\n      COPY: EXP.EXENDT\n      ANCHOR2: EXP.ANCHOR\n    filter: 'EX.COPY >= EX.ANCHOR2'\n"},
+              {"from": "derivation: EXP.EXENDT", "to": "derivation: EXP2.COPY"}
+            ]
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "unknown_kind_flows_through_an_earlier_selector_in_dependency_order",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "kinds_anchored",
+            "edits": [
+              {"from": "DERIVATION", "to": "{first_available: {sources: [EXENDT0, EXSTDT], missing: 17}}"},
+              {"from": "    filter: 'EX.EXENDT >= EX.ANCHOR'\n", "to": ""},
+              {"from": "intermediates:\n", "to": "intermediates:\n  - id: EXP2\n    dataset: EX\n    key: [USUBJID]\n    derivations:\n      COPY: EXP.EXENDT\n      ANCHOR2: EXP.ANCHOR\n    filter: 'EX.COPY >= EX.ANCHOR2'\n"},
+              {"from": "derivation: EXP.EXENDT", "to": "derivation: EXP2.COPY"}
+            ]
+          },
+          "ex.csv": "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,2024-01-01,2024-01-10,2024-01-01\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT\nS01,2024-01-01,2024-01-10\n"}
+    },
+    {
+      "case": "a_flag_over_a_named_intermediates_unknown_kind_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "kinds_anchored",
+            "edits": [
+              {"from": "DERIVATION", "to": "{first_available: {sources: [EXENDT0, EXSTDT], missing: 17}}"},
+              {"from": "    filter: 'EX.EXENDT >= EX.ANCHOR'\n", "to": ""},
+              {"from": "[USUBJID, TRTSDT, TRTEDT]", "to": "[USUBJID, TRTSDT, TRTEDT, PASS]"},
+              {"from": "  - {name: TRTEDT, type: str, derivation: EXP.EXENDT}\n", "to": "  - {name: TRTEDT, type: str, derivation: EXP.EXENDT}\n  - name: PASS\n    type: str\n    derivation: {flag: 'EXP.EXENDT >= EXP.ANCHOR'}\n"}
+            ]
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "generic_predicate_consumers_use_the_named_intermediates_unknown_kind",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "kinds_anchored",
+            "edits": [
+              {"from": "DERIVATION", "to": "{first_available: {sources: [EXENDT0, EXSTDT], missing: 17}}"},
+              {"from": "    filter: 'EX.EXENDT >= EX.ANCHOR'\n", "to": ""},
+              {"from": "[USUBJID, TRTSDT, TRTEDT]", "to": "[USUBJID, TRTSDT, TRTEDT, PASS]"},
+              {"from": "  - {name: TRTEDT, type: str, derivation: EXP.EXENDT}\n", "to": "  - {name: TRTEDT, type: str, derivation: EXP.EXENDT}\n  - name: PASS\n    type: str\n    derivation: {flag: 'EXP.EXENDT >= EXP.ANCHOR'}\n"}
+            ]
+          },
+          "ex.csv": "USUBJID,EXSTDTC,EXENDTC,REFDTC\nS01,2024-01-01,2024-01-10,2024-01-01\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,TRTSDT,TRTEDT,PASS\nS01,2024-01-01,2024-01-10,Y\n"}
+    },
+    {
+      "case": "an_unknown_numeric_sum_checks_clean_against_text",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "kinds",
+            "edits": [
+              {"from": "EX: ex.csv", "to": "EX: {path: ex.csv, types: {EXINT: int, EXFLOAT: float}}"},
+              {"from": "EXENDT: DERIVATION", "to": "SELECTED: {first_available: {sources: [EXINT, EXFLOAT]}}\n      RESULT: 'SELECTED + 1'\n      EXENDT: EXENDT0"},
+              {"from": "filter: 'EX.EXENDT >= EX.EXSTDT'", "to": "filter: \"EX.RESULT >= 'not a number'\""}
+            ]
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "unknown_numeric_operands_do_not_invent_an_integer_result_kind",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "kinds",
+            "edits": [
+              {"from": "EX: ex.csv", "to": "EX: {path: ex.csv, types: {EXINT: int, EXFLOAT: float}}"},
+              {"from": "EXENDT: DERIVATION", "to": "SELECTED: {first_available: {sources: [EXINT, EXFLOAT]}}\n      RESULT: 'SELECTED + 1'\n      EXENDT: EXENDT0"},
+              {"from": "filter: 'EX.EXENDT >= EX.EXSTDT'", "to": "filter: \"EX.RESULT >= 'not a number'\""}
+            ]
+          },
+          "ex.csv": "USUBJID,EXSTDTC,EXENDTC,EXINT,EXFLOAT\nS01,2024-01-01,,,1.5\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5", "spec_paths": ["intermediates.EXP.filter"], "context": {"actual": "str", "left_type": "float", "right_type": "str"}, "operand_route": []}]
+    },
+    {
+      "case": "a_nested_lookup_key_on_an_unknown_choice_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "nested"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_nested_lookup_key_retains_an_unknown_choices_current_kind",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "nested"}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC\nS01,2024-01-01,2024-01-01\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SELECTED\nS01,2024-01-01\n"}
+    },
+    {
+      "case": "a_nested_lookup_key_reports_an_unknown_choices_actual_incompatible_type",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "nested"}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC\nS01,,2024-01-01\n"}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["intermediates.DATES.key"], "context": {"intermediate": "DATES", "source": "EX.CHOICE", "expected": "int", "actual": "date"}}]
+    },
+    {
+      "case": "a_missing_unknown_key_value_keeps_no_match",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "nested"}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC\nS01,,\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SELECTED\nS01,\n"}
+    },
+    {
+      "case": "a_nested_lookup_key_on_a_greatest_of_an_unknown_choice_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "nested", "edits": [{"from": "{DATE: EX.CHOICE}", "to": "{DATE: {greatest: {sources: [EX.CHOICE]}}}"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_nested_lookup_key_retains_a_greatest_of_an_unknown_choices_current_kind",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "nested", "edits": [{"from": "{DATE: EX.CHOICE}", "to": "{DATE: {greatest: {sources: [EX.CHOICE]}}}"}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC\nS01,2024-01-01,2024-01-01\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SELECTED\nS01,2024-01-01\n"}
+    },
+    {
+      "case": "a_nested_lookup_key_reports_a_greatest_of_an_unknown_choices_actual_incompatible_type",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "nested", "edits": [{"from": "{DATE: EX.CHOICE}", "to": "{DATE: {greatest: {sources: [EX.CHOICE]}}}"}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC\nS01,,2024-01-01\n"}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["intermediates.DATES.key.DATE"], "context": {"intermediate": "DATES", "source": "key[DATE]", "expected": "int", "actual": "date"}}]
+    },
+    {
+      "case": "a_filtered_nested_lookup_key_on_an_unknown_choice_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "nested", "edits": [{"from": "    key: {DATE:", "to": "    filter: \"EX.USUBJID = 'S02'\"\n    key: {DATE:"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_filter_cannot_hide_an_incomparable_unknown_key_value",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "nested", "edits": [{"from": "    key: {DATE:", "to": "    filter: \"EX.USUBJID = 'S02'\"\n    key: {DATE:"}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC\nS01,,2024-01-01\n"}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["intermediates.DATES.key"], "context": {"intermediate": "DATES", "source": "EX.CHOICE", "expected": "int", "actual": "date"}}]
+    },
+    {
+      "case": "a_raw_true_key_value_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "nested", "edits": [{"from": "{to_date: {source: EXENDTC}}", "to": "true"}, {"from": "missing: 17", "to": "missing: true"}, {"from": "SELECTED: DATES.DATE", "to": "SELECTED: DATES.USUBJID"}, {"from": "type: date, derivation: RESULT.SELECTED", "to": "type: str, derivation: RESULT.SELECTED"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_raw_true_key_value_matches_an_equal_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "nested", "edits": [{"from": "{to_date: {source: EXENDTC}}", "to": "true"}, {"from": "missing: 17", "to": "missing: true"}, {"from": "SELECTED: DATES.DATE", "to": "SELECTED: DATES.USUBJID"}, {"from": "type: date, derivation: RESULT.SELECTED", "to": "type: str, derivation: RESULT.SELECTED"}]},
+          "ex.csv": "USUBJID,EXSTDTC,EXENDTC\nS01,,\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SELECTED\nS01,S01\n"}
+    },
+    {
+      "case": "a_raw_false_key_value_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "nested", "edits": [{"from": "{to_date: {source: EXENDTC}}", "to": "true"}, {"from": "missing: 17", "to": "missing: false"}, {"from": "SELECTED: DATES.DATE", "to": "SELECTED: DATES.USUBJID"}, {"from": "type: date, derivation: RESULT.SELECTED", "to": "type: str, derivation: RESULT.SELECTED"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_raw_false_key_value_matches_no_unequal_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "nested", "edits": [{"from": "{to_date: {source: EXENDTC}}", "to": "true"}, {"from": "missing: 17", "to": "missing: false"}, {"from": "SELECTED: DATES.DATE", "to": "SELECTED: DATES.USUBJID"}, {"from": "type: date, derivation: RESULT.SELECTED", "to": "type: str, derivation: RESULT.SELECTED"}]},
+          "ex.csv": "USUBJID,EXSTDTC,EXENDTC\nS01,,\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SELECTED\nS01,\n"}
+    },
+    {
+      "case": "a_raw_key_pair_after_a_literal_pair_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "nested", "edits": [{"from": "DATE: EX.CHOICE", "to": "USUBJID: \"'S02'\", DATE: EX.CHOICE"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "an_incompatible_raw_key_pair_after_a_literal_pair_fails",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "nested", "edits": [{"from": "DATE: EX.CHOICE", "to": "USUBJID: \"'S02'\", DATE: EX.CHOICE"}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC\nS01,,2024-01-01\n"}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["intermediates.DATES.key"], "context": {"intermediate": "DATES", "source": "EX.CHOICE", "expected": "int", "actual": "date"}}]
+    },
+    {
+      "case": "a_raw_key_pair_after_a_literal_pair_keeps_no_match_for_missing_values",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "nested", "edits": [{"from": "DATE: EX.CHOICE", "to": "USUBJID: \"'S02'\", DATE: EX.CHOICE"}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC\nS01,,\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SELECTED\nS01,\n"}
+    },
+    {
+      "case": "a_raw_key_pair_after_a_literal_pair_keeps_no_match_for_unequal_values",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "nested", "edits": [{"from": "DATE: EX.CHOICE", "to": "USUBJID: \"'S02'\", DATE: EX.CHOICE"}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC\nS01,2024-01-01,2024-01-02\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SELECTED\nS01,\n"}
+    },
+    {
+      "case": "a_raw_key_pair_before_a_literal_pair_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "nested", "edits": [{"from": "DATE: EX.CHOICE", "to": "DATE: EX.CHOICE, USUBJID: \"'S02'\""}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "an_incompatible_raw_key_pair_before_a_literal_pair_fails",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "nested", "edits": [{"from": "DATE: EX.CHOICE", "to": "DATE: EX.CHOICE, USUBJID: \"'S02'\""}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC\nS01,,2024-01-01\n"}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["intermediates.DATES.key"], "context": {"intermediate": "DATES", "source": "EX.CHOICE", "expected": "int", "actual": "date"}}]
+    },
+    {
+      "case": "a_raw_key_pair_before_a_literal_pair_keeps_no_match_for_missing_values",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "nested", "edits": [{"from": "DATE: EX.CHOICE", "to": "DATE: EX.CHOICE, USUBJID: \"'S02'\""}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC\nS01,,\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SELECTED\nS01,\n"}
+    },
+    {
+      "case": "a_raw_key_pair_before_a_literal_pair_keeps_no_match_for_unequal_values",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "nested", "edits": [{"from": "DATE: EX.CHOICE", "to": "DATE: EX.CHOICE, USUBJID: \"'S02'\""}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC\nS01,2024-01-01,2024-01-02\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,SELECTED\nS01,\n"}
+    }
+  ]
+}

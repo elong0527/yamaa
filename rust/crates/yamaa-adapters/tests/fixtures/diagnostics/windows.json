@@ -1,0 +1,120 @@
+{
+  "about": "Window operations nested in case results, and named windows (WINDOW-1 to WINDOW-9). A window in a column's case result reads the whole completed context: row 3's previous row in group A by O is row 1 (a2), and the row_number in its branch numbers it third among all of A's rows. A window in a row template's case result stays local to its template and sees the rows that template's filter keeps, so the second template numbers rows 2 and 3 as 1 and 2. A baseline_flag in a case branch no row reaches fails nothing; one a row reaches keeps its ambiguous_baseline, at the branch's path, since both rows share the date; and a grouped one in a selected branch judges only the selected partition, so B's tied rows fail nothing. A row_value offset beyond 64 bits selects no neighbour. A named window is expanded into each filtered row template that reads it (WINDOW-2), so each template's rows have their own previous value; a child that replaces the named reference, with another name or an inline window, replaces it whole, losing VISITS's group_by, so its VAL order runs 10, 20, 30, 40 across both groups; a child that clears the definitions a surviving reference names is refused as unknown_window before any input is read (WINDOW-1); and a named window keeps each operation's restrictions, so a row_number over one without order_by fails as window_order_by_required (WINDOW-5). No benchmark nests a window operation in a case result, offsets row_value beyond 64 bits, reads a named window in a row template, or replaces or clears one through a child; negative-unknown-window and negative-locf-no-order refuse a misspelt name and an inline window without order_by. The named-window cases come from the retired Python evaluator's schema/test_named_windows.py at c7b88a4f (#2110), and their documents, which the tests built as JSON, are written here as YAML with the same members. Moved from execution_declarative_self.rs, whose tests compared the saved artifact, the issue's condition and spec path, or the first issue's condition, rule and spec paths.",
+  "documents": {
+    "nested_case": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [I]\ninput: {SRC: {path: input.csv, types: {I: int, O: int}}}\ncolumns:\n  - {name: I, type: int, derivation: SRC.I}\n  - name: N\n    type: int\n    derivation:\n      case:\n        - when: 'I > 1'\n          then: {row_number: {window: {group_by: [SRC.G], order_by: [SRC.O]}}}\n        - otherwise: -1\n  - name: P\n    type: str\n    derivation:\n      case:\n        - when: 'I = 3'\n          then: {row_value: {source: SRC.V, offset: -1, window: {group_by: [SRC.G], order_by: [SRC.O]}}}\n        - otherwise: \"'skip'\"\n  - name: C\n    type: str\n    derivation: {str_template: 'prior={P}'}\noutput: {path: out.csv, columns: [I, N, C]}\n",
+    "template_local": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [T, I]\ninput: {SRC: {path: input.csv, types: {I: int, O: int}}}\ncolumns:\n  - {name: T, type: str}\n  - {name: I, type: int, derivation: SRC.I}\n  - {name: N, type: int}\nrows:\n  - id: first\n    dataset: SRC\n    derivations:\n      T: \"'A'\"\n      N: {case: [{when: 'I > 0', then: {row_number: {window: {order_by: [SRC.O]}}}}]}\n  - id: second\n    dataset: SRC\n    filter: 'SRC.I > 1'\n    derivations:\n      T: \"'B'\"\n      N: {case: [{when: 'I > 0', then: {row_number: {window: {order_by: [SRC.O]}}}}]}\noutput: {path: out.csv, columns: [T, I, N]}\n",
+    "baseline_branch": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [I]\ninput: {SRC: {path: input.csv, types: {I: int, D: date}}}\ncolumns:\n  - {name: I, type: int, derivation: SRC.I}\n  - {name: D, type: date, derivation: SRC.D}\n  - name: B\n    type: str\n    derivation:\n      case:\n        - when: 'I < 0'\n          then: {baseline_flag: {date: D, reference: D, source: I}}\n        - otherwise: \"'skipped'\"\noutput: {path: out.csv, columns: [I, B]}\n",
+    "wide_offsets": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [I]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: I, type: int, derivation: SRC.I}\n  - {name: V, type: str, derivation: SRC.V}\n  - name: BEFORE\n    type: str\n    derivation: {row_value: {source: V, offset: -99999999999999999999999999999999999999, window: {order_by: [I]}}}\n  - name: AFTER\n    type: str\n    derivation: {row_value: {source: V, offset: 99999999999999999999999999999999999999, window: {order_by: [I]}}}\noutput: {path: out.csv, columns: [I, BEFORE, AFTER]}\n",
+    "grouped_baseline": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [I]\ninput: {SRC: {path: input.csv, types: {I: int, D: date}}}\ncolumns:\n  - {name: I, type: int, derivation: SRC.I}\n  - {name: G, type: str, derivation: SRC.G}\n  - {name: D, type: date, derivation: SRC.D}\n  - name: B\n    type: str\n    derivation:\n      case:\n        - when: \"G = 'A'\"\n          then: {baseline_flag: {date: D, reference: D, source: I, window: {group_by: [G]}}}\n        - otherwise: \"'skipped'\"\noutput: {path: out.csv, columns: [I, B]}\n",
+    "named": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nbase: SRC\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {SEQ: int, VAL: int}}}\noutput: {path: out.csv, columns: [ID, PREV]}\nwindows:\n  VISITS: {group_by: [G], order_by: [SEQ]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - {name: SEQ, type: int, label: SEQ, derivation: SRC.SEQ}\n  - {name: VAL, type: int, label: VAL, derivation: SRC.VAL}\n  - {name: PREV, type: int, label: 'Previous value', derivation: {row_value: {source: VAL, offset: -1, window: VISITS}}}\n",
+    "named_rows": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nbase: SRC\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {SEQ: int, VAL: int}}}\noutput: {path: out.csv, columns: [ID, PREV]}\nwindows:\n  VISITS: {order_by: [SEQ]}\ncolumns:\n  - {name: ID, type: str, label: ID}\n  - {name: G, type: str, label: G}\n  - {name: SEQ, type: int, label: SEQ}\n  - {name: VAL, type: int, label: VAL}\n  - {name: PREV, type: int, label: 'Previous value'}\nrows:\n  - id: a\n    dataset: SRC\n    filter: \"SRC.G = 'a'\"\n    derivations: {ID: SRC.ID, G: SRC.G, SEQ: SRC.SEQ, VAL: SRC.VAL, PREV: {row_value: {source: VAL, offset: -1, window: VISITS}}}\n  - id: b\n    dataset: SRC\n    filter: \"SRC.G = 'b'\"\n    derivations: {ID: SRC.ID, G: SRC.G, SEQ: SRC.SEQ, VAL: SRC.VAL, PREV: {row_value: {source: VAL, offset: -1, window: VISITS}}}\n",
+    "visits": "ID,G,SEQ,VAL\n01,a,1,10\n02,a,2,20\n03,b,1,30\n04,b,2,40\n"
+  },
+  "cases": [
+    {
+      "case": "nested_case_windows_use_the_full_completed_context",
+      "operation": "save",
+      "input": {"files": {"input.csv": "I,G,O,V\n1,A,2,a2\n2,A,1,a1\n3,A,3,a3\n4,B,1,b1\n", "spec.yaml": {"base": "nested_case"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "I,N,C\n1,-1,prior=skip\n2,1,prior=skip\n3,3,prior=a2\n4,1,prior=skip\n"}
+    },
+    {
+      "case": "nested_windows_remain_template_local_and_observe_pre_window_row_filtering",
+      "operation": "save",
+      "input": {"files": {"input.csv": "I,O\n1,2\n2,1\n3,3\n", "spec.yaml": {"base": "template_local"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "T,I,N\nA,1,2\nA,2,1\nA,3,3\nB,2,1\nB,3,2\n"}
+    },
+    {
+      "case": "an_unreachable_window_branch_has_no_runtime_failure",
+      "operation": "save",
+      "input": {"files": {"input.csv": "I,D\n1,2024-01-01\n2,2024-01-01\n", "spec.yaml": {"base": "baseline_branch"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "I,B\n1,skipped\n2,skipped\n"}
+    },
+    {
+      "case": "a_reached_window_branch_retains_its_runtime_failure",
+      "operation": "build",
+      "input": {"files": {"input.csv": "I,D\n1,2024-01-01\n2,2024-01-01\n", "spec.yaml": {"base": "baseline_branch", "edits": [{"from": "I < 0", "to": "I = 2"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "ambiguous_baseline", "spec_paths": ["columns.B.derivation.case[0].then.baseline_flag"]}]
+    },
+    {
+      "case": "arbitrary_width_window_offsets_select_absent_neighbors_without_float_conversion",
+      "operation": "save",
+      "input": {"files": {"input.csv": "I,V\n1,a\n2,b\n", "spec.yaml": {"base": "wide_offsets"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "I,BEFORE,AFTER\n1,,\n2,,\n"}
+    },
+    {
+      "case": "selected_window_partition_does_not_evaluate_unselected_partition_failures",
+      "operation": "save",
+      "input": {"files": {"input.csv": "I,G,D\n1,A,2024-01-01\n2,B,2024-01-01\n3,B,2024-01-01\n", "spec.yaml": {"base": "grouped_baseline"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "I,B\n1,Y\n2,skipped\n3,skipped\n"}
+    },
+    {
+      "case": "shared_named_window_is_evaluated_in_each_filtered_row_template",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "named_rows"}, "input.csv": {"base": "visits"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,PREV\n01,\n02,10\n03,\n04,30\n"}
+    },
+    {
+      "case": "replacing_a_named_selection_with_another_name_is_atomic",
+      "operation": "save",
+      "input": {
+        "files": {
+          "parent.yaml": {"base": "named", "edits": [{"from": "  VISITS: {group_by: [G], order_by: [SEQ]}\n", "to": "  VISITS: {group_by: [G], order_by: [SEQ]}\n  OTHER: {order_by: [VAL]}\n"}]},
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\ncolumns:\n  - name: PREV\n    derivation: {row_value: {window: OTHER}}\n",
+          "input.csv": {"base": "visits"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,PREV\n01,\n02,10\n03,20\n04,30\n"}
+    },
+    {
+      "case": "replacing_a_named_selection_with_an_inline_window_is_atomic",
+      "operation": "save",
+      "input": {
+        "files": {
+          "parent.yaml": {"base": "named", "edits": [{"from": "  VISITS: {group_by: [G], order_by: [SEQ]}\n", "to": "  VISITS: {group_by: [G], order_by: [SEQ]}\n  OTHER: {order_by: [VAL]}\n"}]},
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\ncolumns:\n  - name: PREV\n    derivation: {row_value: {window: {order_by: [VAL]}}}\n",
+          "input.csv": {"base": "visits"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,PREV\n01,\n02,10\n03,20\n04,30\n"}
+    },
+    {
+      "case": "clearing_named_definitions_rejects_the_surviving_reference_before_input_access",
+      "operation": "save",
+      "input": {"files": {"parent.yaml": {"base": "named"}, "spec.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\nclear: [windows]\n"}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [{"condition": "unknown_window", "rule": "WINDOW-1", "spec_paths": ["columns.PREV.derivation.row_value.window"]}],
+      "saved": {}
+    },
+    {
+      "case": "named_expansion_preserves_each_operations_window_restrictions",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "named",
+            "edits": [
+              {"from": "  VISITS: {group_by: [G], order_by: [SEQ]}\n", "to": "  VISITS: {}\n"},
+              {"from": "derivation: {row_value: {source: VAL, offset: -1, window: VISITS}}}", "to": "derivation: {row_number: {window: VISITS}}}"}
+            ]
+          },
+          "input.csv": {"base": "visits"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition"],
+      "issues": [{"condition": "window_order_by_required"}],
+      "saved": {}
+    }
+  ]
+}

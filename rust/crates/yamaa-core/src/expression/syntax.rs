@@ -835,7 +835,7 @@ impl<'a> Parser<'a> {
         self.advance();
         if let Some(reducer) = Reducer::lookup(spelling) {
             let operand = if self.token().kind == TokenKind::Star {
-                if reducer != Reducer::Count {
+                if !reducer.takes_star() {
                     return Err(self.invalid("a record star is only the argument of COUNT"));
                 }
                 let star = self.advance().span.start;

@@ -2,6 +2,7 @@
 use super::*;
 use crate::{
     dataset::{MatchRead, MatchValue},
+    expression_table::Verb,
     result_type::ResultType,
 };
 
@@ -43,12 +44,12 @@ fn operation(spec: &ast::Spec, pair: ast::Meta, value: ExprId) -> bool {
 /// need a demand-aware key owner. Its keyword names it.
 fn deferred_owner(kind: &ExprKind) -> Option<&str> {
     Some(match kind {
-        ExprKind::Case(_) => "case",
-        ExprKind::Call { .. } => "function",
-        ExprKind::Aggregate(_) => "aggregate",
-        ExprKind::Odm(_) => "odm",
-        ExprKind::Flag { .. } => "flag",
-        ExprKind::FirstAvailable { .. } => "first_available",
+        ExprKind::Case(_) => Verb::Case.name(),
+        ExprKind::Call { .. } => Verb::Function.name(),
+        ExprKind::Aggregate(_) => Verb::Aggregate.name(),
+        ExprKind::Odm(_) => Verb::Odm.name(),
+        ExprKind::Flag { .. } => Verb::Flag.name(),
+        ExprKind::FirstAvailable { .. } => Verb::FirstAvailable.name(),
         ExprKind::Unsupported(operation) => operation,
         _ => return None,
     })

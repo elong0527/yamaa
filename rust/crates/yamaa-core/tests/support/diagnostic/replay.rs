@@ -4,7 +4,7 @@
 //! and the reader module that owns the file declares it. A case names the
 //! behaviour it proves (`case`), the core operation that reaches it
 //! (`operation`, read by [`super::operations`]; a list names several that
-//! must each report the same issues), that operation's `input`, and the
+//! must each report the same complete rows), that operation's `input`, and the
 //! complete list of `issues` it reports, in order. An issue row is the record
 //! a run report renders: `phase`, `condition`, `rule` (`null` when the cause
 //! cites no card), `spec_paths` and `context`, and `source_span` and
@@ -26,10 +26,10 @@
 //! member at a path of keys and list indexes.
 //!
 //! A positive case also states the output table's rows, the run report's
-//! rows or the files a save wrote, as [`super::form`] reads them for both
-//! crates' replays. Each core operation reports its issues alone, so a core
-//! case that states one of them fails, naming the operation that reports no
-//! such thing.
+//! rows or the files a save created, changed or removed, as [`super::form`]
+//! reads them for both crates' replays. Each core operation reports its
+//! issues alone, so a core case that states one of them fails, naming the
+//! operation that reports no such thing.
 //!
 //! Every row was authored: in the Rust table it moved from, or from the rule
 //! card, registry entry or sibling record its pull request names. No run
@@ -232,12 +232,14 @@ pub fn row(diagnostic: &Diagnostic) -> Value {
 }
 
 /// Replay every case: the issues each of its operations reports must equal
-/// its rows, or hold them when the case is `among`, each issue a row compares
-/// renders its registered message from its own record (P-MSG-1), and the
-/// causes the cases reach are returned.
+/// its rows, or hold them when the case is `among`, the operations of a case
+/// that names several must report the same complete rows, each issue a row
+/// compares renders its registered message from its own record (P-MSG-1),
+/// and the causes the cases reach are returned.
 pub fn replay() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
     for case in cases() {
+        let mut reported = Vec::new();
         for operation in &case.operations {
             let label = match case.operations.len() {
                 1 => case.label.clone(),
@@ -245,9 +247,10 @@ pub fn replay() -> BTreeSet<ConditionCode> {
             };
             let _replaying = Naming(format!("while replaying {label}"));
             let issues = operations::run(operation, &case.input);
-            let rows = issues
+            let complete = issues.iter().map(row).collect::<Vec<_>>();
+            let rows = complete
                 .iter()
-                .map(|issue| compared(row(issue), case.compares.as_deref()))
+                .map(|row| compared(row.clone(), case.compares.as_deref()))
                 .collect::<Vec<_>>();
             let checked = if case.among {
                 match among(&case.issues, &rows) {
@@ -267,7 +270,9 @@ pub fn replay() -> BTreeSet<ConditionCode> {
             reached.extend(checked.into_iter().map(rendered));
             // A core operation builds no table and saves no file.
             case.stated.compare(&Outcome::default(), operation, &label);
+            reported.push((operation.as_str(), complete));
         }
+        form::same_issues(&reported, &case.label);
     }
     reached
 }

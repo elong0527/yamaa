@@ -215,7 +215,7 @@ written in an expression or as any other runtime literal. An `int` result of
 `integer_overflow`.
 
 Fails: `integer_overflow`.
-Evidence: `negative-integer-overflow`, `rust/crates/yamaa-adapters/tests/fixtures/integer_literal_overflow.json`, `rust/crates/yamaa-core/tests/fixtures/arithmetic.tsv`.
+Evidence: `negative-integer-overflow`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/integer_literals.json`, `rust/crates/yamaa-core/tests/fixtures/arithmetic.tsv`.
 
 An out-of-range literal never introduces an arbitrary-width integer value.
 Runtime literals include derivation and replacement literals,
@@ -298,10 +298,10 @@ produces a stable decimal.
 operand is a `float`; `ABS`, `MOD` and `NULLIF` likewise return `int` when
 every argument is `int` and otherwise `float`. `/` always returns `float`,
 widening each `int` operand first under [VALUE-8](#value-8); there is no
-integer division. `SQRT`, `POWER`, `EXP`, `LN`, `CEIL`, `FLOOR` and `TRUNC`
-return `float`.
+integer division. `SQRT`, `POWER`, `EXP`, `LN`, `LOG10`, `NORM_CDF`,
+`NORM_INV`, `CEIL`, `FLOOR` and `TRUNC` return `float`.
 
-Evidence: `schema-numeric-functions`, `rust/crates/yamaa-core/tests/fixtures/numeric_math.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_integral.tsv`, `rust/crates/yamaa-adapters/tests/intermediate_result_kinds.rs::nullif_widens_its_int_result_when_the_float_argument_is_missing`.
+Evidence: `schema-numeric-functions`, `rust/crates/yamaa-core/tests/fixtures/numeric_math.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_integral.tsv`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/completed_intermediates.json::nullif_of_an_int_and_a_float_column_checks_clean`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/completed_intermediates.json::nullif_widens_its_int_result_when_the_float_argument_is_missing`.
 
 The quotient is the binary64 quotient of the widened operands, including when
 both operands are `int`. Above `2^53` it need not equal the exact integer
@@ -675,7 +675,7 @@ order. A term is a bare variable or a mapping declaring `variable`,
 `desc`. A declared `nulls: first` or `nulls: last` places missing values there
 under either direction.
 
-Evidence: `schema-ordering`, `adam-adae-review-order`, `adam-adae-serious-sequence`, `schema-baseline-tie-break`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs::windows_and_presentation_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs::source_and_lookup_selection_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-adapters/tests/execution_value_semantics.rs::output_order_sorts_every_type_places_missing_by_nulls_and_keeps_ties_in_construction_order`.
+Evidence: `schema-ordering`, `adam-adae-review-order`, `adam-adae-serious-sequence`, `schema-baseline-tie-break`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/missing_order.json::windows_and_presentation_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/missing_order.json::a_descending_presentation_sorts_an_undeclared_missing_value_last`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/missing_order.json::source_and_lookup_selection_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-adapters/tests/execution_value_semantics.rs::output_order_sorts_every_type_places_missing_by_nulls_and_keeps_ties_in_construction_order`.
 
 The bare form is a [Schema language](reference/schema-language.md) shorthand
 union, whichever operation declares the list, and a mapping holding only

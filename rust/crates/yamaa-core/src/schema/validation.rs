@@ -5,6 +5,7 @@ use super::{
     SchemaField, SchemaShape, SchemaStructure, TypeError, TypeExpression, TypeNode,
 };
 use crate::diagnostic::{ConditionCode, Definition};
+use crate::expression_table::Verb;
 use std::vec;
 
 /// Value types whose bare string is the source shorthand `{source: <string>}`
@@ -1116,9 +1117,9 @@ impl Run<'_> {
                     if !diagnostics.is_empty() || registry.name != "expressions" {
                         return Ok(diagnostics);
                     }
-                    match entry.name.as_str() {
-                        "case" => self.case_items(payload),
-                        "source" => Ok(self.restated_read(site, payload)),
+                    match Verb::from_name(&entry.name) {
+                        Some(Verb::Case) => self.case_items(payload),
+                        Some(Verb::Source) => Ok(self.restated_read(site, payload)),
                         _ => Ok(diagnostics),
                     }
                 }

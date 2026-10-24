@@ -712,20 +712,15 @@ impl Checks<'_> {
                 }
             }
         }
-        let (operation, baseline) = match &window.function {
-            WindowFunction::RowNumber => ("row_number", false),
-            WindowFunction::Rank { .. } => ("rank", false),
-            WindowFunction::RowValue { offset } => {
-                if offset.parse::<i64>() == Ok(0) {
-                    findings.push(BindFinding::Window(WindowFinding::ZeroOffset {
-                        path: format!("{path}.offset"),
-                    }));
-                }
-                ("row_value", false)
+        if let WindowFunction::RowValue { offset } = &window.function {
+            if offset.parse::<i64>() == Ok(0) {
+                findings.push(BindFinding::Window(WindowFinding::ZeroOffset {
+                    path: format!("{path}.offset"),
+                }));
             }
-            WindowFunction::Locf { .. } => ("locf", false),
-            WindowFunction::BaselineFlag { .. } => ("baseline_flag", true),
-        };
+        }
+        let operation = window.function.verb().name();
+        let baseline = matches!(window.function, WindowFunction::BaselineFlag { .. });
         // A positional window needs an order; a baseline orders by its date
         // and tie-break terms (WINDOW-5).
         if !baseline && window_order(window).is_empty() {
@@ -808,12 +803,10 @@ impl Checks<'_> {
     /// other read.
     fn baseline_types(&self, window: &ast::Window, findings: &mut Vec<BindFinding>) {
         let spec = self.spec;
-        let WindowFunction::BaselineFlag {
-            window_order_by, ..
-        } = &window.function
-        else {
+        let WindowFunction::BaselineFlag { .. } = &window.function else {
             return;
         };
+        let window_order_by = &window.window_order_by;
         let output = |name: &str| spec.columns.iter().find(|column| column.name.name == name);
         let kind = |e: ExprId| name(spec, e).and_then(output).map(|column| column.kind);
         let operand = |slot| {
@@ -875,7 +868,7 @@ impl Checks<'_> {
         };
         let mut finding = LookupFinding::new(&at, C::WindowBaselineInputType);
         for (field, value) in [
-            ("operation", "baseline_flag"),
+            ("operation", window.function.verb().name()),
             ("source", name(spec, source).unwrap_or_default()),
             ("expected", expected),
             ("actual", type_name(actual)),

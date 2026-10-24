@@ -70,7 +70,9 @@
 #
 # The set pins only what the rules fix: EXP, LN and POWER are evaluated where
 # the exact result is a binary64 value, or, inside GEOMEAN, where each LN and
-# EXP step of the pinned portable math is the correctly rounded value, and no
+# EXP step of the pinned portable math is the correctly rounded value; LOG10,
+# NORM_CDF and NORM_INV where the pinned computation gives the correctly
+# rounded value of its formula, or within a bound the rules derive; and no
 # case depends on evaluation order beyond what the rules state.
 
 schema_version: "1.0"
@@ -1743,6 +1745,178 @@ cases:
     phase: validation
     condition: prohibited_function
     rule: FORMULA-13
+
+  # LOG10 is the base-10 logarithm, one operation of the pinned libm rather
+  # than a quotient of natural logarithms; NORM_CDF is 0.5 * erfc(-x /
+  # SQRT(2)) and NORM_INV is AS 241. Each is a float; LOG10 of zero or a
+  # negative number fails as LN does, and NORM_INV outside the open interval
+  # from 0 to 1 fails, 0 and 1 included (FORMULA-13, FORMULA-14, FORMULA-15,
+  # VALUE-10). Exact values are pinned where the pinned computation is the
+  # correctly rounded value of its formula. In the far tail NORM_CDF(-8) is
+  # pinned within the formula's bound, 1E-29 of the standard normal
+  # probability: SQRT(2) is rounded, and erfc multiplies that relative error
+  # by about 64 there. NORM_INV(NORM_CDF(1)) is 1 within 1E-15: AS 241's
+  # accuracy of about 1 part in 10^16, plus NORM_CDF(1)'s own error of at
+  # most about 1.6E-16, which the quantile's slope of 4.13 at 1 enlarges,
+  # stays below it.
+  - id: log10-is-the-base-10-logarithm
+    context: derivation
+    covers: [LOG10, typing, missing, exactness]
+    text: "LOG10(F)"
+    columns: {F: float}
+    rows:
+      - {F: 1000.0}
+      - {F: 0.001}
+      - {F: 0.5}
+      - {F: null}
+    type: float
+    values: [3.0, -3.0, -0.3010299956639812, null]
+  - id: log10-of-an-int-is-a-float
+    context: derivation
+    covers: [LOG10, typing]
+    text: "LOG10(X)"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+      - {X: 100}
+    type: float
+    values: [0.0, 2.0]
+  - id: log10-of-zero-fails
+    context: derivation
+    covers: [LOG10]
+    text: "LOG10(X)"
+    columns: {X: int}
+    rows:
+      - {X: 0}
+    type: float
+    phase: derivation
+    condition: ln_of_nonpositive
+    rule: FORMULA-15
+  - id: log10-of-a-negative-number-fails
+    context: derivation
+    covers: [LOG10]
+    text: "LOG10(F)"
+    columns: {F: float}
+    rows:
+      - {F: -0.5}
+    type: float
+    phase: derivation
+    condition: ln_of_nonpositive
+    rule: FORMULA-15
+  - id: log10-takes-one-argument
+    context: derivation
+    covers: [LOG10, arity]
+    text: "LOG10(X, 10)"
+    columns: {X: int}
+    rows:
+      - {X: 100}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: norm-cdf-is-the-standard-normal-distribution-function
+    context: derivation
+    covers: [NORM_CDF, typing, missing]
+    text: "NORM_CDF(F)"
+    columns: {F: float}
+    rows:
+      - {F: 0.0}
+      - {F: -3.0}
+      - {F: 0.5}
+      - {F: 1000.0}
+      - {F: null}
+    type: float
+    values: [0.5, 0.0013498980316300957, 0.6914624612740131, 1.0, null]
+  - id: norm-cdf-in-the-far-tail-is-within-its-bound
+    context: predicate
+    covers: [NORM_CDF, precision]
+    text: "ABS(NORM_CDF(F) - 6.22096057427178E-16) < 1E-29"
+    columns: {F: float}
+    rows:
+      - {F: -8.0}
+      - {F: null}
+    values: ["TRUE", "UNKNOWN"]
+  - id: norm-cdf-takes-one-argument
+    context: derivation
+    covers: [NORM_CDF, arity]
+    text: "NORM_CDF(F, 0, 1)"
+    columns: {F: float}
+    rows:
+      - {F: 0.0}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: norm-inv-is-the-standard-normal-quantile
+    context: derivation
+    covers: [NORM_INV, typing, missing]
+    text: "NORM_INV(P)"
+    columns: {P: float}
+    rows:
+      - {P: 0.5}
+      - {P: 0.75}
+      - {P: null}
+    type: float
+    values: [0.0, 0.6744897501960817, null]
+  - id: norm-inv-inverts-norm-cdf
+    context: predicate
+    covers: [NORM_INV, NORM_CDF, precision]
+    text: "ABS(NORM_INV(NORM_CDF(F)) - F) < 1E-15"
+    columns: {F: float}
+    rows:
+      - {F: 1.0}
+    values: ["TRUE"]
+  - id: norm-inv-of-one-fails
+    context: derivation
+    covers: [NORM_INV]
+    text: "NORM_INV(X)"
+    columns: {X: int}
+    rows:
+      - {X: 1}
+    type: float
+    phase: derivation
+    condition: invalid_probability
+    rule: FORMULA-15
+  - id: norm-inv-of-zero-fails
+    context: derivation
+    covers: [NORM_INV]
+    text: "NORM_INV(P)"
+    columns: {P: float}
+    rows:
+      - {P: 0.0}
+    type: float
+    phase: derivation
+    condition: invalid_probability
+    rule: FORMULA-15
+  - id: norm-inv-outside-zero-to-one-fails
+    context: derivation
+    covers: [NORM_INV]
+    text: "NORM_INV(P)"
+    columns: {P: float}
+    rows:
+      - {P: 1.5}
+    type: float
+    phase: derivation
+    condition: invalid_probability
+    rule: FORMULA-15
+  - id: norm-inv-takes-one-argument
+    context: derivation
+    covers: [NORM_INV, arity]
+    text: "NORM_INV()"
+    columns: {P: float}
+    rows:
+      - {P: 0.5}
+    phase: validation
+    condition: prohibited_function
+    rule: FORMULA-13
+  - id: a-function-reads-a-group-in-aggregate-expr
+    context: aggregate
+    covers: [LOG10, SUM, context]
+    text: "SUM(LOG10(R.TITER))"
+    columns: {TITER: int}
+    groups:
+      - [{TITER: 10}, {TITER: 100}, {TITER: 1000}]
+      - []
+    type: float
+    values: [6.0, null]
 
   # MOD is the remainder of x / y with the sign of x, an int over two ints and
   # a float otherwise; a zero divisor fails (FORMULA-13, FORMULA-15,

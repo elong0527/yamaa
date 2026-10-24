@@ -15,7 +15,9 @@ read in their fields, and `derivation` in text written in an expression field.
 
 These files are the single authored grammar truth for the shared Rust parser
 used by Python and R. Repository validation renders each rule's grammar block
-from `productions` and validates the structure and vocabulary of every contract.
+from `productions` and validates the structure and vocabulary of every contract,
+and `tools.packaging.generate_expression_table` writes the expression
+vocabulary into the parser's expression table.
 The typed core replay checks every case's exact parse shape, collected identifier
 set and decision in its context, and expands the declared function arities,
 reducers, reserved words and comparison operators into independent acceptance

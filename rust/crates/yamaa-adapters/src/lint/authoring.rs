@@ -17,17 +17,16 @@
 
 use std::collections::{BTreeSet, HashSet};
 
+use yamaa_core::expression_table::{Form, Verb};
+
 use super::checks::{sort, Departure};
 use super::document::{Document, Style, Value};
 
-const DATASET_LEVEL_OPERATIONS: [&str; 6] = [
-    "aggregate",
-    "row_number",
-    "rank",
-    "row_value",
-    "locf",
-    "baseline_flag",
-];
+/// Whether `key` names an operation over a dataset's rows rather than one
+/// row: an `aggregate`, or a verb its declaration gives a window.
+fn dataset_level_operation(key: &str) -> bool {
+    Verb::from_name(key).is_some_and(|verb| verb == Verb::Aggregate || verb.form() == Form::Window)
+}
 
 /// One resolved value. A mapping keeps its keys in written order, each once.
 #[derive(Clone, Debug)]
@@ -333,9 +332,7 @@ fn reads_qualified_name(text: &str, identifier: &str) -> bool {
 fn uses_dataset_operation(value: &Data) -> bool {
     match value {
         Data::Map(entries) => entries.iter().any(|(key, item)| {
-            key.text()
-                .is_some_and(|key| DATASET_LEVEL_OPERATIONS.contains(&key))
-                || uses_dataset_operation(item)
+            key.text().is_some_and(dataset_level_operation) || uses_dataset_operation(item)
         }),
         Data::List(items) => items.iter().any(uses_dataset_operation),
         _ => false,
@@ -783,7 +780,7 @@ fn aggregates<'a>(value: &'a Data, out: &mut Vec<&'a Data>) {
     match value {
         Data::Map(entries) => {
             for (key, item) in entries {
-                if key.text() == Some("aggregate") {
+                if key.text() == Some(Verb::Aggregate.name()) {
                     out.push(item);
                 }
                 aggregates(item, out);
@@ -801,7 +798,7 @@ fn reads_joined(value: &Data, dataset: &str) -> bool {
         Data::Text(text) => reads_qualified_name(text, dataset),
         Data::List(items) => items.iter().any(|item| reads_joined(item, dataset)),
         Data::Map(entries) => entries.iter().any(|(key, item)| {
-            let own_key = key.text() == Some("aggregate")
+            let own_key = key.text() == Some(Verb::Aggregate.name())
                 && item.get("key").is_some_and(|key| !key.is_null());
             !own_key && (reads_joined(key, dataset) || reads_joined(item, dataset))
         }),

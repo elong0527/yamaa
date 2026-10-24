@@ -1983,9 +1983,11 @@ mod scalar {
                                 error.condition(),
                                 error.rule()
                             ),
-                            ArithmeticErrorKind::LnOfNonpositive => {
-                                format!("error:{}:{}@{argument}", error.condition(), error.rule())
-                            }
+                            ArithmeticErrorKind::LnOfNonpositive { function } => format!(
+                                "error:{}:{}:{function}@{argument}",
+                                error.condition(),
+                                error.rule()
+                            ),
                             other => panic!("unexpected failure {other:?}"),
                         }
                     }
