@@ -124,20 +124,23 @@ impl<'a, P: Resolver> AliasCache<'a, P> {
 
     /// A `parent` the port refused as written (FILE-5), found to reach a
     /// symbolic link (FILE-8) or found changed (FILE-10) fails with that
-    /// condition at `parent`, naming the path as written; any other refusal
-    /// stays the port's own error.
-    fn parent_error(
-        port: &P,
-        name: Name<'_>,
-        written: &str,
-        error: &P::Error,
-    ) -> Option<Diagnostic> {
+    /// condition at `parent`, naming the path as written and the layer that
+    /// writes it; any other refusal stays the port's own error.
+    fn parent_error(port: &P, name: Name<'_>, error: &P::Error) -> Option<Diagnostic> {
+        let Name::Written {
+            declaring, written, ..
+        } = name
+        else {
+            return None;
+        };
         match port.failure(name, error)?.resource()? {
             failure @ (ResourceFailure::UriScheme
             | ResourceFailure::Backslash
             | ResourceFailure::EmptySegment
             | ResourceFailure::Symlink
-            | ResourceFailure::ContentChanged) => Some(failure.field_diagnostic("parent", written)),
+            | ResourceFailure::ContentChanged) => Some(crate::inheritance::parent_diagnostic(
+                failure, declaring, written,
+            )),
             _ => None,
         }
     }
@@ -167,7 +170,7 @@ impl<P: Resolver> Resolver for AliasCache<'_, P> {
             match &located {
                 Ok(source) => self.remember(source, declaring, written),
                 Err(error) if file == File::Parent => {
-                    self.parent_failure = Self::parent_error(self.port, name, written, error);
+                    self.parent_failure = Self::parent_error(self.port, name, error);
                 }
                 Err(_) => {}
             }
@@ -195,7 +198,7 @@ impl<P: Resolver> Resolver for AliasCache<'_, P> {
         };
         let captured = self.port.capture(written_name);
         if let (File::Parent, Err(error)) = (file, &captured) {
-            self.parent_failure = Self::parent_error(self.port, written_name, &written, error);
+            self.parent_failure = Self::parent_error(self.port, written_name, error);
         }
         captured
     }
