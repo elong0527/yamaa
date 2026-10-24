@@ -22,11 +22,13 @@
 //!   and is refused. A case names every column of each kind it states; a
 //!   header that names fewer is for a case whose source compared just
 //!   those columns, as `compares` is for issue rows;
-//! - `saved`, each file the operation's save created or changed, by its path
-//!   in the study directory with forward slashes, and its bytes: its text, or
+//! - `saved`, what the operation did to the study directory the case
+//!   staged, whether it was refused or not: each file it created or changed,
+//!   by its path there with forward slashes, and its bytes, its text or
 //!   `{"file": path}` naming an authored expected file by its path from the
-//!   repository root, such as a benchmark's `expected/` file. `{}` states
-//!   that the save wrote nothing.
+//!   repository root, such as a benchmark's `expected/` file; and each file
+//!   it removed, as `null`. `{}` states that it created, changed and removed
+//!   nothing.
 //!
 //! A cell is `null` when the value is missing, its text for `str`, its
 //! integer for `int`, `true` or `false` for `bool`, and for `float` the
@@ -63,18 +65,23 @@ pub const CASE: [&str; 9] = [
 /// The kinds of the run report's rows, in report order (CHECK-23).
 const KINDS: [&str; 6] = ["run", "input", "rows", "handler", "column", "check"];
 
-/// The files a save wrote: each one's path in the study directory, with
-/// forward slashes, and its bytes.
+/// The files of a study directory: each one's path there, with forward
+/// slashes, and its bytes.
 pub type Files = BTreeMap<String, Vec<u8>>;
 
+/// What an operation did to a study directory: each file it created or
+/// changed, by its path there, with its bytes, and each file it removed,
+/// with none.
+pub type Saved = BTreeMap<String, Option<Vec<u8>>>;
+
 /// What an operation reports beside its issues: the output table and the run
-/// report it built, each as its rows, header first, and the files its save
-/// wrote.
+/// report it built, each as its rows, header first, and what an operation
+/// that saves did to the study directory.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Outcome {
     pub output: Option<Vec<Value>>,
     pub report: Option<Vec<Value>>,
-    pub saved: Option<Files>,
+    pub saved: Option<Saved>,
 }
 
 /// What a case states beside its issues.
@@ -84,8 +91,8 @@ pub struct Stated {
     pub output: Option<Vec<Value>>,
     /// The report rows of each kind the case names, each kind's header first.
     pub report: Option<BTreeMap<String, Vec<Value>>>,
-    /// The files the save wrote.
-    pub saved: Option<Files>,
+    /// What the operation did to the study directory.
+    pub saved: Option<Saved>,
 }
 
 impl Stated {
@@ -100,8 +107,8 @@ impl Stated {
     }
 
     /// Compare what the case states with what `operation` reported: the
-    /// output table, the report rows of each kind it names and the files the
-    /// save wrote.
+    /// output table, the report rows of each kind it names and what it did
+    /// to the study directory.
     pub fn compare(&self, reported: &Outcome, operation: &str, label: &str) {
         if let Some(stated) = &self.output {
             let output = reported
@@ -136,12 +143,27 @@ impl Stated {
             (None, Some(_)) => panic!("{label}: {operation} saves, so the case states saved"),
             (Some(stated), Some(saved)) => assert!(
                 stated == saved,
-                "{label}: the save wrote\n{}\nnot\n{}",
+                "{label}: {operation} created, changed or removed\n{}\nnot\n{}",
                 listing(saved),
                 listing(stated)
             ),
         }
     }
+}
+
+/// What an operation did to a study directory that held `staged` before it
+/// and holds `now` after it: each file it created or changed, with its bytes
+/// now, and each file it removed.
+pub fn saved(staged: &Files, now: &Files) -> Saved {
+    let removed = staged
+        .keys()
+        .filter(|name| !now.contains_key(*name))
+        .map(|name| (name.clone(), None));
+    let written = now
+        .iter()
+        .filter(|(name, bytes)| staged.get(*name) != Some(*bytes))
+        .map(|(name, bytes)| (name.clone(), Some(bytes.clone())));
+    removed.chain(written).collect()
 }
 
 /// A table's rows as an operation reports them: the header of its `names`,
@@ -282,28 +304,34 @@ fn of_kind(report: &[Value], kind: &str, header: &Value, label: &str) -> Vec<Val
     rows
 }
 
-/// The files `saved` states, each with its text or the bytes of the authored
-/// file it names.
-fn written(saved: &Value, label: &str) -> Files {
-    let files = saved
-        .as_object()
-        .unwrap_or_else(|| panic!("{label}: saved maps each file to its bytes, not {saved:?}"));
+/// The files `saved` states: each file created or changed, with its text or
+/// the bytes of the authored file it names, and each file removed, written
+/// `null`.
+fn written(saved: &Value, label: &str) -> Saved {
+    let files = saved.as_object().unwrap_or_else(|| {
+        panic!("{label}: saved maps each file to its bytes or null, not {saved:?}")
+    });
     files
         .iter()
         .map(|(name, bytes)| {
             relative(name, label);
             let bytes = match bytes {
-                Value::String(text) => text.clone().into_bytes(),
+                Value::Null => None,
+                Value::String(text) => Some(text.clone().into_bytes()),
                 Value::Object(members) if members.len() == 1 && members.contains_key("file") => {
                     let path = members["file"].as_str().unwrap_or_else(|| {
                         panic!("{label}: {name} names its expected file by its path: {bytes:?}")
                     });
                     relative(path, label);
                     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-                    std::fs::read(root.join(path))
-                        .unwrap_or_else(|error| panic!("{label}: {name}: {path}: {error}"))
+                    Some(
+                        std::fs::read(root.join(path))
+                            .unwrap_or_else(|error| panic!("{label}: {name}: {path}: {error}")),
+                    )
                 }
-                other => panic!("{label}: {name} is its text or {{\"file\": path}}, not {other:?}"),
+                other => {
+                    panic!("{label}: {name} is its text, {{\"file\": path}} or null, not {other:?}")
+                }
             };
             (name.clone(), bytes)
         })
@@ -343,11 +371,18 @@ fn lines(rows: &[Value]) -> String {
         .join("\n")
 }
 
-/// Each file's path and its text, for a failure message.
-fn listing(files: &Files) -> String {
+/// Each file's path and its text, or `null` for a file removed, for a failure
+/// message; `nothing` when there is no file.
+fn listing(files: &Saved) -> String {
+    if files.is_empty() {
+        return "nothing".to_owned();
+    }
     files
         .iter()
-        .map(|(name, bytes)| format!("{name}: {:?}", String::from_utf8_lossy(bytes)))
+        .map(|(name, bytes)| match bytes {
+            Some(bytes) => format!("{name}: {:?}", String::from_utf8_lossy(bytes)),
+            None => format!("{name}: null"),
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }

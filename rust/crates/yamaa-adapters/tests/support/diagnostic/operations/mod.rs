@@ -2,8 +2,9 @@
 //! case's `input` as the arguments of one adapters entry point, refusing a
 //! member it does not take, calls it and returns every issue it reports, in
 //! order, or none when it accepts the input, with the output table and run
-//! report it built and the files it saved. A reader asserts nothing about
-//! what it returns: the replay compares that with the case's authored rows.
+//! report it built and the files its save created, changed or removed. A
+//! reader asserts nothing about what it returns: the replay compares that
+//! with the case's authored rows.
 //! A reader may refuse an input whose setup fails, such as a producer named
 //! under `built` that does not build.
 //!
@@ -43,7 +44,8 @@ mod project_scope;
 pub struct Reported {
     pub issues: Vec<Diagnostic>,
     pub study: Option<Scratch>,
-    /// The tables the operation built and the files it saved.
+    /// The tables the operation built and the files its save created,
+    /// changed or removed.
     pub outcome: Outcome,
 }
 

@@ -29,9 +29,9 @@
 //! engine spells its path.
 //!
 //! A positive case also states the output table's rows, the run report's
-//! rows or the files its operation's save wrote, as [`super::form`] reads
-//! them for both crates' replays, and each is compared with what the
-//! operation reports.
+//! rows or the files its operation created, changed or removed, as
+//! [`super::form`] reads them for both crates' replays, and each is
+//! compared with what the operation reports.
 //!
 //! Every row was authored: in the test it moved from, or from the rule card,
 //! registry entry or sibling record its pull request names. No run wrote one.
