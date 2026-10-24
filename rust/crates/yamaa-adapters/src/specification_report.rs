@@ -377,18 +377,10 @@ fn dataset_failure<'a, C, E>(
     report["verifications"] = json!(verifications);
     Ok(report)
 }
-pub(crate) fn table_observation_projected<T: TableAccess>(
-    table: &T,
-    id: &Identity<'_>,
-    stage: &str,
-    name: &str,
-) -> Result<StoredTable, Error> {
-    table_observation(table, id, stage, name, &[table.row_count()])
-}
-
 /// The observation of a table whose records divide into `partitions` of
 /// these sizes, each admitted on its own: one partition for a table held
-/// whole, and those of an input read by partition (#3792).
+/// whole, those of an input read by partition (#3792), and those of an
+/// output held in partitions (D264).
 fn table_observation<T: TableAccess>(
     table: &T,
     id: &Identity<'_>,

@@ -511,7 +511,7 @@ impl Domain {
     /// only its report file and still reports a failed save. Build itself
     /// never writes.
     pub fn save(&mut self) -> Result<bool, FailedBuild> {
-        self.save_with(false, |_| Ok(()))
+        self.save_with(false, |_, _| Ok(()), |_| Ok(()))
     }
     /// Publish the declared report file alone, as a failed build saves, even
     /// when the build succeeded. `Err` means there is no report file to write.
@@ -520,24 +520,29 @@ impl Domain {
             return Err(FailedBuild);
         }
         let failed = !self.result.accepted();
-        match self.save_with(true, |_| Ok(())) {
+        match self.save_with(true, |_, _| Ok(()), |_| Ok(())) {
             // A failed build reports its failure after the report was written.
             Err(FailedBuild) if failed => Ok(self.publication_issues.is_empty()),
             outcome => outcome,
         }
     }
     /// [`Self::save`], or [`Self::save_report`] with `report_only`, calling
-    /// `before` with each file's position before it is committed.
+    /// `between` before each partition of a file after its first, with the
+    /// file's and the partition's positions ([`crate::publication::stage_with`]),
+    /// and `before` with each file's position before it is committed.
     pub(crate) fn save_with(
         &mut self,
         report_only: bool,
+        between: impl FnMut(usize, usize) -> Result<(), crate::publication::Interruption>,
         before: impl FnMut(usize) -> Result<(), crate::file_publication::Error>,
     ) -> Result<bool, FailedBuild> {
         let failed = !self.result.accepted();
         let fail = || if failed { Err(FailedBuild) } else { Ok(false) };
         let (staged, admitted) = match self.plan(report_only) {
             Ok(None) => return fail(),
-            Ok(Some((files, admitted))) => (crate::publication::stage(&files), admitted),
+            Ok(Some((files, admitted))) => {
+                (crate::publication::stage_with(&files, between), admitted)
+            }
             Err(issues) => {
                 self.refuse(issues);
                 return fail();
@@ -1099,7 +1104,7 @@ mod tests {
         let marker = Arc::new(());
         measurements.save_entered();
         assert!(!result
-            .save_with(false, |_| Err(crate::file_publication::Error::Io(
+            .save_with(false, |_, _| Ok(()), |_| Err(crate::file_publication::Error::Io(
                 std::io::Error::other(Marker(Arc::clone(&marker)))
             )))
             .unwrap());
@@ -1154,13 +1159,13 @@ mod tests {
                     .publication_items()
                     .into_iter()
                     .take(fail_at)
-                    .map(|(_, _, value)| value.clone())
+                    .map(|(_, _, _, value)| value.clone())
                     .collect(),
             );
             let marker = Arc::new(());
             let mut entered = 0;
             assert!(!result
-                .save_with(false, |index| {
+                .save_with(false, |_, _| Ok(()), |index| {
                     entered += 1;
                     if index == fail_at {
                         return Err(crate::file_publication::Error::Io(std::io::Error::other(
@@ -1225,7 +1230,7 @@ mod tests {
         let original = result.observations();
         let marker = Arc::new(());
         assert!(result
-            .save_with(false, |_| {
+            .save_with(false, |_, _| Ok(()), |_| {
                 Err(crate::file_publication::Error::Io(std::io::Error::other(
                     Marker(Arc::clone(&marker)),
                 )))
@@ -1254,7 +1259,7 @@ mod tests {
                 .result
                 .publication_items()
                 .into_iter()
-                .map(|(_, _, value)| value.clone())
+                .map(|(_, _, _, value)| value.clone())
                 .collect(),
         );
         assert_eq!(result.observations(), expected);
@@ -1272,7 +1277,7 @@ mod tests {
         fs::create_dir(study.0.join("foreign")).unwrap();
         std::os::unix::fs::symlink("foreign", study.0.join("nested")).unwrap();
         assert!(!result
-            .save_with(false, |_| panic!("linked parent entered publisher"))
+            .save_with(false, |_, _| Ok(()), |_| panic!("linked parent entered publisher"))
             .unwrap());
         assert_eq!(result.publication_attempt.entered, 0);
         assert_eq!(result.publication_attempt.completed, 0);
@@ -1310,7 +1315,7 @@ mod tests {
         let marker = Arc::new(());
         let mut entered = 0;
         assert!(!result
-            .save_with(false, |_| {
+            .save_with(false, |_, _| Ok(()), |_| {
                 entered += 1;
                 if entered == 2 {
                     std::panic::panic_any(Arc::clone(&marker));

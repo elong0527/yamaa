@@ -4,7 +4,11 @@
 //! A target is a physical file under the local file resolver, or an object a
 //! caller's resolver names. [`stage`] opens every target first, so a target
 //! that cannot be written, or two files that name one target, stop the save
-//! before anything is staged; it then stages every file completely.
+//! before anything is staged; it then stages every file completely. A run's
+//! output encoded a partition at a time (D264) is staged so too: the file
+//! publisher opens its staged file once and appends each partition, and
+//! [`stage_with`] is asked between two partitions, where a save polls its
+//! cancellation.
 //! [`Staged::commit`] replaces each target in order. The first file that
 //! cannot replace its target stops the save there: the files before it stay
 //! replaced, and every staged file after it is removed. Between staging and
