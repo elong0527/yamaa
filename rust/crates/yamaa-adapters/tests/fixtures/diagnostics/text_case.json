@@ -1,0 +1,111 @@
+{
+  "about": "The str_case verb in a specification (TEXT-5). The four modes change only ASCII letters, so other scalars, an empty value and a NUL pass through, and a declared missing literal answers a missing source as written. Without a missing literal, a missing source gives missing, and its default substitution is counted at the verb's missing path (COLUMN-14). A column reads the value its row template substituted, and a nested case evaluates only its selected branch, so an unselected branch's literal is never written. A source the inputs declare as another type is refused in row scope before any data is read (TEXT-1). Moved from the declarative_text_case module of scalar_declarative_rounding.rs, whose tests compared each issue's phase, condition, rule, spec paths and context, the handler counts as the report's handler rows name them (SPEC_PATH, NAME, COUNT), and the saved bytes.",
+  "cases": [
+    {
+      "case": "four_modes_and_literal_handlers_preserve_unicode_empty_nul_and_original_case",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, UP, LOW, SENT, TITLE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: UP, type: str, derivation: {str_case: {source: SRC.TEXT, to: upper, missing: MiXeD}}}\n  - {name: LOW, type: str, derivation: {str_case: {source: SRC.TEXT, to: lower}}}\n  - {name: SENT, type: str, derivation: {str_case: {source: SRC.TEXT, to: sentence}}}\n  - {name: TITLE, type: str, derivation: {str_case: {source: SRC.TEXT, to: title}}}\n",
+          "input.csv": "ID,TEXT\n1,FOLLOW-UP\n2,\u00df\u0130\u00e9\ud83d\ude42AbC\n3,a\u0000BC\n4,\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"output.csv": "ID,UP,LOW,SENT,TITLE\n1,FOLLOW-UP,follow-up,Follow-up,Follow-Up\n2,\u00df\u0130\u00e9\ud83d\ude42ABC,\u00df\u0130\u00e9\ud83d\ude42abc,\u00df\u0130\u00e9\ud83d\ude42abc,\u00df\u0130\u00e9\ud83d\ude42Abc\n3,A\u0000BC,a\u0000bc,A\u0000bc,A\u0000Bc\n4,MiXeD,,,\n"}
+    },
+    {
+      "case": "runtime_missing_gives_missing_and_counts_the_default_substitution",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TEXT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: TEXT, type: str, derivation: {str_case: {source: SRC.TEXT, to: upper}}}\n",
+          "input.csv": "ID,TEXT\nrow1,\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.TEXT.derivation.str_case.missing", "missing", 1]
+        ]
+      },
+      "saved": {"output.csv": "ID,TEXT\nrow1,\n"}
+    },
+    {
+      "case": "row_substitution_preserves_scope",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TEXT, RESULT]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: TEXT, type: str}\n  - {name: RESULT, type: str, derivation: {str_case: {source: TEXT, to: sentence}}}\nrows:\n  - id: records\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      TEXT: {str_case: {source: SRC.TEXT, to: title}}\n",
+          "input.csv": "ID,TEXT\n1,FOLLOW-UP\n2,\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"output.csv": "ID,TEXT,RESULT\n1,Follow-Up,Follow-up\n2,,\n"}
+    },
+    {
+      "case": "selected_nested_case_preserves_branch_effects",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TEXT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: TEXT\n    type: str\n    derivation:\n      case:\n        - when: \"ID = '1'\"\n          then:\n            case:\n              - when: \"ID = '1'\"\n                then: {str_case: {source: SRC.TEXT, to: title, missing: MiXeD}}\n              - otherwise: {str_case: {source: SRC.TEXT, to: upper}}\n        - otherwise: \"'safe'\"\n",
+          "input.csv": "ID,TEXT\n1,FOLLOW-UP\n2,\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"output.csv": "ID,TEXT\n1,Follow-Up\n2,safe\n"}
+    },
+    {
+      "case": "a_declared_int_source_is_rejected_in_row_scope_before_data_capture",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {TEXT: int}}}\noutput: {path: output.csv, columns: [ID, TEXT]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: TEXT, type: str}\nrows:\n  - id: records\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      TEXT: {str_case: {source: SRC.TEXT, to: upper, missing: fallback}}\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["rows.records.derivations.TEXT.str_case.source"], "context": {"source": "SRC.TEXT", "expected": "str", "actual": "int"}}]
+    },
+    {
+      "case": "a_declared_float_source_is_rejected_in_row_scope_before_data_capture",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {TEXT: float}}}\noutput: {path: output.csv, columns: [ID, TEXT]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: TEXT, type: str}\nrows:\n  - id: records\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      TEXT: {str_case: {source: SRC.TEXT, to: upper, missing: fallback}}\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["rows.records.derivations.TEXT.str_case.source"], "context": {"source": "SRC.TEXT", "expected": "str", "actual": "float"}}]
+    },
+    {
+      "case": "a_declared_date_source_is_rejected_in_row_scope_before_data_capture",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {TEXT: date}}}\noutput: {path: output.csv, columns: [ID, TEXT]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: TEXT, type: str}\nrows:\n  - id: records\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      TEXT: {str_case: {source: SRC.TEXT, to: upper, missing: fallback}}\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["rows.records.derivations.TEXT.str_case.source"], "context": {"source": "SRC.TEXT", "expected": "str", "actual": "date"}}]
+    },
+    {
+      "case": "a_declared_datetime_source_is_rejected_in_row_scope_before_data_capture",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {TEXT: datetime}}}\noutput: {path: output.csv, columns: [ID, TEXT]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: TEXT, type: str}\nrows:\n  - id: records\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      TEXT: {str_case: {source: SRC.TEXT, to: upper, missing: fallback}}\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["rows.records.derivations.TEXT.str_case.source"], "context": {"source": "SRC.TEXT", "expected": "str", "actual": "datetime"}}]
+    }
+  ]
+}

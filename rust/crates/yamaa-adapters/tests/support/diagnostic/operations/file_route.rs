@@ -38,6 +38,9 @@ pub(super) const FILES: &[File] = &[
     fixture!("submission.json"),
     fixture!("temporal.json"),
     fixture!("temporal_imputation.json"),
+    fixture!("text_case.json"),
+    fixture!("text_extract.json"),
+    fixture!("text_pad.json"),
     fixture!("workflow.json"),
 ];
 
