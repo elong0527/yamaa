@@ -70,6 +70,40 @@ mod execution {
                 case.label
             );
         }
+        /// Seams the replay cannot express: an absent output table and the
+        /// save's return value. The family's authored build/save refusals
+        /// expose no output and return FailedBuild when they produce a domain.
+        #[test]
+        fn refused_case_predicate_domains_have_no_output_and_fail_saves() {
+            use crate::support::diagnostic::{operations, replay};
+
+            let cases = replay::cases()
+                .into_iter()
+                .filter(|case| {
+                    case.label.starts_with("declarative_case_predicates.json::")
+                        && !case.issues.is_empty()
+                        && case
+                            .operations
+                            .iter()
+                            .any(|operation| matches!(operation.as_str(), "build" | "save"))
+                })
+                .collect::<Vec<_>>();
+            assert!(!cases.is_empty(), "the family has authored refusals");
+            for case in cases {
+                let fixture = Fixture(operations::study(&case.input));
+                let body = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
+                if let Ok(mut result) = fixture.run(&body) {
+                    let has_output = result.output().is_some();
+                    let save_failed = matches!(result.save(), Err(file_application::FailedBuild));
+                    assert_eq!(
+                        (has_output, save_failed),
+                        (false, true),
+                        "{}: a refused domain has no output and fails its save",
+                        case.label
+                    );
+                }
+            }
+        }
         /// A seam the replay cannot reach: these benchmarks' own files, run
         /// by `support::benchmarks::reproduce`. They pin case predicates and
         /// filtered sources in the bytes they save.
