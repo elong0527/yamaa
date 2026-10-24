@@ -75,9 +75,10 @@ mod execution {
         /// Seams the replay cannot express: the route a build takes and what
         /// a save returns. Each case of `aggregate_record_operations.json`
         /// that builds and reports no issue builds a domain, and one that
-        /// saves returns `Ok(true)`. A refused case may be refused before a
-        /// domain exists, as the moved tests accepted, but a domain it
-        /// builds exposes no output and fails its save.
+        /// saves writes none of its files before the save, which returns
+        /// `Ok(true)`. A refused case may be refused before a domain exists,
+        /// as the moved tests accepted, but a domain it builds exposes no
+        /// output and fails its save.
         #[test]
         fn aggregate_record_cases_keep_their_build_routes_and_save_results() {
             use crate::support::diagnostic::{operations, replay};
@@ -95,6 +96,14 @@ mod execution {
                 match (case.issues.is_empty(), fixture.run()) {
                     (true, Ok(mut domain)) => {
                         if case.operations == ["save"] {
+                            let stated = case.stated.saved.as_ref().expect("a stated save");
+                            for name in stated.keys() {
+                                assert!(
+                                    !fixture.0.join(name).exists(),
+                                    "{}: the build publishes {name} only when it saves",
+                                    case.label
+                                );
+                            }
                             let saved = domain.save();
                             assert!(
                                 matches!(saved, Ok(true)),
