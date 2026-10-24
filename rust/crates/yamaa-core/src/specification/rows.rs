@@ -444,7 +444,7 @@ fn declaration(
             // The tree types the call by the return its definition declares.
             let project = admission.project.ok_or_else(|| {
                 PrepareError::Unsupported(vec![UnsupportedFeature {
-                    operation: "function".into(),
+                    operation: crate::expression_table::Verb::Function.name().into(),
                     path: checks::path(spec, expr),
                 }])
             })?;

@@ -626,7 +626,10 @@ fn unpaired(
         }
     }
     for (readers, declared) in unread {
-        let forms = readers.iter().map(|reader| reader.form()).collect::<Vec<_>>();
+        let forms = readers
+            .iter()
+            .map(|reader| reader.form())
+            .collect::<Vec<_>>();
         let missing = forms.iter().map(String::as_str).collect::<Vec<_>>();
         findings.push(finding(&declared, &missing));
     }

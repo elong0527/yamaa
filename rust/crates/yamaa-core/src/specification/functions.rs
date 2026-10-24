@@ -79,7 +79,10 @@ impl FunctionFinding {
                 (C::FunctionImplementationMissing, None)
             }
             Cause::NoProject => {
-                context.insert("binding".into(), text("function"));
+                context.insert(
+                    "binding".into(),
+                    text(crate::expression_table::Verb::Function.name()),
+                );
                 (C::ProjectBindingMissing, None)
             }
             Cause::UnknownArgument => (C::InvalidFunctionArgument, Some("unknown_argument")),

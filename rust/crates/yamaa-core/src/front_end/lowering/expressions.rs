@@ -172,7 +172,7 @@ impl<'d> Lower<'d> {
             };
             match leaf {
                 Some(kind @ ExprKind::Ref(_)) if placement == Placement::Derivation => {
-                    let meta = self.meta(at, keyword("source"), Some(node));
+                    let meta = self.meta(at, keyword(Verb::Source.name()), Some(node));
                     return self.push(kind, meta);
                 }
                 Some(kind) => return self.push(kind, here),

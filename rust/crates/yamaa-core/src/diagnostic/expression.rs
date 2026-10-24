@@ -7,6 +7,7 @@ use crate::expression::{
     Condition, Context as Field, ErrorKind, EvaluationError, Failure, Step, TemporalKind,
     TypeFinding,
 };
+use crate::expression_table::Verb;
 use crate::json::Value as V;
 use crate::numeric::{ArithmeticErrorKind, MathFunction};
 use crate::temporal::TemporalError;
@@ -80,17 +81,20 @@ impl Failure {
                 if let Some(count) = argument_count {
                     context.insert("argument_count".into(), V::from(*count));
                 } else {
+                    // A function the grammar refuses, by the name a dialect
+                    // gives it, and the expression that replaces it.
                     let hint = match function.to_ascii_uppercase().as_str() {
-                        "COALESCE" => Some("use the first_available expression"),
-                        "GREATEST" => Some("use the greatest expression"),
-                        "LEAST" => Some("use the least expression"),
+                        "COALESCE" => Some((Verb::FirstAvailable, "expression")),
+                        "GREATEST" => Some((Verb::Greatest, "expression")),
+                        "LEAST" => Some((Verb::Least, "expression")),
                         "ROUND" | "ROUND_HALF_AWAY_FROM_ZERO" => {
-                            Some("use the round_half_away_from_zero operation")
+                            Some((Verb::RoundHalfAwayFromZero, "operation"))
                         }
                         _ => None,
                     };
-                    if let Some(hint) = hint {
-                        context.insert("hint".into(), text(hint));
+                    if let Some((verb, noun)) = hint {
+                        let hint = format!("use the {} {noun}", verb.name());
+                        context.insert("hint".into(), text(&hint));
                     }
                 }
             }
