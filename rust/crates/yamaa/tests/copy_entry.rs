@@ -513,8 +513,8 @@ fn an_empty_child_reports_the_copy_cycle_its_parent_reports() {
                 .into_iter()
                 .map(|issue| {
                     (
-                        issue.phase,
-                        issue.code,
+                        issue.phase.as_str().to_owned(),
+                        issue.code.as_str().to_owned(),
                         issue.rule,
                         issue.spec_path,
                         yamaa_adapters::json_wire::decode(issue.context.to_json()).unwrap(),

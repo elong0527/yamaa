@@ -53,9 +53,9 @@ fn refused(failure: &Failure, path: &str) -> (String, Option<String>, Vec<String
     );
     assert_eq!(failure.issues.rows(), 1);
     assert!(failure.paths.is_empty());
-    assert_eq!(issue.phase, "validation");
+    assert_eq!(issue.phase.as_str(), "validation");
     (
-        issue.code.clone(),
+        issue.code.as_str().to_owned(),
         issue.rule.clone(),
         issue.spec_path.clone(),
         issue.context.to_json().to_owned(),
@@ -159,7 +159,7 @@ fn a_1_x_header_is_refused_as_a_call_reading_its_type_refuses_it() {
     let check = engine.spec(&path).check().unwrap().diagnostics();
     assert_eq!(
         (
-            check[0].code.clone(),
+            check[0].code.as_str().to_owned(),
             check[0].rule.clone(),
             check[0].spec_path.clone(),
             check[0].context.to_json().to_owned()

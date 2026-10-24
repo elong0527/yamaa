@@ -890,8 +890,8 @@ fn missing_submission_metadata_is_reported_at_the_listing_or_the_column_submissi
             .into_iter()
             .map(|issue| {
                 (
-                    issue.phase,
-                    issue.code,
+                    issue.phase.as_str().to_owned(),
+                    issue.code.as_str().to_owned(),
                     issue.rule,
                     issue.spec_path,
                     issue.context.to_json().to_owned(),

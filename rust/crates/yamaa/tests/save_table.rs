@@ -67,7 +67,7 @@ fn issue(failure: &Failure) -> &Diagnostic {
 #[track_caller]
 fn assert_output_fault(failure: &Failure, code: &str) {
     let issue = issue(failure);
-    assert_eq!(issue.code, "engine_rejected");
+    assert_eq!(issue.code.as_str(), "engine_rejected");
     assert_eq!(issue.rule, None);
     assert!(issue.spec_path.is_empty(), "{:?}", issue.spec_path);
     assert_eq!(issue.context.get("step"), Some(&text("output")));
@@ -318,9 +318,9 @@ fn an_extension_outside_the_closed_mapping_is_refused_before_anything_is_written
         let out = study.path(name);
         let failure = engine.save_table(&table, &out).unwrap_err();
         let issue = issue(&failure);
-        assert_eq!(issue.code, "unknown_artifact_profile");
+        assert_eq!(issue.code.as_str(), "unknown_artifact_profile");
         assert_eq!(issue.rule.as_deref(), Some("OUTPUT-5"));
-        assert_eq!(issue.phase, "validation");
+        assert_eq!(issue.phase.as_str(), "validation");
         assert!(issue.spec_path.is_empty());
         assert_eq!(issue.context.get("path"), Some(&text(&out)));
         assert_eq!(
@@ -448,8 +448,12 @@ fn a_regular_file_in_a_table_targets_parent_is_not_a_missing_path() {
         let out = study.path(name);
         let failure = engine.save_table(&table, &out).unwrap_err();
         let saved = issue(&failure);
-        assert_eq!(saved.phase, "output", "{name}");
-        assert_eq!(saved.code, "resource_path_not_regular_file", "{name}");
+        assert_eq!(saved.phase.as_str(), "output", "{name}");
+        assert_eq!(
+            saved.code.as_str(),
+            "resource_path_not_regular_file",
+            "{name}"
+        );
         assert_eq!(saved.rule.as_deref(), Some("FILE-7"));
         assert!(saved.spec_path.is_empty());
         assert_eq!(saved.context.get("path"), Some(&text(&out)));
