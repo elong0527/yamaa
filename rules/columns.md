@@ -94,7 +94,7 @@ derived by that row template. The grouped `filter` is not a derivation: it adds
 no graph edge between columns and runs only after all columns have completed.
 
 Fails: `phase_boundary`.
-Evidence: `negative-row-phase-flag`, `rust/crates/yamaa-core/tests/project_specification.rs::row_reads_of_nonlocal_columns_return_complete_phase_findings_before_lowering`, `rust/crates/yamaa-adapters/tests/check_row_phase_boundaries.rs::an_aggregate_in_a_case_result_is_not_row_local_in_either_spelling`.
+Evidence: `negative-row-phase-flag`, `rust/crates/yamaa-core/tests/project_specification.rs::row_reads_of_nonlocal_columns_return_complete_phase_findings_before_lowering`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_row_phase_boundaries.json::an_ungrouped_template_reading_a_case_result_aggregate_default_is_a_phase_boundary_for_python`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_row_phase_boundaries.json::an_ungrouped_template_reading_a_case_result_aggregate_default_is_a_phase_boundary_for_r`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_row_phase_boundaries.json::a_grouped_template_reading_a_case_result_aggregate_default_is_a_phase_boundary_for_python`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_row_phase_boundaries.json::a_grouped_template_reading_a_case_result_aggregate_default_is_a_phase_boundary_for_r`.
 
 A row dependency on such a value fails as `phase_boundary`.
 
