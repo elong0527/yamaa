@@ -93,8 +93,11 @@ fn grouped_windows_read_only_group_keys_of_the_driver() {
             None,
         ),
     ] {
-        // A field outside the groups is refused, by `check` as by `domain`; a
-        // group key and a value of the grouped row both build.
+        // A field outside the groups is refused, by `check` as by `domain`.
+        // `negative-row-window-ungrouped` states the first issue of a grouped
+        // template's refusal, but its `error.yaml` leaves out that `domain`
+        // and `check` report it alone; no benchmark pins the column-level
+        // refusal.
         let fixture = Fixture::new(&specification.edit("ORDER", "SRC.VAL"));
         let refused = |identifier: &str, path: &str| {
             let mut context = yamaa_adapters::json!({"identifier": identifier, "dataset": "SRC"});
@@ -116,6 +119,8 @@ fn grouped_windows_read_only_group_keys_of_the_driver() {
         );
         assert!(domain.save().is_err());
         assert_eq!(fixture.check(), vec![refused("SRC.VAL", path)]);
+        // A group key and a value of the grouped row both build, which no
+        // benchmark pins.
         for order in ["SRC.ID", "LOW"] {
             let fixture = Fixture::new(&specification.edit("ORDER", order));
             assert!(fixture.check().is_empty(), "{order}: {:?}", fixture.check());
@@ -132,7 +137,8 @@ fn grouped_windows_read_only_group_keys_of_the_driver() {
         // A refused group read does not hide another read the binder refuses:
         // the unknown field is reported at its own entry in the same pass.
         // Whether the source stores a field is known only once it is read, so
-        // to `check` both fields are driver fields outside the groups.
+        // to `check` both fields are driver fields outside the groups. No
+        // benchmark pins a field the source does not store.
         let fixture = Fixture::new(&specification.edit("ORDER", "SRC.VAL, SRC.MISSING"));
         let domain = fixture.run();
         let reported = domain

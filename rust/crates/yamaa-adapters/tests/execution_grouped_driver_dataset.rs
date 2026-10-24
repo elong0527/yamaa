@@ -36,13 +36,6 @@ impl Fixture {
             crate::support::study::identity("grouped-driver-dataset", specification),
         )
     }
-    /// `domain` reports nothing and saves exactly `expected` to `output`.
-    fn saved(&self, output: &str, expected: &str) {
-        let mut domain = self.domain().unwrap_or_else(|issues| panic!("{issues:?}"));
-        assert!(domain.issues().is_empty(), "{:?}", domain.issues());
-        assert!(domain.save().unwrap());
-        assert_eq!(fs::read_to_string(self.0.join(output)).unwrap(), expected);
-    }
     /// The issues `domain` reports, whether preparation or the build fails.
     fn issues(&self) -> Vec<Value> {
         let issues = match self.domain() {
@@ -102,6 +95,9 @@ fn vitals(clinic: &str, home: &str, column: &str) -> String {
 
 #[test]
 fn later_grouped_template_names_its_own_input() {
+    // `negative-row-ungrouped-second-template` states the bare read's first
+    // issue, but its `error.yaml` leaves out that the issue is the only one;
+    // no benchmark pins the same read as a window's operand.
     let context =
         yamaa_adapters::json!({"identifier": "HOME.SYSBP", "row": "home", "dataset": "HOME"});
     for (home, path) in [
@@ -126,7 +122,8 @@ fn later_grouped_template_names_its_own_input() {
 #[test]
 fn column_derivation_completed_by_a_later_template_names_its_input() {
     // The clinic template derives VSSTRESN itself, so only the home template
-    // completes it from the column-level derivation.
+    // completes it from the column-level derivation. No benchmark pins
+    // ROW-5 for a column-level derivation.
     let fixture = Fixture::new(&vitals(
         ", VSSTRESN: CLINIC.SYSBP",
         "",
@@ -142,21 +139,13 @@ fn column_derivation_completed_by_a_later_template_names_its_input() {
     );
 }
 
+/// The home template averages its readings and states its own visit, so only
+/// the clinic template completes the visit from the column-level derivation.
+/// No template groups the clinic measurements, so each clinic row reads its
+/// own measurement, as `schema-rows-group-scope` states.
 #[test]
 fn column_read_of_an_ungrouped_driver_ignores_another_drivers_groups() {
-    // The home template averages its readings itself, so only the clinic
-    // template completes VSSTRESN from the column-level derivation. No
-    // template groups the clinic measurements, so each clinic row reads its
-    // own measurement.
-    let fixture = Fixture::new(&vitals(
-        "",
-        ", VSSTRESN: {aggregate: 'MEAN(HOME.SYSBP)'}",
-        ", derivation: CLINIC.SYSBP",
-    ));
-    fixture.saved(
-        "vs.csv",
-        "USUBJID,VSDY,VSCAT,VSSTRESN\nS1,1,CLINIC,132\nS1,15,CLINIC,128\nS1,8,HOME,128\n",
-    );
+    crate::support::benchmarks::reproduce("schema-rows-group-scope");
 }
 
 #[test]
@@ -165,6 +154,8 @@ fn column_window_over_a_template_grouped_by_another_driver_names_the_drivers() {
     // which no clinic measurement built. Grouping is not the cause: the home
     // rows hold no clinic record at all, so the read fails as a field that
     // names nothing they hold, naming both drivers.
+    // `negative-window-other-driver` pins the read beside an ungrouped
+    // template; no benchmark pins it beside a grouped one.
     let specification = vitals(
         "",
         "",
@@ -211,6 +202,7 @@ fn serious(derivations: &str, column: &str) -> String {
     )
 }
 
+// No benchmark pins ROW-5 for a named intermediate driver.
 #[test]
 fn grouped_intermediate_driver_is_named_rather_than_its_input() {
     assert_eq!(
@@ -223,6 +215,7 @@ fn grouped_intermediate_driver_is_named_rather_than_its_input() {
     );
 }
 
+// No benchmark pins NAME-4 for a named intermediate driver.
 #[test]
 fn column_read_of_a_grouped_intermediate_driver_names_the_intermediate() {
     assert_eq!(

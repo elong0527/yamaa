@@ -78,6 +78,9 @@ fn numbering(kind: &str, order: &str) -> String {
 /// numerically, so -0.0 and 0.0 tie in rank. A missing `G` forms one
 /// partition, two missing values tie, and `nulls` places missing values
 /// first or last whatever the direction (WINDOW-6, WINDOW-3, VALUE-22).
+/// `schema-window-functions`' `RESULT_ORDER` pins missing values last and two
+/// missing values tying; no benchmark pins values above 2^53, signed zeros, a
+/// missing partition key or `nulls: first`.
 #[test]
 fn numbering_and_rank_keep_exact_order_null_placement_and_ties_within_partitions() {
     // Partition `a` holds 2^53, 2^53 + 1 twice and a missing value; rows 2
@@ -115,7 +118,7 @@ fn numbering_and_rank_keep_exact_order_null_placement_and_ties_within_partitions
 
 /// A window filter evaluates both operands of `AND`: a `FALSE` left operand
 /// does not spare the right one, whose `int` and text operands do not
-/// compare (FORMULA-5).
+/// compare (FORMULA-5). No benchmark pins a window filter's operand types.
 #[test]
 fn window_filter_evaluates_both_operands_of_and() {
     let fixture = Fixture::new(
@@ -166,7 +169,9 @@ fn eligibility(window: &str) -> String {
 /// falls at or before its own `reference`; a missing reference leaves it
 /// ineligible. A window filter removes a later row or a same-date twin from
 /// the search, and the row it removes stays in the output with a missing
-/// flag (WINDOW-9, WINDOW-4).
+/// flag (WINDOW-9, WINDOW-4). `adam-adae-worsening-emergence` pins a
+/// filtered search and a missing reference; no benchmark pins references
+/// that differ within a partition or a filtered same-date twin.
 #[test]
 fn baseline_flag_judges_each_row_by_its_own_reference_and_skips_filtered_rows() {
     // Row 2 falls after its own reference and row 3 has no date, so row 1
@@ -247,6 +252,10 @@ fn tie_break(terms: &str) -> String {
 /// number of tied rows and the partition (WINDOW-9, VALUE-22).
 #[test]
 fn baseline_tie_break_terms_pick_the_last_same_date_row_or_fail_when_still_tied() {
+    // The latest time wins, a missing time sorts lowest, and a sequence
+    // number breaks a tie on the time, as `schema-baseline-tie-break` states.
+    crate::support::benchmarks::reproduce("schema-baseline-tie-break");
+    // No benchmark pins a descending term or a declared missing placement.
     // Rows 1 to 3 share January 3 with descending SEQ; row 4 is earlier.
     let rows = |times: [&str; 3]| {
         format!(
@@ -262,22 +271,20 @@ fn baseline_tie_break_terms_pick_the_last_same_date_row_or_fail_when_still_tied(
         })
     };
     for (terms, id) in [
-        // The latest time wins; a missing time sorts lowest.
-        ("TM", 1),
         // Descending prefers the smallest time, and missing stays lowest,
         // which is now last.
         ("{variable: TM, direction: desc}", 3),
         // A declared placement puts the missing time last.
         ("{variable: TM, nulls: last}", 3),
         // A sequence number instead of a time.
-        ("SEQ", 1),
         ("{variable: SEQ, direction: desc}", 3),
     ] {
         let fixture = Fixture::new(&tie_break(terms), &rows(["900", "800", ""]));
         assert_eq!(fixture.saved(), flagged(id), "{terms}");
     }
-    // Rows 1 and 2 are equal on the time; the sequence breaks the tie in
-    // favour of row 1.
+    // Rows 1 and 2 are equal on the time, the only term, so the flag fails.
+    // `negative-baseline-unresolved-tie` states such a failure's first issue,
+    // but its `error.yaml` leaves out that the issue is the only one.
     let tied = rows(["900", "900", "800"]);
     let mut issue = Fixture::new(&tie_break("TM"), &tied).issue();
     // The facts WINDOW-9 names: the shared date, the number of tied rows and
@@ -294,10 +301,6 @@ fn baseline_tie_break_terms_pick_the_last_same_date_row_or_fail_when_still_tied(
             "spec_paths": ["columns.BLFL.derivation.baseline_flag"],
             "context": {"date": "2025-01-03", "match_count": 2, "keys": [{"G": "a"}]}
         })
-    );
-    assert_eq!(
-        Fixture::new(&tie_break("TM, SEQ"), &tied).saved(),
-        flagged(1)
     );
 }
 
@@ -327,7 +330,7 @@ fn wide(width: usize) -> String {
 /// A window ordered by a source field orders a table of the output columns
 /// and that field, and the fixed limit of 1,024 columns holds for that
 /// table: 1,023 output columns build, while 1,024 are refused at the
-/// window's own path.
+/// window's own path. No benchmark pins the column limit.
 #[test]
 fn window_context_table_counts_its_source_field_against_the_column_limit() {
     let fixture = Fixture::new(&wide(1023), "V\n7\n");
