@@ -541,12 +541,15 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         }
         // Admitted: a key-bounded run cuts its input now (#3763), and a run
         // that divides every step admits its output a partition at a time
-        // from here on (D264).
+        // from here on (D264), unless it admits its output whole, as a run
+        // over a SAS or ODM driver input does.
         self.cut_by_keys();
         self.output_partition = self
             .partitions
             .as_ref()
-            .filter(|partitions| plan.whole_table_step(partitions.keys).is_none())
+            .filter(|partitions| {
+                !partitions.whole_output && plan.whole_table_step(partitions.keys).is_none()
+            })
             .map(partitions::Partitions::largest);
         observer(ExecutionEvent::Exit {
             phase: ExecutionPhase::Admission,
