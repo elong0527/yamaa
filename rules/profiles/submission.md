@@ -808,8 +808,8 @@ intermediate or, in a `case`, from an output column, is anything else.
 Anything else computes its value: arithmetic and rounding (text in an
 expression field that computes, and `round_half_away_from_zero`), every
 aggregation but an `ONLY` pivot, windows, temporal computation (the date and
-datetime operations other than `to_date`, `dtc` and `duration_text`), `flag`, `cut`,
-`str_length`, `greatest` and `least`, `function`, and every read through a
+datetime operations other than `to_date`, `dtc` and `duration_text`), `flag`,
+`cut`, `str_length`, `greatest` and `least`, `function`, and every read through a
 named intermediate that is not a plain lookup: one that declares
 `derivations`, whose fields it computes, or one over `SELF`, the completed
 output rows. Each type it refutes asserts the value arrived as it stands, and
