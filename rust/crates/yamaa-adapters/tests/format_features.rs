@@ -160,7 +160,7 @@ fn odm_reader_is_an_independent_capability() {
             yamaa_core::specification::SourceInterpretation::Ordinary,
             None,
         )
-        .map(yamaa_adapters::decoder::Snapshot::into_table);
+        .map(|snapshot| snapshot.into_table().expect("an input read whole"));
     #[cfg(feature = "odm")]
     {
         let table = result.unwrap();

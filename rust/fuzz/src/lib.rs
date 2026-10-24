@@ -9,13 +9,13 @@
 //! the third-party decoder from reaching that hook: they stay malformed
 //! sources, as the hosts report them.
 
-use std::convert::Infallible;
+use std::{convert::Infallible, num::NonZeroUsize};
 
 use yamaa_adapters::{column_table::ColumnTable, decoder::Decoder, specification_run::Error};
 use yamaa_core::{
     decoder::Decoder as _,
     specification::{SourceDeclaration, SourceInterpretation, SourceProfile},
-    table::TableAccess,
+    table::{TableAccess, ValueRef},
     value::ColumnType,
 };
 
@@ -56,7 +56,90 @@ pub fn decode(
 ) -> Result<ColumnTable, Error> {
     Decoder::<Infallible>::default()
         .table(source, bytes, interpretation, None)
-        .map(|snapshot| snapshot.into_table())
+        .map(|snapshot| snapshot.into_table().expect("an input read whole"))
+}
+
+/// Decode held bytes by partition too (#3792), in partitions of each of a
+/// few sizes, and require the whole read's outcome: the same table, cell by
+/// cell, or the same finding. The one exception is a whole read refused for
+/// its table's size, which each partition may stay within. The schema the
+/// run binds to choose the read, from the header or footer alone, must be
+/// the decoded table's.
+pub fn partitioned_reads_match_the_whole_read(
+    source: &SourceDeclaration,
+    bytes: &[u8],
+    interpretation: SourceInterpretation,
+) {
+    let mut decoder = Decoder::<Infallible>::default();
+    let whole = decoder.table(source, bytes, interpretation, None);
+    if let Ok(table) = &whole {
+        assert_eq!(
+            decoder
+                .partition_schema(source, bytes, interpretation)
+                .as_ref(),
+            Some(table.schema())
+        );
+    }
+    if whole.as_ref().err().is_some_and(table_size) {
+        return;
+    }
+    for rows in [1, 2, 3, 7] {
+        let rows = NonZeroUsize::new(rows).expect("a positive partition size");
+        let divided = decoder.partitioned(source, bytes, interpretation, None, rows);
+        match (&whole, &divided) {
+            (Ok(whole), Ok(divided)) => {
+                assert_eq!(whole.schema(), divided.schema());
+                assert_eq!(cells(whole), cells(divided));
+            }
+            (Err(whole), Err(divided)) => {
+                assert_eq!(format!("{whole:?}"), format!("{divided:?}"));
+            }
+            (whole, divided) => panic!(
+                "the whole read {} where partitions of {rows} {}",
+                if whole.is_ok() { "admits" } else { "refuses" },
+                if divided.is_ok() { "admit" } else { "refuse" },
+            ),
+        }
+    }
+}
+
+/// Whether a read was refused for its table's size: its rows, its cells or
+/// its text's offsets, which bound a partition of a read by partition.
+fn table_size(error: &Error) -> bool {
+    use yamaa_adapters::column_table::TableError;
+    use yamaa_adapters::csv_source::{self, TextTableError};
+    use yamaa_adapters::parquet_source;
+    let size = |resource: &str| matches!(resource, "table_rows" | "table_cells");
+    match error {
+        Error::Source(TextTableError::Csv(csv_source::Error::Limit { resource, .. }))
+        | Error::Source(TextTableError::Table(TableError::Limit { resource, .. }))
+        | Error::TypedSource(yamaa_adapters::typed_csv::Error::Table(TableError::Limit {
+            resource,
+            ..
+        }))
+        | Error::ParquetSource(parquet_source::Error::ResourceLimit { resource, .. })
+        | Error::ParquetSource(parquet_source::Error::Table(TableError::Limit {
+            resource, ..
+        })) => size(resource),
+        Error::ResourceLimit(refusal) => size(refusal.resource),
+        Error::Source(TextTableError::Table(TableError::Representation { .. }))
+        | Error::TypedSource(yamaa_adapters::typed_csv::Error::Table(
+            TableError::Representation { .. },
+        ))
+        | Error::ParquetSource(parquet_source::Error::Representation { .. }) => true,
+        _ => false,
+    }
+}
+
+/// Every cell of a decoded table, in order.
+fn cells(table: &impl TableAccess<Error = Infallible>) -> Vec<Vec<ValueRef<'_>>> {
+    (0..table.row_count())
+        .map(|row| {
+            (0..table.schema().columns().len())
+                .map(|column| table.cell(row, column).expect("a decoded cell"))
+                .collect()
+        })
+        .collect()
 }
 
 /// Read one SAS file under the shared decode: undeclared in windows-1252, the

@@ -45,7 +45,10 @@ partitioned attempt `P` must have the same observable result as `W`:
   must not turn an unobserved failure into an observed one.
 - **Boundaries:** admission and limits apply to the same complete logical inputs
   and outputs. A batch cannot reset a table cap or admit a table that whole-table
-  execution refuses. Keep phase entry/exit, outcome and refusal identity.
+  execution refuses. The one exception is a driver input that a partitioned run
+  reads by partition (#3792, D264): the row and cell limits bound each of its
+  partitions instead of the whole input.
+  Keep phase entry/exit, outcome and refusal identity.
   Elapsed time and allocation measurements need not be equal. Incidental
   allocator/OS exhaustion cannot be made identical by a scheduling contract;
   it must still refuse without exposing a partial accepted dataset.
@@ -76,7 +79,7 @@ The inventory follows `Expression`, `RowMode` and the execution stages in
 
 | Family | Class | Required scope or reconciliation |
 | --- | --- | --- |
-| Plan/schema admission, function binding, source geometry and fixed limits | Global | Admit once in the current order before data reads; retain complete-table row/cell/column counts and source-list positions. |
+| Plan/schema admission, function binding, source geometry and fixed limits | Global | Admit once in the current order before data reads, a driver input read by partition a partition at a time (#3792); retain complete-table row/cell/column counts and source-list positions. |
 | `Source`, `Column`, `Literal`; `Compute`, `Round`, `Temporal`, `Imputation`, `Extreme`; string template, extract, case and pad | Safe | Complete operands first; retain conversion/handler order and exact arithmetic. Regex matching is linear and cannot be refused. A scalar wrapping a lookup or window inherits that dependency. |
 | `Case`, `FirstAvailable`, `Flag`, `SourceBinding` and bound predicates | Safe | Keep authored operand order, three-valued truth, lazy branch/operand evaluation and binding-handler ownership. Never evaluate a suppressed alternative to fill a batch. |
 | `MappingCut` (dictionary mapping and interval cut) | Safe | Admit dictionaries/breaks once; select independently from each completed source value with exact mixed-number comparison, then convert and record missing/unmapped handlers in order. |
@@ -203,9 +206,27 @@ with no host surface.
 
 - **One input.** The run reads the partitions as one table, so every record
   keeps its coordinate in the whole input, and reads, failures and row
-  identities name it as the whole-table run does. Admission checks the
-  complete input and every partition's schema once, before any record is
-  read.
+  identities name it as the whole-table run does. Admission checks every
+  partition's schema, and each partition within the row and cell limits on
+  its own, before any record is read; every other source is admitted whole.
+- **Reading by partition.** A run whose specification reads one input, CSV
+  or Parquet, and whose plan is safe under consecutive partitions reads
+  that input by partition (#3792), every partition before any derivation.
+  A plan that only key-bounded partitions can divide reads the input whole
+  and admits it whole before cutting its key-bounded partitions: the
+  reader's record ranges do not preserve key groups.
+  The CSV reader scans every record once, then decodes and converts one
+  partition of records after another, so only one partition's intermediates
+  exist at a time. The Parquet reader divides the file into runs of whole row
+  groups, a row group of more records than a partition being a partition of
+  its own, and decodes every run before it builds any partition's table, so
+  its peak memory is the whole read's. Each partition is admitted on its
+  own, its generated ordinal counts records in the whole input, and every
+  finding is the whole read's, at the same record, row and field. Every
+  other run reads each input whole and admits it whole, a run with a lookup,
+  join or named relation's source included, so a plan with a step that needs
+  the whole table, run with the fallback or not, refuses an input beyond the
+  limits as an unpartitioned run does.
 - **Units, one partition at a time.** The schedule's units run in their
   order. A unit whose steps are all `Safe` or `CombineStep`, and whose rows
   come from the driver input, runs over each partition's rows in turn, each

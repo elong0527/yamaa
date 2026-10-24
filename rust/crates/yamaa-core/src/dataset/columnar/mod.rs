@@ -484,17 +484,21 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                 required: count,
             }));
         }
-        for (source_index, (rows, columns)) in std::iter::once((
-            self.primary.row_count(),
-            self.primary.schema().columns().len(),
-        ))
-        .chain(
-            self.secondary
-                .iter()
-                .map(|source| (source.row_count(), source.schema().columns().len())),
-        )
-        .enumerate()
-        {
+        // A partitioned run admits each partition of its driver input on its
+        // own (#3792); every other source, and an undivided driver, whole.
+        let width = self.primary.schema().columns().len();
+        let primary = self
+            .driver_admissions()
+            .into_iter()
+            .map(|rows| (0, rows, width));
+        let secondary = self.secondary.iter().enumerate().map(|(index, source)| {
+            (
+                index + 1,
+                source.row_count(),
+                source.schema().columns().len(),
+            )
+        });
+        for (source_index, rows, columns) in primary.chain(secondary) {
             if let Err(error) = Limits::table(rows, columns) {
                 return Err(Box::new(ExecutionError::SourceLimit {
                     resource: match error.resource {
