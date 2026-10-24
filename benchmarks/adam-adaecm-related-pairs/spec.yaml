@@ -2,7 +2,7 @@ yamaa: "1.0"
 type: spec
 model: ADaM
 domain: ADAECM
-keys: [STUDYID, USUBJID, AESEQ, CMSEQ]
+keys: [STUDYID, USUBJID, AESEQ, CMSEQ, RELID]
 input:
   AE: {path: input/ae.csv, types: {AESEQ: int}, key: [USUBJID, AESEQ]}
   CM: {path: input/cm.csv, types: {CMSEQ: int}, key: [USUBJID, CMSEQ]}
