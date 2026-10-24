@@ -9,11 +9,14 @@ use std::mem::offset_of;
 use yamaa_boundary::{abi, BOUNDARY_VERSION};
 
 /// The negotiation entry of an engine of the next boundary version.
+/// Built with the crate's `dynamic-engine` feature, under which the engine
+/// exports its own entry from every library that links it, the fixture
+/// exports none, and the loading tests are left out.
 ///
 /// # Safety
 ///
 /// As `yamaa_engine::negotiate` asks of `request` and `outcome`.
-#[no_mangle]
+#[cfg_attr(not(feature = "dynamic-engine"), no_mangle)]
 pub unsafe extern "C" fn yamaa_engine_negotiate(
     request: *const abi::Request,
     outcome: *mut abi::Outcome,

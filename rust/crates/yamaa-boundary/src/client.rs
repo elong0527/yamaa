@@ -172,18 +172,30 @@ impl Gate {
     /// library beside this module: the test-only loaded mode
     /// ([`crate::loader`]). Beside a module where no engine library loads,
     /// or whose library exports no negotiation entry, the request is refused
-    /// as `missing_interface`, as from a native module without a handshake.
+    /// as `missing_interface`, as from a native module without a handshake,
+    /// and the reason, with the library's path, goes to standard error.
     #[cfg(feature = "loader")]
     pub fn negotiate_loaded(&self, request: &Value) -> Outcome {
-        self.negotiate_through(request, crate::loader::entry())
+        let entry = crate::loader::entry();
+        if let Err(missing) = &entry {
+            // The refusal names no path; the loaded mode serves tests alone,
+            // whose logs keep this line.
+            eprintln!("yamaa, in the test-only loaded mode: {missing}");
+        }
+        self.negotiate_through(request, entry)
     }
 
     /// Answer `request` as [`Gate::negotiate_loaded`] does, through the
     /// engine library beside `module`, a module file's absolute path: the
     /// loading tests' route to their fixture engines.
+    ///
+    /// # Safety
+    ///
+    /// As [`crate::loader::load`] asks of the library beside `module`.
     #[cfg(feature = "loader")]
-    pub fn negotiate_beside(&self, request: &Value, module: &std::path::Path) -> Outcome {
-        self.negotiate_through(request, crate::loader::load(module))
+    pub unsafe fn negotiate_beside(&self, request: &Value, module: &std::path::Path) -> Outcome {
+        // SAFETY: the caller's contract.
+        self.negotiate_through(request, unsafe { crate::loader::load(module) })
     }
 
     #[cfg(feature = "loader")]

@@ -96,7 +96,9 @@ fn each_fixture_engine_gets_its_authored_outcome() {
         let module = Scratch::new("loading");
         place(&fixture(fixture_case["library"].as_str().unwrap()), &module);
         let gate = Gate::new();
-        let outcome = gate.negotiate_beside(&generated(), &module.join("module"));
+        // SAFETY: the library beside the module is a fixture engine of this
+        // crate.
+        let outcome = unsafe { gate.negotiate_beside(&generated(), &module.join("module")) };
         let table = gate.pass().ok().map(|engine| {
             let before = counted(engine.census(), HandleKind::Plans);
             let plans = engine.plans().unwrap();
@@ -124,13 +126,17 @@ fn the_loader_never_searches_the_current_directory() {
     place(&fixture("fixture_no_format_parquet"), &current);
     let _entered = CurrentDirectory::enter(&current);
     let absolute = module.join("module");
-    let refused = Gate::new().negotiate_beside(&generated(), &absolute);
-    assert_eq!(
+    // SAFETY: no library is beside the module, and the one in the current
+    // directory is a fixture engine of this crate.
+    let (refused, beside, relative) = unsafe {
         (
-            shape(loader::load(&absolute)),
-            shape(loader::load(Path::new("module"))),
-            outcome_record(&refused),
-        ),
+            Gate::new().negotiate_beside(&generated(), &absolute),
+            loader::load(&absolute),
+            loader::load(Path::new("module")),
+        )
+    };
+    assert_eq!(
+        (shape(beside), shape(relative), outcome_record(&refused)),
         (
             ("no library", Some(module.join(LIBRARY))),
             ("no absolute module", None),

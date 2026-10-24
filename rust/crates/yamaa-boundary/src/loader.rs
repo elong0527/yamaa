@@ -6,19 +6,25 @@
 //! compiles this module; a repository check refuses the feature in every
 //! build that ships.
 //!
-//! The library is found by an absolute path computed from the module's own
-//! location, `dladdr` on Linux and macOS and `GetModuleHandleExW` with
-//! `GetModuleFileNameW` on Windows, never through `PATH`, `LD_LIBRARY_PATH`,
-//! `DYLD_*` or the current directory, and it is never unloaded: a library
-//! with registered thread-local destructors cannot be unloaded safely.
+//! The library's path is absolute, computed from the module's own location:
+//! `dladdr` on Linux and macOS, and `GetModuleHandleExW` with
+//! `GetModuleFileNameW` on Windows. A path that names no regular file is
+//! refused before the platform's loader sees it, the loader searches neither
+//! `PATH`, `LD_LIBRARY_PATH` nor the current directory, and the library is
+//! never unloaded: a library with registered thread-local destructors cannot
+//! be unloaded safely.
 //!
 //! - Linux and macOS: `dlopen` with `RTLD_NOW | RTLD_LOCAL`, which keeps the
-//!   library's symbols out of the global namespace. `dlopen` on macOS may
-//!   consult `DYLD_LIBRARY_PATH` even for an absolute path, so the loader
-//!   takes the entry only from the file it asked for.
+//!   library's symbols out of the global namespace. On macOS, dyld may still
+//!   honour `DYLD_LIBRARY_PATH` and open a library of the same file name from
+//!   one of its directories, even for an absolute path. The loader takes the
+//!   entry only from the file it asked for, so it then refuses that entry.
 //! - Windows: `LoadLibraryExW` with `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR |
 //!   LOAD_LIBRARY_SEARCH_DEFAULT_DIRS`, which leaves out the current
-//!   directory and `PATH`.
+//!   directory and `PATH`. Windows deletes no file of a loaded library, and
+//!   none is unloaded, so each scratch directory of the loading tests, which
+//!   holds a fixture engine that the test process loaded, stays behind in
+//!   the temporary directory.
 //!
 //! # Safety
 //!
@@ -54,19 +60,52 @@ pub enum Missing {
     Entry(PathBuf),
 }
 
+impl std::fmt::Display for Missing {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Missing::Module(reason) => {
+                write!(
+                    formatter,
+                    "no module file to load the engine beside: {reason}"
+                )
+            }
+            Missing::Library(path, reason) => write!(
+                formatter,
+                "no engine library loads from {}: {reason}",
+                path.display()
+            ),
+            Missing::Entry(path) => write!(formatter, "{} exports no {ENTRY}", path.display()),
+        }
+    }
+}
+
 /// The negotiation entry of the engine library beside the module that holds
 /// this code: loaded on the first call and kept, with the library, for the
 /// life of the process.
 pub fn entry() -> Result<Negotiate, Missing> {
     static LOADED: OnceLock<Result<Negotiate, Missing>> = OnceLock::new();
     LOADED
-        .get_or_init(|| load(&platform::module().map_err(Missing::Module)?))
+        .get_or_init(|| {
+            let module = platform::module().map_err(Missing::Module)?;
+            // SAFETY: the library beside a binding built for the loaded mode
+            // is the engine library that the mode's tooling places there
+            // (the module documentation).
+            unsafe { load(&module) }
+        })
         .clone()
 }
 
 /// The negotiation entry of the engine library beside `module`, a module
 /// file's absolute path.
-pub fn load(module: &Path) -> Result<Negotiate, Missing> {
+///
+/// # Safety
+///
+/// A library beside `module` must be an engine library of this workspace,
+/// or a fixture engine of its loading tests: loading it runs its
+/// initializers, and its [`ENTRY`], if it exports one, must have the
+/// [`Negotiate`] signature, which the caller trusts when it calls the
+/// entry.
+pub unsafe fn load(module: &Path) -> Result<Negotiate, Missing> {
     if !module.is_absolute() {
         return Err(Missing::Module(format!(
             "{} is not absolute",
@@ -77,10 +116,18 @@ pub fn load(module: &Path) -> Result<Negotiate, Missing> {
         .parent()
         .ok_or_else(|| Missing::Module(format!("{} has no directory", module.display())))?;
     let library = directory.join(LIBRARY);
-    // SAFETY: see the module documentation.
+    // A path that names no regular file is refused here, before dyld could
+    // look in its fallback directories for a library of that file name.
+    if !library.is_file() {
+        return Err(Missing::Library(
+            library,
+            "no regular file is there".to_owned(),
+        ));
+    }
+    // SAFETY: the caller's contract.
     let entry = unsafe { platform::open(&library) }?;
-    // SAFETY: an engine library's entry has the negotiation entry's
-    // signature, which every boundary version keeps.
+    // SAFETY: the caller's contract: the library's entry has the
+    // negotiation entry's signature, which every boundary version keeps.
     Ok(unsafe { std::mem::transmute::<*const std::ffi::c_void, Negotiate>(entry) })
 }
 
@@ -132,7 +179,7 @@ mod platform {
     ///
     /// # Safety
     ///
-    /// See the module documentation.
+    /// As [`super::load`] asks of the library.
     pub(super) unsafe fn open(library: &Path) -> Result<*const c_void, Missing> {
         let failed = |reason: String| Missing::Library(library.to_owned(), reason);
         let path = CString::new(library.as_os_str().as_bytes())
@@ -150,11 +197,13 @@ mod platform {
         }
         let canonical = |path: &Path| std::fs::canonicalize(path).ok();
         let found = file_of(entry.cast_const());
-        if found.as_deref().and_then(canonical) != canonical(library) {
-            let found = found.map_or("no file".to_owned(), |found| found.display().to_string());
-            return Err(failed(format!("the entry was found in {found}")));
+        match (found.as_deref().and_then(canonical), canonical(library)) {
+            (Some(found), Some(asked)) if found == asked => Ok(entry.cast_const()),
+            _ => {
+                let found = found.map_or("no file".to_owned(), |found| found.display().to_string());
+                Err(failed(format!("the entry was found in {found}")))
+            }
         }
-        Ok(entry.cast_const())
     }
 }
 
@@ -214,7 +263,7 @@ mod platform {
     ///
     /// # Safety
     ///
-    /// See the module documentation.
+    /// As [`super::load`] asks of the library.
     pub(super) unsafe fn open(library: &Path) -> Result<*const c_void, Missing> {
         let failed = |reason: String| Missing::Library(library.to_owned(), reason);
         let path: Vec<u16> = library.as_os_str().encode_wide().chain([0]).collect();
@@ -226,8 +275,12 @@ mod platform {
             return Err(failed(error.to_string()));
         }
         let canonical = |path: &Path| std::fs::canonicalize(path).ok();
-        if file_of(module).as_deref().and_then(canonical) != canonical(library) {
-            return Err(failed("another module of that name was loaded".to_owned()));
+        match (
+            file_of(module).as_deref().and_then(canonical),
+            canonical(library),
+        ) {
+            (Some(found), Some(asked)) if found == asked => {}
+            _ => return Err(failed("another module of that name was loaded".to_owned())),
         }
         let name: Vec<u8> = ENTRY.bytes().chain([0]).collect();
         // SAFETY: the module is the library's, which is never freed.
