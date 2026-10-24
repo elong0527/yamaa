@@ -736,6 +736,7 @@ pub fn traverse_versioned<R: Resolver, D: Decoder>(
 /// Admit one layer at the version it declares, named by the field `named` of
 /// the layer `declaring`; `given_parent`, the parent a caller names as the
 /// caller gave it, says the entry is a fragment checked on it.
+#[allow(clippy::too_many_arguments)]
 fn admit_versioned<E>(
     schema: &SchemaStructure,
     reads: LanguageVersion,
