@@ -298,7 +298,7 @@ field that no layer supplies fails on the resolved specification, and a later
 layer that never mentions a field cannot replace an earlier value with the
 field's default.
 
-Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::complete_composition_materializes_defaults_once_and_keeps_written_provenance`, `rust/crates/yamaa-core/tests/schema_references.rs::keyed_member_fragments_defer_nested_requiredness_but_root_values_do_not`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_cleared_field_takes_its_default_again_and_its_path_its_base`.
+Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::complete_composition_materializes_defaults_once_and_keeps_written_provenance`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::keyed_member_fragments_defer_nested_requiredness_but_root_values_do_not`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_cleared_field_takes_its_default_again_and_its_path_its_base`.
 
 A whole root field is a complete value in the layer that writes it, so its
 requiredness and defaults apply there. A default fills a field the composed
