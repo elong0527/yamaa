@@ -5,7 +5,7 @@
 //! reads.
 use super::{
     document::{prepared, schemas, tree},
-    text, value, File,
+    language, text, value, File,
 };
 use crate::support::{
     diagnostic::{json::Json, Record},
@@ -29,7 +29,6 @@ use yamaa_core::{
     },
     producer_contract::{prepare_document, Link, Links},
     project_environment::{Draft, Environment},
-    project_function::Language,
     project_scope,
     run_report::{Recorded, Run},
     schema::{
@@ -174,11 +173,6 @@ fn flag_condition(input: &Json) -> Vec<Diagnostic> {
 fn prepare_in(input: &Json) -> Vec<Diagnostic> {
     let input = input.closed(&["document", "project"]);
     let project = input.field("project").closed(&["language", "functions"]);
-    let language = |written: &str| match written {
-        "python" => Language::Python,
-        "r" => Language::R,
-        other => panic!("no host language {other:?}"),
-    };
     let host = match project.field("language") {
         Json::Null => None,
         written => Some(language(written.text())),

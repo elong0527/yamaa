@@ -1,0 +1,118 @@
+{
+  "about": "A project environment's findings, each at its own path: the independent findings of two invalid codelists (CT-1, CT-3 to CT-6), an alias on an extended item (CT-6), a format name whose dollar sign disagrees with its codelist's data type (CT-12), a function file's findings beside a lock of another host (FUNC-2, FUNC-3), a function file value its declared type cannot read (FUNC-2) and a lock that is no packaging lock (FUNC-2, FUNC-3). A case whose table compared a record in part names those fields, or those keys of its context, in compares.",
+  "cases": [
+    {
+      "case": "each_independent_finding_of_two_invalid_codelists_is_reported_in_order_at_its_path",
+      "operation": "project_environment",
+      "input": {
+        "language": "python",
+        "lock": null,
+        "functions": [],
+        "codelists": [
+          {
+            "codelists": [
+              {"id": "SEX", "name": "Sex", "data_type": "text", "items": [{"value": true, "decode": "bad", "rank": 1, "extended": true}, {"value": true}], "external": {"dictionary": "Other", "version": "1"}},
+              {"id": "SEX", "name": "Sex", "data_type": "text", "items": [{"value": true, "decode": "bad", "rank": 1, "extended": true}, {"value": true}], "external": {"dictionary": "Other", "version": "1"}}
+            ]
+          }
+        ]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "source_span", "operand_route"],
+      "issues": [
+        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-3", "spec_paths": ["codelists[0].codelists[0]"]},
+        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[0].items[0].value"]},
+        {"phase": "validation", "condition": "codelist_extension_not_admitted", "rule": "CT-6", "spec_paths": ["codelists[0].codelists[0].items[0].extended"]},
+        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[0].items[1].value"]},
+        {"phase": "validation", "condition": "codelist_duplicate_value", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[0].items[1].value"]},
+        {"phase": "validation", "condition": "codelist_partial_item_field", "rule": "CT-5", "spec_paths": ["codelists[0].codelists[0]"]},
+        {"phase": "validation", "condition": "codelist_partial_item_field", "rule": "CT-5", "spec_paths": ["codelists[0].codelists[0]"]},
+        {"phase": "validation", "condition": "duplicate_define_identifier", "rule": "CT-1", "spec_paths": ["codelists[0].codelists[1].id"]},
+        {"phase": "validation", "condition": "duplicate_define_identifier", "rule": "CT-1", "spec_paths": ["codelists[0].codelists[1].name"]},
+        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-3", "spec_paths": ["codelists[0].codelists[1]"]},
+        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[1].items[0].value"]},
+        {"phase": "validation", "condition": "codelist_extension_not_admitted", "rule": "CT-6", "spec_paths": ["codelists[0].codelists[1].items[0].extended"]},
+        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[1].items[1].value"]},
+        {"phase": "validation", "condition": "codelist_duplicate_value", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[1].items[1].value"]},
+        {"phase": "validation", "condition": "codelist_partial_item_field", "rule": "CT-5", "spec_paths": ["codelists[0].codelists[1]"]},
+        {"phase": "validation", "condition": "codelist_partial_item_field", "rule": "CT-5", "spec_paths": ["codelists[0].codelists[1]"]}
+      ]
+    },
+    {
+      "case": "an_extended_item_of_a_published_extensible_codelist_declares_no_alias",
+      "operation": "project_environment",
+      "input": {
+        "language": "python",
+        "lock": null,
+        "functions": [],
+        "codelists": [
+          {
+            "standard": {"name": "CDISC/NCI", "publishing_set": "SDTM", "version": "2025-03-28"},
+            "codelists": [
+              {"id": "EPOCH", "name": "Epoch", "data_type": "text", "extensible": true, "alias": "C99079", "items": [{"value": "SCREENING", "alias": "C48262"}, {"value": "EXTENSION", "alias": "C48262", "extended": true}, {"value": "TITRATION", "extended": true}]}
+            ]
+          }
+        ]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "codelist_extended_alias", "rule": "CT-6", "spec_paths": ["codelists[0].codelists[0].items[1].alias"], "context": {"codelist": "EPOCH", "value": "EXTENSION", "alias": "C48262"}}]
+    },
+    {
+      "case": "a_format_name_begins_with_a_dollar_sign_exactly_when_its_codelist_is_text",
+      "operation": "project_environment",
+      "input": {
+        "language": "python",
+        "lock": null,
+        "functions": [],
+        "codelists": [
+          {
+            "codelists": [
+              {"id": "NY", "name": "NY", "data_type": "text", "format_name": "$NY", "items": [{"value": "Y"}]},
+              {"id": "SEX", "name": "SEX", "data_type": "text", "format_name": "SEXF", "items": [{"value": "Y"}]},
+              {"id": "AGEGR1N", "name": "AGEGR1N", "data_type": "integer", "format_name": "$AGEGRN", "items": [{"value": 1}]},
+              {"id": "DOSE", "name": "DOSE", "data_type": "float", "format_name": "DOSEF", "items": [{"value": 1}]}
+            ]
+          }
+        ]
+      },
+      "issues": [
+        {"phase": "validation", "condition": "value_not_permitted", "rule": "CT-12", "spec_paths": ["codelists[0].codelists[1].format_name"], "context": {"codelist": "SEX", "value": "SEXF", "data_type": "text"}},
+        {"phase": "validation", "condition": "value_not_permitted", "rule": "CT-12", "spec_paths": ["codelists[0].codelists[2].format_name"], "context": {"codelist": "AGEGR1N", "value": "$AGEGRN", "data_type": "integer"}}
+      ]
+    },
+    {
+      "case": "each_function_file_finding_and_a_lock_of_another_host_fail_where_they_are_written",
+      "operation": "project_environment",
+      "input": {
+        "language": "python",
+        "lock": {"written": "renv.lock", "kind": "renv"},
+        "functions": [
+          {"identity": "id", "implementations": [["python", "project.id"], ["r", "project.id"]]},
+          {"identity": "id", "implementations": [["python", "project.id"]]},
+          {"identity": "constant", "implementations": []}
+        ],
+        "codelists": []
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["environments.python.lock"], "context": {"reason": "lock_kind_mismatch", "language": "python", "actual_lock_kind": "renv"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["implementations.r"], "context": {"function": "id", "language": "r", "reason": "invalid_callable"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["name"], "context": {"function": "id", "reason": "duplicate_function"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["implementations"], "context": {"function": "constant", "reason": "missing_implementation"}}
+      ]
+    },
+    {
+      "case": "a_function_file_value_its_type_cannot_read_fails_as_its_file_keeping_its_text",
+      "operation": "function_file_scalars",
+      "input": {"findings": [{"path": "tests[0].result", "node": 0, "kind": "invalid_date", "value": "2024-02-30"}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason", "context.value"],
+      "issues": [{"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].result"], "context": {"reason": "invalid_date", "value": "2024-02-30"}}]
+    },
+    {
+      "case": "a_lock_that_is_no_packaging_lock_fails_at_its_field_naming_the_project_file",
+      "operation": "invalid_packaging_lock",
+      "input": {"language": "r", "project": "study/project.yaml", "written": "r/renv.lock"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["environments.r.lock"], "context": {"source": "study/project.yaml", "entry": "study/project.yaml", "path": "r/renv.lock", "environment_path": "environments.r.lock", "cause": "invalid_packaging_lock", "reason": "invalid_packaging_lock"}}]
+    }
+  ]
+}

@@ -50,7 +50,7 @@ files declare, fails, and static checking returns every independently
 inferable finding before activation.
 
 Fails: `function_file_invalid`.
-Evidence: `schema-functions`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::function_file_findings_name_the_function_file_and_its_listing`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_function_file_without_the_1_0_header_fails_in_that_file`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_file_or_lock_that_cannot_be_read_fails_as_any_file_a_run_reads`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::an_unclassified_read_failure_refuses_the_preparation_opaquely`, `rust/crates/yamaa-core/tests/support/project_environment.rs::function_file_reached`, `rust/crates/yamaa-adapters/tests/file_workflow.rs::metadata_failures_name_each_written_dependency_and_cause_before_study_reads`.
+Evidence: `schema-functions`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::function_file_findings_name_the_function_file_and_its_listing`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_function_file_without_the_1_0_header_fails_in_that_file`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_file_or_lock_that_cannot_be_read_fails_as_any_file_a_run_reads`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::an_unclassified_read_failure_refuses_the_preparation_opaquely`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::each_function_file_finding_and_a_lock_of_another_host_fail_where_they_are_written`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::a_function_file_value_its_type_cannot_read_fails_as_its_file_keeping_its_text`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::a_lock_that_is_no_packaging_lock_fails_at_its_field_naming_the_project_file`, `rust/crates/yamaa-adapters/tests/file_workflow.rs::metadata_failures_name_each_written_dependency_and_cause_before_study_reads`.
 
 A function file declares `yamaa`, `type`, its own `name`, and the definition
 of [FUNC-4](#func-4). The project's `functions` checks the header of each
@@ -94,7 +94,7 @@ verifies the installed version of yamaa and of every called function package
 against the captured lock.
 
 Fails: `runtime_artifact_mismatch`, `function_file_invalid`.
-Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/support/project_environment.rs::function_file_reached`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::lock_kind_and_function_findings_are_core_owned_after_capture_without_code_authority`, `rust/crates/yamaa-adapters/tests/project_run.rs::lock_and_actual_conformance_mismatches_keep_complete_zero_read_reports`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_lock_that_is_no_packaging_lock_fails_as_the_function_files_do`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::activation_reports_a_function_file_s_findings_in_that_file_and_its_lock_in_the_project`.
+Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::each_function_file_finding_and_a_lock_of_another_host_fail_where_they_are_written`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::a_lock_that_is_no_packaging_lock_fails_at_its_field_naming_the_project_file`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::lock_kind_and_function_findings_are_core_owned_after_capture_without_code_authority`, `rust/crates/yamaa-adapters/tests/project_run.rs::lock_and_actual_conformance_mismatches_keep_complete_zero_read_reports`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_lock_that_is_no_packaging_lock_fails_as_the_function_files_do`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::activation_reports_a_function_file_s_findings_in_that_file_and_its_lock_in_the_project`.
 
 Parallel bindings and per-function language choices are invalid:
 `implementations` names one callable per host language. A lock is optional,
@@ -304,7 +304,7 @@ Boolean parameter are covered. A nullable contract covers `nullable-output`,
 and a float-returning contract `numeric-comparison`.
 
 Fails: `function_file_invalid`.
-Evidence: `schema-functions`, `schema-non-finite`, `rust/crates/yamaa-core/tests/support/project_environment.rs::function_file_reached`, `rust/crates/yamaa-adapters/tests/project_environment.rs::complete_static_report_keeps_semantics_alongside_original_opaque_capture_and_authored_holes`.
+Evidence: `schema-functions`, `schema-non-finite`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::a_function_file_value_its_type_cannot_read_fails_as_its_file_keeping_its_text`, `rust/crates/yamaa-adapters/tests/project_environment.rs::complete_static_report_keeps_semantics_alongside_original_opaque_capture_and_authored_holes`.
 
 Tests do not repeat a logical name or contract version. `covers` is a
 non-empty list of unique obligations demonstrated by that case:

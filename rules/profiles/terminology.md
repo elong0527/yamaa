@@ -73,7 +73,7 @@ with `$`, or an `integer` or `float` codelist declaring one that does, fails
 validation.
 
 Fails: `value_not_permitted`.
-Evidence: `negative-format-name-without-dollar`, `negative-numeric-format-name-with-dollar`, `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::format_names_begin_with_a_dollar_sign_exactly_for_text_codelists`, `rust/crates/yamaa-core/tests/support/project_environment.rs::format_name_reached`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_format_name_whose_dollar_sign_disagrees_with_its_data_type_fails_where_written`.
+Evidence: `negative-format-name-without-dollar`, `negative-numeric-format-name-with-dollar`, `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::format_names_begin_with_a_dollar_sign_exactly_for_text_codelists`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::a_format_name_begins_with_a_dollar_sign_exactly_when_its_codelist_is_text`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_format_name_whose_dollar_sign_disagrees_with_its_data_type_fails_where_written`.
 
 A `text` codelist's `format_name` that does not begin with `$`, or an
 `integer` or `float` codelist's that does, fails with `value_not_permitted` at
@@ -130,7 +130,7 @@ one codelist and not others fails validation, and so does declaring `rank` for
 some items and not others.
 
 Fails: `codelist_partial_item_field`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_independent_item_findings_survive_invalid_shape`, `rust/crates/yamaa-core/tests/support/project_environment.rs`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_independent_item_findings_survive_invalid_shape`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::each_independent_finding_of_two_invalid_codelists_is_reported_in_order_at_its_path`.
 
 A list whose values are already the words a reader needs has no decode to add.
 Lists with and without `decode` are different kinds of list rather than a list
@@ -147,7 +147,7 @@ false and may be true only on an `extensible` codelist whose source declares
 codelist, or one that declares `alias`, fails validation.
 
 Fails: `codelist_extension_not_admitted`, `codelist_extended_alias`.
-Evidence: `sdtm-ta-sponsor-epoch`, `rust/crates/yamaa-core/tests/project_execution.rs::extensions_require_both_a_published_source_and_an_extensible_list`, `rust/crates/yamaa-core/tests/project_execution.rs::extended_items_carry_no_published_alias`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_independent_item_findings_survive_invalid_shape`, `rust/crates/yamaa-core/tests/support/project_environment.rs`.
+Evidence: `sdtm-ta-sponsor-epoch`, `rust/crates/yamaa-core/tests/project_execution.rs::extensions_require_both_a_published_source_and_an_extensible_list`, `rust/crates/yamaa-core/tests/project_execution.rs::extended_items_carry_no_published_alias`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_independent_item_findings_survive_invalid_shape`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::each_independent_finding_of_two_invalid_codelists_is_reported_in_order_at_its_path`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::an_extended_item_of_a_published_extensible_codelist_declares_no_alias`.
 
 Adding a value to a list that admits no additions is a contradiction rather
 than an extension. A sponsor addition is an item like any other, so

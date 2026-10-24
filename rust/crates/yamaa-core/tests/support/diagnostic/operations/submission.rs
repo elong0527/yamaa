@@ -7,15 +7,13 @@
 //! findings the adapters' Define-XML and XPT encoders report.
 //! `front_end_checks` runs the 1.0 front end's own checks on a lowered
 //! specification.
-use super::{column_type, document::tree, text, value, File};
+use super::{codelist_source, column_type, document::tree, text, value, File};
 use crate::support::{
     diagnostic::{json::Json, Record},
-    roots as rt,
     submission::compose as compose_study,
 };
 use std::convert::Infallible;
 use yamaa_core::{
-    ast::Codelists,
     define_diagnostics::{self, TargetRelation},
     diagnostic::Diagnostic,
     front_end::v1::spec as front_end,
@@ -264,64 +262,10 @@ fn held(json: &Json) -> Held {
     }
 }
 
-/// The terminology of the codelist sources `json`, each written as a
-/// codelist file writes its source (`codelist_source_class` in
-/// `yaml/schema_terminology.yaml`): an optional `standard` and its
-/// `codelists`, whose `data_type` defaults to text and whose `extensible`, and
-/// whose items' `extended`, default to false.
+/// The terminology of the codelist sources `json`, each written as a codelist
+/// file writes its source ([`codelist_source`]).
 fn catalogue(json: &Json) -> ct::Catalogue {
-    let sources = json.items().iter().map(source).collect();
+    let sources = json.items().iter().map(codelist_source).collect();
     ct::Catalogue::admit(sources)
         .unwrap_or_else(|findings| panic!("an admitted terminology: {findings:?}"))
-}
-
-fn source(json: &Json) -> Codelists {
-    let json = json.closed(&["standard", "codelists"]);
-    rt::Source {
-        standard: json.get("standard").map(|standard| {
-            let standard = standard.closed(&["name", "publishing_set", "version"]);
-            rt::Standard {
-                name: text(standard, "name").into(),
-                publishing_set: text(standard, "publishing_set").into(),
-                version: text(standard, "version").into(),
-            }
-        }),
-        codelists: json
-            .field("codelists")
-            .items()
-            .iter()
-            .map(codelist)
-            .collect(),
-    }
-    .root()
-}
-
-fn codelist(json: &Json) -> rt::Codelist {
-    let json = json.closed(&["id", "name", "data_type", "extensible", "alias", "items"]);
-    rt::Codelist {
-        id: text(json, "id").into(),
-        name: text(json, "name").into(),
-        data_type: match json.get("data_type").map_or("text", Json::text) {
-            "text" => rt::CodelistType::Text,
-            "integer" => rt::CodelistType::Integer,
-            "float" => rt::CodelistType::Float,
-            other => panic!("no codelist data type {other:?}"),
-        },
-        extensible: json.get("extensible").is_some_and(Json::boolean),
-        alias: json.get("alias").map(|alias| alias.text().into()),
-        format_name: None,
-        items: Some(json.field("items").items().iter().map(item).collect()),
-        external: None,
-    }
-}
-
-fn item(json: &Json) -> rt::Item {
-    let json = json.closed(&["value", "alias", "extended"]);
-    rt::Item {
-        value: value(json.field("value")),
-        decode: None,
-        rank: None,
-        alias: json.get("alias").map(|alias| alias.text().into()),
-        extended: json.get("extended").is_some_and(Json::boolean),
-    }
 }
