@@ -5,12 +5,12 @@
 //! written twice in one object is refused, as core's reader refuses it. A
 //! case names the behaviour it proves (`case`), the operation that reaches it
 //! (`operation`, read by [`super::operations`]; a list names several that
-//! must each report the same issues), that operation's `input`, and the
-//! issues it reports, in order. An issue row is the record a run report
-//! renders: `phase`, `condition`, `rule` (`null` when the cause cites no
-//! card), `spec_paths` and `context`, and `source_span` and `operand_route`
-//! only when the issue carries them, so a row without them asserts their
-//! absence.
+//! must each report the same complete rows, each study directory written
+//! `{study}/`), that operation's `input`, and the issues it reports, in
+//! order. An issue row is the record a run report renders: `phase`,
+//! `condition`, `rule` (`null` when the cause cites no card), `spec_paths`
+//! and `context`, and `source_span` and `operand_route` only when the issue
+//! carries them, so a row without them asserts their absence.
 //!
 //! A case whose test compared only part of each record says which fields in
 //! `compares`, and its rows hold those alone: a field, or one key of the
@@ -29,9 +29,9 @@
 //! engine spells its path.
 //!
 //! A positive case also states the output table's rows, the run report's
-//! rows or the files its operation's save wrote, as [`super::form`] reads
-//! them for both crates' replays, and each is compared with what the
-//! operation reports.
+//! rows or the files its operation created, changed or removed, as
+//! [`super::form`] reads them for both crates' replays, and each is
+//! compared with what the operation reports.
 //!
 //! Every row was authored: in the test it moved from, or from the rule card,
 //! registry entry or sibling record its pull request names. No run wrote one.
@@ -146,10 +146,12 @@ pub fn cases() -> Vec<Case> {
 
 /// Replay every case: the issues each of its operations reports must equal
 /// its rows, or, for a case found `among` them, include each of its rows,
-/// and the tables and files the operation reports must be the ones the case
-/// states.
+/// the tables and files the operation reports must be the ones the case
+/// states, and the operations of a case that names several must report the
+/// same complete rows.
 pub fn replay() {
     for case in cases() {
+        let mut reported = Vec::new();
         for operation in &case.operations {
             let label = match case.operations.len() {
                 1 => case.label.clone(),
@@ -195,7 +197,16 @@ pub fn replay() {
                 );
             }
             case.stated.compare(&outcome, operation, &label);
+            let complete = match &study {
+                Some(study) => actual
+                    .iter()
+                    .map(|row| unexpanded(row, &study.identity("")))
+                    .collect(),
+                None => actual,
+            };
+            reported.push((operation.as_str(), complete));
         }
+        form::same_issues(&reported, &case.label);
     }
 }
 
@@ -310,6 +321,28 @@ fn expanded(row: &Value, study: Option<&crate::support::Scratch>, label: &str) -
             members
                 .iter()
                 .map(|(key, value)| (key.clone(), expanded(value, study, label)))
+                .collect(),
+        ),
+        _ => row.clone(),
+    }
+}
+
+/// `row` with the study `directory`, wherever a text names it, written
+/// `{study}/` as an authored row writes it, so that the rows of two
+/// operations, each run in a study directory of its own, compare.
+fn unexpanded(row: &Value, directory: &str) -> Value {
+    match row {
+        Value::String(text) => Value::String(text.replace(directory, STUDY)),
+        Value::Array(items) => Value::Array(
+            items
+                .iter()
+                .map(|item| unexpanded(item, directory))
+                .collect(),
+        ),
+        Value::Object(members) => Value::Object(
+            members
+                .iter()
+                .map(|(key, value)| (key.clone(), unexpanded(value, directory)))
                 .collect(),
         ),
         _ => row.clone(),
