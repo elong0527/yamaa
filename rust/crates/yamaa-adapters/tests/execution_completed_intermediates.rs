@@ -29,108 +29,67 @@ mod execution {
         fn issue(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
             crate::support::study::issue_row(issue)
         }
-        fn expected(path: &Path) -> yamaa_core::json::Value {
-            let text = fs::read_to_string(path).unwrap();
-            let d = yamaa_adapters::yaml_decode::decode_yaml(text.as_bytes())
-                .unwrap()
-                .document;
-            fn value(d: &yamaa_core::schema::Document, id: usize) -> yamaa_core::json::Value {
-                use yamaa_core::schema::DocumentNode as N;
-                match &d.nodes()[id] {
-                    N::Null => yamaa_core::json::Value::Null,
-                    N::Boolean(v) => (*v).into(),
-                    N::Integer(v) => yamaa_adapters::json_wire::decode(v).unwrap(),
-                    N::Float(v) => yamaa_adapters::json!(v),
-                    N::Text(v) => v.clone().into(),
-                    N::Sequence(ids) => ids.iter().map(|&id| value(d, id)).collect(),
-                    N::Mapping(pairs) => pairs
-                        .iter()
-                        .map(|&(key, item)| {
-                            (value(d, key).as_str().unwrap().to_owned(), value(d, item))
-                        })
-                        .collect(),
-                }
-            }
-            value(&d, d.root())
-        }
-        fn unchanged_original(name: &str) {
-            let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
 
-            let original = root.join("benchmarks").join(name);
-            let fixture = Fixture::new();
-            copy(&original.join("input"), &fixture.0.join("input"));
-            fs::copy(original.join("spec.yaml"), fixture.0.join("spec.yaml")).unwrap();
-            let spec = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-            let id = crate::support::study::identity(name, &spec);
-            let outcome = crate::support::study::domain(
-                yamaa_core::project_function::Language::Python,
-                Request {
-                    specification: &spec,
-                    environment: None,
-                },
-                id,
-            );
-            if let Ok(mut result) = outcome {
-                if name.starts_with("negative-") {
-                    assert_eq!(result.issues().len(), 1, "{name}");
-                    let expected: yamaa_core::json::Value =
-                        expected(&original.join("expected/error.yaml"));
-                    assert_eq!(issue(&result.issues()[0]), expected, "{name}");
-                    assert!(result.save().is_err());
-                } else {
-                    assert!(result.issues().is_empty(), "{name}: {:?}", result.issues());
-                    assert!(result.save().unwrap());
-                    for file in fs::read_dir(original.join("expected")).unwrap() {
-                        let file = file.unwrap();
-                        assert_eq!(
-                            fs::read(fixture.0.join(file.file_name())).unwrap(),
-                            fs::read(file.path()).unwrap(),
-                            "{name}"
-                        );
+        /// Each benchmark reads named intermediates and states the CSV it
+        /// saves, which `reproduce` compares byte for byte.
+        #[test]
+        fn completed_intermediate_benchmarks_reproduce_their_expected_files() {
+            for name in [
+                "schema-lookup-intermediate-unique",
+                "sdtm-ae-meddra-hierarchy",
+                "sdtm-cm-whodrug-coding",
+                "sdtm-vs-collected-form",
+                "sdtm-lb-last-observation-before-exposure",
+                "sdtm-vs-planned-time-points",
+                "sdtm-qs-questionnaire-items",
+                "sdtm-fa-event-findings",
+                "sdtm-ex-from-ec",
+                "schema-lookup-intermediate-derived-filter",
+                "schema-lookup-intermediate-correlated-derive",
+                "schema-window-intermediate-rank",
+                "adam-adlb-end-of-treatment",
+                "adam-adae-prior-serious-event",
+            ] {
+                crate::support::benchmarks::reproduce(name);
+            }
+        }
+
+        /// Each benchmark's refusal holds exactly what its `error.yaml` states
+        /// and is the run's only issue, which that file, a partial assertion
+        /// about the first issue, leaves out.
+        #[test]
+        fn completed_intermediate_refusals_are_their_runs_only_issue() {
+            for name in [
+                "negative-lookup-duplicate-intermediate",
+                "negative-lookup-id-collision",
+            ] {
+                let original = crate::support::benchmarks::path(name);
+                let fixture = Fixture::new();
+                copy(&original.join("input"), &fixture.0.join("input"));
+                fs::copy(original.join("spec.yaml"), fixture.0.join("spec.yaml")).unwrap();
+                let spec = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
+                let issues = match crate::support::study::domain(
+                    yamaa_core::project_function::Language::Python,
+                    Request {
+                        specification: &spec,
+                        environment: None,
+                    },
+                    crate::support::study::identity(name, &spec),
+                ) {
+                    Ok(mut result) => {
+                        assert!(result.save().is_err(), "{name}");
+                        result.issues()
                     }
-                }
-            } else {
-                let actual = outcome.err().unwrap().iter().map(issue).collect::<Vec<_>>();
-                if name == "negative-lookup-id-collision" {
-                    let expected: yamaa_core::json::Value =
-                        expected(&original.join("expected/error.yaml"));
-                    assert_eq!(actual, vec![expected], "{name}");
-                } else {
-                    panic!("{name}: {actual:?}");
-                }
+                    Err(issues) if name == "negative-lookup-id-collision" => issues,
+                    Err(issues) => panic!("{name}: refused before its run: {issues:?}"),
+                };
+                assert_eq!(
+                    issues.iter().map(issue).collect::<Vec<_>>(),
+                    [crate::support::benchmarks::error(name)],
+                    "{name}"
+                );
             }
         }
-
-        macro_rules! original {
-            ($test:ident,$case:literal) => {
-                #[test]
-                fn $test() {
-                    unchanged_original($case)
-                }
-            };
-        }
-        original!(unique, "schema-lookup-intermediate-unique");
-        original!(duplicate, "negative-lookup-duplicate-intermediate");
-        original!(collision, "negative-lookup-id-collision");
-        original!(ae, "sdtm-ae-meddra-hierarchy");
-        original!(cm, "sdtm-cm-whodrug-coding");
-        original!(vs, "sdtm-vs-collected-form");
-        original!(lb, "sdtm-lb-last-observation-before-exposure");
-        original!(timepoints, "sdtm-vs-planned-time-points");
-        original!(qs, "sdtm-qs-questionnaire-items");
-        original!(fa, "sdtm-fa-event-findings");
-        original!(ex, "sdtm-ex-from-ec");
-        original!(derived_filter, "schema-lookup-intermediate-derived-filter");
-        original!(
-            correlated_derive,
-            "schema-lookup-intermediate-correlated-derive"
-        );
-        original!(derived_window, "schema-window-intermediate-rank");
-        original!(eot, "adam-adlb-end-of-treatment");
-        original!(serious, "adam-adae-serious-events");
-        original!(self_unique, "adam-adae-prior-serious-event");
-
-        original!(advs, "adam-advs-windows");
 
         fn independent(
             spec: &str,
@@ -158,6 +117,10 @@ mod execution {
             );
             (fixture, result)
         }
+        /// `negative-lookup-duplicate-intermediate` fails the one check of an
+        /// intermediate a column reads. No benchmark fails the checks of an
+        /// intermediate nothing reads, and an `error.yaml` states one finding,
+        /// not the two this run keeps.
         #[test]
         fn unused_unique_checks_are_eager_and_retain_all_failed_declarations() {
             let spec="yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int}}, DONOR: {path: donor.csv, types: {ID: int, X: int}}}\noutput: {path: out.csv, columns: [ID]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    verifications:\n      - unique: {columns: [ID], id: donor-id}\n      - unique: [X]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
@@ -174,6 +137,8 @@ mod execution {
             assert!(result.save().is_err());
             assert!(!fixture.0.join("out.csv").exists());
         }
+        /// `negative-integer-overflow` overflows a column's derivation; no
+        /// benchmark fails a derivation of an intermediate nothing reads.
         #[test]
         fn unused_donor_derivation_failure_is_not_hidden_by_an_unread_lookup() {
             let spec="yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int}}, DONOR: {path: donor.csv, types: {ID: int, X: int}}}\noutput: {path: out.csv, columns: [ID]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    derivations: {NEXT: 'X + 1'}\n    verifications: [{unique: [ID]}]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
@@ -188,6 +153,11 @@ mod execution {
             assert!(result.save().is_err());
             assert!(!fixture.0.join("out.csv").exists());
         }
+        /// `negative-unique-correlated-filter` and
+        /// `negative-unique-correlated-derivation` each state one of these
+        /// refusals, for an intermediate a column reads. Neither `error.yaml`
+        /// states the complete list this run reports: both refusals, for one
+        /// intermediate nothing reads.
         #[test]
         fn current_row_correlation_cannot_turn_a_unique_check_into_a_lazy_check() {
             let spec="yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int}}, DONOR: {path: donor.csv, types: {ID: int, X: int}}}\noutput: {path: out.csv, columns: [ID]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    filter: 'DONOR.X > SRC.ID'\n    derivations: {NEXT: 'X + SRC.ID'}\n    verifications: [{unique: [ID]}]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
@@ -214,6 +184,11 @@ mod execution {
             );
         }
 
+        /// `adam-adsl-crossover-sequence` and `schema-lookup-donor-range` key
+        /// an earlier intermediate on a later donor other than the base, by
+        /// fields of the same names, and `adam-adlb-end-of-treatment` on a
+        /// donor that is the base. No benchmark matches such a key to a field
+        /// of another name of a donor other than the base.
         #[test]
         fn an_earlier_selector_key_uses_the_later_donor_current_record_owner() {
             let spec = "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: EARLIER\n    dataset: SRC\n    key: {ID: DONOR.KEY}\n  - id: LATER\n    dataset: DONOR\n    key: {KEY: ID}\n    derivations: {LOOKED_UP: EARLIER.VAL}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: LATER.LOOKED_UP}\n";
@@ -229,6 +204,9 @@ mod execution {
             );
         }
 
+        /// `negative-lookup-key-other-template` refuses a key on another
+        /// input's field where a row outside that input's template reads it.
+        /// No benchmark declares such a key and never reads it.
         #[test]
         fn retained_foreign_key_is_valid_until_it_is_read_in_the_wrong_current_scope() {
             let declaration = "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID]}\nintermediates:\n  - id: P\n    dataset: SRC\n    key: {ID: DONOR.KEY}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
@@ -251,6 +229,10 @@ mod execution {
             assert!(!fixture.0.join("out.csv").exists());
         }
 
+        /// `adam-adpp-dose-normalized` and `sdtm-suppmh-linkage` key an
+        /// intermediate on the driver of the row templates that read it, with
+        /// no base. No benchmark reads one in a template whose driver is not
+        /// the declared base, where the base's record must not answer.
         #[test]
         fn a_foreign_row_driver_owns_its_qualified_selector_keys() {
             let spec = "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: SRC\n    key: {ID: DONOR.KEY}\ncolumns:\n  - {name: ID, type: int}\n  - {name: VALUE, type: int}\nrows:\n  - id: donor\n    dataset: DONOR\n    derivations: {ID: DONOR.KEY, VALUE: P.VAL}\n";
@@ -265,6 +247,8 @@ mod execution {
             );
         }
 
+        /// No benchmark filters an earlier intermediate by the record of a
+        /// later intermediate's donor.
         #[test]
         fn an_earlier_selectors_filter_uses_the_reading_donor_current_fields() {
             let spec = "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int, MIN: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: EARLIER\n    dataset: SRC\n    key: {ID: DONOR.KEY}\n    filter: 'SRC.VAL > DONOR.MIN'\n    absent: -1\n  - id: LATER\n    dataset: DONOR\n    key: {KEY: ID}\n    derivations: {LOOKED_UP: EARLIER.VAL}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: LATER.LOOKED_UP}\n";
@@ -282,6 +266,8 @@ mod execution {
             );
         }
 
+        /// No benchmark keys an earlier intermediate on a field that a later
+        /// intermediate derives for its donor.
         #[test]
         fn named_match_keys_bind_an_earlier_derived_field_of_the_reading_donor() {
             let spec = "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: EARLIER\n    dataset: SRC\n    key: {ID: DONOR.NEWKEY}\n  - id: LATER\n    dataset: DONOR\n    key: {KEY: ID}\n    derivations:\n      NEWKEY: KEY\n      LOOKED_UP: EARLIER.VAL\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: LATER.LOOKED_UP}\n";
@@ -296,6 +282,10 @@ mod execution {
             );
         }
 
+        /// `negative-lookup-donor-range-driver` refuses a donor read of a
+        /// range for a value the donor lacks. No benchmark refuses a donor
+        /// read of an earlier intermediate for a field its key names, or a
+        /// key whose derived field has another type.
         #[test]
         fn contextual_keys_reject_later_unknown_wrong_owner_and_known_type_at_binding() {
             let base = "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: EARLIER\n    dataset: SRC\n    key: {ID: DONOR.NEWKEY}\n  - id: LATER\n    dataset: DONOR\n    key: {KEY: ID}\n    derivations:\n      NEWKEY: KEY\n      LOOKED_UP: EARLIER.VAL\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: LATER.LOOKED_UP}\n";
@@ -333,6 +323,9 @@ mod execution {
             }
         }
 
+        /// No benchmark derives a field on a `SELF` intermediate:
+        /// `adam-adae-prior-serious-event` and `adam-advs-windows` select
+        /// completed records and derive nothing.
         #[test]
         fn self_derivations_read_completed_rows_and_publish_each_template_snapshot() {
             let spec = self_derivation_spec();
@@ -350,6 +343,9 @@ mod execution {
             "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, STAGE]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}}\noutput: {path: out.csv, columns: [ID, STAGE, VALUE]}\nintermediates:\n  - id: P\n    dataset: SELF\n    key: [ID]\n    derivations:\n      TWICE: 'SELF.VALUE * 2'\n      PLUS: 'TWICE + 1'\n    order_by: [SELF.STAGE]\n    keep: last\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: STAGE, type: int}\n  - {name: VALUE, type: int}\nrows:\n  - id: first\n    derivations: {STAGE: 1, VALUE: SRC.VAL}\n  - id: second\n    derivations: {STAGE: 2, VALUE: P.PLUS}\n  - id: third\n    derivations: {STAGE: 3, VALUE: P.PLUS}\n"
         }
 
+        /// No benchmark derives a field on a `SELF` intermediate:
+        /// `negative-lookup-derivation-scope` refuses an input-backed
+        /// intermediate's derivation that reads another input.
         #[test]
         fn self_derivations_reject_later_and_unknown_fields() {
             for reference in ["SELF.PLUS", "PLUS", "SELF.ABSENT", "ABSENT"] {
@@ -369,6 +365,8 @@ mod execution {
                 assert!(!fixture.0.join("out.csv").exists());
             }
         }
+        /// No benchmark derives a field on a `SELF` intermediate, so none
+        /// refuses one that shadows a completed record's field.
         #[test]
         fn self_derivations_cannot_shadow_completed_stored_fields() {
             let spec = self_derivation_spec()
@@ -387,6 +385,9 @@ mod execution {
             assert!(result.save().is_err());
             assert!(!fixture.0.join("out.csv").exists());
         }
+        /// `adam-adae-prior-serious-event` checks a `SELF` intermediate's
+        /// stored fields, and the check holds. No benchmark fails a check of a
+        /// field a `SELF` intermediate derives.
         #[test]
         fn self_derived_unique_checks_are_eager_after_a_completed_template() {
             let spec = self_derivation_spec()
@@ -408,6 +409,11 @@ mod execution {
             assert!(result.save().is_err());
             assert!(!fixture.0.join("out.csv").exists());
         }
+        /// `negative-self-filter-first-template` and
+        /// `negative-self-window-first-template` refuse a first template's
+        /// filter, and its read through a range, of a `SELF` intermediate's
+        /// stored field. No benchmark refuses its derivation's read of a
+        /// derived one.
         #[test]
         fn a_first_template_cannot_read_a_self_derived_field_from_future_rows() {
             let spec = self_derivation_spec().edit("VALUE: SRC.VAL", "VALUE: P.PLUS");
@@ -424,6 +430,8 @@ mod execution {
             assert!(!fixture.0.join("out.csv").exists());
         }
 
+        /// No benchmark derives a field on a `SELF` intermediate, here the
+        /// key that selects an input-backed intermediate's record.
         #[test]
         fn a_self_donor_derived_key_can_read_an_input_backed_selector() {
             let spec = self_derivation_spec()
@@ -482,6 +490,9 @@ mod execution {
         const SUBJ: &str = "  - id: SUBJ\n    dataset: DM\n    key: [USUBJID]\n    derivations:\n      SEXL: {str_case: {source: SEX, to: lower}}\n";
         const LAST_TRT: &str = "  - id: LAST_TRT\n    dataset: EX\n    key: [USUBJID]\n    between: {value: ADTM, lower: EXSTDTC}\n    derivations:\n      TRT: EX.EXTRT\n    order_by: [EX.EXSTDTC]\n    keep: last\n";
 
+        /// No benchmark reads a range in a column beside another
+        /// intermediate's derivations, which must leave the range reading the
+        /// row.
         #[test]
         fn unrelated_donor_derivations_do_not_rebase_earlier_between_values() {
             for (intermediates, x, expected) in [
@@ -521,6 +532,10 @@ mod execution {
             }
         }
 
+        /// `negative-lookup-donor-range-driver` refuses a donor read of a
+        /// range whose value the donor lacks, and `schema-lookup-donor-range`
+        /// reads a value only the donor carries. No benchmark names a value
+        /// that both the row and the donor carry, where the donor's answers.
         #[test]
         fn a_read_of_between_requires_its_value_in_the_reading_donor_scope() {
             let reader = "  - id: SUBJ\n    dataset: DM\n    key: [USUBJID]\n    derivations:\n      LD: LAST_DOSE.EXSTDTC\n";
@@ -552,6 +567,8 @@ mod execution {
             assert_eq!(fs::read_to_string(fixture.0.join("out.csv")).unwrap(), "USUBJID,PCSEQ,ADTM,LDOSEDTM,X\nS1,1,2030-01-01T09:00:00,2030-01-01T07:00:00,2030-01-02T07:00:00\nS1,2,2030-01-02T09:00:00,2030-01-02T07:00:00,2030-01-02T07:00:00\nS2,1,2030-01-01T10:00:00,2030-01-01T07:30:00,2030-01-01T07:30:00\n");
         }
 
+        /// No benchmark gives a range a value that reads another range, where
+        /// a name missing two reads away is refused.
         #[test]
         fn rebasing_retains_transitive_selector_dependencies_and_missing_names() {
             let second = "  - id: SECOND\n    dataset: EX\n    key: [USUBJID]\n    between: {value: LAST_DOSE.EXSTDTC, lower: EXSTDTC}\n    order_by: [EX.EXSTDTC]\n    keep: last\n";
@@ -579,6 +596,11 @@ mod execution {
         /// A `between.value` qualified by an input reads that input's record
         /// only where it drives the reading row or donor record. Elsewhere it
         /// names no current-row value, however the intermediate is reached.
+        /// `negative-lookup-range-other-input` refuses the read from the
+        /// base's rows, and `schema-lookup-intermediate-range-driver` reads
+        /// one in a row template that the value's input drives. No benchmark
+        /// refuses it through another range or an aggregate, or reads it from
+        /// a donor record of the value's input.
         #[test]
         fn a_qualified_between_value_reads_only_its_own_driver_record() {
             const WINDOW: &str = "  - id: W\n    dataset: WIN\n    key: [USUBJID]\n    between: {value: REF.REFDAY, lower: LO, upper: HI}\n    order_by: [WIN.LO]\n    keep: first\n";
@@ -667,6 +689,12 @@ mod execution {
         /// An aggregate's `between.value` qualified by an input reads that
         /// input's record only where it drives every row the column derives.
         /// `check` refuses any other input from the declarations alone.
+        /// `negative-aggregate-range-other-input` refuses the read from the
+        /// base's rows, and `schema-aggregate-range-driver` and
+        /// `adam-adsl-new-therapy` read a value that the row's own driver or a
+        /// column supplies. No benchmark refuses one in a case alternative,
+        /// through an intermediate or under templates of two drivers, or an
+        /// output-row range.
         #[test]
         fn an_aggregate_between_value_reads_only_its_own_driver_record() {
             const WINDOW: &str = "intermediates:\n  - id: W\n    dataset: WIN\n    key: [USUBJID]\n    between: {value: REF.REFDAY, lower: LO, upper: HI}\n    order_by: [WIN.LO]\n    keep: first\n";
@@ -830,6 +858,11 @@ mod execution {
                     .collect(),
             )
         }
+        /// `negative-verification-lookup-key` refuses an assertion's lookup
+        /// for its key before any record is read. No benchmark runs an
+        /// assertion that reads a lookup, whose `check` issues, run issues,
+        /// handler ledger and verification records the crate fixture's cases
+        /// state whole.
         #[test]
         fn complete_independent_lookup_assertions_keep_declaring_sites_and_prior_records() {
             let truth: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
@@ -905,7 +938,7 @@ mod execution {
 
     mod declarative_case_intermediates {
         //! Complete case observations use the shared scalar source binder.
-        use std::{fs, path::Path};
+        use std::fs;
         use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
@@ -973,6 +1006,9 @@ columns:
           then: P.B
         - otherwise: "'skip'"
 "#;
+        /// `schema-lookup-intermediate-unique-warning`'s report counts the
+        /// handlers of a column's plain read. No benchmark counts those of a
+        /// read in a case branch, which an unselected branch never fires.
         #[test]
         fn selected_case_fields_share_kept_donors_and_unselected_branches_have_no_handlers() {
             let fixture = Fixture::new();
@@ -994,11 +1030,14 @@ columns:
                 ])
             );
         }
+        /// `adam-adtte-first-ae` states the CSV it saves, which `reproduce`
+        /// compares. No benchmark counts the handlers of a read in a case
+        /// branch, which this run's report pins.
         #[test]
         fn unchanged_first_ae_capture_matches_full_csv_and_complete_reached_handlers() {
+            crate::support::benchmarks::reproduce("adam-adtte-first-ae");
             let fixture = Fixture::new();
-            let original = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../../benchmarks/adam-adtte-first-ae");
+            let original = crate::support::benchmarks::path("adam-adtte-first-ae");
             fs::create_dir(fixture.0.join("input")).unwrap();
             for name in ["adsl.csv", "adae.csv"] {
                 fs::copy(
@@ -1007,15 +1046,9 @@ columns:
                 )
                 .unwrap();
             }
-            let written = fs::read(original.join("spec.yaml")).unwrap();
-            let mut result = fixture.run(std::str::from_utf8(&written).unwrap()).unwrap();
+            let written = fs::read_to_string(original.join("spec.yaml")).unwrap();
+            let result = fixture.run(&written).unwrap();
             assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read(fixture.0.join("adtte.csv")).unwrap(),
-                fs::read(original.join("expected/adtte.csv")).unwrap()
-            );
-            assert_eq!(fs::read(original.join("spec.yaml")).unwrap(), written);
             assert_eq!(
                 result.observations()["handler_counts"],
                 yamaa_adapters::json!([

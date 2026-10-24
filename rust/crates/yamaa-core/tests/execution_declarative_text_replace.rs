@@ -1,6 +1,9 @@
 //! `str_replace` execution contracts.
 use crate::support;
 
+/// No benchmark compiles a pattern beyond the size limit. This proves the
+/// compiler's typed refusal for both operations; the host-fixture case
+/// `pattern_beyond_the_compiled_size_limit` proves its public report.
 #[test]
 fn oversized_patterns_report_the_compiled_size_limit_at_the_pattern() {
     use support::document::Tree as T;

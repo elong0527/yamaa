@@ -427,7 +427,10 @@ made to both, and `make check-repository` fails while they differ
   its authored issue rows from `support::study::issue_row` and `issues`,
   and a test that only writes files and runs one specification uses
   `support::study::Study`. The corpus tests walk
-  `support::benchmarks::all()`.
+  `support::benchmarks::all()`, and a test that a benchmark pins calls
+  `support::benchmarks::reproduce(name)`, which runs the benchmark as public
+  conformance reads it: its first issue against `expected/error.yaml`, or
+  every CSV it writes against `expected/`.
 - Tests that differ in one value are one test over a table, with the
   label in every assertion:
 

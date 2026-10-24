@@ -6,7 +6,7 @@ mod execution {
     mod aggregate_record_operations {
         //! Independent YAML, donor bytes and exact saved truth for per-record aggregates.
         use crate::support::Edit as _;
-        use std::{fs, path::Path};
+        use std::fs;
         use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
@@ -39,6 +39,8 @@ mod execution {
         fn specification(operation: &str) -> String {
             format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  A: {{path: a.csv, types: {{CUT: int}}}}\n  B: {{path: b.csv, key: [ID], types: {{N: int}}}}\nbase: A\noutput: {{path: result.csv, columns: [ID, CUT, TOTAL]}}\ncolumns:\n  - {{name: ID, type: str, derivation: A.ID}}\n  - {{name: CUT, type: int, derivation: A.CUT}}\n  - name: TOTAL\n    type: float\n    derivation:\n      aggregate:\n{operation}")
         }
+        // No benchmark pins a filtered, ranged aggregate whose bindings
+        // recover an unconvertible value.
         #[test]
         fn ordered_converted_bindings_reduce_only_matched_filtered_inclusive_records() {
             let fixture = Fixture::new();
@@ -47,6 +49,8 @@ mod execution {
             fs::write(fixture.0.join("spec.yaml"),specification("        filter: B.USE = 'Y'\n        between: {value: CUT, lower: N}\n        derivations:\n          VALUE:\n            type: float\n            derivation: {value: B.V, unconvertible: 0}\n          TWICE:\n            type: float\n            derivation: 'VALUE * 2'\n        expr: SUM(TWICE)\n")).unwrap();
             assert_eq!(fixture.save(), b"ID,CUT,TOTAL\na,3,7\nb,2,0\nc,,\nd,1,\n");
         }
+        // No benchmark pins an aggregate binding that extracts or templates
+        // text.
         #[test]
         fn aggregate_bindings_admit_extractions_and_templates_before_binding() {
             for (derivation, kind, expression) in [
@@ -90,47 +94,24 @@ mod execution {
         }
         #[test]
         fn original_public_aggregate_fixtures_preserve_frozen_csv_bytes() {
-            let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks");
-            fn copy(from: &Path, to: &Path) {
-                for entry in fs::read_dir(from).unwrap() {
-                    let entry = entry.unwrap();
-                    if entry.file_name() == "expected" {
-                        continue;
-                    }
-                    let target = to.join(entry.file_name());
-                    if entry.file_type().unwrap().is_dir() {
-                        fs::create_dir(&target).unwrap();
-                        copy(&entry.path(), &target);
-                    } else {
-                        fs::copy(entry.path(), target).unwrap();
-                    }
-                }
-            }
-            for (name, result) in [
-                ("schema-aggregation", "adsl.csv"),
-                ("schema-derive-date-epoch", "adex.csv"),
-                ("schema-derive-text-score", "adqs.csv"),
-                ("schema-aggregate-derive-intermediate", "adex.csv"),
-                ("adam-adsl-new-therapy", "adsl.csv"),
-                ("adam-adtr-nadir", "adtr.csv"),
-                ("adam-adtte-pfs", "adtte.csv"),
-                ("sdtm-rs-timepoint-response", "rs.csv"),
+            for name in [
+                "schema-aggregation",
+                "schema-derive-date-epoch",
+                "schema-derive-text-score",
+                "schema-aggregate-derive-intermediate",
+                "adam-adsl-new-therapy",
+                "adam-adtr-nadir",
+                "adam-adtte-pfs",
+                "sdtm-rs-timepoint-response",
             ] {
-                let fixture = Fixture::new();
-                copy(&root.join(name), &fixture.0);
-                let mut domain = fixture
-                    .run()
-                    .unwrap_or_else(|issues| panic!("{name}: {issues:?}"));
-                assert!(domain.issues().is_empty(), "{name}: {:?}", domain.issues());
-                assert!(domain.save().unwrap(), "{name}");
-                assert_eq!(
-                    fs::read(fixture.0.join(result)).unwrap(),
-                    fs::read(root.join(name).join("expected").join(result)).unwrap(),
-                    "{name}"
-                );
+                crate::support::benchmarks::reproduce(name);
             }
         }
 
+        // No benchmark pins these faults of an aggregate's own bindings and
+        // range: `negative-aggregate-unbound-variable` pins an expression
+        // that reads no binding, and `negative-lookup-bad-range` a lookup's
+        // range.
         #[test]
         fn derive_and_range_faults_fail_before_any_output_with_registered_causes() {
             for (operation,condition,rule) in [
@@ -157,6 +138,16 @@ mod execution {
         /// Another input has no record there and is refused (#2904).
         #[test]
         fn a_qualified_between_value_reads_only_the_rows_own_driver_record() {
+            // Without row templates the base input builds every row: a value
+            // read from the base input or from a column builds, as
+            // `schema-aggregate-range-driver` and `adam-adtte-pro-deterioration`
+            // state.
+            for name in [
+                "schema-aggregate-range-driver",
+                "adam-adtte-pro-deterioration",
+            ] {
+                crate::support::benchmarks::reproduce(name);
+            }
             let run = |spec: String| {
                 let fixture = Fixture::new();
                 fs::write(fixture.0.join("a.csv"), b"ID,CUT\na,1\nb,2\n").unwrap();
@@ -195,23 +186,18 @@ mod execution {
             let operation = |value: &str| {
                 format!("        between: {{value: {value}, lower: N}}\n        expr: SUM(B.N)\n")
             };
-            let inputs = |spec: String| {
-                spec.edit(
+            // A value read from another input is refused.
+            // `negative-aggregate-range-other-input` states the refusal's first
+            // issue, but its `error.yaml` leaves out that the issue is the only
+            // one.
+            assert_eq!(
+                run(specification(&operation("C.LIMIT")).edit(
                     "  B: {path: b.csv, key: [ID], types: {N: int}}\n",
                     "  B: {path: b.csv, key: [ID], types: {N: int}}\n  C: {path: c.csv, types: {LIMIT: int}}\n",
-                )
-            };
-            // Without row templates the base input builds every row.
-            for value in ["A.CUT", "CUT"] {
-                assert_eq!(
-                    run(inputs(specification(&operation(value)))),
-                    Ok("ID,CUT,TOTAL\na,1,1\nb,2,3\n".into())
-                );
-            }
-            assert_eq!(
-                run(inputs(specification(&operation("C.LIMIT")))),
+                )),
                 refused("C.LIMIT")
             );
+            // No benchmark pins the reads of rows that row templates build.
             // Rows built from A and from C share the aggregate's column, so
             // neither input supplies a record for every row.
             let rows = |value: &str, templates: &str| {
@@ -232,6 +218,10 @@ mod execution {
                 );
             }
         }
+        // No benchmark pins a binding that reads a lookup keyed on the
+        // driver's own record, nor its refusal without `keep`:
+        // `schema-aggregate-derive-intermediate` reads a kept lookup keyed
+        // on output columns.
         #[test]
         fn named_derive_read_requires_keep_and_uses_original_current_record() {
             let fixture = Fixture::new();
@@ -283,6 +273,11 @@ mod execution {
         // Original planning/test_aggregate_relation_reads.py inputs: COUNT still owns
         // a relation even though it reads no payload field. Its key producer is written
         // after the consuming column, and only the two matching donors are eligible.
+        // No benchmark pins a key producer written after the reduction, also where a
+        // reduction without a key of its own matches on the key its input declares
+        // (LOOKUP-5): `schema-aggregation`, which
+        // `original_public_aggregate_fixtures_preserve_frozen_csv_bytes` reproduces,
+        // pins that match on a key column written before the reduction.
         #[test]
         fn original_fieldless_reductions_schedule_real_key_dependencies_once() {
             for (expression, count) in [
@@ -343,7 +338,7 @@ mod execution {
         }
 
         /// A written 1.0 aggregate key reports a pair whose types cannot compare
-        /// at `key` (D196).
+        /// at `key` (D196). No benchmark pins such a pair.
         #[test]
         fn original_fieldless_reduction_type_findings_keep_one_authored_owner() {
             for expression in [
@@ -395,6 +390,9 @@ mod execution {
 
         /// A written 1.0 aggregate key reports a key column the relation lacks
         /// at `key`, and a match value that reads nothing at its pair (D196).
+        /// No benchmark pins these names in a fieldless reduction;
+        /// `negative-aggregate-key-bare-field` pins a bare match value of a
+        /// reduction that reads a field.
         #[test]
         fn original_fieldless_reduction_unknown_names_do_not_invent_join_findings() {
             for (expression, key, identifier, rule, path) in [
@@ -454,7 +452,8 @@ mod execution {
         }
 
         /// The filter is the only reference to the donor, and the key pair's
-        /// types are reported at `key` (D196).
+        /// types are reported at `key` (D196). No benchmark pins an aggregate
+        /// whose filter is its only donor reference.
         #[test]
         fn fieldless_literal_bindings_keep_the_filter_as_the_only_donor_reference() {
             for expression in ["COUNT(OTHER.*)", "SUM(H)"] {
@@ -525,47 +524,6 @@ S1,001,PF01,SCALE,1
 S1,001,PF02,SCALE,N/A
 S1,001,PF03,SCALE,3
 "#;
-        const ORIGINAL_ENUM_DERIVE_SPEC: &str = r#"yamaa: "1.0"
-type: spec
-domain: ADSL
-keys: [STUDYID, USUBJID]
-input:
-  EX: input/ex.csv
-output:
-  path: adsl.csv
-  columns: [STUDYID, USUBJID, TRTEDT]
-columns:
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation: EX.STUDYID
-  - name: USUBJID
-    type: str
-    label: Unique Subject Identifier
-    derivation: EX.USUBJID
-  - name: TRTEDT
-    type: date
-    label: Date of Last Exposure
-    derivation:
-      aggregate:
-        key: [STUDYID, USUBJID]
-        derivations:
-          H:
-            type: date
-            derivation:
-              impute:
-                type: date
-                source: EX.EXENDTC
-                day: last
-        expr: "MAX(H)"
-rows:
-  - id: one
-"#;
-        const ORIGINAL_EX: &str = r#"STUDYID,USUBJID,EXENDTC
-S1,001,2024-05
-S1,002,2024-06
-"#;
-
         fn original_derive_fixture(bindings: &str, expression: &str, input: &str) -> Fixture {
             let fixture = Fixture::new();
             fs::create_dir(fixture.0.join("input")).unwrap();
@@ -598,7 +556,9 @@ S1,002,2024-06
 
         /// A binding that reads a later binding is refused (P-BIND-1); a 1.0
         /// `derivations` map cannot repeat a name, since a YAML mapping refuses
-        /// a repeated key.
+        /// a repeated key. No benchmark pins a forward reference between
+        /// bindings; `negative-aggregate-unbound-variable` pins a name no
+        /// binding declares.
         #[test]
         fn original_aggregate_bindings_reject_forward_references() {
             let fixture = original_derive_fixture(
@@ -612,6 +572,8 @@ S1,002,2024-06
             assert_eq!(context["variable"], "QSNUM");
         }
 
+        // No benchmark pins a binding that reads an earlier binding converted
+        // from text, nor one that recovers an unconvertible value.
         #[test]
         fn original_aggregate_bindings_read_converted_earlier_values_and_recover_once() {
             for (bindings, expression, input, expected) in [
@@ -649,21 +611,14 @@ S1,002,2024-06
             );
         }
 
+        /// The bindings of the first and last exposures impute with `time:
+        /// first` and `time: last`, enum arguments rather than reads.
         #[test]
         fn original_aggregate_derive_enum_arguments_are_not_variable_references() {
-            let fixture = Fixture::new();
-            fs::create_dir(fixture.0.join("input")).unwrap();
-            fs::write(fixture.0.join("input/ex.csv"), ORIGINAL_EX).unwrap();
-            fs::write(fixture.0.join("spec.yaml"), ORIGINAL_ENUM_DERIVE_SPEC).unwrap();
-            let mut domain = fixture.run().unwrap_or_else(|issues| panic!("{issues:?}"));
-            assert!(domain.issues().is_empty(), "{:?}", domain.issues());
-            assert!(domain.save().unwrap());
-            assert_eq!(
-                fs::read(fixture.0.join("adsl.csv")).unwrap(),
-                b"STUDYID,USUBJID,TRTEDT\nS1,001,2024-05-31\nS1,002,2024-06-30\n"
-            );
+            crate::support::benchmarks::reproduce("adam-adsl-treatment");
         }
 
+        // No benchmark pins these findings of a binding's relation or field.
         #[test]
         fn original_aggregate_binding_relation_and_field_findings_keep_their_context() {
             let fixture = original_derive_fixture(
@@ -753,6 +708,8 @@ S1,002,2024-06
                 .map(crate::support::study::issue_row)
                 .collect::<Vec<_>>())
         }
+        // The cases are host-fixture truth, which the Python and R suites
+        // read too; no benchmark pins these typed baseline operands.
         #[test]
         fn baseline_types_preserve_conditions_and_reference_priority() {
             let truth: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
@@ -920,6 +877,10 @@ S1,002,2024-06
 
         #[test]
         fn case_item_order_reports_req_0339_at_each_expression_site() {
+            // `negative-case-otherwise-only` states the first site's first
+            // issue, but its `error.yaml` leaves out the layer the finding
+            // names and that the issue is the only one. No benchmark pins the
+            // other sites.
             let sites = [
                 (column(ONLY), "columns.FL.derivation.case", NO_BRANCH),
                 (column("{case: []}"), "columns.FL.derivation.case", NO_BRANCH),
@@ -967,6 +928,8 @@ S1,002,2024-06
             }
         }
 
+        // `negative-case-otherwise-only` states a case of one `otherwise` item;
+        // no benchmark pins a case of two, each misplaced one reported.
         #[test]
         fn case_with_only_otherwise_items_reports_the_case_and_each_misplaced_item() {
             let fixture = Fixture::new(&column(
@@ -984,6 +947,8 @@ S1,002,2024-06
             }
         }
 
+        // No benchmark runs `check` in both hosts: a positive benchmark with an
+        // ordered case, such as `adam-adsl-age-group`, pins its build alone.
         #[test]
         fn ordered_case_items_still_build() {
             let fixture = Fixture::new(&column(
@@ -999,10 +964,8 @@ S1,002,2024-06
         //! study data: output declarations (#2295), formula qualification and column
         //! order. The same first issue, in both host routes. Committed negative
         //! benchmarks and `expected/error.yaml` remain the oracle.
-        use std::{
-            fs,
-            path::{Path, PathBuf},
-        };
+        use crate::support::benchmarks;
+        use std::{fs, path::Path};
         use yamaa_adapters::{file_application, specification_report::Identity};
         use yamaa_core::domain_entry::Request;
 
@@ -1029,31 +992,6 @@ S1,002,2024-06
 
         fn issue(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
             crate::support::study::issue_row(issue)
-        }
-
-        fn expected(path: &Path) -> yamaa_core::json::Value {
-            let text = fs::read_to_string(path).unwrap();
-            let d = yamaa_adapters::yaml_decode::decode_yaml(text.as_bytes())
-                .unwrap()
-                .document;
-            fn value(d: &yamaa_core::schema::Document, id: usize) -> yamaa_core::json::Value {
-                use yamaa_core::schema::DocumentNode as N;
-                match &d.nodes()[id] {
-                    N::Null => yamaa_core::json::Value::Null,
-                    N::Boolean(v) => (*v).into(),
-                    N::Integer(v) => yamaa_adapters::json_wire::decode(v).unwrap(),
-                    N::Float(v) => yamaa_adapters::json!(v),
-                    N::Text(v) => v.clone().into(),
-                    N::Sequence(ids) => ids.iter().map(|&id| value(d, id)).collect(),
-                    N::Mapping(pairs) => pairs
-                        .iter()
-                        .map(|&(key, item)| {
-                            (value(d, key).as_str().unwrap().to_owned(), value(d, item))
-                        })
-                        .collect(),
-                }
-            }
-            value(&d, d.root())
         }
 
         fn identity<'a>(
@@ -1107,15 +1045,11 @@ S1,002,2024-06
             (issue(&checked[0]), issue(&built[0]))
         }
 
-        fn benchmarks_root() -> PathBuf {
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks")
-        }
-
         /// Every committed negative benchmark whose first issue comes from `output.*`
         /// is an output-declaration validation case. The denominator is pinned so a
         /// benchmark that silently stops being selected fails this test.
         fn output_validation_benchmarks() -> Vec<String> {
-            let root = benchmarks_root();
+            let root = benchmarks::path("");
             let mut selected = Vec::new();
             for entry in fs::read_dir(&root).unwrap() {
                 let entry = entry.unwrap();
@@ -1127,7 +1061,7 @@ S1,002,2024-06
                 if !oracle.exists() {
                     continue;
                 }
-                let expected = expected(&oracle);
+                let expected = benchmarks::yaml(&oracle);
                 let from_output = expected["spec_paths"]
                     .as_array()
                     .and_then(|paths| paths.first())
@@ -1154,14 +1088,14 @@ S1,002,2024-06
                 ],
                 "output-validation benchmark denominator changed"
             );
-            let root = benchmarks_root();
+            let root = benchmarks::path("");
             for name in &selected {
                 let original = root.join(name);
                 let fixture = Fixture::new(name);
                 copy(&original.join("input"), &fixture.0.join("input"));
                 fs::copy(original.join("spec.yaml"), fixture.0.join("spec.yaml")).unwrap();
                 let spec = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let oracle = expected(&original.join("expected/error.yaml"));
+                let oracle = benchmarks::yaml(&original.join("expected/error.yaml"));
                 for runtime in ["python", "r"] {
                     let (checked, built) = first_issues(&spec, name, runtime);
                     assert_eq!(
@@ -1362,7 +1296,7 @@ S1,002,2024-06
         /// composition, which `submission_transport` runs; its domain build
         /// succeeds.
         fn negative_benchmarks() -> Vec<(String, String)> {
-            let root = benchmarks_root();
+            let root = benchmarks::path("");
             let mut selected = Vec::new();
             for entry in fs::read_dir(&root).unwrap() {
                 let entry = entry.unwrap();
@@ -1371,9 +1305,12 @@ S1,002,2024-06
                 if !name.starts_with("negative-") || !oracle.exists() {
                     continue;
                 }
-                let metadata = expected(&entry.path().join("benchmark.yaml"));
+                let metadata = benchmarks::yaml(&entry.path().join("benchmark.yaml"));
                 if metadata["conformance"]["excluded"].is_null() && metadata["define"].is_null() {
-                    let phase = expected(&oracle)["phase"].as_str().unwrap().to_owned();
+                    let phase = benchmarks::yaml(&oracle)["phase"]
+                        .as_str()
+                        .unwrap()
+                        .to_owned();
                     selected.push((name, phase));
                 }
             }
@@ -1399,14 +1336,14 @@ S1,002,2024-06
                     "{name}: not selected"
                 );
             }
-            let root = benchmarks_root();
+            let root = benchmarks::path("");
             let mut compared = Vec::new();
             for (name, phase) in &selected {
                 if NOT_BUILT_HERE.iter().any(|(n, _)| n == name) {
                     continue;
                 }
                 let case = root.join(name);
-                let metadata = expected(&case.join("benchmark.yaml"));
+                let metadata = benchmarks::yaml(&case.join("benchmark.yaml"));
                 let specification = |runtime: &str| {
                     // The primary entry is last in each host's declared list.
                     let filename = if metadata["entries"].is_null() {
@@ -1422,7 +1359,7 @@ S1,002,2024-06
                     };
                     case.join(filename).to_str().unwrap().to_owned()
                 };
-                let oracle = expected(&case.join("expected/error.yaml"));
+                let oracle = benchmarks::yaml(&case.join("expected/error.yaml"));
                 if phase != "validation" {
                     // This harness passes no project file. A 1.x
                     // specification that binds a codelist through its
@@ -1530,7 +1467,9 @@ S1,002,2024-06
 
         /// Formula reads bind without a source schema, so when nothing else is wrong
         /// `check` reports exactly what `domain` reports: each qualified name that is
-        /// not a record lookup, then column order over the formulas' reads.
+        /// not a record lookup, then column order over the formulas' reads. The
+        /// benchmarks state first issues alone (`negative-direct-dose-read`,
+        /// `negative-forward-reference`); no benchmark pins the complete list.
         #[test]
         fn check_reports_formula_qualification_and_column_order() {
             let qualified = |expr: &str, identifier: &str| yamaa_adapters::json!({"phase":"validation","condition":"qualified_identifier","rule":"FORMULA-9","spec_paths":["columns.A.derivation"],"context":{"expr":expr,"identifier":identifier}});
@@ -1617,6 +1556,9 @@ S1,002,2024-06
         /// `rows: []` builds no row template, as without `rows`, and an ODM read
         /// under `unconvertible` is named at binding's path. `check` and `domain`
         /// report the same issues in both host routes (#3225).
+        /// `negative-lookup-empty-order` writes `order_by: []` beside `keep: last`;
+        /// no benchmark pins `order_by: []` without `keep`, `derivations: {}`, an
+        /// ODM input's `types: {}` or `rows: []`.
         #[test]
         fn written_empty_declarations_keep_their_outcomes_in_both_routes() {
             let header = "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\n";
@@ -1698,7 +1640,7 @@ S1,002,2024-06
                     ),
                 ),
             ];
-            let odm_source = benchmarks_root().join("negative-odm-schema-type/input/odm.csv");
+            let odm_source = benchmarks::path("negative-odm-schema-type").join("input/odm.csv");
             for (name, specification, oracle) in cases {
                 let fixture = Fixture::new(name);
                 fs::create_dir(fixture.0.join("input")).unwrap();
@@ -1753,6 +1695,8 @@ S1,002,2024-06
     )
         }
 
+        // The finding is the crate fixture `csv_precision_limit.json`; no
+        // benchmark pins a precision outside the range.
         #[test]
         fn csv_precision_range_is_validated_for_empty_and_non_float_outputs_in_both_hosts() {
             let oracle: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
@@ -1812,6 +1756,9 @@ S1,002,2024-06
             }
         }
 
+        // No benchmark pins the endpoints of the precision, 0 and 18:
+        // `adam-adlb-reported-precision` pins four decimals, and every float
+        // benchmark without `decimals` pins its omission.
         #[test]
         fn csv_precision_endpoints_and_omission_keep_exact_saved_bytes() {
             for (decimals, expected) in [
@@ -2021,6 +1968,8 @@ S1,002,2024-06
             }
         }
 
+        // A unit seam: the bound plans of six benchmarks' specifications, which
+        // no benchmark's expected files pin.
         #[test]
         fn all_six_original_yaml_documents_compile_against_independent_model_expectations() {
             type Case<'a> = (
@@ -2401,6 +2350,8 @@ S1,002,2024-06
             }
         }
 
+        // A unit seam: where the finding of an edited layer of
+        // `schema-inheritance` is located, which no benchmark pins.
         #[test]
         fn inherited_unknown_profile_retains_written_layer_and_location_before_study_effects() {
             let (document, parents) = prepare("schema-inheritance", true);

@@ -145,27 +145,16 @@ const OWN_AE: &str = "S1,AE,1,OWN\nS1,AE,2,OWN\nS2,AE,1,OWN\n";
 fn second_template_driver_reads_its_own_record_through_a_bare_source() {
     // The first row template derives SEX itself; only the DM rows complete it
     // from the column, and they read their own record, not the first
-    // template's input.
+    // template's input. No benchmark pins a later template's bare read;
+    // `schema-column-default-own-record` pins its read inside an operation.
     Fixture::new(&specification("str", "DM.SEX", &["ae", "dm"], &["ae"])).saved(&format!(
         "USUBJID,SRC,SEQ,X\n{OWN_AE}S1,DM,0,F\nS2,DM,0,M\nS3,DM,0,F\n"
     ));
 }
 
 #[test]
-fn second_template_driver_reads_its_own_record_inside_an_operation() {
-    Fixture::new(&specification(
-        "str",
-        "{str_case: {source: DM.SEX, to: lower}}",
-        &["ae", "dm"],
-        &["ae"],
-    ))
-    .saved(&format!(
-        "USUBJID,SRC,SEQ,X\n{OWN_AE}S1,DM,0,f\nS2,DM,0,m\nS3,DM,0,f\n"
-    ));
-}
-
-#[test]
 fn second_template_driver_reads_its_own_record_in_a_flag_condition() {
+    // No benchmark pins a later template's read in a flag condition.
     Fixture::new(&specification(
         "str",
         "{flag: \"DM.SEX = 'F'\"}",
@@ -179,7 +168,8 @@ fn second_template_driver_reads_its_own_record_in_a_flag_condition() {
 
 #[test]
 fn second_template_driver_reads_its_own_record_in_a_case_condition() {
-    // Without an otherwise, S2's DM row matches no branch and is missing.
+    // Without an otherwise, S2's DM row matches no branch and is missing. No
+    // benchmark pins a later template's read in a case condition.
     Fixture::new(&specification(
         "str",
         "{case: [{when: \"DM.SEX = 'F'\", then: \"'Y'\"}]}",
@@ -191,10 +181,17 @@ fn second_template_driver_reads_its_own_record_in_a_case_condition() {
     ));
 }
 
+/// The subject template states the start date itself; the event and
+/// medication rows complete it from the column, inside an operation, each
+/// from its own record, and join the other input on the key it declares, as
+/// `schema-column-default-own-record` states.
 #[test]
 fn each_driver_reads_its_own_record_and_joins_the_other() {
-    // AE and DM both leave X to the column; CM states it. The AE rows join DM
-    // on USUBJID, the key DM declares; the DM rows read their own record.
+    crate::support::benchmarks::reproduce("schema-column-default-own-record");
+    // The benchmark's joins never match, since DOMAIN is in the key; no
+    // benchmark pins a join that matches inside a driver's binding. AE and DM
+    // both leave X to the column; CM states it. The AE rows join DM on
+    // USUBJID, the key DM declares; the DM rows read their own record.
     Fixture::new(&specification(
         "str",
         "DM.SEX",
@@ -209,7 +206,8 @@ fn each_driver_reads_its_own_record_and_joins_the_other() {
 
 #[test]
 fn each_driver_reads_its_own_record_where_a_condition_selects_it() {
-    // Every row reads the stored field only its own driver carries.
+    // Every row reads the stored field only its own driver carries. No
+    // benchmark pins a case that selects each driver's own field.
     Fixture::new(&specification(
         "str",
         "{case: [{when: \"SRC = 'AE'\", then: AE.AETERM}, {otherwise: DM.SEX}]}",
@@ -225,7 +223,8 @@ fn each_driver_reads_its_own_record_where_a_condition_selects_it() {
 #[test]
 fn another_drivers_records_still_join_on_the_output_keys() {
     // The DM rows join AE on USUBJID, and S1 has two adverse events: the
-    // implicit join fails as it would in any other column.
+    // implicit join fails as it would in any other column. No benchmark pins
+    // a join of another driver's records that fails.
     let fixture = Fixture::new(&specification(
         "str",
         "AE.AETERM",
@@ -253,7 +252,7 @@ fn column_bindings_run_one_driver_after_another() {
     // The DM templates arm_a and arm_b share one binding, which runs before
     // the AE binding because arm_a comes first. S2's DM record fails in
     // arm_b before S2's adverse event is converted, although the event row
-    // comes first.
+    // comes first. No benchmark pins the order of the bindings.
     let fixture = Fixture::new(&format!(
         "{HEAD}{}rows:\n\
          \x20 - {{id: arm_a, dataset: DM, filter: \"DM.ARM = 'A'\", derivations: {{USUBJID: DM.USUBJID, SRC: \"'A'\", SEQ: 0}}}}\n\
@@ -285,7 +284,8 @@ fn a_column_holding_an_aggregate_keeps_the_whole_dataset() {
     // A qualified aggregate reduces its declared input for every row; DM is
     // read through the join on USUBJID, for the DM rows as well. X holds an
     // aggregate, so no template may state it (SPEC-6): the column phase
-    // completes the rows of all three drivers.
+    // completes the rows of all three drivers. No benchmark pins an
+    // aggregate column over the rows of several drivers.
     Fixture::new(&specification(
         "int",
         "{case: [{when: \"DM.SEX = 'F'\", then: {aggregate: {expr: \"COUNT(AE.AESEQ)\", key: [USUBJID]}}}, {otherwise: 0}]}",
@@ -301,7 +301,9 @@ fn a_column_holding_an_aggregate_keeps_the_whole_dataset() {
 #[test]
 fn a_column_window_spans_the_rows_of_every_driver() {
     // No template states X: one window numbers the rows of all three drivers
-    // within each subject, in construction order.
+    // within each subject, in construction order. The benchmarks that number
+    // the rows of several drivers break every tie themselves
+    // (`sdtm-qs-questionnaire-items`); no benchmark pins construction order.
     Fixture::new(&specification(
         "int",
         "{row_number: {window: {group_by: [USUBJID], order_by: [SEQ]}}}",
@@ -327,6 +329,8 @@ fn serious(derivation: &str, intermediate: &str) -> String {
     )
 }
 
+// No benchmark pins this refusal, which public conformance marks
+// unsupported.
 #[test]
 fn a_field_an_intermediate_driver_derives_is_refused_beside_another_driver() {
     let fixture = Fixture::new(&serious(

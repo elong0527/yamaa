@@ -91,6 +91,9 @@ fn windowed(value: &str) -> String {
 
 #[test]
 fn a_window_key_gives_every_column_its_row_record() {
+    // `schema-window-key-records` pins such reads, but it calls a project
+    // function, which this route's empty host-functions double cannot run;
+    // no benchmark pins a filtered `first_available` source.
     for (value, output) in [
         (
             "{flag: 'SRC.VAL > 3'}",
@@ -117,7 +120,12 @@ fn a_window_key_gives_every_column_its_row_record() {
         assert_eq!(fixture.run(), Ok(output.into()), "{value}");
     }
     // Every ODM record is its own row: an item read takes the scope of the
-    // record's own item group, and the key may read one too.
+    // record's own item group, as `schema-window-key-odm-records` states.
+    crate::support::benchmarks::reproduce("schema-window-key-odm-records");
+    // So a VS record reads no SEX, although its subject has one in the DM
+    // item group occurrence at the same repeat key, and the key may read an
+    // item too. No benchmark pins an item of another item group occurrence at
+    // the same repeat key, nor a key that reads one.
     let odm = |keys: &str| {
         format!(
             "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [{keys}]\ninput: {{ODM: odm.csv}}\n\
@@ -138,6 +146,9 @@ fn a_window_key_gives_every_column_its_row_record() {
     assert_eq!(refused[0]["condition"], Value::String("missing_key".into()));
 }
 
+// `schema-keys-record-reads` pins a key that reads a named lookup, but it
+// calls a project function, which this route's empty host-functions double
+// cannot run.
 #[test]
 fn a_key_reads_a_named_intermediate_for_its_record() {
     let keyed = |value: &str, kind: &str| {
@@ -184,7 +195,9 @@ fn a_key_that_reads_other_records_fails_before_data() {
         })]
     };
     // An aggregate reduces the records of a key combination that does not
-    // exist yet.
+    // exist yet. `negative-keys-aggregate` and `negative-keys-odm` state the
+    // first issue of this refusal and of the odm read's below, but their
+    // `error.yaml` leaves out that `domain` and `check` report it alone.
     let aggregate = "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, TOP]\n\
                      input: {SRC: {path: source.csv, key: [ID], types: {ID: int, VAL: int}}}\n\
                      output: {path: out.csv, columns: [ID, TOP]}\n\
@@ -193,7 +206,8 @@ fn a_key_that_reads_other_records_fails_before_data() {
     let fixture = Fixture::new(aggregate, &[("source.csv", SOURCE)]);
     assert_eq!(fixture.run(), Err(refused("TOP", "aggregate")));
     assert_eq!(fixture.check(), refused("TOP", "aggregate"));
-    // An odm read reads the items of the key combination, also inside a case.
+    // An odm read reads the items of the key combination, also inside a
+    // case; no benchmark pins the case, nor the builds below.
     let odm = |derivation: &str, path: &str| {
         format!(
             "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [USUBJID, SEX]\ninput: {{ODM: odm.csv}}\n\
@@ -253,6 +267,8 @@ fn a_key_that_reads_other_records_fails_before_data() {
 /// derivation whatever its operation: a 1.0 formula, which writes no
 /// operation segment of its own, also under `value`, reports where a bare
 /// name's source binding does, as its 0.5 `compute` did (COLUMN-7, D18).
+/// `negative-keys-missing` pins a `cut`; no benchmark pins a formula, a
+/// `value` or a bare name.
 #[test]
 fn a_key_that_reads_a_non_key_column_fails_at_its_derivation() {
     let refused = vec![yamaa_adapters::json!({

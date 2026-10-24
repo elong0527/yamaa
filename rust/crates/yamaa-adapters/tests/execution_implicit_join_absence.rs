@@ -100,6 +100,7 @@ const READS: &str = "  - {name: TRTSDT, type: str, derivation: ADSL.TRTSDT}\n\
     \x20   type: str\n\
     \x20   derivation: {flag: \"ADSL.SAFFL = 'Y'\"}\n";
 
+/// No benchmark's run report counts an absence, so none pins these counts.
 #[test]
 fn every_value_read_counts_its_missing_record_and_a_predicate_read_does_not() {
     let fixture = Fixture::new(&format!(
@@ -144,32 +145,16 @@ fn every_value_read_counts_its_missing_record_and_a_predicate_read_does_not() {
     );
 }
 
+/// `negative-input-require-match` reads its required subject-level input
+/// through a concise read for an event whose subject has no record, and
+/// states the whole finding.
 #[test]
 fn an_input_requiring_a_match_fails_a_concise_read_as_unmatched_key() {
-    let fixture = Fixture::new(&format!(
-        "{}  - {{name: TRTSDT, type: str, derivation: ADSL.TRTSDT}}\n",
-        specification(
-            "{path: adsl.csv, key: [STUDYID, USUBJID], require_match: true}",
-            ", TRTSDT",
-            "",
-        )
-    ));
-    let failure = fixture.failure();
-    assert_eq!(failure["phase"], "join");
-    assert_eq!(failure["condition"], "unmatched_key");
-    assert_eq!(failure["rule"], "LOOKUP-24");
-    assert_eq!(
-        failure["spec_paths"],
-        yamaa_adapters::json!(["columns.TRTSDT.derivation.source"])
-    );
-    assert_eq!(failure["context"]["dataset"], "ADSL");
-    assert_eq!(failure["context"]["intermediate"], "intermediate(ADSL)");
-    assert_eq!(
-        failure["context"]["intermediate_key"],
-        yamaa_adapters::json!({"STUDYID": "S", "USUBJID": "S-2"})
-    );
+    crate::support::benchmarks::reproduce("negative-input-require-match");
 }
 
+/// No benchmark fails an operand's or a predicate's read of a required input:
+/// `negative-input-require-match` fails a concise read.
 #[test]
 fn an_input_requiring_a_match_fails_operand_and_predicate_reads_at_their_paths() {
     for (column, derivation, path) in [
@@ -199,6 +184,8 @@ fn an_input_requiring_a_match_fails_operand_and_predicate_reads_at_their_paths()
     }
 }
 
+/// No benchmark declares an `absent` answer on a read of an input that
+/// requires a match.
 #[test]
 fn a_declared_absent_answers_before_the_input_requirement() {
     let fixture = Fixture::new(&format!(
@@ -220,6 +207,7 @@ fn a_declared_absent_answers_before_the_input_requirement() {
     assert!(counts.contains(&("columns.TRTSDT.derivation.source.absent".into(), 1)));
 }
 
+/// No benchmark requires a match of an input that no read joins.
 #[test]
 fn an_input_requirement_registers_no_count_and_allows_an_unread_input() {
     // The required input is never read through a join: the run succeeds and
@@ -234,6 +222,8 @@ fn an_input_requirement_registers_no_count_and_allows_an_unread_input() {
     assert!(counts.is_empty(), "{counts:?}");
 }
 
+/// No benchmark reads a named intermediate over an input that requires a
+/// match.
 #[test]
 fn an_input_requirement_leaves_a_named_intermediate_its_own_policy() {
     let fixture = Fixture::new(&format!(
@@ -285,7 +275,8 @@ const NAMED: &str = "yamaa: \"1.0\"\n\
 
 /// S-2 has no subject-level record, so each read answers it once. A named
 /// intermediate's answer, declared or by default, is counted under `absent`
-/// at the read's path, as the implicit join's is (LOOKUP-14, D202).
+/// at the read's path, as the implicit join's is (LOOKUP-14, D202). No
+/// benchmark's run report counts an absence.
 #[test]
 fn a_named_intermediate_s_absence_counts_under_the_handler_its_surface_names() {
     let fixture = Fixture::new(NAMED);
@@ -333,6 +324,8 @@ const ROWS: &str = "yamaa: \"1.0\"\n\
     \x20 - {name: AESEQ, type: int}\n\
     \x20 - {name: ARMU, type: str}\n";
 
+/// No benchmark's run report counts an absence, and no benchmark requires a
+/// match of an input that a row template reads.
 #[test]
 fn a_row_template_counts_an_operand_read_and_fails_it_when_required() {
     let fixture = Fixture::new(&ROWS.edit(

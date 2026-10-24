@@ -200,6 +200,9 @@ const ORDER: &str = "columns.ORD.derivation.row_number.window.order_by[0]";
 fn a_window_reading_a_driver_another_template_lacks_is_refused() {
     // The events rows used to take the ages of the subjects at their own
     // record positions, so S1's second event was ordered by S2's age.
+    // `negative-window-other-driver` states such a refusal's first issue,
+    // but its `error.yaml` leaves out that `domain` and `check` report it
+    // alone.
     numbered("", &[SUBJECTS, EVENTS], "DM.AGE").refused(&[(
         ORDER,
         "DM.AGE",
@@ -207,14 +210,16 @@ fn a_window_reading_a_driver_another_template_lacks_is_refused() {
         "row_number",
     )]);
     // A field of the later template's driver, which binding used to refuse
-    // as a field of no dataset (NAME-3), is refused the same way.
+    // as a field of no dataset (NAME-3), is refused the same way; no
+    // benchmark pins it.
     numbered("", &[SUBJECTS, EVENTS], "AE.AESEQ").refused(&[(
         ORDER,
         "AE.AESEQ",
         &["DM", "AE"],
         "row_number",
     )]);
-    // Each driver is named once, in construction order.
+    // Each driver is named once, in construction order, which no benchmark
+    // pins.
     numbered(
         "",
         &[EVENTS, SUBJECTS, &EVENTS.edit("id: events", "id: again")],
@@ -223,6 +228,8 @@ fn a_window_reading_a_driver_another_template_lacks_is_refused() {
     .refused(&[(ORDER, "AE.AESEQ", &["AE", "DM"], "row_number")]);
 }
 
+// No benchmark pins these operands; `negative-window-other-driver` pins a
+// `row_number` order.
 #[test]
 fn every_operand_of_every_window_operation_is_checked() {
     let drivers: &[&str] = &["DM", "AE"];
@@ -336,6 +343,7 @@ fn every_operand_of_every_window_operation_is_checked() {
     }
 }
 
+// No benchmark pins the refusal beside a grouped template.
 #[test]
 fn grouping_either_template_refuses_the_read_the_same_way() {
     let grouped_events = "  - {id: events, dataset: AE, group_by: [AE.USUBJID], derivations: {USUBJID: AE.USUBJID, SRC: \"'AE'\", SEQ: 1}}\n";
@@ -345,6 +353,8 @@ fn grouping_either_template_refuses_the_read_the_same_way() {
     }
 }
 
+// No benchmark pins a window's read of a named intermediate driver or of
+// the input it reads.
 #[test]
 fn named_intermediate_drivers_and_the_input_they_read() {
     let grouped = "  - {id: serious, dataset: SER, group_by: [SER.USUBJID], derivations: {USUBJID: SER.USUBJID, SRC: \"'SER'\", SEQ: 1}}\n";
@@ -398,6 +408,9 @@ fn named_intermediate_drivers_and_the_input_they_read() {
     }
 }
 
+// `sdtm-fa-reactogenicity-diary` pins a window over templates that share
+// the driver; no benchmark pins the ties in template order, a grouped
+// template's group key or a shared named intermediate.
 #[test]
 fn a_window_whose_templates_share_the_driver_builds_unchanged() {
     // Ties keep row-template order, then record order.
@@ -427,6 +440,7 @@ fn a_window_whose_templates_share_the_driver_builds_unchanged() {
     );
 }
 
+// No benchmark pins NAME-4 for a column-level window.
 #[test]
 fn a_grouped_template_over_the_shared_driver_still_reads_only_its_group_keys() {
     // A grouped row holds one value of each group key, not an age, so `check`
@@ -465,7 +479,9 @@ fn a_grouped_template_over_the_shared_driver_still_reads_only_its_group_keys() {
 fn a_column_every_row_completes_in_its_own_scope_orders_every_row() {
     // The repair: each row reads its subject's age as a column, an events row
     // through the implicit join on USUBJID, and the window orders by it. S2's
-    // event and record come first (30), then S1's events and record (40).
+    // event and record come first (30), then S1's events and record (40). No
+    // benchmark pins a column window over two drivers' rows ordered by a
+    // column one driver completes through a join.
     Fixture::new(&specification(
         "",
         &[SUBJECTS, EVENTS],
@@ -474,8 +490,13 @@ fn a_column_every_row_completes_in_its_own_scope_orders_every_row() {
         "{row_number: {window: {order_by: [AGE, SRC, SEQ]}}}",
     ))
     .saved("USUBJID,SRC,SEQ,ORD\nS1,DM,0,6\nS2,DM,0,2\nS3,DM,0,7\nS1,AE,1,3\nS1,AE,2,4\nS2,AE,1,1\nS1,AE,3,5\n");
+    // `adam-advs-windows` also builds one column window over the rows of two
+    // drivers, though each of its partitions holds one driver's rows and its
+    // output reads the rank only through `ANL01FL`.
+    crate::support::benchmarks::reproduce("adam-advs-windows");
 }
 
+// No benchmark pins a window's read of a dataset that builds no row.
 #[test]
 fn a_read_of_a_dataset_no_row_is_built_from_is_refused_before_any_data_is_read() {
     // An input that builds no row, whether or not the templates share a driver.
@@ -510,6 +531,8 @@ fn a_read_of_a_dataset_no_row_is_built_from_is_refused_before_any_data_is_read()
         .saved("USUBJID,SRC,SEQ,ORD\nS1,DM,0,2\nS2,DM,0,1\nS3,DM,0,3\n");
 }
 
+// No benchmark pins these reads of a row template's or a base input's
+// window.
 #[test]
 fn a_window_in_a_row_template_or_without_row_templates_reads_only_its_driver() {
     // A row template's own window reads its driver's records: another

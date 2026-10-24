@@ -106,6 +106,8 @@ fn dtc(columns: &[(&str, &str)]) -> String {
 /// Subject 2 has a year and no month, so no day is read for it.
 const RAW: &str = "ID,Y,M\n1,2025,03\n2,2025,\n3,2025,04\n";
 
+/// No benchmark reads a `dtc` part through a lookup: `sdtm-ae-partial-dates`
+/// and `sdtm-mh-ongoing-conditions` read each part from the row.
 #[test]
 fn a_day_after_a_missing_month_is_never_looked_up() {
     // The lookup table holds two records for subject 2, which the keyed
@@ -124,6 +126,8 @@ fn a_day_after_a_missing_month_is_never_looked_up() {
     );
 }
 
+/// No benchmark reads a `dtc` part through a lookup, so none counts such a
+/// read's absence answers in its report.
 #[test]
 fn an_absence_answer_after_a_missing_month_is_not_counted() {
     // Only subject 1 has a day record: subject 3 reaches its day and finds
@@ -170,6 +174,9 @@ fn an_absence_answer_after_a_missing_month_is_not_counted() {
     );
 }
 
+/// `negative-dtc-month-digits` refuses a month part read from the row. No
+/// benchmark refuses a part read through a lookup, for the lookup's multiple
+/// matches or for a day that is not two digits.
 #[test]
 fn a_reached_part_is_read_and_refused_as_before() {
     // With a month, subject 2's day is read, and its two records fail the run.
@@ -202,6 +209,8 @@ fn a_reached_part_is_read_and_refused_as_before() {
     );
 }
 
+/// No benchmark refuses an interval or a duration that `to_date` reads:
+/// `negative-impute-interval` refuses the one `impute` reads.
 #[test]
 fn to_date_refuses_an_interval_with_its_source_and_row() {
     // A duration names no single date: the failure reports the operation,

@@ -227,6 +227,9 @@ mod execution {
             }
         }
 
+        /// A port interaction: the order of the capture, decode and classify
+        /// requests, and the allocations they move, which no benchmark
+        /// observes.
         #[test]
         fn failed_run_keeps_complete_order_all_original_allocations_and_effects_through_projection()
         {
@@ -331,6 +334,8 @@ mod execution {
             assert_eq!(port.reads, 3);
         }
 
+        /// A port interaction: an opaque decoder failure stops the run before
+        /// any later capture, which no benchmark's decoder raises.
         #[test]
         fn original_opaque_decoder_payload_aborts_after_completed_prefix_before_later_capture() {
             let prepared = prepared(&["SRC", "SECOND", "THIRD", "NEVER"]);
@@ -378,6 +383,9 @@ mod execution {
             assert_eq!(port.reads, 3);
         }
 
+        /// A port interaction: an opaque capture failure keeps its identity
+        /// and nothing after it is decoded, which no benchmark's resolver
+        /// raises.
         #[test]
         fn original_opaque_capture_payload_retains_identity_without_decode_or_projection() {
             let prepared = prepared(&["SRC", "SECOND", "THIRD"]);
