@@ -316,9 +316,10 @@ pub enum ScalarOp {
     },
     /// `dataset::Imputation`.
     ToDate,
-    /// `text_case::StringCase`.
+    /// `text_case::StringCase`, with the `delimiters` list as written.
     StrCase {
         to: TextCase,
+        delimiters: Option<String>,
     },
     /// `text_pad::StringPad`, width as written.
     StrPad {
@@ -413,6 +414,20 @@ pub enum TextCase {
     Lower,
     Sentence,
     Title,
+    Proper,
+}
+
+impl TextCase {
+    /// The mode as `to` writes it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Upper => "upper",
+            Self::Lower => "lower",
+            Self::Sentence => "sentence",
+            Self::Title => "title",
+            Self::Proper => "proper",
+        }
+    }
 }
 
 /// A mapping dictionary, inline or the path of a file holding it.

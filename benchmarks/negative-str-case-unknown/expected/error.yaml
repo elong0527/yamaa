@@ -5,4 +5,4 @@ spec_paths:
 rule: SCHEMA-12
 context:
   value: capitalize
-  permitted: [upper, lower, sentence, title]
+  permitted: [upper, lower, sentence, title, proper]

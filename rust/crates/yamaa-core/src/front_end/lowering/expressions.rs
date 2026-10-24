@@ -590,7 +590,14 @@ impl Lower<'_> {
                         "lower" => TextCase::Lower,
                         "sentence" => TextCase::Sentence,
                         "title" => TextCase::Title,
+                        "proper" => TextCase::Proper,
                         _ => return None,
+                    },
+                    // Which modes take a list is the executor's to decide
+                    // (TEXT-5).
+                    delimiters: match self.field(p, "delimiters") {
+                        Some(_) => Some(text("delimiters")?.into()),
+                        None => None,
                     },
                 },
                 SOURCE,

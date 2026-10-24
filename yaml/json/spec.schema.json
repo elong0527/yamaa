@@ -2140,9 +2140,16 @@
                 "upper",
                 "lower",
                 "sentence",
-                "title"
+                "title",
+                "proper"
               ],
-              "description": "Case to produce, one of upper, lower, sentence or title (TEXT-5).",
+              "description": "Case to produce, one of upper, lower, sentence, title or proper (TEXT-5).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "str"
+            },
+            "delimiters": {
+              "type": "string",
+              "description": "ASCII characters, each listed once, after which proper raises the next character, declared only with proper; without it they are the blank, slash, hyphen, open parenthesis, period and tab (TEXT-5).",
               "x-yamaa-kind": "value",
               "x-yamaa-type": "str"
             },
@@ -4254,9 +4261,16 @@
                 "upper",
                 "lower",
                 "sentence",
-                "title"
+                "title",
+                "proper"
               ],
-              "description": "Case to produce, one of upper, lower, sentence or title (TEXT-5).",
+              "description": "Case to produce, one of upper, lower, sentence, title or proper (TEXT-5).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "str"
+            },
+            "delimiters": {
+              "type": "string",
+              "description": "ASCII characters, each listed once, after which proper raises the next character, declared only with proper; without it they are the blank, slash, hyphen, open parenthesis, period and tab (TEXT-5).",
               "x-yamaa-kind": "value",
               "x-yamaa-type": "str"
             },
