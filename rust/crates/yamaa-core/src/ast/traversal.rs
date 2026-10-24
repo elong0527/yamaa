@@ -7,9 +7,7 @@
 //! bindings), the donor record (an intermediate's own declarations), or the
 //! local bindings of an aggregate.
 
-use super::{
-    ColumnCheckKind, DatasetCheckKind, ExprId, ExprKind, JoinKey, Name, Spec, WindowFunction,
-};
+use super::{ColumnCheckKind, DatasetCheckKind, ExprId, ExprKind, JoinKey, Name, Spec};
 
 /// Why an expression is a child of its parent.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -203,12 +201,12 @@ impl Spec {
                 out.extend(window.group_by.iter().map(|&group| (Role::Group, group)));
                 out.extend(window.order_by.iter().map(|t| (Role::Order, t.variable)));
                 out.extend(window.filter.map(|filter| (Role::Condition, filter)));
-                if let WindowFunction::BaselineFlag {
-                    window_order_by, ..
-                } = &window.function
-                {
-                    out.extend(window_order_by.iter().map(|t| (Role::Order, t.variable)));
-                }
+                out.extend(
+                    window
+                        .window_order_by
+                        .iter()
+                        .map(|t| (Role::Order, t.variable)),
+                );
             }
             ExprKind::Aggregate(aggregate) => {
                 if let Some(JoinKey::Pairs { pairs, .. }) = &aggregate.key {

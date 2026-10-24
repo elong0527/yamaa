@@ -28,18 +28,31 @@ The modules they include, directly or through another module:
 |---|---|---|
 | [`schema_shared.yaml`](../../yaml/schema_shared.yaml) | The language version, column types, constants, paths and identifiers | every entry module |
 | [`schema_derivation.yaml`](../../yaml/schema_derivation.yaml) | The `expression` and `derivation` types, a derivation written in full with `unconvertible`, and a named intermediate's derivations | `schema_spec.yaml` |
-| [`schema_expression_core.yaml`](../../yaml/schema_expression_core.yaml) | `source`, `first_available`, `greatest`, `least`, `case` and `flag`, with order terms and `keep` | `schema_derivation.yaml` |
-| [`schema_expression_mapping.yaml`](../../yaml/schema_expression_mapping.yaml) | `mapping` and `cut` | `schema_derivation.yaml` |
-| [`schema_expression_str.yaml`](../../yaml/schema_expression_str.yaml) | `str_pad`, `str_substr`, `str_length`, `str_extract`, `str_replace`, `str_template` and `str_case` | `schema_derivation.yaml` |
-| [`schema_expression_numeric.yaml`](../../yaml/schema_expression_numeric.yaml) | `round_half_away_from_zero` and `str_decimal` | `schema_derivation.yaml` |
-| [`schema_expression_aggregate.yaml`](../../yaml/schema_expression_aggregate.yaml) | `aggregate` | `schema_derivation.yaml` |
-| [`schema_expression_date.yaml`](../../yaml/schema_expression_date.yaml) | `diff`, `impute`, `precision`, `imputation_flag`, `to_date`, `date_text`, `study_day`, `to_epoch_day`, `dtc`, `time_of_day`, `shift`, `duration_value` and `duration_text` | `schema_derivation.yaml` |
-| [`schema_expression_window.yaml`](../../yaml/schema_expression_window.yaml) | Windows, and `row_number`, `rank`, `row_value`, `locf` and `baseline_flag` | `schema_derivation.yaml` |
-| [`schema_expression_odm.yaml`](../../yaml/schema_expression_odm.yaml) | `odm`, which reads an item of the collected ODM data | `schema_derivation.yaml` |
-| [`schema_expression_function.yaml`](../../yaml/schema_expression_function.yaml) | `function`, which calls a project function | `schema_derivation.yaml` |
 | [`schema_verification.yaml`](../../yaml/schema_verification.yaml) | Column, dataset and named-intermediate verifications | `schema_spec.yaml` |
 | [`schema_metadata.yaml`](../../yaml/schema_metadata.yaml) | Dataset and column submission metadata | `schema_spec.yaml` |
 | [`schema_terminology.yaml`](../../yaml/schema_terminology.yaml) | Codelist sources, codelists and their items | `schema_project.yaml`, `schema_codelists.yaml` |
+
+`schema_derivation.yaml` includes the expression modules, each registering
+expressions in the `expressions` registry. The table below is generated from
+them, so it lists every expression each one registers. The core module also
+declares order terms and `keep`, and the window module the windows its
+expressions read.
+
+<!-- expression-modules:start -->
+
+| Module | Expressions |
+|---|---|
+| [`schema_expression_core.yaml`](../../yaml/schema_expression_core.yaml) | `source`, `first_available`, `greatest`, `least`, `case` and `flag` |
+| [`schema_expression_mapping.yaml`](../../yaml/schema_expression_mapping.yaml) | `mapping` and `cut` |
+| [`schema_expression_str.yaml`](../../yaml/schema_expression_str.yaml) | `str_pad`, `str_substr`, `str_length`, `str_extract`, `str_replace`, `str_template` and `str_case` |
+| [`schema_expression_numeric.yaml`](../../yaml/schema_expression_numeric.yaml) | `round_half_away_from_zero` and `str_decimal` |
+| [`schema_expression_date.yaml`](../../yaml/schema_expression_date.yaml) | `diff`, `impute`, `precision`, `imputation_flag`, `to_date`, `date_text`, `study_day`, `to_epoch_day`, `dtc`, `time_of_day`, `shift`, `duration_value` and `duration_text` |
+| [`schema_expression_window.yaml`](../../yaml/schema_expression_window.yaml) | `row_number`, `rank`, `row_value`, `locf` and `baseline_flag` |
+| [`schema_expression_aggregate.yaml`](../../yaml/schema_expression_aggregate.yaml) | `aggregate` |
+| [`schema_expression_odm.yaml`](../../yaml/schema_expression_odm.yaml) | `odm` |
+| [`schema_expression_function.yaml`](../../yaml/schema_expression_function.yaml) | `function` |
+
+<!-- expression-modules:end -->
 
 `yaml/` also holds [`conditions.yaml`](../../yaml/conditions.yaml), which
 records every registered condition's phases, message template and former

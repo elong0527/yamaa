@@ -98,14 +98,28 @@ checks a complete specification. The engine embeds them byte for byte, and
 `schema(file_type)` gives each as canonical JSON text, one line with its
 members in key order. After changing a schema file, regenerate them, then
 the copies of the schema files and their JSON Schemas that the engine embeds,
-in `rust/crates/yamaa-adapters/schema/`, and the field orders the lint reads
-from each file type's classes, which `make quick` also compares:
+in `rust/crates/yamaa-adapters/schema/`, the field orders the lint reads
+from each file type's classes, and the expression table, which `make quick`
+also compares:
 
 ```sh
 uv run --project python --no-sync python -m tools.packaging.generate_json_schema --write
 uv run --project python --no-sync python -m tools.packaging.generate_shipped_schema --write
 uv run --project python --no-sync python -m tools.packaging.generate_style_orders --write
+uv run --project python --no-sync python -m tools.packaging.generate_expression_table --write
 ```
+
+The expression table, `rust/crates/yamaa-core/src/expression_table.rs`, is
+the one place the engine spells an expression function (#3800). It holds each
+registered expression of the `expressions` registries, with its arguments,
+their types, defaults and admitted values, and each function and reducer of
+the expression grammar's `vocabulary`, with its argument bounds, result and
+the contexts that admit it. The lowering and the executor dispatch on its
+enumerations. The same generator writes the table of expression modules in
+`docs/articles/schema.md`. A new function is then its declaration, its
+semantics, its conformance cases or benchmark, and its rule card; each
+exhaustive match on the enumerations fails to compile until it places a new
+variant.
 
 ## Execution overview
 
@@ -180,9 +194,9 @@ rule, grammar, or fixture:
   [terminology contract](../rules/profiles/terminology.md).
 - Change a closed grammar in its `grammar/` file first. The rule's grammar
   block is rendered from that file, the shared parser's closed vocabulary is
-  compared with it, and both hosts replay its vectors, so a change made
-  anywhere else fails validation. Add a vector for every behavior the change
-  decides, in each context that decides it.
+  generated from it into the expression table, and both hosts replay its
+  vectors, so a change made anywhere else fails validation. Add a vector for
+  every behavior the change decides, in each context that decides it.
 - Change what an expression evaluates to, or the issue it reports, together
   with the cases of `conformance/expressions.yaml` that show it, authored from
   the rule cards. `make check-repository` runs every case through the engine,
