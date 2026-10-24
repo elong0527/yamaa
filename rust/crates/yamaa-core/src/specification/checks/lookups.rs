@@ -13,7 +13,9 @@ use crate::json::Value as JsonValue;
 pub(in crate::specification) fn self_findings(spec: &Spec) -> Vec<PreflightFinding> {
     let mut findings = Vec::new();
     for item in &spec.intermediates {
-        if item.dataset.name != "SELF" {
+        // A pair relation refuses either SELF side under LOOKUP-27,
+        // whether or not the specification declares row templates.
+        if item.dataset.name != "SELF" || item.pairs() {
             continue;
         }
         let path = format!("{}.dataset", spec.cite(item.meta));

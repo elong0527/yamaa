@@ -429,6 +429,15 @@
       "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.inner_join"], "context": {"intermediate": "P", "construct": "SELF"}}]
     },
     {
+      "case": "a_pair_relation_refuses_self_as_its_left_side_without_row_templates",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SELF", "inner_join": "SECOND", "key": ["ID"], "derivations": {"N": "SECOND.ID"}}]}]
+      },
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.dataset", "intermediates.P.inner_join"], "context": {"intermediate": "P", "construct": "SELF"}}]
+    },
+    {
       "case": "a_pair_relation_refuses_a_self_left_side_after_the_listed_fields",
       "operation": "prepare",
       "input": {
