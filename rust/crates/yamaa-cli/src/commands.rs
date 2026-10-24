@@ -208,6 +208,18 @@ fn exit(status: Status) -> u8 {
     }
 }
 
+/// The lines of a result's summary before its first issue's: the summary
+/// line and any member lines, which the command line prints before every
+/// issue's line. `issues` are the result's own, read with its summary, which
+/// ends with the first issue's line exactly when they are not empty.
+fn heading(summary: &Summary, issues: &[Diagnostic]) -> Vec<String> {
+    let mut lines = summary.lines().map(str::to_owned).collect::<Vec<_>>();
+    if !issues.is_empty() {
+        lines.pop();
+    }
+    lines
+}
+
 /// A result's printed form: its summary line and member lines, every issue,
 /// then, after a save, the files it wrote. `issues` are the result's issues
 /// read after its save, which a save's own failure joins. A refused save's
@@ -222,6 +234,7 @@ fn result(
     mut issues: Vec<Diagnostic>,
     saved: Option<Result<Vec<String>, Failure>>,
 ) -> Printed {
+    let mut lines = heading(summary, &issues);
     let mut refused = false;
     let paths = saved.map(|saved| match saved {
         Ok(paths) => paths,
@@ -235,8 +248,6 @@ fn result(
             failure.paths
         }
     });
-    let mut lines = vec![summary.line.clone()];
-    lines.extend(summary.members.iter().cloned());
     lines.extend(issues.iter().map(Diagnostic::text));
     document.insert("status".into(), text(status.as_str()));
     document.insert("issues".into(), self::issues(&issues));
@@ -526,17 +537,12 @@ fn submission(call: &Call, token: &CancellationToken) -> Result<Printed, Executi
             let used = submission.created().to_owned();
             document.insert("created".into(), text(&used));
             let summary = submission.summary();
-            let mut printed = result(
-                document,
-                &summary,
-                submission.status(),
-                submission.diagnostics(),
-                Some(saved),
-            );
+            let issues = submission.diagnostics();
             // The time follows the summary line and any member line, before
             // the issues.
+            let after = heading(&summary, &issues).len();
+            let mut printed = result(document, &summary, submission.status(), issues, Some(saved));
             if created.is_none() {
-                let after = 1 + summary.members.len();
                 printed.lines.insert(after, format!("created: {used}"));
             }
             printed
@@ -765,11 +771,10 @@ fn selftest() -> Printed {
 mod tests {
     use super::*;
 
-    /// A summary of `line` alone, with no member lines.
-    fn summary(line: &str) -> Summary {
-        let mut summary = Summary::spec("unused");
-        summary.line = line.to_owned();
-        summary
+    /// A lazy specification's summary, which stands in for a result's: its
+    /// one line, `yamaa spec p.yaml`, and no member or issue line.
+    fn summary() -> Summary {
+        Summary::spec("p.yaml")
     }
 
     fn rendered(printed: Printed, format: Format) -> (String, u8) {
@@ -781,7 +786,7 @@ mod tests {
 
     #[test]
     fn a_result_prints_its_lines_then_its_paths_and_exits_by_its_status() {
-        let summary = summary("yamaa run of DM: succeeded, 2 rows x 2 columns, 0 issues");
+        let summary = summary();
         let saved = Ok(vec!["/s/dm-report.csv".to_owned(), "/s/dm.csv".to_owned()]);
         let printed = |status, saved| {
             result(
@@ -793,10 +798,12 @@ mod tests {
             )
         };
         assert_eq!(
-            rendered(printed(Status::Succeeded, Some(saved.clone())), Format::Text),
+            rendered(
+                printed(Status::Succeeded, Some(saved.clone())),
+                Format::Text
+            ),
             (
-                "yamaa run of DM: succeeded, 2 rows x 2 columns, 0 issues\n/s/dm-report.csv\n/s/dm.csv\n"
-                    .to_owned(),
+                "yamaa spec p.yaml\n/s/dm-report.csv\n/s/dm.csv\n".to_owned(),
                 0
             )
         );

@@ -1,0 +1,37 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADCM
+keys: [STUDYID, USUBJID, CMSEQ]
+input:
+  CM: input/cm.csv
+
+output:
+  path: adcm.csv
+  columns: [STUDYID, USUBJID, CMSEQ, ASTDTC]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: CM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: CM.USUBJID
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number
+    derivation: CM.CMSEQ
+
+  # Both slashed orders are listed, so 03/04/2001 would be March 4 under one
+  # and April 3 under the other.
+  - name: ASTDTC
+    type: str
+    label: Analysis Start Date Text
+    derivation:
+      date_text:
+        source: CM.CMSTDAT
+        forms: [iso, mdy_slash, dmy_slash]

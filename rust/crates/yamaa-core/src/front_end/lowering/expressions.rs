@@ -17,6 +17,7 @@ use crate::ast::{
     Nulls, OdmRead, Operand, OrderTerm, RankMethod, Role, ScalarOp, Segment, Slot, SourceRead,
     TemporalType, Text, TextCase, TimeRule, TimeUnit, Window, WindowFunction,
 };
+use crate::date_forms::DateForm;
 use crate::expression::{compile, CompiledExpression, Context, NodeKind, TemporalKind};
 use crate::schema::DocumentNode as N;
 
@@ -583,6 +584,18 @@ impl Lower<'_> {
                 SOURCE,
             ),
             "to_date" => (ScalarOp::ToDate, SOURCE),
+            // The forms as written, a repeated form or both slash orders
+            // included, for the front end's refusal (TIME-22).
+            "date_text" => (
+                ScalarOp::DateText {
+                    forms: self
+                        .items(self.field(p, "forms")?)
+                        .iter()
+                        .map(|&item| self.text(item).and_then(DateForm::of))
+                        .collect::<Option<_>>()?,
+                },
+                SOURCE,
+            ),
             "str_case" => (
                 ScalarOp::StrCase {
                     to: match text("to")? {
@@ -590,7 +603,14 @@ impl Lower<'_> {
                         "lower" => TextCase::Lower,
                         "sentence" => TextCase::Sentence,
                         "title" => TextCase::Title,
+                        "proper" => TextCase::Proper,
                         _ => return None,
+                    },
+                    // Which modes take a list is the executor's to decide
+                    // (TEXT-5).
+                    delimiters: match self.field(p, "delimiters") {
+                        Some(_) => Some(text("delimiters")?.into()),
+                        None => None,
                     },
                 },
                 SOURCE,
@@ -601,6 +621,17 @@ impl Lower<'_> {
                 },
                 SOURCE,
             ),
+            "str_substr" => (
+                ScalarOp::StrSubstr {
+                    start: integer("start")?,
+                    length: match self.field(p, "length") {
+                        Some(_) => Some(integer("length")?),
+                        None => None,
+                    },
+                },
+                SOURCE,
+            ),
+            "str_length" => (ScalarOp::StrLength, SOURCE),
             "str_extract" => (
                 ScalarOp::StrExtract {
                     pattern: text("pattern")?.into(),
@@ -997,6 +1028,13 @@ impl Lower<'_> {
                 }
             }
         }
+        // The fields `STR_JOIN` and `COUNT(x)` read besides their argument
+        // (FORMULA-18); a shorthand writes none.
+        let order_by = self.order_by(p, "order_by", site);
+        let separator = self.text_field(site, p, "separator");
+        let distinct = self
+            .field(p, "distinct")
+            .map(|node| matches!(self.node(node), N::Boolean(true)));
         // A written long form never holds only `expr` (SCHEMA-15), so such
         // a payload is the expanded shorthand and its text is the site.
         let text_meta = if shorthand {
@@ -1030,8 +1068,11 @@ impl Lower<'_> {
                 filter,
                 group_by,
                 bindings,
+                order_by,
+                separator,
+                distinct,
                 expr,
-                written: self.written(p, &["derivations"]),
+                written: self.written(p, &["derivations", "order_by", "separator", "distinct"]),
             }),
         ))
     }

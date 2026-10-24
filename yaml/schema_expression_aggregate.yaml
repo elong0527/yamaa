@@ -17,6 +17,18 @@ aggregate_class:
         type: "dict[identifier, derive_binding_class]"
         required: false
         description: Per-record intermediate variables, by the name the reducer expression reads, evaluated in order before reduction (LOOKUP-22).
+    - order_by:
+        type: "list[order_by_term]"
+        required: false
+        description: Terms ordering the records whose values STR_JOIN joins, over the relation's fields and the derivations' variables, ties keeping stored order; required beside STR_JOIN and refused beside any other expression (FORMULA-18, LOOKUP-10).
+    - separator:
+        type: str
+        required: false
+        description: Text STR_JOIN writes between two joined values, the empty string included; required beside STR_JOIN and refused beside any other expression (FORMULA-18).
+    - distinct:
+        type: bool
+        required: false
+        description: When true, STR_JOIN writes each text once and COUNT(x) counts each value once; omitted, every value counts. Admitted only beside a bare STR_JOIN(x) or COUNT(x) (FORMULA-18).
     - expr:
         type: aggregate_expression
         required: true

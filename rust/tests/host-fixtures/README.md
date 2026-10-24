@@ -291,6 +291,12 @@ missing answers written as YAML null, empty children, `clear:` entries and
 rename-only intermediates in both hosts. Each case names `absent_count`,
 the number of times it reaches the handler an intermediate's absence counts
 under (D202).
+The `original-specifications.text_positions` cases share the pieces and
+lengths of `str_substr` and `str_length` over ASCII, non-ASCII and empty text
+(TEXT-13, TEXT-14), a continuation row filtered on a text's length, and two
+static refusals across Rust, Python and R. Each case names its complete issue
+rows, or its saved CSV bytes, and `missing_count`, the number of `missing`
+answers it reaches, a row template's filtered records included (ROW-3).
 
 ## Conditions no case reaches
 

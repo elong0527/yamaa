@@ -223,6 +223,7 @@ impl Spec {
                         .iter()
                         .map(|binding| (Role::Binding, binding.derivation.expr)),
                 );
+                out.extend(aggregate.order_by.iter().map(|t| (Role::Order, t.variable)));
                 out.push((Role::Operand, aggregate.expr));
             }
             ExprKind::Odm(read) => {
@@ -403,7 +404,9 @@ impl Spec {
             _ => parent.scope,
         };
         if let ExprKind::Ref(name) = &self.expr(child).kind {
-            let local = if role == Role::Reducer {
+            // A reducer name and an aggregate's order term read its bindings
+            // as its expression does (LOOKUP-22).
+            let local = if role == Role::Reducer || (aggregate && role == Role::Order) {
                 relation
             } else {
                 bindings

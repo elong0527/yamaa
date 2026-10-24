@@ -1,0 +1,57 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADCM
+keys: [STUDYID, USUBJID, CMSEQ]
+input:
+  CM: input/cm.csv
+
+output:
+  path: adcm.csv
+  columns: [STUDYID, USUBJID, CMSEQ, CMTRT, CMSTDAT, ASTDTC, ASTDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: CM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: CM.USUBJID
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number
+    derivation: CM.CMSEQ
+
+  - name: CMTRT
+    type: str
+    label: Reported Name of Drug, Medication, or Therapy
+    derivation: CM.CMTRT
+
+  - name: CMSTDAT
+    type: str
+    label: Collected Start Date
+    derivation: CM.CMSTDAT
+
+  # The sites wrote the start in five spellings, and a slashed date reads
+  # month first. A start in any other spelling stops the run.
+  - name: ASTDTC
+    type: str
+    label: Analysis Start Date Text
+    derivation:
+      date_text:
+        source: CM.CMSTDAT
+        forms: [iso, ddmonyyyy, mdy_slash, yyyymmdd, monyyyy]
+
+  # A month alone is completed to the first day of that month.
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation:
+      impute:
+        type: date
+        source: ASTDTC
+        day: first

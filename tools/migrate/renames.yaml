@@ -88,11 +88,11 @@ status: approved
 measured_at: 1758ad145
 design: docs/design/interface-1.0.md
 summary:
-  entries: 646
-  changes: 77
+  entries: 654
+  changes: 85
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 31
+    new, decided: 39
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7392,6 +7392,33 @@ entries:
     declares it, so the converter wrote none.'
   field_kind: path
   convert: {action: none}
+- id: new.spec.str_case.to=proper
+  file_type: spec
+  path: columns[].derivation.str_case.to
+  today: null
+  kind: new
+  proposed: proper
+  decision: decided (D264)
+  reason: 'An addition to the approved table under D27 (D264), spelled under D241: proper case as SAS PROPCASE
+    writes it, every ASCII letter lowered, then the first character and each character directly after a
+    delimiter raised; `title` keeps its meaning (TEXT-5). No 0.5 file declares it, so the converter wrote
+    none.'
+  field_kind: value
+  convert: {action: none}
+- id: new.spec.str_case.delimiters
+  file_type: spec
+  path: columns[].derivation.str_case.delimiters
+  today: null
+  kind: new
+  proposed: 'str_case: {to: proper, delimiters: " /-(.,["}'
+  decision: decided (D264)
+  reason: 'An addition to the approved table under D27 (D264), spelled under D241. Optional, with no schema
+    default (I5): the ASCII characters, each listed once, after which `to: proper` raises the next character;
+    without it `proper` takes SAS PROPCASE''s six, the blank, slash, hyphen, open parenthesis, period and
+    tab. Beside another mode it fails as unknown_field, and an empty list, a repeated character or one outside
+    ASCII as invalid_field_type (TEXT-5). No 0.5 file declares it, so the converter wrote none.'
+  field_kind: value
+  convert: {action: none}
 - id: new.spec.expressions.duration_text
   file_type: spec
   path: columns[].derivation.duration_text
@@ -7403,6 +7430,85 @@ entries:
     duration_value: an int or float amount of the declared elapsed unit is written as one canonical ISO 8601
     fixed-length duration text, days the largest unit, every zero component omitted and a fraction on the
     seconds alone (TIME-21). No 0.5 file declares it, so the converter wrote none.'
+  convert: {action: none}
+- id: new.spec.expressions.str_substr
+  file_type: spec
+  path: columns[].derivation.str_substr
+  today: null
+  kind: new
+  proposed: 'str_substr: {source: VARIABLE, start: INT, length: INT, missing: VALUE}'
+  decision: decided (D264)
+  reason: 'An addition to the approved table under D27: the owner put the batch 14 language additions in
+    1.0.0 (D263, D264), spelled under D241. At most `length` Unicode scalar values of a text source from
+    position `start`, counted from 1, or every one to the end without `length`; a start past the end gives
+    missing, and a start or length below one fails as invalid_field_type (TEXT-13). No 0.5 file declares
+    it, so the converter wrote none.'
+  convert: {action: none}
+- id: new.spec.expressions.str_length
+  file_type: spec
+  path: columns[].derivation.str_length
+  today: null
+  kind: new
+  proposed: 'str_length: {source: VARIABLE, missing: VALUE}'
+  decision: decided (D264)
+  reason: 'An addition to the approved table under D27: the owner put the batch 14 language additions in
+    1.0.0 (D263, D264), spelled under D241. The number of Unicode scalar values in a text source, as int,
+    the count a declared length bounds (TEXT-14). No 0.5 file declares it, so the converter wrote none.'
+  convert: {action: none}
+- id: new.spec.aggregate_class.order_by
+  file_type: spec
+  path: columns[].derivation.aggregate.order_by
+  today: null
+  kind: new
+  proposed: 'aggregate: {order_by: [TERM, ...], separator: TEXT, expr: "STR_JOIN(x)"}'
+  decision: decided (D264)
+  reason: 'An addition to the approved table under D27 (D264): the owner decided on 2026-10-24 that STR_JOIN
+    ships in 1.0.0 with order_by, separator and distinct as fields of the aggregate (#3774). Optional, with
+    no default (I5): the order STR_JOIN joins a group''s values in, VALUE-22 terms over the relation''s fields
+    and the derivations'' variables, ties in stored order; required beside STR_JOIN and refused beside any
+    other expression as unpaired_fields (FORMULA-18, LOOKUP-10). No 0.5 file declares it, so the converter
+    wrote none.'
+  field_kind: name
+  convert: {action: none}
+- id: new.spec.aggregate_class.separator
+  file_type: spec
+  path: columns[].derivation.aggregate.separator
+  today: null
+  kind: new
+  proposed: 'aggregate: {separator: ", "}'
+  decision: decided (D264)
+  reason: 'An addition to the approved table under D27 (D264), as new.spec.aggregate_class.order_by (#3774).
+    Optional, with no default (I5): the text STR_JOIN writes between two joined values, the empty string
+    included; required beside STR_JOIN and refused beside any other expression as unpaired_fields
+    (FORMULA-18). No 0.5 file declares it, so the converter wrote none.'
+  field_kind: value
+  convert: {action: none}
+- id: new.spec.aggregate_class.distinct
+  file_type: spec
+  path: columns[].derivation.aggregate.distinct
+  today: null
+  kind: new
+  proposed: 'aggregate: {distinct: true}'
+  decision: decided (D264)
+  reason: 'An addition to the approved table under D27 (D264), as new.spec.aggregate_class.order_by (#3774).
+    Optional, with no default (I5): STR_JOIN writes each text once and COUNT(x) counts each different value
+    once; omitted, every value counts. Beside anything but a bare STR_JOIN(x) or COUNT(x) it is refused as
+    unpaired_fields (FORMULA-18). No 0.5 file declares it, so the converter wrote none.'
+  field_kind: value
+  convert: {action: none}
+- id: new.spec.expressions.date_text
+  file_type: spec
+  path: columns[].derivation.date_text
+  today: null
+  kind: new
+  proposed: 'date_text: {source: VARIABLE, forms: [FORM, ...], invalid: VALUE}'
+  decision: decided (D264)
+  reason: 'An addition to the approved table under D27 (D264, from #3731), spelled under D241. A new verb:
+    `source`, the text read; `forms`, a required list of the closed date forms iso, ddmonyyyy, mdy_slash,
+    dmy_slash, yyyymmdd and monyyyy, at least one, each named once and with at most one of the two slash
+    orders; and the optional `invalid` handler. It returns the collected date text that the form reading
+    the whole source denotes, which impute then reads (TIME-22). No 0.5 file declares it, so the converter
+    wrote none.'
   convert: {action: none}
 conditions:
 - today: schema_version_mismatch

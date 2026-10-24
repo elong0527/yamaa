@@ -43,8 +43,8 @@ use super::{
     AggregateRowContext, BoundAggregate, BoundNumeric, BoundOdm, BoundProjectFunction, Check,
     ContextWindow, DatasetPlan, Flag, Imputation, Intermediate, IntermediateUnique, JoinAbsence,
     JoinedRead, Keep, Lookup, OdmTemplateScope, RelationRange, Rounding, SourceSelection,
-    StringCase, StringExtract, StringPad, StringReplace, StringTemplate, Temporal,
-    VerificationSeverity, Window,
+    StringCase, StringExtract, StringLength, StringPad, StringReplace, StringSubstr,
+    StringTemplate, Temporal, VerificationSeverity, Window,
 };
 use crate::bound_expression::BoundPredicate;
 use crate::conversion::LiteralHandler;
@@ -346,6 +346,8 @@ pub enum Op {
     StrReplace(StringReplace),
     StrCase(StringCase),
     StrPad(StringPad),
+    StrSubstr(StringSubstr),
+    StrLength(StringLength),
     SourceBinding {
         absent: Option<Value>,
         variable: String,
@@ -422,6 +424,8 @@ impl Op {
                 | (K::StrReplace, Op::StrReplace(_))
                 | (K::StrCase, Op::StrCase(_))
                 | (K::StrPad, Op::StrPad(_))
+                | (K::StrSubstr, Op::StrSubstr(_))
+                | (K::StrLength, Op::StrLength(_))
                 | (K::SourceBinding, Op::SourceBinding { .. })
                 | (K::FirstAvailable, Op::FirstAvailable { .. })
                 | (K::ProjectFunction, Op::ProjectFunction(_))
@@ -460,6 +464,8 @@ pub enum ExprKind {
     StrReplace,
     StrCase,
     StrPad,
+    StrSubstr,
+    StrLength,
     SourceBinding,
     FirstAvailable,
     ProjectFunction,

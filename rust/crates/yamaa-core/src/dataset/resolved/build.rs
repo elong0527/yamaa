@@ -846,6 +846,20 @@ impl<'p> Builder<'p> {
                 node.op = Op::StrPad(operation.clone());
                 values.push((source, Value, Always));
             }
+            E::StrSubstr { source, operation } => {
+                node.kind = ExprKind::StrSubstr;
+                node.op = Op::StrSubstr(operation.clone());
+                let site = format!("{}.missing", operation.path());
+                self.site(&mut node, true, site, H::Missing);
+                values.push((source, Value, Always));
+            }
+            E::StrLength { source, operation } => {
+                node.kind = ExprKind::StrLength;
+                node.op = Op::StrLength(operation.clone());
+                let site = format!("{}.missing", operation.path());
+                self.site(&mut node, true, site, H::Missing);
+                values.push((source, Value, Always));
+            }
             E::SourceBinding {
                 source,
                 absent,
@@ -1488,8 +1502,9 @@ impl<'p> Builder<'p> {
                     });
                     relation_node.scan.push(id);
                 }
-                for binding in bound.bindings() {
-                    let id = cx.column(binding.column)?;
+                let order = bound.order().iter().map(|term| term.column);
+                for column in bound.bindings().iter().map(|b| b.column).chain(order) {
+                    let id = cx.column(column)?;
                     if !relation_node.scan.contains(&id) {
                         relation_node.scan.push(id);
                     }
@@ -1544,6 +1559,13 @@ impl<'p> Builder<'p> {
         for binding in bound.bindings() {
             node.reads
                 .push(Read::Relation(relation_id, field(binding.column)?));
+        }
+        // The fields `STR_JOIN` orders the records by.
+        for term in bound.order() {
+            let read = Read::Relation(relation_id, field(term.column)?);
+            if !node.reads.contains(&read) {
+                node.reads.push(read);
+            }
         }
         Ok(())
     }
@@ -1899,6 +1921,8 @@ fn deferred_odm(expression: &Expression) -> Option<&[OdmTemplateScope]> {
         | E::StrReplace { source, .. }
         | E::StrCase { source, .. }
         | E::StrPad { source, .. }
+        | E::StrSubstr { source, .. }
+        | E::StrLength { source, .. }
         | E::Round { source, .. } => deferred_odm(&source.expression),
         E::Extreme { operands, .. }
         | E::StrTemplate { operands, .. }

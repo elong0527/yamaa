@@ -316,14 +316,26 @@ pub enum ScalarOp {
     },
     /// `dataset::Imputation`.
     ToDate,
-    /// `text_case::StringCase`.
+    /// `dataset::Imputation`: `date_text`, its forms as written, in order.
+    DateText {
+        forms: Vec<crate::date_forms::DateForm>,
+    },
+    /// `text_case::StringCase`, with the `delimiters` list as written.
     StrCase {
         to: TextCase,
+        delimiters: Option<String>,
     },
     /// `text_pad::StringPad`, width as written.
     StrPad {
         width: String,
     },
+    /// `text_position::StringSubstr`, start and length as written.
+    StrSubstr {
+        start: String,
+        length: Option<String>,
+    },
+    /// `text_position::StringLength`.
+    StrLength,
     /// `text_extract::StringExtract`, group as written.
     StrExtract {
         pattern: String,
@@ -406,6 +418,20 @@ pub enum TextCase {
     Lower,
     Sentence,
     Title,
+    Proper,
+}
+
+impl TextCase {
+    /// The mode as `to` writes it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Upper => "upper",
+            Self::Lower => "lower",
+            Self::Sentence => "sentence",
+            Self::Title => "title",
+            Self::Proper => "proper",
+        }
+    }
 }
 
 /// A mapping dictionary, inline or the path of a file holding it.
@@ -465,8 +491,17 @@ pub struct Aggregate {
     pub group_by: Vec<ExprId>,
     /// Per-record bindings evaluated before the reduction (P-BIND-1).
     pub bindings: Vec<Binding>,
+    /// The order `STR_JOIN` joins the group's values in, each term a field
+    /// of the relation or a binding (LOOKUP-10).
+    pub order_by: Vec<OrderTerm>,
+    /// The text `STR_JOIN` writes between two values (FORMULA-18).
+    pub separator: Option<Text>,
+    /// Whether `STR_JOIN` and `COUNT(x)` take each value once; `None` when
+    /// omitted (FORMULA-18).
+    pub distinct: Option<bool>,
     pub expr: ExprId,
-    /// Of the bindings, written `derivations`.
+    /// Of the bindings and the reducer fields, the ones written:
+    /// `derivations`, `order_by`, `separator` and `distinct`.
     pub written: super::Written,
 }
 

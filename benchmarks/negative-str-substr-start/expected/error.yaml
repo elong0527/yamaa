@@ -1,0 +1,7 @@
+phase: validation
+condition: invalid_field_type
+spec_paths:
+  - columns.COVAL.derivation.str_substr.start
+rule: TEXT-13
+context:
+  expected: a positive integer start

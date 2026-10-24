@@ -1,0 +1,11 @@
+phase: validation
+condition: unpaired_fields
+spec_paths:
+  - columns.TOTDOSE.derivation.aggregate
+rule: LOOKUP-10
+context:
+  declared:
+    - distinct
+  missing:
+    - STR_JOIN(x)
+    - COUNT(x)

@@ -71,16 +71,20 @@ pub enum Reducer {
     Max,
     Mean,
     Only,
+    /// Joins a group's values into one text in the aggregate's declared
+    /// order, with its separator (FORMULA-18).
+    StrJoin,
 }
 
 impl Reducer {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Sum,
         Self::Count,
         Self::Min,
         Self::Max,
         Self::Mean,
         Self::Only,
+        Self::StrJoin,
     ];
     /// Canonical spelling from the grammar contract.
     pub fn name(self) -> &'static str {
@@ -91,6 +95,7 @@ impl Reducer {
             Self::Max => "MAX",
             Self::Mean => "MEAN",
             Self::Only => "ONLY",
+            Self::StrJoin => "STR_JOIN",
         }
     }
     /// Recognize a reducer call without reserving the spelling as a name.

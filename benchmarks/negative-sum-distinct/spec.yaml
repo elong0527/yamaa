@@ -1,0 +1,40 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+
+input:
+  DM: input/dm.csv
+  EX:
+    path: input/ex.csv
+    types:
+      EXSEQ: int
+      EXDOSE: float
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TOTDOSE]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  # The total would count each different dose amount once: the run is
+  # rejected before any data is read.
+  - name: TOTDOSE
+    type: float
+    label: Total Dose Administered
+    derivation:
+      aggregate:
+        key: [STUDYID, USUBJID]
+        distinct: true
+        expr: "SUM(EX.EXDOSE)"

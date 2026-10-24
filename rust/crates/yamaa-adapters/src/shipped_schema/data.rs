@@ -84,6 +84,18 @@ aggregate_class:
         type: "dict[identifier, derive_binding_class]"
         required: false
         description: Per-record intermediate variables, by the name the reducer expression reads, evaluated in order before reduction (LOOKUP-22).
+    - order_by:
+        type: "list[order_by_term]"
+        required: false
+        description: Terms ordering the records whose values STR_JOIN joins, over the relation's fields and the derivations' variables, ties keeping stored order; required beside STR_JOIN and refused beside any other expression (FORMULA-18, LOOKUP-10).
+    - separator:
+        type: str
+        required: false
+        description: Text STR_JOIN writes between two joined values, the empty string included; required beside STR_JOIN and refused beside any other expression (FORMULA-18).
+    - distinct:
+        type: bool
+        required: false
+        description: When true, STR_JOIN writes each text once and COUNT(x) counts each value once; omitted, every value counts. Admitted only beside a bare STR_JOIN(x) or COUNT(x) (FORMULA-18).
     - expr:
         type: aggregate_expression
         required: true
@@ -307,6 +319,18 @@ expressions:
             type: variable
             required: true
             description: Datetime whose calendar date is returned, or ISO 8601 date or datetime text whose date part is returned (TIME-2).
+    date_text: # See TIME-22.
+        - source:
+            type: variable
+            required: true
+            description: Text holding a date in one of the declared forms, read whole and untrimmed (TIME-22).
+        - forms:
+            type: "list[date_form]"
+            required: true
+            description: Forms the source may take, at least one, each named once, and at most one of mdy_slash and dmy_slash, which fix the order of day and month (TIME-22).
+        - invalid:
+            type: substitute_value
+            description: Result when the source is text in none of the declared forms (TIME-22).
     study_day: # See TIME-6.
         - source:
             type: variable
@@ -407,6 +431,11 @@ time_rule:
     type: str
     values: [first, last]
     description: Earliest or latest civil moment the collected source admits, each missing time field taking its first or last value (TIME-8).
+
+date_form:
+    type: str
+    values: [iso, ddmonyyyy, mdy_slash, dmy_slash, yyyymmdd, monyyyy]
+    description: Form of date text that date_text reads, iso for collected date text, or else the fields in the order its name spells, mon being a three-letter month abbreviation (TIME-22).
 
 shift_days:
     type: [variable, int]
@@ -549,6 +578,29 @@ expressions:
             type: int
             required: true
             description: See TEXT-2.
+    str_substr: # See TEXT-13.
+        - source:
+            type: variable
+            required: true
+            description: String variable whose scalars are taken (TEXT-13).
+        - start:
+            type: int
+            required: true
+            description: Position of the first scalar taken, counted from 1 (TEXT-13).
+        - length:
+            type: int
+            description: Most scalars taken; without it, they run to the end of the source (TEXT-13).
+        - missing:
+            type: substitute_value
+            description: Value returned when the source is missing; without it, a missing source gives missing (TEXT-13).
+    str_length: # See TEXT-14.
+        - source:
+            type: variable
+            required: true
+            description: String variable whose scalars are counted (TEXT-14).
+        - missing:
+            type: substitute_value
+            description: Value returned when the source is missing; without it, a missing source gives missing (TEXT-14).
     str_extract: # See TEXT-10.
         - source:
             type: variable
@@ -595,8 +647,11 @@ expressions:
         - to:
             type: str
             required: true
-            values: [upper, lower, sentence, title]
-            description: Case to produce, one of upper, lower, sentence or title (TEXT-5).
+            values: [upper, lower, sentence, title, proper]
+            description: Case to produce, one of upper, lower, sentence, title or proper (TEXT-5).
+        - delimiters:
+            type: str
+            description: ASCII characters, each listed once, after which proper raises the next character, declared only with proper; without it they are the blank, slash, hyphen, open parenthesis, period and tab (TEXT-5).
         - missing:
             type: substitute_value
             description: Value returned when the source is missing; without it, a missing source gives missing (TEXT-5).
@@ -2029,6 +2084,27 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           "x-yamaa-kind": "structure",
           "x-yamaa-type": "dict[identifier, derive_binding_class]"
         },
+        "order_by": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/order_by_term"
+          },
+          "description": "Terms ordering the records whose values STR_JOIN joins, over the relation's fields and the derivations' variables, ties keeping stored order; required beside STR_JOIN and refused beside any other expression (FORMULA-18, LOOKUP-10).",
+          "x-yamaa-kind": "name",
+          "x-yamaa-type": "list[order_by_term]"
+        },
+        "separator": {
+          "type": "string",
+          "description": "Text STR_JOIN writes between two joined values, the empty string included; required beside STR_JOIN and refused beside any other expression (FORMULA-18).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "distinct": {
+          "type": "boolean",
+          "description": "When true, STR_JOIN writes each text once and COUNT(x) counts each value once; omitted, every value counts. Admitted only beside a bare STR_JOIN(x) or COUNT(x) (FORMULA-18).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
+        },
         "expr": {
           "$ref": "#/$defs/aggregate_expression",
           "description": "Closed reducer expression over the records of one relation (FORMULA-17).",
@@ -2731,6 +2807,18 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
       "minProperties": 1,
       "maxProperties": 1
     },
+    "date_form": {
+      "type": "string",
+      "enum": [
+        "iso",
+        "ddmonyyyy",
+        "mdy_slash",
+        "dmy_slash",
+        "yyyymmdd",
+        "monyyyy"
+      ],
+      "description": "Form of date text that date_text reads, iso for collected date text, or else the fields in the order its name spells, mon being a three-letter month abbreviation (TIME-22)."
+    },
     "day_rule": {
       "type": "string",
       "enum": [
@@ -2948,6 +3036,27 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           "description": "Per-record intermediate variables, by the name the reducer expression reads, evaluated in order before reduction (LOOKUP-22).",
           "x-yamaa-kind": "structure",
           "x-yamaa-type": "dict[identifier, derive_binding_class]"
+        },
+        "order_by": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fragment.order_by_term"
+          },
+          "description": "Terms ordering the records whose values STR_JOIN joins, over the relation's fields and the derivations' variables, ties keeping stored order; required beside STR_JOIN and refused beside any other expression (FORMULA-18, LOOKUP-10).",
+          "x-yamaa-kind": "name",
+          "x-yamaa-type": "list[order_by_term]"
+        },
+        "separator": {
+          "type": "string",
+          "description": "Text STR_JOIN writes between two joined values, the empty string included; required beside STR_JOIN and refused beside any other expression (FORMULA-18).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "distinct": {
+          "type": "boolean",
+          "description": "When true, STR_JOIN writes each text once and COUNT(x) counts each value once; omitted, every value counts. Admitted only beside a bare STR_JOIN(x) or COUNT(x) (FORMULA-18).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
         },
         "expr": {
           "$ref": "#/$defs/aggregate_expression",
@@ -3991,6 +4100,54 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           },
           "additionalProperties": false
         },
+        "str_substr": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "String variable whose scalars are taken (TEXT-13).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "start": {
+              "type": "integer",
+              "description": "Position of the first scalar taken, counted from 1 (TEXT-13).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
+            },
+            "length": {
+              "type": "integer",
+              "description": "Most scalars taken; without it, they run to the end of the source (TEXT-13).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
+            },
+            "missing": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Value returned when the source is missing; without it, a missing source gives missing (TEXT-13).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            }
+          },
+          "additionalProperties": false
+        },
+        "str_length": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "String variable whose scalars are counted (TEXT-14).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "missing": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Value returned when the source is missing; without it, a missing source gives missing (TEXT-14).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            }
+          },
+          "additionalProperties": false
+        },
         "str_extract": {
           "type": "object",
           "properties": {
@@ -4084,9 +4241,16 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
                 "upper",
                 "lower",
                 "sentence",
-                "title"
+                "title",
+                "proper"
               ],
-              "description": "Case to produce, one of upper, lower, sentence or title (TEXT-5).",
+              "description": "Case to produce, one of upper, lower, sentence, title or proper (TEXT-5).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "str"
+            },
+            "delimiters": {
+              "type": "string",
+              "description": "ASCII characters, each listed once, after which proper raises the next character, declared only with proper; without it they are the blank, slash, hyphen, open parenthesis, period and tab (TEXT-5).",
               "x-yamaa-kind": "value",
               "x-yamaa-type": "str"
             },
@@ -4299,6 +4463,33 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
               "description": "Datetime whose calendar date is returned, or ISO 8601 date or datetime text whose date part is returned (TIME-2).",
               "x-yamaa-kind": "name",
               "x-yamaa-type": "variable"
+            }
+          },
+          "additionalProperties": false
+        },
+        "date_text": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "Text holding a date in one of the declared forms, read whole and untrimmed (TIME-22).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "forms": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/date_form"
+              },
+              "description": "Forms the source may take, at least one, each named once, and at most one of mdy_slash and dmy_slash, which fix the order of day and month (TIME-22).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "list[date_form]"
+            },
+            "invalid": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Result when the source is text in none of the declared forms (TIME-22).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
             }
           },
           "additionalProperties": false
@@ -6047,6 +6238,61 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           ],
           "additionalProperties": false
         },
+        "str_substr": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "String variable whose scalars are taken (TEXT-13).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "start": {
+              "type": "integer",
+              "description": "Position of the first scalar taken, counted from 1 (TEXT-13).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
+            },
+            "length": {
+              "type": "integer",
+              "description": "Most scalars taken; without it, they run to the end of the source (TEXT-13).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
+            },
+            "missing": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Value returned when the source is missing; without it, a missing source gives missing (TEXT-13).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            }
+          },
+          "required": [
+            "source",
+            "start"
+          ],
+          "additionalProperties": false
+        },
+        "str_length": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "String variable whose scalars are counted (TEXT-14).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "missing": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Value returned when the source is missing; without it, a missing source gives missing (TEXT-14).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            }
+          },
+          "required": [
+            "source"
+          ],
+          "additionalProperties": false
+        },
         "str_extract": {
           "type": "object",
           "properties": {
@@ -6149,9 +6395,16 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
                 "upper",
                 "lower",
                 "sentence",
-                "title"
+                "title",
+                "proper"
               ],
-              "description": "Case to produce, one of upper, lower, sentence or title (TEXT-5).",
+              "description": "Case to produce, one of upper, lower, sentence, title or proper (TEXT-5).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "str"
+            },
+            "delimiters": {
+              "type": "string",
+              "description": "ASCII characters, each listed once, after which proper raises the next character, declared only with proper; without it they are the blank, slash, hyphen, open parenthesis, period and tab (TEXT-5).",
               "x-yamaa-kind": "value",
               "x-yamaa-type": "str"
             },
@@ -6394,6 +6647,37 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           },
           "required": [
             "source"
+          ],
+          "additionalProperties": false
+        },
+        "date_text": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "Text holding a date in one of the declared forms, read whole and untrimmed (TIME-22).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "forms": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/date_form"
+              },
+              "description": "Forms the source may take, at least one, each named once, and at most one of mdy_slash and dmy_slash, which fix the order of day and month (TIME-22).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "list[date_form]"
+            },
+            "invalid": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Result when the source is text in none of the declared forms (TIME-22).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            }
+          },
+          "required": [
+            "source",
+            "forms"
           ],
           "additionalProperties": false
         },

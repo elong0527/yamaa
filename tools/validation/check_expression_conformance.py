@@ -12,9 +12,10 @@ NOT, AND and OR, and the refusals of FORMULA-13 and FORMULA-27 in each
 context. It then runs every
 case through the installed engine, the development package `make setup`
 builds, as a specification that reads the case's table and derives one
-column from its text, and compares each value exactly, or the issue's phase,
-condition and rule. Nothing here decides an outcome: every expectation stays
-in the document.
+column from its text, an aggregate case with the reducer fields it gives
+(`order_by`, `separator`, `distinct`), and compares each value exactly, or the
+issue's phase, condition and rule. Nothing here decides an outcome: every
+expectation stays in the document.
 """
 
 import argparse
@@ -49,12 +50,19 @@ CASE_KEYS = {
     "rows",
     "groups",
     "group_by",
+    "order_by",
+    "separator",
+    "distinct",
     "type",
     "values",
     "phase",
     "condition",
     "rule",
 }
+# The fields of aggregate.expr's aggregate that a reducer reads besides its
+# argument (FORMULA-18), which an aggregate case may give.
+REDUCER_FIELDS = ("order_by", "separator", "distinct")
+ORDER_TERM_KEYS = {"variable", "direction", "nulls"}
 ISSUE_KEYS = ("phase", "condition", "rule")
 CONTEXTS = ("predicate", "derivation", "aggregate")
 # The column types of VALUE-1, and the truth values of FORMULA-4 that a
@@ -93,6 +101,8 @@ TOPICS = {
     "arity",
     "association",
     "context",
+    "declared-order",
+    "distinct",
     "exactness",
     "keyword-case",
     "literal",
@@ -345,6 +355,38 @@ def table_errors(case, label):
     return errors
 
 
+def field_errors(case, label):
+    """Errors in the reducer fields an aggregate case gives: order terms over
+    the case's columns as R.<column>, a text separator and a Boolean
+    distinct (VALUE-22, FORMULA-18)."""
+    given = [key for key in REDUCER_FIELDS if key in case]
+    if not given:
+        return []
+    if case["context"] != "aggregate":
+        return [f"{label}: only an aggregate case gives {given}"]
+    errors = []
+    terms = case.get("order_by", [])
+    if not isinstance(terms, list):
+        errors.append(f"{label}: order_by must be a list of order terms")
+        terms = []
+    names = {f"{RELATION}.{name}" for name in case["columns"]}
+    for term in terms:
+        variable = term.get("variable") if isinstance(term, dict) else term
+        if isinstance(term, dict) and (
+            not set(term) <= ORDER_TERM_KEYS
+            or term.get("direction", "asc") not in ("asc", "desc")
+            or term.get("nulls", "first") not in ("first", "last")
+        ):
+            errors.append(f"{label}: order term {term!r} is not an order term")
+        if variable not in names:
+            errors.append(f"{label}: order term {term!r} names no column as R.<column>")
+    if "separator" in case and not isinstance(case["separator"], str):
+        errors.append(f"{label}: separator must be text")
+    if "distinct" in case and not isinstance(case["distinct"], bool):
+        errors.append(f"{label}: distinct must be true or false")
+    return errors
+
+
 def case_errors(case, label, conditions, rules):
     """Errors in one case's keys, table and expectation."""
     errors = []
@@ -359,6 +401,9 @@ def case_errors(case, label, conditions, rules):
     table = table_errors(case, label)
     if table:
         return errors + table
+    fields = field_errors(case, label)
+    if fields:
+        return errors + fields
     kind = case.get("type")
     if "values" in case:
         if any(key in case for key in ISSUE_KEYS):
@@ -513,6 +558,13 @@ def cell(kind, value):
     return str(value)
 
 
+def aggregate(case):
+    """A case's aggregate: its text alone, or, with the reducer fields it
+    gives, the long form that holds them (SCHEMA-15)."""
+    fields = {key: case[key] for key in REDUCER_FIELDS if key in case}
+    return {"expr": case["text"], **fields} if fields else case["text"]
+
+
 def write_csv(path, header, rows):
     with path.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.writer(stream, lineterminator="\n")
@@ -564,7 +616,7 @@ def stage(case, directory):
             {
                 "name": "RESULT",
                 "type": result,
-                "derivation": {"aggregate": case["text"]},
+                "derivation": {"aggregate": aggregate(case)},
             }
         ]
     else:
@@ -643,7 +695,7 @@ def grouped_stage(case, directory):
                 "id": "groups",
                 "dataset": RELATION,
                 "group_by": group_by,
-                "derivations": {"RESULT": {"aggregate": case["text"]}},
+                "derivations": {"RESULT": {"aggregate": aggregate(case)}},
             }
         ],
         "output": {"path": "unwritten.csv", "columns": ["GROUPID", "RESULT"]},

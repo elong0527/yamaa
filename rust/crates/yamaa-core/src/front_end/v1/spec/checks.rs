@@ -225,6 +225,27 @@ pub fn findings(spec: &Spec) -> Vec<SchemaDiagnostic> {
                 context: vec![("field", C::Text("day".into()))],
             });
         }
+        // A `date_text` declares at least one form, each once, and at most
+        // one of the two slash orders, which read one shape with the day
+        // and the month in either order (TIME-22).
+        if let ExprKind::Scalar {
+            op: ScalarOp::DateText { forms },
+            ..
+        } = &expr.kind
+        {
+            let path = format!("{}.forms", spec.cite(expr.meta));
+            for fault in crate::date_forms::faults(forms) {
+                findings.push(SchemaDiagnostic {
+                    path: fault.path(&path),
+                    code: ConditionCode::DateFormsList,
+                    context: fault
+                        .context()
+                        .into_iter()
+                        .map(|(key, value)| (key, C::Text(value)))
+                        .collect(),
+                });
+            }
+        }
         let ExprKind::Call { function, args, .. } = &expr.kind else {
             continue;
         };

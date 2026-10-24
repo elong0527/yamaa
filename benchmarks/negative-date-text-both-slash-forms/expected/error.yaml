@@ -1,0 +1,8 @@
+phase: validation
+condition: invalid_field_type
+spec_paths:
+  - columns.ASTDTC.derivation.date_text.forms
+rule: TIME-22
+context:
+  operation: date_text
+  expected: mdy_slash or dmy_slash, not both

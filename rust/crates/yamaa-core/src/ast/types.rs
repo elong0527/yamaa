@@ -268,6 +268,16 @@ mod tests {
                 value("IMPUTED", temporal("impute", "date", "day")),
                 value("DATE", source("to_date")),
                 value(
+                    "READ",
+                    op(
+                        "date_text",
+                        fields(vec![
+                            ("source", Tree::text("SRC.T")),
+                            ("forms", Tree::list(vec![Tree::text("iso")])),
+                        ]),
+                    ),
+                ),
+                value(
                     "CASED",
                     op(
                         "str_case",
@@ -277,6 +287,17 @@ mod tests {
                         ])
                     )
                 ),
+                value(
+                    "PIECE",
+                    op(
+                        "str_substr",
+                        fields(vec![
+                            ("source", Tree::text("SRC.T")),
+                            ("start", Tree::integer(1))
+                        ])
+                    )
+                ),
+                value("LENGTH", source("str_length")),
                 value(
                     "ROUNDED",
                     op(
@@ -306,6 +327,9 @@ mod tests {
                 ResultType::DATE,
                 ResultType::DATE,
                 ResultType::STR,
+                ResultType::STR,
+                ResultType::STR,
+                ResultType::INT,
                 ResultType::FLOAT,
                 ResultType::INT,
                 ResultType::STR,

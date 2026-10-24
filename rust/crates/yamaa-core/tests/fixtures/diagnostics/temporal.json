@@ -1,5 +1,5 @@
 {
-  "about": "The refusals of the date and time operations: civil arithmetic, duration text, dtc and time_of_day (TIME-4, TIME-14, TIME-17, TIME-19, TIME-20, TIME-21), whose cases compare the fields their table compared, and date completion: impute's policy (TIME-10), the text impute, precision and to_date read (TIME-2, TIME-10, TIME-13) and their operands' types (TIME-1, TIME-2, TIME-7, TIME-8, TIME-18).",
+  "about": "The refusals of the date and time operations: civil arithmetic, duration text, dtc and time_of_day (TIME-4, TIME-14, TIME-17, TIME-19, TIME-20, TIME-21), whose cases compare the fields their table compared, and date completion: impute's policy (TIME-10), the text impute, precision and to_date read (TIME-2, TIME-10, TIME-13) and their operands' types (TIME-1, TIME-2, TIME-7, TIME-8, TIME-18), and the text date_text reads in its declared forms and its source's type (TIME-22).",
   "cases": [
     {
       "case": "date_shift_refuses_a_source_that_is_not_a_date",
@@ -178,6 +178,18 @@
       "operation": "impute",
       "input": {"kind": "to_date", "source": "SRC.V", "path": "columns.V.derivation.impute", "value": "P3D"},
       "issues": [{"phase": "impute", "condition": "interval_or_duration_text", "rule": "TIME-2", "spec_paths": ["columns.V.derivation.impute"], "context": {"operation": "to_date", "source": "SRC.V", "value": "P3D"}}]
+    },
+    {
+      "case": "date_text_fails_on_text_in_no_declared_form",
+      "operation": "impute",
+      "input": {"kind": {"date_text": ["iso", "ddmonyyyy", "mdy_slash", "yyyymmdd", "monyyyy"]}, "source": "SRC.V", "path": "columns.V.derivation.date_text", "value": "4 March 2001"},
+      "issues": [{"phase": "impute", "condition": "invalid_date_text", "rule": "TIME-22", "spec_paths": ["columns.V.derivation.date_text"], "context": {"operation": "date_text", "source": "SRC.V", "value": "4 March 2001"}}]
+    },
+    {
+      "case": "date_text_refuses_a_source_that_is_not_text",
+      "operation": "impute",
+      "input": {"kind": {"date_text": ["iso"]}, "source": "SRC.V", "path": "columns.V.derivation.date_text", "value": {"date": "2001-03-04"}},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-22", "spec_paths": ["columns.V.derivation.date_text.source"], "context": {"source": "SRC.V", "expected": "str", "actual": "date"}}]
     }
   ]
 }

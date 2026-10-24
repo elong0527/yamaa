@@ -1,5 +1,5 @@
 {
-  "about": "The 1.0 front end's own checks on a lowered specification, the rules of the surface its schema cannot state (FUNC-6, WINDOW-5, TIME-10, LOOKUP-3, LOOKUP-17, LOOKUP-27, CSV-10, SUB-3, SUB-14), and CT-13's refusal of each binding that a specification prepared without its project names. Each case takes `specification` and replaces its second column, adding the root fields it needs; the CSV-10 cases edit its input `SRC` instead, and the CT-13 case replaces all its columns.",
+  "about": "The 1.0 front end's own checks on a lowered specification, the rules of the surface its schema cannot state (FUNC-6, WINDOW-5, TIME-10, TIME-22, LOOKUP-3, LOOKUP-17, LOOKUP-27, CSV-10, SUB-3, SUB-14), and CT-13's refusal of each binding that a specification prepared without its project names. Each case takes `specification` and replaces its second column, adding the root fields it needs; the CSV-10 cases edit its input `SRC` instead, and the CT-13 case replaces all its columns.",
   "documents": {
     "specification": {
       "yamaa": "1.0",
@@ -41,6 +41,33 @@
         "edits": [{"set": ["columns", "1"], "to": {"name": "ADT", "type": "date", "derivation": {"value": {"impute": {"type": "date", "source": "SRC.DTC", "month": 6}}}}}]
       },
       "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "TIME-10", "spec_paths": ["columns.ADT.derivation.impute"], "context": {"field": "day"}}]
+    },
+    {
+      "case": "a_date_text_lists_at_least_one_form",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [{"set": ["columns", "1"], "to": {"name": "DTC", "type": "str", "derivation": {"value": {"date_text": {"source": "SRC.V", "forms": []}}}}}]
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TIME-22", "spec_paths": ["columns.DTC.derivation.date_text.forms"], "context": {"operation": "date_text", "expected": "at least one date form"}}]
+    },
+    {
+      "case": "a_date_text_lists_each_form_once",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [{"set": ["columns", "1"], "to": {"name": "DTC", "type": "str", "derivation": {"value": {"date_text": {"source": "SRC.V", "forms": ["iso", "monyyyy", "iso"]}}}}}]
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TIME-22", "spec_paths": ["columns.DTC.derivation.date_text.forms[2]"], "context": {"operation": "date_text", "value": "iso", "expected": "each date form once"}}]
+    },
+    {
+      "case": "a_date_text_lists_one_slash_order",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [{"set": ["columns", "1"], "to": {"name": "DTC", "type": "str", "derivation": {"value": {"date_text": {"source": "SRC.V", "forms": ["iso", "mdy_slash", "dmy_slash"]}}}}}]
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TIME-22", "spec_paths": ["columns.DTC.derivation.date_text.forms"], "context": {"operation": "date_text", "expected": "mdy_slash or dmy_slash, not both"}}]
     },
     {
       "case": "an_intermediate_without_a_key_is_refused",

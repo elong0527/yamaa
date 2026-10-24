@@ -8,38 +8,29 @@ yamaa: pub mod diagnostic
 yamaa: pub mod engine
 yamaa: pub mod error
 yamaa: pub mod file_type
-yamaa: pub mod functions
+yamaa: pub mod host
 yamaa: pub mod info
 yamaa: pub mod lint
 yamaa: pub mod odm
-yamaa: pub mod resolver
 yamaa: pub mod scalar
 yamaa: pub mod schema
 yamaa: pub mod selftest
 yamaa: pub mod stream [cfg(feature = "arrow")]
 yamaa: pub mod table
 yamaa: pub mod text
-yamaa::Action: pub use yamaa::text::Action
-yamaa::Argument: pub use yamaa::functions::Argument
 yamaa::Array: pub use yamaa::table::Array [cfg(feature = "arrow")]
-yamaa::BatchArgument: pub use yamaa::functions::BatchArgument
 yamaa::Batches: pub use yamaa::stream::Batches [cfg(feature = "arrow")]
 yamaa::CONDITION_COLUMNS: pub use yamaa::conditions::CONDITION_COLUMNS
-yamaa::CallError: pub use yamaa::functions::CallError
 yamaa::CancellationToken: pub use yamaa::cancel::CancellationToken
 yamaa::Check: pub use yamaa::api::Check
-yamaa::ColumnType: pub use yamaa::functions::ColumnType
 yamaa::Condition: pub use yamaa::conditions::Condition
 yamaa::ConditionCode: pub use yamaa::conditions::ConditionCode
 yamaa::Conditions: pub use yamaa::conditions::Conditions
 yamaa::ContextValue: pub use yamaa::diagnostic::ContextValue
 yamaa::DataType: pub use yamaa::table::DataType [cfg(feature = "arrow")]
 yamaa::Date32Array: pub use yamaa::table::Date32Array [cfg(feature = "arrow")]
-yamaa::Date: pub use yamaa::scalar::Date
-yamaa::DateTime: pub use yamaa::scalar::DateTime
 yamaa::Diagnostic: pub use yamaa::diagnostic::Diagnostic
 yamaa::DiagnosticContext: pub use yamaa::diagnostic::DiagnosticContext
-yamaa::EncodedScalar: pub use yamaa::scalar::EncodedScalar
 yamaa::Engine: pub use yamaa::engine::Engine
 yamaa::EngineOptions: pub use yamaa::engine::EngineOptions
 yamaa::FEATURES: pub use yamaa::info::FEATURES
@@ -51,18 +42,12 @@ yamaa::Field: pub use yamaa::table::Field [cfg(feature = "arrow")]
 yamaa::Fields: pub use yamaa::table::Fields [cfg(feature = "arrow")]
 yamaa::FileType: pub use yamaa::file_type::FileType
 yamaa::Float64Array: pub use yamaa::table::Float64Array [cfg(feature = "arrow")]
-yamaa::FunctionError: pub use yamaa::error::FunctionError
-yamaa::FunctionHandle: pub use yamaa::functions::FunctionHandle
-yamaa::FunctionIdentity: pub use yamaa::functions::FunctionIdentity
 yamaa::HOSTS: pub use yamaa::info::HOSTS
 yamaa::Host: pub use yamaa::info::Host
-yamaa::HostLanguage: pub use yamaa::functions::HostLanguage
-yamaa::HostPayload: pub use yamaa::error::HostPayload
+yamaa::HostLanguage: pub use yamaa::host::functions::HostLanguage
 yamaa::ISSUE_COLUMNS: pub use yamaa::diagnostic::ISSUE_COLUMNS
 yamaa::Info: pub use yamaa::info::Info
 yamaa::InputFrame: pub use yamaa::table::InputFrame
-yamaa::InstalledDistributions: pub use yamaa::functions::InstalledDistributions
-yamaa::InstalledVersion: pub use yamaa::functions::InstalledVersion
 yamaa::Int64Array: pub use yamaa::table::Int64Array [cfg(feature = "arrow")]
 yamaa::LINT_COLUMNS: pub use yamaa::lint::LINT_COLUMNS
 yamaa::LINT_FINDINGS: pub use yamaa::lint::LINT_FINDINGS
@@ -71,50 +56,32 @@ yamaa::Lint: pub use yamaa::lint::Lint
 yamaa::LintFinding: pub use yamaa::lint::LintFinding
 yamaa::ListArray: pub use yamaa::table::ListArray [cfg(feature = "arrow")]
 yamaa::Location: pub use yamaa::diagnostic::Location
-yamaa::LockContext: pub use yamaa::functions::LockContext
-yamaa::LockFinding: pub use yamaa::error::LockFinding
-yamaa::LockKind: pub use yamaa::functions::LockKind
-yamaa::LockReason: pub use yamaa::error::LockReason
-yamaa::LockSyntaxError: pub use yamaa::error::LockSyntaxError
-yamaa::MemoryResolver: pub use yamaa::resolver::MemoryResolver
+yamaa::MemoryResolver: pub use yamaa::host::resolver::MemoryResolver
 yamaa::ODM_COLUMNS: pub use yamaa::odm::ODM_COLUMNS
 yamaa::OdmOptions: pub use yamaa::odm::OdmOptions
 yamaa::PHASES: pub use yamaa::diagnostic::PHASES
-yamaa::Parameter: pub use yamaa::functions::Parameter
 yamaa::Partitions: pub use yamaa::engine::Partitions
 yamaa::Phase: pub use yamaa::diagnostic::Phase
 yamaa::Plans: pub use yamaa::api::Plans
 yamaa::Position: pub use yamaa::diagnostic::Position
-yamaa::ProjectFunctions: pub use yamaa::functions::ProjectFunctions
+yamaa::ProjectFunctions: pub use yamaa::host::functions::ProjectFunctions
 yamaa::ProjectRequest: pub use yamaa::api::ProjectRequest
 yamaa::ProjectRun: pub use yamaa::api::ProjectRun
 yamaa::REPORT_COLUMNS: pub use yamaa::diagnostic::REPORT_COLUMNS
 yamaa::REPORT_KINDS: pub use yamaa::diagnostic::REPORT_KINDS
 yamaa::REPORT_OUTCOMES: pub use yamaa::diagnostic::REPORT_OUTCOMES
 yamaa::RecordBatch: pub use yamaa::table::RecordBatch [cfg(feature = "arrow")]
-yamaa::RenvLock: pub use yamaa::functions::RenvLock
-yamaa::Report: pub use yamaa::diagnostic::Report
-yamaa::ResolverFailure: pub use yamaa::error::ResolverFailure
-yamaa::ResolverKind: pub use yamaa::resolver::ResolverKind
-yamaa::ResolverOperation: pub use yamaa::resolver::ResolverOperation
-yamaa::ResolverReply: pub use yamaa::resolver::ResolverReply
-yamaa::ResolverRequest: pub use yamaa::resolver::ResolverRequest
-yamaa::ResourceKind: pub use yamaa::resolver::ResourceKind
-yamaa::ResourceResolver: pub use yamaa::resolver::ResourceResolver
+yamaa::ResourceResolver: pub use yamaa::host::resolver::ResourceResolver
 yamaa::Run: pub use yamaa::api::Run
 yamaa::RunGuard: pub use yamaa::stream::RunGuard [cfg(feature = "arrow")]
 yamaa::SECTIONS: pub use yamaa::api::SECTIONS
 yamaa::SELFTEST_COLUMNS: pub use yamaa::selftest::SELFTEST_COLUMNS
 yamaa::SEVERITIES: pub use yamaa::diagnostic::SEVERITIES
 yamaa::STATUSES: pub use yamaa::api::STATUSES
-yamaa::Scalar: pub use yamaa::scalar::Scalar
-yamaa::ScalarDecodeError: pub use yamaa::scalar::ScalarDecodeError
-yamaa::ScalarRef: pub use yamaa::scalar::ScalarRef
 yamaa::SchemaRef: pub use yamaa::table::SchemaRef [cfg(feature = "arrow")]
 yamaa::SelfTest: pub use yamaa::selftest::SelfTest
 yamaa::SelfTestCase: pub use yamaa::selftest::SelfTestCase
 yamaa::Severity: pub use yamaa::diagnostic::Severity
-yamaa::Signature: pub use yamaa::functions::Signature
 yamaa::SourceSpan: pub use yamaa::diagnostic::SourceSpan
 yamaa::SpecRequest: pub use yamaa::api::SpecRequest
 yamaa::Status: pub use yamaa::api::Status
@@ -169,7 +136,8 @@ yamaa::api::Run: impl Run
 yamaa::api::Run: pub struct Run
 yamaa::api::Run::diagnostics: pub fn diagnostics(&self) -> Vec<yamaa::diagnostic::Diagnostic>
 yamaa::api::Run::issues: pub fn issues(&self) -> Table
-yamaa::api::Run::observations: pub fn observations(&self, include_measurements: bool) -> Option<String>
+yamaa::api::Run::measured_observations: pub fn measured_observations(&self) -> String
+yamaa::api::Run::observations: pub fn observations(&self) -> Option<String>
 yamaa::api::Run::output: pub fn output(&self) -> Option<&Table>
 yamaa::api::Run::report: pub fn report(&self) -> Option<&Table>
 yamaa::api::Run::save: pub fn save(&mut self, token: &CancellationToken) -> Result<Vec<String>, Failure>
@@ -240,7 +208,6 @@ yamaa::conditions::Conditions::entries: pub fn entries(&self) -> &[Condition]
 yamaa::conditions::Conditions::lines: pub fn lines(&self) -> Vec<String>
 yamaa::conditions::Conditions::table: pub fn table(&self) -> Table
 yamaa::conditions::conditions: pub fn conditions() -> Conditions
-yamaa::decode_renv_lock: pub use yamaa::functions::decode_renv_lock
 yamaa::diagnostic::ContextValue: impl ContextValue
 yamaa::diagnostic::ContextValue: pub enum ContextValue [derive(Clone, Debug, PartialEq)] [non_exhaustive]
 yamaa::diagnostic::ContextValue::Bool: Bool(bool)
@@ -250,7 +217,6 @@ yamaa::diagnostic::ContextValue::List: List(Vec<ContextValue>)
 yamaa::diagnostic::ContextValue::Map: Map(BTreeMap<String, ContextValue>)
 yamaa::diagnostic::ContextValue::Null: Null
 yamaa::diagnostic::ContextValue::Text: Text(String)
-yamaa::diagnostic::ContextValue::Uint: Uint(u64)
 yamaa::diagnostic::ContextValue::Wide: Wide(String)
 yamaa::diagnostic::ContextValue::to_json: pub fn to_json(&self) -> String
 yamaa::diagnostic::Diagnostic: impl Diagnostic
@@ -302,12 +268,6 @@ yamaa::diagnostic::Position::line: pub line: usize
 yamaa::diagnostic::REPORT_COLUMNS: pub const REPORT_COLUMNS: &[&str]
 yamaa::diagnostic::REPORT_KINDS: pub const REPORT_KINDS: [&str; 6]
 yamaa::diagnostic::REPORT_OUTCOMES: pub const REPORT_OUTCOMES: [&str; 4]
-yamaa::diagnostic::Report: impl Report
-yamaa::diagnostic::Report: pub struct Report [derive(Clone, Debug, Default, PartialEq)] [non_exhaustive]
-yamaa::diagnostic::Report::diagnostics: pub diagnostics: Vec<Diagnostic>
-yamaa::diagnostic::Report::is_empty: pub fn is_empty(&self) -> bool
-yamaa::diagnostic::Report::len: pub fn len(&self) -> usize
-yamaa::diagnostic::Report::table: pub fn table(&self) -> Table
 yamaa::diagnostic::SEVERITIES: pub const SEVERITIES: [&str; 2]
 yamaa::diagnostic::Severity: impl Severity
 yamaa::diagnostic::Severity: pub enum Severity [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
@@ -317,6 +277,7 @@ yamaa::diagnostic::Severity::as_str: pub fn as_str(self) -> &'static str
 yamaa::diagnostic::SourceSpan: pub struct SourceSpan [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::diagnostic::SourceSpan::end: pub end: usize
 yamaa::diagnostic::SourceSpan::start: pub start: usize
+yamaa::diagnostic::issues: pub fn issues(diagnostics: &[Diagnostic]) -> Table
 yamaa::engine::Engine: impl Engine
 yamaa::engine::Engine: pub struct Engine [derive(Clone)]
 yamaa::engine::Engine::new: pub fn new(options: EngineOptions) -> Self
@@ -356,58 +317,6 @@ yamaa::error::FailureKind::Rejected: Rejected
 yamaa::error::FailureKind::Stream: Stream { code: &'static str }
 yamaa::error::FailureKind::Table: Table(Box<TableError>)
 yamaa::error::FailureKind::Unavailable: Unavailable { feature: &'static str }
-yamaa::error::FunctionError: impl FunctionError
-yamaa::error::FunctionError: pub enum FunctionError [derive(Clone, Debug)] [non_exhaustive]
-yamaa::error::FunctionError::Exception: Exception { class: String, message: String, payload: Option<HostPayload>, }
-yamaa::error::FunctionError::Internal: Internal { code: &'static str }
-yamaa::error::FunctionError::Interrupted: Interrupted { payload: Option<HostPayload> }
-yamaa::error::FunctionError::Lock: Lock(Vec<LockFinding>)
-yamaa::error::FunctionError::LockSyntax: LockSyntax(LockSyntaxError)
-yamaa::error::FunctionError::MissingBinding: MissingBinding(String)
-yamaa::error::FunctionError::Protocol: Protocol
-yamaa::error::FunctionError::Rejected: Rejected { reason: String, returned: Option<String>, }
-yamaa::error::FunctionError::Representation: Representation { message: String, payload: Option<HostPayload>, }
-yamaa::error::FunctionError::Scalar: Scalar { reason: &'static str }
-yamaa::error::FunctionError::SdkBoundary: SdkBoundary { payload: Option<HostPayload> }
-yamaa::error::FunctionError::code: pub fn code(&self) -> &'static str
-yamaa::error::FunctionError::message: pub fn message(&self) -> String
-yamaa::error::HostPayload: impl Clone for HostPayload
-yamaa::error::HostPayload: impl HostPayload
-yamaa::error::HostPayload: impl std::fmt::Debug for HostPayload
-yamaa::error::HostPayload: pub struct HostPayload
-yamaa::error::HostPayload::new: pub fn new<T: Any + Send>(value: T) -> Self
-yamaa::error::HostPayload::with: pub fn with<T: Any + Send, R>(&self, with: impl FnOnce(&T) -> R) -> Option<R>
-yamaa::error::LockFinding: impl LockFinding
-yamaa::error::LockFinding: pub struct LockFinding [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::error::LockFinding::actual: pub actual: Option<String>
-yamaa::error::LockFinding::expected: pub expected: Vec<String>
-yamaa::error::LockFinding::new: pub fn new(package: String, reason: LockReason, expected: Vec<String>, actual: Option<String>) -> Self
-yamaa::error::LockFinding::package: pub package: String
-yamaa::error::LockFinding::reason: pub reason: LockReason
-yamaa::error::LockReason: impl LockReason
-yamaa::error::LockReason: pub enum LockReason [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::error::LockReason::AmbiguousLockVersion: AmbiguousLockVersion
-yamaa::error::LockReason::DistributionNotIdentified: DistributionNotIdentified
-yamaa::error::LockReason::InvalidInstalledVersion: InvalidInstalledVersion
-yamaa::error::LockReason::InvalidLockedVersion: InvalidLockedVersion
-yamaa::error::LockReason::PackageNotInstalled: PackageNotInstalled
-yamaa::error::LockReason::VersionMismatch: VersionMismatch
-yamaa::error::LockReason::VersionNotLocked: VersionNotLocked
-yamaa::error::LockReason::as_str: pub fn as_str(self) -> &'static str
-yamaa::error::LockReason::parse: pub fn parse(value: &str) -> Option<Self>
-yamaa::error::LockSyntaxError: impl LockSyntaxError
-yamaa::error::LockSyntaxError: pub enum LockSyntaxError [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::error::LockSyntaxError::Document: Document { resource_refusal: bool, }
-yamaa::error::LockSyntaxError::Json: Json { line: usize, column: usize, }
-yamaa::error::LockSyntaxError::Limit: Limit { resource: &'static str, limit: usize, actual: Option<usize>, }
-yamaa::error::LockSyntaxError::Shape: Shape { field: &'static str, }
-yamaa::error::ResolverFailure: impl ResolverFailure
-yamaa::error::ResolverFailure: pub struct ResolverFailure [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::error::ResolverFailure::code: pub fn code(&self) -> &'static str
-yamaa::error::ResolverFailure::from_code: pub fn from_code(code: &str) -> Self
-yamaa::error::ResolverFailure::from_kind: pub fn from_kind(kind: ResourceKind) -> Self
-yamaa::error::ResolverFailure::kind: pub fn kind(&self) -> Option<ResourceKind>
-yamaa::error::ResolverFailure::message: pub fn message(&self) -> &str
 yamaa::error::TableError: impl TableError
 yamaa::error::TableError: pub struct TableError [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::error::TableError::code: pub fn code(&self) -> &'static str
@@ -423,74 +332,178 @@ yamaa::file_type::FileType::Project: Project
 yamaa::file_type::FileType::Spec: Spec
 yamaa::file_type::FileType::as_str: pub fn as_str(self) -> &'static str
 yamaa::file_type::FileType::parse: pub fn parse(text: &str) -> Option<Self>
-yamaa::functions::Argument: pub struct Argument<'a> [derive(Clone, Copy, Debug, PartialEq)] [non_exhaustive]
-yamaa::functions::Argument::name: pub name: &'a str
-yamaa::functions::Argument::value: pub value: ScalarRef<'a>
-yamaa::functions::BatchArgument: pub struct BatchArgument [derive(Clone, Debug, PartialEq)] [non_exhaustive]
-yamaa::functions::BatchArgument::name: pub name: String
-yamaa::functions::BatchArgument::values: pub values: Vec<Scalar>
-yamaa::functions::CallError: impl CallError
-yamaa::functions::CallError: pub enum CallError [derive(Clone, Debug)] [non_exhaustive]
-yamaa::functions::CallError::InvalidResult: InvalidResult(FunctionError)
-yamaa::functions::CallError::Raised: Raised(FunctionError)
-yamaa::functions::CallError::error: pub fn error(&self) -> &FunctionError
-yamaa::functions::ColumnType: impl ColumnType
-yamaa::functions::ColumnType: pub enum ColumnType [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::functions::ColumnType::Date: Date
-yamaa::functions::ColumnType::DateTime: DateTime
-yamaa::functions::ColumnType::Float: Float
-yamaa::functions::ColumnType::Int: Int
-yamaa::functions::ColumnType::Str: Str
-yamaa::functions::FunctionHandle: impl Clone for FunctionHandle
-yamaa::functions::FunctionHandle: impl FunctionHandle
-yamaa::functions::FunctionHandle: impl std::fmt::Debug for FunctionHandle
-yamaa::functions::FunctionHandle: pub struct FunctionHandle
-yamaa::functions::FunctionHandle::new: pub fn new<T: std::any::Any + Send>(handle: T) -> Self
-yamaa::functions::FunctionHandle::with: pub fn with<T: std::any::Any + Send, R>(&self, with: impl FnOnce(&T) -> R) -> Option<R>
-yamaa::functions::FunctionIdentity: impl FunctionIdentity
-yamaa::functions::FunctionIdentity: pub struct FunctionIdentity [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::functions::FunctionIdentity::call: pub call: String
-yamaa::functions::FunctionIdentity::name: pub name: String
-yamaa::functions::HostLanguage: impl HostLanguage
-yamaa::functions::HostLanguage: pub enum HostLanguage [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::functions::HostLanguage::Python: Python
-yamaa::functions::HostLanguage::R: R
-yamaa::functions::InstalledDistributions: pub trait InstalledDistributions
-yamaa::functions::InstalledDistributions::environment: fn environment(&self) -> Result<BTreeMap<String, String>, FunctionError> [required]
-yamaa::functions::InstalledDistributions::integer_digits: fn integer_digits(&self) -> Result<Option<usize>, FunctionError> [default]
-yamaa::functions::InstalledDistributions::providers: fn providers(&self, modules: &[String]) -> Result<BTreeMap<String, Vec<String>>, FunctionError> [required]
-yamaa::functions::InstalledDistributions::standard_library: fn standard_library(&self, module: &str) -> Result<bool, FunctionError> [required]
-yamaa::functions::InstalledDistributions::version: fn version(&self, distribution: &str) -> Result<InstalledVersion, FunctionError> [required]
-yamaa::functions::InstalledVersion: pub enum InstalledVersion [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::functions::InstalledVersion::Missing: Missing
-yamaa::functions::InstalledVersion::Unreadable: Unreadable
-yamaa::functions::InstalledVersion::Version: Version(String)
-yamaa::functions::LockContext: pub struct LockContext<'a> [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::functions::LockContext::bytes: pub bytes: &'a [u8]
-yamaa::functions::LockContext::kind: pub kind: LockKind
-yamaa::functions::LockContext::language: pub language: HostLanguage
-yamaa::functions::LockKind: impl LockKind
-yamaa::functions::LockKind: pub enum LockKind [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::functions::LockKind::Renv: Renv
-yamaa::functions::LockKind::Uv: Uv
-yamaa::functions::Parameter: pub struct Parameter [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::functions::Parameter::name: pub name: String
-yamaa::functions::ProjectFunctions: pub trait ProjectFunctions: Send + Sync
-yamaa::functions::ProjectFunctions::bind: fn bind(&self, identity: &FunctionIdentity, signature: &Signature) -> Result<FunctionHandle, FunctionError> [required]
-yamaa::functions::ProjectFunctions::call_batch: fn call_batch(&self, handle: &FunctionHandle, rows: usize, arguments: &[BatchArgument]) -> Result<Vec<Scalar>, CallError> [default]
-yamaa::functions::ProjectFunctions::invoke: fn invoke(&self, handle: &FunctionHandle, arguments: &[Argument<'_>]) -> Result<Scalar, CallError> [required]
-yamaa::functions::ProjectFunctions::is_interrupt: fn is_interrupt(&self, error: &FunctionError) -> bool [default]
-yamaa::functions::ProjectFunctions::verify_lock: fn verify_lock(&self, lock: &LockContext<'_>, functions: &[FunctionIdentity]) -> Result<(), FunctionError> [required]
-yamaa::functions::RenvLock: pub struct RenvLock [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::functions::RenvLock::packages: pub packages: BTreeMap<String, String>
-yamaa::functions::RenvLock::runtime_version: pub runtime_version: String
-yamaa::functions::Signature: impl Signature
-yamaa::functions::Signature: pub struct Signature [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::functions::Signature::may_return_missing: pub may_return_missing: bool
-yamaa::functions::Signature::parameters: pub parameters: Vec<Parameter>
-yamaa::functions::Signature::returns: pub returns: ColumnType
-yamaa::functions::decode_renv_lock: pub fn decode_renv_lock(bytes: &[u8]) -> Result<RenvLock, LockSyntaxError>
-yamaa::functions::verify_uv_lock: pub fn verify_uv_lock(lock: &[u8], functions: &[FunctionIdentity], installed: &dyn InstalledDistributions) -> Result<(), FunctionError>
+yamaa::host: pub mod functions
+yamaa::host: pub mod resolver
+yamaa::host::functions::Argument: pub struct Argument<'a> [derive(Clone, Copy, Debug, PartialEq)] [non_exhaustive]
+yamaa::host::functions::Argument::name: pub name: &'a str
+yamaa::host::functions::Argument::value: pub value: ScalarRef<'a>
+yamaa::host::functions::BatchArgument: pub struct BatchArgument [derive(Clone, Debug, PartialEq)] [non_exhaustive]
+yamaa::host::functions::BatchArgument::name: pub name: String
+yamaa::host::functions::BatchArgument::values: pub values: Vec<Scalar>
+yamaa::host::functions::CallError: impl CallError
+yamaa::host::functions::CallError: pub enum CallError [derive(Clone, Debug)] [non_exhaustive]
+yamaa::host::functions::CallError::InvalidResult: InvalidResult(FunctionError)
+yamaa::host::functions::CallError::Raised: Raised(FunctionError)
+yamaa::host::functions::CallError::error: pub fn error(&self) -> &FunctionError
+yamaa::host::functions::ColumnType: impl ColumnType
+yamaa::host::functions::ColumnType: pub enum ColumnType [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::host::functions::ColumnType::Date: Date
+yamaa::host::functions::ColumnType::DateTime: DateTime
+yamaa::host::functions::ColumnType::Float: Float
+yamaa::host::functions::ColumnType::Int: Int
+yamaa::host::functions::ColumnType::Str: Str
+yamaa::host::functions::FunctionError: impl FunctionError
+yamaa::host::functions::FunctionError: pub enum FunctionError [derive(Clone, Debug)] [non_exhaustive]
+yamaa::host::functions::FunctionError::Exception: Exception { class: String, message: String, payload: Option<HostPayload>, }
+yamaa::host::functions::FunctionError::Internal: Internal { code: &'static str }
+yamaa::host::functions::FunctionError::Interrupted: Interrupted { payload: Option<HostPayload> }
+yamaa::host::functions::FunctionError::Lock: Lock(Vec<LockFinding>)
+yamaa::host::functions::FunctionError::LockSyntax: LockSyntax(LockSyntaxError)
+yamaa::host::functions::FunctionError::MissingBinding: MissingBinding(String)
+yamaa::host::functions::FunctionError::Protocol: Protocol
+yamaa::host::functions::FunctionError::Rejected: Rejected { reason: String, returned: Option<String>, }
+yamaa::host::functions::FunctionError::Representation: Representation { message: String, payload: Option<HostPayload>, }
+yamaa::host::functions::FunctionError::Scalar: Scalar { reason: &'static str }
+yamaa::host::functions::FunctionError::SdkBoundary: SdkBoundary { payload: Option<HostPayload> }
+yamaa::host::functions::FunctionError::code: pub fn code(&self) -> &'static str
+yamaa::host::functions::FunctionError::message: pub fn message(&self) -> String
+yamaa::host::functions::FunctionHandle: impl Clone for FunctionHandle
+yamaa::host::functions::FunctionHandle: impl FunctionHandle
+yamaa::host::functions::FunctionHandle: impl std::fmt::Debug for FunctionHandle
+yamaa::host::functions::FunctionHandle: pub struct FunctionHandle
+yamaa::host::functions::FunctionHandle::new: pub fn new<T: std::any::Any + Send>(handle: T) -> Self
+yamaa::host::functions::FunctionHandle::with: pub fn with<T: std::any::Any + Send, R>(&self, with: impl FnOnce(&T) -> R) -> Option<R>
+yamaa::host::functions::FunctionIdentity: impl FunctionIdentity
+yamaa::host::functions::FunctionIdentity: pub struct FunctionIdentity [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::host::functions::FunctionIdentity::call: pub call: String
+yamaa::host::functions::FunctionIdentity::name: pub name: String
+yamaa::host::functions::HostLanguage: impl HostLanguage
+yamaa::host::functions::HostLanguage: pub enum HostLanguage [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::host::functions::HostLanguage::Python: Python
+yamaa::host::functions::HostLanguage::R: R
+yamaa::host::functions::HostPayload: impl Clone for HostPayload
+yamaa::host::functions::HostPayload: impl HostPayload
+yamaa::host::functions::HostPayload: impl std::fmt::Debug for HostPayload
+yamaa::host::functions::HostPayload: pub struct HostPayload
+yamaa::host::functions::HostPayload::new: pub fn new<T: Any + Send>(value: T) -> Self
+yamaa::host::functions::HostPayload::with: pub fn with<T: Any + Send, R>(&self, with: impl FnOnce(&T) -> R) -> Option<R>
+yamaa::host::functions::InstalledDistributions: pub trait InstalledDistributions
+yamaa::host::functions::InstalledDistributions::environment: fn environment(&self) -> Result<BTreeMap<String, String>, FunctionError> [required]
+yamaa::host::functions::InstalledDistributions::integer_digits: fn integer_digits(&self) -> Result<Option<usize>, FunctionError> [default]
+yamaa::host::functions::InstalledDistributions::providers: fn providers(&self, modules: &[String]) -> Result<BTreeMap<String, Vec<String>>, FunctionError> [required]
+yamaa::host::functions::InstalledDistributions::standard_library: fn standard_library(&self, module: &str) -> Result<bool, FunctionError> [required]
+yamaa::host::functions::InstalledDistributions::version: fn version(&self, distribution: &str) -> Result<InstalledVersion, FunctionError> [required]
+yamaa::host::functions::InstalledVersion: pub enum InstalledVersion [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::host::functions::InstalledVersion::Missing: Missing
+yamaa::host::functions::InstalledVersion::Unreadable: Unreadable
+yamaa::host::functions::InstalledVersion::Version: Version(String)
+yamaa::host::functions::LockContext: pub struct LockContext<'a> [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::host::functions::LockContext::bytes: pub bytes: &'a [u8]
+yamaa::host::functions::LockContext::kind: pub kind: LockKind
+yamaa::host::functions::LockContext::language: pub language: HostLanguage
+yamaa::host::functions::LockFinding: impl LockFinding
+yamaa::host::functions::LockFinding: pub struct LockFinding [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::host::functions::LockFinding::actual: pub actual: Option<String>
+yamaa::host::functions::LockFinding::expected: pub expected: Vec<String>
+yamaa::host::functions::LockFinding::new: pub fn new(package: String, reason: LockReason, expected: Vec<String>, actual: Option<String>) -> Self
+yamaa::host::functions::LockFinding::package: pub package: String
+yamaa::host::functions::LockFinding::reason: pub reason: LockReason
+yamaa::host::functions::LockKind: impl LockKind
+yamaa::host::functions::LockKind: pub enum LockKind [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::host::functions::LockKind::Renv: Renv
+yamaa::host::functions::LockKind::Uv: Uv
+yamaa::host::functions::LockReason: impl LockReason
+yamaa::host::functions::LockReason: pub enum LockReason [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::host::functions::LockReason::AmbiguousLockVersion: AmbiguousLockVersion
+yamaa::host::functions::LockReason::DistributionNotIdentified: DistributionNotIdentified
+yamaa::host::functions::LockReason::InvalidInstalledVersion: InvalidInstalledVersion
+yamaa::host::functions::LockReason::InvalidLockedVersion: InvalidLockedVersion
+yamaa::host::functions::LockReason::PackageNotInstalled: PackageNotInstalled
+yamaa::host::functions::LockReason::VersionMismatch: VersionMismatch
+yamaa::host::functions::LockReason::VersionNotLocked: VersionNotLocked
+yamaa::host::functions::LockReason::as_str: pub fn as_str(self) -> &'static str
+yamaa::host::functions::LockReason::parse: pub fn parse(value: &str) -> Option<Self>
+yamaa::host::functions::LockSyntaxError: impl LockSyntaxError
+yamaa::host::functions::LockSyntaxError: pub enum LockSyntaxError [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::host::functions::LockSyntaxError::Document: Document { resource_refusal: bool, }
+yamaa::host::functions::LockSyntaxError::Json: Json { line: usize, column: usize, }
+yamaa::host::functions::LockSyntaxError::Limit: Limit { resource: &'static str, limit: usize, actual: Option<usize>, }
+yamaa::host::functions::LockSyntaxError::Shape: Shape { field: &'static str, }
+yamaa::host::functions::Parameter: pub struct Parameter [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::host::functions::Parameter::name: pub name: String
+yamaa::host::functions::ProjectFunctions: pub trait ProjectFunctions: Send + Sync
+yamaa::host::functions::ProjectFunctions::bind: fn bind(&self, identity: &FunctionIdentity, signature: &Signature) -> Result<FunctionHandle, FunctionError> [required]
+yamaa::host::functions::ProjectFunctions::call_batch: fn call_batch(&self, handle: &FunctionHandle, rows: usize, arguments: &[BatchArgument]) -> Result<Vec<Scalar>, CallError> [default]
+yamaa::host::functions::ProjectFunctions::invoke: fn invoke(&self, handle: &FunctionHandle, arguments: &[Argument<'_>]) -> Result<Scalar, CallError> [required]
+yamaa::host::functions::ProjectFunctions::is_interrupt: fn is_interrupt(&self, error: &FunctionError) -> bool [default]
+yamaa::host::functions::ProjectFunctions::verify_lock: fn verify_lock(&self, lock: &LockContext<'_>, functions: &[FunctionIdentity]) -> Result<(), FunctionError> [required]
+yamaa::host::functions::RenvLock: pub struct RenvLock [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::host::functions::RenvLock::packages: pub packages: BTreeMap<String, String>
+yamaa::host::functions::RenvLock::runtime_version: pub runtime_version: String
+yamaa::host::functions::Signature: impl Signature
+yamaa::host::functions::Signature: pub struct Signature [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::host::functions::Signature::may_return_missing: pub may_return_missing: bool
+yamaa::host::functions::Signature::parameters: pub parameters: Vec<Parameter>
+yamaa::host::functions::Signature::returns: pub returns: ColumnType
+yamaa::host::functions::decode_renv_lock: pub fn decode_renv_lock(bytes: &[u8]) -> Result<RenvLock, LockSyntaxError>
+yamaa::host::functions::verify_uv_lock: pub fn verify_uv_lock(lock: &[u8], functions: &[FunctionIdentity], installed: &dyn InstalledDistributions) -> Result<(), FunctionError>
+yamaa::host::resolver::MemoryResolver: impl MemoryResolver
+yamaa::host::resolver::MemoryResolver: impl ResourceResolver for MemoryResolver
+yamaa::host::resolver::MemoryResolver: pub struct MemoryResolver [derive(Default)] [non_exhaustive]
+yamaa::host::resolver::MemoryResolver::cancel: pub fn cancel(&self)
+yamaa::host::resolver::MemoryResolver::insert: pub fn insert(&self, declaring: &str, written: &str, reference: &str, bytes: Arc<[u8]>)
+yamaa::host::resolver::MemoryResolver::insert_frame: pub fn insert_frame(&self, declaring: &str, written: &str, reference: &str, frame: &InputFrame)
+yamaa::host::resolver::MemoryResolver::insert_kind: pub fn insert_kind(&self, declaring: &str, written: &str, kind: ResourceKind)
+yamaa::host::resolver::MemoryResolver::new: pub fn new() -> Self
+yamaa::host::resolver::MemoryResolver::published: pub fn published(&self, reference: &str) -> Option<Arc<[u8]>>
+yamaa::host::resolver::MemoryResolver::staged_count: pub fn staged_count(&self) -> usize
+yamaa::host::resolver::ResolverFailure: impl ResolverFailure
+yamaa::host::resolver::ResolverFailure: pub struct ResolverFailure [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::host::resolver::ResolverFailure::code: pub fn code(&self) -> &'static str
+yamaa::host::resolver::ResolverFailure::from_code: pub fn from_code(code: &str) -> Self
+yamaa::host::resolver::ResolverFailure::from_kind: pub fn from_kind(kind: ResourceKind) -> Self
+yamaa::host::resolver::ResolverFailure::kind: pub fn kind(&self) -> Option<ResourceKind>
+yamaa::host::resolver::ResolverFailure::message: pub fn message(&self) -> &str
+yamaa::host::resolver::ResolverKind: impl ResolverKind
+yamaa::host::resolver::ResolverKind: pub enum ResolverKind [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::host::resolver::ResolverKind::Input: Input
+yamaa::host::resolver::ResolverKind::Metadata: Metadata
+yamaa::host::resolver::ResolverKind::Output: Output
+yamaa::host::resolver::ResolverKind::name: pub fn name(self) -> &'static str
+yamaa::host::resolver::ResolverOperation: impl ResolverOperation
+yamaa::host::resolver::ResolverOperation: pub enum ResolverOperation [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::host::resolver::ResolverOperation::Abort: Abort
+yamaa::host::resolver::ResolverOperation::Capture: Capture
+yamaa::host::resolver::ResolverOperation::Commit: Commit
+yamaa::host::resolver::ResolverOperation::Inspect: Inspect
+yamaa::host::resolver::ResolverOperation::Stage: Stage
+yamaa::host::resolver::ResolverOperation::Target: Target
+yamaa::host::resolver::ResolverOperation::name: pub fn name(self) -> &'static str
+yamaa::host::resolver::ResolverReply: impl ResolverReply
+yamaa::host::resolver::ResolverReply: pub struct ResolverReply [derive(Clone, Debug)] [non_exhaustive]
+yamaa::host::resolver::ResolverReply::bytes: pub bytes: Option<Arc<[u8]>>
+yamaa::host::resolver::ResolverReply::frame: pub frame: Option<InputFrame>
+yamaa::host::resolver::ResolverReply::new: pub fn new(reference: String, bytes: Option<Arc<[u8]>>, frame: Option<InputFrame>) -> Self
+yamaa::host::resolver::ResolverReply::reference: pub reference: String
+yamaa::host::resolver::ResolverRequest: pub struct ResolverRequest<'a> [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::host::resolver::ResolverRequest::bytes: pub bytes: Option<&'a [u8]>
+yamaa::host::resolver::ResolverRequest::declaring: pub declaring: &'a str
+yamaa::host::resolver::ResolverRequest::kind: pub kind: ResolverKind
+yamaa::host::resolver::ResolverRequest::operation: pub operation: ResolverOperation
+yamaa::host::resolver::ResolverRequest::reference: pub reference: Option<&'a str>
+yamaa::host::resolver::ResolverRequest::written: pub written: &'a str
+yamaa::host::resolver::ResourceKind: impl ResourceKind
+yamaa::host::resolver::ResourceKind: pub enum ResourceKind [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::host::resolver::ResourceKind::Directory: Directory
+yamaa::host::resolver::ResourceKind::File: File
+yamaa::host::resolver::ResourceKind::Junction: Junction
+yamaa::host::resolver::ResourceKind::Missing: Missing
+yamaa::host::resolver::ResourceKind::Other: Other
+yamaa::host::resolver::ResourceKind::ReparsePoint: ReparsePoint
+yamaa::host::resolver::ResourceKind::SymbolicLink: SymbolicLink
+yamaa::host::resolver::ResourceKind::name: pub fn name(self) -> &'static str
+yamaa::host::resolver::ResourceResolver: pub trait ResourceResolver: Send + Sync
+yamaa::host::resolver::ResourceResolver::request: fn request(&self, request: ResolverRequest<'_>) -> Result<ResolverReply, ResolverFailure> [required]
 yamaa::info: pub use yamaa::info::info
 yamaa::info::FEATURES: pub const FEATURES: [&str; 4]
 yamaa::info::HOSTS: pub const HOSTS: [&str; 3]
@@ -544,56 +557,6 @@ yamaa::odm::OdmOptions::with_archive_member: pub fn with_archive_member(mut self
 yamaa::odm::OdmOptions::with_max_archive_members: pub fn with_max_archive_members(mut self, limit: usize) -> Self
 yamaa::odm::OdmOptions::with_max_expanded_bytes: pub fn with_max_expanded_bytes(mut self, limit: u64) -> Self
 yamaa::odm::OdmOptions::with_max_xml_depth: pub fn with_max_xml_depth(mut self, limit: usize) -> Self
-yamaa::resolver::MemoryResolver: impl MemoryResolver
-yamaa::resolver::MemoryResolver: impl ResourceResolver for MemoryResolver
-yamaa::resolver::MemoryResolver: pub struct MemoryResolver [derive(Default)] [non_exhaustive]
-yamaa::resolver::MemoryResolver::cancel: pub fn cancel(&self)
-yamaa::resolver::MemoryResolver::insert: pub fn insert(&self, declaring: &str, written: &str, reference: &str, bytes: Arc<[u8]>)
-yamaa::resolver::MemoryResolver::insert_frame: pub fn insert_frame(&self, declaring: &str, written: &str, reference: &str, frame: &InputFrame)
-yamaa::resolver::MemoryResolver::insert_kind: pub fn insert_kind(&self, declaring: &str, written: &str, kind: ResourceKind)
-yamaa::resolver::MemoryResolver::new: pub fn new() -> Self
-yamaa::resolver::MemoryResolver::published: pub fn published(&self, reference: &str) -> Option<Arc<[u8]>>
-yamaa::resolver::MemoryResolver::staged_count: pub fn staged_count(&self) -> usize
-yamaa::resolver::ResolverKind: impl ResolverKind
-yamaa::resolver::ResolverKind: pub enum ResolverKind [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::resolver::ResolverKind::Input: Input
-yamaa::resolver::ResolverKind::Metadata: Metadata
-yamaa::resolver::ResolverKind::Output: Output
-yamaa::resolver::ResolverKind::name: pub fn name(self) -> &'static str
-yamaa::resolver::ResolverOperation: impl ResolverOperation
-yamaa::resolver::ResolverOperation: pub enum ResolverOperation [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::resolver::ResolverOperation::Abort: Abort
-yamaa::resolver::ResolverOperation::Capture: Capture
-yamaa::resolver::ResolverOperation::Commit: Commit
-yamaa::resolver::ResolverOperation::Inspect: Inspect
-yamaa::resolver::ResolverOperation::Stage: Stage
-yamaa::resolver::ResolverOperation::Target: Target
-yamaa::resolver::ResolverOperation::name: pub fn name(self) -> &'static str
-yamaa::resolver::ResolverReply: impl ResolverReply
-yamaa::resolver::ResolverReply: pub struct ResolverReply [derive(Clone, Debug)] [non_exhaustive]
-yamaa::resolver::ResolverReply::bytes: pub bytes: Option<Arc<[u8]>>
-yamaa::resolver::ResolverReply::frame: pub frame: Option<InputFrame>
-yamaa::resolver::ResolverReply::new: pub fn new(reference: String, bytes: Option<Arc<[u8]>>, frame: Option<InputFrame>) -> Self
-yamaa::resolver::ResolverReply::reference: pub reference: String
-yamaa::resolver::ResolverRequest: pub struct ResolverRequest<'a> [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::resolver::ResolverRequest::bytes: pub bytes: Option<&'a [u8]>
-yamaa::resolver::ResolverRequest::declaring: pub declaring: &'a str
-yamaa::resolver::ResolverRequest::kind: pub kind: ResolverKind
-yamaa::resolver::ResolverRequest::operation: pub operation: ResolverOperation
-yamaa::resolver::ResolverRequest::reference: pub reference: Option<&'a str>
-yamaa::resolver::ResolverRequest::written: pub written: &'a str
-yamaa::resolver::ResourceKind: impl ResourceKind
-yamaa::resolver::ResourceKind: pub enum ResourceKind [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::resolver::ResourceKind::Directory: Directory
-yamaa::resolver::ResourceKind::File: File
-yamaa::resolver::ResourceKind::Junction: Junction
-yamaa::resolver::ResourceKind::Missing: Missing
-yamaa::resolver::ResourceKind::Other: Other
-yamaa::resolver::ResourceKind::ReparsePoint: ReparsePoint
-yamaa::resolver::ResourceKind::SymbolicLink: SymbolicLink
-yamaa::resolver::ResourceKind::name: pub fn name(self) -> &'static str
-yamaa::resolver::ResourceResolver: pub trait ResourceResolver: Send + Sync
-yamaa::resolver::ResourceResolver::request: fn request(&self, request: ResolverRequest<'_>) -> Result<ResolverReply, yamaa::error::ResolverFailure> [required]
 yamaa::scalar::Date: impl Date
 yamaa::scalar::Date: pub struct Date [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::scalar::Date::epoch_days: pub fn epoch_days(self) -> i32
@@ -606,12 +569,6 @@ yamaa::scalar::DateTime::epoch_seconds: pub fn epoch_seconds(self) -> i64
 yamaa::scalar::DateTime::fields: pub fn fields(self) -> (u16, u8, u8, u8, u8, u8)
 yamaa::scalar::DateTime::from_epoch_seconds: pub fn from_epoch_seconds(seconds: i64) -> Option<Self>
 yamaa::scalar::DateTime::new: pub fn new(year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8) -> Option<Self>
-yamaa::scalar::EncodedScalar: impl EncodedScalar
-yamaa::scalar::EncodedScalar: pub struct EncodedScalar [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::scalar::EncodedScalar::decode: pub fn decode(tag: i32, bytes: &[u8]) -> Result<Scalar, ScalarDecodeError>
-yamaa::scalar::EncodedScalar::encode: pub fn encode(value: Scalar) -> Self
-yamaa::scalar::EncodedScalar::payload: pub payload: Vec<u8>
-yamaa::scalar::EncodedScalar::tag: pub tag: i32
 yamaa::scalar::Scalar: impl Scalar
 yamaa::scalar::Scalar: pub enum Scalar [derive(Clone, Debug, PartialEq)] [non_exhaustive]
 yamaa::scalar::Scalar::Bool: Bool(bool)
@@ -622,11 +579,6 @@ yamaa::scalar::Scalar::Int: Int(i64)
 yamaa::scalar::Scalar::Missing: Missing
 yamaa::scalar::Scalar::Str: Str(String)
 yamaa::scalar::Scalar::float: pub fn float(value: f64) -> Self
-yamaa::scalar::ScalarDecodeError: impl ScalarDecodeError
-yamaa::scalar::ScalarDecodeError: impl std::error::Error for ScalarDecodeError
-yamaa::scalar::ScalarDecodeError: impl std::fmt::Display for ScalarDecodeError
-yamaa::scalar::ScalarDecodeError: pub struct ScalarDecodeError [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::scalar::ScalarDecodeError::reason: pub fn reason(self) -> &'static str
 yamaa::scalar::ScalarRef: impl<'a> ScalarRef<'a>
 yamaa::scalar::ScalarRef: pub enum ScalarRef<'a> [derive(Clone, Copy, Debug, PartialEq)] [non_exhaustive]
 yamaa::scalar::ScalarRef::Bool: Bool(bool)
@@ -705,21 +657,9 @@ yamaa::table::Table::schema: pub fn schema(&self) -> &SchemaRef [cfg(feature = "
 yamaa::table::Table::stream: pub fn stream(&self) -> FFI_ArrowArrayStream [cfg(feature = "arrow")]
 yamaa::table::TimeUnit: pub use arrow_schema::TimeUnit [cfg(feature = "arrow")]
 yamaa::table::TimestampSecondArray: pub use arrow_array::TimestampSecondArray [cfg(feature = "arrow")]
-yamaa::text::Action: impl fmt::Display for Action<'_>
-yamaa::text::Action: pub enum Action<'a> [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::text::Action::Lint: Lint(&'a str)
-yamaa::text::Action::Read: Read(&'a str)
-yamaa::text::Action::Resolve: Resolve(&'a str)
-yamaa::text::Action::Save: Save(&'a str)
-yamaa::text::Action::Schema: Schema(&'a str)
-yamaa::text::Action::Select: Select(&'a str)
 yamaa::text::Summary: impl Summary
 yamaa::text::Summary: impl fmt::Display for Summary
 yamaa::text::Summary: pub struct Summary [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::text::Summary::first_issue: pub first_issue: Option<String>
-yamaa::text::Summary::line: pub line: String
 yamaa::text::Summary::lines: pub fn lines(&self) -> impl Iterator<Item = &str>
-yamaa::text::Summary::members: pub members: Vec<String>
 yamaa::text::Summary::project: pub fn project(path: &str) -> Self
 yamaa::text::Summary::spec: pub fn spec(path: &str) -> Self
-yamaa::verify_uv_lock: pub use yamaa::functions::verify_uv_lock

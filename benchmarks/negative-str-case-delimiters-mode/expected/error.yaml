@@ -1,0 +1,9 @@
+phase: validation
+condition: unknown_field
+spec_paths:
+  - columns.AETERMTC.derivation.str_case.delimiters
+rule: TEXT-5
+context:
+  field: delimiters
+  to: title
+  identifier: delimiters

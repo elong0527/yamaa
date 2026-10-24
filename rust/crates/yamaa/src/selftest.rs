@@ -49,9 +49,9 @@ use crate::api::{Status, SubmissionOptions};
 use crate::cancel::CancellationToken;
 use crate::diagnostic::{ContextValue, Diagnostic};
 use crate::engine::{Engine, EngineOptions};
-use crate::functions::HostLanguage;
+use crate::host::functions::HostLanguage;
+use crate::host::resolver::{MemoryResolver, ResourceKind, ResourceResolver};
 use crate::info::{info, Host, Info};
-use crate::resolver::{MemoryResolver, ResourceKind, ResourceResolver};
 use crate::table::Table;
 use crate::text::{self, Summary};
 
@@ -587,7 +587,9 @@ fn same(left: &ContextValue, right: &ContextValue) -> bool {
     fn number(value: &ContextValue) -> Option<f64> {
         match value {
             ContextValue::Int(value) => Some(*value as f64),
-            ContextValue::Uint(value) => Some(*value as f64),
+            // An integer above `i64::MAX` that `u64` holds compares by value;
+            // a wider number compares only by its spelling.
+            ContextValue::Wide(text) => text.parse::<u64>().ok().map(|value| value as f64),
             ContextValue::Float(value) => Some(*value),
             _ => None,
         }
@@ -618,9 +620,7 @@ fn document_value(document: &yamaa_core::schema::Document, node: usize) -> Conte
         DocumentNode::Boolean(value) => ContextValue::Bool(*value),
         DocumentNode::Integer(text) => text
             .parse()
-            .map(ContextValue::Int)
-            .or_else(|_| text.parse().map(ContextValue::Uint))
-            .unwrap_or_else(|_| ContextValue::Wide(text.clone())),
+            .map_or_else(|_| ContextValue::Wide(text.clone()), ContextValue::Int),
         DocumentNode::Float(value) => ContextValue::Float(*value),
         DocumentNode::Text(text) => ContextValue::Text(text.clone()),
         DocumentNode::Sequence(items) => ContextValue::List(

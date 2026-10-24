@@ -2,8 +2,9 @@
 
 These operations compute with the `date` and `datetime` values of
 [VALUE-13](values.md#value-13): differences, study days and times of day,
-assembly and completion of collected dates and times, collected precision and
-imputation flags, and civil arithmetic with fixed-length durations.
+reading of declared date forms, assembly and completion of collected dates and
+times, collected precision and imputation flags, and civil arithmetic with
+fixed-length durations.
 
 ## Operations
 
@@ -34,6 +35,7 @@ Evidence: `negative-study-day-datetime`, `negative-date-diff-endpoints`, `negati
 | `precision` | `source` is collected date text or a value of the declared type |
 | `imputation_flag` | `source` is a `date` or a `datetime`, and a `datetime` with `part: time` |
 | `to_date` | `source` is a `datetime` or collected date text |
+| `date_text` | `source` is `str`; `forms` lists date forms |
 | `to_epoch_day` | `source` is `date` |
 | `shift`, `type: date` | `source` is `date`; `days` is `int` |
 | `shift`, `type: datetime` | `source` is `datetime`; a numeric `amount` and an elapsed `unit` |
@@ -247,6 +249,68 @@ was collected keeps the text as `str` and reads it with `impute` or
 `precision`. A `datetime` source to `precision` with `type: date`, and a `date`
 source with `type: datetime`, are incompatible inputs ([TIME-1](#time-1)). A
 missing source and invalid text follow [TIME-13](#time-13).
+
+<a id="time-22"></a>
+
+### TIME-22. date_text reads text in one of its declared date forms into the collected date text it denotes
+
+`date_text` reads its `str` source, whole and as written, in the first
+declared form whose shape it has, and returns the collected date text of
+[TIME-7](#time-7) it denotes: `iso` returns collected date text unchanged,
+`monyyyy` a year and month, and `ddmonyyyy`, `mdy_slash`, `dmy_slash` and
+`yyyymmdd` a complete date, each field with the width and range of
+[VALUE-15](values.md#value-15). A missing source gives missing, and text that
+no declared form reads fails with `invalid_date_text` unless `invalid`
+declares a literal substitute.
+
+Fails: `incompatible_input_type`, `invalid_field_type`, `invalid_date_text`.
+Evidence: `adam-adcm-free-text-start-date`, `negative-date-text-no-form`, `negative-date-text-both-slash-forms`, `rust/crates/yamaa-adapters/tests/fixtures/date_text_forms.json`, `rust/crates/yamaa-core/src/date_forms.rs::each_form_reads_its_own_shape_into_collected_date_text`, `rust/crates/yamaa-core/src/date_forms.rs::only_the_two_slash_orders_share_a_shape`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_date_text_lists_at_least_one_form`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_date_text_lists_each_form_once`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_date_text_lists_one_slash_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::date_text_fails_on_text_in_no_declared_form`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::date_text_refuses_a_source_that_is_not_text`.
+
+| Form | Shape | Example | Result |
+|---|---|---|---|
+| `iso` | collected date text ([TIME-7](#time-7)) | `2001-03-04T08:30` | `2001-03-04T08:30` |
+| `ddmonyyyy` | `DD`, a month abbreviation, `YYYY` | `04MAR2001` | `2001-03-04` |
+| `mdy_slash` | `MM/DD/YYYY` | `03/04/2001` | `2001-03-04` |
+| `dmy_slash` | `DD/MM/YYYY` | `03/04/2001` | `2001-04-03` |
+| `yyyymmdd` | `YYYYMMDD` | `20010304` | `2001-03-04` |
+| `monyyyy` | a month abbreviation, `YYYY` | `MAR2001` | `2001-03` |
+
+`forms` is a list naming at least one form, each once. `mdy_slash` and
+`dmy_slash` read the one shape `NN/NN/YYYY` with the month or the day first,
+so a list names at most one of them, and the order of day and month is the
+form it names. No other two forms share a shape, so the order of a list never
+changes what it reads. An empty list, a form named again and both slash forms
+fail with `invalid_field_type` where the specification is read, before any
+input is read: an empty list and both slash forms at `forms`, and a form named
+again at its entry. Each refusal reports the operation, a form named again as
+`value`, and what the list must be as `expected`: `at least one date form`,
+`each date form once`, or `mdy_slash or dmy_slash, not both`. A name outside
+the six fails with `value_not_permitted`
+([SCHEMA-12](reference/schema-language.md#schema-12)).
+
+The source is read whole: no blank is trimmed and no other separator is read,
+so `04MAR2001` after a blank, and `4 March 2001`, are in no form. A day and a
+month are two digits and a year four, so `4MAR2001` and `04MAR01` are in no
+form and no two-digit year is read; `yyyymmdd` reads eight digits and nothing
+shorter. A month abbreviation is the first three letters of the month's
+English name, `JAN` to `DEC`, in any letter case, so `04mar2001` reads as
+`04MAR2001` does. A field outside its range in the form whose shape the text
+has, such as `29FEB2001`, or `13/04/2001` with `mdy_slash`, makes the text
+invalid.
+
+`iso` returns its text unchanged, an unknown field or a time included, so
+`impute`, `precision` and `to_date` read the result as they read collected
+date text; an ISO 8601 interval or duration is not collected date text and is
+in no form. `monyyyy` returns a month, so `MAR2001` gives `2001-03`, which
+`impute` completes with its `day` rule ([TIME-8](#time-8)); every other form
+returns a complete date.
+
+Text in no declared form fails with `invalid_date_text` in the `impute` phase,
+reporting the operation, the source and the value, unless `invalid` declares a
+literal substitute; a declared handler is counted only when reached. A missing
+source gives missing without invoking `invalid`, and nothing is counted. A
+source of another type than `str` is an incompatible input under
+[TIME-1](#time-1).
 
 <a id="time-19"></a>
 

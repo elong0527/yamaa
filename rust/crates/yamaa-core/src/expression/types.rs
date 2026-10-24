@@ -156,6 +156,7 @@ impl CompiledExpression {
                     Reducer::Mean => ResultType::FLOAT,
                     Reducer::Sum => number(reduced),
                     Reducer::Min | Reducer::Max | Reducer::Only => reduced,
+                    Reducer::StrJoin => ResultType::STR,
                 }
             }
             _ => ResultType::UNKNOWN,
@@ -180,46 +181,64 @@ impl CompiledExpression {
                 let arithmetic = self.result == AggregateResult::Numeric;
                 let mut operands = Vec::new();
                 for reduction in &self.reductions {
-                    match &reduction.operand {
-                        ReductionOperand::Numeric => {
-                            let mut names = Vec::new();
-                            self.names(reduction.operand_node, &mut names);
-                            for name in names {
-                                self.numeric_name(name, &kind, &mut findings);
-                            }
-                        }
-                        ReductionOperand::Value(name) => {
-                            if collected_sources && name.contains('.') {
-                                continue;
-                            }
-                            let Some(actual) = kind(name).filter(|actual| !numeric(*actual)) else {
-                                continue;
-                            };
-                            let reducer = match reduction.reducer {
-                                Reducer::Sum => NumericReducer::Sum,
-                                Reducer::Mean => NumericReducer::Mean,
-                                // These keep the type they reduce, which the
-                                // arithmetic that reads them needs numeric.
-                                Reducer::Min | Reducer::Max | Reducer::Only => {
-                                    let reference = reduction.reference.as_str();
-                                    if arithmetic && !operands.contains(&reference) {
-                                        operands.push(reference);
-                                        findings.push(TypeFinding::AggregateOperand {
-                                            source: reference.into(),
-                                            actual,
-                                        });
-                                    }
-                                    continue;
+                    'operand: {
+                        match &reduction.operand {
+                            ReductionOperand::Numeric => {
+                                let mut names = Vec::new();
+                                self.names(reduction.operand_node, &mut names);
+                                for name in names {
+                                    self.numeric_name(name, &kind, &mut findings);
                                 }
-                                Reducer::Count => continue,
-                            };
-                            findings.push(TypeFinding::ReductionInput {
-                                reducer,
-                                source: name.clone(),
-                                actual,
-                            });
+                            }
+                            ReductionOperand::Value(name) => {
+                                if collected_sources && name.contains('.') {
+                                    break 'operand;
+                                }
+                                let Some(actual) = kind(name).filter(|actual| !numeric(*actual))
+                                else {
+                                    break 'operand;
+                                };
+                                let reducer = match reduction.reducer {
+                                    Reducer::Sum => NumericReducer::Sum,
+                                    Reducer::Mean => NumericReducer::Mean,
+                                    // These keep the type they reduce, which the
+                                    // arithmetic that reads them needs numeric.
+                                    Reducer::Min | Reducer::Max | Reducer::Only => {
+                                        let reference = reduction.reference.as_str();
+                                        if arithmetic && !operands.contains(&reference) {
+                                            operands.push(reference);
+                                            findings.push(TypeFinding::AggregateOperand {
+                                                source: reference.into(),
+                                                actual,
+                                            });
+                                        }
+                                        break 'operand;
+                                    }
+                                    // Both accept any type; a join's text is
+                                    // checked below.
+                                    Reducer::Count | Reducer::StrJoin => break 'operand,
+                                };
+                                findings.push(TypeFinding::ReductionInput {
+                                    reducer,
+                                    source: name.clone(),
+                                    actual,
+                                });
+                            }
+                            ReductionOperand::Records(_) => {}
                         }
-                        ReductionOperand::Records(_) => {}
+                    }
+                    // A join is text whatever it joins, and arithmetic needs a
+                    // number, once its argument is checked (FORMULA-23).
+                    let reference = reduction.reference.as_str();
+                    if arithmetic
+                        && reduction.reducer == Reducer::StrJoin
+                        && !operands.contains(&reference)
+                    {
+                        operands.push(reference);
+                        findings.push(TypeFinding::AggregateOperand {
+                            source: reference.into(),
+                            actual: ValueType::Str,
+                        });
                     }
                 }
                 if arithmetic {

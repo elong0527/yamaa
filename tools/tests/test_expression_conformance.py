@@ -52,6 +52,15 @@ class DocumentRulesTests(unittest.TestCase):
 
     def test_a_case_that_breaks_one_rule_is_named_with_it(self):
         label = f"{DOCUMENT}: probe"
+        # A valid aggregate case, which may give the fields a reducer reads.
+        aggregate = {
+            "context": "aggregate",
+            "covers": ["COUNT"],
+            "text": "COUNT(R.X)",
+            "rows": ...,
+            "groups": [[{"X": 1}]],
+            "values": [1],
+        }
         for name, probe, expected in (
             ("a valid case", case(), []),
             ("an unknown key", case(note="x"), [f"{label}: unknown keys ['note']"]),
@@ -159,6 +168,35 @@ class DocumentRulesTests(unittest.TestCase):
                     "each group_by column",
                     f"{label}: the records of group 2 must share one value of "
                     "each group_by column",
+                ],
+            ),
+            (
+                "a reducer field outside an aggregate",
+                case(separator=", "),
+                [f"{label}: only an aggregate case gives ['separator']"],
+            ),
+            (
+                "an order term that names no column of the case",
+                case(**aggregate, order_by=["R.Z", "X"]),
+                [
+                    f"{label}: order term 'R.Z' names no column as R.<column>",
+                    f"{label}: order term 'X' names no column as R.<column>",
+                ],
+            ),
+            (
+                "an order term with another direction",
+                case(**aggregate, order_by=[{"variable": "R.X", "direction": "up"}]),
+                [
+                    f"{label}: order term {{'variable': 'R.X', 'direction': "
+                    "'up'} is not an order term"
+                ],
+            ),
+            (
+                "a separator that is not text and a distinct that is not Boolean",
+                case(**aggregate, separator=1, distinct="yes"),
+                [
+                    f"{label}: separator must be text",
+                    f"{label}: distinct must be true or false",
                 ],
             ),
             (
@@ -523,6 +561,65 @@ class StagingTests(unittest.TestCase):
                         "groups.csv": "GROUPID\n1\n2\n",
                         "records.csv": "GROUPID,F\n1,1e+16\n1,\n",
                     },
+                ),
+            ),
+            (
+                "an aggregate case's reducer fields stand beside its text",
+                case(
+                    context="aggregate",
+                    covers=["STR_JOIN"],
+                    text="STR_JOIN(R.X)",
+                    rows=...,
+                    groups=[[{"X": 2}]],
+                    type="str",
+                    values=["2"],
+                    order_by=[{"variable": "R.X", "direction": "desc"}],
+                    separator=", ",
+                    distinct=True,
+                ),
+                (
+                    {
+                        **header,
+                        "keys": ["GROUPID"],
+                        "input": {
+                            "GROUPS": {
+                                "path": "groups.csv",
+                                "types": {"GROUPID": "int"},
+                            },
+                            "R": {
+                                "path": "records.csv",
+                                "types": {"GROUPID": "int", "X": "int"},
+                                "key": ["GROUPID"],
+                            },
+                        },
+                        "base": "GROUPS",
+                        "columns": [
+                            {
+                                "name": "GROUPID",
+                                "type": "int",
+                                "derivation": "GROUPS.GROUPID",
+                            },
+                            {
+                                "name": "RESULT",
+                                "type": "str",
+                                "derivation": {
+                                    "aggregate": {
+                                        "expr": "STR_JOIN(R.X)",
+                                        "order_by": [
+                                            {"variable": "R.X", "direction": "desc"}
+                                        ],
+                                        "separator": ", ",
+                                        "distinct": True,
+                                    }
+                                },
+                            },
+                        ],
+                        "output": {
+                            "path": "unwritten.csv",
+                            "columns": ["GROUPID", "RESULT"],
+                        },
+                    },
+                    {"groups.csv": "GROUPID\n1\n", "records.csv": "GROUPID,X\n1,2\n"},
                 ),
             ),
             (

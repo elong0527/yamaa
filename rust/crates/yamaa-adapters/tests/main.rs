@@ -36,6 +36,7 @@ mod execution_aggregate_record_operations;
 mod execution_column_driver_bindings;
 mod execution_column_window_drivers;
 mod execution_completed_intermediates;
+mod execution_date_text_forms;
 mod execution_date_text_reads;
 mod execution_declarative_case_predicates;
 mod execution_declarative_self;
@@ -78,6 +79,7 @@ mod run_scopes;
 mod scalar_declarative_rounding;
 mod scalar_declarative_text_replace;
 mod scalar_language;
+mod scalar_text_positions;
 mod specification_reports;
 mod specification_sources;
 // The file wraps its tests in a module of its own name, which kept their

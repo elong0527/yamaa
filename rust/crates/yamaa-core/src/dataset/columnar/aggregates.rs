@@ -6,7 +6,7 @@ use super::eval::owned;
 use super::index::{Equality, Index};
 use super::relations::{candidates, Probe, Refusal};
 use super::{Cx, Fail, Run, Table};
-use crate::aggregate_reduction::{reduce_values, AggregateReductionError};
+use crate::aggregate_reduction::{reduce_values, AggregateReductionError, ReductionFields};
 use crate::conversion::convert;
 use crate::dataset::execution::ExecutionError;
 use crate::dataset::resolved::{ExprId, ExprKind, Op, OperandRole, ResolvedPlan};
@@ -413,9 +413,24 @@ fn reduce_selected<E, T: TableAccess<Error = E> + ?Sized>(
     selected: &Selected,
     row: usize,
 ) -> Result<Value, Fail<E>> {
-    let members = &selected.members;
+    // `STR_JOIN` reads the records in the declared order; every other
+    // reducer, and a tie, keeps stored order (LOOKUP-10, VALUE-23).
+    let joins = bound
+        .expression()
+        .reductions()
+        .iter()
+        .any(|reduction| reduction.reducer == Reducer::StrJoin);
+    let ordered = if joins && !bound.order().is_empty() {
+        Some(order(donor, bound, coordinate, &selected.members)?)
+    } else {
+        None
+    };
     let mut reductions = Vec::with_capacity(bound.expression().reductions().len());
     for (index, reduction) in bound.expression().reductions().iter().enumerate() {
+        let members = match &ordered {
+            Some(ordered) if reduction.reducer == Reducer::StrJoin => ordered,
+            _ => &selected.members,
+        };
         let value = if members.is_empty() {
             Value::Missing
         } else {
@@ -477,6 +492,35 @@ fn reduce_selected<E, T: TableAccess<Error = E> + ?Sized>(
     }
 }
 
+/// The selected records in the order `STR_JOIN` joins them: by each term of
+/// the declared order in turn (VALUE-22), a stable sort keeping stored order
+/// among records equal on every term (VALUE-23).
+fn order<T: TableAccess + ?Sized>(
+    donor: &T,
+    bound: &BoundAggregate,
+    coordinate: Coordinate,
+    members: &[usize],
+) -> Result<Vec<usize>, Fail<T::Error>> {
+    let terms = bound.order();
+    let mut keyed = Vec::with_capacity(members.len());
+    for &member in members {
+        let mut values = Vec::with_capacity(terms.len());
+        for term in terms {
+            values.push(cell(donor, bound, coordinate, member, term.column)?);
+        }
+        keyed.push((member, values));
+    }
+    keyed.sort_by(|(_, left), (_, right)| {
+        terms
+            .iter()
+            .zip(left.iter().zip(right))
+            .map(|(term, (left, right))| super::relations::compare(*left, *right, term))
+            .find(|order| order.is_ne())
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    Ok(keyed.into_iter().map(|(member, _)| member).collect())
+}
+
 fn fold<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
@@ -486,11 +530,27 @@ fn fold<E>(
     row: usize,
 ) -> Result<Value, Fail<E>> {
     let plan = run.plan;
-    let error = match reduce_values(values, reduction.reducer, bound.expression().expression()) {
-        Ok(value) => return Ok(owned(value)),
+    let fields = ReductionFields {
+        separator: bound.separator(),
+        distinct: bound.distinct(),
+    };
+    let error = match reduce_values(
+        values,
+        reduction.reducer,
+        fields,
+        bound.expression().expression(),
+    ) {
+        Ok(value) => return Ok(value),
         Err(error) => error,
     };
     match error {
+        // No column holds a value without text, such as a truth value.
+        AggregateReductionError::Text { error, .. } => Err(Box::new(ExecutionError::Conversion {
+            path: bound.expression().spec_path().into(),
+            output_row: row,
+            error,
+            identity: run.failure_identity(cx, row),
+        })),
         AggregateReductionError::Numeric(
             crate::reduction::ReductionError::IncompatibleInputType { actual, .. },
         ) => Err(Box::new(ExecutionError::ReductionType {

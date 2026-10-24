@@ -12,11 +12,14 @@ use std::sync::{
     Arc, Mutex,
 };
 
+use yamaa::host::functions::{
+    Argument, CallError, FunctionError, FunctionHandle, FunctionIdentity, LockContext, Signature,
+};
+use yamaa::host::resolver::{ResolverFailure, ResolverReply, ResolverRequest};
+use yamaa::scalar::{Scalar, ScalarRef};
 use yamaa::{
-    Argument, CallError, CancellationToken, Engine, EngineOptions, FunctionError, FunctionHandle,
-    FunctionIdentity, HostLanguage, LockContext, MemoryResolver, Plans, ProjectFunctions,
-    ResolverFailure, ResolverReply, ResolverRequest, ResourceResolver, Run, Scalar, ScalarRef,
-    Signature,
+    CancellationToken, Engine, EngineOptions, HostLanguage, MemoryResolver, Plans,
+    ProjectFunctions, ResourceResolver, Run,
 };
 
 const SPECIFICATION: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: f, args: {x: SRC.ID}}}}\n";
@@ -123,7 +126,7 @@ fn engine(resolver: Option<Arc<dyn ResourceResolver>>, installed: &Arc<Installed
 
 /// How the run got its plan, from its private measurements.
 fn plan_of(run: &Run) -> &'static str {
-    let observed = run.observations(true).unwrap();
+    let observed = run.measured_observations();
     let statuses = ["compiled", "refused", "reused"]
         .into_iter()
         .filter(|status| observed.contains(&format!("\"plan\":\"{status}\"")))
@@ -136,8 +139,7 @@ fn plan_of(run: &Run) -> &'static str {
 /// the `preparation` phase.
 fn compiled(run: &Run) -> bool {
     let preparation = run
-        .observations(true)
-        .unwrap()
+        .measured_observations()
         .contains("\"phase\":\"preparation\"");
     assert_eq!(preparation, plan_of(run) != "reused");
     preparation

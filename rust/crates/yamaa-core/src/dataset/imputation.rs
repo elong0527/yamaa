@@ -1,8 +1,11 @@
 //! Declarative completion, precision and imputation flags read collected
 //! ISO 8601 (SDTM `--DTC`) text up to its first unknown field and preserve
-//! each collected field.
+//! each collected field. `date_text` reads text written in one of its
+//! declared date forms into such text; no other operation here reads any
+//! other form.
 use crate::json::Value as V;
 use crate::{
+    date_forms::DateForms,
     diagnostic::{ConditionCode as C, Diagnostic},
     table::ValueRef,
     temporal::{month_length, Date, DateTime, Precision},
@@ -218,6 +221,9 @@ pub enum ImputationKind {
         seconds_collected: bool,
     },
     ToDate,
+    /// `date_text`: text in one of the declared forms, read into the
+    /// collected date text it denotes (TIME-22).
+    DateText(DateForms),
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct Imputation {
@@ -508,13 +514,16 @@ impl Imputation {
             ImputationKind::Precision { .. } => "precision",
             ImputationKind::Flag { .. } => "imputation_flag",
             ImputationKind::ToDate => "to_date",
+            ImputationKind::DateText(_) => "date_text",
         }
     }
     fn target(&self) -> Option<TemporalType> {
         match self.kind {
             ImputationKind::Impute(Completion { target, .. })
             | ImputationKind::Precision { target } => Some(target),
-            ImputationKind::Flag { .. } | ImputationKind::ToDate => None,
+            ImputationKind::Flag { .. } | ImputationKind::ToDate | ImputationKind::DateText(_) => {
+                None
+            }
         }
     }
     pub fn expected(&self) -> &'static str {
@@ -533,6 +542,7 @@ impl Imputation {
                 ..
             } => "datetime",
             ImputationKind::ToDate => "datetime, ISO date text, or ISO 8601 datetime text",
+            ImputationKind::DateText(_) => "str",
         }
     }
     pub fn accepts(&self, kind: ColumnType) -> bool {
@@ -551,6 +561,7 @@ impl Imputation {
                 ..
             } => kind == T::DateTime,
             ImputationKind::ToDate => matches!(kind, T::Str | T::DateTime),
+            ImputationKind::DateText(_) => kind == T::Str,
         }
     }
     /// A bound or fallback has the declared target type.
@@ -569,6 +580,7 @@ impl Imputation {
             } => C::PrecisionDatetimeInput,
             ImputationKind::Flag { .. } => C::ImputationFlagInput,
             ImputationKind::ToDate => C::ToDateInput,
+            ImputationKind::DateText(_) => C::DateFormsInput,
             _ => C::TemporalOperand,
         };
         diagnostic(
@@ -628,7 +640,9 @@ impl Imputation {
         if value == ValueRef::Missing {
             return Ok(match self.kind {
                 K::Impute(_) | K::Precision { .. } => ImputationStep::Missing,
-                K::Flag { .. } | K::ToDate => ImputationStep::Value(Value::Missing),
+                K::Flag { .. } | K::ToDate | K::DateText(_) => {
+                    ImputationStep::Value(Value::Missing)
+                }
             });
         }
         let result = match (self.kind, value) {
@@ -715,6 +729,25 @@ impl Imputation {
                         &self.path,
                         &[
                             ("operation", Value::Str("to_date".into())),
+                            ("value", Value::Str(text.into())),
+                        ],
+                    ))
+                }
+            },
+            // Text in none of the declared forms is invalid text, which a
+            // declared `invalid` answers (TIME-22).
+            (K::DateText(forms), ValueRef::Str(text)) => match forms.read(text) {
+                Some(collected) => Value::Str(collected),
+                None if self.invalid.is_some() => {
+                    return Ok(ImputationStep::Recovered { handler: "invalid" })
+                }
+                None => {
+                    return Err(diagnostic(
+                        C::DateFormsInvalid,
+                        &self.path,
+                        &[
+                            ("operation", Value::Str("date_text".into())),
+                            ("source", Value::Str(self.source.clone())),
                             ("value", Value::Str(text.into())),
                         ],
                     ))

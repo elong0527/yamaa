@@ -116,6 +116,8 @@ macro_rules! walk {
             | Expression::StrReplace { source, .. }
             | Expression::StrCase { source, .. }
             | Expression::StrPad { source, .. }
+            | Expression::StrSubstr { source, .. }
+            | Expression::StrLength { source, .. }
             | Expression::Round { source, .. } => $recurse(&$($mutable)? source.expression, $visitor, $depth + 1)?,
             Expression::Extreme { operands, .. }
             | Expression::StrTemplate { operands, .. }

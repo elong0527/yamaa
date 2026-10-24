@@ -775,13 +775,13 @@ collected values `Protocol` and `Predecessor`, and any other derivation
 types all its `rows` entries admit, and no shared type fails.
 
 Fails: `origin_contradicts_derivation`.
-Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::independent_metadata_refutations_preserve_shared_conditions_and_zero_writes`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::recodes_literals_and_stored_values_admit_their_published_origins`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::computed_values_and_case_reads_of_derived_columns_refute_collected`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::arithmetic_refutes_a_collected_origin`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_case_reading_an_output_column_refutes_a_collected_origin`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_recode_refutes_a_protocol_origin`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::duration_text_is_a_recode_that_refutes_a_protocol_origin`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_literal_refutes_a_derived_origin`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::pivots_and_plain_lookups_are_bare_reads_that_admit_collected`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_reduction_other_than_only_refutes_a_collected_origin`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_lookup_that_derives_fields_refutes_a_collected_origin`, `rust/crates/yamaa-core/src/submission_origin.rs::every_derivation_row_refutes_exactly_its_published_types`, `rust/crates/yamaa-core/src/submission_origin.rs::only_the_reduction_of_one_variable_to_its_one_value_is_a_pivot`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_literal_derivation_refutes_a_derived_origin`.
+Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::independent_metadata_refutations_preserve_shared_conditions_and_zero_writes`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::recodes_literals_and_stored_values_admit_their_published_origins`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::computed_values_and_case_reads_of_derived_columns_refute_collected`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::arithmetic_refutes_a_collected_origin`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_case_reading_an_output_column_refutes_a_collected_origin`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_recode_refutes_a_protocol_origin`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::duration_text_is_a_recode_that_refutes_a_protocol_origin`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::date_text_is_a_recode_that_refutes_a_protocol_origin`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_literal_refutes_a_derived_origin`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::pivots_and_plain_lookups_are_bare_reads_that_admit_collected`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_reduction_other_than_only_refutes_a_collected_origin`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_lookup_that_derives_fields_refutes_a_collected_origin`, `rust/crates/yamaa-core/src/submission_origin.rs::every_derivation_row_refutes_exactly_its_published_types`, `rust/crates/yamaa-core/src/submission_origin.rs::only_the_reduction_of_one_variable_to_its_one_value_is_a_pivot`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_literal_derivation_refutes_a_derived_origin`.
 
 | Derivation | Admitted `origin.type` | Refuted |
 |---|---|---|
 | a bare read: a `source`, an `odm` read or an `ONLY` pivot, directly or through a plain lookup | every type | none |
 | a literal | `Assigned`, `Protocol`, `Collected`, `Other`, `Not Available` | `Derived`, `Predecessor` |
-| a recode: `mapping`, `case`, `first_available`, `str_case`, `str_pad`, `str_replace`, `str_extract`, `str_template`, `to_date`, `dtc` or `duration_text`, reading only as the paragraphs below state | `Collected`, `Derived`, `Assigned`, `Other`, `Not Available` | `Protocol`, `Predecessor` |
+| a recode: `mapping`, `case`, `first_available`, `str_case`, `str_pad`, `str_substr`, `str_replace`, `str_extract`, `str_template`, `to_date`, `date_text`, `dtc` or `duration_text`, reading only as the paragraphs below state | `Collected`, `Derived`, `Assigned`, `Other`, `Not Available` | `Protocol`, `Predecessor` |
 | anything else | `Derived`, `Assigned`, `Other`, `Not Available` | `Collected`, `Protocol`, `Predecessor` |
 
 An `ONLY` pivot is an `aggregate` whose `expr` is exactly `ONLY(<variable>)`,
@@ -808,21 +808,23 @@ intermediate or, in a `case`, from an output column, is anything else.
 Anything else computes its value: arithmetic and rounding (text in an
 expression field that computes, and `round_half_away_from_zero`), every
 aggregation but an `ONLY` pivot, windows, temporal computation (the date and
-datetime operations other than `to_date` and `dtc`), `flag`, `cut`,
-`greatest` and `least`, `function`, and every read through a named
-intermediate that is not a plain lookup: one that declares `derivations`,
-whose fields it computes, or one over `SELF`, the completed output rows. Each
-type it refutes asserts the value arrived as it stands, and the specification
-shows it did not.
+datetime operations other than `to_date`, `date_text`, `dtc` and
+`duration_text`), `flag`, `cut`, `str_length`, `greatest` and `least`,
+`function`, and every read through a named intermediate that is not a plain
+lookup: one that declares `derivations`, whose fields it computes, or one over
+`SELF`, the completed output rows. Each type it refutes asserts the value
+arrived as it stands, and the specification shows it did not.
 
 The graph cannot tell an investigator-recorded value from a vendor-transmitted
 or protocol-fixed value, and it refutes only what the derivation proves. An
 SDTM recode of collected terminology (`SEX` from `Male` to `M` through
-`mapping`), a case normalization (`str_case`) and an ISO 8601 assembly of
-collected date parts (`dtc`, `str_template` or `to_date`) admit `Collected`. A value
-printed on the case report form, such as a unit or a test name, is written as
-a literal and admits `Collected`; a literal reads no input, so it refutes
-`Derived`. A vendor- or EDC-computed value read as stored, such as an
+`mapping`), a case normalization (`str_case`), an ISO 8601 assembly of
+collected date parts (`dtc`, `str_template` or `to_date`), a collected date
+read from its declared form into ISO 8601 text (`date_text`) and a collected
+duration written as ISO 8601 duration text (`duration_text`) admit `Collected`.
+A value printed on the case report form, such as a unit or a test name, is
+written as a literal and admits `Collected`; a literal reads no input, so it
+refutes `Derived`. A vendor- or EDC-computed value read as stored, such as an
 eGFR or a BMI, is a bare `source` and admits `Derived`, with the method
 [SUB-18](#sub-18) requires. A laboratory result pivoted with `ONLY` from long
 ODM records admits `Collected`, as the same result read from a wide record

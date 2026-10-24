@@ -254,6 +254,8 @@ fn contains_window(expression: &Expression) -> bool {
         | Expression::MappingCut { source, .. }
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
+        | Expression::StrSubstr { source, .. }
+        | Expression::StrLength { source, .. }
         | Expression::StrExtract { source, .. }
         | Expression::StrReplace { source, .. }
         | Expression::Round { source, .. } => contains_window(&source.expression),

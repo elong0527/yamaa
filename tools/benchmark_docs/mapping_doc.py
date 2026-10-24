@@ -828,6 +828,42 @@ def describe_to_date(node, ctx=None, depth=0):
     )
 
 
+# The spellings each date form reads, as the sheet names them (TIME-22).
+DATE_FORM_SPELLINGS = {
+    "iso": "ISO 8601 date text",
+    "ddmonyyyy": "day-month-year text such as 04MAR2001",
+    "mdy_slash": "month-first slashed dates such as 03/04/2001 for March 4",
+    "dmy_slash": "day-first slashed dates such as 03/04/2001 for April 3",
+    "yyyymmdd": "eight digits such as 20010304",
+    "monyyyy": "month-year text such as MAR2001 for a month alone",
+}
+
+
+def describe_date_text(node, ctx=None, depth=0):
+    """Text in one of the declared spellings read as ISO 8601 date text."""
+    forms = node.get("forms")
+    spellings = [
+        DATE_FORM_SPELLINGS.get(str(form), str(form))
+        for form in (forms if isinstance(forms, list) else [])
+    ]
+    if len(spellings) > 1:
+        listed = ", ".join(spellings[:-1]) + " or " + spellings[-1]
+    else:
+        listed = spellings[0] if spellings else "no declared spelling"
+    text = (
+        "Read "
+        + describe_variable(node.get("source"), ctx, depth)
+        + " as ISO 8601 date text from "
+        + listed
+        + "; blank when it is blank"
+    )
+    if declared(node, "invalid"):
+        text += handler_phrase(node, "invalid", "any other spelling")
+    else:
+        text += "; any other spelling is an error"
+    return sentence(text)
+
+
 def describe_to_epoch_day(node, ctx=None, depth=0):
     return sentence(
         "Days since 1970-01-01 for " + describe_variable(node.get("source"), ctx, depth)
@@ -1048,6 +1084,10 @@ def describe_str_case(node, ctx=None, depth=0):
         + to
         + " case"
     )
+    # A declared list replaces the characters after which proper case starts
+    # a word (TEXT-5).
+    if declared(node, "delimiters"):
+        text += ", starting a word after any of " + literal_text(node["delimiters"])
     return sentence(
         text + handler_phrase(node, "missing", "a missing source", restated=True)
     )
@@ -1060,6 +1100,46 @@ def describe_str_pad(node, ctx=None, depth=0):
         + " on the left with spaces to at least "
         + str(node.get("width"))
         + " characters"
+    )
+
+
+def describe_str_substr(node, ctx=None, depth=0):
+    start, length = node.get("start"), node.get("length")
+
+    def whole(value):
+        return isinstance(value, int) and not isinstance(value, bool)
+
+    if length is None:
+        part = "characters " + str(start) + " to the end"
+    elif whole(start) and whole(length):
+        part = "characters " + str(start) + " to " + str(start + length - 1)
+    else:
+        part = str(length) + " characters from character " + str(start)
+    # A start past the text's last character gives a blank (TEXT-13).
+    blank = (
+        "it is empty"
+        if start == 1
+        else "it has fewer than " + str(start) + " characters"
+    )
+    text = (
+        "Take "
+        + part
+        + " of "
+        + describe_variable(node.get("source"), ctx, depth)
+        + ", blank when "
+        + blank
+    )
+    return sentence(
+        text + handler_phrase(node, "missing", "a missing source", restated=True)
+    )
+
+
+def describe_str_length(node, ctx=None, depth=0):
+    text = "Number of characters in " + describe_variable(
+        node.get("source"), ctx, depth
+    )
+    return sentence(
+        text + handler_phrase(node, "missing", "a missing source", restated=True)
     )
 
 
@@ -1204,6 +1284,7 @@ DERIVATION_DESCRIBERS = {
     "precision": describe_precision,
     "imputation_flag": describe_imputation_flag,
     "to_date": describe_to_date,
+    "date_text": describe_date_text,
     "to_epoch_day": describe_to_epoch_day,
     "dtc": describe_dtc,
     "time_of_day": describe_time_of_day,
@@ -1211,6 +1292,8 @@ DERIVATION_DESCRIBERS = {
     "study_day": describe_study_day,
     "str_case": describe_str_case,
     "str_pad": describe_str_pad,
+    "str_substr": describe_str_substr,
+    "str_length": describe_str_length,
     "str_extract": describe_str_extract,
     "str_replace": describe_str_replace,
     "str_template": describe_str_template,
