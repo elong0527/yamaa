@@ -1,0 +1,148 @@
+{
+  "about": "Local paths on the file route (FILE, LAYER): an inherited output that an entry's output replaces whole, a written input path refused in its written form before any source profile is read, and a URI source refused where its layer is read. Moved from file_resources.rs's local_paths module, whose remaining tests prove the resources' captures and resolved locations, which no operation reports. The written-path cases compared each issue's phase, condition, rule, spec paths and context; the inherited-output cases compared the count, the condition and the spec paths, whose order is the output class's field order in the schema (path, then columns; SCHEMA-13).",
+  "documents": {
+    "base_output": "yamaa: \"1.0\"\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: result.csv, relative_to: entry, columns: [ID], report: report.csv}\n",
+    "written_path": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: SOURCE}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: output.csv, columns: [ID]}\n"
+  },
+  "cases": [
+    {
+      "case": "an_output_base_alone_cannot_patch_an_inherited_output",
+      "operation": "check",
+      "input": {
+        "files": {
+          "shared/base.yaml": {"base": "base_output"},
+          "entry/spec.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: ../shared/base.yaml\noutput: {relative_to: declaring}\n"
+        },
+        "specification": "entry/spec.yaml"
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [
+        {"condition": "missing_required_field", "spec_paths": ["output.path"]},
+        {"condition": "missing_required_field", "spec_paths": ["output.columns"]}
+      ]
+    },
+    {
+      "case": "an_output_path_alone_cannot_patch_an_inherited_output",
+      "operation": "check",
+      "input": {
+        "files": {
+          "shared/base.yaml": {"base": "base_output"},
+          "entry/spec.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: ../shared/base.yaml\noutput: {path: another.csv}\n"
+        },
+        "specification": "entry/spec.yaml"
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [
+        {"condition": "missing_required_field", "spec_paths": ["output.columns"]}
+      ]
+    },
+    {
+      "case": "a_bare_input_path_with_a_backslash_is_refused_before_its_source_profile",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"entry/spec.yaml": {"base": "written_path", "edits": [{"from": "SOURCE", "to": "'input\\x.csv'"}]}},
+        "specification": "entry/spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "resource_path_not_normalized", "rule": "FILE-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "entry": "{study}/entry/spec.yaml", "path": "input\\x.csv", "source": "{study}/entry/spec.yaml"}}
+      ]
+    },
+    {
+      "case": "an_expanded_input_path_with_a_backslash_is_refused_before_its_source_profile",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"entry/spec.yaml": {"base": "written_path", "edits": [{"from": "SOURCE", "to": "{path: 'input\\x.csv'}"}]}},
+        "specification": "entry/spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "resource_path_not_normalized", "rule": "FILE-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "entry": "{study}/entry/spec.yaml", "path": "input\\x.csv", "source": "{study}/entry/spec.yaml"}}
+      ]
+    },
+    {
+      "case": "a_bare_input_path_with_a_drive_is_refused_before_its_source_profile",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"entry/spec.yaml": {"base": "written_path", "edits": [{"from": "SOURCE", "to": "'C:\\input.csv'"}]}},
+        "specification": "entry/spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "resource_path_not_normalized", "rule": "FILE-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "entry": "{study}/entry/spec.yaml", "path": "C:\\input.csv", "source": "{study}/entry/spec.yaml"}}
+      ]
+    },
+    {
+      "case": "an_expanded_input_path_with_a_drive_is_refused_before_its_source_profile",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"entry/spec.yaml": {"base": "written_path", "edits": [{"from": "SOURCE", "to": "{path: 'C:\\input.csv'}"}]}},
+        "specification": "entry/spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "resource_path_not_normalized", "rule": "FILE-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "entry": "{study}/entry/spec.yaml", "path": "C:\\input.csv", "source": "{study}/entry/spec.yaml"}}
+      ]
+    },
+    {
+      "case": "a_bare_input_path_with_an_empty_segment_is_refused_before_its_source_profile",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"entry/spec.yaml": {"base": "written_path", "edits": [{"from": "SOURCE", "to": "'input//x.csv'"}]}},
+        "specification": "entry/spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "resource_path_not_normalized", "rule": "FILE-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "entry": "{study}/entry/spec.yaml", "path": "input//x.csv", "source": "{study}/entry/spec.yaml"}}
+      ]
+    },
+    {
+      "case": "an_expanded_input_path_with_an_empty_segment_is_refused_before_its_source_profile",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"entry/spec.yaml": {"base": "written_path", "edits": [{"from": "SOURCE", "to": "{path: 'input//x.csv'}"}]}},
+        "specification": "entry/spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "resource_path_not_normalized", "rule": "FILE-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "entry": "{study}/entry/spec.yaml", "path": "input//x.csv", "source": "{study}/entry/spec.yaml"}}
+      ]
+    },
+    {
+      "case": "a_bare_input_path_with_a_trailing_slash_is_refused_before_its_source_profile",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"entry/spec.yaml": {"base": "written_path", "edits": [{"from": "SOURCE", "to": "'input/x.csv/'"}]}},
+        "specification": "entry/spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "resource_path_not_normalized", "rule": "FILE-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "entry": "{study}/entry/spec.yaml", "path": "input/x.csv/", "source": "{study}/entry/spec.yaml"}}
+      ]
+    },
+    {
+      "case": "an_expanded_input_path_with_a_trailing_slash_is_refused_before_its_source_profile",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"entry/spec.yaml": {"base": "written_path", "edits": [{"from": "SOURCE", "to": "{path: 'input/x.csv/'}"}]}},
+        "specification": "entry/spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "resource_path_not_normalized", "rule": "FILE-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "entry": "{study}/entry/spec.yaml", "path": "input/x.csv/", "source": "{study}/entry/spec.yaml"}}
+      ]
+    },
+    {
+      "case": "a_uri_input_source_keeps_its_normative_cause_and_authored_path",
+      "operation": "save",
+      "input": {
+        "files": {"entry/spec.yaml": {"base": "written_path", "edits": [{"from": "SOURCE", "to": "'https://example.invalid/source.csv'"}]}},
+        "specification": "entry/spec.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "resource_path_uri_scheme", "rule": "FILE-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "entry": "{study}/entry/spec.yaml", "path": "https://example.invalid/source.csv", "source": "{study}/entry/spec.yaml"}}
+      ],
+      "saved": {}
+    }
+  ]
+}

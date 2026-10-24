@@ -4,8 +4,10 @@
 //! temporal arithmetic and typed intermediate derivations. The family's
 //! other cases are in `tests/fixtures/diagnostics/`: `odm_source_reads.json`,
 //! `row_derivations.json`, `row_intermediate_operands.json` and
-//! `row_scopes.json` (#3798). Each test left here proves a seam the replay
-//! cannot reach, which its module or its first comment names.
+//! `row_scopes.json` (#3798). The tests left here read shared benchmark or
+//! host-fixture truth, or prove the API and observation seams their comments
+//! name. The remaining benchmark-copy cases predate benchmark staging in
+//! the replay (#3875) and remain a follow-up of #3798.
 mod execution {
     mod retired_odm_context {
         //! Original retired ODM-context operands through the shared public file engine.
@@ -275,9 +277,8 @@ mod execution {
     }
     mod row_derivations {
         //! Its other cases are `row_derivations.json`'s (#3798). This test
-        //! stays beside the replay: it reads a benchmark through
-        //! `support::benchmarks`, whose files a replay case's input cannot
-        //! name.
+        //! stays a benchmark reader through `support::benchmarks`, which
+        //! checks that benchmark's own authored expected files.
         /// `sdtm-vs-units` builds its rows through row-template cases and
         /// numeric branches, and states the CSV it saves.
         #[test]
@@ -383,11 +384,10 @@ mod execution {
     }
     mod scoped_windows_checks {
         //! Its other cases are `row_scopes.json`'s (#3798). The tests here
-        //! stay beside the replay, each for the seam its first comment names:
-        //! a benchmark read through `support::benchmarks`, or copied for a run
-        //! of its own, whose files a replay case's input cannot name; or the
+        //! stay as benchmark readers, benchmark-copy cases, or checks of the
         //! observations' verification record, which no replay operation
-        //! reports.
+        //! reports. The replay can stage benchmarks since #3875; the four
+        //! benchmark-copy tests are a follow-up of #3798.
         use crate::support::Edit as _;
         use std::{fs, path::Path};
         use yamaa_adapters::file_application;

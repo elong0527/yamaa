@@ -76,6 +76,8 @@ pub use row_stages::{read_requires_window, window_stages};
 mod row_drivers;
 mod windows;
 pub use windows::{ContextWindow, OrderTerm, Window, WindowKind};
+mod cut;
+pub use cut::PartitionCut;
 pub mod resolved;
 pub use resolved::{ResolutionError, ResolvedPlan};
 mod columnar;

@@ -134,6 +134,8 @@ pub struct Partitions<'t> {
     /// Where each partition's first record begins in `text`, then where the
     /// last one ends: an empty source has one empty partition.
     starts: Vec<usize>,
+    /// The records the scan read.
+    count: usize,
 }
 
 impl Partitions<'_> {
@@ -162,16 +164,108 @@ impl Partitions<'_> {
     /// The scan admitted every record, so this finds nothing; a finding
     /// would be the scan's.
     pub fn records(&self, index: usize) -> Result<CsvSource, Error> {
-        let text = &self.text[self.starts[index]..self.starts[index + 1]];
-        let mut kept = Kept(Vec::new());
-        if !text.is_empty() {
+        let first = self.first_record(index);
+        let last = if index + 1 < self.len() {
+            first + self.rows
+        } else {
+            self.count
+        };
+        self.offsets().range(self.text, 0, first..last)
+    }
+
+    /// What decodes any range of the scanned records again from the held
+    /// bytes, without the scan (#3830).
+    pub fn offsets(&self) -> Offsets {
+        Offsets {
+            names: self.names.clone(),
+            rows: self.rows,
+            starts: self.starts.clone(),
+            count: self.count,
+        }
+    }
+}
+
+/// Where each partition of a scanned source's records begins in its text
+/// (#3830): what decodes any range of its records again, the scan having
+/// admitted every record.
+#[derive(Clone, Debug)]
+pub struct Offsets {
+    names: Vec<String>,
+    rows: usize,
+    starts: Vec<usize>,
+    count: usize,
+}
+
+impl Offsets {
+    /// The records the scan read.
+    pub fn count(&self) -> usize {
+        self.count
+    }
+
+    /// The bytes of the source's text, after any byte-order mark, that hold
+    /// the partitions of records `range`.
+    fn span(&self, range: &std::ops::Range<usize>) -> std::ops::Range<usize> {
+        let first = range.start / self.rows;
+        let last = range
+            .end
+            .div_ceil(self.rows)
+            .clamp(first, self.starts.len() - 1);
+        self.starts[first.min(self.starts.len() - 1)]..self.starts[last]
+    }
+
+    /// Decode records `range` as the whole read decodes them, lexed from the
+    /// start of the partition holding the range's first record. `text` is
+    /// the source's text from byte `base` on, through the partitions of the
+    /// range.
+    fn range(
+        &self,
+        text: &str,
+        base: usize,
+        range: std::ops::Range<usize>,
+    ) -> Result<CsvSource, Error> {
+        let mut kept = Kept {
+            skip: 0,
+            take: range.len(),
+            records: Vec::new(),
+        };
+        if !range.is_empty() {
+            let first = range.start / self.rows;
+            kept.skip = range.start - first * self.rows;
+            let span = self.span(&range);
             // The header is record 1, so data record `n` is record `n + 2`.
-            lex(text, self.first_record(index) + 2, &mut kept)?;
+            lex(
+                &text[span.start - base..span.end - base],
+                first * self.rows + 2,
+                &mut kept,
+            )?;
         }
         Ok(CsvSource {
             names: self.names.clone(),
-            records: kept.0,
+            records: kept.records,
         })
+    }
+
+    /// Decode records `range` of `content`, the bytes the scan read, whose
+    /// input declares `byte_order_mark`. Only the bytes of the range's own
+    /// partitions are decoded again; the scan admitted the rest.
+    pub fn records(
+        &self,
+        content: &[u8],
+        byte_order_mark: bool,
+        range: std::ops::Range<usize>,
+    ) -> Result<CsvSource, Error> {
+        let mark = if byte_order_mark {
+            BYTE_ORDER_MARK.len_utf8()
+        } else {
+            0
+        };
+        let span = self.span(&range);
+        let bytes = &content[mark + span.start..mark + span.end];
+        let text = std::str::from_utf8(bytes).map_err(|error| {
+            let (record, field) = coordinates(&bytes[..error.valid_up_to()]);
+            failure(ProfileCause::InvalidText, record, field)
+        })?;
+        self.range(text, span.start, range)
     }
 }
 
@@ -196,6 +290,7 @@ pub fn scan(
         names,
         rows: rows.get(),
         starts,
+        count: records.count,
     })
 }
 
@@ -414,13 +509,22 @@ impl<'t> Sink<'t> for Records {
     }
 }
 
-/// Every record of a scanned partition, as the whole read keeps it.
-struct Kept(Vec<Vec<Option<String>>>);
+/// The records of a range of a scanned source, as the whole read keeps
+/// them: the first `skip` records lexed are passed over, and `take` kept.
+struct Kept {
+    skip: usize,
+    take: usize,
+    records: Vec<Vec<Option<String>>>,
+}
 
 impl<'t> Sink<'t> for Kept {
     fn record(&mut self, _: usize, fields: &[Lexed<'t>], _: usize) -> Result<(), Error> {
-        self.0
-            .push(fields.iter().map(|field| field.value()).collect());
+        if self.skip > 0 {
+            self.skip -= 1;
+        } else if self.records.len() < self.take {
+            self.records
+                .push(fields.iter().map(|field| field.value()).collect());
+        }
         Ok(())
     }
 }

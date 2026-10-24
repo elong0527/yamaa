@@ -66,6 +66,8 @@ class SizeReport(unittest.TestCase):
             "rust/crates/yamaa-core/src/checks.rs": CHECKS,
             "rust/crates/yamaa-core/src/long.rs": LONG,
             "rust/crates/yamaa-core/src/generated.rs": GENERATED,
+            # The generator that generated.rs names.
+            "tools/packaging/generate_x.py": "",
             "rust/crates/yamaa-core/tests/main.rs": INTEGRATION,
             "rust/crates/yamaa-cli/src/main.rs": MAIN,
         }.items():

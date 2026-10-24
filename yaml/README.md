@@ -116,10 +116,16 @@ their types, defaults and admitted values, and each function and reducer of
 the expression grammar's `vocabulary`, with its argument bounds, result and
 the contexts that admit it. The lowering and the executor dispatch on its
 enumerations. The same generator writes the table of expression modules in
-`docs/articles/schema.md`. A new function is then its declaration, its
-semantics, its conformance cases or benchmark, and its rule card; each
-exhaustive match on the enumerations fails to compile until it places a new
-variant.
+`docs/articles/schema.md`. Each exhaustive match on the enumerations fails
+to compile until it places a new variant.
+
+A new grammar function is then its declaration, its arm in
+`expression/evaluate.rs`, its conformance cases and its entry in its rule
+card's list. A new verb is its declaration, and beyond it what is
+semantics or repository policy rather than a copy of the declaration: its
+executor arms in `scalar_verb/` (and in `dataset/` for a new executor
+type), a negative benchmark, its rule card and its row in EXPR-14's table,
+and its entry in the approved rename table.
 
 ## Execution overview
 

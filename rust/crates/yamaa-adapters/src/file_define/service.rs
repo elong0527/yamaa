@@ -429,37 +429,7 @@ impl Application {
             transports.push(target.map(|target| (path, target)));
             self.specifications.push(document);
         }
-        // The selected output set is admitted before any published artifact
-        // read: no published artifact or declared input is a written target.
-        for (artifact, (_, artifact_written)) in locations.iter().zip(&outputs) {
-            if written
-                .iter()
-                .any(|target| reads.same_location(target, artifact))
-            {
-                return Err(Failure::Metadata(vec![Finding::cause(
-                    ConditionCode::DefineArtifactCollision,
-                    standard,
-                    "published dataset overlaps Define targets",
-                )
-                .with("path", artifact_written.as_str())]));
-            }
-        }
-        for (input_path, input, input_written) in &inputs {
-            if let Some(target) = written
-                .iter()
-                .find(|target| reads.same_location(target, input))
-            {
-                return Err(Failure::Metadata(vec![
-                    yamaa_core::define_diagnostics::admit_relation(
-                        yamaa_core::define_diagnostics::TargetRelation::TransportCollision,
-                        input_path,
-                        input_written,
-                        &format!("declared input {input} is the written target {target}"),
-                    )
-                    .unwrap_err(),
-                ]));
-            }
-        }
+        Self::admit_targets(reads, standard, &written, &locations, &outputs, &inputs)?;
         // The dataset inventory (CT-11) and the predecessor columns (SUB-20)
         // span every submission section. The other sections' specifications
         // are read, never represented, when a composed specification needs them.
@@ -569,6 +539,47 @@ impl Application {
         // Preflight all outputs after complete admission/rendering. Recheck them
         // together on Save; no retained metadata or artifact is reopened there.
         self.preflight()?;
+        Ok(())
+    }
+    /// The selected output set is admitted before any published artifact is
+    /// read: no published artifact or declared input is a written target.
+    fn admit_targets(
+        reads: &Reads,
+        standard: &str,
+        written: &[String],
+        locations: &[String],
+        outputs: &[(String, String)],
+        inputs: &[(String, String, String)],
+    ) -> Result<(), Failure> {
+        for (artifact, (_, artifact_written)) in locations.iter().zip(outputs) {
+            if written
+                .iter()
+                .any(|target| reads.same_location(target, artifact))
+            {
+                return Err(Failure::Metadata(vec![Finding::cause(
+                    ConditionCode::DefineArtifactCollision,
+                    standard,
+                    "published dataset overlaps Define targets",
+                )
+                .with("path", artifact_written.as_str())]));
+            }
+        }
+        for (input_path, input, input_written) in inputs {
+            if let Some(target) = written
+                .iter()
+                .find(|target| reads.same_location(target, input))
+            {
+                return Err(Failure::Metadata(vec![
+                    yamaa_core::define_diagnostics::admit_relation(
+                        yamaa_core::define_diagnostics::TargetRelation::TransportCollision,
+                        input_path,
+                        input_written,
+                        &format!("declared input {input} is the written target {target}"),
+                    )
+                    .unwrap_err(),
+                ]));
+            }
+        }
         Ok(())
     }
     /// The staleness guard (PROJECT-15): in entry order, each listed

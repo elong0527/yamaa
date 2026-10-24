@@ -493,20 +493,23 @@ fn quantile_range(spec: &ast::Spec, aggregate: &ast::Aggregate) -> Vec<Preflight
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct Reader {
     reducer: crate::expression::Reducer,
-    form: &'static str,
+}
+
+impl Reader {
+    /// The reducer over an expression `x`, spelled as the grammar spells it.
+    fn form(self) -> String {
+        format!("{}(x)", self.reducer.name())
+    }
 }
 
 const JOIN: Reader = Reader {
     reducer: crate::expression::Reducer::StrJoin,
-    form: "STR_JOIN(x)",
 };
 const COUNT: Reader = Reader {
     reducer: crate::expression::Reducer::Count,
-    form: "COUNT(x)",
 };
 const QUANTILE: Reader = Reader {
     reducer: crate::expression::Reducer::Quantile,
-    form: "QUANTILE(x)",
 };
 
 /// One row of FORMULA-18's field table: a field of the aggregate, the
@@ -606,7 +609,7 @@ fn unpaired(
             .map(|row| row.field)
             .collect::<Vec<_>>();
         if !missing.is_empty() {
-            findings.push(finding(&[reader.form], &missing));
+            findings.push(finding(&[reader.form().as_str()], &missing));
         }
     }
     let mut unread: Vec<(&[Reader], Vec<&str>)> = Vec::new();
@@ -623,7 +626,11 @@ fn unpaired(
         }
     }
     for (readers, declared) in unread {
-        let missing = readers.iter().map(|reader| reader.form).collect::<Vec<_>>();
+        let forms = readers
+            .iter()
+            .map(|reader| reader.form())
+            .collect::<Vec<_>>();
+        let missing = forms.iter().map(String::as_str).collect::<Vec<_>>();
         findings.push(finding(&declared, &missing));
     }
     findings

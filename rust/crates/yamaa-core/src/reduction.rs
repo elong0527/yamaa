@@ -6,20 +6,13 @@ use crate::{
     value::ValueType,
 };
 
+/// `SUM` or `MEAN`, the reducers that fold their arguments in order; a
+/// diagnostic names the reducer by the grammar's spelling
+/// (`crate::expression::Reducer`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NumericReducer {
     Sum,
     Mean,
-}
-
-impl NumericReducer {
-    /// Return the canonical reducer spelling used in diagnostic context.
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Sum => "SUM",
-            Self::Mean => "MEAN",
-        }
-    }
 }
 
 /// Caller retains expression/source/path context. Argument indices include missing

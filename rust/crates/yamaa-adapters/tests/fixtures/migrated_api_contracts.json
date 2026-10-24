@@ -1,5 +1,5 @@
 {
-  "about": "API route and save contracts of migrated execution cases, each from the test it moved from. From execution_completed_intermediates.rs and intermediate_result_kinds.rs at a71a3f4b6: check-only calls stay check-only, every build requires a domain except the first-template preparation refusal, and save booleans retain the original Ok(true) or failed-save assertions; inputs, expected diagnostics and saved bytes remain in completed_intermediates.json. From execution_retired_odm_context.rs at 3e8d5f6b5: a build its test unwrapped requires a domain, and one whose test accepted either outcome (either) may also be refused; a save its test asserted returns Ok(true) or fails, including the build case when_binds_groups_without_changing_the_fraction_denominator, whose test saved before reading the saved report; inputs, expected diagnostics, tables and saved bytes remain in odm_source_reads.json, row_derivations.json, row_intermediate_operands.json and row_scopes.json. No engine output supplied these facts.",
+  "about": "API route and save contracts of migrated execution cases, each from the test it moved from. From execution_completed_intermediates.rs and intermediate_result_kinds.rs at a71a3f4b6: check-only calls stay check-only, every build requires a domain except the first-template preparation refusal, and save booleans retain the original Ok(true) or failed-save assertions; inputs, expected diagnostics and saved bytes remain in completed_intermediates.json. From execution_retired_odm_context.rs at 3e8d5f6b5: a build its test unwrapped requires a domain, and one whose test accepted either outcome (either) may also be refused; a save its test asserted returns Ok(true) or fails, including the build case when_binds_groups_without_changing_the_fraction_denominator, whose test saved before reading the saved report; inputs, expected diagnostics, tables and saved bytes remain in odm_source_reads.json, row_derivations.json, row_intermediate_operands.json and row_scopes.json. From the saved helper of check_variable_forms.rs: every build required a domain without issues and Ok(true); its inputs, expected diagnostics and saved bytes remain in check_variable_forms.json. No engine output supplied these facts.",
   "cases": {
     "completed_intermediates.json::unused_unique_checks_are_eager_and_retain_all_failed_declarations": {"route": "domain", "save": false},
     "completed_intermediates.json::unused_donor_derivation_failure_is_not_hidden_by_an_unread_lookup": {"route": "domain", "save": false},
@@ -230,6 +230,12 @@
     "row_scopes.json::a_row_lag_of_a_lag_reads_the_completed_lag": {"route": "domain", "save": null},
     "row_scopes.json::a_scalar_over_a_lag_completes_before_a_later_scalar_reads_it": {"route": "domain", "save": null},
     "row_scopes.json::a_lag_of_a_scalar_over_a_lag_reads_the_completed_scalar": {"route": "domain", "save": null},
-    "row_scopes.json::original_windows_in_one_case_column_keep_distinct_orderings": {"route": "domain", "save": null}
+    "row_scopes.json::original_windows_in_one_case_column_keep_distinct_orderings": {"route": "domain", "save": null},
+    "check_variable_forms.json::an_output_column_as_range_value_keeps_its_meaning": {"route": "domain", "save": true},
+    "check_variable_forms.json::a_driver_qualified_range_value_keeps_its_meaning": {"route": "domain", "save": true},
+    "check_variable_forms.json::a_lookup_qualified_range_value_keeps_its_meaning": {"route": "domain", "save": true},
+    "check_variable_forms.json::a_donor_read_s_bare_range_value_is_the_donor_record_s_field": {"route": "domain", "save": true},
+    "check_variable_forms.json::a_donor_read_s_range_value_qualified_by_the_donor_dataset_is_its_field": {"route": "domain", "save": true},
+    "check_variable_forms.json::a_donor_read_s_lookup_qualified_range_value_reads_that_lookup_for_the_donor_record": {"route": "domain", "save": true}
   }
 }

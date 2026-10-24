@@ -43,9 +43,10 @@ in :data:`JOINED`, and a field ``type`` is ``kind``, a Rust keyword
 otherwise.
 
 The generator also writes the table of expression modules in
-``docs/articles/schema.md``, between its markers. The default mode compares
-both with the text regenerated from the declarations, and ``--write``
-regenerates them.
+``docs/articles/schema.md``, between its markers, each module with the
+expressions it registers and, for one it registers alone, the note
+:data:`NOTES` gives it. The default mode compares both with the text
+regenerated from the declarations, and ``--write`` regenerates them.
 """
 
 import argparse
@@ -95,6 +96,12 @@ JOINED = {
     "datetime": "DateTime",
     "ddmonyyyy": "DdMonYyyy",
     "monyyyy": "MonYyyy",
+}
+# What the schema page says of an expression its module registers alone,
+# after its name.
+NOTES = {
+    "odm": "which reads an item of the collected ODM data",
+    "function": "which calls a project function",
 }
 # The named types an argument's role is read from.
 HANDLER = "substitute_value"
@@ -1002,9 +1009,18 @@ def page_table(root=ROOT):
     modules = {}
     for verb in declarations.verbs:
         modules.setdefault(verb.module, []).append(verb.name)
+    alone = {names[0] for names in modules.values() if len(names) == 1}
+    unplaced = sorted(set(NOTES) - alone)
+    if unplaced:
+        raise DeclarationError(
+            f"NOTES names {unplaced[0]!r}, which no module registers alone"
+        )
     lines = [START, "", "| Module | Expressions |", "|---|---|"]
     for module, names in modules.items():
-        lines.append(f"| [`{module}`](../../yaml/{module}) | {phrase(names)} |")
+        cell = phrase(names)
+        if names[0] in NOTES and len(names) == 1:
+            cell += f", {NOTES[names[0]]}"
+        lines.append(f"| [`{module}`](../../yaml/{module}) | {cell} |")
     lines += ["", END]
     return "\n".join(lines)
 

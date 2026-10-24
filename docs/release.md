@@ -1345,9 +1345,9 @@ as `failed` and includes the refusal's `issues`.
 In a run divided into partitions (`docs/partition-execution.md`), the row and
 cell limits bound each materialized partition of a CSV or Parquet driver input
 that the run reads by partition, which it does when that input is the
-specification's only one and its plan is safe under consecutive partitions,
-and each table it reads whole. A run that also reads the source of a lookup,
-join or named relation reads every input whole.
+specification's only one and its plan is safe under its partitions,
+consecutive or key-bounded, and each table it reads whole. A run that also
+reads the source of a lookup, join or named relation reads every input whole.
 
 When no step of such a run needs the whole table, its output is admitted a
 partition at a time too, each holding at most as many rows as its largest

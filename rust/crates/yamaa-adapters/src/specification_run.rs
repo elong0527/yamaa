@@ -470,81 +470,213 @@ fn producer_header(
     }
 }
 
-/// Decode `source`'s held bytes by partition (#3792): a CSV source in
+/// An input read by partition (#3792): what its scan admitted, holding no
+/// record, from which any range of its records decodes again (#3830).
+pub(crate) struct Scanned {
+    /// The schema of the table the input decodes to.
+    pub(crate) schema: yamaa_core::table::TableSchema,
+    /// The input's records.
+    pub(crate) records: usize,
+    source: SourceDeclaration,
+    reader: Reader,
+}
+
+/// What decodes a range of a scanned input's records.
+enum Reader {
+    Csv {
+        offsets: csv_source::Offsets,
+        odm: Option<yamaa_core::odm_source::FieldBinding>,
+    },
+    Parquet(crate::parquet_source::Scanned),
+}
+
+/// The first of the findings a read by partition makes once its profile has
+/// decoded every partition: the ordering stage the whole read checks first,
+/// then the earliest partition (#3830).
+struct First(Option<((u8, usize), Error)>);
+
+impl First {
+    /// A finding of `stage`, in partition `partition`.
+    fn offer(&mut self, stage: u8, partition: usize, error: Error) {
+        if self
+            .0
+            .as_ref()
+            .is_none_or(|(at, _)| (stage, partition) < *at)
+        {
+            self.0 = Some(((stage, partition), error));
+        }
+    }
+}
+
+/// The checks the whole read makes once its profile has decoded the whole
+/// table, in their order: the empty-string convention, the producer
+/// contract over the stored fields, then the generated ordinal.
+const CONVENTION: u8 = 0;
+const CONTRACT: u8 = 1;
+const ORDINAL: u8 = 2;
+
+/// Scan `source`'s held bytes by partition (#3792): a CSV source in
 /// partitions of `rows` records, the last holding the rest, and a Parquet
 /// source in runs of whole row groups of at most `rows` records, a larger
-/// row group being a partition of its own. Any other profile is read whole,
-/// as one partition.
+/// row group being a partition of its own. Each partition's table is decoded
+/// once, in order, given to `visit` with the position of its first record
+/// among the input's records, and dropped (#3830). `None` for any other
+/// profile, which is read whole.
 ///
 /// Every finding [`decode_source`] reports is reported in the same order, at
 /// the same record, row and field, and with the same context: the CSV scan
-/// reads every record before any converts, and each later check runs over
-/// every partition before the next one starts. Only the row and cell limits
-/// differ, with the text-offset bound of each column: each partition, not
-/// the whole table, is admitted within them. A partition's generated ordinal
-/// is its records' positions in the whole source.
-pub(crate) fn decode_partitions(
+/// reads every record before any converts, records convert in order, and the
+/// checks the whole read makes after converting wait until every partition
+/// has converted. Only the row and cell limits differ, with the text-offset
+/// bound of each column: each partition, not the whole table, is admitted
+/// within them. A partition's generated ordinal is its records' positions in
+/// the whole source.
+pub(crate) fn scan_partitions(
     source: &SourceDeclaration,
     bytes: &[u8],
     interpretation: yamaa_core::specification::SourceInterpretation,
     contract: Option<&yamaa_core::producer_contract::Contract>,
     rows: std::num::NonZeroUsize,
-) -> Result<Vec<ColumnTable>, Error> {
+    visit: &mut dyn FnMut(&ColumnTable, usize),
+) -> Option<Result<Scanned, Error>> {
     use yamaa_core::specification::SourceProfile;
     use yamaa_core::table::TableAccess;
     let odm = interpretation == yamaa_core::specification::SourceInterpretation::Odm;
-    let tables = match source.profile {
-        SourceProfile::Parquet => {
-            let tables =
-                crate::parquet_source::parse_partitions(bytes, odm, rows).map_err(parquet_error)?;
-            tables
-                .into_iter()
-                .map(|table| empty_string_convention(source, table))
-                .collect::<Result<Vec<_>, _>>()?
-        }
-        SourceProfile::Csv => {
-            let types = yamaa_core::typed_csv::PreparedTypes::new(&source.types)
-                .map_err(|error| typed_source_error(crate::typed_csv::Error::Typing(error)))?;
-            let partitions = csv_source::scan(bytes, source.byte_order_mark, rows)
-                .map_err(|error| Error::Source(TextTableError::Csv(error)))?;
-            let records = |index| {
-                partitions
-                    .records(index)
-                    .map_err(|error| Error::Source(TextTableError::Csv(error)))
-            };
-            if odm {
-                let binding = odm_header(partitions.names())?;
-                (0..partitions.len())
-                    .map(|index| odm_records(records(index)?, &binding))
-                    .collect::<Result<Vec<_>, _>>()?
-            } else {
-                producer_header(source, contract, partitions.names())?;
-                (0..partitions.len())
-                    .map(|index| {
-                        crate::typed_csv::convert(records(index)?, types)
-                            .map_err(typed_source_error)
-                    })
-                    .collect::<Result<Vec<_>, _>>()?
+    let mut first = First(None);
+    let mut schema = None;
+    let mut partition = 0usize;
+    // The checks the whole read makes once the table has decoded, each
+    // partition's on its own, and its visit.
+    let mut finish = |table: ColumnTable, start: usize, first: &mut First| {
+        let table = match source.profile {
+            SourceProfile::Parquet => match empty_string_convention(source, table) {
+                Ok(table) => table,
+                Err(error) => {
+                    first.offer(CONVENTION, partition, error);
+                    partition += 1;
+                    return;
+                }
+            },
+            _ => table,
+        };
+        if partition == 0 {
+            if let Some(contract) = contract {
+                if let Err(error) = stored_contract(source, contract, &table) {
+                    first.offer(CONTRACT, partition, error);
+                }
             }
         }
-        // Every other profile is read whole: one partition.
-        SourceProfile::Xport | SourceProfile::Sas7bdat | SourceProfile::OdmXml => {
-            return decode_source(source, bytes, interpretation, contract).map(|table| vec![table]);
+        match crate::source_ordinal::append_at(source, table, start) {
+            Ok(table) => {
+                if schema.is_none() {
+                    schema = Some(table.schema().clone());
+                }
+                if first.0.is_none() {
+                    visit(&table, start);
+                }
+            }
+            Err(error) => first.offer(ORDINAL, partition, error),
         }
+        partition += 1;
     };
-    if let (Some(contract), Some(first)) = (contract, tables.first()) {
-        stored_contract(source, contract, first)?;
+    let (reader, records) = match source.profile {
+        SourceProfile::Csv => {
+            let scanned = (|| {
+                let types = yamaa_core::typed_csv::PreparedTypes::new(&source.types)
+                    .map_err(|error| typed_source_error(crate::typed_csv::Error::Typing(error)))?;
+                let partitions = csv_source::scan(bytes, source.byte_order_mark, rows)
+                    .map_err(|error| Error::Source(TextTableError::Csv(error)))?;
+                let binding = if odm {
+                    Some(odm_header(partitions.names())?)
+                } else {
+                    producer_header(source, contract, partitions.names())?;
+                    None
+                };
+                let mut start = 0usize;
+                for index in 0..partitions.len() {
+                    let records = partitions
+                        .records(index)
+                        .map_err(|error| Error::Source(TextTableError::Csv(error)))?;
+                    // Records convert in order, so the first that does not
+                    // convert is the whole read's.
+                    let table = match &binding {
+                        Some(binding) => odm_records(records, binding)?,
+                        None => {
+                            crate::typed_csv::convert(records, types).map_err(typed_source_error)?
+                        }
+                    };
+                    let count = table.row_count();
+                    finish(table, start, &mut first);
+                    start += count;
+                }
+                Ok((
+                    Reader::Csv {
+                        offsets: partitions.offsets(),
+                        odm: binding,
+                    },
+                    start,
+                ))
+            })();
+            match scanned {
+                Ok(scanned) => scanned,
+                Err(error) => return Some(Err(error)),
+            }
+        }
+        SourceProfile::Parquet => {
+            let mut start = 0usize;
+            let scanned = crate::parquet_source::scan(bytes, odm, rows, &mut |table, at| {
+                start = at + table.row_count();
+                finish(table, at, &mut first);
+            });
+            match scanned {
+                Ok(scanned) => (Reader::Parquet(scanned), start),
+                Err(error) => return Some(Err(parquet_error(error))),
+            }
+        }
+        // Every other profile is read whole.
+        SourceProfile::Xport | SourceProfile::Sas7bdat | SourceProfile::OdmXml => return None,
+    };
+    if let Some((_, error)) = first.0 {
+        return Some(Err(error));
     }
-    let mut start = 0usize;
-    tables
-        .into_iter()
-        .map(|table| {
-            let records = table.row_count();
-            let table = crate::source_ordinal::append_at(source, table, start)?;
-            start += records;
-            Ok(table)
-        })
-        .collect()
+    Some(Ok(Scanned {
+        schema: schema.expect("a scan reads at least one partition"),
+        records,
+        source: source.clone(),
+        reader,
+    }))
+}
+
+/// Decode records `range` of an input [`scan_partitions`] scanned, from the
+/// same held bytes (#3830): its table as the whole read gives those
+/// records, its generated ordinal their positions in the whole source.
+pub(crate) fn decode_range(
+    scanned: &Scanned,
+    bytes: &[u8],
+    range: std::ops::Range<usize>,
+) -> Result<ColumnTable, Error> {
+    let source = &scanned.source;
+    let table = match &scanned.reader {
+        Reader::Csv { offsets, odm } => {
+            let records = offsets
+                .records(bytes, source.byte_order_mark, range.clone())
+                .map_err(|error| Error::Source(TextTableError::Csv(error)))?;
+            match odm {
+                Some(binding) => odm_records(records, binding)?,
+                None => {
+                    let types = yamaa_core::typed_csv::PreparedTypes::new(&source.types).map_err(
+                        |error| typed_source_error(crate::typed_csv::Error::Typing(error)),
+                    )?;
+                    crate::typed_csv::convert(records, types).map_err(typed_source_error)?
+                }
+            }
+        }
+        Reader::Parquet(parquet) => empty_string_convention(
+            source,
+            crate::parquet_source::decode_range(parquet, range.clone()).map_err(parquet_error)?,
+        )?,
+    };
+    crate::source_ordinal::append_at(source, table, range.start)
 }
 
 /// The schema `source`'s held bytes decode to, read from a CSV source's

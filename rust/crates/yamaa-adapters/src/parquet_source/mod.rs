@@ -198,30 +198,102 @@ pub fn signature(content: &[u8]) -> Result<Vec<ColumnSignature>, Error> {
     Ok(reader::signature(content)?)
 }
 
-/// Decode held bytes by partition (#3792), with `odm` as [`parse_odm`] does:
-/// the row groups in partitions of at most `rows` records, a row group of
-/// more records a partition of its own, each partition's table in order.
-/// Every finding [`parse`] reports is reported in the same order, a value's
-/// row being its row in the whole file, except that each partition, not the
-/// whole file, is admitted within the row and cell limits.
+/// A held file read by partition (#3792): what its scan admitted, which
+/// decodes any range of its records again (#3830).
 #[cfg(feature = "parquet")]
-pub fn parse_partitions(
+pub struct Scanned {
+    runs: reader::Runs,
+}
+
+/// A held file read by partition, which this build cannot read.
+#[cfg(not(feature = "parquet"))]
+pub struct Scanned {
+    never: std::convert::Infallible,
+}
+
+/// Where a scan's table admission falls in the whole read's order: every
+/// partition is admitted before any value converts.
+#[cfg(feature = "parquet")]
+const ADMIT: reader::Position = (17, 0, 0);
+/// Where its conversion falls: each partition's values, in order.
+#[cfg(feature = "parquet")]
+const BUILD: reader::Position = (18, 0, 0);
+
+/// Scan held bytes by partition (#3792), with `odm` as [`parse_odm`] does:
+/// the row groups in partitions of at most `rows` records, a row group of
+/// more records a partition of its own. Each partition is decoded once, in
+/// order, given to `visit` with the position of its first record among the
+/// file's records, and dropped (#3830): no two partitions are decoded at
+/// once. Every finding [`parse`] reports is reported in the same order, a
+/// value's row being its row in the whole file, except that each partition,
+/// not the whole file, is admitted within the row and cell limits: the
+/// whole read checks each stage over every partition before the next, so
+/// the first finding is the one whose stage and column come first, then
+/// whose partition does.
+#[cfg(feature = "parquet")]
+pub fn scan(
     content: &[u8],
     odm: bool,
     rows: std::num::NonZeroUsize,
-) -> Result<Vec<ColumnTable>, Error> {
-    let decoded = reader::read_partitions(content, odm, Some(rows))?;
-    // Every partition is admitted before any value converts, as the whole
-    // read admits its one table first.
-    let rows = decoded
-        .iter()
-        .map(|decoded| table::admit(decoded).map_err(table_error))
-        .collect::<Result<Vec<_>, _>>()?;
-    decoded
-        .into_iter()
-        .zip(rows)
-        .map(|(decoded, rows)| table::build(decoded, rows).map_err(table_error))
-        .collect()
+    visit: &mut dyn FnMut(ColumnTable, usize),
+) -> Result<Scanned, Error> {
+    use yamaa_core::table::TableAccess;
+    let runs = reader::Runs::open(content, odm, Some(rows))?;
+    let ready = runs.deferred().is_ok();
+    let mut first: Option<(reader::Position, Error)> = None;
+    let mut before = 0usize;
+    for partition in 0..runs.len() {
+        // The whole read decodes every partition's columns before any later
+        // check, so the first partition that does not decode is its finding.
+        let raw = runs.raw(partition)?;
+        if ready {
+            let found = match runs.decoded(raw, partition, before) {
+                Err((position, error)) => Some((position, Error::from(error))),
+                Ok(decoded) => match table::admit(&decoded) {
+                    Err(error) => Some((ADMIT, table_error(error))),
+                    Ok(rows) => match table::build(decoded, rows) {
+                        Err(error) => Some((BUILD, table_error(error))),
+                        Ok(table) => {
+                            debug_assert_eq!(table.row_count(), runs.records(partition));
+                            if first.is_none() {
+                                visit(table, before);
+                            }
+                            None
+                        }
+                    },
+                },
+            };
+            if let Some((position, error)) = found {
+                if first.as_ref().is_none_or(|(at, _)| position < *at) {
+                    first = Some((position, error));
+                }
+            }
+        }
+        before += runs.records(partition);
+    }
+    runs.deferred()?;
+    match first {
+        Some((_, error)) => Err(error),
+        None => Ok(Scanned { runs }),
+    }
+}
+
+/// The table of records `range` of a file [`scan`] admitted (#3830),
+/// decoded again from the row groups that hold them.
+#[cfg(feature = "parquet")]
+pub fn decode_range(
+    scanned: &Scanned,
+    range: std::ops::Range<usize>,
+) -> Result<ColumnTable, Error> {
+    use yamaa_core::table::TableAccess;
+    let (decoded, offset) = scanned.runs.range(range.clone())?;
+    let table = convert(decoded)?;
+    if offset == 0 && table.row_count() == range.len() {
+        return Ok(table);
+    }
+    table
+        .rows(offset..offset + range.len())
+        .map_err(Error::Table)
 }
 
 /// The table schema held bytes decode to, with `odm` as [`parse_odm`] does,
@@ -358,12 +430,17 @@ pub fn signature(_: &[u8]) -> Result<Vec<ColumnSignature>, Error> {
     Err(Error::ReaderUnavailable)
 }
 #[cfg(not(feature = "parquet"))]
-pub fn parse_partitions(
+pub fn scan(
     _: &[u8],
     _: bool,
     _: std::num::NonZeroUsize,
-) -> Result<Vec<ColumnTable>, Error> {
+    _: &mut dyn FnMut(ColumnTable, usize),
+) -> Result<Scanned, Error> {
     Err(Error::ReaderUnavailable)
+}
+#[cfg(not(feature = "parquet"))]
+pub fn decode_range(scanned: &Scanned, _: std::ops::Range<usize>) -> Result<ColumnTable, Error> {
+    match scanned.never {}
 }
 #[cfg(not(feature = "parquet"))]
 pub fn schema(_: &[u8], _: bool) -> Option<yamaa_core::table::TableSchema> {
