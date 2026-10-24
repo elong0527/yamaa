@@ -83,7 +83,7 @@ class Streaming(unittest.TestCase):
         root = self.root / "study"
         root.mkdir()
         (root / "spec.yaml").write_text(TRUTH["specification_yaml"], encoding="utf-8")
-        (root / "input.csv").write_text(TRUTH["input_csv"], encoding="utf-8")
+        (root / "input.csv").write_bytes(TRUTH["input_csv"].encode("utf-8"))
         return root
 
     def large(self):
@@ -95,7 +95,10 @@ class Streaming(unittest.TestCase):
         records = "".join(
             f"{record},{prefix}{record}\n" for record in range(1, LARGE["records"] + 1)
         )
-        (root / "input.csv").write_text("ID,NAME\n" + records, encoding="utf-8")
+        # Bytes, not text mode, which on Windows ends each record in U+000D
+        # U+000A: a test compares this input with the saved CSV, whose records
+        # end in U+000A (CSV-1).
+        (root / "input.csv").write_bytes(("ID,NAME\n" + records).encode("utf-8"))
         return root
 
     def test_a_streamed_output_holds_the_expected_rows_and_saves_the_expected_file(
