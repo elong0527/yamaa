@@ -2,7 +2,9 @@
 //! none: untrusted bytes reach the writer as the published artifact that a
 //! submission build reads back. Each input is such a CSV artifact, admitted by
 //! the same CSV profile and declared typing as that build; every typed table
-//! is rendered, and the output must parse as JSON that holds every cell.
+//! is rendered in both representations (JSON-4), and the output must parse
+//! as JSON that holds every cell: the single-object form as one object, the
+//! newline-delimited form as a first line and one JSON array per later line.
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
@@ -10,7 +12,7 @@ use serde::Deserialize;
 use serde_json::value::RawValue;
 use yamaa_adapters::{
     csv_source,
-    submission_json::{DatasetJsonColumn, DatasetJsonDocument},
+    submission_json::{DatasetJsonColumn, DatasetJsonDocument, Layout},
 };
 use yamaa_core::{
     table::{TableAccess, ValueRef},
@@ -77,9 +79,40 @@ struct RenderedColumn {
     name: String,
 }
 
+/// The first line of the newline-delimited form: the object without `rows`.
+#[derive(Deserialize)]
+struct Head {
+    records: usize,
+    columns: Vec<RenderedColumn>,
+}
+
+/// The rendered file read back by its layout: the single-object form is one
+/// JSON text; the newline-delimited form is one JSON text per `U+000A`-ended
+/// line, the first its header and each later one a row (JSON-13).
+fn rendered(bytes: &[u8], layout: Layout) -> Rendered<'_> {
+    match layout {
+        Layout::Object => serde_json::from_slice(bytes).expect("Dataset-JSON output is JSON"),
+        Layout::Lines => {
+            let text = std::str::from_utf8(bytes).expect("UTF-8 output");
+            let body = text.strip_suffix('\n').expect("a final newline");
+            assert!(!body.contains('\r'), "no carriage return outside a string");
+            let mut lines = body.split('\n');
+            let head: Head = serde_json::from_str(lines.next().expect("a first line"))
+                .expect("the first line is the header object");
+            let rows = lines
+                .map(|line| serde_json::from_str(line).expect("a row line is a JSON array"))
+                .collect();
+            Rendered {
+                records: head.records,
+                columns: head.columns,
+                rows,
+            }
+        }
+    }
+}
+
 /// The rendered file is JSON whose header and rows hold the table exactly.
-fn check(bytes: &[u8], table: &TypedRows) {
-    let rendered: Rendered = serde_json::from_slice(bytes).expect("Dataset-JSON output is JSON");
+fn check(rendered: &Rendered<'_>, table: &TypedRows) {
     let columns = table.schema().columns();
     assert_eq!(rendered.records, table.row_count());
     let names: Vec<_> = rendered.columns.iter().map(|column| &column.name).collect();
@@ -131,8 +164,10 @@ fuzz_target!(|data: &[u8]| {
         else {
             continue;
         };
-        let bytes = yamaa_adapters::submission_json::render(&document(&table), &table)
-            .expect("an admitted table renders");
-        check(&bytes, &table);
+        for layout in [Layout::Object, Layout::Lines] {
+            let bytes = yamaa_adapters::submission_json::render(&document(&table), &table, layout)
+                .expect("an admitted table renders");
+            check(&rendered(&bytes, layout), &table);
+        }
     }
 });

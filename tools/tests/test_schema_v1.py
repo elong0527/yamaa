@@ -246,6 +246,11 @@ EXPECTED = {
     "new.project.standards.status=Provisional": [
         Values("implementation_guide_class", "status", ("Provisional",))
     ],
+    # #3821: a section's transport writes Dataset-JSON 1.1 in its
+    # newline-delimited representation (JSON-1, JSON-4).
+    "new.project.transport=dataset_ndjson": [
+        Values("submission_section_class", "transport", ("dataset_ndjson",))
+    ],
     # P-VOC-1: roles and a terminology standard's name close to the lists the
     # CDISC vocabulary file holds.
     "new.spec.submission.role=closed": [

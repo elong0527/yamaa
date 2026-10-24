@@ -496,13 +496,19 @@ class PublicConformance(unittest.TestCase):
             "  created: '2026-09-11T00:00:00'\n"
         )
         self.example = judge.plan(self.fixtures)["examples"][0]
-        for name in ["define.xml", "dm.json", "dm.xpt", "spec_resolved.yaml"]:
+        for name in [
+            "define.xml",
+            "dm.json",
+            "dm.ndjson",
+            "dm.xpt",
+            "spec_resolved.yaml",
+        ]:
             (self.case / "expected" / name).write_text("independent truth")
         verdict = self.verdict()
         self.assertEqual(verdict["verdict"], "pass")
         self.assertEqual(
             {r["artifact"] for r in verdict["not_compared"]},
-            {"define.xml", "dm.json", "dm.xpt", "spec_resolved.yaml"},
+            {"define.xml", "dm.json", "dm.ndjson", "dm.xpt", "spec_resolved.yaml"},
         )
         # A Define benchmark's expected failure belongs to its Define call: the
         # domain build must still pass and save, and the error is not compared.
