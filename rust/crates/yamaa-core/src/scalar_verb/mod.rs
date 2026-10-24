@@ -26,6 +26,7 @@ mod rounding;
 mod str_case;
 mod str_extract;
 mod str_pad;
+mod str_position;
 mod str_template;
 mod temporal;
 
@@ -41,6 +42,7 @@ use crate::result_type::ResultType;
 use crate::text_case::StringCase;
 use crate::text_extract::StringExtract;
 use crate::text_pad::StringPad;
+use crate::text_position::{StringLength, StringSubstr};
 use crate::text_replace::StringReplace;
 use crate::text_template::StringTemplate;
 use crate::value::{ColumnType, Value};
@@ -50,13 +52,13 @@ use crate::value::{ColumnType, Value};
 impl ScalarOp {
     /// The verb's result type (EXPR-14), fixed by the verb or set by its
     /// written `type`, unit or dictionary: differences, study days, epoch
-    /// days and times of day are counts; a difference of datetimes in
-    /// seconds is a whole count and in a longer unit a fraction; a shift and
-    /// `impute` keep their declared type; a duration is a fraction in every
-    /// unit; `to_date` is a date; assembled date parts, duration text, text
-    /// verbs, precisions, imputation flags and cuts are text; a mapping
-    /// returns the types its dictionary values take; `greatest` and `least`
-    /// take every type their `operands` take.
+    /// days, times of day and text lengths are counts; a difference of
+    /// datetimes in seconds is a whole count and in a longer unit a
+    /// fraction; a shift and `impute` keep their declared type; a duration
+    /// is a fraction in every unit; `to_date` is a date; assembled date
+    /// parts, duration text, the other text verbs, precisions, imputation
+    /// flags and cuts are text; a mapping returns the types its dictionary
+    /// values take; `greatest` and `least` take every type their `operands` take.
     pub(crate) fn result_type(&self, operands: &mut dyn Iterator<Item = ResultType>) -> ResultType {
         let temporal = |kind: &ast::TemporalType| match kind {
             ast::TemporalType::Date => ResultType::DATE,
@@ -69,9 +71,11 @@ impl ScalarOp {
                 unit,
                 ..
             } if *unit != ast::TimeUnit::Second => ResultType::FLOAT,
-            Self::Diff { .. } | Self::StudyDay | Self::ToEpochDay | Self::TimeOfDay => {
-                ResultType::INT
-            }
+            Self::Diff { .. }
+            | Self::StudyDay
+            | Self::ToEpochDay
+            | Self::TimeOfDay
+            | Self::StrLength => ResultType::INT,
             Self::Shift { kind, .. } | Self::Impute { kind, .. } => temporal(kind),
             Self::ToDate => ResultType::DATE,
             Self::Dtc
@@ -80,6 +84,7 @@ impl ScalarOp {
             | Self::ImputationFlag { .. }
             | Self::StrCase { .. }
             | Self::StrPad { .. }
+            | Self::StrSubstr { .. }
             | Self::StrExtract { .. }
             | Self::StrReplace { .. }
             | Self::StrTemplate { .. }
@@ -158,6 +163,7 @@ impl ScalarOp {
             Self::Greatest | Self::Least => Preflight::Extremes,
             Self::StrExtract { .. } | Self::StrReplace { .. } => Preflight::Extraction,
             Self::StrTemplate { .. } => Preflight::Template,
+            Self::StrSubstr { .. } | Self::StrLength => Preflight::Position,
             Self::StrPad { .. } | Self::Mapping { .. } | Self::Cut { .. } => return None,
         })
     }
@@ -167,9 +173,11 @@ impl ScalarOp {
     pub(crate) fn check_typing(&self) -> CheckTyping {
         match self {
             Self::Mapping { .. } | Self::Cut { .. } => CheckTyping::Always,
-            Self::StrTemplate { .. } | Self::StrExtract { .. } | Self::StrReplace { .. } => {
-                CheckTyping::LeftToBinding
-            }
+            Self::StrTemplate { .. }
+            | Self::StrExtract { .. }
+            | Self::StrReplace { .. }
+            | Self::StrSubstr { .. }
+            | Self::StrLength => CheckTyping::LeftToBinding,
             _ => CheckTyping::Never,
         }
     }
@@ -187,6 +195,7 @@ impl ScalarOp {
             Self::Mapping { .. }
             | Self::StrCase { .. }
             | Self::StrPad { .. }
+            | Self::StrSubstr { .. }
             | Self::StrReplace { .. }
             | Self::StrExtract { .. }
             | Self::ToDate
@@ -226,11 +235,13 @@ pub(crate) enum Preflight {
     Extremes,
     Extraction,
     Template,
+    /// The positional text verbs, `str_substr` and `str_length`.
+    Position,
 }
 
 impl Preflight {
     /// Every check, in the order preparation reports them.
-    pub(crate) const ORDER: [Self; 7] = [
+    pub(crate) const ORDER: [Self; 8] = [
         Self::Rounding,
         Self::Temporal,
         Self::Imputation,
@@ -238,6 +249,7 @@ impl Preflight {
         Self::Extremes,
         Self::Extraction,
         Self::Template,
+        Self::Position,
     ];
 
     /// The derivations the check visits.
@@ -245,7 +257,7 @@ impl Preflight {
         match self {
             Self::Rounding | Self::Temporal => Sites::Defaults,
             Self::Imputation | Self::Case | Self::Extremes => Sites::Derivations,
-            Self::Extraction | Self::Template => Sites::Everywhere,
+            Self::Extraction | Self::Template | Self::Position => Sites::Everywhere,
         }
     }
 
@@ -277,9 +289,9 @@ pub(crate) enum Sites {
 pub(crate) enum CheckTyping {
     /// None: preflight types them, or only binding can.
     Never,
-    /// Those preflight leaves to binding: a template's placeholders, and an
-    /// extraction's or a replacement's source, in row templates and in a
-    /// lookup's own derivations.
+    /// Those preflight leaves to binding: a template's placeholders, and the
+    /// source of an extraction, a replacement or a positional verb, in row
+    /// templates and in a lookup's own derivations.
     LeftToBinding,
     /// Every operand it reads: a `mapping`'s or a `cut`'s source.
     Always,
@@ -323,6 +335,7 @@ pub(crate) fn preflight(
         Some(Preflight::Extremes) => Ok(extremes::preflight(spec, e, declared)),
         Some(Preflight::Extraction) => str_extract::preflight(spec, e, declared, rows),
         Some(Preflight::Template) => str_template::preflight(spec, e, declared, rows),
+        Some(Preflight::Position) => str_position::preflight(spec, e, declared, rows),
         None => Ok(Vec::new()),
     }
 }
@@ -367,6 +380,10 @@ enum Kind {
     /// A `str_pad` whose width is not a positive whole number has no
     /// operation, only its declaration defect (TEXT-2).
     StrPad(Result<StringPad, Diagnostic>),
+    /// A `str_substr` whose `start` or `length` is below one has no
+    /// operation, only its declaration defect (TEXT-13).
+    StrSubstr(Result<StringSubstr, Diagnostic>),
+    StrLength(StringLength),
     StrExtract(StringExtract),
     StrReplace(StringReplace),
     StrTemplate(StringTemplate),
@@ -415,7 +432,7 @@ pub(crate) enum Typing {
     None,
     /// Each operand once it binds, by the reading scope's catalog alone,
     /// which does not type a lookup's field (`str_extract`, `str_replace`,
-    /// `str_template`).
+    /// `str_template`, `str_substr`, `str_length`).
     Catalog,
     /// As `Catalog`, but not in a spec without row templates, whose names
     /// preflight typed (`str_case`).
@@ -475,6 +492,7 @@ impl Operation {
             | ScalarOp::ToDate => imputation::from_tree(spec, e),
             ScalarOp::StrCase { .. } => str_case::from_tree(spec, e),
             ScalarOp::StrPad { .. } => str_pad::from_tree(spec, e),
+            ScalarOp::StrSubstr { .. } | ScalarOp::StrLength => str_position::from_tree(spec, e),
             ScalarOp::StrExtract { .. } | ScalarOp::StrReplace { .. } => {
                 str_extract::from_tree(spec, e)
             }
@@ -508,6 +526,8 @@ impl Operation {
                     .then(|| operation.operand_input_diagnostic(field, name, actual))
             }
             Kind::StrCase(operation) => (!text).then(|| operation.input_diagnostic(actual)),
+            Kind::StrSubstr(Ok(operation)) => (!text).then(|| operation.input_diagnostic(actual)),
+            Kind::StrLength(operation) => (!text).then(|| operation.input_diagnostic(actual)),
             Kind::StrExtract(operation) => (!text).then(|| operation.input_diagnostic(actual)),
             Kind::StrReplace(operation) => {
                 (!text).then(|| operation.search().input_diagnostic(actual))
@@ -518,7 +538,9 @@ impl Operation {
             Kind::MappingCut(operation) => {
                 (!operation.accepts(kind)).then(|| operation.input_diagnostic(actual))
             }
-            Kind::StrPad(_) | Kind::Extreme { .. } => None,
+            // A defective `str_substr` is refused at its declaration, before
+            // binding reads its source.
+            Kind::StrPad(_) | Kind::StrSubstr(Err(_)) | Kind::Extreme { .. } => None,
         }
     }
 
@@ -526,7 +548,11 @@ impl Operation {
     pub(crate) fn typing(&self) -> Typing {
         match &self.kind {
             Kind::Round(_) | Kind::Imputation(_) | Kind::StrPad(_) => Typing::None,
-            Kind::StrExtract(_) | Kind::StrReplace(_) | Kind::StrTemplate(_) => Typing::Catalog,
+            Kind::StrExtract(_)
+            | Kind::StrReplace(_)
+            | Kind::StrTemplate(_)
+            | Kind::StrSubstr(_)
+            | Kind::StrLength(_) => Typing::Catalog,
             Kind::StrCase(_) => Typing::RowTemplates,
             Kind::Temporal(_) => Typing::Bound,
             Kind::MappingCut(_) => Typing::Captured,
@@ -597,10 +623,11 @@ impl Operation {
 
     /// The declaration defect that leaves the verb without an operation,
     /// which binding reports at its derivation's checkpoint, before any
-    /// reference binds: a `str_pad` width (TEXT-2).
+    /// reference binds: a `str_pad` width (TEXT-2), a `str_substr` start or
+    /// length (TEXT-13).
     pub(crate) fn defect(&self) -> Option<&Diagnostic> {
         match &self.kind {
-            Kind::StrPad(Err(defect)) => Some(defect),
+            Kind::StrPad(Err(defect)) | Kind::StrSubstr(Err(defect)) => Some(defect),
             _ => None,
         }
     }
@@ -636,7 +663,15 @@ impl Operation {
                 source: source()?,
                 operation: operation.clone(),
             },
-            Kind::StrPad(Err(_)) => return None,
+            Kind::StrPad(Err(_)) | Kind::StrSubstr(Err(_)) => return None,
+            Kind::StrSubstr(Ok(operation)) => Expression::StrSubstr {
+                source: source()?,
+                operation: operation.clone(),
+            },
+            Kind::StrLength(operation) => Expression::StrLength {
+                source: source()?,
+                operation: operation.clone(),
+            },
             Kind::StrExtract(operation) => Expression::StrExtract {
                 source: source()?,
                 operation: operation.clone(),

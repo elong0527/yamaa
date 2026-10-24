@@ -78,6 +78,7 @@ mod run_scopes;
 mod scalar_declarative_rounding;
 mod scalar_declarative_text_replace;
 mod scalar_language;
+mod scalar_text_positions;
 mod specification_reports;
 mod specification_sources;
 // The file wraps its tests in a module of its own name, which kept their

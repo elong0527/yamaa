@@ -1,0 +1,9 @@
+phase: validation
+condition: incompatible_input_type
+spec_paths:
+  - columns.COLEN.derivation.str_length.source
+rule: TEXT-1
+context:
+  source: CO_RAW.COSEQ
+  expected: str
+  actual: int

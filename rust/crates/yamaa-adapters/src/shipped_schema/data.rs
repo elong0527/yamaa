@@ -549,6 +549,29 @@ expressions:
             type: int
             required: true
             description: See TEXT-2.
+    str_substr: # See TEXT-13.
+        - source:
+            type: variable
+            required: true
+            description: String variable whose scalars are taken (TEXT-13).
+        - start:
+            type: int
+            required: true
+            description: Position of the first scalar taken, counted from 1 (TEXT-13).
+        - length:
+            type: int
+            description: Most scalars taken; without it, they run to the end of the source (TEXT-13).
+        - missing:
+            type: substitute_value
+            description: Value returned when the source is missing; without it, a missing source gives missing (TEXT-13).
+    str_length: # See TEXT-14.
+        - source:
+            type: variable
+            required: true
+            description: String variable whose scalars are counted (TEXT-14).
+        - missing:
+            type: substitute_value
+            description: Value returned when the source is missing; without it, a missing source gives missing (TEXT-14).
     str_extract: # See TEXT-10.
         - source:
             type: variable
@@ -3984,6 +4007,54 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           },
           "additionalProperties": false
         },
+        "str_substr": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "String variable whose scalars are taken (TEXT-13).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "start": {
+              "type": "integer",
+              "description": "Position of the first scalar taken, counted from 1 (TEXT-13).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
+            },
+            "length": {
+              "type": "integer",
+              "description": "Most scalars taken; without it, they run to the end of the source (TEXT-13).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
+            },
+            "missing": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Value returned when the source is missing; without it, a missing source gives missing (TEXT-13).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            }
+          },
+          "additionalProperties": false
+        },
+        "str_length": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "String variable whose scalars are counted (TEXT-14).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "missing": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Value returned when the source is missing; without it, a missing source gives missing (TEXT-14).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            }
+          },
+          "additionalProperties": false
+        },
         "str_extract": {
           "type": "object",
           "properties": {
@@ -6038,6 +6109,61 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           "required": [
             "source",
             "width"
+          ],
+          "additionalProperties": false
+        },
+        "str_substr": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "String variable whose scalars are taken (TEXT-13).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "start": {
+              "type": "integer",
+              "description": "Position of the first scalar taken, counted from 1 (TEXT-13).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
+            },
+            "length": {
+              "type": "integer",
+              "description": "Most scalars taken; without it, they run to the end of the source (TEXT-13).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
+            },
+            "missing": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Value returned when the source is missing; without it, a missing source gives missing (TEXT-13).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            }
+          },
+          "required": [
+            "source",
+            "start"
+          ],
+          "additionalProperties": false
+        },
+        "str_length": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "String variable whose scalars are counted (TEXT-14).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "missing": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Value returned when the source is missing; without it, a missing source gives missing (TEXT-14).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            }
+          },
+          "required": [
+            "source"
           ],
           "additionalProperties": false
         },

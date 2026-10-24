@@ -325,6 +325,13 @@ pub enum ScalarOp {
     StrPad {
         width: String,
     },
+    /// `text_position::StringSubstr`, start and length as written.
+    StrSubstr {
+        start: String,
+        length: Option<String>,
+    },
+    /// `text_position::StringLength`.
+    StrLength,
     /// `text_extract::StringExtract`, group as written.
     StrExtract {
         pattern: String,

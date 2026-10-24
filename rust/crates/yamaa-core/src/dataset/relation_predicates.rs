@@ -116,6 +116,8 @@ pub(crate) fn visit(expression: &Expression, visitor: &mut impl FnMut(usize)) {
         | Expression::MappingCut { source, .. }
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
+        | Expression::StrSubstr { source, .. }
+        | Expression::StrLength { source, .. }
         | Expression::StrExtract { source, .. }
         | Expression::StrReplace { source, .. }
         | Expression::Round { source, .. } => visit(&source.expression, visitor),
@@ -215,6 +217,8 @@ pub(crate) fn visit_ranges(expression: &Expression, visitor: &mut impl FnMut(&Re
         | Expression::MappingCut { source, .. }
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
+        | Expression::StrSubstr { source, .. }
+        | Expression::StrLength { source, .. }
         | Expression::StrExtract { source, .. }
         | Expression::StrReplace { source, .. }
         | Expression::Round { source, .. } => visit_ranges(&source.expression, visitor),
