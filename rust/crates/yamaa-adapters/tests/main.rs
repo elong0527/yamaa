@@ -42,7 +42,6 @@ mod execution_implicit_join_absence;
 mod execution_intermediate_driver_columns;
 mod execution_key_lookup_reads;
 mod execution_key_selection_semantics;
-mod execution_lookup_model;
 mod execution_lookup_read_contexts;
 mod execution_no_rows_record_reads;
 mod execution_per_template_defaults;

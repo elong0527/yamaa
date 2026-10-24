@@ -66,7 +66,7 @@ in `derivation` or `handled_expression_class.value`, is not restricted by
 this rule. That text and fields typed `string_template` and
 `aggregate_expression` are leaves whose identifiers their own rules resolve.
 
-Evidence: `schema-expressions`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs::the_reference_may_be_a_literal_or_an_expression_over_the_current_row`.
+Evidence: `schema-expressions`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json::a_literal_nearest_reference_checks_clean`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json::a_literal_nearest_reference_is_the_same_for_every_ecg`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json::an_expression_nearest_reference_checks_clean`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json::an_expression_nearest_reference_reads_the_current_row`.
 
 `case` selects among expressions, a key match value computes the operand it
 matches, and a nearest selection's `to`, read as a key match value is,
