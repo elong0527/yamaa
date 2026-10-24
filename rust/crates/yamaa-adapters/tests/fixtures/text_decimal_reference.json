@@ -1,0 +1,306 @@
+{
+  "about": "The text str_decimal writes (TEXT-15), one run per declaration: a run's type, decimals and optional width and missing declare one TEXT column over a VALUE input field, and each row gives a value as the input writes it and the text authored for it; a null value is missing and a null text the missing value. A run's source, VALUE by default, is the variable TEXT reads; with donor, the CSV text of a DONOR input, it reads through D, a named intermediate over DONOR keyed by KEY = SRC.ID. A run with issues is refused with exactly those issue rows and saves nothing. The rows of the three ties_and_near_ties runs are the boundary rows of rounding_rational.tsv at those places (row is its id, bits its input binary64, value the shortest text that reads as those bits), and each text is that file's expected binary64 written with exactly that many decimals. Every other row was written by hand from TEXT-15, FORMULA-16 and CSV-9 and checked by an exact rational computation, never by a run; a count too large for one saved file is refused as a str_pad width beyond any length is. A run with display also writes VALUE under the file's display precision with the same decimals (CSV-9), which gives the same text.",
+  "runs": [
+    {
+      "run": "the_issue_table",
+      "type": "float",
+      "decimals": 2,
+      "width": 8,
+      "missing": ".",
+      "rows": [
+        {"row": "3.14159", "value": "3.14159", "text": "    3.14"},
+        {"row": "7", "value": "7", "text": "    7.00"},
+        {"row": "0.5", "value": "0.5", "text": "    0.50"},
+        {"row": "-1.234", "value": "-1.234", "text": "   -1.23"},
+        {"row": "1234.5678", "value": "1234.5678", "text": " 1234.57"},
+        {"row": "missing", "value": null, "text": "."}
+      ]
+    },
+    {
+      "run": "ties_and_near_ties_at_no_places",
+      "type": "float",
+      "decimals": 0,
+      "display": true,
+      "rows": [
+        {"row": "boundary/0/0/tie/below/1", "bits": "3fdfffffffffffff", "value": "0.49999999999999994", "text": "1"},
+        {"row": "boundary/0/0/tie/below/-1", "bits": "bfdfffffffffffff", "value": "-0.49999999999999994", "text": "-1"},
+        {"row": "boundary/0/0/tie/at/1", "bits": "3fe0000000000000", "value": "0.5", "text": "1"},
+        {"row": "boundary/0/0/tie/at/-1", "bits": "bfe0000000000000", "value": "-0.5", "text": "-1"},
+        {"row": "boundary/0/0/tie/above/1", "bits": "3fe0000000000001", "value": "0.5000000000000001", "text": "1"},
+        {"row": "boundary/0/0/tie/above/-1", "bits": "bfe0000000000001", "value": "-0.5000000000000001", "text": "-1"},
+        {"row": "boundary/0/0/threshold/below/1", "bits": "3fdfffffefffffff", "value": "0.49999998509883875", "text": "0"},
+        {"row": "boundary/0/0/threshold/below/-1", "bits": "bfdfffffefffffff", "value": "-0.49999998509883875", "text": "0"},
+        {"row": "boundary/0/0/threshold/at/1", "bits": "3fdffffff0000000", "value": "0.4999999850988388", "text": "1"},
+        {"row": "boundary/0/0/threshold/at/-1", "bits": "bfdffffff0000000", "value": "-0.4999999850988388", "text": "-1"},
+        {"row": "boundary/0/0/threshold/above/1", "bits": "3fdffffff0000001", "value": "0.49999998509883886", "text": "1"},
+        {"row": "boundary/0/0/threshold/above/-1", "bits": "bfdffffff0000001", "value": "-0.49999998509883886", "text": "-1"},
+        {"row": "boundary/0/2/tie/below/1", "bits": "4003ffffffffffff", "value": "2.4999999999999996", "text": "3"},
+        {"row": "boundary/0/2/tie/below/-1", "bits": "c003ffffffffffff", "value": "-2.4999999999999996", "text": "-3"},
+        {"row": "boundary/0/2/tie/at/1", "bits": "4004000000000000", "value": "2.5", "text": "3"},
+        {"row": "boundary/0/2/tie/at/-1", "bits": "c004000000000000", "value": "-2.5", "text": "-3"},
+        {"row": "boundary/0/2/tie/above/1", "bits": "4004000000000001", "value": "2.5000000000000004", "text": "3"},
+        {"row": "boundary/0/2/tie/above/-1", "bits": "c004000000000001", "value": "-2.5000000000000004", "text": "-3"},
+        {"row": "boundary/0/2/threshold/below/1", "bits": "4003fffffdffffff", "value": "2.4999999850988384", "text": "2"},
+        {"row": "boundary/0/2/threshold/below/-1", "bits": "c003fffffdffffff", "value": "-2.4999999850988384", "text": "-2"},
+        {"row": "boundary/0/2/threshold/at/1", "bits": "4003fffffe000000", "value": "2.499999985098839", "text": "3"},
+        {"row": "boundary/0/2/threshold/at/-1", "bits": "c003fffffe000000", "value": "-2.499999985098839", "text": "-3"},
+        {"row": "boundary/0/2/threshold/above/1", "bits": "4003fffffe000001", "value": "2.4999999850988393", "text": "3"},
+        {"row": "boundary/0/2/threshold/above/-1", "bits": "c003fffffe000001", "value": "-2.4999999850988393", "text": "-3"}
+      ]
+    },
+    {
+      "run": "ties_and_near_ties_at_one_places",
+      "type": "float",
+      "decimals": 1,
+      "display": true,
+      "rows": [
+        {"row": "boundary/1/0/tie/below/1", "bits": "3fa9999999999999", "value": "0.049999999999999996", "text": "0.1"},
+        {"row": "boundary/1/0/tie/below/-1", "bits": "bfa9999999999999", "value": "-0.049999999999999996", "text": "-0.1"},
+        {"row": "boundary/1/0/tie/at/1", "bits": "3fa999999999999a", "value": "0.05", "text": "0.1"},
+        {"row": "boundary/1/0/tie/at/-1", "bits": "bfa999999999999a", "value": "-0.05", "text": "-0.1"},
+        {"row": "boundary/1/0/tie/above/1", "bits": "3fa999999999999b", "value": "0.05000000000000001", "text": "0.1"},
+        {"row": "boundary/1/0/tie/above/-1", "bits": "bfa999999999999b", "value": "-0.05000000000000001", "text": "-0.1"},
+        {"row": "boundary/1/0/threshold/below/1", "bits": "3fa999998ccccccc", "value": "0.049999998509883875", "text": "0.0"},
+        {"row": "boundary/1/0/threshold/below/-1", "bits": "bfa999998ccccccc", "value": "-0.049999998509883875", "text": "0.0"},
+        {"row": "boundary/1/0/threshold/at/1", "bits": "3fa999998ccccccd", "value": "0.04999999850988388", "text": "0.1"},
+        {"row": "boundary/1/0/threshold/at/-1", "bits": "bfa999998ccccccd", "value": "-0.04999999850988388", "text": "-0.1"},
+        {"row": "boundary/1/0/threshold/above/1", "bits": "3fa999998cccccce", "value": "0.04999999850988389", "text": "0.1"},
+        {"row": "boundary/1/0/threshold/above/-1", "bits": "bfa999998cccccce", "value": "-0.04999999850988389", "text": "-0.1"},
+        {"row": "boundary/1/2/tie/below/1", "bits": "3fcfffffffffffff", "value": "0.24999999999999997", "text": "0.3"},
+        {"row": "boundary/1/2/tie/below/-1", "bits": "bfcfffffffffffff", "value": "-0.24999999999999997", "text": "-0.3"},
+        {"row": "boundary/1/2/tie/at/1", "bits": "3fd0000000000000", "value": "0.25", "text": "0.3"},
+        {"row": "boundary/1/2/tie/at/-1", "bits": "bfd0000000000000", "value": "-0.25", "text": "-0.3"},
+        {"row": "boundary/1/2/tie/above/1", "bits": "3fd0000000000001", "value": "0.25000000000000006", "text": "0.3"},
+        {"row": "boundary/1/2/tie/above/-1", "bits": "bfd0000000000001", "value": "-0.25000000000000006", "text": "-0.3"},
+        {"row": "boundary/1/2/threshold/below/1", "bits": "3fcffffffccccccc", "value": "0.24999999850988386", "text": "0.2"},
+        {"row": "boundary/1/2/threshold/below/-1", "bits": "bfcffffffccccccc", "value": "-0.24999999850988386", "text": "-0.2"},
+        {"row": "boundary/1/2/threshold/at/1", "bits": "3fcffffffccccccd", "value": "0.2499999985098839", "text": "0.3"},
+        {"row": "boundary/1/2/threshold/at/-1", "bits": "bfcffffffccccccd", "value": "-0.2499999985098839", "text": "-0.3"},
+        {"row": "boundary/1/2/threshold/above/1", "bits": "3fcffffffcccccce", "value": "0.24999999850988391", "text": "0.3"},
+        {"row": "boundary/1/2/threshold/above/-1", "bits": "bfcffffffcccccce", "value": "-0.24999999850988391", "text": "-0.3"}
+      ]
+    },
+    {
+      "run": "ties_and_near_ties_at_two_places",
+      "type": "float",
+      "decimals": 2,
+      "display": true,
+      "rows": [
+        {"row": "boundary/2/0/tie/below/1", "bits": "3f747ae147ae147a", "value": "0.004999999999999999", "text": "0.01"},
+        {"row": "boundary/2/0/tie/below/-1", "bits": "bf747ae147ae147a", "value": "-0.004999999999999999", "text": "-0.01"},
+        {"row": "boundary/2/0/tie/at/1", "bits": "3f747ae147ae147b", "value": "0.005", "text": "0.01"},
+        {"row": "boundary/2/0/tie/at/-1", "bits": "bf747ae147ae147b", "value": "-0.005", "text": "-0.01"},
+        {"row": "boundary/2/0/tie/above/1", "bits": "3f747ae147ae147c", "value": "0.005000000000000001", "text": "0.01"},
+        {"row": "boundary/2/0/tie/above/-1", "bits": "bf747ae147ae147c", "value": "-0.005000000000000001", "text": "-0.01"},
+        {"row": "boundary/2/0/threshold/below/1", "bits": "3f747ae13d70a3d6", "value": "0.004999999850988387", "text": "0.00"},
+        {"row": "boundary/2/0/threshold/below/-1", "bits": "bf747ae13d70a3d6", "value": "-0.004999999850988387", "text": "0.00"},
+        {"row": "boundary/2/0/threshold/at/1", "bits": "3f747ae13d70a3d7", "value": "0.004999999850988388", "text": "0.00"},
+        {"row": "boundary/2/0/threshold/at/-1", "bits": "bf747ae13d70a3d7", "value": "-0.004999999850988388", "text": "0.00"},
+        {"row": "boundary/2/0/threshold/above/1", "bits": "3f747ae13d70a3d8", "value": "0.004999999850988389", "text": "0.01"},
+        {"row": "boundary/2/0/threshold/above/-1", "bits": "bf747ae13d70a3d8", "value": "-0.004999999850988389", "text": "-0.01"},
+        {"row": "boundary/2/2/tie/below/1", "bits": "3f99999999999999", "value": "0.024999999999999998", "text": "0.03"},
+        {"row": "boundary/2/2/tie/below/-1", "bits": "bf99999999999999", "value": "-0.024999999999999998", "text": "-0.03"},
+        {"row": "boundary/2/2/tie/at/1", "bits": "3f9999999999999a", "value": "0.025", "text": "0.03"},
+        {"row": "boundary/2/2/tie/at/-1", "bits": "bf9999999999999a", "value": "-0.025", "text": "-0.03"},
+        {"row": "boundary/2/2/tie/above/1", "bits": "3f9999999999999b", "value": "0.025000000000000005", "text": "0.03"},
+        {"row": "boundary/2/2/tie/above/-1", "bits": "bf9999999999999b", "value": "-0.025000000000000005", "text": "-0.03"},
+        {"row": "boundary/2/2/threshold/below/1", "bits": "3f999999970a3d70", "value": "0.024999999850988386", "text": "0.02"},
+        {"row": "boundary/2/2/threshold/below/-1", "bits": "bf999999970a3d70", "value": "-0.024999999850988386", "text": "-0.02"},
+        {"row": "boundary/2/2/threshold/at/1", "bits": "3f999999970a3d71", "value": "0.02499999985098839", "text": "0.03"},
+        {"row": "boundary/2/2/threshold/at/-1", "bits": "bf999999970a3d71", "value": "-0.02499999985098839", "text": "-0.03"},
+        {"row": "boundary/2/2/threshold/above/1", "bits": "3f999999970a3d72", "value": "0.024999999850988393", "text": "0.03"},
+        {"row": "boundary/2/2/threshold/above/-1", "bits": "bf999999970a3d72", "value": "-0.024999999850988393", "text": "-0.03"},
+        {"row": "boundary/2/1000001/tie/below/1", "bits": "40c38801eb851eb7", "value": "10000.014999999998", "text": "10000.02"},
+        {"row": "boundary/2/1000001/tie/below/-1", "bits": "c0c38801eb851eb7", "value": "-10000.014999999998", "text": "-10000.02"},
+        {"row": "boundary/2/1000001/tie/at/1", "bits": "40c38801eb851eb8", "value": "10000.015", "text": "10000.02"},
+        {"row": "boundary/2/1000001/tie/at/-1", "bits": "c0c38801eb851eb8", "value": "-10000.015", "text": "-10000.02"},
+        {"row": "boundary/2/1000001/tie/above/1", "bits": "40c38801eb851eb9", "value": "10000.015000000001", "text": "10000.02"},
+        {"row": "boundary/2/1000001/tie/above/-1", "bits": "c0c38801eb851eb9", "value": "-10000.015000000001", "text": "-10000.02"},
+        {"row": "boundary/2/1000001/threshold/below/1", "bits": "40c38801eb851e65", "value": "10000.014999999848", "text": "10000.01"},
+        {"row": "boundary/2/1000001/threshold/below/-1", "bits": "c0c38801eb851e65", "value": "-10000.014999999848", "text": "-10000.01"},
+        {"row": "boundary/2/1000001/threshold/at/1", "bits": "40c38801eb851e66", "value": "10000.01499999985", "text": "10000.01"},
+        {"row": "boundary/2/1000001/threshold/at/-1", "bits": "c0c38801eb851e66", "value": "-10000.01499999985", "text": "-10000.01"},
+        {"row": "boundary/2/1000001/threshold/above/1", "bits": "40c38801eb851e67", "value": "10000.014999999852", "text": "10000.02"},
+        {"row": "boundary/2/1000001/threshold/above/-1", "bits": "c0c38801eb851e67", "value": "-10000.014999999852", "text": "-10000.02"}
+      ]
+    },
+    {
+      "run": "zeros_and_the_tie_window",
+      "type": "float",
+      "decimals": 2,
+      "display": true,
+      "rows": [
+        {"row": "0", "value": "0", "text": "0.00"},
+        {"row": "-0.0", "value": "-0.0", "text": "0.00"},
+        {"row": "-0.004", "value": "-0.004", "text": "0.00"},
+        {"row": "-0.005", "value": "-0.005", "text": "-0.01"},
+        {"row": "0.125", "value": "0.125", "text": "0.13"},
+        {"row": "-0.125", "value": "-0.125", "text": "-0.13"},
+        {"row": "1.0049999999", "value": "1.0049999999", "text": "1.01"},
+        {"row": "1.004999999", "value": "1.004999999", "text": "1.00"},
+        {"row": "0.0049999999", "value": "0.0049999999", "text": "0.01"},
+        {"row": "0.004999999", "value": "0.004999999", "text": "0.00"}
+      ]
+    },
+    {
+      "run": "large_values_keep_every_digit",
+      "type": "float",
+      "decimals": 2,
+      "display": true,
+      "rows": [
+        {"row": "1e20", "value": "1e20", "text": "100000000000000000000.00"},
+        {"row": "-1e20", "value": "-1e20", "text": "-100000000000000000000.00"}
+      ]
+    },
+    {
+      "run": "width_is_a_minimum",
+      "type": "float",
+      "decimals": 2,
+      "width": 5,
+      "rows": [
+        {"row": "1.5", "value": "1.5", "text": " 1.50"},
+        {"row": "12.5", "value": "12.5", "text": "12.50"},
+        {"row": "-1.5", "value": "-1.5", "text": "-1.50"},
+        {"row": "-12.5", "value": "-12.5", "text": "-12.50"},
+        {"row": "123.456", "value": "123.456", "text": "123.46"}
+      ]
+    },
+    {
+      "run": "no_decimals_write_no_point",
+      "type": "float",
+      "decimals": 0,
+      "width": 3,
+      "rows": [
+        {"row": "0.5", "value": "0.5", "text": "  1"},
+        {"row": "-0.5", "value": "-0.5", "text": " -1"},
+        {"row": "2.5", "value": "2.5", "text": "  3"},
+        {"row": "-0.4", "value": "-0.4", "text": "  0"},
+        {"row": "999.5", "value": "999.5", "text": "1000"},
+        {"row": "0", "value": "0", "text": "  0"}
+      ]
+    },
+    {
+      "run": "many_decimals_write_the_exact_value",
+      "type": "float",
+      "decimals": 20,
+      "rows": [
+        {"row": "0.1", "value": "0.1", "text": "0.10000000000000000555"},
+        {"row": "0.5", "value": "0.5", "text": "0.50000000000000000000"},
+        {"row": "-2.675", "value": "-2.675", "text": "-2.67499999999999982236"}
+      ]
+    },
+    {
+      "run": "integers",
+      "type": "int",
+      "decimals": 2,
+      "rows": [
+        {"row": "7", "value": "7", "text": "7.00"},
+        {"row": "-5", "value": "-5", "text": "-5.00"},
+        {"row": "0", "value": "0", "text": "0.00"}
+      ]
+    },
+    {
+      "run": "integers_widen_to_the_nearest_binary64",
+      "type": "int",
+      "decimals": 0,
+      "rows": [
+        {"row": "9007199254740993", "value": "9007199254740993", "text": "9007199254740992"},
+        {"row": "-9223372036854775808", "value": "-9223372036854775808", "text": "-9223372036854775808"},
+        {"row": "9223372036854775807", "value": "9223372036854775807", "text": "9223372036854775808"}
+      ]
+    },
+    {
+      "run": "missing_without_a_declared_answer",
+      "type": "float",
+      "decimals": 2,
+      "width": 8,
+      "rows": [
+        {"row": "missing", "value": null, "text": null},
+        {"row": "1", "value": "1", "text": "    1.00"}
+      ]
+    },
+    {
+      "run": "decimals_beyond_the_platform_need_no_text_for_a_missing_value",
+      "type": "float",
+      "decimals": 999999999999999999999999999999,
+      "rows": [
+        {"row": "missing", "value": null, "text": null}
+      ]
+    },
+    {
+      "run": "decimals_beyond_the_platform_refuse_a_present_value",
+      "type": "float",
+      "decimals": 999999999999999999999999999999,
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": [], "context": {"step": "build", "code": "result_projection"}}],
+      "rows": [
+        {"row": "1.5", "value": "1.5"}
+      ]
+    },
+    {
+      "run": "decimals_beyond_a_saved_file_need_no_text_for_a_missing_value",
+      "type": "float",
+      "decimals": 20000000000,
+      "rows": [
+        {"row": "missing", "value": null, "text": null}
+      ]
+    },
+    {
+      "run": "decimals_beyond_a_saved_file_refuse_a_present_value",
+      "type": "float",
+      "decimals": 20000000000,
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": [], "context": {"step": "build", "code": "result_projection"}}],
+      "rows": [
+        {"row": "1.5", "value": "1.5"}
+      ]
+    },
+    {
+      "run": "width_beyond_the_platform_need_no_text_for_a_missing_value",
+      "type": "float",
+      "decimals": 2,
+      "width": 999999999999999999999999999999,
+      "rows": [
+        {"row": "missing", "value": null, "text": null}
+      ]
+    },
+    {
+      "run": "width_beyond_the_platform_refuse_a_present_value",
+      "type": "float",
+      "decimals": 2,
+      "width": 999999999999999999999999999999,
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": [], "context": {"step": "build", "code": "result_projection"}}],
+      "rows": [
+        {"row": "1.5", "value": "1.5"}
+      ]
+    },
+    {
+      "run": "width_beyond_a_saved_file_need_no_text_for_a_missing_value",
+      "type": "float",
+      "decimals": 2,
+      "width": 20000000000,
+      "rows": [
+        {"row": "missing", "value": null, "text": null}
+      ]
+    },
+    {
+      "run": "width_beyond_a_saved_file_refuse_a_present_value",
+      "type": "float",
+      "decimals": 2,
+      "width": 20000000000,
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": [], "context": {"step": "build", "code": "result_projection"}}],
+      "rows": [
+        {"row": "1.5", "value": "1.5"}
+      ]
+    },
+    {
+      "run": "a_text_field_read_through_a_lookup_is_refused_whatever_its_values",
+      "type": "float",
+      "decimals": 1,
+      "source": "D.VAL",
+      "donor": "KEY,VAL\nr999,5.5\n",
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-15", "spec_paths": ["columns.TEXT.derivation.str_decimal.source"], "context": {"source": "D.VAL", "expected": "numeric", "actual": "str"}}],
+      "rows": [
+        {"row": "no record", "value": null}
+      ]
+    }
+  ]
+}

@@ -515,20 +515,23 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             }
         }
         self.check_capacity(RegionId::DATASET, 0, 0)?;
-        // A partitioned run divides only what the inventory lets it divide;
-        // a step that needs the whole table refuses it before any record is
-        // read, unless the run falls back to the whole table (#3697).
-        if self
+        // A partitioned run divides only what the inventory lets it divide
+        // under its partitions; a step that needs the whole table refuses it
+        // before any record is read, unless the run falls back to the whole
+        // table (#3697, #3763).
+        if let Some(partitions) = self
             .partitions
             .as_ref()
-            .is_some_and(|partitions| !partitions.fallback)
+            .filter(|partitions| !partitions.fallback)
         {
-            if let Some(step) = plan.whole_table_step() {
+            if let Some(step) = plan.whole_table_step(partitions.keys) {
                 return Err(Box::new(ExecutionError::PartitionGlobal {
                     path: plan.step_path(step).to_owned(),
                 }));
             }
         }
+        // Admitted: a key-bounded run cuts its input now (#3763).
+        self.cut_by_keys();
         observer(ExecutionEvent::Exit {
             phase: ExecutionPhase::Admission,
             outcome: crate::application_observer::Outcome::Succeeded,
@@ -847,46 +850,63 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             .collect();
         let rows: Vec<usize> = (first..frame.rows()).collect();
         for binding in windowed {
-            let callbacks = self.step_callbacks(region, super::resolved::Step::Window(binding));
+            let step = super::resolved::Step::Window(binding);
+            let callbacks = self.step_callbacks(region, step);
             let column = self.local_column(region, plan.binding(binding).column);
             let output = first..frame.rows();
             let columns = [column];
-            let footprint = Footprint::Cells {
-                columns: &columns,
-                rows: &rows,
-            };
-            self.run_unit(frame, footprint, callbacks, |run, frame, row_mode| {
-                run.windows = windows::Runs::default();
-                {
-                    let mut cx = run.template_cx(frame, region, table, secondary, first);
-                    cx.output = output.clone();
-                    windows::prepare(run, &cx, plan.binding(binding).expr)?;
-                }
-                if row_mode {
-                    for &row in &rows {
+            // Under key-bounded partitions a window that groups by every
+            // partition key reads only rows of its own partition (#3763): its
+            // run is prepared once over the template's rows, then each
+            // partition's rows are evaluated as a unit of their own.
+            // Consecutive partitions keep the window stage one unit (#3697).
+            let keyed = self
+                .partitions
+                .as_ref()
+                .is_some_and(|partitions| partitions.keys > 0);
+            let divided =
+                keyed && self.reads_partitions(template) && self.divides(|other| other == step);
+            let runs = self.row_runs(divided, frame, &rows);
+            for (number, range) in runs.into_iter().enumerate() {
+                self.next_partition(number)?;
+                let unit_rows = &rows[range];
+                let footprint = Footprint::Cells {
+                    columns: &columns,
+                    rows: unit_rows,
+                };
+                self.run_unit(frame, footprint, callbacks, |run, frame, row_mode| {
+                    if number == 0 {
+                        run.windows = windows::Runs::default();
+                        let mut cx = run.template_cx(frame, region, table, secondary, first);
+                        cx.output = output.clone();
+                        windows::prepare(run, &cx, plan.binding(binding).expr)?;
+                    }
+                    if row_mode {
+                        for &row in unit_rows {
+                            run.complete_binding(
+                                frame,
+                                binding,
+                                table,
+                                secondary,
+                                first,
+                                &[row],
+                                Some(output.clone()),
+                            )?;
+                        }
+                        Ok(())
+                    } else {
                         run.complete_binding(
                             frame,
                             binding,
                             table,
                             secondary,
                             first,
-                            &[row],
+                            unit_rows,
                             Some(output.clone()),
-                        )?;
+                        )
                     }
-                    Ok(())
-                } else {
-                    run.complete_binding(
-                        frame,
-                        binding,
-                        table,
-                        secondary,
-                        first,
-                        &rows,
-                        Some(output.clone()),
-                    )
-                }
-            })?;
+                })?;
+            }
         }
         if let Some(filter) = node
             .filter

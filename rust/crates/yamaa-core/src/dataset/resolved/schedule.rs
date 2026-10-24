@@ -19,6 +19,10 @@ pub(super) fn build(plan: &mut ResolvedPlan) -> Result<(), ResolutionError> {
             step,
             checkpoint: false,
             partition: PartitionClass::Safe,
+            keyed: KeyedClass {
+                keys: u32::MAX,
+                class: PartitionClass::Safe,
+            },
             effects: Effects::Pure,
         }));
         plan.regions[index].schedule = u32::try_from(start)
@@ -220,9 +224,14 @@ fn donor(plan: &ResolvedPlan, region: RegionId) -> Vec<Step> {
 
 /// Cancellation checkpoints, partition classes and effects of every step.
 pub(super) fn annotate(plan: &mut ResolvedPlan) {
+    let key_fields = key_fields(plan);
+    let every = plan
+        .region_templates(RegionId::DATASET)
+        .all(|template| plan.reads_driver(template));
     let mut classes = Classes {
         plan,
         donors: vec![None; plan.regions.len()],
+        key_fields: &key_fields,
     };
     let mut annotations = Vec::with_capacity(plan.schedule.len());
     for index in 0..plan.regions.len() {
@@ -253,7 +262,7 @@ pub(super) fn annotate(plan: &mut ResolvedPlan) {
                     )
                     || matches!(step, Step::Checks(check) if plan.check(check).scope == CheckScope::Dataset));
             after_keys = matches!(step, Step::OutputKeys);
-            let mut partition = match step {
+            let mut class = Class::of(match step {
                 Step::Admit | Step::VerifyIntermediates { .. } | Step::Order => {
                     PartitionClass::Global
                 }
@@ -261,7 +270,7 @@ pub(super) fn annotate(plan: &mut ResolvedPlan) {
                 Step::PublishSelf(_) if self_rows => PartitionClass::Global,
                 Step::Checks(check) => check_class(plan.check(check).family),
                 _ => PartitionClass::Safe,
-            };
+            });
             let mut effects = Effects::Pure;
             let converts = |binding: BindingId| plan.binding(binding).unconvertible.is_some();
             match step {
@@ -274,24 +283,101 @@ pub(super) fn annotate(plan: &mut ResolvedPlan) {
                 // A named driver materializes its donor rows in its driver step.
                 Step::Driver(template) => {
                     if let Some(relation) = plan.template(template).driver.named {
-                        let (_, effect) = classes.relation(relation, &mut Vec::new());
+                        let (_, effect) =
+                            classes.relation(relation, Scope::default(), &mut Vec::new());
                         effects = effects.max(effect);
                     }
                 }
                 _ => (),
             }
+            let scope = step_scope(plan, step, every);
             for expr in step_exprs(plan, step) {
-                let (class, effect) = classes.expr(expr);
-                partition = partition.max(class);
+                let (reached, effect) = classes.expr(expr, scope);
+                class = class.max(reached);
                 effects = effects.max(effect);
             }
-            annotations.push((checkpoint, partition, effects));
+            annotations.push((checkpoint, class, effects));
         }
     }
-    for (info, (checkpoint, partition, effects)) in plan.schedule.iter_mut().zip(annotations) {
+    for (info, (checkpoint, class, effects)) in plan.schedule.iter_mut().zip(annotations) {
         info.checkpoint = checkpoint;
-        info.partition = partition;
+        info.partition = class.rows;
+        info.keyed = KeyedClass {
+            keys: class.keys,
+            class: class.keyed,
+        };
         info.effects = effects;
+    }
+}
+
+/// The driver field each declared key copies (#3763): the field that every
+/// template reading the driver input binds the key to by a plain read whose
+/// value keeps its type. None for a key that some such template derives any
+/// other way, and for every key when no template reads the driver input.
+fn key_fields(plan: &ResolvedPlan) -> Vec<Option<u32>> {
+    let templates: Vec<TemplateId> = plan
+        .region_templates(RegionId::DATASET)
+        .filter(|&template| plan.reads_driver(template))
+        .collect();
+    plan.keys()
+        .iter()
+        .map(|&key| {
+            let mut fields = templates
+                .iter()
+                .map(|&template| key_field(plan, template, key));
+            let first = fields.next()??;
+            fields.all(|field| field == Some(first)).then_some(first)
+        })
+        .collect()
+}
+
+/// The driver field `template` copies into `key`: a plain read of the field,
+/// which converts nothing because the field's type is the column's, and for
+/// a grouped template one of its group fields.
+fn key_field(plan: &ResolvedPlan, template: TemplateId, key: ColumnId) -> Option<u32> {
+    let binding = plan.binding(plan.cell(template, key)?);
+    let node = plan.expr(binding.expr);
+    let &[Read::Field(field)] = plan.reads(binding.expr) else {
+        return None;
+    };
+    if node.kind != ExprKind::Source || !matches!(node.op, Op::Read) {
+        return None;
+    }
+    let source = &plan.sources()[binding.driver.source.index()].schema;
+    if Some(source.columns().get(field as usize)?.kind) != plan.column(key).kind {
+        return None;
+    }
+    match &binding.driver.grain {
+        Grain::Groups(fields) if !fields.contains(&field) => None,
+        _ => Some(field),
+    }
+}
+
+/// Whose rows `step`'s windows and aggregates read ([`Scope`]). `every`
+/// says whether every template of the dataset reads the driver input.
+fn step_scope(plan: &ResolvedPlan, step: Step, every: bool) -> Scope<'_> {
+    match step {
+        Step::Row(binding) | Step::Window(binding) => {
+            let bound = plan.binding(binding);
+            let rows = bound
+                .templates
+                .iter()
+                .all(|&template| plan.reads_driver(template));
+            Scope {
+                driver: Some(&bound.driver),
+                rows,
+                candidates: rows,
+            }
+        }
+        Step::Column(column) => Scope {
+            driver: None,
+            rows: plan
+                .column_bindings(column)
+                .flat_map(|binding| &plan.binding(binding).templates)
+                .all(|&template| plan.reads_driver(template)),
+            candidates: every,
+        },
+        _ => Scope::default(),
     }
 }
 
@@ -307,7 +393,12 @@ impl ResolvedPlan {
     /// admission over the complete inputs, intermediate verification, SELF
     /// publication, the final order over the complete accepted relation, and
     /// the declaration checks, which read no data.
-    pub fn whole_table_step(&self) -> Option<Step> {
+    ///
+    /// Under key-bounded partitions over the leading `keys` declared keys
+    /// (#3763), a window or an aggregate that groups by every one of them
+    /// needs no more than its partition ([`StepInfo::class`]); zero `keys`
+    /// asks for partitions of consecutive records.
+    pub fn whole_table_step(&self, keys: usize) -> Option<Step> {
         self.region_schedule(RegionId::DATASET)
             .iter()
             .find(|info| match info.step {
@@ -316,7 +407,7 @@ impl ResolvedPlan {
                 | Step::PublishSelf(_)
                 | Step::Order => false,
                 Step::Checks(check) => {
-                    info.partition == PartitionClass::Global
+                    info.class(keys) == PartitionClass::Global
                         && !matches!(
                             self.check(check).family,
                             CheckFamily::InvalidDiagnostic
@@ -336,9 +427,27 @@ impl ResolvedPlan {
                                 materialized_class(self, relation) == PartitionClass::Global
                             })
                 }
-                _ => info.partition == PartitionClass::Global,
+                _ => info.class(keys) == PartitionClass::Global,
             })
             .map(|info| info.step)
+    }
+
+    /// The driver fields that key-bounded partitions over the leading `keys`
+    /// declared keys cut the driver input by (#3763): for each of those keys,
+    /// the field that every template reading the driver input copies into it
+    /// unchanged. None when the specification declares no key, or when a
+    /// template derives one of those keys any other way: the partitions then
+    /// have nothing to keep whole.
+    pub fn partition_fields(&self, keys: usize) -> Option<Vec<usize>> {
+        let fields = key_fields(self);
+        let keys = keys.min(fields.len());
+        if keys == 0 {
+            return None;
+        }
+        fields[..keys]
+            .iter()
+            .map(|field| field.map(|field| field as usize))
+            .collect()
     }
 
     /// The authored path a dataset step evaluates: its binding's, its
@@ -371,9 +480,11 @@ impl ResolvedPlan {
 /// class of its donor plan's derivations, its filter and its key
 /// expressions.
 fn materialized_class(plan: &ResolvedPlan, relation: RelationId) -> PartitionClass {
+    let key_fields = key_fields(plan);
     let mut classes = Classes {
         plan,
         donors: vec![None; plan.regions.len()],
+        key_fields: &key_fields,
     };
     let node = plan.relation(relation);
     let mut exprs: Vec<ExprId> = node.filter.into_iter().collect();
@@ -389,7 +500,7 @@ fn materialized_class(plan: &ResolvedPlan, relation: RelationId) -> PartitionCla
     }
     exprs
         .into_iter()
-        .map(|expr| classes.expr(expr).0)
+        .map(|expr| classes.expr(expr, Scope::default()).0.rows)
         .max()
         .unwrap_or(PartitionClass::Safe)
 }
@@ -442,11 +553,73 @@ fn check_class(family: CheckFamily) -> PartitionClass {
     }
 }
 
+/// What an expression or a step reaches: its class under partitions of
+/// consecutive records (#3697), its class under key-bounded partitions
+/// (#3763), and how many leading declared keys every window and aggregate it
+/// reads groups by, `u32::MAX` when it reads none.
+#[derive(Clone, Copy)]
+struct Class {
+    rows: PartitionClass,
+    keyed: PartitionClass,
+    keys: u32,
+}
+
+impl Class {
+    const SAFE: Self = Self::of(PartitionClass::Safe);
+
+    /// The same class under both kinds of partitions.
+    const fn of(class: PartitionClass) -> Self {
+        Self {
+            rows: class,
+            keyed: class,
+            keys: u32::MAX,
+        }
+    }
+
+    /// A window or an aggregate whose grouping holds the leading `keys`
+    /// declared keys: global over consecutive records, and inside one
+    /// partition when the partitions keep those keys' groups whole.
+    const fn grouped(keys: u32) -> Self {
+        Self {
+            rows: PartitionClass::Global,
+            keyed: PartitionClass::Safe,
+            keys,
+        }
+    }
+
+    fn max(self, other: Self) -> Self {
+        Self {
+            rows: self.rows.max(other.rows),
+            keyed: self.keyed.max(other.keyed),
+            keys: self.keys.min(other.keys),
+        }
+    }
+}
+
+/// Whose rows a step's windows and aggregates read (#3763). A row of a
+/// template that does not read the driver input belongs to no partition,
+/// so a window or an aggregate that reads such a row holds no partition key.
+#[derive(Clone, Copy, Default)]
+struct Scope<'p> {
+    /// The driver context of a row-stage binding, whose current group a
+    /// grouped template's aggregate reduces.
+    driver: Option<&'p DriverContext>,
+    /// Every row the step evaluates belongs to a template that reads the
+    /// driver input: the rows a qualified aggregate matches records for.
+    rows: bool,
+    /// Every row a window or an unqualified aggregate of the step ranges
+    /// over belongs to such a template: the template's own rows in the row
+    /// stage, and every candidate of the dataset in the column phase.
+    candidates: bool,
+}
+
 /// Partition classes and effects of expressions. Each donor region's effects
 /// are computed once, however many reads materialize it.
 struct Classes<'a> {
     plan: &'a ResolvedPlan,
     donors: Vec<Option<Effects>>,
+    /// The driver field each declared key copies, if any ([`key_fields`]).
+    key_fields: &'a [Option<u32>],
 }
 
 impl Classes<'_> {
@@ -465,7 +638,7 @@ impl Classes<'_> {
             Effects::Handlers
         };
         for binding in plan.region_bindings(region) {
-            let (_, effect) = self.expr(plan.binding(binding).expr);
+            let (_, effect) = self.expr(plan.binding(binding).expr, Scope::default());
             effects = effects.max(effect);
         }
         self.donors[region.index()] = Some(effects);
@@ -474,16 +647,20 @@ impl Classes<'_> {
 
     /// Reading a relation: its class, and the effects of selecting from it
     /// (key expressions and the nearest reference, filter, and a donor plan
-    /// it materializes).
+    /// it materializes). `scope` says whose rows the reading step reads.
     fn relation(
         &mut self,
         relation: RelationId,
+        scope: Scope<'_>,
         pending: &mut Vec<ExprId>,
-    ) -> (PartitionClass, Effects) {
+    ) -> (Class, Effects) {
         let node = self.plan.relation(relation);
         let class = match node.kind {
-            RelationKind::OdmItems => PartitionClass::CombineStep,
-            _ => PartitionClass::Global,
+            RelationKind::OdmItems => Class::of(PartitionClass::CombineStep),
+            RelationKind::CurrentGroup
+            | RelationKind::MatchedAggregate
+            | RelationKind::OutputAggregate => Class::grouped(self.aggregate_keys(relation, scope)),
+            RelationKind::Named { .. } | RelationKind::Join => Class::of(PartitionClass::Global),
         };
         pending.extend(node.filter);
         let keys = node.keys.iter().chain(&node.nearest);
@@ -497,11 +674,94 @@ impl Classes<'_> {
         (class, effects)
     }
 
-    /// The strongest partition class and effect of an expression and
-    /// everything it reaches: operands, relations and windows.
-    fn expr(&mut self, root: ExprId) -> (PartitionClass, Effects) {
+    /// The number of leading declared keys, each copied from a driver field,
+    /// that `holds` accepts: it is given the key's column and that field.
+    fn leading(&self, holds: impl Fn(ColumnId, u32) -> bool) -> u32 {
+        let held = self
+            .plan
+            .keys()
+            .iter()
+            .zip(self.key_fields)
+            .take_while(|(&key, field)| field.is_some_and(|field| holds(key, field)))
+            .count();
+        u32::try_from(held).unwrap_or(u32::MAX)
+    }
+
+    /// The leading keys a window groups by: its `group_by` reads the key's
+    /// completed column, or the driver field the key copies (WINDOW-3,
+    /// WINDOW-11). A window of an intermediate's derivations groups donor
+    /// records, which no partition divides, and holds none, as does a window
+    /// whose rows include one of a template that does not read the driver
+    /// input.
+    fn window_keys(&self, window: WindowId, scope: Scope<'_>) -> u32 {
+        let node = self.plan.window(window);
+        if node.region != RegionId::DATASET || !scope.candidates {
+            return 0;
+        }
+        self.leading(|key, field| {
+            node.group_by.contains(&Read::Column(key))
+                || node.group_by.contains(&Read::Field(field))
+        })
+    }
+
+    /// The leading keys an aggregate groups by (LOOKUP-18, LOOKUP-19): the
+    /// group fields of the grouped row template it reduces, when that
+    /// template reads the driver input; the `group_by` columns of an
+    /// unqualified aggregate; or the keys of a qualified one, each reading
+    /// the key's column or the driver field it copies, and over the driver
+    /// input pairing it with that field, so every matched record shares the
+    /// current row's partition keys. An aggregate of an intermediate's
+    /// derivations holds none, as its windows do, and so does one that
+    /// ranges over or is evaluated for a row of a template that does not read
+    /// the driver input.
+    fn aggregate_keys(&self, relation: RelationId, scope: Scope<'_>) -> u32 {
         let plan = self.plan;
-        let mut class = PartitionClass::Safe;
+        let node = plan.relation(relation);
+        if node.region != RegionId::DATASET {
+            return 0;
+        }
+        let reads = |key: ColumnId, field: u32| {
+            move |pair: &&RelationKey| {
+                pair.value == KeyValue::Read(Read::Column(key))
+                    || pair.value == KeyValue::Read(Read::Field(field))
+            }
+        };
+        match node.kind {
+            RelationKind::CurrentGroup => match scope.driver {
+                Some(DriverContext {
+                    source,
+                    named: None,
+                    grain: Grain::Groups(fields),
+                    ..
+                }) if plan.region_sources(RegionId::DATASET).next() == Some(*source) => {
+                    self.leading(|_, field| fields.contains(&field))
+                }
+                _ => 0,
+            },
+            RelationKind::OutputAggregate if scope.candidates => {
+                self.leading(|key, field| node.keys.iter().any(|pair| reads(key, field)(&pair)))
+            }
+            RelationKind::MatchedAggregate if scope.rows => {
+                let primary = plan.region_sources(node.region).next();
+                let over_driver =
+                    matches!(node.donor, Donor::Source(source) if Some(source) == primary);
+                self.leading(|key, field| {
+                    node.keys
+                        .iter()
+                        .filter(reads(key, field))
+                        .any(|pair| !over_driver || pair.field == field)
+                })
+            }
+            _ => 0,
+        }
+    }
+
+    /// The strongest partition classes and effect of an expression and
+    /// everything it reaches: operands, relations and windows. `scope`
+    /// says whose rows the step the expression belongs to reads.
+    fn expr(&mut self, root: ExprId, scope: Scope<'_>) -> (Class, Effects) {
+        let plan = self.plan;
+        let mut class = Class::SAFE;
         let mut effects = Effects::Pure;
         let mut pending = vec![root];
         let mut seen = std::collections::BTreeSet::new();
@@ -510,16 +770,19 @@ impl Classes<'_> {
                 continue;
             }
             class = class.max(match plan.expr(expr).kind {
-                ExprKind::Collect | ExprKind::Odm(_) => PartitionClass::CombineStep,
+                ExprKind::Collect | ExprKind::Odm(_) => Class::of(PartitionClass::CombineStep),
+                ExprKind::Window(window) | ExprKind::ContextWindow(window) => {
+                    Class::grouped(self.window_keys(window, scope))
+                }
+                ExprKind::Aggregate(relation) => {
+                    Class::grouped(self.aggregate_keys(relation, scope))
+                }
                 ExprKind::ProjectFunction
-                | ExprKind::Window(_)
-                | ExprKind::ContextWindow(_)
                 | ExprKind::Intermediate(_)
                 | ExprKind::Joined(_)
                 | ExprKind::JoinedSource(_)
-                | ExprKind::SourceLookup(_)
-                | ExprKind::Aggregate(_) => PartitionClass::Global,
-                _ => PartitionClass::Safe,
+                | ExprKind::SourceLookup(_) => Class::of(PartitionClass::Global),
+                _ => Class::SAFE,
             });
             if plan.expr(expr).kind == ExprKind::ProjectFunction {
                 effects = effects.max(Effects::Callbacks);
@@ -531,12 +794,12 @@ impl Classes<'_> {
             for read in plan.reads(expr) {
                 match *read {
                     Read::Relation(relation, _) => {
-                        let (relation_class, effect) = self.relation(relation, &mut pending);
+                        let (relation_class, effect) = self.relation(relation, scope, &mut pending);
                         class = class.max(relation_class);
                         effects = effects.max(effect);
                     }
                     Read::Window(window) => {
-                        class = PartitionClass::Global;
+                        class = class.max(Class::grouped(self.window_keys(window, scope)));
                         pending.extend(plan.window(window).filter);
                     }
                     Read::Column(_) | Read::Field(_) => (),

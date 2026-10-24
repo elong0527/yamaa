@@ -266,16 +266,6 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         self.assertEqual(len(self.errors()), 1)
         self.assertIn("errors.rs:1: new diagnostic", self.errors()[0])
 
-    def test_generated_schema_is_exempt_from_ownership_but_not_normative_ids(self):
-        path = self.write(
-            "rust/crates/yamaa-adapters/src/shipped_schema/data.rs",
-            'const DATA: &str = "invalid_value";\nconst REQ: &str = "VALUE-1";\n',
-        )
-        self.assertEqual(self.errors(), [])
-        path.write_text('const REQ: &str = "VALUE-999";\n')
-        self.assertEqual(len(self.errors()), 1)
-        self.assertIn("undefined rule VALUE-999", self.errors()[0])
-
     def test_missing_condition_and_wrong_phase_fail(self):
         path = self.root / "yaml/conditions.yaml"
         path.write_text(
@@ -323,12 +313,20 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         self.write("yaml/conditions.yaml", "conditions: []\n")
         self.assertReported("no condition registrations")
 
-    def test_generated_message_table_is_exempt_from_ownership(self):
-        self.write(
+    def test_generated_message_table_is_exempt_from_ownership_but_not_normative_ids(
+        self,
+    ):
+        path = self.write(
             str(guard.MESSAGE_TABLE),
             'const TEMPLATES: &[(&str, &str)] = &[("invalid_value", "a value is invalid")];\n',
         )
         self.assertEqual(self.errors(), [])
+        path.write_text('const REQ: &str = "VALUE-999";\n')
+        self.assertEqual(
+            self.errors(),
+            [f"{guard.MESSAGE_TABLE.as_posix()}:1: undefined rule VALUE-999"],
+        )
+        path.unlink()
         self.write(
             "rust/crates/yamaa-core/src/diagnostic/other.rs",
             'const NAME: &str = "invalid_value";\n',
@@ -1710,9 +1708,9 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
             ],
         )
 
-    def test_generated_schema_and_private_unit_tests_hold_no_condition_sites(self):
+    def test_generated_tables_and_private_unit_tests_hold_no_condition_sites(self):
         self.write(
-            str(guard.SHIPPED_SCHEMA),
+            str(guard.CATALOGUE_TABLE),
             'const DATA: &str = r#"{"condition":"cancelled"}"#;\n',
         )
         self.publication_unit_module()

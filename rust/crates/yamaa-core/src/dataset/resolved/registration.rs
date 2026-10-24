@@ -232,6 +232,7 @@ fn admit(plan: &ResolvedPlan, expr: ExprId, found: &mut Vec<ExprId>) {
         | K::StrPad
         | K::StrSubstr
         | K::StrLength
+        | K::StrDecimal
         | K::MappingCut
         | K::Round
         | K::SourceBinding => follow(OperandRole::Value, found),

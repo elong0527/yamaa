@@ -1010,6 +1010,33 @@ class DerivationShapeTests(unittest.TestCase):
         rule = method_column("adam-adsl-demographics")["AGE"]
         self.assertIn("cannot be converted", rule)
 
+    def test_decimal_text_states_its_decimals_width_and_missing_answer(self):
+        # A declared `missing: null` restates the default and is left out.
+        for case, node, expected in [
+            (
+                "aligned",
+                {"source": "AVAL", "decimals": 2, "width": 8, "missing": "."},
+                "Write AVAL as text with exactly 2 decimals, rounded half away "
+                "from zero, padded on the left with spaces to at least 8 "
+                "characters; a missing source " + mapping_doc.ARROW + ' ".".',
+            ),
+            (
+                "one decimal",
+                {"source": "AVAL", "decimals": 1},
+                "Write AVAL as text with exactly 1 decimal, rounded half away "
+                "from zero.",
+            ),
+            (
+                "no decimals",
+                {"source": "AVAL", "decimals": 0, "missing": None},
+                "Write AVAL as text with no decimals, rounded half away from zero.",
+            ),
+        ]:
+            with self.subTest(case=case):
+                self.assertEqual(
+                    mapping_doc.describe_derivation({"str_decimal": node}), expected
+                )
+
 
 class RevisionHistoryTests(unittest.TestCase):
     def test_history_tracks_the_renderer_newest_first(self):

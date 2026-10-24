@@ -1,0 +1,41 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADLB
+keys: [STUDYID, USUBJID, PARAMCD]
+input:
+  LB: input/lb.csv
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, PARAMCD, AVALC]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: LB.LBTESTCD
+
+  - name: LBSTRESC
+    type: str
+    label: Character Result in Std Format
+    derivation: LB.LBSTRESC
+
+  # The defect: LBSTRESC is the result as collected text, and fixed-decimal
+  # text is written only from a number, so the specification is rejected
+  # before any data is read.
+  - name: AVALC
+    type: str
+    label: Analysis Value (C)
+    derivation:
+      str_decimal: {source: LBSTRESC, decimals: 2, width: 8, missing: "."}

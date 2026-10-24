@@ -3,7 +3,7 @@
 The text verbs pad, take a piece by position, count scalars, change case,
 interpolate templates, and extract and replace by pattern. They operate on the
 string values of [VALUE-11](values.md#value-11) and preserve every scalar they
-do not change.
+do not change, and `str_decimal` writes a number as text with fixed decimals.
 One portable regular-expression language serves every pattern in a
 specification.
 
@@ -111,6 +111,73 @@ than 200 scalars, as a row template that writes a second piece filters on it;
 `.` matches no line terminator ([TEXT-7](#text-7)), and `[\s\S]` matches every
 scalar. Otherwise `str_length` is bound to a column, internal when it is not
 published, and the condition compares that column.
+
+<a id="text-15"></a>
+
+### TEXT-15. str_decimal writes a number with exactly `decimals` digits by the one rounding, left-padded with spaces to a minimum width
+
+`str_decimal` rounds a present numeric `source` to `decimals` places, zero or
+more, by the one rounding of [FORMULA-16](formulas.md#formula-16) applied to
+its exact binary64 value. It writes the result in positional notation with
+exactly `decimals` digits after the point and a `-` only when the rounded
+value is below zero, then adds ASCII spaces on the left until the text has at
+least `width` characters, a positive integer when declared; it never
+truncates. A missing source returns `missing`, or missing when it is omitted.
+
+Fails: `incompatible_input_type`, `invalid_field_type`.
+Evidence: `adam-adlb-character-result-text`, `negative-str-decimal-text-source`, `negative-str-decimal-width-zero`, `rust/crates/yamaa-adapters/tests/fixtures/text_decimal_reference.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_decimal_refuses_both_counts_in_field_order`.
+
+The rounding and the writing are those of CSV display precision
+([CSV-9](reference/csv.md#csv-9)): a tie, or a value within
+`2^-26 * 10^-decimals` below a tie, goes away from zero, and the rounded
+decimal is written directly, never rounded back to binary64. A value written
+with `decimals: n` therefore reads as a `float` column written under
+`output.decimals` of `n` does. An `int` source widens to the nearest binary64
+first, as an operand of a `float` result does
+([VALUE-8](values.md#value-8)), so above `2^53` the text is that binary64
+value's: `9007199254740993` with no decimals is `9007199254740992`.
+
+With `decimals: 0` there is no decimal point; otherwise a value below one in
+magnitude keeps one `0` before the point. Digits are never grouped and never
+take an exponent, and a value that rounds to zero, negative zero included, is
+written without a sign. `width` is a minimum, as [TEXT-2](#text-2)'s is: a
+sign counts as one character, and text longer than `width` is written whole,
+never shortened, given fewer decimals or replaced. Without `width` nothing is
+added. This is the shape of a SAS `w.d` format, `put(AVAL, 8.2)` for
+`decimals: 2, width: 8`, with the one rounding above and with text that does
+not fit written whole.
+
+```text
+AVAL         decimals: 2, width: 8   decimals: 1
+3.14159      |    3.14|              |3.1|
+7            |    7.00|              |7.0|
+-1.234       |   -1.23|              |-1.2|
+2.675        |    2.68|              |2.7|
+-0.001       |    0.00|              |0.0|
+12345678.9   |12345678.90|           |12345678.9|
+```
+
+`2.675` is stored `1.8e-14` below its tie at two places, inside the window, so
+it rounds up; at one place it is not near a tie. `missing` is a value field
+([COLUMN-10](columns.md#column-10)), substituted as written and never padded,
+so a period aligned with the numbers is written with its spaces,
+`missing: "       ."`, and a missing source is counted under `missing`
+whether or not it is declared ([COLUMN-14](columns.md#column-14)).
+
+A `str`, `date`, `datetime` or Boolean source fails with
+`incompatible_input_type` at `str_decimal.source`, whatever its values:
+before any record is read where its declared type shows it
+([EXPR-14](expressions.md#expr-14)), and otherwise when it binds, by the type
+of the field it reads, a lookup's field by its donor's. `decimals` below zero
+and `width` below one each fail validation with `invalid_field_type` at their
+own field, both reported in field order. A larger count is admitted, but no
+text is built longer than one saved file may hold: a missing source needs
+none, and a present value whose decimals or width would exceed it refuses the
+run before the text is built. The result type is `str`, and the text is
+presentation ([VALUE-9](values.md#value-9)): the source keeps its unrounded
+value for every other reader, arithmetic refuses the text
+([FORMULA-12](formulas.md#formula-12)), and a value that must itself be
+rounded is rounded by `round_half_away_from_zero`.
 
 ## String templates
 

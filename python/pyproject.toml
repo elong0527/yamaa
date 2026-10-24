@@ -144,6 +144,7 @@ cache-keys = [
   { file = "../rust/crates/*/build.rs" },
   { file = "../rust/crates/*/src/**/*.rs" },
   { file = "../rust/crates/yamaa-adapters/vendor/**" },
+  { file = "../rust/crates/yamaa-adapters/schema/**" },
   { file = "../rust/vendor/**" },
 ]
 

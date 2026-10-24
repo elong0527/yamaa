@@ -632,6 +632,16 @@ impl Lower<'_> {
                 SOURCE,
             ),
             "str_length" => (ScalarOp::StrLength, SOURCE),
+            "str_decimal" => (
+                ScalarOp::StrDecimal {
+                    decimals: integer("decimals")?,
+                    width: match self.field(p, "width") {
+                        Some(_) => Some(integer("width")?),
+                        None => None,
+                    },
+                },
+                SOURCE,
+            ),
             "str_extract" => (
                 ScalarOp::StrExtract {
                     pattern: text("pattern")?.into(),

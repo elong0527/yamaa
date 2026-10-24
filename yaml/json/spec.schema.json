@@ -2240,6 +2240,36 @@
           },
           "additionalProperties": false
         },
+        "str_decimal": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "Numeric variable written as text (TEXT-15).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "decimals": {
+              "type": "integer",
+              "description": "Digits written after the decimal point, zero or more, to which the value is rounded (TEXT-15).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
+            },
+            "width": {
+              "type": "integer",
+              "description": "Minimum length of the text, reached with leading spaces; longer text is never truncated (TEXT-15).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
+            },
+            "missing": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Value returned when the source is missing; without it, a missing source gives missing (TEXT-15).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            }
+          },
+          "additionalProperties": false
+        },
         "diff": {
           "type": "object",
           "properties": {
@@ -4399,6 +4429,40 @@
           "required": [
             "source",
             "digits"
+          ],
+          "additionalProperties": false
+        },
+        "str_decimal": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "Numeric variable written as text (TEXT-15).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "decimals": {
+              "type": "integer",
+              "description": "Digits written after the decimal point, zero or more, to which the value is rounded (TEXT-15).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
+            },
+            "width": {
+              "type": "integer",
+              "description": "Minimum length of the text, reached with leading spaces; longer text is never truncated (TEXT-15).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
+            },
+            "missing": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Value returned when the source is missing; without it, a missing source gives missing (TEXT-15).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            }
+          },
+          "required": [
+            "source",
+            "decimals"
           ],
           "additionalProperties": false
         },

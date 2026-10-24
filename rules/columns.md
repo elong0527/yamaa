@@ -268,6 +268,7 @@ the handler is omitted.
 | mapping | `mapping.unmapped` | Non-missing value with no mapping | Fails |
 | mapping | `cut.missing` | Missing numeric input | Missing |
 | mapping | `missing` of `str_extract`, `str_replace`, `str_case`, `str_substr` and `str_length` | Missing string input | Missing |
+| mapping | `str_decimal.missing` | Missing numeric input | Missing |
 | mapping | `str_extract.no_match` | Non-missing string does not match | Fails |
 | mapping | `str_template.missing` | Any placeholder value is missing | Fails |
 | derivation | `flag.missing` | The condition is `UNKNOWN` ([EXPR-8](expressions.md#expr-8)) | Missing |
@@ -413,22 +414,21 @@ the filter.
 
 Evidence: `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json`, `rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json`, `rust/crates/yamaa-core/tests/execution_numeric_lifecycle.rs::accounting_retains_zero_declarations_and_prior_firings_on_failure`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::handler_rows_register_every_path_at_zero_in_one_order`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::intermediate_derivation_handlers_count_each_build_of_the_donor_records`, `rust/crates/yamaa-core/src/dataset/resolved/tests.rs::column_bindings_register_their_sites_one_binding_after_another`.
 
-A default substitution is counted where the handler it stands for would be:
-at `<operation>.missing` for `mapping`, `cut`, `str_extract`, `str_replace`,
-`str_case`, `str_substr`, `str_length`, `flag`, `first_available`, `impute`
-and `precision`; and at
-`<path>.absent` for a read through an implicit join or of a named
-intermediate, at the source binding or operand that makes the read
-([LOOKUP-24](lookup.md#lookup-24), [LOOKUP-14](lookup.md#lookup-14)). A
-lookup read made while a predicate is evaluated is not a handler site: its
-absence gives missing, uncounted. Nor is
-a read of a named intermediate that supplies another lookup's `between`
-value, filter field or derivation's current-record operand: it answers as in
-a predicate, uncounted, and only the lookup it feeds counts its own answer.
-So one record is never counted twice at one path, a read made while a
-predicate is evaluated counts nothing at any path, including the lookups it
-reads through, and a count does not depend on which read of an intermediate
-first selected a record for the row.
+A default substitution is counted where the handler it stands for would be: at
+`<operation>.missing` for `mapping`, `cut`, `str_extract`, `str_replace`,
+`str_case`, `str_substr`, `str_length`, `str_decimal`, `flag`,
+`first_available`, `impute` and `precision`; and at `<path>.absent` for a read
+through an implicit join or of a named intermediate, at the source binding or
+operand that makes the read ([LOOKUP-24](lookup.md#lookup-24),
+[LOOKUP-14](lookup.md#lookup-14)). A lookup read made while a predicate is
+evaluated is not a handler site: its absence gives missing, uncounted. Nor is a
+read of a named intermediate that supplies another lookup's `between` value,
+filter field or derivation's current-record operand: it answers as in a
+predicate, uncounted, and only the lookup it feeds counts its own answer. So
+one record is never counted twice at one path, a read made while a predicate is
+evaluated counts nothing at any path, including the lookups it reads through,
+and a count does not depend on which read of an intermediate first selected a
+record for the row.
 
 A run registers every handler path before it reads any row, so a run reports
 a path even when it answers nothing. That covers every declared handler and

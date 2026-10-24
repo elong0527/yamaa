@@ -3,7 +3,8 @@
 Each engine crate owns its integration tests' support tree, and no crate's
 tests import another crate's test source (#2158). The adapters' tests build
 the same hand-written documents, AST roots and project compilers as core's,
-so `rust/crates/yamaa-adapters/tests/support/` holds copies of four modules of
+and their replay reads the same case form (#3798), so
+`rust/crates/yamaa-adapters/tests/support/` holds copies of five modules of
 `rust/crates/yamaa-core/tests/support/`. Each copy must stay byte for byte
 equal to core's, so a change to one is made to both (#3569).
 """
@@ -17,6 +18,7 @@ from tools.paths import ROOT
 OWNER = Path("rust/crates/yamaa-core/tests/support")
 COPY = Path("rust/crates/yamaa-adapters/tests/support")
 SHARED = (
+    "diagnostic/form.rs",
     "document.rs",
     "project_call_compiler.rs",
     "project_codelist_compiler.rs",

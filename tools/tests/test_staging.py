@@ -15,6 +15,7 @@ from unittest import mock
 from tools.commands import installed
 from tools.packaging import check_cargo_lock
 from tools.packaging import generate_selftest_cases as selftest_cases
+from tools.packaging import generate_shipped_schema as shipped_schema
 from tools.staging import engine_bundle, vendor_crates
 from tools.staging import stage_grammar_inputs as grammar
 from tools.staging import stage_r_package as staging
@@ -80,6 +81,13 @@ class StagingTests(unittest.TestCase):
                 self.assertEqual(
                     (embedded / "crates/yamaa/selftest" / relative).read_bytes(),
                     source.read_bytes(),
+                )
+            # The adapters carry the schema files that they embed, with the
+            # bytes of yaml/.
+            for relative in shipped_schema.copied():
+                self.assertEqual(
+                    (embedded / "crates/yamaa-adapters/schema" / relative).read_bytes(),
+                    (staging.REPOSITORY / "yaml" / relative).read_bytes(),
                 )
             self.assertEqual(
                 {path.name for path in (destination / "src").iterdir()},

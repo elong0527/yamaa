@@ -355,6 +355,15 @@ EXPECTED = {
         Field("expressions.str_length", "source", "variable", True, kind="name"),
         Field("expressions.str_length", "missing", "substitute_value", kind="value"),
     ],
+    # D264: a number written as fixed-decimal text, as SAS put(x, w.d)
+    # writes a value that fits (TEXT-15).
+    "new.spec.expressions.str_decimal": [
+        Keyword("expressions", "str_decimal", "[]"),
+        Field("expressions.str_decimal", "source", "variable", True, kind="name"),
+        Field("expressions.str_decimal", "decimals", "int", True, kind="value"),
+        Field("expressions.str_decimal", "width", "int", kind="value"),
+        Field("expressions.str_decimal", "missing", "substitute_value", kind="value"),
+    ],
     # #3774: the fields STR_JOIN and COUNT(x) read besides their argument
     # (FORMULA-18).
     "new.spec.aggregate_class.order_by": [

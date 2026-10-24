@@ -308,6 +308,16 @@ mod tests {
                         ]),
                     ),
                 ),
+                value(
+                    "DECIMAL",
+                    op(
+                        "str_decimal",
+                        fields(vec![
+                            ("source", Tree::text("SRC.B")),
+                            ("decimals", Tree::integer(2))
+                        ]),
+                    ),
+                ),
                 value("NUMBER", op("row_number", fields(vec![]))),
                 value("ODM", op("odm", Tree::text("ODM.IT"))),
                 value(
@@ -331,6 +341,7 @@ mod tests {
                 ResultType::STR,
                 ResultType::INT,
                 ResultType::FLOAT,
+                ResultType::STR,
                 ResultType::INT,
                 ResultType::STR,
                 ResultType::DATE,

@@ -25,10 +25,17 @@
 //! file's `documents`, by name (`base`), with `edits` that set or remove a
 //! member at a path of keys and list indexes.
 //!
+//! A positive case also states the output table's rows, the run report's
+//! rows or the files a save wrote, as [`super::form`] reads them for both
+//! crates' replays. Each core operation reports its issues alone, so a core
+//! case that states one of them fails, naming the operation that reports no
+//! such thing.
+//!
 //! Every row was authored: in the Rust table it moved from, or from the rule
 //! card, registry entry or sibling record its pull request names. No run
 //! wrote one.
 use super::{
+    form::{self, Outcome, Stated},
     json::{self, Json},
     operations, rendered,
 };
@@ -61,6 +68,8 @@ pub struct Case {
     /// Whether the rows are some of the issues reported, in any order.
     pub among: bool,
     pub issues: Vec<Value>,
+    /// The tables and files the case states beside its issues.
+    pub stated: Stated,
 }
 
 /// Every case of every fixture file, by file name and then as written. A
@@ -87,15 +96,16 @@ pub fn cases() -> Vec<Case> {
         let name = file.name;
         let _reading = Naming(format!("while reading {name}"));
         let fixture = json::read(file.text, name);
-        let fixture = fixture.closed(&["about", "documents", "cases"]);
+        let fixture = fixture.closed(&form::FIXTURE);
         for case in fixture.field("cases").items() {
-            let case = case.closed(&["case", "operation", "input", "compares", "among", "issues"]);
             let case_name = case.field("case").text();
             assert!(
                 names.insert(case_name.to_owned()),
                 "{name}: the case {case_name} is named twice"
             );
             let label = format!("{name}::{case_name}");
+            let _case = Naming(format!("while reading {label}"));
+            let case = case.closed(&form::CASE);
             let operations = match case.field("operation") {
                 Json::Array(items) => items.iter().map(|item| item.text().into()).collect(),
                 operation => vec![operation.text().into()],
@@ -161,6 +171,7 @@ pub fn cases() -> Vec<Case> {
             }
             cases.push(Case {
                 input: resolved(fixture, case.field("input"), &label),
+                stated: Stated::read(&case.value(), &label),
                 label,
                 operations,
                 compares,
@@ -254,6 +265,8 @@ pub fn replay() -> BTreeSet<ConditionCode> {
                 issues.iter().collect::<Vec<_>>()
             };
             reached.extend(checked.into_iter().map(rendered));
+            // A core operation builds no table and saves no file.
+            case.stated.compare(&Outcome::default(), operation, &label);
         }
     }
     reached

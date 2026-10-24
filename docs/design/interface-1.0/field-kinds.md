@@ -322,6 +322,10 @@ derived columns (NAME-5).
 | `input.*.key` | key: [COLUMN, ...] | identifier | | proposed, P-JOIN-1 |
 | `columns[].derivation.cut.closed` | closed: left \| right (default left) | value | | proposed, P-ORD-2 |
 | `columns[].derivation.str_case.delimiters` | delimiters: CHARACTERS, beside to: proper | value | | decided (D264) |
+| `columns[].derivation.str_decimal.source` | source: VARIABLE | name | | decided (D264) |
+| `columns[].derivation.str_decimal.decimals` | decimals: N (required, zero or more) | value | | decided (D264) |
+| `columns[].derivation.str_decimal.width` | width: W (optional, one or more) | value | | decided (D264) |
+| `columns[].derivation.str_decimal.missing` | missing: VALUE | value | | decided (D264) |
 
 ## Project files (`type: project`)
 

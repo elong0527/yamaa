@@ -96,7 +96,7 @@ Evidence: `rust/crates/yamaa-core/src/ast/types.rs::verbs_fix_or_set_their_resul
 
 | Expression | Class | Result type |
 | --- | --- | --- |
-| `str_pad`, `str_substr`, `str_extract`, `str_replace`, `str_template`, `str_case` | fixed | `str` |
+| `str_pad`, `str_substr`, `str_decimal`, `str_extract`, `str_replace`, `str_template`, `str_case` | fixed | `str` |
 | `cut`, `precision`, `imputation_flag`, `baseline_flag`, `odm`, `dtc`, `date_text` | fixed | `str` |
 | `row_number`, `rank`, `study_day`, `to_epoch_day`, `time_of_day`, `str_length` | fixed | `int` |
 | `round_half_away_from_zero`, `duration_value` | fixed | `float` |

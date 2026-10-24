@@ -195,6 +195,8 @@ conditions! {
     ExtremeIncomparable => ("validation", "incomparable_sources", Some("VALUE-19")),
     StrPadWidth => ("validation", "invalid_field_type", Some("TEXT-2")),
     StrSubstrPosition => ("validation", "invalid_field_type", Some("TEXT-13")),
+    StrDecimalDeclaration => ("validation", "invalid_field_type", Some("TEXT-15")),
+    StrDecimalInput => ("validation", "incompatible_input_type", Some("TEXT-15")),
     DeclarativeRoundingInput => ("validation", "incompatible_input_type", Some("FORMULA-16")),
     TemporalOperand => ("validation", "incompatible_input_type", Some("TIME-1")),
     DateShiftInput => ("validation", "incompatible_input_type", Some("TIME-14")),

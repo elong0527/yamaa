@@ -59,6 +59,7 @@ mod duration;
 mod temporal;
 mod temporal_arithmetic;
 pub use crate::text_case::StringCase;
+pub use crate::text_decimal::StringDecimal;
 pub use crate::text_extract::StringExtract;
 pub use crate::text_pad::StringPad;
 pub use crate::text_position::{StringLength, StringSubstr};
@@ -120,6 +121,10 @@ pub enum Expression {
     StrLength {
         source: std::boxed::Box<Assignment>,
         operation: StringLength,
+    },
+    StrDecimal {
+        source: std::boxed::Box<Assignment>,
+        operation: StringDecimal,
     },
     /// Only the first TRUE branch is evaluated; FALSE and UNKNOWN continue.
     Case(Vec<CaseBranch>),

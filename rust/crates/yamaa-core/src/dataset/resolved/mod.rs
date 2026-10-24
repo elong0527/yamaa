@@ -43,7 +43,7 @@ use super::{
     AggregateRowContext, BoundAggregate, BoundNumeric, BoundOdm, BoundProjectFunction, Check,
     ContextWindow, DatasetPlan, Flag, Imputation, Intermediate, IntermediateUnique, JoinAbsence,
     JoinedRead, Keep, Lookup, OdmTemplateScope, RelationRange, Rounding, SourceSelection,
-    StringCase, StringExtract, StringLength, StringPad, StringReplace, StringSubstr,
+    StringCase, StringDecimal, StringExtract, StringLength, StringPad, StringReplace, StringSubstr,
     StringTemplate, Temporal, VerificationSeverity, Window,
 };
 use crate::bound_expression::BoundPredicate;
@@ -348,6 +348,7 @@ pub enum Op {
     StrPad(StringPad),
     StrSubstr(StringSubstr),
     StrLength(StringLength),
+    StrDecimal(StringDecimal),
     SourceBinding {
         absent: Option<Value>,
         variable: String,
@@ -426,6 +427,7 @@ impl Op {
                 | (K::StrPad, Op::StrPad(_))
                 | (K::StrSubstr, Op::StrSubstr(_))
                 | (K::StrLength, Op::StrLength(_))
+                | (K::StrDecimal, Op::StrDecimal(_))
                 | (K::SourceBinding, Op::SourceBinding { .. })
                 | (K::FirstAvailable, Op::FirstAvailable { .. })
                 | (K::ProjectFunction, Op::ProjectFunction(_))
@@ -466,6 +468,7 @@ pub enum ExprKind {
     StrPad,
     StrSubstr,
     StrLength,
+    StrDecimal,
     SourceBinding,
     FirstAvailable,
     ProjectFunction,
@@ -768,8 +771,39 @@ pub struct StepInfo {
     /// it, sometimes once per current row (LOOKUP-15), so that step's
     /// checkpoint covers it.
     pub checkpoint: bool,
+    /// The step's class under partitions of consecutive records (#3697).
     pub partition: PartitionClass,
+    /// The step's class under key-bounded partitions (#3763).
+    pub keyed: KeyedClass,
     pub effects: Effects,
+}
+
+impl StepInfo {
+    /// The step's class when the partitions never split a group of the
+    /// leading `keys` declared keys, or, for zero keys, when they are
+    /// consecutive records (#3763).
+    pub fn class(&self, keys: usize) -> PartitionClass {
+        if keys > 0 && self.keyed.keys as usize >= keys {
+            self.keyed.class
+        } else {
+            self.partition
+        }
+    }
+}
+
+/// A step's class under key-bounded partitions (#3763). A window or an
+/// aggregate whose grouping includes every partition key reads only rows of
+/// one partition, so it is partition-safe there, while
+/// [`StepInfo::partition`] marks it global.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct KeyedClass {
+    /// How many leading declared keys every window and aggregate of the step
+    /// groups by, each a key the driver input holds; `u32::MAX` for a step
+    /// that reads none.
+    pub keys: u32,
+    /// The step's class when the partitions keep that many leading keys'
+    /// groups whole.
+    pub class: PartitionClass,
 }
 
 /// One step of the schedule, in the order a run visits it.
@@ -974,9 +1008,6 @@ impl ResolvedPlan {
     pub fn conversions(&self, id: RegionId) -> &[HandlerSiteId] {
         &self.region(id).conversions
     }
-    /// A region's named intermediate `index`: named intermediates keep their
-    /// plan positions as the region's first relation slots.
-    /// Returns `None` when the index does not name an intermediate in that region.
     /// How many secondary ports of the dataset follow its inputs: one for
     /// each pair relation, which the run fills before any row is built
     /// (LOOKUP-27).
@@ -990,6 +1021,9 @@ impl ResolvedPlan {
             })
             .count()
     }
+    /// A region's named intermediate `index`: named intermediates keep their
+    /// plan positions as the region's first relation slots.
+    /// Returns `None` when the index does not name an intermediate in that region.
     pub fn named(&self, region: RegionId, index: usize) -> Option<RelationId> {
         let relations = &self.region(region).relations;
         let id = relations.start.checked_add(u32::try_from(index).ok()?)?;
@@ -1003,5 +1037,13 @@ impl ResolvedPlan {
     /// A region's column-phase columns, in the compiler's order.
     pub fn column_order(&self, id: RegionId) -> &[ColumnId] {
         &self.region(id).column_order
+    }
+    /// Whether a dataset template reads the driver input record by record:
+    /// it is driven neither by a secondary input nor by a named
+    /// intermediate, so its rows divide with the input's partitions (#3697).
+    pub fn reads_driver(&self, id: TemplateId) -> bool {
+        let driver = &self.template(id).driver;
+        driver.named.is_none()
+            && self.region_sources(RegionId::DATASET).next() == Some(driver.source)
     }
 }
