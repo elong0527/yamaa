@@ -922,6 +922,7 @@
       "level": "component",
       "consumers": [
         "rust/crates/yamaa-adapters/tests/execution_retired_odm_context.rs",
+        "rust/crates/yamaa-adapters/tests/scalar_text_positions.rs",
         "python/tests/installed/installed_original_specifications.py",
         "R/yamaa/tests/original_specifications.R",
         "R/yamaa/tests/original_specifications_handlers.R",

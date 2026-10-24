@@ -781,7 +781,7 @@ Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/te
 |---|---|---|
 | a bare read: a `source`, an `odm` read or an `ONLY` pivot, directly or through a plain lookup | every type | none |
 | a literal | `Assigned`, `Protocol`, `Collected`, `Other`, `Not Available` | `Derived`, `Predecessor` |
-| a recode: `mapping`, `case`, `first_available`, `str_case`, `str_pad`, `str_replace`, `str_extract`, `str_template`, `to_date` or `dtc`, reading only as the paragraphs below state | `Collected`, `Derived`, `Assigned`, `Other`, `Not Available` | `Protocol`, `Predecessor` |
+| a recode: `mapping`, `case`, `first_available`, `str_case`, `str_pad`, `str_substr`, `str_replace`, `str_extract`, `str_template`, `to_date` or `dtc`, reading only as the paragraphs below state | `Collected`, `Derived`, `Assigned`, `Other`, `Not Available` | `Protocol`, `Predecessor` |
 | anything else | `Derived`, `Assigned`, `Other`, `Not Available` | `Collected`, `Protocol`, `Predecessor` |
 
 An `ONLY` pivot is an `aggregate` whose `expr` is exactly `ONLY(<variable>)`,
@@ -809,11 +809,11 @@ Anything else computes its value: arithmetic and rounding (text in an
 expression field that computes, and `round_half_away_from_zero`), every
 aggregation but an `ONLY` pivot, windows, temporal computation (the date and
 datetime operations other than `to_date` and `dtc`), `flag`, `cut`,
-`greatest` and `least`, `function`, and every read through a named
-intermediate that is not a plain lookup: one that declares `derivations`,
-whose fields it computes, or one over `SELF`, the completed output rows. Each
-type it refutes asserts the value arrived as it stands, and the specification
-shows it did not.
+`str_length`, `greatest` and `least`, `function`, and every read through a
+named intermediate that is not a plain lookup: one that declares
+`derivations`, whose fields it computes, or one over `SELF`, the completed
+output rows. Each type it refutes asserts the value arrived as it stands, and
+the specification shows it did not.
 
 The graph cannot tell an investigator-recorded value from a vendor-transmitted
 or protocol-fixed value, and it refutes only what the derivation proves. An

@@ -316,6 +316,19 @@ EXPECTED = {
     ],
     "new.spec.clear": [Field("root_class", "clear", "list[spec_path]")],
     "new.spec.include": [Field("root_class", "include", "list[project_path]")],
+    # D264: the positional text verbs (TEXT-13, TEXT-14).
+    "new.spec.expressions.str_substr": [
+        Keyword("expressions", "str_substr", "[]"),
+        Field("expressions.str_substr", "source", "variable", True, kind="name"),
+        Field("expressions.str_substr", "start", "int", True, kind="value"),
+        Field("expressions.str_substr", "length", "int", kind="value"),
+        Field("expressions.str_substr", "missing", "substitute_value", kind="value"),
+    ],
+    "new.spec.expressions.str_length": [
+        Keyword("expressions", "str_length", "[]"),
+        Field("expressions.str_length", "source", "variable", True, kind="name"),
+        Field("expressions.str_length", "missing", "substitute_value", kind="value"),
+    ],
     # A lint suppression comment and a profile chosen by the path's
     # extension: neither is a schema field.
     "new.any.suppression_comment": [],
@@ -644,6 +657,13 @@ class RenameTableTests(unittest.TestCase):
             location(entry)
             for entry in rename_table()["entries"]
             if is_keyword(entry) and entry["kind"] in {"keep", "reshape"}
+        }
+        # A keyword 1.0 adds is listed by its reviewed reading.
+        keywords |= {
+            (check.registry, check.keyword)
+            for checks in EXPECTED.values()
+            for check in checks
+            if isinstance(check, Keyword)
         }
         failures = []
         for file_type, (entry, root) in generator.FILE_TYPES.items():

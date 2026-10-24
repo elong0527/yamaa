@@ -423,6 +423,73 @@ pub(super) fn str_case<E>(
     Ok(values)
 }
 
+/// A piece by scalar position: a missing source is counted under `missing`,
+/// declared or by default; a start past the text's end gives missing,
+/// uncounted.
+pub(super) fn str_substr<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    expr: ExprId,
+    rows: &[usize],
+) -> Result<Values, Fail<E>> {
+    use crate::text_position::{Error, Step};
+    let plan = run.plan;
+    let Op::StrSubstr(operation) = &plan.expr(expr).op else {
+        unreachable!("a substring node holds its operation")
+    };
+    let source = run.eval(cx, value_operand(run, expr, 0), rows, false)?;
+    let mut values = Values::missing(0);
+    for (index, &row) in rows.iter().enumerate() {
+        match operation.apply(source.get(index)) {
+            Ok(Step::Value(value)) => values.push_value(value),
+            Ok(Step::Recovered) => {
+                run.fire_node(expr, HandlerKind::Missing, || {
+                    format!("{}.missing", operation.path())
+                })?;
+                values.push_value(operation.missing_substitute());
+            }
+            // Only a source of another type fails, a validation finding without keys.
+            Err(Error::Diagnostic(diagnostic)) => {
+                return Err(run.retained_diagnostic(cx, diagnostic, false, row))
+            }
+        }
+    }
+    Ok(values)
+}
+
+/// A length in scalars: a missing source is counted under `missing`,
+/// declared or by default.
+pub(super) fn str_length<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    expr: ExprId,
+    rows: &[usize],
+) -> Result<Values, Fail<E>> {
+    use crate::text_position::{Error, Step};
+    let plan = run.plan;
+    let Op::StrLength(operation) = &plan.expr(expr).op else {
+        unreachable!("a length node holds its operation")
+    };
+    let source = run.eval(cx, value_operand(run, expr, 0), rows, false)?;
+    let mut values = Values::missing(0);
+    for (index, &row) in rows.iter().enumerate() {
+        match operation.apply(source.get(index)) {
+            Ok(Step::Value(value)) => values.push_value(value),
+            Ok(Step::Recovered) => {
+                run.fire_node(expr, HandlerKind::Missing, || {
+                    format!("{}.missing", operation.path())
+                })?;
+                values.push_value(operation.missing_substitute());
+            }
+            // Only a source of another type fails, a validation finding without keys.
+            Err(Error::Diagnostic(diagnostic)) => {
+                return Err(run.retained_diagnostic(cx, diagnostic, false, row))
+            }
+        }
+    }
+    Ok(values)
+}
+
 /// Padding: one read, shared canonical conversion and an admitted copy.
 pub(super) fn str_pad<E>(
     run: &mut Run<'_, '_, E>,

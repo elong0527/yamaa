@@ -277,6 +277,17 @@ mod tests {
                     )
                 ),
                 value(
+                    "PIECE",
+                    op(
+                        "str_substr",
+                        fields(vec![
+                            ("source", Tree::text("SRC.T")),
+                            ("start", Tree::integer(1))
+                        ])
+                    )
+                ),
+                value("LENGTH", source("str_length")),
+                value(
                     "ROUNDED",
                     op(
                         "round_half_away_from_zero",
@@ -304,6 +315,8 @@ mod tests {
                 ResultType::DATE,
                 ResultType::DATE,
                 ResultType::STR,
+                ResultType::STR,
+                ResultType::INT,
                 ResultType::FLOAT,
                 ResultType::INT,
                 ResultType::STR,

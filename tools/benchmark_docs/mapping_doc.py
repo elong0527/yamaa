@@ -1052,6 +1052,46 @@ def describe_str_pad(node, ctx=None, depth=0):
     )
 
 
+def describe_str_substr(node, ctx=None, depth=0):
+    start, length = node.get("start"), node.get("length")
+
+    def whole(value):
+        return isinstance(value, int) and not isinstance(value, bool)
+
+    if length is None:
+        part = "characters " + str(start) + " to the end"
+    elif whole(start) and whole(length):
+        part = "characters " + str(start) + " to " + str(start + length - 1)
+    else:
+        part = str(length) + " characters from character " + str(start)
+    # A start past the text's last character gives a blank (TEXT-13).
+    blank = (
+        "it is empty"
+        if start == 1
+        else "it has fewer than " + str(start) + " characters"
+    )
+    text = (
+        "Take "
+        + part
+        + " of "
+        + describe_variable(node.get("source"), ctx, depth)
+        + ", blank when "
+        + blank
+    )
+    return sentence(
+        text + handler_phrase(node, "missing", "a missing source", restated=True)
+    )
+
+
+def describe_str_length(node, ctx=None, depth=0):
+    text = "Number of characters in " + describe_variable(
+        node.get("source"), ctx, depth
+    )
+    return sentence(
+        text + handler_phrase(node, "missing", "a missing source", restated=True)
+    )
+
+
 def describe_str_extract(node, ctx=None, depth=0):
     group = node.get("group", 0)
     part = "the whole match" if group in (0, None) else "capture group " + str(group)
@@ -1199,6 +1239,8 @@ DERIVATION_DESCRIBERS = {
     "study_day": describe_study_day,
     "str_case": describe_str_case,
     "str_pad": describe_str_pad,
+    "str_substr": describe_str_substr,
+    "str_length": describe_str_length,
     "str_extract": describe_str_extract,
     "str_replace": describe_str_replace,
     "str_template": describe_str_template,

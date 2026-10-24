@@ -924,6 +924,30 @@ class DerivationShapeTests(unittest.TestCase):
             "Seconds since midnight for the time of day of ASTDTM.",
         )
 
+    def test_str_substr_names_the_characters_it_keeps_and_when_it_is_blank(self):
+        for source, expected in [
+            (
+                {"source": "COMMENT", "start": 201, "length": 200},
+                "Take characters 201 to 400 of COMMENT, blank when it has fewer "
+                "than 201 characters.",
+            ),
+            (
+                {"source": "COMMENT", "start": 1, "missing": "NONE"},
+                "Take characters 1 to the end of COMMENT, blank when it is empty; "
+                "a missing source " + mapping_doc.ARROW + ' "NONE".',
+            ),
+        ]:
+            with self.subTest(source=source):
+                self.assertEqual(
+                    mapping_doc.describe_derivation({"str_substr": source}), expected
+                )
+
+    def test_str_length_counts_the_characters(self):
+        self.assertEqual(
+            mapping_doc.describe_derivation({"str_length": {"source": "COMMENT"}}),
+            "Number of characters in COMMENT.",
+        )
+
     def test_cut_names_the_closed_side_of_each_interval(self):
         rule = method_column("adam-adsl-demographics")["AGEGR1"]
         self.assertIn("intervals closed on the left", rule)
