@@ -6,10 +6,10 @@
 //!
 //! Every single-specification benchmark already saves its files over
 //! one-record partitions in `partitioned_corpus.rs`, so each output is
-//! written one record at a time there. Here the benchmarks that save Parquet
-//! save it in partitions of three records, which divide no row group of the
-//! writer's 1,024 rows, and a run whose check fires in two partitions saves
-//! the whole-table run report, authored from the run report's columns. An
+//! written one record at a time there. Here a Parquet output of several row
+//! groups is saved in partitions that divide no row group of the writer's
+//! 1,024 rows, and a run whose check fires in two partitions saves the
+//! whole-table run report, authored from the run report's columns. An
 //! output beyond the row limit is `partitioned_reading.rs`'s.
 //!
 //! The seam is the facade's partitioned engine mode, which neither the
@@ -18,7 +18,6 @@ use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 use std::path::Path;
 
-use crate::support::corpus::{cases, stage};
 use crate::support::scratch::Scratch;
 use yamaa::{CancellationToken, Engine, EngineOptions, HostLanguage, Partitions};
 
@@ -51,44 +50,30 @@ fn saved(spec: &Path, partitions: Option<Partitions>) -> (usize, BTreeMap<String
     (rows, files)
 }
 
-/// Every single-specification benchmark that saves a Parquet file saves its
-/// files in partitions of three records with the whole-table run's bytes,
-/// its output having more rows than a partition holds (D160, D264).
+/// A Parquet output of 2,500 rows saved in partitions of seven records, a
+/// size that divides no row group of the writer's 1,024 rows, has the
+/// whole-table run's bytes, its row groups of 1,024, 1,024 and 452 rows
+/// included (D160, D264). The corpus's one Parquet benchmark,
+/// `schema-parquet`, has two output rows, fewer than any such size, and
+/// saves its files over one-record partitions in `partitioned_corpus.rs`.
 #[cfg(feature = "parquet")]
 #[test]
-fn a_benchmark_saves_its_parquet_files_in_partitions_that_divide_no_row_group() {
-    let three = Partitions::new(NonZeroUsize::new(3).unwrap());
-    let mut compared = Vec::new();
-    for case in cases() {
-        let expected = case.join("expected");
-        let parquet = std::fs::read_dir(&expected).unwrap().any(|file| {
-            file.unwrap()
-                .file_name()
-                .to_string_lossy()
-                .ends_with(".parquet")
-        });
-        if !parquet || expected.join("error.yaml").is_file() {
-            continue;
-        }
-        let name = case.file_name().unwrap().to_string_lossy().into_owned();
-        let (whole, divided) = (
-            Scratch::new("partitioned-publication-whole"),
-            Scratch::new("partitioned-publication"),
-        );
-        assert!(stage(&case, &whole) && stage(&case, &divided), "{name}");
-        let (rows, files) = saved(&whole.join("spec.yaml"), None);
-        let (divided_rows, divided_files) = saved(&divided.join("spec.yaml"), Some(three));
-        assert_eq!(
-            (divided_rows > 3, divided_rows, divided_files),
-            (true, rows, files),
-            "{name}: partitions of three records"
-        );
-        compared.push(name);
+fn a_parquet_output_saved_in_partitions_that_divide_no_row_group_has_the_whole_tables_bytes() {
+    use std::fmt::Write as _;
+    const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, V: float}}}\noutput: {path: out.parquet, columns: [ID, NAME, V]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: NAME, type: str, derivation: SRC.NAME}\n  - {name: V, type: float, derivation: SRC.V}\n";
+    let mut input = String::from("ID,NAME,V\n");
+    for id in 1..=2_500 {
+        writeln!(input, "{id},name {id},{}.5", id % 97).unwrap();
     }
-    assert!(
-        compared.iter().any(|name| name == "schema-parquet"),
-        "{compared:?}"
-    );
+    let seven = Partitions::new(NonZeroUsize::new(7).unwrap());
+    let [whole, divided] = [None, Some(seven)].map(|partitions| {
+        let scratch = Scratch::new("partitioned-publication-parquet");
+        scratch.write("spec.yaml", SPEC);
+        scratch.write("input.csv", &input);
+        saved(&scratch.join("spec.yaml"), partitions)
+    });
+    assert_eq!(whole.0, 2_500, "the whole-table run's rows");
+    assert_eq!(divided, whole, "partitions of seven records");
 }
 
 /// A range check on AGE fires for ID 1, aged 17, and ID 4, aged 101: in each
