@@ -394,6 +394,10 @@ EXPECTED = {
         ),
         Field("expressions.date_text", "invalid", "substitute_value", kind="value"),
     ],
+    # #3779: the probability QUANTILE reads (FORMULA-18).
+    "new.spec.aggregate_class.quantile": [
+        Field("aggregate_class", "quantile", "float")
+    ],
     # A lint suppression comment and a profile chosen by the path's
     # extension: neither is a schema field.
     "new.any.suppression_comment": [],

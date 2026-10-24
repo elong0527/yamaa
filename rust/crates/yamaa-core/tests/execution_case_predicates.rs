@@ -6,7 +6,7 @@ mod execution {
             use yamaa_core::dataset::{ExecutionError, RowIdentity};
 
             use yamaa_core::{
-                reduction::NumericReducer,
+                expression::Reducer,
                 table::CellError,
                 temporal::{Date, Precision},
                 value::{Value, ValueType},
@@ -72,7 +72,7 @@ mod execution {
                     ExecutionError::ReductionType {
                         path: "columns.A.aggregate".into(),
                         expression: "SUM(SRC.A)".into(),
-                        reducer: NumericReducer::Sum,
+                        reducer: Reducer::Sum,
                         source: "SRC.A".into(),
                         actual: ValueType::Str,
                     },

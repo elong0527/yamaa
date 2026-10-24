@@ -1,5 +1,5 @@
 {
-  "about": "The findings of a qualified or row aggregate: its keys and key types (LOOKUP-5, LOOKUP-9), its context and relations (LOOKUP-18, LOOKUP-19), a reduction that reads several records (FORMULA-20), an identifier outside a reduction (FORMULA-22) and operands of no common or numeric type (FORMULA-23), then the derive bindings that preparation refuses (LOOKUP-22), and the fields of the aggregate that preparation finds unpaired from the reductions that read them (FORMULA-18, LOOKUP-10). All but the static type findings compare the fields their table compared, and each derive binding's case finds its issue among those preparation reports (among). The specification `aggregate` derives RESULT from an aggregate whose derive bindings each case writes.",
+  "about": "The findings of a qualified or row aggregate: its keys and key types (LOOKUP-5, LOOKUP-9), its context and relations (LOOKUP-18, LOOKUP-19), a reduction that reads several records (FORMULA-20), an identifier outside a reduction (FORMULA-22), operands of no common or numeric type (FORMULA-23) and a `quantile` outside 0 through 1 (FORMULA-18), then the derive bindings that preparation refuses (LOOKUP-22), and the fields of the aggregate that preparation finds unpaired from the reductions that read them (FORMULA-18, LOOKUP-10). All but the static type findings compare the fields their table compared, and each derive binding's case finds its issue among those preparation reports (among). The specification `aggregate` derives RESULT from an aggregate whose derive bindings each case writes.",
   "documents": {
     "aggregate": {
       "yamaa": "1.0",
@@ -126,6 +126,18 @@
       "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-23", "spec_paths": ["aggregate.expr"], "context": {"expr": "SUM(D.N) + G", "source": "G", "expected": "numeric", "actual": "str"}}]
     },
     {
+      "case": "a_statistical_reducer_over_a_name_that_is_not_numeric_is_refused_before_any_record",
+      "operation": "aggregate_types",
+      "input": {"expression": "STDDEV(D.S)", "path": "aggregate.expr", "types": {"D.S": "str", "G": "str", "D.N": "int"}},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-23", "spec_paths": ["aggregate.expr"], "context": {"expr": "STDDEV(D.S)", "reducer": "STDDEV", "source": "D.S", "expected": "numeric", "actual": "str"}}]
+    },
+    {
+      "case": "a_quantile_above_one_fails_at_the_field_before_any_record",
+      "operation": "prepare",
+      "input": {"base": "aggregate", "edits": [{"set": ["columns", "1", "derivation"], "to": {"aggregate": {"expr": "QUANTILE(SRC.V)", "quantile": 1.5}}}]},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "FORMULA-18", "spec_paths": ["columns.RESULT.derivation.aggregate.quantile"], "context": {"expected": "a number from 0 through 1"}}]
+    },
+    {
       "case": "an_aggregate_whose_derivations_bind_nothing_is_an_invalid_derive_step",
       "operation": "prepare",
       "input": {"base": "aggregate"},
@@ -186,6 +198,21 @@
       "operation": "prepare",
       "input": {"base": "aggregate", "edits": [{"remove": ["columns", "1", "derivation", "value", "aggregate", "derivations"]}, {"set": ["columns", "1", "derivation", "value", "aggregate", "expr"], "to": "COUNT(SRC.V) + 1"}, {"set": ["columns", "1", "derivation", "value", "aggregate", "distinct"], "to": true}]},
       "issues": [{"phase": "validation", "condition": "unpaired_fields", "rule": "LOOKUP-10", "spec_paths": ["columns.RESULT.derivation.aggregate"], "context": {"declared": ["distinct"], "missing": ["STR_JOIN(x)", "COUNT(x)"]}}]
+    },
+    {
+      "case": "a_quantile_inside_arithmetic_without_its_probability_misses_it",
+      "operation": "prepare",
+      "input": {"base": "aggregate", "edits": [{"remove": ["columns", "1", "derivation", "value", "aggregate", "derivations"]}, {"set": ["columns", "1", "derivation", "value", "aggregate", "expr"], "to": "QUANTILE(SRC.V) - MEDIAN(SRC.V)"}]},
+      "issues": [{"phase": "validation", "condition": "unpaired_fields", "rule": "LOOKUP-10", "spec_paths": ["columns.RESULT.derivation.aggregate"], "context": {"declared": ["QUANTILE(x)"], "missing": ["quantile"]}}]
+    },
+    {
+      "case": "fields_of_different_readers_beside_a_sum_are_two_findings_in_the_tables_order",
+      "operation": "prepare",
+      "input": {"base": "aggregate", "edits": [{"remove": ["columns", "1", "derivation", "value", "aggregate", "derivations"]}, {"set": ["columns", "1", "derivation", "value", "aggregate", "expr"], "to": "SUM(SRC.V)"}, {"set": ["columns", "1", "derivation", "value", "aggregate", "quantile"], "to": 0.5}, {"set": ["columns", "1", "derivation", "value", "aggregate", "order_by"], "to": ["SRC.V"]}]},
+      "issues": [
+        {"phase": "validation", "condition": "unpaired_fields", "rule": "LOOKUP-10", "spec_paths": ["columns.RESULT.derivation.aggregate"], "context": {"declared": ["order_by"], "missing": ["STR_JOIN(x)"]}},
+        {"phase": "validation", "condition": "unpaired_fields", "rule": "LOOKUP-10", "spec_paths": ["columns.RESULT.derivation.aggregate"], "context": {"declared": ["quantile"], "missing": ["QUANTILE(x)"]}}
+      ]
     }
   ]
 }

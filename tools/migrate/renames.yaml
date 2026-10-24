@@ -7524,6 +7524,21 @@ entries:
     the whole source denotes, which impute then reads (TIME-22). No 0.5 file declares it, so the converter
     wrote none.'
   convert: {action: none}
+- id: new.spec.aggregate_class.quantile
+  file_type: spec
+  path: columns[].derivation.aggregate.quantile
+  today: null
+  kind: new
+  proposed: 'aggregate: {quantile: 0.9, expr: "QUANTILE(x)"}'
+  decision: decided (D264)
+  reason: 'An addition to the approved table under D27 (D264): the owner decided on 2026-10-24 that the
+    statistical reducers ship in 1.0.0, a quantile following R''s default, type 7 of Hyndman and Fan (#3779).
+    Optional, with no default (I5): the probability, from 0 through 1, at which QUANTILE reads its quantile;
+    required beside QUANTILE and refused beside any other expression as unpaired_fields, and a value outside
+    0 through 1 fails as invalid_field_type (FORMULA-18). No 0.5 file declares it, so the converter wrote
+    none.'
+  field_kind: value
+  convert: {action: none}
 conditions:
 - today: schema_version_mismatch
   kind: rename

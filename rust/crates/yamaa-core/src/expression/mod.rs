@@ -74,10 +74,21 @@ pub enum Reducer {
     /// Joins a group's values into one text in the aggregate's declared
     /// order, with its separator (FORMULA-18).
     StrJoin,
+    /// The statistical reducers, each with one named definition
+    /// (FORMULA-18, FORMULA-19): the type 7 quantile at 0.5, 0.25, 0.75 and
+    /// at the aggregate's `quantile`, the sample variance and its square
+    /// root, and the geometric mean.
+    Median,
+    Q1,
+    Q3,
+    Quantile,
+    StdDev,
+    Variance,
+    GeoMean,
 }
 
 impl Reducer {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 14] = [
         Self::Sum,
         Self::Count,
         Self::Min,
@@ -85,6 +96,13 @@ impl Reducer {
         Self::Mean,
         Self::Only,
         Self::StrJoin,
+        Self::Median,
+        Self::Q1,
+        Self::Q3,
+        Self::Quantile,
+        Self::StdDev,
+        Self::Variance,
+        Self::GeoMean,
     ];
     /// Canonical spelling from the grammar contract.
     pub fn name(self) -> &'static str {
@@ -96,6 +114,13 @@ impl Reducer {
             Self::Mean => "MEAN",
             Self::Only => "ONLY",
             Self::StrJoin => "STR_JOIN",
+            Self::Median => "MEDIAN",
+            Self::Q1 => "Q1",
+            Self::Q3 => "Q3",
+            Self::Quantile => "QUANTILE",
+            Self::StdDev => "STDDEV",
+            Self::Variance => "VARIANCE",
+            Self::GeoMean => "GEOMEAN",
         }
     }
     /// Recognize a reducer call without reserving the spelling as a name.

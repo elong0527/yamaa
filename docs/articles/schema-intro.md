@@ -295,7 +295,7 @@ in its short form is listed under the field it fills.
 | `str_case` | | `source` | | `to`, `delimiters`, `missing` | |
 | `round_half_away_from_zero` | | `source` | | `digits` | |
 | `str_decimal` | | `source` | | `decimals`, `width`, `missing` | |
-| `aggregate` | `key`, `filter`, `expr` | `group_by`, `order_by` | | `separator`, `distinct` | `between`, `derivations` |
+| `aggregate` | `key`, `filter`, `expr` | `group_by`, `order_by` | | `separator`, `distinct`, `quantile` | `between`, `derivations` |
 | An `aggregate` derivation | `derivation` | | | `type` | |
 | `diff` | | `start`, `end` | | `type`, `unit`, `closed` | |
 | `impute` | | `source`, `not_before`, `not_after`, `fallback` | | `type`, `month`, `day`, `time`, `invalid` | |
