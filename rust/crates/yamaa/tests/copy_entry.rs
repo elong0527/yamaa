@@ -78,15 +78,10 @@ fn rows(table: &Table) -> Vec<(String, Option<String>, Vec<String>, Value)> {
 
 /// The condition, rule and spec paths of each issue a check of `spec` finds.
 fn checked(study: &Study, spec: &str) -> Vec<(String, Option<String>, Vec<String>)> {
-    rows(
-        &engine()
-            .spec_check(&study.path(spec), None, &CancellationToken::new())
-            .unwrap()
-            .issues(),
-    )
-    .into_iter()
-    .map(|(condition, rule, paths, _)| (condition, rule, paths))
-    .collect()
+    rows(&engine().spec(&study.path(spec)).check().unwrap().issues())
+        .into_iter()
+        .map(|(condition, rule, paths, _)| (condition, rule, paths))
+        .collect()
 }
 
 fn issue(condition: &str, rule: &str, path: &str) -> (String, Option<String>, Vec<String>) {
@@ -104,7 +99,7 @@ fn field<'a>(value: &'a ContextValue, key: &str) -> &'a ContextValue {
 
 /// The resolved specification of `spec`.
 fn resolved(study: &Study, spec: &str) -> ContextValue {
-    let artifact = engine().spec_resolve(&study.path(spec), None).unwrap();
+    let artifact = engine().spec(&study.path(spec)).resolve().unwrap();
     let ContextValue::List(entries) = field(&artifact, "entries") else {
         panic!("entries")
     };
@@ -214,7 +209,9 @@ fn a_copy_entry_declares_each_listed_producer_column() {
     let engine = engine();
     let token = CancellationToken::new();
     let mut producer = engine
-        .spec_run(&study.path("adsl.yaml"), None, &token)
+        .spec(&study.path("adsl.yaml"))
+        .cancel_with(&token)
+        .run()
         .unwrap();
     assert_eq!(rows(&producer.issues()), []);
     producer.save(&CancellationToken::new()).unwrap();
@@ -246,7 +243,9 @@ fn a_copy_entry_declares_each_listed_producer_column() {
         ["core", "origins"]
     );
     let mut run = engine
-        .spec_run(&study.path("adae.yaml"), None, &token)
+        .spec(&study.path("adae.yaml"))
+        .cancel_with(&token)
+        .run()
         .unwrap();
     assert_eq!(rows(&run.issues()), []);
     run.save(&CancellationToken::new()).unwrap();
@@ -407,7 +406,8 @@ columns:
     );
     let issues = rows(
         &engine()
-            .spec_check(&study.path("adae.yaml"), None, &CancellationToken::new())
+            .spec(&study.path("adae.yaml"))
+            .check()
             .unwrap()
             .issues(),
     );
@@ -505,7 +505,9 @@ fn an_empty_child_reports_the_copy_cycle_its_parent_reports() {
             .collect::<Vec<_>>();
         for spec in [parent, "child.yaml"] {
             let issues = engine
-                .spec_check(&study.path(spec), None, &token)
+                .spec(&study.path(spec))
+                .cancel_with(&token)
+                .check()
                 .unwrap()
                 .diagnostics()
                 .into_iter()
@@ -707,7 +709,9 @@ fn a_copy_from_a_joined_input_needs_its_key() {
     let engine = engine();
     let token = CancellationToken::new();
     engine
-        .spec_run(&study.path("adsl.yaml"), None, &token)
+        .spec(&study.path("adsl.yaml"))
+        .cancel_with(&token)
+        .run()
         .unwrap()
         .save(&CancellationToken::new())
         .unwrap();
@@ -719,7 +723,9 @@ fn a_copy_from_a_joined_input_needs_its_key() {
     );
     let issues = rows(
         &engine
-            .spec_run(&study.path("adae.yaml"), None, &token)
+            .spec(&study.path("adae.yaml"))
+            .cancel_with(&token)
+            .run()
             .unwrap()
             .issues(),
     );

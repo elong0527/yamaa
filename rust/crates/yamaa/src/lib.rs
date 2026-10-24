@@ -2,7 +2,8 @@
 //! `yamaa-core`.
 //!
 //! An embedder configures one [`Engine`] and calls its use cases: check, run
-//! and save, submission, resolve, `read_odm` and `file_type`, beside the free
+//! and save, submission and resolve through the request [`Engine::spec`] or
+//! [`Engine::project`] gives, and `read_odm` and `file_type`, beside the free
 //! [`lint`], [`schema()`], [`conditions()`], [`info`] and [`selftest`]. The
 //! facade wraps the existing prepare, bind, execute and publish workflow;
 //! there is no second admission or evaluation route. All physical access
@@ -74,7 +75,10 @@ mod internal;
 mod outcome;
 mod plan;
 
-pub use api::{Check, Failure, Plans, ProjectRun, Run, Status, Submission, SECTIONS, STATUSES};
+pub use api::{
+    Check, Failure, Plans, ProjectRequest, ProjectRun, Run, SpecRequest, Status, Submission,
+    SubmissionOptions, SECTIONS, STATUSES,
+};
 pub use cancel::CancellationToken;
 pub use conditions::{conditions, Condition, Conditions, CONDITION_COLUMNS};
 pub use diagnostic::{

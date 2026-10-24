@@ -32,7 +32,7 @@ use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 
 use crate::support::scratch::Scratch;
-use yamaa::{CancellationToken, Engine, EngineOptions, Error, HostLanguage, Partitions, Plans};
+use yamaa::{CancellationToken, Engine, EngineOptions, Error, HostLanguage, Partitions};
 
 /// Benchmarks that must divide, read from their specifications: each
 /// derives only from its input's own records (source reads, mappings, date
@@ -182,9 +182,7 @@ fn whole_table_file(case: &Path, name: &str) -> Option<Vec<u8>> {
     let whole = Scratch::new("partitioned-corpus-whole");
     stage(case, &whole);
     let spec = whole.join("spec.yaml");
-    let run = engine(None)
-        .spec_run(spec.to_str().unwrap(), None, &CancellationToken::new())
-        .unwrap();
+    let run = engine(None).spec(spec.to_str().unwrap()).run().unwrap();
     match outcome(run) {
         Outcome::Saved(Ok(mut files)) => files.remove(name),
         _ => None,
@@ -276,7 +274,11 @@ fn partitioned_and_streamed_runs_reproduce_every_single_specification_benchmark(
         }
         let spec = scratch.join("spec.yaml");
         let spec = spec.to_str().unwrap();
-        let mut run = engine(Some(one)).spec_run(spec, None, &token).unwrap();
+        let mut run = engine(Some(one))
+            .spec(spec)
+            .cancel_with(&token)
+            .run()
+            .unwrap();
         let refused = run.diagnostics().first().is_some_and(|issue| {
             issue.code == "engine_rejected"
                 && issue
@@ -291,21 +293,25 @@ fn partitioned_and_streamed_runs_reproduce_every_single_specification_benchmark(
         };
         if refused {
             run = engine(Some(partitions))
-                .spec_run(spec, None, &token)
+                .spec(spec)
+                .cancel_with(&token)
+                .run()
                 .unwrap();
         } else {
             divided.push(name.clone());
         }
         // Read as a stream before the run's save writes its files.
         let streamed = engine(Some(partitions))
-            .spec_stream(spec, None, &Plans::new(), &token)
+            .spec(spec)
+            .cancel_with(&token)
+            .stream()
             .unwrap();
         let streaming = stream_problems(&run, streamed);
         // A negative benchmark states its first issue's phase, condition,
         // paths and rule; every issue, context included, is the whole-table
         // run's, over the same staged files.
         let issues = if case.join("expected/error.yaml").is_file() {
-            let whole = engine(None).spec_run(spec, None, &token).unwrap();
+            let whole = engine(None).spec(spec).cancel_with(&token).run().unwrap();
             (run.diagnostics() != whole.diagnostics())
                 .then(|| "issues differ from the whole-table run's".to_owned())
         } else {

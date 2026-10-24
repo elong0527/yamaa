@@ -80,7 +80,10 @@ fn relative_paths_after_a_working_directory_change_compile_the_study_they_now_na
     let plans = Plans::new();
     let spec = |plans: &Plans| {
         let run = engine
-            .spec_run_reusing("spec.yaml", None, plans, &token)
+            .spec("spec.yaml")
+            .reusing(plans)
+            .cancel_with(&token)
+            .run()
             .unwrap();
         (plan_of(&run), run.output().unwrap().rows())
     };
@@ -98,7 +101,10 @@ fn relative_paths_after_a_working_directory_change_compile_the_study_they_now_na
     let plans = Plans::new();
     let project = |plans: &Plans| {
         let runs = engine
-            .project_run_reusing("project.yaml", None, plans, &token)
+            .project("project.yaml")
+            .reusing(plans)
+            .cancel_with(&token)
+            .run()
             .unwrap();
         let run = runs.get("DM").unwrap();
         (plan_of(run), run.output().unwrap().rows())
@@ -114,11 +120,14 @@ fn relative_paths_after_a_working_directory_change_compile_the_study_they_now_na
     // project's relative path. The project path now names study B's project,
     // so the plan compiled with study A's project is not reused.
     studies.enter("a");
-    let listed = engine.project_spec("project.yaml", "DM").unwrap();
+    let listed = engine.project("project.yaml").spec("DM").unwrap();
     let plans = Plans::new();
     let member = |plans: &Plans| {
-        let run = engine
-            .spec_run_reusing(&listed, Some("project.yaml"), plans, &token)
+        let run = listed
+            .clone()
+            .reusing(plans)
+            .cancel_with(&token)
+            .run()
             .unwrap();
         (plan_of(&run), run.output().unwrap().rows())
     };

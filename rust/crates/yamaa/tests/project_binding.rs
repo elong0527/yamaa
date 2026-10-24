@@ -163,8 +163,15 @@ fn without_project(engine: &Engine, study: &Study, spec: &str) -> [Vec<Issue>; 2
     study.write("spec.yaml", spec);
     let path = study.path("spec.yaml");
     let token = CancellationToken::new();
-    let checked = issues(&engine.spec_check(&path, None, &token).unwrap().issues());
-    let run = engine.spec_run(&path, None, &token).unwrap();
+    let checked = issues(
+        &engine
+            .spec(&path)
+            .cancel_with(&token)
+            .check()
+            .unwrap()
+            .issues(),
+    );
+    let run = engine.spec(&path).cancel_with(&token).run().unwrap();
     assert!(run.output().is_none());
     [checked, issues(&run.issues())]
 }
@@ -248,7 +255,9 @@ fn with_its_project_a_binding_names_what_the_project_declares() {
         study.write("project.yaml", &project(codelists));
         issues(
             &engine()
-                .spec_check(&path, Some(&project_path), &CancellationToken::new())
+                .spec(&path)
+                .project(&project_path)
+                .check()
                 .unwrap()
                 .issues(),
         )
@@ -281,11 +290,9 @@ fn a_where_value_is_never_left_unchecked_against_its_codelist() {
     study.write("project.yaml", &project(&format!("{PARAMCD}{GLUCU}")));
     let found = issues(
         &engine()
-            .spec_check(
-                &study.path("spec.yaml"),
-                Some(&study.path("project.yaml")),
-                &CancellationToken::new(),
-            )
+            .spec(&study.path("spec.yaml"))
+            .project(&study.path("project.yaml"))
+            .check()
             .unwrap()
             .issues(),
     );

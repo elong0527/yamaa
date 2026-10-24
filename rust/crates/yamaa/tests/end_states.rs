@@ -3,7 +3,7 @@
 //! 2026-10-23): one test per cell of the before-start, mid-partition,
 //! mid-stream and publication rows, on a partitioned engine over a memory
 //! resolver. The mid-stream cells read a streamed run's output one record per
-//! batch (`Engine::spec_stream`).
+//! batch (`SpecRequest::stream`).
 //!
 //! Each cell asserts its end state whole: the outcome and its identity
 //! (cancelled, or the first issue's phase, condition and paths), what names
@@ -18,7 +18,7 @@ use std::sync::{
 
 use yamaa::{
     Argument, CallError, CancellationToken, Engine, EngineOptions, Error, Failure, FunctionError,
-    FunctionHandle, FunctionIdentity, HostLanguage, LockContext, MemoryResolver, Partitions, Plans,
+    FunctionHandle, FunctionIdentity, HostLanguage, LockContext, MemoryResolver, Partitions,
     ProjectFunctions, ResolverFailure, ResolverReply, ResolverRequest, ResourceResolver, Run,
     Scalar, ScalarRef, Signature,
 };
@@ -195,7 +195,10 @@ fn before_start_a_cancelled_run_returns_no_result_and_publishes_nothing() {
         if cancel_before {
             token.cancel();
         }
-        let result = engine(Arc::clone(&resolver), false).spec_run("spec.yaml", None, &token);
+        let result = engine(Arc::clone(&resolver), false)
+            .spec("spec.yaml")
+            .cancel_with(&token)
+            .run();
         assert!(matches!(result, Err(Error::Cancelled)), "{label}");
         assert_eq!(
             end_state(&resolver, "cancelled".into(), String::new()),
@@ -226,7 +229,8 @@ fn before_start_a_cancelled_run_returns_no_result_and_publishes_nothing() {
 fn before_start_a_refused_partitioned_run_publishes_only_its_report() {
     let resolver = Recording::new(WINDOW, INPUT, None);
     let mut run = engine(Arc::clone(&resolver), false)
-        .spec_run("spec.yaml", None, &CancellationToken::new())
+        .spec("spec.yaml")
+        .run()
         .unwrap();
     assert!(run.output().is_none());
     let outcome = r#"Error engine engine_rejected None ["columns.RN.derivation.row_number"] {"code":"partition_global","step":"execute"} None None"#.to_owned();
@@ -272,10 +276,16 @@ fn mid_partition_a_cancelled_run_returns_no_result_and_publishes_nothing() {
         EngineOptions::new(HostLanguage::Python, "test".into(), "0".into())
             .with_resolver(Recording::new(SPEC, INPUT, None)),
     );
-    whole.spec_run("spec.yaml", None, &counting(None)).unwrap();
+    whole
+        .spec("spec.yaml")
+        .cancel_with(&counting(None))
+        .run()
+        .unwrap();
     let whole_polls = polls.swap(0, Ordering::SeqCst);
     engine(Recording::new(SPEC, INPUT, None), false)
-        .spec_run("spec.yaml", None, &counting(None))
+        .spec("spec.yaml")
+        .cancel_with(&counting(None))
+        .run()
         .unwrap();
     let total = polls.swap(0, Ordering::SeqCst);
     // Without rows the specification builds the key grain: its key
@@ -285,8 +295,10 @@ fn mid_partition_a_cancelled_run_returns_no_result_and_publishes_nothing() {
     for from in 1..=total {
         let resolver = Recording::new(SPEC, INPUT, None);
         polls.store(0, Ordering::SeqCst);
-        let result =
-            engine(Arc::clone(&resolver), false).spec_run("spec.yaml", None, &counting(Some(from)));
+        let result = engine(Arc::clone(&resolver), false)
+            .spec("spec.yaml")
+            .cancel_with(&counting(Some(from)))
+            .run();
         assert!(matches!(result, Err(Error::Cancelled)), "poll {from}");
         assert_eq!(
             end_state(&resolver, "cancelled".into(), String::new()),
@@ -399,7 +411,9 @@ fn before_start_a_driver_whose_donor_calls_a_function_is_refused_before_any_call
         });
         let (engine, resolver) = function_study(DRIVER_SPEC, functions.clone(), partitions);
         let run = engine
-            .spec_run("spec.yaml", Some("project.yaml"), &CancellationToken::new())
+            .spec("spec.yaml")
+            .project("project.yaml")
+            .run()
             .unwrap();
         let built = if run.diagnostics().is_empty() {
             "succeeded".to_owned()
@@ -435,7 +449,11 @@ fn mid_partition_a_project_function_interrupt_cancels_the_call() {
         Partitions::new(NonZeroUsize::MIN).with_whole_table_fallback(),
     );
     let token = CancellationToken::new();
-    let result = engine.spec_run("spec.yaml", Some("project.yaml"), &token);
+    let result = engine
+        .spec("spec.yaml")
+        .project("project.yaml")
+        .cancel_with(&token)
+        .run();
     assert!(matches!(result, Err(Error::Cancelled)));
     assert_eq!(
         functions.calls.load(Ordering::SeqCst),
@@ -464,7 +482,8 @@ fn mid_partition_a_project_function_interrupt_cancels_the_call() {
 fn mid_partition_a_failed_run_publishes_only_its_report() {
     let resolver = Recording::new(SPEC, FAILING, None);
     let mut run = engine(Arc::clone(&resolver), false)
-        .spec_run("spec.yaml", None, &CancellationToken::new())
+        .spec("spec.yaml")
+        .run()
         .unwrap();
     assert!(run.output().is_none());
     let outcome = r#"Error convert conversion_failed Some("VALUE-7") ["columns.W"] {"from":"float","keys":[{"ID":3}],"to":"int","value":3.5} None None"#.to_owned();
@@ -495,7 +514,9 @@ fn mid_partition_a_failed_run_publishes_only_its_report() {
 /// whose output is read one record per batch.
 fn streamed(resolver: &Arc<Recording>, token: &CancellationToken) -> yamaa::Streamed {
     engine(Arc::clone(resolver), false)
-        .spec_stream("spec.yaml", None, &Plans::new(), token)
+        .spec("spec.yaml")
+        .cancel_with(token)
+        .stream()
         .unwrap()
 }
 
@@ -577,7 +598,10 @@ fn mid_stream_a_project_function_interrupt_cancels_the_run() {
     );
     let token = CancellationToken::new();
     let streamed = engine
-        .spec_stream("spec.yaml", Some("project.yaml"), &Plans::new(), &token)
+        .spec("spec.yaml")
+        .project("project.yaml")
+        .cancel_with(&token)
+        .stream()
         .unwrap();
     let mut reader = streamed.reader();
     assert!(matches!(reader.next(), Some(Err(Error::Cancelled))));
@@ -642,7 +666,8 @@ fn mid_stream_a_failed_run_ends_its_stream_with_its_issue() {
 fn during_publication_a_cancelled_save_removes_what_it_staged() {
     let resolver = Recording::new(SPEC, INPUT, None);
     let mut run = engine(Arc::clone(&resolver), false)
-        .spec_run("spec.yaml", None, &CancellationToken::new())
+        .spec("spec.yaml")
+        .run()
         .unwrap();
     let token = CancellationToken::new();
     token.cancel();
@@ -681,7 +706,8 @@ fn during_publication_a_cancelled_save_removes_what_it_staged() {
 fn during_publication_a_file_that_cannot_be_staged_publishes_nothing() {
     let resolver = Recording::new(SPEC, INPUT, Some(("stage", "out.csv")));
     let mut run = engine(Arc::clone(&resolver), false)
-        .spec_run("spec.yaml", None, &CancellationToken::new())
+        .spec("spec.yaml")
+        .run()
         .unwrap();
     let failure = run.save(&CancellationToken::new()).unwrap_err();
     assert!(failure.paths.is_empty(), "{:?}", failure.paths);
@@ -710,7 +736,8 @@ fn during_publication_a_file_that_cannot_be_staged_publishes_nothing() {
 fn during_publication_a_failed_commit_keeps_only_the_files_before_it() {
     let resolver = Recording::new(SPEC, INPUT, Some(("commit", "out.csv")));
     let mut run = engine(Arc::clone(&resolver), false)
-        .spec_run("spec.yaml", None, &CancellationToken::new())
+        .spec("spec.yaml")
+        .run()
         .unwrap();
     let failure = run.save(&CancellationToken::new()).unwrap_err();
     assert_eq!(failure.paths, [REPORT], "the files written before the stop");

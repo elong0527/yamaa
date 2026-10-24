@@ -150,9 +150,16 @@ fn odm_reads_bind_the_item_table_of_an_xml_input() {
     let engine = engine();
     let token = CancellationToken::new();
     // Checking reads no input.
-    let checked = issues(&engine.spec_check(&spec, None, &token).unwrap().issues());
+    let checked = issues(
+        &engine
+            .spec(&spec)
+            .cancel_with(&token)
+            .check()
+            .unwrap()
+            .issues(),
+    );
     assert!(checked.is_empty(), "{checked:?}");
-    let mut run = engine.spec_run(&spec, None, &token).unwrap();
+    let mut run = engine.spec(&spec).cancel_with(&token).run().unwrap();
     let ran = issues(&run.issues());
     assert!(ran.is_empty(), "{ran:?}");
     run.save(&token).unwrap();
@@ -182,9 +189,7 @@ fn an_xml_input_no_odm_read_names_reads_every_column() {
         "spec.yaml",
         "yamaa: \"1.0\"\ntype: spec\ndomain: IT\nkeys: [SEQ]\ninput:\n  ODM: odm.xml\noutput:\n  path: items.csv\n  columns: [SEQ, ITEM, VALUE, NAME, TRANSACTION, ISNULL]\ncolumns:\n  - {name: SEQ, type: int, label: Sequence, derivation: ODM.SourceOrdinal}\n  - {name: ITEM, type: str, label: Item, derivation: ODM.ItemOID}\n  - {name: VALUE, type: str, label: Value, derivation: ODM.Value}\n  - {name: NAME, type: str, label: Name, derivation: ODM.ItemName}\n  - {name: TRANSACTION, type: str, label: Transaction, derivation: ODM.TransactionType}\n  - {name: ISNULL, type: str, label: Explicitly null, derivation: ODM.IsNull}\n",
     );
-    let mut run = engine()
-        .spec_run(&study.path("spec.yaml"), None, &CancellationToken::new())
-        .unwrap();
+    let mut run = engine().spec(&study.path("spec.yaml")).run().unwrap();
     let ran = issues(&run.issues());
     assert!(ran.is_empty(), "{ran:?}");
     run.save(&CancellationToken::new()).unwrap();
@@ -211,7 +216,9 @@ fn an_xml_input_no_odm_read_names_may_declare_an_ordinal() {
     let engine = engine();
     let token = CancellationToken::new();
     let mut run = engine
-        .spec_run(&study.path("spec.yaml"), None, &token)
+        .spec(&study.path("spec.yaml"))
+        .cancel_with(&token)
+        .run()
         .unwrap();
     let ran = issues(&run.issues());
     assert!(ran.is_empty(), "{ran:?}");
@@ -224,7 +231,9 @@ fn an_xml_input_no_odm_read_names_may_declare_an_ordinal() {
     study.write("spec.yaml", spec("SourceOrdinal"));
     let found = issues(
         &engine
-            .spec_run(&study.path("spec.yaml"), None, &token)
+            .spec(&study.path("spec.yaml"))
+            .cancel_with(&token)
+            .run()
             .unwrap()
             .issues(),
     );
@@ -240,9 +249,7 @@ fn run_issue(odm: &[u8]) -> Issue {
     let study = Study::new();
     study.write("odm.xml", odm);
     study.write("spec.yaml", DEMOGRAPHICS);
-    let run = engine()
-        .spec_run(&study.path("spec.yaml"), None, &CancellationToken::new())
-        .unwrap();
+    let run = engine().spec(&study.path("spec.yaml")).run().unwrap();
     let mut found = issues(&run.issues());
     assert_eq!(found.len(), 1, "{found:?}");
     found.remove(0)
@@ -332,8 +339,22 @@ fn an_xml_input_declares_no_types() {
     let token = CancellationToken::new();
     // No input file exists: the declaration fails first.
     for found in [
-        issues(&engine.spec_check(&path, None, &token).unwrap().issues()),
-        issues(&engine.spec_run(&path, None, &token).unwrap().issues()),
+        issues(
+            &engine
+                .spec(&path)
+                .cancel_with(&token)
+                .check()
+                .unwrap()
+                .issues(),
+        ),
+        issues(
+            &engine
+                .spec(&path)
+                .cancel_with(&token)
+                .run()
+                .unwrap()
+                .issues(),
+        ),
     ] {
         let [issue] = found.as_slice() else {
             panic!("one issue: {found:?}")

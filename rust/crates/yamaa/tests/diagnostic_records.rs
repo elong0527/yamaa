@@ -4,7 +4,7 @@
 //! unregistered probe condition (the `check_diagnostics` ratchet forbids
 //! registered condition/rule literals in crate sources). This suite pins real
 //! registry diagnostics -- codes, requirements, ordered spec paths and
-//! structured context -- through `Engine::spec_check` and `Engine::spec_run`
+//! structured context -- through `SpecRequest::check` and `SpecRequest::run`
 //! on an in-memory specification, where such literals are allowed.
 
 use std::sync::Arc;
@@ -66,7 +66,9 @@ fn engine_with_columns(columns: &str, output: &str) -> (Engine, CancellationToke
 fn unknown_source_column_arrives_as_a_typed_record() {
     let (engine, token) = engine_with_bad_derivation();
     let run = engine
-        .spec_run("spec.yaml", None, &token)
+        .spec("spec.yaml")
+        .cancel_with(&token)
+        .run()
         .expect("adjudicated outcomes return a run");
     let diagnostics = run.diagnostics();
     assert!(!diagnostics.is_empty());
@@ -107,7 +109,9 @@ fn evaluation_failures_carry_recorded_geometry() {
         "[ID, VALUE, ZERO, RATIO]",
     );
     let run = engine
-        .spec_run("spec.yaml", None, &token)
+        .spec("spec.yaml")
+        .cancel_with(&token)
+        .run()
         .expect("adjudicated outcomes return a run");
     let diagnostics = run.diagnostics();
     assert!(!diagnostics.is_empty());
@@ -142,7 +146,9 @@ fn integer_tokens_beyond_sixty_four_bits_stay_exact_numbers() {
         "[ID, VALUE]",
     );
     let diagnostics = engine
-        .spec_check("spec.yaml", None, &token)
+        .spec("spec.yaml")
+        .cancel_with(&token)
+        .check()
         .unwrap()
         .diagnostics();
     assert!(!diagnostics.is_empty());
@@ -192,14 +198,10 @@ fn check_takes_the_host_language_from_the_options_not_the_runtime_name() {
         let engine = Engine::new(
             EngineOptions::new(host, "embedder".into(), "0".into()).with_resolver(resolver),
         );
-        let token = CancellationToken::new();
-        let project = Some("project.yaml");
-        let checked = engine
-            .spec_check("spec.yaml", project, &token)
-            .unwrap()
-            .diagnostics();
-        let ran = engine
-            .spec_run("spec.yaml", project, &token)
+        let request = engine.spec("spec.yaml").project("project.yaml");
+        let checked = request.check().unwrap().diagnostics();
+        let ran = request
+            .run()
             .expect("adjudicated outcomes return a run")
             .diagnostics();
         for (route, diagnostics) in [("check", &checked), ("run", &ran)] {

@@ -1,11 +1,11 @@
 //! Streamed runs (#3697): a specification run whose output its consumer
 //! reads as a stream of Arrow batches, the consumer's pull driving the run.
 //!
-//! [`Engine::spec_stream`](crate::Engine::spec_stream) compiles a
-//! specification, or reuses the plan a [`Plans`](crate::Plans) holder kept,
-//! and returns a [`Streamed`] run before reading any study data or calling
-//! any project function. A [`Batches`] reader of its output produces it as
-//! it is read:
+//! [`SpecRequest::stream`](crate::SpecRequest::stream) compiles a
+//! specification, or reuses the plan its request's [`Plans`](crate::Plans)
+//! holder kept, and returns a [`Streamed`] run before reading any study data
+//! or calling any project function. A [`Batches`] reader of its output
+//! produces it as it is read:
 //!
 //! - its first pull builds the run, through every barrier a whole-table run
 //!   has (admission, derivation, output keys, verification and the final
@@ -46,9 +46,9 @@
 //!
 //! A run whose output nobody has started to read runs whole when its result
 //! is asked for: [`Streamed::run`] builds it as
-//! [`Engine::spec_run_reusing`](crate::Engine::spec_run_reusing) does, and a
-//! reader then reads the output table that run keeps. Once a reader has
-//! started the stream, the run's result is known when that stream ends.
+//! [`SpecRequest::run`](crate::SpecRequest::run) does, and a reader then
+//! reads the output table that run keeps. Once a reader has started the
+//! stream, the run's result is known when that stream ends.
 //!
 //! When the run can call its host's project functions (an engine with
 //! [`ProjectFunctions`](crate::ProjectFunctions) runs a specification with a
@@ -389,13 +389,13 @@ impl Streamed {
     /// output was read as a stream), issues, run report, summary and save.
     ///
     /// A run that nobody has started to read runs whole now, as
-    /// [`Engine::spec_run_reusing`](crate::Engine::spec_run_reusing) runs
-    /// it, and keeps its output table. While a reader's stream has not
-    /// ended, this fails with the `stream_open` code of [`Error::Stream`];
-    /// a cancelled run fails with [`Error::Cancelled`], and one whose
-    /// accepted output's batch could not be built with that error; and a
-    /// run that can call its host is built only on the thread that started
-    /// it, failing with `host_thread` on another.
+    /// [`SpecRequest::run`](crate::SpecRequest::run) runs it, and keeps its
+    /// output table. While a reader's stream has not ended, this fails with
+    /// the `stream_open` code of [`Error::Stream`]; a cancelled run fails
+    /// with [`Error::Cancelled`], and one whose accepted output's batch could
+    /// not be built with that error; and a run that can call its host is
+    /// built only on the thread that started it, failing with `host_thread`
+    /// on another.
     pub fn run(&self) -> Result<RunGuard<'_>, Error> {
         let mut state = self.shared.lock()?;
         if matches!(&*state, State::Unread(_)) {

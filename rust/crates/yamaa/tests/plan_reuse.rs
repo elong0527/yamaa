@@ -173,12 +173,10 @@ fn memory_study() -> Arc<Recording> {
 
 fn run(engine: &Engine, plans: &Plans) -> Run {
     engine
-        .spec_run_reusing(
-            "spec.yaml",
-            Some("project.yaml"),
-            plans,
-            &CancellationToken::new(),
-        )
+        .spec("spec.yaml")
+        .project("project.yaml")
+        .reusing(plans)
+        .run()
         .unwrap()
 }
 
@@ -213,7 +211,9 @@ fn later_runs_reuse_the_plan_the_first_run_compiled() {
     }
     // A one-shot run, and a run through another holder, compile.
     let one_shot = engine
-        .spec_run("spec.yaml", Some("project.yaml"), &CancellationToken::new())
+        .spec("spec.yaml")
+        .project("project.yaml")
+        .run()
         .unwrap();
     assert!(compiled(&one_shot));
     assert!(compiled(&run(&engine, &Plans::new())));
@@ -396,12 +396,9 @@ impl Study {
 /// its run compiled.
 fn project_run(engine: &Engine, study: &Study, plans: &Plans) -> Vec<(String, String, bool)> {
     let runs = engine
-        .project_run_reusing(
-            &study.path("project.yaml"),
-            None,
-            plans,
-            &CancellationToken::new(),
-        )
+        .project(&study.path("project.yaml"))
+        .reusing(plans)
+        .run()
         .unwrap();
     assert_eq!(runs.issues().rows(), 0);
     runs.names()
@@ -414,18 +411,21 @@ fn project_run(engine: &Engine, study: &Study, plans: &Plans) -> Vec<(String, St
         .collect()
 }
 
+/// What [`project_run`] gives for the study when DM's and ADSL's runs
+/// compiled as `compiled` says.
+fn rows(compiled: [bool; 2]) -> Vec<(String, String, bool)> {
+    vec![
+        ("DM".to_owned(), "2 rows".to_owned(), compiled[0]),
+        ("ADSL".to_owned(), "2 rows".to_owned(), compiled[1]),
+    ]
+}
+
 #[test]
 fn project_runs_reuse_each_specifications_plan_and_compile_only_what_changed() {
     let study = Study::new("project");
     let installed = Arc::new(Installed::default());
     let engine = engine(None, &installed);
     let plans = Plans::new();
-    let rows = |compiled: [bool; 2]| {
-        vec![
-            ("DM".to_owned(), "2 rows".to_owned(), compiled[0]),
-            ("ADSL".to_owned(), "2 rows".to_owned(), compiled[1]),
-        ]
-    };
     assert_eq!(project_run(&engine, &study, &plans), rows([true, true]));
     assert_eq!(project_run(&engine, &study, &plans), rows([false, false]));
     // ADSL's own specification changed: only ADSL compiles again.
@@ -454,6 +454,25 @@ fn project_runs_reuse_each_specifications_plan_and_compile_only_what_changed() {
     assert_eq!(project_run(&engine, &study, &plans), rows([false, false]));
 }
 
+/// The request of a specification a project lists reuses none of the
+/// project request's plans, as each host object keeps a holder of its own:
+/// each of its runs compiles, and the project's holder keeps every plan it
+/// kept, so the next project run compiles nothing.
+#[test]
+fn a_listed_specifications_request_takes_none_of_the_project_requests_plans() {
+    let study = Study::new("listed");
+    let installed = Arc::new(Installed::default());
+    let engine = engine(None, &installed);
+    let plans = Plans::new();
+    assert_eq!(project_run(&engine, &study, &plans), rows([true, true]));
+    let project = study.path("project.yaml");
+    let dm = engine.project(&project).reusing(&plans).spec("DM").unwrap();
+    for attempt in 1..=2 {
+        assert!(compiled(&dm.run().unwrap()), "DM run {attempt}");
+    }
+    assert_eq!(project_run(&engine, &study, &plans), rows([false, false]));
+}
+
 /// Symbolic links need privileges on Windows, so this test runs on Unix only,
 /// as the host suites' link tests do. Its specification is declared inside it,
 /// so a platform that skips the test does not compile that text unused.
@@ -474,9 +493,7 @@ fn a_path_through_a_retargeted_link_compiles_the_study_it_now_names() {
     let plans = Plans::new();
     let specification = study.path("study/spec.yaml");
     let rows = |plans: &Plans| {
-        let run = engine
-            .spec_run_reusing(&specification, None, plans, &CancellationToken::new())
-            .unwrap();
+        let run = engine.spec(&specification).reusing(plans).run().unwrap();
         (plan_of(&run), run.output().unwrap().rows())
     };
     assert_eq!(rows(&plans), ("compiled", 2));
