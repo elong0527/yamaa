@@ -8,7 +8,7 @@ mod execution {
     mod declarative_case_predicates {
         //! Independently authored full case reports and unchanged original CSV truth.
         use crate::support::Edit as _;
-        use std::{fs, path::Path};
+        use std::fs;
         use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
@@ -65,6 +65,9 @@ columns:
           then: SRC.BAD
         - otherwise: 8
 "#;
+        /// No benchmark's case predicate reads a key with several records,
+        /// as `a`'s present and missing `V` here (COLUMN-2), and none pins
+        /// the empty handler and verification ledgers of such a run.
         #[test]
         fn implicit_case_predicates_reduce_feeding_values_and_only_true_selects() {
             let fixture = Fixture::new();
@@ -89,6 +92,11 @@ columns:
                 b"ID,VALUE\na,7\nb,8\nc,8\n"
             );
         }
+        /// No benchmark refuses a case predicate's read as
+        /// `multiple_values_per_key` (`negative-keys-conflict` and
+        /// `negative-sex-duplicate` refuse a source and a mapping), nor leaves
+        /// a file at a refused run's target, which the run must keep
+        /// (OUTPUT-7).
         #[test]
         fn case_predicate_multiplicity_retains_its_complete_report_and_blocks_publication() {
             let fixture = Fixture::new();
@@ -109,6 +117,9 @@ columns:
             assert!(result.save().is_err());
             assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(), b"sentinel");
         }
+        /// `sdtm-ds-reasons` reads a filtered source in a case result of a
+        /// key-grain specification; no benchmark reads one in a record row
+        /// template, where it must give the same values.
         #[test]
         fn filtered_case_source_is_shared_by_columns_and_record_rows() {
             let body = SOURCE
@@ -139,6 +150,9 @@ columns:
             }
         }
 
+        /// No benchmark captures a `str_extract` group in a row template,
+        /// whether in a record template's default or local derivation or in
+        /// a grouped template.
         #[test]
         fn qualified_case_predicate_and_full_pattern_capture_execute_in_each_expression_position() {
             let expression = "{case: [{when: 'SRC.V > 0', then: {str_extract: {source: SRC.TEXT, pattern: 'prefix:([A-Z]+)$', group: 1}}}, {otherwise: \"'none'\"}]}";
@@ -158,6 +172,9 @@ columns:
     }
         }
 
+        /// No benchmark refuses an assertion's `require`, whether a non-text
+        /// value or an incomplete predicate, and none writes float literals
+        /// in an integer column's `allowed_values` or `range`.
         #[test]
         fn verification_predicate_and_literals_check_completed_column_case_and_row_outputs() {
             let prefix = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: int\n    verifications:\n      - allowed_values: {values: [0, 1.0]}\n      - range: {min: 0.0, max: 1.5}\n";
@@ -196,22 +213,10 @@ columns:
         }
     }
         }
+        /// These benchmarks pin case predicates and filtered sources in the
+        /// bytes they save.
         #[test]
         fn unchanged_original_case_and_filtered_source_truth_passes_in_full() {
-            let benchmarks = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks");
-            fn copy(source: &Path, target: &Path) {
-                for entry in fs::read_dir(source).unwrap() {
-                    let entry = entry.unwrap();
-                    let path = target.join(entry.file_name());
-                    if entry.file_type().unwrap().is_dir() {
-                        fs::create_dir(&path).unwrap();
-                        copy(&entry.path(), &path);
-                    } else {
-                        fs::copy(entry.path(), path).unwrap();
-                    }
-                }
-            }
-            let mut remaining = Vec::new();
             for name in [
                 "adam-adae-protocol-review",
                 "schema-expressions",
@@ -222,43 +227,12 @@ columns:
                 "sdtm-tu-tumor-identification",
                 "sdtm-ds-reasons",
             ] {
-                let fixture = Fixture::new();
-                let source = benchmarks.join(name);
-                copy(&source, &fixture.0);
-                let authored = fs::read(source.join("spec.yaml")).unwrap();
-                let mut result = match fixture.run(std::str::from_utf8(&authored).unwrap()) {
-                    Ok(result) => result,
-                    Err(issues) => {
-                        remaining.push(format!("{name}: {issues:?}"));
-                        continue;
-                    }
-                };
-                assert!(result.issues().is_empty(), "{name}: {:?}", result.issues());
-                assert!(result.save().unwrap(), "{name}");
-                for expected in fs::read_dir(source.join("expected")).unwrap() {
-                    let expected = expected.unwrap();
-                    if expected
-                        .path()
-                        .extension()
-                        .is_some_and(|extension| extension == "csv")
-                    {
-                        assert_eq!(
-                            fs::read(fixture.0.join(expected.file_name())).unwrap(),
-                            fs::read(expected.path()).unwrap(),
-                            "{name}/{}",
-                            expected.file_name().to_string_lossy()
-                        );
-                    }
-                }
-                assert_eq!(fs::read(source.join("spec.yaml")).unwrap(), authored);
+                crate::support::benchmarks::reproduce(name);
             }
-            assert!(
-                remaining.is_empty(),
-                "remaining original blockers: {}",
-                remaining.join("\n")
-            );
         }
 
+        /// Each case is an authored complete report, its findings or saved
+        /// bytes, which no benchmark states.
         #[test]
         fn independently_authored_installed_host_truth_has_the_same_complete_native_observations() {
             let truth: yamaa_core::json::Value =
@@ -326,6 +300,8 @@ columns:
             (fixture, case["specification"].as_str().unwrap().into())
         }
 
+        /// No benchmark pins the handler ledger of an assertion that reads a
+        /// lookup.
         #[test]
         fn assertion_lookup_reuses_current_selection_without_adding_derivation_handlers() {
             let (fixture, body) = lookup_fixture("assert_lookup_selected");
@@ -340,6 +316,8 @@ columns:
             );
         }
 
+        /// No benchmark's assertion reads a lookup that requires a match while
+        /// its `when` is false.
         #[test]
         fn false_when_still_resolves_require_lookup_and_refuses_a_required_match() {
             let (fixture, body) = lookup_fixture("assert_lookup_only");
@@ -368,6 +346,8 @@ columns:
             assert!(!fixture.0.join("result.csv").exists());
         }
 
+        /// No benchmark refuses an assertion's lookup operand types on an
+        /// empty output, nor pins that run's zero handler ledger.
         #[test]
         fn empty_output_validates_lookup_operand_types_without_selecting_a_donor() {
             let (fixture, body) = lookup_fixture("assert_lookup_empty");
@@ -397,6 +377,8 @@ columns:
             assert!(result.save().is_err());
         }
 
+        /// No benchmark refuses a warning assertion's read of a lookup field
+        /// the lookup lacks, at its `when` or at its `require`.
         #[test]
         fn warning_assertion_missing_lookup_fields_retain_field_specific_diagnostics() {
             for (field, pattern) in [
@@ -509,6 +491,8 @@ columns:
         fn finding(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
             crate::support::study::issue_row(issue)
         }
+        /// No benchmark pins the handler ledger of a correlated selection,
+        /// whose counts follow each current row.
         #[test]
         fn complete_root_outputs_and_handler_geometry_are_current_row_specific() {
             let fixture = Fixture::new();
@@ -535,6 +519,8 @@ columns:
         .edit("D.TIME < SRC.CUT",filter)
         .edit("columns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}","rows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, SEQ: ALT.SEQ, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: SEQ, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}")
         }
+        /// No benchmark's correlated filter names its donor field and its
+        /// current field twice each.
         #[test]
         fn repeated_donor_and_current_identifiers_share_bindings_without_changing_selection() {
             let fixture = Fixture::new();
@@ -551,6 +537,8 @@ columns:
                 b"ID,SEQ,A,B\n1,1,one,x\n1,2,three,\n3,1,,\n1,3,,\n"
             );
         }
+        /// No benchmark pins the handler ledger of a correlated selection that
+        /// a row template over another input reads.
         #[test]
         fn secondary_driver_fields_bind_to_the_actual_template_and_original_native_port() {
             let fixture = Fixture::new();
@@ -582,6 +570,10 @@ columns:
                 }
             }
         }
+        /// `negative-row-filter-lookup-scope` refuses an intermediate's filter
+        /// that names an input building no row, and its `error.yaml` states
+        /// the first issue; what no benchmark pins is that the refusal is the
+        /// run's only issue, here for a read in a row template's derivation.
         #[test]
         fn known_unrelated_input_fields_are_refused_with_complete_selection_geometry() {
             let fixture = Fixture::new();
@@ -595,6 +587,9 @@ columns:
             );
             assert!(!fixture.0.join("result.csv").exists());
         }
+        /// No benchmark's refusal suggests a qualified name (`suggestion`),
+        /// and none pins the handler ledger of a filter that names only donor
+        /// fields.
         #[test]
         fn donor_qualifier_takes_precedence_and_bare_stored_fields_suggest_it() {
             let fixture = Fixture::new();
@@ -698,7 +693,9 @@ columns:
         /// an intermediate's absence, which a 1.0 file counts under `absent`
         /// (D202). The captured truth holds for each benchmark's own
         /// specification, and the capture's specification text is not
-        /// compared.
+        /// compared. Each benchmark pins the bytes it saves; what no
+        /// benchmark pins is the handler ledger each run reports, as
+        /// `flag_reference.json` captured it.
         #[test]
         fn six_unchanged_original_positive_documents_match_csv_and_full_handlers() {
             let truth = reference();
@@ -710,37 +707,12 @@ columns:
                 "adam-adsl-completion-flag",
                 "sdtm-dm-death",
             ] {
+                crate::support::benchmarks::reproduce(name);
                 let fixture = Fixture::original(name);
-                let mut result = fixture
+                let result = fixture
                     .run(name)
                     .unwrap_or_else(|issues| panic!("{name}: {issues:?}"));
                 assert!(result.issues().is_empty(), "{name}: {:?}", result.issues());
-                assert!(result.save().unwrap());
-                let original = Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .join("../../../benchmarks")
-                    .join(name)
-                    .join("expected");
-                let expected = fs::read_dir(original)
-                    .unwrap()
-                    .map(|e| e.unwrap().path())
-                    .find(|p| p.extension().is_some_and(|s| s == "csv"))
-                    .unwrap();
-                let output_path = if name.starts_with("schema-") {
-                    "adae.csv"
-                } else {
-                    match name {
-                        "adam-adae-occurrence-flags" => "adae.csv",
-                        "adam-adex-dose-reduction" => "adex.csv",
-                        "adam-adlb-closest-visit" => "adlb.csv",
-                        "adam-adsl-completion-flag" => "adsl.csv",
-                        _ => "dm.csv",
-                    }
-                };
-                assert_eq!(
-                    fs::read(fixture.0.join(output_path)).unwrap(),
-                    fs::read(expected).unwrap(),
-                    "{name}"
-                );
                 assert_eq!(
                     result.observations()["handler_counts"],
                     truth["originals"][name]["handlers"],
@@ -748,6 +720,11 @@ columns:
                 );
             }
         }
+        /// Each benchmark's `error.yaml` states its first issue, which public
+        /// conformance compares in part; what no benchmark pins is each run's
+        /// complete findings as `flag_reference.json` captured them: the one
+        /// issue, with every context key (`negative-flag-condition`'s `expr`,
+        /// `negative-review-date-text`'s `actual`).
         #[test]
         fn unchanged_negative_originals_retain_complete_semantic_findings() {
             let truth = reference();
@@ -787,6 +764,8 @@ columns:
                 assert_eq!(actual, expected.as_array().unwrap().as_slice(), "{name}");
             }
         }
+        /// The witnesses are authored cases; no benchmark states their
+        /// complete results: findings, handler ledgers and saved bytes.
         #[test]
         fn captured_scope_presence_precedence_and_lazy_named_witnesses_match_full_result() {
             let truth = reference();
@@ -902,6 +881,8 @@ columns:
                 .unwrap()
             }
         }
+        /// No benchmark keys a selection by integers beyond 2^53 or at the
+        /// 64-bit minimum, nor pins its handler ledger for each read.
         #[test]
         fn single_column_key_preserves_distinct_large_integer_keys_and_per_read_handlers() {
             let fixture = Fixture::new();
@@ -978,6 +959,8 @@ columns:
         fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
             crate::support::study::issue_row(issue)
         }
+        /// Each case is an authored complete report, its findings or saved
+        /// bytes, which no benchmark states.
         #[test]
         fn independent_original_language_captures_match_all_output_bytes_and_complete_findings() {
             let cases: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
@@ -1008,6 +991,9 @@ columns:
             }
         }
 
+        /// No benchmark refuses an intermediate's filter once its expression
+        /// key resolves, nor compares the check route's findings with the
+        /// build's.
         #[test]
         fn resolved_source_keys_still_refuse_the_original_bad_donor_filter() {
             let cases: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
@@ -1042,6 +1028,9 @@ columns:
             assert!(!fixture.0.join("out.csv").exists());
         }
 
+        /// No benchmark refuses an ill-typed intermediate filter beside a key
+        /// that reads a plain source field, nor compares the check route's
+        /// findings with the build's.
         #[test]
         fn ordinary_source_keys_keep_static_filter_types_before_key_cardinality() {
             let cases: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
@@ -1072,6 +1061,11 @@ columns:
             assert!(!fixture.0.join("out.csv").exists());
         }
 
+        /// No benchmark refuses an ill-typed intermediate filter that never
+        /// runs (an empty donor or driver, a missing operand, an unread
+        /// branch), nor pins the operand route the report records or the
+        /// check without data, and none prunes an unread intermediate with an
+        /// ill-typed filter (LAYER-11).
         #[test]
         fn deferred_filter_types_refuse_empty_missing_and_unread_selectors() {
             let cases: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
@@ -1174,30 +1168,34 @@ columns:
             }
         }
 
+        /// `adam-adlb-supplb-padded-key` selects through a padded expression
+        /// key without a filter, and checks clean and saves the bytes it
+        /// states. No benchmark pins an integer filter beside an expression
+        /// key, the twin of `dependency_before_bad_filter`'s refused one:
+        /// `adam-adlb-end-of-treatment`'s filter compares text.
         #[test]
         fn expression_keys_without_type_refusals_keep_successful_selection_and_saves() {
+            crate::support::benchmarks::reproduce("adam-adlb-supplb-padded-key");
             let cases: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
                 "fixtures/intermediate_key_reference.json"
             ))
             .unwrap();
-            for filter in ["filter: \"TAB.KINT > 0\"", ""] {
-                let mut case = cases["dependency_before_bad_filter"].clone();
-                case["inputs"]["src.csv"] = yamaa_adapters::json!("ID,N\na,7\n");
-                case["specification"] = yamaa_adapters::json!(case["specification"]
-                    .as_str()
-                    .unwrap()
-                    .edit("filter: \"TAB.KINT > 'bad'\"", filter));
-                let fixture = Fixture::new();
-                let mut result = fixture.run("valid-expression-key-filter", &case);
-                assert!(fixture.check().is_empty());
-                assert!(result.issues().is_empty());
-                for _ in 0..2 {
-                    assert!(result.save().unwrap());
-                    assert_eq!(
-                        fs::read(fixture.0.join("out.csv")).unwrap(),
-                        b"ID,V,V2\na,A,A\n"
-                    );
-                }
+            let mut case = cases["dependency_before_bad_filter"].clone();
+            case["inputs"]["src.csv"] = yamaa_adapters::json!("ID,N\na,7\n");
+            case["specification"] = yamaa_adapters::json!(case["specification"]
+                .as_str()
+                .unwrap()
+                .edit("filter: \"TAB.KINT > 'bad'\"", "filter: \"TAB.KINT > 0\""));
+            let fixture = Fixture::new();
+            let mut result = fixture.run("valid-expression-key-filter", &case);
+            assert!(fixture.check().is_empty());
+            assert!(result.issues().is_empty());
+            for _ in 0..2 {
+                assert!(result.save().unwrap());
+                assert_eq!(
+                    fs::read(fixture.0.join("out.csv")).unwrap(),
+                    b"ID,V,V2\na,A,A\n"
+                );
             }
         }
     }
@@ -1263,6 +1261,10 @@ columns:
             fs::write(f.0.join("donor.csv"), "ID,LOW,HIGH,ORD,ELIG,V,W\n1,1,3,2,Y,edge,\n1,3,5,1,Y,later,paired\n1,,10,3,Y,missing-bound,hidden\n1,1,10,0,N,filtered,hidden\n").unwrap();
         }
 
+        /// No benchmark derives a range bound as a date from a timestamp, so
+        /// that a donor on the current date qualifies:
+        /// `adam-adae-post-dose-window` derives a datetime bound, and
+        /// `adam-adpc-relative-times` reads its lower bound as stored.
         #[test]
         fn derived_date_bound_keeps_the_last_record_on_the_current_date() {
             let f = Fixture::new();
@@ -1311,6 +1313,8 @@ columns:
             );
         }
 
+        /// No benchmark projects a range intermediate's `columns`, one of them
+        /// repeated, nor pins a range selection's handler ledger.
         #[test]
         fn inclusive_ranges_keep_one_record_choice_and_project_only_named_reads() {
             let f = Fixture::new();
@@ -1329,6 +1333,8 @@ columns:
                 ])
             );
         }
+        /// No benchmark selects a named intermediate through a range without a
+        /// lower bound.
         #[test]
         fn unstated_lower_bound_never_turns_a_missing_unused_donor_field_into_absence() {
             let f = Fixture::new();
@@ -1348,6 +1354,8 @@ columns:
                 ])
             );
         }
+        /// No benchmark refuses a read of a donor field that the
+        /// intermediate's `columns` leaves out (LOOKUP-11).
         #[test]
         fn a_hidden_read_has_the_complete_original_reference_finding_and_no_output() {
             let f = Fixture::new();
@@ -1374,6 +1382,8 @@ columns:
             assert!(matches!(result.save(), Err(file_application::FailedBuild)));
             assert!(!f.0.join("result.csv").exists());
         }
+        /// No benchmark answers an absence with the 64-bit minimum or a
+        /// fraction, nor pins the ledger that counts it.
         #[test]
         fn typed_absence_replacements_keep_their_full_value_and_ledger() {
             for (case, replacement, kind, expected) in [
@@ -1422,6 +1432,10 @@ columns:
             }
         }
 
+        /// No benchmark reads a named range intermediate in a row template
+        /// whose range value and key are column defaults:
+        /// `schema-lookup-source-range-default` promotes the default of a
+        /// structured source's range value. None pins that ledger either.
         #[test]
         fn range_current_outputs_and_scalar_keys_promote_their_defaults_before_row_reads() {
             let f = Fixture::new();
@@ -1445,6 +1459,7 @@ columns:
             );
         }
 
+        /// No benchmark answers an absence with a boolean.
         #[test]
         fn boolean_absence_replacement_reaches_a_null_test_without_conversion() {
             let f = Fixture::new();
@@ -1475,6 +1490,8 @@ columns:
             );
         }
 
+        /// No benchmark compares an integer beyond 2^53 with float range
+        /// endpoints.
         #[test]
         fn integer_current_values_do_not_round_into_a_float_donor_endpoint() {
             let f = Fixture::new();
@@ -1507,6 +1524,9 @@ columns:
             );
         }
 
+        /// The benchmark's own specification and inputs, compared with the
+        /// finding its `error.yaml` states; what no benchmark pins is that the
+        /// finding is the run's only issue, with an empty handler ledger.
         #[test]
         fn unchanged_bad_range_document_preserves_its_single_complete_historical_finding() {
             let f = Fixture::new();
@@ -1549,7 +1569,6 @@ columns:
     mod declarative_output_ordering {
         //! Authored public-file observations and immutable original benchmark artifacts.
         use crate::support::issues::assert_issues;
-        use crate::support::Edit as _;
         use std::{fs, path::Path};
         use yamaa_adapters::file_application;
         use yamaa_core::diagnostic::Diagnostic;
@@ -1596,67 +1615,34 @@ columns:
             fs::write(f.0.join("source.csv"), input).unwrap();
             f
         }
+        /// The benchmark states the bytes its ordering saves.
         #[test]
         fn original_ordering_artifact_matches_immutable_csv_truth() {
-            let fixture = Fixture::new("schema-ordering");
-            let mut result = fixture.run().unwrap();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read(fixture.0.join("adae.csv")).unwrap(),
-                fs::read(fixture.0.join("expected/adae.csv")).unwrap()
-            );
+            crate::support::benchmarks::reproduce("schema-ordering");
         }
+        /// `adam-adae-review-order` orders its rows by `SEVORD`, a working
+        /// column outside the output, `schema-ordering` keeps tied rows in
+        /// construction order, and `adam-adsl-site-parse`, which declares no
+        /// order, keeps its subjects in the order its input holds them.
         #[test]
         fn internal_working_columns_order_the_projection_and_omission_keeps_construction_order() {
-            let spec = r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [ID]
-input: {SRC: {path: source.csv, types: {SORT: int}}}
-output: {path: result.csv, columns: [ID], order_by: [SORT]}
-columns:
-  - {name: ID, type: str, derivation: SRC.ID}
-  - {name: SORT, type: int, derivation: SRC.SORT}
-"#;
-            for (source, expected) in [
-                (spec.to_owned(), b"ID\nb\nc\na\n".as_slice()),
-                (
-                    spec.edit(", order_by: [SORT]", ""),
-                    b"ID\na\nb\nc\n".as_slice(),
-                ),
+            for benchmark in [
+                "adam-adae-review-order",
+                "schema-ordering",
+                "adam-adsl-site-parse",
             ] {
-                let fixture = authored(&source, b"ID,SORT\na,2\nb,1\nc,1\n");
-                let mut result = fixture.run().unwrap();
-                assert!(result.issues().is_empty(), "{:?}", result.issues());
-                assert!(result.save().unwrap());
-                assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(), expected);
+                crate::support::benchmarks::reproduce(benchmark);
             }
         }
+        /// The benchmarks' own specifications, compared with the issue each
+        /// one's `error.yaml` states; what no benchmark pins is that it is the
+        /// run's only issue.
         #[test]
         fn ordering_and_unknown_profile_negatives_keep_registered_first_findings() {
-            for (name, condition, path, rule, context) in [
-                (
-                    "negative-order-repeated",
-                    "duplicate_order_term",
-                    "output.order_by[2]",
-                    "OUTPUT-12",
-                    yamaa_adapters::json!({"column":"USUBJID"}),
-                ),
-                (
-                    "negative-order-unknown-column",
-                    "undeclared_column",
-                    "output.order_by[1]",
-                    "OUTPUT-12",
-                    yamaa_adapters::json!({"column":"VISITNUM"}),
-                ),
-                (
-                    "negative-source-unknown-format",
-                    "source_profile_unknown",
-                    "input.DM.path",
-                    "INPUT-1",
-                    yamaa_adapters::json!({"dataset":"DM", "path":"input/dm.txt"}),
-                ),
+            for name in [
+                "negative-order-repeated",
+                "negative-order-unknown-column",
+                "negative-source-unknown-format",
             ] {
                 let fixture = Fixture::new(name);
                 let issues = match fixture.run() {
@@ -1666,21 +1652,19 @@ columns:
                     }
                     Err(issues) => issues,
                 };
-                assert_eq!(issues.len(), 1, "{name}: {issues:?}");
-                let issue = &issues[0];
                 assert_eq!(
-                    (issue.phase(), issue.condition(), issue.rule()),
-                    ("validation", condition, Some(rule)),
-                    "{name}"
-                );
-                assert_eq!(issue.spec_paths, [path], "{name}");
-                assert_eq!(
-                    yamaa_core::json::Value::Object(issue.context.clone()),
-                    context,
+                    issues
+                        .iter()
+                        .map(crate::support::study::issue_row)
+                        .collect::<Vec<_>>(),
+                    [crate::support::benchmarks::error(name)],
                     "{name}"
                 );
             }
         }
+        /// `negative-csv-empty-string-present` refuses the declaration with its
+        /// input present; no benchmark shows the refusal comes before the
+        /// input is read, here with no input file.
         #[test]
         fn csv_present_empty_is_rejected_before_study_bytes_are_requested() {
             let fixture = authored(
@@ -1706,6 +1690,8 @@ columns: [{name: ID, type: str, derivation: SRC.ID}]
         }
 
         /// Root predicates gate raw base records before key conversion and keep first key appearance.
+        /// No benchmark's root filter reads a key field whose stored text
+        /// (`02`) differs from its converted key.
         #[test]
         fn root_filter_reads_raw_driver_values_before_key_derivation() {
             let fixture = authored(
@@ -1747,6 +1733,9 @@ columns: [{name: ID, type: int, derivation: SRC.ID}]
             assert!(result.save().unwrap());
             assert_eq!(fs::read(raw.0.join("result.csv")).unwrap(), b"ID\n2\n");
         }
+        /// No benchmark's root filter reads a base declared after another
+        /// input: `adam-adrs-response-records` and `adam-adtte-dor` declare
+        /// theirs first.
         #[test]
         fn root_filter_uses_explicit_base_independently_of_input_declaration_order() {
             let fixture = authored(
@@ -1768,6 +1757,11 @@ columns: [{name: ID, type: str, derivation: SRC.ID}]
             assert!(result.save().unwrap());
             assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(), b"ID\nb\n");
         }
+        /// No benchmark's root filter reads a column the specification
+        /// constructs. `negative-root-filter-with-rows` refuses a root filter
+        /// beside row templates, and its `error.yaml` states the first issue
+        /// in part; what no benchmark pins is that the refusal is the run's
+        /// only issue, before any input is read.
         #[test]
         fn root_filter_forbids_constructed_columns_and_conflicting_row_templates() {
             let fixture = authored(
@@ -1810,6 +1804,9 @@ columns: [{name: ID, type: str, derivation: SRC.ID}]
             );
         }
 
+        /// `schema-source-ordinal` keeps each record's position through a row
+        /// filter; no benchmark's ordinal input holds a record on two lines,
+        /// or no record at all.
         #[test]
         fn source_ordinals_precede_filtering_and_count_multiline_records_once() {
             let spec = r#"yamaa: "1.0"
@@ -1838,6 +1835,10 @@ columns:
             }
         }
 
+        /// The first case is the benchmark's own specification, compared with
+        /// the issue its `error.yaml` states; what no benchmark pins is that it
+        /// is the run's only issue, and an ordinal on the fixed ODM schema
+        /// (INPUT-4).
         #[test]
         fn ordinal_collision_and_fixed_odm_schema_have_complete_public_diagnostics() {
             let fixture = Fixture::new("negative-source-ordinal-collision");
@@ -1846,9 +1847,9 @@ columns:
             let issues = result.issues();
             assert_issues(
                 &issues,
-                &[
-                    yamaa_adapters::json!({"phase":"validation","condition":"ordinal_field_collision","rule":"INPUT-4","spec_paths":["input.SOURCE.ordinal"],"context":{"dataset":"SOURCE","field":"SourceOrdinal"}}),
-                ],
+                &[crate::support::benchmarks::error(
+                    "negative-source-ordinal-collision",
+                )],
                 "negative-source-ordinal-collision",
             );
 
@@ -1876,6 +1877,7 @@ columns: [{name: ID, type: str, derivation: {odm: SRC.ITEM}}]
             );
         }
 
+        /// No benchmark declares an ordinal beside a column's `metadata.odm`.
         #[test]
         fn metadata_odm_spelling_does_not_turn_an_ordinal_source_into_odm() {
             let fixture = authored(
@@ -1900,6 +1902,8 @@ columns:
             );
         }
 
+        /// No benchmark declares an ordinal on an input that a nested ODM
+        /// derivation reads.
         #[test]
         fn nested_column_and_row_odm_derivations_still_reject_ordinals_before_capture() {
             for declarations in [
@@ -1917,6 +1921,7 @@ columns:
     }
         }
 
+        /// No benchmark declares an ordinal on a Parquet input.
         #[test]
         #[cfg(feature = "parquet")]
         fn parquet_records_expose_identical_ordinal_policy_without_changing_stored_fields() {
@@ -2013,6 +2018,8 @@ columns:
             )
             .unwrap();
         }
+        /// No benchmark pins the handler ledger of a selection whose donor is
+        /// the driver's own input.
         #[test]
         fn driver_and_donor_share_the_input_but_selection_stays_at_the_donor_grain() {
             let fixture = Fixture::new();
@@ -2034,6 +2041,8 @@ columns:
                 ])
             );
         }
+        /// No benchmark pins the handler ledger of a row template over another
+        /// input that reads the base's records as donors.
         #[test]
         fn a_different_template_driver_still_reads_the_original_primary_donors() {
             let fixture = Fixture::new();
@@ -2076,6 +2085,10 @@ columns:
         fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
             crate::support::study::issue_row(issue)
         }
+        /// The two originals copy `adam-adlb-supplb-padded-key` and
+        /// `adam-adlb-end-of-treatment`, whose saved bytes their
+        /// `expected/adlb.csv` pins; what no benchmark pins is each run's
+        /// complete handler ledger, and the authored cases' complete reports.
         #[test]
         fn complete_independent_record_contexts_and_unchanged_original() {
             let reference: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(
