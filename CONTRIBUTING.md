@@ -410,12 +410,14 @@ made to both, and `make check-repository` fails while they differ
   of an existing operation is data alone; a new operation's reader, and a
   new fixture file, are declared in their module under
   `support::diagnostic::operations`. A case whose source compared only part
-  of each record names the fields it compares in `compares`. A case whose
-  source found its record by cause among several issues writes
-  `"among": true`: its rows need only be among the issues reported, in any
-  order, since the issues its source left unstated give its rows no
-  authored position. It is the one exception to comparing the whole issue
-  list.
+  of each record names the fields it compares in `compares`, and a case
+  whose source compared some keys of a context names each as
+  `context.<key>` in place of `context`, its rows' contexts holding exactly
+  those keys. A case whose source found its record by cause among several
+  issues writes `"among": true`: its rows need only be among the issues
+  reported, in any order, since the issues its source left unstated give
+  its rows no authored position. It is the one exception to comparing the
+  whole issue list.
 - A variant of a document comes from an exact-once edit,
   `document.edit(from, to)` through the adapters' `support::Edit`, never
   from `str::replace`, which does nothing when its pattern is missing.

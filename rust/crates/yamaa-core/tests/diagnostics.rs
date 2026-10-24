@@ -1034,8 +1034,71 @@ mod diagnostics {
     /// How the replay compares an authored case with what its operation
     /// reports (#3691).
     mod replay {
-        use crate::support::diagnostic::replay::among;
+        use crate::support::diagnostic::replay::{among, compared};
         use yamaa_core::json::Value;
+
+        /// A case that compares some keys of the context reads a reported
+        /// context at those keys alone: another reported key is ignored, and
+        /// a named key the report lacks leaves the row unequal to its author's.
+        #[test]
+        fn compares_reads_a_context_only_at_the_keys_it_names() {
+            let row = |context: &[(&str, &str)]| {
+                Value::Object(
+                    [
+                        (
+                            "condition".into(),
+                            Value::String("undeclared_column".into()),
+                        ),
+                        (
+                            "context".into(),
+                            Value::Object(
+                                context
+                                    .iter()
+                                    .map(|(key, value)| {
+                                        ((*key).into(), Value::String((*value).into()))
+                                    })
+                                    .collect(),
+                            ),
+                        ),
+                        ("phase".into(), Value::String("validation".into())),
+                    ]
+                    .into(),
+                )
+            };
+            let compares = ["condition".to_owned(), "context.column".to_owned()];
+            let projected = |context: &[(&str, &str)]| {
+                let Value::Object(mut row) = row(context) else {
+                    unreachable!("a row is an object")
+                };
+                row.remove("phase");
+                Value::Object(row)
+            };
+            let authored = projected(&[("column", "VALUE")]);
+            for (reported, expected, matches, label) in [
+                (
+                    row(&[("column", "VALUE"), ("detail", "VALUE")]),
+                    projected(&[("column", "VALUE")]),
+                    true,
+                    "another reported key is ignored",
+                ),
+                (
+                    row(&[("column", "OTHER")]),
+                    projected(&[("column", "OTHER")]),
+                    false,
+                    "the named key is compared",
+                ),
+                (
+                    row(&[("detail", "VALUE")]),
+                    projected(&[]),
+                    false,
+                    "a named key the report lacks",
+                ),
+            ] {
+                let actual = compared(reported, Some(&compares));
+                let equal = actual == authored;
+                assert_eq!((actual, equal), (expected, matches), "{label}");
+            }
+        }
 
         /// An `among` case's rows are some of the issues its operation
         /// reports: each matches a distinct reported row, in any order, and

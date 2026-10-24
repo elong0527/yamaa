@@ -13,14 +13,17 @@
 //!
 //! A case whose table compared only part of each record says which fields in
 //! `compares`, and its rows hold those alone; nothing a table did not compare
-//! is filled in. A case whose table found its record by cause among several
-//! issues says `"among": true`: its rows are some of the issues reported,
-//! each equal to a distinct one after the `compares` projection, in any
-//! order, since the issues the table left unstated give its rows no authored
-//! position; the replay renders and counts only the issues they match. An
-//! input may take its `document` from one of the file's `documents`, by name
-//! (`base`), with `edits` that set or remove a member at a path of keys and
-//! list indexes.
+//! is filled in. A case whose table compared some keys of the context, not
+//! the whole of it, names each as `context.<key>` in place of `context`:
+//! each row's context holds exactly those keys, and each reported context is
+//! compared at them alone. A case whose table found its record by cause
+//! among several issues says `"among": true`: its rows are some of the
+//! issues reported, each equal to a distinct one after the `compares`
+//! projection, in any order, since the issues the table left unstated give
+//! its rows no authored position; the replay renders and counts only the
+//! issues they match. An input may take its `document` from one of the
+//! file's `documents`, by name (`base`), with `edits` that set or remove a
+//! member at a path of keys and list indexes.
 //!
 //! Every row was authored: in the Rust table it moved from, or from the rule
 //! card, registry entry or sibling record its pull request names. No run
@@ -52,7 +55,8 @@ pub struct Case {
     pub label: String,
     pub operations: Vec<String>,
     pub input: Json,
-    /// The fields the case compares, when its table compared fewer than all.
+    /// The fields the case compares, when its table compared fewer than all,
+    /// each a field or a `context.<key>`.
     pub compares: Option<Vec<String>>,
     /// Whether the rows are some of the issues reported, in any order.
     pub among: bool,
@@ -102,11 +106,20 @@ pub fn cases() -> Vec<Case> {
                     .iter()
                     .map(|field| field.text().to_owned())
                     .collect::<Vec<_>>();
+                let keys = context_keys(&fields);
+                let whole = fields
+                    .iter()
+                    .filter(|field| !field.starts_with("context."))
+                    .collect::<Vec<_>>();
                 assert!(
-                    fields.iter().all(|field| FIELDS.contains(&field.as_str()))
+                    whole.iter().all(|field| FIELDS.contains(&field.as_str()))
+                        && keys.iter().all(|key| !key.is_empty() && !key.contains('.'))
                         && fields.iter().collect::<BTreeSet<_>>().len() == fields.len()
-                        && fields.len() < FIELDS.len(),
-                    "{label}: compares names some of the fields {FIELDS:?}, each once: {fields:?}"
+                        && whole.len() < FIELDS.len()
+                        && (keys.is_empty() || !whole.iter().any(|field| *field == "context")),
+                    "{label}: compares names some of the fields {FIELDS:?}, each once, \
+                     or some keys of the context as `context.<key>` in place of \
+                     `context`: {fields:?}"
                 );
                 fields
             });
@@ -120,11 +133,28 @@ pub fn cases() -> Vec<Case> {
                 true
             });
             if let Some(fields) = &compares {
+                let keys = context_keys(fields);
                 for issue in issues {
                     for (field, _) in issue.members() {
                         assert!(
-                            fields.contains(field),
+                            fields.contains(field) || (field == "context" && !keys.is_empty()),
                             "{label}: a row holds only the fields it compares, not {field:?}"
+                        );
+                    }
+                    if !keys.is_empty() {
+                        let written = issue
+                            .get("context")
+                            .unwrap_or_else(|| {
+                                panic!("{label}: a row holds the context keys it compares")
+                            })
+                            .members()
+                            .iter()
+                            .map(|(key, _)| key.as_str())
+                            .collect::<BTreeSet<_>>();
+                        assert_eq!(
+                            written,
+                            keys.iter().copied().collect::<BTreeSet<_>>(),
+                            "{label}: a row's context holds exactly the keys it compares"
                         );
                     }
                 }
@@ -252,17 +282,38 @@ pub fn among(authored: &[Value], reported: &[Value]) -> Result<Vec<usize>, Vec<V
     }
 }
 
-/// `row` with only the fields `compares` names, or whole.
-fn compared(row: Value, compares: Option<&[String]>) -> Value {
+/// `row` with only the fields `compares` names, its context with only the
+/// keys a `context.<key>` names, or whole.
+pub fn compared(row: Value, compares: Option<&[String]>) -> Value {
     match (row, compares) {
-        (Value::Object(fields), Some(compares)) => Value::Object(
-            fields
-                .into_iter()
-                .filter(|(field, _)| compares.contains(field))
-                .collect(),
-        ),
+        (Value::Object(fields), Some(compares)) => {
+            let keys = context_keys(compares);
+            Value::Object(
+                fields
+                    .into_iter()
+                    .filter_map(|(field, value)| match value {
+                        Value::Object(context) if field == "context" && !keys.is_empty() => {
+                            let context = context
+                                .into_iter()
+                                .filter(|(key, _)| keys.contains(&key.as_str()))
+                                .collect();
+                            Some((field, Value::Object(context)))
+                        }
+                        value => compares.contains(&field).then_some((field, value)),
+                    })
+                    .collect(),
+            )
+        }
         (row, _) => row,
     }
+}
+
+/// The context keys `compares` names as `context.<key>`.
+fn context_keys(compares: &[String]) -> Vec<&str> {
+    compares
+        .iter()
+        .filter_map(|field| field.strip_prefix("context."))
+        .collect()
 }
 
 /// Names the file being read or the case being replayed when a reader, a
