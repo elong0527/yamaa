@@ -5,7 +5,10 @@ dataset-qualified source, through a named intermediate declared in
 `intermediates`, or through a qualified aggregate. Each is one lookup
 ([LOOKUP-25](#lookup-25)): it matches records on keys and an optional range,
 narrows them by a filter, selects one record or reduces them, and answers
-absence. The kinds of lookup differ only in the steps they declare.
+absence. The kinds of lookup differ only in the steps they declare. A named
+intermediate that writes `inner_join` is a fourth kind, the pair relation: it
+matches and narrows the records of one relation for every record of another
+and keeps every pair ([LOOKUP-27](#lookup-27)).
 
 ## The lookup model
 
@@ -22,15 +25,15 @@ one candidate, or an aggregate reduces them ([LOOKUP-10](#lookup-10)). With no
 candidate, absence is answered ([LOOKUP-24](#lookup-24)). Candidates keep
 stored record order. The kinds differ only in the steps they enable.
 
-Evidence: `schema-lookup-source-range`, `schema-lookup-filters`, `schema-aggregation`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
+Evidence: `schema-lookup-source-range`, `schema-lookup-filters`, `schema-aggregation`, `schema-lookup-inner-join-pairs`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
 
-| Step | Implicit join | Named intermediate | Qualified aggregate |
-| --- | --- | --- | --- |
-| Match keys | The input's `key` ([LOOKUP-1](#lookup-1)) | `key` ([LOOKUP-3](#lookup-3)) | `key`, or the input's `key` ([LOOKUP-5](#lookup-5)) |
-| Match range | `between` on a structured `source:` | `between` | `between` |
-| Narrow | `filter` on a structured `source:`, over the donor record | `filter`, which may also read the current row's driver | `filter`, over the donor record |
-| Select | `order_by` and `keep` | `order_by` and `keep`, or `nearest` ([LOOKUP-26](#lookup-26)) | The reduction of `expr` over every candidate ([LOOKUP-18](#lookup-18)) |
-| Answer absence | `absent`, missing by default, or `require_match` | `absent`, missing by default, or `require_match` | Missing, uncounted ([FORMULA-24](formulas.md#formula-24)) |
+| Step | Implicit join | Named intermediate | Qualified aggregate | Pair relation |
+| --- | --- | --- | --- | --- |
+| Match keys | The input's `key` ([LOOKUP-1](#lookup-1)) | `key` ([LOOKUP-3](#lookup-3)) | `key`, or the input's `key` ([LOOKUP-5](#lookup-5)) | `key`, the left record's values against the right side's fields ([LOOKUP-27](#lookup-27)) |
+| Match range | `between` on a structured `source:` | `between` | `between` | None |
+| Narrow | `filter` on a structured `source:`, over the donor record | `filter`, which may also read the current row's driver | `filter`, over the donor record | `filter`, over both sides' records |
+| Select | `order_by` and `keep` | `order_by` and `keep`, or `nearest` ([LOOKUP-26](#lookup-26)) | The reduction of `expr` over every candidate ([LOOKUP-18](#lookup-18)) | None: every candidate makes one pair |
+| Answer absence | `absent`, missing by default, or `require_match` | `absent`, missing by default, or `require_match` | Missing, uncounted ([FORMULA-24](formulas.md#formula-24)) | None: a record without a candidate is in no pair |
 
 A step a lookup does not declare keeps every record: without `between` every
 record whose keys match is in range, and without `filter` every matched record
@@ -56,7 +59,11 @@ selecting one, so it declares no `keep`, and an `order_by` only to order the
 values `STR_JOIN` joins ([LOOKUP-10](#lookup-10)). An unqualified aggregate
 and a grouped-row aggregate are not lookups: they reduce the constructed output
 rows of a partition or the current input group, which their `filter` narrows
-([LOOKUP-8](#lookup-8)), and declare no `between` ([LOOKUP-19](#lookup-19)).
+([LOOKUP-8](#lookup-8)), and declare no `between` ([LOOKUP-19](#lookup-19)). A
+pair relation runs the match and narrow steps once for every record of its
+left side, that record standing where the current row stands, and keeps every
+candidate as a record of its own; it runs once, before any row is built
+([LOOKUP-27](#lookup-27)).
 
 <a id="lookup-9"></a>
 
@@ -254,6 +261,11 @@ order.
 
 Fails: `unpaired_fields`, `multiple_matches`.
 Evidence: `negative-lookup-unordered`, `negative-lookup-empty-order`, `negative-lookup-unchosen`, `negative-source-duplicate-key`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::fields_beside_a_reduction_that_reads_neither_share_one_finding_in_the_tables_order`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
+
+A lookup never multiplies rows: of several matching partners, `order_by` with
+`keep` reads one, which is a choice, not a join, and the other partners take no
+part in the row. One row for each matching pair of records is a row template
+driving on a pair relation ([LOOKUP-27](#lookup-27)).
 
 Declaring one of `order_by` and `keep` without the other fails as
 `unpaired_fields`, on a named intermediate and a source binding alike, and an
@@ -752,10 +764,11 @@ derivation's read does ([COLUMN-4](columns.md#column-4)), at `between.value`.
 
 An entry of `intermediates` declares `id`, `dataset`, the relation it reads,
 and `key`, its match ([LOOKUP-5](#lookup-5)), unless it drives a row
-template, which declares none ([ROW-2](rows.md#row-2)). Its `id` shares one
-naming list with dataset identifiers, other lookup ids and the output
-`domain`, and a collision fails. An intermediate read as a lookup without
-`key` fails as `missing_required_field`.
+template or is a side of a pair relation, which declare none
+([ROW-2](rows.md#row-2), [LOOKUP-27](#lookup-27)). Its `id` shares one naming
+list with dataset identifiers, other lookup ids and the output `domain`, and a
+collision fails. An intermediate read as a lookup without `key` fails as
+`missing_required_field`.
 
 Fails: `duplicate_identifier`, `missing_required_field`.
 Evidence: `negative-lookup-id-collision`, `negative-lookup-unknown-key`, `schema-lookup`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::an_intermediate_read_as_a_lookup_requires_its_key`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_driver_read_as_a_lookup_is_refused_at_its_key`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::an_intermediate_without_key_is_refused_unless_it_drives_rows`, `rust/tests/host-fixtures/cases.json::ordinary_lookup_without_keys`.
@@ -767,14 +780,21 @@ row, or grouped-row candidate, the lookup runs for. The match fields are the
 ([LOOKUP-5](#lookup-5)), and the candidates are the matched records that
 survive `filter` ([LOOKUP-25](#lookup-25)).
 
+A `dataset` that names a pair relation reads the relation's records as it
+reads an input's, with a `key` of its own ([LOOKUP-27](#lookup-27)). A pair
+relation's own `key` pairs its two sides, not a current row, and an
+intermediate that is a side of one declares no `key`, as a row driver does
+([ROW-2](rows.md#row-2)).
+
 An `id` collision fails as `duplicate_identifier`. The schema requires `id`
 and `dataset`: omitting either fails as `missing_required_field` with no
-rule cited. An intermediate that drives no row template and declares no `key`
-fails as `missing_required_field` at its `key` before any input is read, even
-when nothing reads it, its context naming the field and its class as the
-schema's does; a row template's driver read as a lookup by the rows another
-template builds fails the same way. An intermediate never falls back to its
-input's `key`.
+rule cited. An intermediate that drives no row template, is no side of a pair
+relation and declares no `key`, or a pair relation without one, fails as
+`missing_required_field` at its `key` before any input is read, even when
+nothing reads it, its context naming the field and its class as the schema's
+does; a row template's driver read as a lookup by the rows another template
+builds fails the same way. An intermediate never falls back to its input's
+`key`.
 
 ```yaml
 intermediates:
@@ -840,8 +860,9 @@ output's `CMSEQ` is numeric but `CODING.CMSEQ` is stored as text, declare
 
 ### LOOKUP-7. A named intermediate may read SELF, the completed rows of earlier row templates
 
-A lookup's `dataset` must be declared in `input`, except that a named
-intermediate may use `SELF` when the specification declares row templates.
+A lookup's `dataset` must be declared in `input` or be a pair relation
+([LOOKUP-27](#lookup-27)), except that a named intermediate may use `SELF` when
+the specification declares row templates.
 `SELF` holds the rows of completed earlier templates during row construction
 and all completed rows during column derivation; the current template's
 unfinished rows are never eligible, and a read from the first template fails.
@@ -1281,7 +1302,7 @@ are reported and the selection chooses. A lookup whose key is verified unique
 at `error` needs no selection.
 
 Fails: `duplicate_intermediate_records`, `unknown_field`, `correlated_filter_with_unique_verification`, `correlated_derivation_with_unique_verification`, `value_not_permitted`.
-Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-intermediate`, `schema-lookup-intermediate-unique-warning`, `negative-lookup-unique-warning-unordered`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_without_a_selection_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_keep_alone_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_an_order_of_no_term_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_an_order_and_keep_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_nearest_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::an_error_unique_without_a_selection_is_admitted`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::a_warning_unique_beside_a_nearest_selection_reports_and_reads_take_the_nearest`.
+Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-intermediate`, `negative-lookup-inner-join-duplicate-pairs`, `schema-lookup-intermediate-unique-warning`, `negative-lookup-unique-warning-unordered`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_without_a_selection_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_keep_alone_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_an_order_of_no_term_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_an_order_and_keep_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_nearest_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::an_error_unique_without_a_selection_is_admitted`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::a_warning_unique_beside_a_nearest_selection_reports_and_reads_take_the_nearest`.
 
 ```yaml
 - id: DS_EOS
@@ -1291,6 +1312,13 @@ Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-interm
   verifications:
     - unique: [STUDYID, USUBJID]
 ```
+
+A pair relation's checks run over its records, the matching pairs its filter
+keeps with their derivations complete, once the relation is built and before
+any row ([LOOKUP-27](#lookup-27)), and a repeated combination names the
+relation itself as the dataset it repeats in. It selects nothing, so its
+checks take `error` severity alone, and each column a check names is a
+derivation of it.
 
 The mapping form `unique: {columns: [STUDYID, USUBJID], id: donor-key}` also
 admits an optional `severity`, and it is written only to declare one of them;
@@ -1370,7 +1398,9 @@ never changes the row count.
   match and its filter keeps ([LOOKUP-25](#lookup-25)), even when the
   expression qualifier equals the current row template's input dataset. A
   scalar source qualified to that input dataset reads one record; the
-  aggregate keyword makes the same qualifier relational.
+  aggregate keyword makes the same qualifier relational. The declared
+  dataset is an input or a pair relation, whose records it reduces as an
+  input's, by a `key` of its own ([LOOKUP-27](#lookup-27)).
 - **Unqualified.** The expression reduces constructed output rows within its
   `group_by` partition and broadcasts the result to every row in the
   partition.
@@ -1496,3 +1526,121 @@ producer's segment expression is `0.5 * (PREVC + AVAL) * (ARELTM - PREVT)`,
 and the consumer's reduction is `SUM(SEGS.SEG)`. A first sample's missing
 neighbour produces a missing segment, which `SUM` skips under
 [FORMULA-19](formulas.md#formula-19).
+
+## The pair relation
+
+<a id="lookup-27"></a>
+
+### LOOKUP-27. A named intermediate that writes inner_join is a pair relation, one record for each matching pair of its two sides
+
+A named intermediate that writes `inner_join` is a pair relation: its
+`dataset` is the left side and its `inner_join` the right side, each an input
+or an intermediate a row template could drive on ([ROW-2](rows.md#row-2)).
+Its records are every left record paired with each right record whose `key`
+values equal its own, in left stored order and then right stored order; an
+unmatched record is in no pair. It requires `key` and `derivations`, and is
+read as an input is. Its select and absence steps are none
+([LOOKUP-25](#lookup-25)).
+
+Fails: `prohibited_construct`, `missing_required_field`, `invalid_field_type`, `duplicate_identifier`, `invalid_intermediate_driver`, `unknown_intermediate_driver_type`, `unknown_field`, `incompatible_input_type`.
+Evidence: `schema-lookup-inner-join-pairs`, `adam-adaecm-related-pairs`, `schema-lookup-inner-join-aggregate`, `schema-lookup-inner-join-filter`, `schema-lookup-inner-join-missing-key`, `negative-lookup-inner-join-keep`, `negative-lookup-inner-join-no-key`, `negative-lookup-inner-join-self`, `schema-lookup-inner-join-lookup`, `schema-lookup-inner-join-grouped`, `schema-lookup-inner-join-expression-key`, `schema-lookup-inner-join-unconvertible`, `negative-lookup-inner-join-duplicate-pairs`, `negative-lookup-inner-join-key-type`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_refuses_an_order_and_a_keep_written_beside_inner_join_naming_the_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_refuses_self_as_its_right_side`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_pairs_two_relations`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_is_no_side_of_another`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_pair_relation_without_derivations_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_pair_relation_key_pair_compares_its_two_types`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_pair_relation_side_reads_no_other_record`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_pair_relation_exposes_fields_of_one_type`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_read_through_a_pair_relation_s_implicit_join_has_no_applicable_keys`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_keyless_aggregate_over_a_pair_relation_has_no_applicable_keys`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_pair_relation_side_may_read_a_lookup_keyed_by_its_own_record`, `rust/tests/host-fixtures/cases.json::a_pair_relation_key_beyond_the_key_limit`.
+
+```yaml
+intermediates:
+  - id: AEMEM
+    dataset: RELREC
+    filter: "RELREC.RDOMAIN = 'AE' AND RELREC.IDVAR = 'AESEQ'"
+    derivations: {SEQ: {type: int, derivation: IDVARVAL}}
+  - id: CMMEM
+    dataset: RELREC
+    filter: "RELREC.RDOMAIN = 'CM' AND RELREC.IDVAR = 'CMSEQ'"
+    derivations: {SEQ: {type: int, derivation: IDVARVAL}}
+  - id: PAIRS
+    dataset: AEMEM
+    inner_join: CMMEM
+    key: [USUBJID, RELID]
+    derivations:
+      USUBJID: {type: str, derivation: AEMEM.USUBJID}
+      RELID: {type: str, derivation: AEMEM.RELID}
+      AESEQ: {type: int, derivation: AEMEM.SEQ}
+      CMSEQ: {type: int, derivation: CMMEM.SEQ}
+rows:
+  - id: pairs
+    dataset: PAIRS
+    derivations: {USUBJID: PAIRS.USUBJID, AESEQ: PAIRS.AESEQ, CMSEQ: PAIRS.CMSEQ, RELID: PAIRS.RELID}
+```
+
+Each adverse event member of a relationship pairs with each medication member
+of the same subject's same relationship, and each pair builds one row. A
+relationship of two events and two medications gives four pairs.
+
+A side that names an input reads every record of it. A side that names an
+intermediate reads the records a row template driving on it would read: those
+its filter keeps, its derivations complete, before any pair is formed. Such an
+intermediate reads an input and declares none of `key`, `between`,
+`order_by`, `keep`, `nearest`, `absent`, `require_match` and `inner_join`, or
+the pair relation fails as `invalid_intermediate_driver` at its field that
+names the side, naming the side as `intermediate` and each such field, the
+side's `dataset` among them when it reads no input. So a pair relation is no
+side of another, directly or through an intermediate over it. A side
+intermediate whose filter or derivations read another input's record fails
+the same way, naming `filter` or `derivations`, and one that exposes a field
+without one column type ([EXPR-14](expressions.md#expr-14)) fails as
+`unknown_intermediate_driver_type` there. The two sides are two relations: a
+side named twice fails as `duplicate_identifier` at `inner_join` and then
+`dataset`. A side's `columns` limits the fields the pair relation reads of it.
+
+`key` pairs the two sides, the left record standing where a lookup's current
+row stands ([LOOKUP-5](#lookup-5), [LOOKUP-6](#lookup-6)). Its list form pairs
+each field it names of the right side with the left side's field of the same
+name. Its mapping form pairs each right side field, written as its key, with a
+value of the left record: the left side's field, qualified by the left side's
+name, or an expression over the left side's fields, which each left record
+evaluates before any pair is formed. Each pair compares under key equality
+([LOOKUP-9](#lookup-9)), with no operand converted: a missing value matches
+nothing, so a record missing a key value, on either side, is in no pair, and a
+pair whose types cannot compare fails as `incompatible_input_type` before any
+input is read, at `key`, or at `key.<field>` for an expression; a type decided
+per value fails the same way when that value is compared. A field a side does
+not have, and a name written alone that reads no field of the left side, fail
+as `unknown_field` at `key`. A missing `key` fails as
+`missing_required_field` at `key`, and one that names no pair as
+`invalid_field_type` ([LOOKUP-5](#lookup-5)), and one of more than 64 pairs
+is refused as every key is, under the [fixed resource
+policy](../docs/release.md#resource-limits). Key values constant on both
+sides pair every record of one side with every record of the other: the
+relation holds at most as many records as the product of its sides'.
+
+`filter` narrows the matching pairs ([LOOKUP-8](#lookup-8)). It reads each
+side's fields qualified by the side's name, and it is asked of every matching
+pair before any derivation is evaluated, so a derivation never fails on a pair
+it removes. `derivations` names the fields the relation exposes, in
+declaration order ([LOOKUP-15](#lookup-15)): each reads the sides' fields by
+their qualifiers and the derivations declared before it by name, and a typed
+entry converts its result. Each exposed field has one column type, or the
+relation fails as `unknown_intermediate_driver_type` at `derivations`.
+`columns` limits the exposed fields to the derivations it lists. A name the
+filter, a derivation or `columns` reads that is none of these fails as
+`unknown_field`, and the sides' own fields are read nowhere else. A missing
+`derivations` fails as `missing_required_field`, and an empty one as
+`invalid_field_type`. Its `unique` checks run over its records, at `error`
+severity only ([LOOKUP-17](#lookup-17)).
+
+A pair relation selects nothing, ranges over nothing and answers no absence:
+`between`, `order_by`, `keep`, `nearest`, `absent` and `require_match`
+written beside `inner_join`, and `SELF` as either side, fail before any input
+is read as `prohibited_construct`, naming each of them and then `inner_join`,
+in the order listed here, with the relation's id as `intermediate` and the first
+of them as `construct`: a field's name, or `SELF`.
+
+The relation is built once, before any row is built and before any
+intermediate's `unique` check runs, and is read as an input is, through its
+id. A row template drives on it, each record building one candidate row
+([ROW-2](rows.md#row-2)); a named intermediate whose `dataset` names it looks
+it up with a `key` of its own ([LOOKUP-3](#lookup-3)); and a qualified
+aggregate with a `key` of its own reduces it ([LOOKUP-18](#lookup-18)), so
+`COUNT(PAIRS.*)` keyed by an event counts the event's pairs. It declares no
+input `key`, so a read through its implicit join, and a qualified aggregate
+over it without `key`, fail as `no_applicable_keys` ([LOOKUP-5](#lookup-5)),
+whose hint names the routes that read it: a named intermediate or an
+aggregate with a `key` of its own.

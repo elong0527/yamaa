@@ -12,9 +12,11 @@ pub enum JoinedFinding {
         identifier: String,
         finding: crate::reference_scope::Finding,
     },
-    /// An input that declares no `key` (LOOKUP-1).
+    /// An input that declares no `key` (LOOKUP-1), or a pair relation,
+    /// which declares none (LOOKUP-27).
     UndeclaredKey {
         dataset: String,
+        pair: bool,
     },
     /// A declared key column the input does not store, as `INPUT.COLUMN`
     /// (LOOKUP-5).
@@ -43,7 +45,9 @@ impl JoinedFinding {
     pub(crate) fn key_diagnostic(&self, path: &str) -> Option<crate::diagnostic::Diagnostic> {
         use crate::diagnostic::lookup::{self, Owner};
         Some(match self {
-            Self::UndeclaredKey { dataset } => lookup::undeclared_input_key(path, dataset, false),
+            Self::UndeclaredKey { dataset, pair } => {
+                lookup::undeclared_input_key(path, dataset, false, *pair)
+            }
             Self::DonorKey { identifier } => {
                 lookup::donor_key_reference(path, Owner::Unnamed, identifier)
             }
@@ -82,6 +86,7 @@ impl Catalog {
         };
         let no_keys = || JoinedFinding::UndeclaredKey {
             dataset: owner.into(),
+            pair: donor.pair,
         };
         let mut record_keys = None;
         let row_pairs;

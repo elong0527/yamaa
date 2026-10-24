@@ -1,0 +1,8 @@
+phase: validation
+condition: prohibited_construct
+spec_paths:
+  - intermediates.PAIRS.inner_join
+rule: LOOKUP-27
+context:
+  intermediate: PAIRS
+  construct: SELF

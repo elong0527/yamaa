@@ -100,6 +100,7 @@ pub(super) fn extend_catalog(
                     fields: &fields[index],
                 },
                 declared_key(spec, name),
+                spec.pair_relation(name).is_some(),
             )
         })
         .collect::<Vec<_>>();

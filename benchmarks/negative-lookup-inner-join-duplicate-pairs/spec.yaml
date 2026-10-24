@@ -1,0 +1,54 @@
+yamaa: "1.0"
+type: spec
+domain: AECM
+keys: [USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int}}
+  CM: {path: input/cm.csv, types: {CMSEQ: int}}
+
+output:
+  path: aecm.csv
+  columns: [USUBJID, AESEQ, CMSEQ, CMTRT]
+
+intermediates:
+  # Each adverse event paired with the medication of the same subject given
+  # for its term, which is expected to be one medication for each event.
+  - id: TREATMENT
+    dataset: AE
+    inner_join: CM
+    key:
+      USUBJID: AE.USUBJID
+      CMINDC: AE.AETERM
+    derivations:
+      USUBJID: AE.USUBJID
+      AESEQ: AE.AESEQ
+      CMSEQ: CM.CMSEQ
+      CMTRT: CM.CMTRT
+    verifications:
+      - unique: [USUBJID, AESEQ]
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number of the Adverse Event
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number of the Medication
+
+  - name: CMTRT
+    type: str
+    label: Reported Name of Drug, Med, or Therapy
+
+rows:
+  - id: treatment
+    dataset: TREATMENT
+    derivations:
+      USUBJID: TREATMENT.USUBJID
+      AESEQ: TREATMENT.AESEQ
+      CMSEQ: TREATMENT.CMSEQ
+      CMTRT: TREATMENT.CMTRT

@@ -109,16 +109,40 @@ pub fn findings(spec: &Spec) -> Vec<SchemaDiagnostic> {
         }
     }
     // An intermediate states its own `key`, unless it drives a row template,
-    // which declares none (LOOKUP-3, ROW-2; D23, D63). The record is the
-    // schema's own for a missing required field.
+    // which declares none (LOOKUP-3, ROW-2; D23, D63); a pair relation always
+    // states it, and its `derivations`, the fields it exposes (LOOKUP-27).
+    // The record is the schema's own for a missing required field.
     for item in &spec.intermediates {
+        let required = |field: &str, code| SchemaDiagnostic {
+            path: format!("{}.{field}", spec.cite(item.meta)),
+            code,
+            context: vec![
+                ("field", C::Text(field.into())),
+                ("class", C::Text("intermediate_class".into())),
+            ],
+        };
         if spec.lacks_key(item) {
+            findings.push(required(
+                "key",
+                if item.pairs() {
+                    ConditionCode::LookupPairKeyRequired
+                } else {
+                    ConditionCode::IntermediateKeyRequired
+                },
+            ));
+        }
+        if item.pairs() && !item.written.contains("derivations") {
+            findings.push(required(
+                "derivations",
+                ConditionCode::LookupPairDerivationsRequired,
+            ));
+        } else if item.pairs() && item.bindings.is_empty() {
             findings.push(SchemaDiagnostic {
-                path: format!("{}.key", spec.cite(item.meta)),
-                code: ConditionCode::IntermediateKeyRequired,
+                path: format!("{}.derivations", spec.cite(item.meta)),
+                code: ConditionCode::LookupPairDerivationsEmpty,
                 context: vec![
-                    ("field", C::Text("key".into())),
-                    ("class", C::Text("intermediate_class".into())),
+                    ("intermediate", C::Text(item.id.name.clone())),
+                    ("expected", C::Text("at least one derivation".into())),
                 ],
             });
         }

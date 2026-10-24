@@ -39,6 +39,8 @@ pub use relation_range::{
 };
 mod self_relations;
 pub use self_relations::IntermediateSource;
+mod pairs;
+pub use pairs::{PairJoin, PairKey, PairRecords, PairSide, PairValue};
 mod match_expression;
 mod match_values;
 pub use match_expression::MatchExpression;

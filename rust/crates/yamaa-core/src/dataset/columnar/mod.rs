@@ -41,6 +41,7 @@ mod index;
 mod joins;
 mod keygrain;
 mod odm;
+mod pairs;
 mod partitions;
 mod predicates;
 mod relations;
@@ -466,7 +467,11 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         functions::admit(self.plan, &*self.functions)?;
         let plan = self.plan;
         let sources: Vec<_> = plan.region_sources(RegionId::DATASET).collect();
-        let expected = sources.len().saturating_sub(1);
+        // A pair relation's port is filled by the run itself (LOOKUP-27).
+        let expected = sources
+            .len()
+            .saturating_sub(1)
+            .saturating_sub(plan.pair_ports());
         if self.primary.schema() != &plan.sources()[sources[0].index()].schema
             || self
                 .partitions
@@ -561,12 +566,23 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         let region = RegionId::DATASET;
         let width = plan.region(region).output.columns().len();
         let mut frame = Frame::new(width);
-        let secondary: Vec<Table<'a, E>> = self
+        let inputs: Vec<Table<'a, E>> = self
             .secondary
             .iter()
             .map(|&table| Table::Source(table))
             .collect();
         self.poll(super::resolved::Step::VerifyIntermediates { self_rows: false })?;
+        // Every pair relation is materialized before any intermediate is
+        // verified and any row is built, and is read through its port, after
+        // the inputs' (LOOKUP-27).
+        let ports = self.pair_ports(&frame, &inputs)?;
+        let mut secondary: Vec<Table<'_, E>> = inputs.clone();
+        secondary.extend(ports.iter().map(|(records, schema)| Table::Rows {
+            frame: records,
+            schema,
+            start: 0,
+            rows: records.rows(),
+        }));
         self.verify_intermediates(&frame, &secondary, false, records)?;
         let template_ids: Vec<TemplateId> = plan.region_templates(region).collect();
         let keyed = template_ids.first().is_some_and(|&template| {
@@ -604,6 +620,44 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             verifications: std::mem::take(records),
             partition_rows: self.output_partition,
         })
+    }
+
+    /// The records of each pair relation's port, in port order: each pair
+    /// relation materialized once over the complete inputs `inputs`, its
+    /// exposed fields copied (LOOKUP-27).
+    fn pair_ports(
+        &mut self,
+        frame: &Frame,
+        inputs: &[Table<'a, E>],
+    ) -> Result<Vec<(Frame, TableSchema)>, Fail<E>> {
+        let plan = self.plan;
+        let mut ports = Vec::new();
+        for relation in plan.region_relations(RegionId::DATASET) {
+            let Some(item) = plan.relation(relation).named.as_deref() else {
+                continue;
+            };
+            let Some(join) = item.source.pairs() else {
+                continue;
+            };
+            let cx = self.probe_cx(frame, RegionId::DATASET, inputs);
+            let built = pairs::materialize(self, &cx, relation)?;
+            let columns = item.columns.as_deref().unwrap_or_default();
+            let records = pairs::port_records(&built, columns, &join.fields)?;
+            ports.push((join.port, records, join.fields.clone()));
+        }
+        ports.sort_by_key(|(port, ..)| *port);
+        // The ports follow the inputs' in declaration order.
+        if ports
+            .iter()
+            .enumerate()
+            .any(|(offset, (port, ..))| *port != inputs.len() + offset)
+        {
+            return Err(Box::new(ExecutionError::SchemaMismatch));
+        }
+        Ok(ports
+            .into_iter()
+            .map(|(_, records, schema)| (records, schema))
+            .collect())
     }
 
     /// Reject cardinality overflow and excessive output slots before deriving
@@ -672,16 +726,19 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
     /// filter, then publish its SELF rows and verify the SELF intermediates,
     /// a warning's record joining `records`.
     #[allow(clippy::too_many_arguments)]
-    fn process_template(
+    fn process_template<'s>(
         &mut self,
         index: usize,
         template: TemplateId,
         frame: &mut Frame,
-        secondary: &[Table<'a, E>],
+        secondary: &[Table<'s, E>],
         next_identity: &mut usize,
         templates: &mut Vec<TemplateRows>,
         records: &mut Vec<CheckRecord>,
-    ) -> Result<(), Fail<E>> {
+    ) -> Result<(), Fail<E>>
+    where
+        'a: 's,
+    {
         let plan = self.plan;
         let node = plan.template(template);
         let region = node.region;
@@ -977,12 +1034,15 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
     }
 
     /// The source table of a region's source slot.
-    fn source_table(
+    fn source_table<'s>(
         &self,
         region: RegionId,
         source: super::resolved::SourceId,
-        secondary: &[Table<'a, E>],
-    ) -> Table<'a, E> {
+        secondary: &[Table<'s, E>],
+    ) -> Table<'s, E>
+    where
+        'a: 's,
+    {
         let first = self
             .plan
             .region_sources(region)
@@ -1055,12 +1115,15 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
 
     /// Complete the column phase in the compiler's order, checking each
     /// available declared prefix of column checks in order.
-    fn complete_columns(
+    fn complete_columns<'s>(
         &mut self,
         frame: &mut Frame,
-        secondary: &[Table<'a, E>],
+        secondary: &[Table<'s, E>],
         records: &mut Vec<CheckRecord>,
-    ) -> Result<(), Fail<E>> {
+    ) -> Result<(), Fail<E>>
+    where
+        'a: 's,
+    {
         let plan = self.plan;
         let region = RegionId::DATASET;
         self.relations.begin_columns(plan);
@@ -1184,14 +1247,17 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
     /// row's own template's driver, or the primary for a whole-dataset
     /// binding. Its first call prepares a direct window over every candidate
     /// before any row, even for no rows.
-    fn complete_column(
+    fn complete_column<'s>(
         &mut self,
         frame: &mut Frame,
         binding: BindingId,
-        secondary: &[Table<'a, E>],
+        secondary: &[Table<'s, E>],
         rows: &[usize],
         prepare: bool,
-    ) -> Result<(), Fail<E>> {
+    ) -> Result<(), Fail<E>>
+    where
+        'a: 's,
+    {
         let plan = self.plan;
         let bound = plan.binding(binding);
         let region = RegionId::DATASET;
@@ -1224,13 +1290,16 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
 
     /// Intermediate `unique` verifications: input-backed ones before any row,
     /// SELF ones after each completed template.
-    fn verify_intermediates(
+    fn verify_intermediates<'s>(
         &mut self,
         frame: &Frame,
-        secondary: &[Table<'a, E>],
+        secondary: &[Table<'s, E>],
         self_rows: bool,
         records: &mut Vec<CheckRecord>,
-    ) -> Result<(), Fail<E>> {
+    ) -> Result<(), Fail<E>>
+    where
+        'a: 's,
+    {
         relations::verify(self, frame, secondary, self_rows, records)
     }
 }

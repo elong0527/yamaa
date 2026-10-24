@@ -25,7 +25,19 @@ pub(super) fn reading_path<'a>(derivations: &'a [Derivation], identifier: &str) 
         .map(|derivation| derivation.operation_path.as_str())
 }
 impl Derivation {
-    fn assignment_path(&self) -> &str {
+    /// The declared type of a typed entry.
+    pub(super) fn typed(&self) -> Option<ColumnType> {
+        self.typed
+    }
+    /// The entry's path, at which a conversion of its result is named.
+    pub(super) fn path(&self) -> &str {
+        &self.path
+    }
+    /// The literal answering a result its declared type cannot hold.
+    pub(super) fn handler(&self) -> Option<&crate::conversion::LiteralHandler> {
+        self.handler.as_ref()
+    }
+    pub(super) fn assignment_path(&self) -> &str {
         if self.typed.is_some() {
             &self.path
         } else {
@@ -390,12 +402,24 @@ fn select_earlier(
         .flat_map(|item| &item.references)
         .filter_map(|name| name.split_once('.').map(|(owner, _)| owner))
         .collect::<std::collections::BTreeSet<_>>();
+    // A pair relation is read as an input is, never through its
+    // intermediate (LOOKUP-27): a name it qualifies is a current-record read.
+    let pairs = previous
+        .iter()
+        .enumerate()
+        .filter(|(_, item)| {
+            item.as_ref()
+                .is_some_and(|item| item.source.pairs().is_some())
+        })
+        .map(|(index, _)| index)
+        .collect::<std::collections::BTreeSet<_>>();
     let mut required = previous
         .iter()
         .enumerate()
         .filter_map(|(index, item)| {
             item.as_ref()
                 .filter(|item| references.contains(item.identifier.as_str()))
+                .filter(|_| !pairs.contains(&index))
                 .map(|_| index)
         })
         .collect::<std::collections::BTreeSet<_>>();
@@ -444,7 +468,7 @@ fn select_earlier(
         let Some(item) = item else {
             continue;
         };
-        if !references.contains(item.identifier.as_str()) {
+        if !references.contains(item.identifier.as_str()) || pairs.contains(&index) {
             continue;
         }
         let schema = item.source_schema(secondary).ok_or(BindError::Internal)?;
@@ -952,7 +976,7 @@ fn rebase(
         let name = match &item.source {
             IntermediateSource::Input(index) => Some(original_secondary[*index].name.clone()),
             IntermediateSource::Primary { name, .. } => Some(name.clone()),
-            IntermediateSource::SelfRows { .. } => None,
+            IntermediateSource::SelfRows { .. } | IntermediateSource::Pairs(_) => None,
         };
         if let IntermediateSource::SelfRows { schema, .. } = &mut item.source {
             *schema = output.clone();

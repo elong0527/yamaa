@@ -232,8 +232,14 @@ and each kind of read treats them in its own way:
   of its own, so it matches on the input's `key`.
 - **A named intermediate** chooses one record per row and always declares its
   own `key`, here the same columns, with `order_by` and `keep` choosing the
-  first exposure. The one exception is an intermediate that drives a row
-  template, which declares no key.
+  first exposure. The exceptions are an intermediate that drives a row
+  template and one that is a side of a pair relation, which declare no key.
+- **A pair relation**, a named intermediate that writes `inner_join`, keeps
+  every matching pair of two relations as a record of its own, matched on its
+  `key`, so a row template driving on it builds one row for each pair, such as
+  each adverse event with each medication given for it
+  ([LOOKUP-27](../../rules/lookup.md#lookup-27)). A lookup never builds more
+  rows: choosing one of several records with `keep` drops the others.
 
 A qualified read of an input that declares no `key` fails validation with
 `no_applicable_keys` at the read. An empty or repeated `key`, or a named

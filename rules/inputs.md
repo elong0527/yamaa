@@ -94,7 +94,7 @@ position of the data record in stored record order, assigned before any
 filter, join, grouping or window reads the input dataset; filtering keeps the
 original positions. Without the declaration, ingestion adds no field.
 
-Evidence: `schema-source-ordinal`, `rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs::source_ordinals_precede_filtering_and_count_multiline_records_once`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_linked_ordinal_is_local_to_the_consumer_and_never_part_of_the_contract`, `rust/crates/yamaa/tests/odm_input.rs::an_xml_input_no_odm_read_names_may_declare_an_ordinal`.
+Evidence: `schema-source-ordinal`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_case_predicates.json::source_ordinals_precede_filtering_and_count_multiline_records_once`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_case_predicates.json::an_ordinal_input_with_no_record_saves_its_header_alone`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_linked_ordinal_is_local_to_the_consumer_and_never_part_of_the_contract`, `rust/crates/yamaa/tests/odm_input.rs::an_xml_input_no_odm_read_names_may_declare_an_ordinal`.
 
 ```yaml
 input:
@@ -132,7 +132,7 @@ of [NAME-8](names.md#name-8), and the declaration fails
 validation with `odm_schema_field_type`.
 
 Fails: `ordinal_field_collision`, `odm_schema_field_type`.
-Evidence: `negative-source-ordinal-collision`, `rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs::ordinal_collision_and_fixed_odm_schema_have_complete_public_diagnostics`.
+Evidence: `negative-source-ordinal-collision`, `rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs::ordinal_collision_and_fixed_odm_schema_have_complete_public_diagnostics`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_case_predicates.json::an_ordinal_on_the_fixed_odm_schema_is_refused_before_capture`.
 
 `ordinal_field_collision` reports the input dataset, the generated field name
 and the `input.<dataset>.ordinal` specification path. `odm_schema_field_type`
@@ -266,7 +266,7 @@ fields only. A delimited source must not declare `present`; the declaration
 fails validation.
 
 Fails: `empty_string_present_unsupported`.
-Evidence: `rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs::csv_present_empty_is_rejected_before_study_bytes_are_requested`.
+Evidence: `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_case_predicates.json::csv_present_empty_is_rejected_before_study_bytes_are_requested`.
 
 Handlers answer for a collected empty string like any other string. The
 container profiles keep their own distinction -- a Parquet null and a

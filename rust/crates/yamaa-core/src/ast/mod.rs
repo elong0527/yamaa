@@ -190,10 +190,28 @@ impl Spec {
                 .is_some_and(|driver| driver.name == name)
         })
     }
+    /// Whether the intermediate `name` is a side of a pair relation, whose
+    /// records it reads as a row template reads a driver's (LOOKUP-27).
+    pub fn pairs_with(&self, name: &str) -> bool {
+        self.intermediates.iter().any(|item| {
+            item.inner_join
+                .as_ref()
+                .is_some_and(|right| right.name == name || item.dataset.name == name)
+        })
+    }
     /// Whether the intermediate `item` lacks the `key` it requires: it
-    /// declares none and drives no row template (LOOKUP-3, ROW-2; D23, D63).
+    /// declares none and neither drives a row template nor is a side of a
+    /// pair relation (LOOKUP-3, ROW-2, LOOKUP-27; D23, D63), or it is a pair
+    /// relation, whose `key` pairs its two sides whatever reads it.
     pub fn lacks_key(&self, item: &Intermediate) -> bool {
-        item.key.is_none() && !self.drives_rows(&item.id.name)
+        let name = &item.id.name;
+        item.key.is_none() && (item.pairs() || !(self.drives_rows(name) || self.pairs_with(name)))
+    }
+    /// The pair relation `name` declares, if it is one (LOOKUP-27).
+    pub fn pair_relation(&self, name: &str) -> Option<&Intermediate> {
+        self.intermediates
+            .iter()
+            .find(|item| item.id.name == name && item.pairs())
     }
     /// The input `name`'s declared `key`, if it declares one (P-JOIN-1).
     pub fn input_key(&self, name: &str) -> Option<&[Named]> {
@@ -304,6 +322,9 @@ pub struct Template {
 pub struct Intermediate {
     pub id: Named,
     pub dataset: Named,
+    /// The right side of a pair relation, whose `dataset` is the left side
+    /// (LOOKUP-27).
+    pub inner_join: Option<Named>,
     pub key: Option<JoinKey>,
     pub between: Option<Between>,
     pub filter: Option<ExprId>,
@@ -319,14 +340,19 @@ pub struct Intermediate {
     pub require_match: bool,
     pub bindings: Vec<Binding>,
     pub checks: Vec<UniqueCheck>,
-    /// Of `key`, `between`, `filter`, `order_by`, `keep`, `nearest`,
-    /// `columns`, `derivations`, `verifications`, the absence answer and
-    /// `require_match`.
+    /// Of `inner_join`, `key`, `between`, `filter`, `order_by`, `keep`,
+    /// `nearest`, `columns`, `derivations`, `verifications`, the absence
+    /// answer and `require_match`.
     pub written: Written,
     pub meta: Meta,
 }
 
 impl Intermediate {
+    /// Whether the intermediate is a pair relation: it writes `inner_join`,
+    /// so its records are the matching pairs of its two sides (LOOKUP-27).
+    pub fn pairs(&self) -> bool {
+        self.inner_join.is_some()
+    }
     /// The current-row values the lookup reads before any record: each key
     /// pair's match value, then the `to` of its nearest selection, which is
     /// read as a key match value is (LOOKUP-5, LOOKUP-26).

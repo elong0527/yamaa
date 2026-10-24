@@ -1,0 +1,18 @@
+{
+  "about": "The str_extract verb in a specification (TEXT-10). A group written as an integer wider than any machine integer is read as that integer, not as a float, and is refused as out of range with the whole number in its context. The case's row is the one its test built: phase, condition, rule and context from text_extract_reference.json's wide-group-pure-expression capture, at the group's spec path. Moved from the declarative_text_extract module of scalar_declarative_rounding.rs, whose test compared the one issue's phase, condition, rule, spec paths and context.",
+  "cases": [
+    {
+      "case": "native_integer_group_preserves_the_independent_pure_expression_truth",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, TEXT, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: TEXT, type: str, derivation: SRC.TEXT}\n  - name: RESULT\n    type: str\n    derivation:\n      str_extract: {source: TEXT, pattern: '(a)', group: 100000000000000000000000000000000000000000000000000000000000000000000000000000000}\n",
+          "input.csv": "ID,TEXT\nrow1,a\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "regex_group_out_of_range", "rule": "TEXT-10", "spec_paths": ["columns.RESULT.derivation.str_extract.group"], "context": {"group": 100000000000000000000000000000000000000000000000000000000000000000000000000000000, "group_count": 1, "pattern": "(a)"}}]
+    }
+  ]
+}
