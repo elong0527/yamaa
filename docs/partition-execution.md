@@ -216,23 +216,27 @@ with no host surface.
   partition's schema, and each partition within the row and cell limits on
   its own, before any record is read; every other source is admitted whole.
 - **Reading by partition.** A run whose specification reads one input, CSV
-  or Parquet, and whose plan is safe under consecutive partitions reads
-  that input by partition (#3792), every partition before any derivation.
-  A plan that only key-bounded partitions can divide reads the input whole
-  and admits it whole before cutting its key-bounded partitions: the
-  reader's record ranges do not preserve key groups.
-  The CSV reader scans every record once, then decodes and converts one
-  partition of records after another, so only one partition's intermediates
-  exist at a time. The Parquet reader divides the file into runs of whole row
-  groups, a row group of more records than a partition being a partition of
-  its own, and decodes every run before it builds any partition's table, so
-  its peak memory is the whole read's. Each partition is admitted on its
-  own, its generated ordinal counts records in the whole input, and every
-  finding is the whole read's, at the same record, row and field. Every
-  other run reads each input whole and admits it whole, a run with a lookup,
-  join or named relation's source included, so a plan with a step that needs
-  the whole table, run with the fallback or not, refuses an input beyond the
-  limits as an unpartitioned run does.
+  or Parquet, and whose plan is safe under its partitions reads that input
+  by partition (#3792). A scan decodes every partition once, in order, and
+  drops it before decoding the next (#3830). The CSV reader scans every
+  record, then decodes and converts one partition of records after another.
+  The Parquet reader divides the file into runs of whole row groups, a row
+  group of more records than a partition being a partition of its own, and
+  decodes one run after another. Every finding is the whole read's, at the
+  same record, row and field: the whole read runs each check over every
+  partition before the next check, so the scan reports the finding whose
+  check, then column, then partition comes first. Key-bounded partitions
+  are cut as the scan reads the records
+  ([below](#key-bounded-partitions)); consecutive ones are the scan's own.
+  Each partition is admitted on its own, then decoded again from the held
+  bytes, and its generated ordinal counts records in the whole input. The
+  run holds the partitions it decoded for its execution. The observations'
+  copy of the input holds no record: it is decoded again, a partition at a
+  time, whenever the observations are serialized. Every other run reads
+  each input whole and admits it whole, a run with a lookup, join or named
+  relation's source included, so a plan with a step that needs the whole
+  table, run with the fallback or not, refuses an input beyond the limits as
+  an unpartitioned run does.
 - **Units, one partition at a time.** The schedule's units run in their
   order. A unit whose steps are all `Safe` or `CombineStep`, and whose rows
   come from the driver input, runs over each partition's rows in turn, each
@@ -296,8 +300,12 @@ keys make each partition a run of whole subjects.
   order of the records, each partition holds as many whole runs of equal
   values as fit in `rows` records, and a run longer than `rows` is a partition
   of its own. Stored order is kept (P5): the engine never reorders records.
-  The cut is made once admission has passed, so a run refused or cancelled
-  at admission reads no record.
+  A run that reads its input whole makes the cut once admission has passed,
+  so a run refused or cancelled at admission reads no record. A run that
+  reads its input by partition makes it as its scan decodes the records,
+  reading only the fields that hold the partition keys and keeping the key
+  of every run that has ended, never a record (#3830); each partition is
+  then admitted on its own.
 - **One partition.** An input that is not grouped by its partition fields,
   where a value recurs after its run has ended, runs as one partition, as
   does an input whose partition fields cannot be read, or a specification

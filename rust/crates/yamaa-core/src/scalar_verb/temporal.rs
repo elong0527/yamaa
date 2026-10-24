@@ -3,8 +3,26 @@
 use super::*;
 use crate::dataset::{CalendarUnit, DateBounds, ElapsedUnit, TemporalKind, DATE_PARTS};
 
-const CALENDAR_UNITS: &[&str] = &["day", "week", "month", "year"];
-const ELAPSED_UNITS: &[&str] = &["second", "minute", "hour", "day"];
+/// The units a date counts and moves in, and those a datetime counts and
+/// moves in, in the order a refusal lists them (TIME-4, TIME-14).
+const CALENDAR_UNITS: [ast::TimeUnit; 4] = [
+    ast::TimeUnit::Day,
+    ast::TimeUnit::Week,
+    ast::TimeUnit::Month,
+    ast::TimeUnit::Year,
+];
+const ELAPSED_UNITS: [ast::TimeUnit; 4] = [
+    ast::TimeUnit::Second,
+    ast::TimeUnit::Minute,
+    ast::TimeUnit::Hour,
+    ast::TimeUnit::Day,
+];
+
+/// The refusal of `unit` at `<path>.unit`, listing the units `permitted`
+/// by their spellings.
+fn unit_refusal(path: &str, unit: ast::TimeUnit, permitted: [ast::TimeUnit; 4]) -> Diagnostic {
+    Temporal::unit_diagnostic(path, unit.name(), &permitted.map(ast::TimeUnit::name))
+}
 
 /// The elapsed unit a datetime counts or moves in, of the units a verb
 /// writes (TIME-4, TIME-14).
@@ -27,8 +45,7 @@ pub(crate) fn difference(
     unit: ast::TimeUnit,
     path: &str,
 ) -> Result<TemporalKind, Diagnostic> {
-    let name = unit.name();
-    let refusal = |permitted| Temporal::unit_diagnostic(path, name, permitted);
+    let refusal = |permitted| unit_refusal(path, unit, permitted);
     match kind {
         ast::TemporalType::DateTime => elapsed_unit(unit)
             .map(|unit| TemporalKind::DateTimeDifference { unit })
@@ -127,11 +144,7 @@ pub(super) fn tree_kind(
             let bounds = date_bounds(*closed)?;
             if *kind == ast::TemporalType::DateTime {
                 let Some(elapsed) = elapsed_unit(*unit) else {
-                    return Ok(Err(vec![Temporal::unit_diagnostic(
-                        &path,
-                        unit.name(),
-                        ELAPSED_UNITS,
-                    )]));
+                    return Ok(Err(vec![unit_refusal(&path, *unit, ELAPSED_UNITS)]));
                 };
                 if bounds != DateBounds::Exclusive {
                     return Ok(Err(vec![bounds_finding(path, *closed)?]));
@@ -144,13 +157,7 @@ pub(super) fn tree_kind(
                         ast::TimeUnit::Week => CalendarUnit::Week,
                         ast::TimeUnit::Month => CalendarUnit::Month,
                         ast::TimeUnit::Year => CalendarUnit::Year,
-                        other => {
-                            return Ok(Err(vec![Temporal::unit_diagnostic(
-                                &path,
-                                other.name(),
-                                CALENDAR_UNITS,
-                            )]))
-                        }
+                        other => return Ok(Err(vec![unit_refusal(&path, *other, CALENDAR_UNITS)])),
                     },
                     bounds,
                 }
@@ -158,7 +165,7 @@ pub(super) fn tree_kind(
         }
         ScalarOp::Shift { kind, unit } => {
             let datetime = *kind == ast::TemporalType::DateTime;
-            let target = if datetime { "datetime" } else { "date" };
+            let target = kind.name();
             let findings = [
                 ("days", !datetime, written(spec, operands, "days")),
                 ("amount", datetime, written(spec, operands, "amount")),

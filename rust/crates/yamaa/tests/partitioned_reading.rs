@@ -297,3 +297,72 @@ fn a_malformed_record_past_the_first_partition_reports_the_whole_table_runs_issu
         );
     }
 }
+
+/// The observations of a run that read its input by partition are the
+/// whole-table run's, the source's records included: the run holds no copy
+/// of them, and they are decoded again from the held bytes, a partition at
+/// a time, when the observations are serialized (#3830).
+#[test]
+fn a_partitioned_runs_observations_hold_the_whole_reads_source_records() {
+    let partitions = Partitions::new(NonZeroUsize::new(7).unwrap());
+    for shape in shapes() {
+        let scratch = Scratch::new("partitioned-reading-observations");
+        let spec = stage(&scratch, &shape, 1..=25);
+        let divided = engine(Some(partitions)).spec(&spec).run().unwrap();
+        let whole = engine(None).spec(&spec).run().unwrap();
+        assert_eq!(
+            divided.observations(),
+            whole.observations(),
+            "{}",
+            shape.benchmark
+        );
+    }
+}
+
+/// A required ODM field missing from records in two partitions refuses the
+/// partitioned run with the whole read's one finding: the field, its first
+/// missing record, the header being record 1, and the number of records it
+/// is missing from, every partition's (NAME-9, #3830). The fifth and the
+/// seventh records, the second and the fourth data records, lack a subject
+/// key, in the first and the second partitions of two records.
+#[test]
+fn an_odm_field_missing_in_two_partitions_is_the_whole_reads_one_finding() {
+    let spec = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  ODM: input.csv\noutput: {path: out.csv, columns: [ID, AGE]}\ncolumns:\n  - {name: ID, type: str, derivation: ODM.SubjectKey}\n  - {name: AGE, type: str, derivation: {odm: ODM.IT.AGE}}\n";
+    let mut csv = String::from(
+        "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\n",
+    );
+    for (subject, key) in ["1", "", "3", "", "5"].into_iter().enumerate() {
+        writeln!(csv, "S,M,{key},E,,F,,G,,IT.AGE,{}", 30 + subject).unwrap();
+    }
+    let scratch = Scratch::new("partitioned-reading-odm");
+    scratch.write("spec.yaml", spec);
+    scratch.write("input.csv", csv.as_bytes());
+    let spec = scratch.join("spec.yaml");
+    let spec = spec.to_str().unwrap();
+    let partitions = Partitions::new(NonZeroUsize::new(2).unwrap());
+    let divided = engine(Some(partitions)).spec(spec).run().unwrap();
+    let whole = engine(None).spec(spec).run().unwrap();
+    assert_eq!(divided.diagnostics(), whole.diagnostics(), "the issues");
+    let issues: Vec<(String, String, Vec<String>, String)> = divided
+        .diagnostics()
+        .iter()
+        .map(|issue| {
+            (
+                issue.phase.as_str().to_owned(),
+                issue.code.as_str().to_owned(),
+                issue.spec_path.clone(),
+                issue.context.to_json().to_owned(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        issues,
+        vec![(
+            "ingest".to_owned(),
+            "odm_schema_value_missing".to_owned(),
+            vec!["input.ODM.path".to_owned()],
+            r#"{"dataset":"ODM","field":"SubjectKey","record":3,"records":2}"#.to_owned(),
+        )],
+        "the partitioned run's issues"
+    );
+}

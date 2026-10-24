@@ -579,6 +579,8 @@ impl Checks<'_> {
     /// derived after one it does not bind (`intermediate_derivations::bind`).
     /// It mirrors binding's walk of the lookups step for step, and #3805
     /// removes it with this pass, so it stays whole until then.
+    // Over the 250-line ceiling until #3805 deletes this pass in 1.0.0 (D279).
+    #[allow(clippy::too_many_lines)]
     pub(super) fn intermediates(
         &self,
         findings: &mut Vec<BindFinding>,

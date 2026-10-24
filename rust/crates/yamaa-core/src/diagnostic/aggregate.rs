@@ -3,6 +3,7 @@ use super::{ConditionCode as C, Diagnostic, ProjectionError};
 use crate::json::Value as V;
 use crate::{
     dataset::AggregatePhase,
+    expression::Reducer,
     result_type::ResultType,
     value::{ColumnType, Value, ValueType},
 };
@@ -233,7 +234,7 @@ impl AggregateFinding<'_> {
                 group,
                 ..
             } => {
-                context.insert("reducer".into(), text("ONLY"));
+                context.insert("reducer".into(), text(Reducer::Only.name()));
                 context.insert("record_count".into(), V::from(count));
                 if let Some(row) = row {
                     context.insert("row".into(), text(row));

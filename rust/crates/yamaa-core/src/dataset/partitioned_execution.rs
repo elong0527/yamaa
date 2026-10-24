@@ -173,6 +173,7 @@ fn partitioned(
         None,
         &|| false,
         fallback,
+        0,
     )
 }
 
@@ -822,6 +823,7 @@ fn a_step_that_needs_the_whole_table_refuses_the_run_unless_it_falls_back() {
         Some(&mut observe),
         &|| false,
         false,
+        0,
     );
     let expected = ExecutionAttempt {
         result: Err(Box::new(ExecutionError::PartitionGlobal {
@@ -891,8 +893,15 @@ fn a_partition_with_another_schema_fails_admission() {
     let resolved = plan.resolve().unwrap();
     let other = Rows::new(schema(&[("ID", ColumnType::Int)]), vec![vec![int(9)]]);
     let parts: Vec<&dyn TableAccess<Error = Infallible>> = vec![&input, &other];
-    let attempt =
-        resolved.execute_partitioned(&parts, &[], &mut NoFunctions::new(), None, &|| false, false);
+    let attempt = resolved.execute_partitioned(
+        &parts,
+        &[],
+        &mut NoFunctions::new(),
+        None,
+        &|| false,
+        false,
+        0,
+    );
     let zero = |spec_path: &str| HandlerCount {
         spec_path: spec_path.into(),
         handler: HandlerKind::Unconvertible,
@@ -961,6 +970,7 @@ fn a_run_cancelled_between_partitions_keeps_nothing_and_names_its_phase() {
         None,
         &|| probe.cancelled(),
         false,
+        0,
     );
     assert_eq!(as_stated(attempt), graded_attempt(), "uncancelled");
     assert_eq!(probe.polls.get(), total, "polls of an uncancelled run");
@@ -975,6 +985,7 @@ fn a_run_cancelled_between_partitions_keeps_nothing_and_names_its_phase() {
             Some(&mut observe),
             &|| probe.cancelled(),
             false,
+            0,
         );
         let expected = ExecutionAttempt {
             result: Err(Box::new(ExecutionError::Cancelled)),
@@ -1132,7 +1143,7 @@ fn a_project_function_runs_only_under_the_fallback_and_then_once_per_record() {
             calls: Cell::new(0),
         };
         let attempt =
-            resolved.execute_partitioned(&refs, &[], &mut port, None, &|| false, fallback);
+            resolved.execute_partitioned(&refs, &[], &mut port, None, &|| false, fallback, 0);
         assert_eq!(attempt, expected, "fallback {fallback}");
         assert_eq!(port.calls.get(), calls, "calls with fallback {fallback}");
     }

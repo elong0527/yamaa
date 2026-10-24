@@ -340,6 +340,28 @@ impl ColumnTable {
     pub fn column(&self, index: usize) -> &Column {
         &self.columns[index]
     }
+
+    /// Records `range` of the table, copied into a table of their own.
+    pub fn rows(&self, range: std::ops::Range<usize>) -> Result<Self, TableError> {
+        let rows = range.len();
+        if range.end > self.rows {
+            return Err(TableError::SchemaMismatch { batch: 0 });
+        }
+        let columns = self
+            .schema
+            .columns()
+            .iter()
+            .enumerate()
+            .map(|(index, field)| {
+                let mut column = Column::empty(field.kind);
+                for row in range.clone() {
+                    column.push(self.cell(row, index).expect("a record of the table"));
+                }
+                column
+            })
+            .collect();
+        Self::new(self.schema.clone(), columns, rows)
+    }
 }
 
 /// Decode each present value of `values`, a column of a table whose rows

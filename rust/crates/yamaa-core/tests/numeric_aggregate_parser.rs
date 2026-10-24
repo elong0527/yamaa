@@ -1819,13 +1819,36 @@ mod numeric {
     }
     mod predicate_grammar {
         use yamaa_core::expression::{
-            compile, Comparison, CompileError, CompiledExpression, Context, Failure, NodeKind,
-            Resource, TemporalKind,
+            compile, Comparison, CompileError, CompiledExpression, Context, Failure, Function,
+            FunctionResult, NodeKind, Resource, TemporalKind,
         };
         use yamaa_core::temporal::TemporalError;
 
         fn predicate(text: &str) -> Result<CompiledExpression, CompileError> {
             compile(text, Context::Predicate, "filter")
+        }
+
+        /// The binder reads a truth-valued call's arguments by the function
+        /// it names (FORMULA-8), and refuses one it has not learned to read
+        /// rather than read it as another function's. So each truth-valued
+        /// function the grammar declares has an authored call here, written
+        /// with its declared arguments, which binds; a new one fails this
+        /// test until the binder reads its arguments and its call is added.
+        #[test]
+        fn each_truth_valued_function_binds_by_its_own_arguments() {
+            let calls = [(Function::StrContains, "STR_CONTAINS(A, 'x')")];
+            let declared = Function::ALL
+                .into_iter()
+                .filter(|function| function.result() == FunctionResult::Boolean)
+                .collect::<Vec<_>>();
+            assert_eq!(
+                declared,
+                calls.map(|(function, _)| function),
+                "the truth-valued functions of the grammar"
+            );
+            for (function, text) in calls {
+                assert!(predicate(text).is_ok(), "{}: {text}", function.name());
+            }
         }
 
         #[test]

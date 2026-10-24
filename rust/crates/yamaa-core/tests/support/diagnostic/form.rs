@@ -31,6 +31,17 @@
 //!   it removed, as `null`. `{}` states that it created, changed and removed
 //!   nothing.
 //!
+//! The adapters' `input` stages a study directory: its `files`, each its
+//! text, a document of the fixture's `documents` (`base`) or an authored
+//! file named by its path from the repository root (`file`), as `saved`
+//! names one, the last two with `edits`; the files of the benchmark
+//! `benchmark` names, each at its path there but its `expected/` directory,
+//! `README.md` and `benchmark.yaml`, which the input's `edits` map to their
+//! edits; and empty `directories`. An edit replaces text that occurs exactly
+//! once, and a file of `files` is never one the benchmark stages. The
+//! adapters' `define` composes a project's submission section and saves it,
+//! as `save` builds and saves, so each reports the issues of its save too.
+//!
 //! A cell is `null` when the value is missing, its text for `str`, its
 //! integer for `int`, `true` or `false` for `bool`, and for `float` the
 //! shortest number that reads back as the same double, spelt as a
@@ -346,12 +357,7 @@ fn written(saved: &Value, label: &str) -> Saved {
                     let path = members["file"].as_str().unwrap_or_else(|| {
                         panic!("{label}: {name} names its expected file by its path: {bytes:?}")
                     });
-                    relative(path, label);
-                    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-                    Some(
-                        std::fs::read(root.join(path))
-                            .unwrap_or_else(|error| panic!("{label}: {name}: {path}: {error}")),
-                    )
+                    Some(authored(path, &format!("{label}: {name}")))
                 }
                 other => {
                     panic!("{label}: {name} is its text, {{\"file\": path}} or null, not {other:?}")
@@ -360,6 +366,15 @@ fn written(saved: &Value, label: &str) -> Saved {
             (name.clone(), bytes)
         })
         .collect()
+}
+
+/// The bytes of the authored file at `path`, relative to the repository root,
+/// such as a benchmark's `expected/` file; `label` names the case and member
+/// that name it in a failure.
+pub fn authored(path: &str, label: &str) -> Vec<u8> {
+    relative(path, label);
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    std::fs::read(root.join(path)).unwrap_or_else(|error| panic!("{label}: {path}: {error}"))
 }
 
 /// `path` is relative, spelt with forward slashes, and names no `.` or `..`.

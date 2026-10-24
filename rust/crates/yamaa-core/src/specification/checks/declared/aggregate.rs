@@ -313,6 +313,8 @@ impl Checks<'_> {
     /// relation it reduces, when it names one. It mirrors binding's header
     /// checks in their order, and #3805 removes it with this pass, so it
     /// stays whole until then.
+    // Over the 250-line ceiling until #3805 deletes this pass in 1.0.0 (D279).
+    #[allow(clippy::too_many_lines)]
     fn aggregate(
         &self,
         e: ExprId,

@@ -2,6 +2,7 @@
 //! an implicit join, a named intermediate or an aggregate. Each finding keeps
 //! the facts of the site that raised it.
 use super::{ConditionCode as C, Context, Diagnostic};
+use crate::expression_table::Verb;
 use crate::json::Value as JsonValue;
 use crate::result_type::ResultType;
 
@@ -162,7 +163,7 @@ pub(crate) fn selection_unpaired(
     match owner {
         // A source binding names the operation it belongs to.
         Owner::Source(_) => {
-            context.insert("operation".into(), text("source"));
+            context.insert("operation".into(), text(Verb::Source.name()));
         }
         owner => owner.add(&mut context),
     }

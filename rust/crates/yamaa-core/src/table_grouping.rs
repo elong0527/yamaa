@@ -57,6 +57,48 @@ impl<'a> From<ValueRef<'a>> for Key<'a> {
     }
 }
 
+/// A [`Key`] that owns its text, with the same equality and order: what a
+/// reader keeps of a key once the records it was read from are dropped.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum OwnedKey {
+    Missing,
+    Str(Box<str>),
+    Int(i64),
+    Float(u64),
+    Bool(bool),
+    Date(Date),
+    DateTime(DateTime),
+}
+
+impl OwnedKey {
+    /// The key this owns.
+    pub(crate) fn key(&self) -> Key<'_> {
+        match self {
+            Self::Missing => Key::Missing,
+            Self::Str(value) => Key::Str(value),
+            Self::Int(value) => Key::Int(*value),
+            Self::Float(bits) => Key::Float(*bits),
+            Self::Bool(value) => Key::Bool(*value),
+            Self::Date(value) => Key::Date(*value),
+            Self::DateTime(value) => Key::DateTime(*value),
+        }
+    }
+}
+
+impl From<Key<'_>> for OwnedKey {
+    fn from(key: Key<'_>) -> Self {
+        match key {
+            Key::Missing => Self::Missing,
+            Key::Str(value) => Self::Str(value.into()),
+            Key::Int(value) => Self::Int(value),
+            Key::Float(bits) => Self::Float(bits),
+            Key::Bool(value) => Self::Bool(value),
+            Key::Date(value) => Self::Date(value),
+            Key::DateTime(value) => Self::DateTime(value),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum GroupingError<E> {
     #[error("table grouping empty columns")]

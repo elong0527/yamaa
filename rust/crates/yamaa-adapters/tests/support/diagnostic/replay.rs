@@ -23,10 +23,13 @@
 //! is filled in. These are the `compares` and `among` core's replay reads.
 //!
 //! An input's files are written to a fresh study directory: a file is its
-//! text, or a document of the fixture's `documents` taken by name (`base`)
-//! with `edits`, each replacing text that occurs exactly once. An issue row's
-//! text that starts with `{study}/` names a file of that directory as the
-//! engine spells its path.
+//! text, a document of the fixture's `documents` taken by name (`base`), or
+//! an authored file of the repository taken by its path from the repository
+//! root (`file`), the last two with `edits`, each replacing text that occurs
+//! exactly once. An input may also stage a benchmark's files (`benchmark`),
+//! which [`super::operations::study`] copies with their `edits`. An issue
+//! row's text that starts with `{study}/` names a file of that directory as
+//! the engine spells its path.
 //!
 //! A positive case also states the output table's rows, the run report's
 //! rows or the files its operation created, changed or removed, as
@@ -361,8 +364,8 @@ fn unexpanded(row: &Value, directory: &str) -> Value {
     }
 }
 
-/// `input` with each of its `files` that is a document of the fixture
-/// written as its text.
+/// `input` with each of its `files` that is a document of the fixture or an
+/// authored file of the repository written as its text.
 fn resolved(documents: Option<&Value>, input: &Value, label: &str) -> Value {
     let Some(files) = input.get("files") else {
         return input.clone();
@@ -372,7 +375,7 @@ fn resolved(documents: Option<&Value>, input: &Value, label: &str) -> Value {
         .map(|(name, file)| {
             let file = match file {
                 Value::String(_) => file.clone(),
-                document => Value::String(edited(documents, document, &format!("{label}: {name}"))),
+                source => Value::String(edited(documents, source, &format!("{label}: {name}"))),
             };
             (name.clone(), file)
         })
@@ -382,15 +385,30 @@ fn resolved(documents: Option<&Value>, input: &Value, label: &str) -> Value {
     Value::Object(input)
 }
 
-/// The text of the document `base` names, with each of its `edits` made.
-fn edited(documents: Option<&Value>, document: &Value, label: &str) -> String {
-    closed(document, &["base", "edits"]);
-    let base = text(field(document, "base"));
-    let mut text = documents
-        .and_then(|documents| documents.get(base))
-        .map(|document| self::text(document).to_owned())
-        .unwrap_or_else(|| panic!("{label}: no document {base:?}"));
-    for edit in document.get("edits").map_or(&[][..], items) {
+/// The text of the document `base` names, or of the authored file `file`
+/// names by its path from the repository root, with each of its `edits`
+/// made.
+fn edited(documents: Option<&Value>, source: &Value, label: &str) -> String {
+    let members = closed(source, &["base", "file", "edits"]);
+    let text = match (members.get("base"), members.get("file")) {
+        (Some(base), None) => {
+            let base = text(base);
+            documents
+                .and_then(|documents| documents.get(base))
+                .map(|document| self::text(document).to_owned())
+                .unwrap_or_else(|| panic!("{label}: no document {base:?}"))
+        }
+        (None, Some(path)) => String::from_utf8(form::authored(text(path), label))
+            .unwrap_or_else(|_| panic!("{label}: {path:?} is not text")),
+        _ => panic!("{label}: a file is its text, a document (base) or an authored file (file)"),
+    };
+    edit(text, source.get("edits").map_or(&[][..], items), label)
+}
+
+/// `text` with each of `edits` made in order, each replacing its `from`,
+/// which occurs exactly once, with its `to`.
+pub fn edit(mut text: String, edits: &[Value], label: &str) -> String {
+    for edit in edits {
         closed(edit, &["from", "to"]);
         let (from, to) = (
             self::text(field(edit, "from")),

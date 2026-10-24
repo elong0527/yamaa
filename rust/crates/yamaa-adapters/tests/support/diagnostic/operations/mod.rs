@@ -11,13 +11,13 @@
 //! Each module owns its readers and the fixture files its cases are in.
 use crate::support::diagnostic::{
     form::{self, Files, Outcome},
-    replay::{field, items, object, text},
+    replay::{edit, items, object, text},
 };
 use crate::support::Scratch;
 use yamaa_adapters::public_table::{PublicColumn, PublicTable};
 use yamaa_core::{
-    diagnostic::Diagnostic, json::Value, project_function::Language, table::ValueRef,
-    temporal::Precision, value::FiniteFloat,
+    diagnostic::Diagnostic, json::Value, project_environment::Submission,
+    project_function::Language, table::ValueRef, temporal::Precision, value::FiniteFloat,
 };
 
 /// A fixture file of `tests/fixtures/diagnostics/`, read at compile time, so
@@ -36,6 +36,7 @@ macro_rules! fixture {
     };
 }
 
+mod define;
 mod file_route;
 mod project_scope;
 
@@ -52,7 +53,8 @@ pub struct Reported {
 type Reader = fn(&str, &Value) -> Option<Reported>;
 
 /// Each module's readers, by the operations it names, and its files.
-const MODULES: [(Reader, &[File]); 2] = [
+const MODULES: [(Reader, &[File]); 3] = [
+    (define::run, define::FILES),
     (file_route::run, file_route::FILES),
     (project_scope::run, project_scope::FILES),
 ];
@@ -70,18 +72,51 @@ pub fn files() -> impl Iterator<Item = &'static File> {
     MODULES.iter().flat_map(|(_, files)| files.iter())
 }
 
-/// A fresh study directory holding the input's `files` (each relative path
-/// and its text) and `directories` (empty ones), named canonically, as the
-/// engine spells the paths it reports.
+/// The members of an input that stage its study directory, which each
+/// reader's own members join.
+const STUDY: [&str; 4] = ["benchmark", "edits", "files", "directories"];
+
+/// A fresh study directory, named canonically, as the engine spells the
+/// paths it reports, holding what the input stages: the files of the
+/// benchmark `benchmark` names, each at its path in the benchmark
+/// (`support::benchmarks::stage`), with the `edits` the input maps it to;
+/// the input's `files` (each relative path and its text), none of them a
+/// file the benchmark stages; and its `directories` (empty ones).
 pub fn study(input: &Value) -> Scratch {
     let study = Scratch::canonical("diagnostics");
-    for (name, file) in object(field(input, "files")) {
+    let staged = input.get("benchmark").map_or_else(Vec::new, |name| {
+        crate::support::benchmarks::stage(text(name), &study)
+    });
+    for (name, edits) in input.get("edits").map(object).into_iter().flatten() {
+        assert!(
+            staged.contains(name),
+            "the edits of {name} name no file the benchmark stages"
+        );
+        let file = study.join(name);
+        let edited = edit(std::fs::read_to_string(&file).unwrap(), items(edits), name);
+        std::fs::write(file, edited).unwrap();
+    }
+    for (name, file) in input.get("files").map(object).into_iter().flatten() {
+        assert!(
+            !staged.contains(name),
+            "{name} is a file the benchmark stages, which changes only by its edits"
+        );
         study.write(name, text(file));
     }
     for name in input.get("directories").map_or(&[][..], items) {
         std::fs::create_dir_all(study.join(text(name))).unwrap();
     }
     study
+}
+
+/// The submission section `name` names: `sdtm`, `adam` or `send`.
+fn section(name: &Value) -> Submission {
+    match text(name) {
+        "sdtm" => Submission::Sdtm,
+        "adam" => Submission::Adam,
+        "send" => Submission::Send,
+        other => panic!("no section {other:?}"),
+    }
 }
 
 /// The path of `name` in `study`, as a caller passes it, with forward

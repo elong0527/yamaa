@@ -10,14 +10,14 @@
 //! scope (every section unless written), `refused_step` what refuses the
 //! step of that plan that runs the listed `name`, and `blocked_consumer`
 //! what the step running `name` reports when every producer it reads has
-//! failed. Each takes `files` and `directories` as the file route does.
-use super::{path, study, File, Reported};
+//! failed. Each takes the study a case stages ([`super::study`]).
+use super::{path, section, study, File, Reported, STUDY};
 use crate::support::diagnostic::{
     form::Outcome,
     replay::{closed, field, text},
 };
 use yamaa_adapters::project_scope::Project;
-use yamaa_core::{json::Value, project_environment::Submission, project_function::Language};
+use yamaa_core::{json::Value, project_function::Language};
 
 pub(super) const FILES: &[File] = &[fixture!("project_scope.json")];
 
@@ -29,10 +29,7 @@ pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
         "refused_step" => &["section", "name"][..],
         _ => return None,
     };
-    closed(
-        input,
-        &[&["files", "directories", "project"][..], members].concat(),
-    );
+    closed(input, &[&STUDY[..], &["project"], members].concat());
     let study = study(input);
     let read = Project::read(
         &path(&study, text(field(input, "project"))),
@@ -44,12 +41,7 @@ pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
         ("read_project", Err(issues)) => issues,
         (_, Err(issues)) => panic!("the project is refused: {issues:?}"),
         (_, Ok(project)) => {
-            let section = input.get("section").map(|section| match text(section) {
-                "sdtm" => Submission::Sdtm,
-                "adam" => Submission::Adam,
-                "send" => Submission::Send,
-                other => panic!("no section {other:?}"),
-            });
+            let section = input.get("section").map(section);
             let name = || text(field(input, "name"));
             let step = |plan: &yamaa_adapters::project_scope::Plan, name: &str| {
                 plan.steps()

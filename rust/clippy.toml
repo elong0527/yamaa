@@ -1,0 +1,7 @@
+# The function ceiling of AGENTS.md's design principles. `too_many_lines`,
+# which [workspace.lints.clippy] turns on, counts the lines of a function's
+# body that hold code, without blank or comment-only lines, and fails a
+# function over this threshold. Such a function becomes named steps, or
+# carries an `allow` whose comment names the open issue that removes it
+# (#3806). `tools.validation.source_size` counts the same way.
+too-many-lines-threshold = 250

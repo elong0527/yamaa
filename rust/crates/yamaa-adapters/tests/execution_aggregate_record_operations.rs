@@ -1,20 +1,21 @@
 #![cfg(feature = "yaml")]
 //! Execution contracts: aggregate record operations, baseline window types,
-//! case item order, check output validation and compiled model.
+//! case item order, check output validation and compiled model. The
+//! aggregate record operations that write files, run one specification and
+//! compare what it reports are cases of
+//! `tests/fixtures/diagnostics/aggregate_record_operations.json` (#3798);
+//! the tests left of that family read benchmarks' own files and the API
+//! results the replay does not state.
 
 mod execution {
     mod aggregate_record_operations {
-        //! Independent YAML, donor bytes and exact saved truth for per-record aggregates.
-        use crate::support::Edit as _;
-        use std::fs;
+        //! Per-record aggregates: benchmarks that pin their saved bytes, and
+        //! the build route and save result of each case of
+        //! `aggregate_record_operations.json`.
         use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Fixture(crate::support::Scratch);
         impl Fixture {
-            fn new() -> Self {
-                let path = crate::support::Scratch::new("aggregate-records");
-                Self(path)
-            }
             fn run(
                 &self,
             ) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>>
@@ -29,69 +30,10 @@ mod execution {
                     crate::support::study::identity("test", &specification),
                 )
             }
-            fn save(&self) -> Vec<u8> {
-                let mut domain = self.run().unwrap_or_else(|issues| panic!("{issues:?}"));
-                assert!(domain.issues().is_empty(), "{:?}", domain.issues());
-                assert!(domain.save().unwrap());
-                fs::read(self.0.join("result.csv")).unwrap()
-            }
         }
-        fn specification(operation: &str) -> String {
-            format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  A: {{path: a.csv, types: {{CUT: int}}}}\n  B: {{path: b.csv, key: [ID], types: {{N: int}}}}\nbase: A\noutput: {{path: result.csv, columns: [ID, CUT, TOTAL]}}\ncolumns:\n  - {{name: ID, type: str, derivation: A.ID}}\n  - {{name: CUT, type: int, derivation: A.CUT}}\n  - name: TOTAL\n    type: float\n    derivation:\n      aggregate:\n{operation}")
-        }
-        // No benchmark pins a filtered, ranged aggregate whose bindings
-        // recover an unconvertible value.
-        #[test]
-        fn ordered_converted_bindings_reduce_only_matched_filtered_inclusive_records() {
-            let fixture = Fixture::new();
-            fs::write(fixture.0.join("a.csv"), b"ID,CUT\na,3\nb,2\nc,\nd,1\n").unwrap();
-            fs::write(fixture.0.join("b.csv"),b"ID,N,V,USE\na,2,1.5,Y\na,3,2,Y\na,4,invalid,Y\na,1,invalid,N\nb,2,bad,Y\nc,1,99,Y\nd,2,99,Y\n").unwrap();
-            fs::write(fixture.0.join("spec.yaml"),specification("        filter: B.USE = 'Y'\n        between: {value: CUT, lower: N}\n        derivations:\n          VALUE:\n            type: float\n            derivation: {value: B.V, unconvertible: 0}\n          TWICE:\n            type: float\n            derivation: 'VALUE * 2'\n        expr: SUM(TWICE)\n")).unwrap();
-            assert_eq!(fixture.save(), b"ID,CUT,TOTAL\na,3,7\nb,2,0\nc,,\nd,1,\n");
-        }
-        // No benchmark pins an aggregate binding that extracts or templates
-        // text.
-        #[test]
-        fn aggregate_bindings_admit_extractions_and_templates_before_binding() {
-            for (derivation, kind, expression) in [
-        (
-            "{str_extract: {source: B.V, pattern: '([0-9]+)$', group: 1}}",
-            "int",
-            "MAX(V)",
-        ),
-        (
-            "{case: [{when: \"B.USE = 'Y'\", then: {str_extract: {source: B.V, pattern: '([0-9]+)$', group: 1}}}, {otherwise: 0}]}",
-            "int",
-            "MAX(V)",
-        ),
-        ("{str_template: '{B.V}!'}", "str", "COUNT(V)"),
-    ] {
-        let fixture = Fixture::new();
-        fs::write(fixture.0.join("a.csv"), b"ID,CUT\na,3\nb,2\n").unwrap();
-        fs::write(
-            fixture.0.join("b.csv"),
-            b"ID,N,V,USE\na,1,PERIOD 1,Y\na,2,PERIOD 2,Y\nb,1,PERIOD 1,Y\n",
-        )
-        .unwrap();
-        fs::write(
-            fixture.0.join("spec.yaml"),
-            specification(&format!(
-                "        derivations:\n          V: {{type: {kind}, derivation: {derivation}}}\n        expr: {expression}\n"
-            )),
-        )
-        .unwrap();
-        let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
-        let issues = file_application::check(yamaa_core::project_function::Language::Python,
-            Request {
-                specification: &specification,
-                environment: None,
-            },
-            crate::support::study::identity("test", &specification),
-        );
-        assert!(issues.is_empty(), "{derivation}: {issues:?}");
-        assert_eq!(fixture.save(), b"ID,CUT,TOTAL\na,3,2\nb,2,1\n", "{derivation}");
-    }
-        }
+        /// A seam the replay cannot reach: these benchmarks' own files, run
+        /// by `support::benchmarks::reproduce`. They pin aggregates in the
+        /// bytes they save.
         #[test]
         fn original_public_aggregate_fixtures_preserve_frozen_csv_bytes() {
             for name in [
@@ -107,592 +49,86 @@ mod execution {
                 crate::support::benchmarks::reproduce(name);
             }
         }
-
-        // No benchmark pins these faults of an aggregate's own bindings and
-        // range: `negative-aggregate-unbound-variable` pins an expression
-        // that reads no binding, and `negative-lookup-bad-range` a lookup's
-        // range.
+        /// A seam the replay cannot reach: these benchmarks' own files, run
+        /// by `support::benchmarks::reproduce`. Without row templates the
+        /// base input builds every row, so a qualified `between.value` read
+        /// from the base input or from a column builds (#2904). The reads
+        /// of rows that row templates build are the `a_between_value_...`
+        /// cases of `aggregate_record_operations.json`.
         #[test]
-        fn derive_and_range_faults_fail_before_any_output_with_registered_causes() {
-            for (operation,condition,rule) in [
-        ("        derivations: {}\n        expr: SUM(V)\n","invalid_derive_step","LOOKUP-22"),
-        ("        derivations:\n          V: {type: float, derivation: W}\n        expr: SUM(V)\n","unknown_derive_variable","LOOKUP-22"),
-        ("        derivations:\n          V: {type: float, derivation: 1}\n        expr: SUM(V)\n","invalid_derive_step","LOOKUP-22"),
-        ("        between: {value: CUT, lower: USE}\n        expr: SUM(B.N)\n","incomparable_range_types","LOOKUP-9"),
-        ("        between: {value: CUT, lower: ABSENT}\n        expr: SUM(B.N)\n","unknown_field","LOOKUP-9"),
-        // A range with neither bound narrows nothing (LOOKUP-9); 0.4.0 refused
-        // it as invalid_aggregate_context.
-        ("        between: {value: CUT}\n        expr: SUM(B.N)\n","invalid_field_type","LOOKUP-9"),
-    ] {
-        let fixture=Fixture::new();
-        fs::write(fixture.0.join("a.csv"),b"ID,CUT\na,2\n").unwrap();
-        fs::write(fixture.0.join("b.csv"),b"ID,N,USE\na,2,Y\n").unwrap();
-        fs::write(fixture.0.join("spec.yaml"),specification(operation)).unwrap();
-        let issues=match fixture.run(){Ok(mut domain)=>{assert!(domain.output().is_none());assert!(domain.save().is_err());domain.issues()},Err(issues)=>issues};
-        assert!(issues.iter().any(|issue|issue.condition()==condition && issue.rule()==Some(rule)),"{issues:?}");
-        assert!(!fixture.0.join("result.csv").exists());
-    }
-        }
-        /// A qualified `between.value` reads the record that built the row, so
-        /// it names the driver of every row the aggregate is derived for.
-        /// Another input has no record there and is refused (#2904).
-        #[test]
-        fn a_qualified_between_value_reads_only_the_rows_own_driver_record() {
-            // Without row templates the base input builds every row: a value
-            // read from the base input or from a column builds, as
-            // `schema-aggregate-range-driver` and `adam-adtte-pro-deterioration`
-            // state.
+        fn a_qualified_between_value_of_the_base_input_reproduces_its_benchmarks() {
             for name in [
                 "schema-aggregate-range-driver",
                 "adam-adtte-pro-deterioration",
             ] {
                 crate::support::benchmarks::reproduce(name);
             }
-            let run = |spec: String| {
-                let fixture = Fixture::new();
-                fs::write(fixture.0.join("a.csv"), b"ID,CUT\na,1\nb,2\n").unwrap();
-                fs::write(
-                    fixture.0.join("b.csv"),
-                    b"ID,N\na,1\na,2\na,3\nb,1\nb,2\nb,3\n",
-                )
-                .unwrap();
-                // C orders the subjects the other way and keeps each limit in
-                // the column where A keeps its cutoff.
-                fs::write(fixture.0.join("c.csv"), b"ID,LIMIT\nb,3\na,2\n").unwrap();
-                fs::write(fixture.0.join("spec.yaml"), spec).unwrap();
-                let issues = match fixture.run() {
-                    Ok(mut domain) if domain.issues().is_empty() => {
-                        assert!(domain.save().unwrap());
-                        return Ok(fs::read_to_string(fixture.0.join("result.csv")).unwrap());
-                    }
-                    Ok(mut domain) => {
-                        assert!(domain.save().is_err());
-                        domain.issues()
-                    }
-                    Err(issues) => issues,
-                };
-                Err(issues
-                    .iter()
-                    .map(crate::support::study::issue_row)
-                    .collect::<Vec<_>>())
-            };
-            let refused = |identifier: &str| {
-                Err(vec![yamaa_adapters::json!({
-                    "phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9",
-                    "spec_paths": ["columns.TOTAL.derivation.aggregate.between.value"],
-                    "context": {"identifier": identifier}
-                })])
-            };
-            let operation = |value: &str| {
-                format!("        between: {{value: {value}, lower: N}}\n        expr: SUM(B.N)\n")
-            };
-            // A value read from another input is refused.
-            // `negative-aggregate-range-other-input` states the refusal's first
-            // issue, but its `error.yaml` leaves out that the issue is the only
-            // one.
-            assert_eq!(
-                run(specification(&operation("C.LIMIT")).edit(
-                    "  B: {path: b.csv, key: [ID], types: {N: int}}\n",
-                    "  B: {path: b.csv, key: [ID], types: {N: int}}\n  C: {path: c.csv, types: {LIMIT: int}}\n",
-                )),
-                refused("C.LIMIT")
-            );
-            // No benchmark pins the reads of rows that row templates build.
-            // Rows built from A and from C share the aggregate's column, so
-            // neither input supplies a record for every row.
-            let rows = |value: &str, templates: &str| {
-                format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, ORIGIN]\ninput:\n  A: {{path: a.csv, types: {{CUT: int}}}}\n  B: {{path: b.csv, key: [ID], types: {{N: int}}}}\n  C: {{path: c.csv, types: {{LIMIT: int}}}}\noutput: {{path: result.csv, columns: [ID, ORIGIN, TOTAL]}}\ncolumns:\n  - {{name: ID, type: str}}\n  - {{name: ORIGIN, type: str}}\n  - name: TOTAL\n    type: float\n    derivation:\n      aggregate:\n{}rows:\n{templates}", operation(value))
-            };
-            let from_a =
-                "  - id: a\n    dataset: A\n    derivations: {ID: A.ID, ORIGIN: \"'A'\"}\n";
-            let from_c =
-                "  - id: c\n    dataset: C\n    derivations: {ID: C.ID, ORIGIN: \"'C'\"}\n";
-            assert_eq!(
-                run(rows("A.CUT", from_a)),
-                Ok("ID,ORIGIN,TOTAL\na,A,1\nb,A,3\n".into())
-            );
-            for value in ["A.CUT", "C.LIMIT"] {
-                assert_eq!(
-                    run(rows(value, &format!("{from_a}{from_c}"))),
-                    refused(value)
-                );
-            }
         }
-        // No benchmark pins a binding that reads a lookup keyed on the
-        // driver's own record, nor its refusal without `keep`:
-        // `schema-aggregate-derive-intermediate` reads a kept lookup keyed
-        // on output columns.
-        #[test]
-        fn named_derive_read_requires_keep_and_uses_original_current_record() {
-            let fixture = Fixture::new();
-            fs::write(fixture.0.join("a.csv"), b"ID,CUT\na,2\nb,3\n").unwrap();
-            fs::write(fixture.0.join("b.csv"), b"ID,N\nb,10\na,1\na,4\n").unwrap();
-            let operation="        derivations:\n          N: {type: int, derivation: B.N}\n          C: {type: int, derivation: CAP.CUT}\n          VALUE: {type: int, derivation: {least: {sources: [N, C]}}}\n        expr: SUM(VALUE)\n";
-            let spec=specification(operation).edit("base: A\n","base: A\nintermediates:\n  - {id: CAP, dataset: A, key: {ID: A.ID}, order_by: [A.CUT], keep: first}\n");
-            fs::write(fixture.0.join("spec.yaml"), &spec).unwrap();
-            assert_eq!(fixture.save(), b"ID,CUT,TOTAL\na,2,3\nb,3,3\n");
-            fs::write(
-                fixture.0.join("spec.yaml"),
-                spec.edit(", order_by: [A.CUT], keep: first", ""),
-            )
-            .unwrap();
-            let issues = match fixture.run() {
-                Ok(domain) => domain.issues(),
-                Err(issues) => issues,
-            };
-            assert!(
-                issues
-                    .iter()
-                    .any(|issue| issue.condition() == "invalid_derive_step"
-                        && issue.rule() == Some("LOOKUP-22")),
-                "{issues:?}"
-            );
-        }
-
-        fn original_fieldless_count(expression: &str, key: &str, filter: &str) -> String {
-            format!(
-        "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\ninput:\n  SRC: {{path: src.csv, types: {{N: int}}}}\n  OTHER: {{path: other.csv, types: {{N: int}}}}\nbase: SRC\nkeys: [K]\noutput: {{path: out.csv, columns: [K, V]}}\ncolumns:\n  - name: V\n    type: int\n    derivation:\n      aggregate:\n        expr: '{expression}'\n        key: {key}\n{filter}  - {{name: K, type: int, derivation: SRC.N}}\n"
-    )
-        }
-
-        fn fieldless_count_fixture(source: &str) -> Fixture {
-            let fixture = Fixture::new();
-            fs::write(fixture.0.join("src.csv"), "N\n1\n").unwrap();
-            fs::write(fixture.0.join("other.csv"), "N\n1\n1\n2\n").unwrap();
-            fs::write(fixture.0.join("spec.yaml"), source).unwrap();
-            fixture
-        }
-
-        fn saved_count(fixture: &Fixture, mut result: file_application::Domain) -> Vec<u8> {
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(!fixture.0.join("out.csv").exists());
-            assert!(result.save().unwrap());
-            fs::read(fixture.0.join("out.csv")).unwrap()
-        }
-
-        // Original planning/test_aggregate_relation_reads.py inputs: COUNT still owns
-        // a relation even though it reads no payload field. Its key producer is written
-        // after the consuming column, and only the two matching donors are eligible.
-        // No benchmark pins a key producer written after the reduction, also where a
-        // reduction without a key of its own matches on the key its input declares
-        // (LOOKUP-5): `schema-aggregation`, which
-        // `original_public_aggregate_fixtures_preserve_frozen_csv_bytes` reproduces,
-        // pins that match on a key column written before the reduction.
-        #[test]
-        fn original_fieldless_reductions_schedule_real_key_dependencies_once() {
-            for (expression, count) in [
-                ("COUNT(OTHER.*)", 2),
-                ("SUM(OTHER.N)", 2),
-                ("COUNT(OTHER.*) + COUNT(OTHER.*)", 4),
-                ("COUNT(OTHER.*) + SUM(OTHER.N)", 4),
-            ] {
-                for key in ["{N: K}", "{N: 1}", "{N: {greatest: {sources: [K, K]}}}"] {
-                    let source = original_fieldless_count(expression, key, "");
-                    let fixture = fieldless_count_fixture(&source);
-                    let result = fixture.run().unwrap_or_else(|issues| panic!("{issues:?}"));
-                    assert!(
-                        result.issues().is_empty(),
-                        "{expression}, {key}: {:?}",
-                        result.issues()
-                    );
-                    assert_eq!(
-                        saved_count(&fixture, result),
-                        format!("K,V\n1,{count}\n").as_bytes()
-                    );
-                }
-            }
-            // Without a key of its own the aggregate matches on the key OTHER
-            // declares (LOOKUP-5).
-            let source = original_fieldless_count("COUNT(OTHER.*)", "{N: K}", "")
-                .edit(
-                    "OTHER: {path: other.csv, types: {N: int}}",
-                    "OTHER: {path: other.csv, key: [N], types: {N: int}}",
-                )
-                .edit("keys: [K]", "keys: [N]")
-                .edit("columns: [K, V]", "columns: [N, V]")
-                .edit(
-                    "      aggregate:\n        expr: 'COUNT(OTHER.*)'\n        key: {N: K}\n",
-                    "      aggregate: 'COUNT(OTHER.*)'\n",
-                )
-                .edit("name: K", "name: N");
-            let fixture = fieldless_count_fixture(&source);
-            let result = fixture.run().unwrap_or_else(|issues| panic!("{issues:?}"));
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert_eq!(saved_count(&fixture, result), b"N,V\n1,2\n");
-        }
-
-        fn complete_aggregate_issues(fixture: &Fixture) -> Vec<yamaa_core::json::Value> {
-            let issues = match fixture.run() {
-                Ok(mut result) => {
-                    assert!(result.output().is_none());
-                    assert!(result.save().is_err());
-                    result.issues()
-                }
-                Err(issues) => issues,
-            };
-            assert!(!fixture.0.join("out.csv").exists());
-            issues
-                .iter()
-                .map(crate::support::study::issue_row)
-                .collect()
-        }
-
-        /// A written 1.0 aggregate key reports a pair whose types cannot compare
-        /// at `key` (D196). No benchmark pins such a pair.
-        #[test]
-        fn original_fieldless_reduction_type_findings_keep_one_authored_owner() {
-            for expression in [
-                "COUNT(OTHER.*)",
-                "SUM(OTHER.N)",
-                "COUNT(OTHER.*) + COUNT(OTHER.*)",
-                "COUNT(OTHER.*) + SUM(OTHER.N)",
-            ] {
-                for (literal, kind) in [("true", "bool"), ("\"'x'\"", "str")] {
-                    let fixture = fieldless_count_fixture(&original_fieldless_count(
-                        expression,
-                        &format!("{{N: {literal}}}"),
-                        "",
-                    ));
-                    assert_eq!(
-                        complete_aggregate_issues(&fixture),
-                        vec![yamaa_adapters::json!({
-                            "phase": "validation", "condition": "incompatible_input_type",
-                            "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"],
-                            "context": {"source": "key[N]", "expected": kind, "actual": "int"}
-                        })],
-                        "{expression}, {literal}"
-                    );
-                }
-            }
-            // The filter reads the relation too, and the pair is still reported
-            // at `key`.
-            for expression in [
-                "COUNT(OTHER.*)",
-                "SUM(OTHER.N)",
-                "COUNT(OTHER.*) + SUM(OTHER.N)",
-            ] {
-                let fixture = fieldless_count_fixture(&original_fieldless_count(
-                    expression,
-                    "{N: true}",
-                    "        filter: OTHER.N > 0\n",
-                ));
-                assert_eq!(
-                    complete_aggregate_issues(&fixture),
-                    vec![yamaa_adapters::json!({
-                        "phase": "validation", "condition": "incompatible_input_type",
-                        "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"],
-                        "context": {"source": "key[N]", "expected": "bool", "actual": "int"}
-                    })],
-                    "{expression}"
-                );
-            }
-        }
-
-        /// A written 1.0 aggregate key reports a key column the relation lacks
-        /// at `key`, and a match value that reads nothing at its pair (D196).
-        /// No benchmark pins these names in a fieldless reduction;
-        /// `negative-aggregate-key-bare-field` pins a bare match value of a
-        /// reduction that reads a field.
-        #[test]
-        fn original_fieldless_reduction_unknown_names_do_not_invent_join_findings() {
-            for (expression, key, identifier, rule, path) in [
-                (
-                    "COUNT(OTHER.*)",
-                    "{ABSENT: K}",
-                    "OTHER.ABSENT",
-                    "LOOKUP-5",
-                    "columns.V.derivation.aggregate.key",
-                ),
-                (
-                    "COUNT(OTHER.*)",
-                    "{N: ABSENT}",
-                    "ABSENT",
-                    "LOOKUP-5",
-                    "columns.V.derivation.aggregate.key.N",
-                ),
-                (
-                    "COUNT(ABSENT.*)",
-                    "{N: K}",
-                    "ABSENT.*",
-                    "NAME-3",
-                    "columns.V.derivation.aggregate.expr",
-                ),
-            ] {
-                let fixture =
-                    fieldless_count_fixture(&original_fieldless_count(expression, key, ""));
-                assert_eq!(
-                    complete_aggregate_issues(&fixture),
-                    vec![yamaa_adapters::json!({
-                        "phase": "validation", "condition": "unknown_field",
-                        "rule": rule, "spec_paths": [path],
-                        "context": {"identifier": identifier}
-                    })],
-                    "{expression}, {key}"
-                );
-            }
-            for (expression, identifier) in [
-                ("SUM(ABSENT.N)", "ABSENT.N"),
-                ("COUNT(ABSENT.*)", "ABSENT.*"),
-            ] {
-                let fixture = fieldless_count_fixture(&original_fieldless_count(
-                    expression,
-                    "{N: K}",
-                    "        filter: ABSENT.OTHER > 0\n",
-                ));
-                assert_eq!(
-                    complete_aggregate_issues(&fixture),
-                    vec![yamaa_adapters::json!({
-                        "phase": "validation", "condition": "unknown_field",
-                        "rule": "NAME-3", "spec_paths": ["columns.V.derivation.aggregate.expr"],
-                        "context": {"identifier": identifier}
-                    })],
-                    "{expression}"
-                );
-            }
-        }
-
-        /// The filter is the only reference to the donor, and the key pair's
-        /// types are reported at `key` (D196). No benchmark pins an aggregate
-        /// whose filter is its only donor reference.
-        #[test]
-        fn fieldless_literal_bindings_keep_the_filter_as_the_only_donor_reference() {
-            for expression in ["COUNT(OTHER.*)", "SUM(H)"] {
-                for key in ["{N: true}", "{N: K}"] {
-                    let source = original_fieldless_count(expression, key, "        filter: OTHER.N > 0\n")
-                .edit(
-                    "        filter: OTHER.N > 0\n",
-                    "        derivations:\n          H: {type: int, derivation: 1}\n        filter: OTHER.N > 0\n",
-                );
-                    let fixture = fieldless_count_fixture(&source);
-                    if key == "{N: K}" {
-                        let result = fixture.run().unwrap_or_else(|issues| panic!("{issues:?}"));
-                        assert_eq!(saved_count(&fixture, result), b"K,V\n1,2\n");
-                    } else {
-                        assert_eq!(
-                            complete_aggregate_issues(&fixture),
-                            vec![yamaa_adapters::json!({
-                                "phase": "validation", "condition": "incompatible_input_type",
-                                "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"],
-                                "context": {"source": "key[N]", "expected": "bool", "actual": "int"}
-                            })],
-                            "{expression}"
-                        );
-                    }
-                }
-            }
-        }
-
-        const ORIGINAL_DERIVE_SPEC: &str = r#"yamaa: "1.0"
-type: spec
-domain: ADQS
-keys: [STUDYID, USUBJID]
-input:
-  QS: input/qs.csv
-output:
-  path: adqs.csv
-  columns: [STUDYID, USUBJID, AVAL]
-columns:
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation: QS.STUDYID
-  - name: USUBJID
-    type: str
-    label: Unique Subject Identifier
-    derivation: QS.USUBJID
-  - name: AVAL
-    type: float
-    label: Analysis Value
-    derivation:
-      aggregate:
-        filter: "QS.QSCAT = 'SCALE'"
-        key: [STUDYID, USUBJID]
-        derivations:
-DERIVE_BINDINGS
-        expr: "REDUCTION_EXPRESSION"
-rows:
-  - id: subscale
-    filter: "QS.QSCAT = 'SCALE' AND QS.QSTESTCD = 'PF01'"
-"#;
-        const ORIGINAL_QS: &str = r#"STUDYID,USUBJID,QSTESTCD,QSCAT,QSORRES
-S1,001,PF01,SCALE,1
-S1,001,PF02,SCALE,2
-S1,001,PF03,SCALE,3
-"#;
-        const ORIGINAL_QS_WITH_TEXT: &str = r#"STUDYID,USUBJID,QSTESTCD,QSCAT,QSORRES
-S1,001,PF01,SCALE,1
-S1,001,PF02,SCALE,N/A
-S1,001,PF03,SCALE,3
-"#;
-        fn original_derive_fixture(bindings: &str, expression: &str, input: &str) -> Fixture {
-            let fixture = Fixture::new();
-            fs::create_dir(fixture.0.join("input")).unwrap();
-            fs::write(fixture.0.join("input/qs.csv"), input).unwrap();
-            let bindings = bindings
-                .lines()
-                .map(|line| format!("          {line}"))
-                .collect::<Vec<_>>()
-                .join("\n");
-            fs::write(
-                fixture.0.join("spec.yaml"),
-                ORIGINAL_DERIVE_SPEC
-                    .edit("DERIVE_BINDINGS", &bindings)
-                    .edit("REDUCTION_EXPRESSION", expression),
-            )
-            .unwrap();
-            fixture
-        }
-
-        fn original_derive_issues(fixture: &Fixture) -> Vec<yamaa_core::diagnostic::Diagnostic> {
-            match fixture.run() {
-                Ok(mut domain) => {
-                    assert!(domain.output().is_none());
-                    assert!(domain.save().is_err());
-                    domain.issues()
-                }
-                Err(issues) => issues,
-            }
-        }
-
-        /// A binding that reads a later binding is refused (P-BIND-1); a 1.0
-        /// `derivations` map cannot repeat a name, since a YAML mapping refuses
-        /// a repeated key. No benchmark pins a forward reference between
-        /// bindings; `negative-aggregate-unbound-variable` pins a name no
-        /// binding declares.
-        #[test]
-        fn original_aggregate_bindings_reject_forward_references() {
-            let fixture = original_derive_fixture(
-                "DOUBLED:\n  type: float\n  derivation: QSNUM\nQSNUM:\n  type: float\n  derivation: QS.QSORRES",
-                "SUM(DOUBLED)",
-                ORIGINAL_QS,
-            );
-            let issues = original_derive_issues(&fixture);
-            assert_eq!(issues[0].condition(), "unknown_derive_variable");
-            let context = yamaa_core::json::Value::Object(issues[0].context.clone());
-            assert_eq!(context["variable"], "QSNUM");
-        }
-
-        // No benchmark pins a binding that reads an earlier binding converted
-        // from text, nor one that recovers an unconvertible value.
-        #[test]
-        fn original_aggregate_bindings_read_converted_earlier_values_and_recover_once() {
-            for (bindings, expression, input, expected) in [
-        (
-            "QSNUM:\n  type: float\n  derivation: QS.QSORRES\nDOUBLED:\n  type: float\n  derivation: 'QSNUM * 2'",
-            "SUM(DOUBLED)",
-            ORIGINAL_QS,
-            12.0,
-        ),
-        (
-            "QSNUM:\n  type: float\n  derivation:\n    value: QS.QSORRES\n    unconvertible: 0",
-            "SUM(QSNUM)",
-            ORIGINAL_QS_WITH_TEXT,
-            4.0,
-        ),
-    ] {
-        let fixture = original_derive_fixture(bindings, expression, input);
-        let domain = fixture.run().unwrap_or_else(|issues| panic!("{issues:?}"));
-        assert!(domain.issues().is_empty(), "{:?}", domain.issues());
-        let table = domain.output().unwrap();
-        assert_eq!(table.rows(), 1);
-        let batch = &table.batches()[0];
-        assert_eq!(batch.column(0).as_any().downcast_ref::<arrow_array::StringArray>().unwrap().iter().collect::<Vec<_>>(), [Some("S1")]);
-        assert_eq!(batch.column(1).as_any().downcast_ref::<arrow_array::StringArray>().unwrap().iter().collect::<Vec<_>>(), [Some("001")]);
-        assert_eq!(batch.column(2).as_any().downcast_ref::<arrow_array::Float64Array>().unwrap().iter().collect::<Vec<_>>(), [Some(expected)]);
-    }
-            let fixture = original_derive_fixture(
-                "QSNUM:\n  type: float\n  derivation: QS.QSORRES",
-                "SUM(QSNUM)",
-                ORIGINAL_QS_WITH_TEXT,
-            );
-            assert_eq!(
-                original_derive_issues(&fixture)[0].condition(),
-                "conversion_failed"
-            );
-        }
-
-        /// The bindings of the first and last exposures impute with `time:
-        /// first` and `time: last`, enum arguments rather than reads.
+        /// A seam the replay cannot reach: `adam-adsl-treatment`'s own files,
+        /// run by `support::benchmarks::reproduce`. The bindings of the first
+        /// and last exposures impute with `time: first` and `time: last`,
+        /// enum arguments rather than reads.
         #[test]
         fn original_aggregate_derive_enum_arguments_are_not_variable_references() {
             crate::support::benchmarks::reproduce("adam-adsl-treatment");
         }
-
-        // No benchmark pins these findings of a binding's relation or field.
+        /// Seams the replay cannot express: the route a build takes and what
+        /// a save returns. Each case of `aggregate_record_operations.json`
+        /// that builds and reports no issue builds a domain, and one that
+        /// saves writes none of its files before the save, which returns
+        /// `Ok(true)`. A refused case may be refused before a domain exists,
+        /// as the moved tests accepted, but a domain it builds exposes no
+        /// output and fails its save.
         #[test]
-        fn original_aggregate_binding_relation_and_field_findings_keep_their_context() {
-            let fixture = original_derive_fixture(
-        "A:\n  type: float\n  derivation: QS.QSORRES\nB:\n  type: float\n  derivation: EX.EXSEQ",
-        "SUM(A)",
-        ORIGINAL_QS,
-    );
-            let issues = original_derive_issues(&fixture);
-            assert!(issues
-                .iter()
-                .any(|issue| issue.condition() == "invalid_derive_step"));
+        fn aggregate_record_cases_keep_their_build_routes_and_save_results() {
+            use crate::support::diagnostic::{operations, replay};
 
-            let fixture = original_derive_fixture(
-        "A:\n  type: float\n  derivation: QS.QSORRES\nB:\n  type: float\n  derivation: XX.YY\nCAPNUM:\n  type: float\n  derivation: CAP.DSNUM",
-        "SUM(A)",
-        ORIGINAL_QS,
-    );
-            add_original_cap_intermediate(&fixture, true);
-            let issues = original_derive_issues(&fixture);
-            let issue = issues
-                .iter()
-                .find(|issue| issue.condition() == "invalid_derive_step")
-                .unwrap();
-            assert_eq!(issue.rule(), Some("LOOKUP-22"));
-            let context = yamaa_core::json::Value::Object(issue.context.clone());
-            assert_eq!(context["relations"], yamaa_adapters::json!(["QS", "XX"]));
-
-            for (source, rule) in [("QS.NOSUCHFIELD", "NAME-3"), ("CAP.NOSUCH", "LOOKUP-11")] {
-                let fixture = original_derive_fixture(
-                    &format!("A:\n  type: float\n  derivation: {source}"),
-                    "SUM(A)",
-                    ORIGINAL_QS,
-                );
-                add_original_cap_intermediate(&fixture, true);
-                let issues = original_derive_issues(&fixture);
-                let unknown = issues
-                    .iter()
-                    .filter(|issue| issue.condition() == "unknown_field")
-                    .collect::<Vec<_>>();
-                assert_eq!(unknown.len(), 1, "{issues:?}");
-                assert_eq!(unknown[0].rule(), Some(rule));
-                let context = yamaa_core::json::Value::Object(unknown[0].context.clone());
-                assert_eq!(context["identifier"], source);
-            }
-
-            let fixture = original_derive_fixture(
-        "QSNUM:\n  type: float\n  derivation: QS.QSORRES\nCAPNUM:\n  type: float\n  derivation: CAP.DSNUM\nCAPPED:\n  type: float\n  derivation: {least: {sources: [QSNUM, CAPNUM]}}",
-        "SUM(CAPPED)",
-        ORIGINAL_QS,
-    );
-            add_original_cap_intermediate(&fixture, false);
-            let issues = original_derive_issues(&fixture);
-            let invalid = issues
-                .iter()
-                .filter(|issue| issue.condition() == "invalid_derive_step")
+            let cases = replay::cases()
+                .into_iter()
+                .filter(|case| {
+                    case.label.starts_with("aggregate_record_operations.json::")
+                        && case.operations.iter().any(|operation| operation != "check")
+                })
                 .collect::<Vec<_>>();
-            assert_eq!(invalid.len(), 1, "{issues:?}");
-            assert_eq!(invalid[0].rule(), Some("LOOKUP-22"));
-            let context = yamaa_core::json::Value::Object(invalid[0].context.clone());
-            assert_eq!(context["intermediate"], "CAP");
-        }
-
-        fn add_original_cap_intermediate(fixture: &Fixture, keep: bool) {
-            fs::write(
-                fixture.0.join("input/ds.csv"),
-                b"STUDYID,USUBJID,DSNUM\nS1,001,9\nS1,001,2\nS2,002,10\n",
-            )
-            .unwrap();
-            let path = fixture.0.join("spec.yaml");
-            let spec = fs::read_to_string(&path).unwrap()
-        .edit("  QS: input/qs.csv", "  QS: input/qs.csv\n  DS: input/ds.csv")
-        .edit("output:\n", &format!("intermediates:\n  - id: CAP\n    dataset: DS\n    key: [STUDYID, USUBJID]{}\noutput:\n", if keep { "\n    order_by: [DS.DSNUM]\n    keep: first" } else { "" }))
-        .edit("  - id: subscale\n", "  - id: subscale\n    dataset: QS\n");
-            fs::write(path, spec).unwrap();
+            assert!(!cases.is_empty(), "the family builds its cases");
+            for case in cases {
+                let fixture = Fixture(operations::study(&case.input));
+                match (case.issues.is_empty(), fixture.run()) {
+                    (true, Ok(mut domain)) => {
+                        if case.operations == ["save"] {
+                            let stated = case.stated.saved.as_ref().expect("a stated save");
+                            for name in stated.keys() {
+                                assert!(
+                                    !fixture.0.join(name).exists(),
+                                    "{}: the build publishes {name} only when it saves",
+                                    case.label
+                                );
+                            }
+                            let saved = domain.save();
+                            assert!(
+                                matches!(saved, Ok(true)),
+                                "{}: an accepted save returns Ok(true), not {saved:?}",
+                                case.label
+                            );
+                        }
+                    }
+                    (true, Err(issues)) => {
+                        panic!("{}: an accepted case builds: {issues:?}", case.label)
+                    }
+                    (false, Ok(mut domain)) => {
+                        let has_output = domain.output().is_some();
+                        let save_failed =
+                            matches!(domain.save(), Err(file_application::FailedBuild));
+                        assert_eq!(
+                            (has_output, save_failed),
+                            (false, true),
+                            "{}: a refused domain has no output and fails its save",
+                            case.label
+                        );
+                    }
+                    (false, Err(_)) => {}
+                }
+            }
         }
     }
     mod baseline_window_types {
@@ -1976,6 +1412,8 @@ S1,001,PF03,SCALE,3
 
         // A unit seam: the bound plans of six benchmarks' specifications, which
         // no benchmark's expected files pin.
+        // Over the 250-line ceiling until the follow-up of #3806 splits it.
+        #[allow(clippy::too_many_lines)]
         #[test]
         fn all_six_original_yaml_documents_compile_against_independent_model_expectations() {
             type Case<'a> = (
