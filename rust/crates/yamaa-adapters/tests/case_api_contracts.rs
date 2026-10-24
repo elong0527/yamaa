@@ -350,6 +350,17 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
                             case.label
                         );
                         saved_bytes(&study, expected, &case.label);
+                    } else {
+                        assert_eq!(
+                            case.label,
+                            "row_scopes.json::when_binds_groups_without_changing_the_fraction_denominator",
+                            "an authored positive save states its bytes"
+                        );
+                        assert_eq!(
+                            case.operations,
+                            ["build"],
+                            "the return-value-only case builds without saving in the replay"
+                        );
                     }
                 } else {
                     assert!(
