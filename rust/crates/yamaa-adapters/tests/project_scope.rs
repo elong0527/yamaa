@@ -155,7 +155,7 @@ fn blocked_consumers_name_each_failed_producer() {
     let project = read(&study);
     let plan = project.plan(None);
     let adae = &plan.steps()[2];
-    // A failed producer ADAE does not read blocks nothing; the failed ADSL
+    // A failed DM, which ADAE does not read, blocks nothing; a failed ADSL
     // blocks it, as `project_scope.json` records.
     let dm = 0;
     assert!(adae.blocked(&project, |producer| producer == dm).is_empty());
