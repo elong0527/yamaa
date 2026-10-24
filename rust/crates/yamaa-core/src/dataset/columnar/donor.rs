@@ -337,10 +337,12 @@ fn build<E>(
         region,
         &mut frame,
         rows,
-        current,
-        stride,
-        &input_schema,
-        &secondary,
+        DonorInput {
+            current,
+            stride,
+            schema: &input_schema,
+            secondary: &secondary,
+        },
         item,
         cx.region,
     );
@@ -354,22 +356,34 @@ fn build<E>(
     }))
 }
 
+/// What a donor's bindings read besides its frame: the current values its
+/// records read (`current`, one set for every record, or one set per record
+/// when `stride` is its width), the donor's input schema, and the secondary
+/// ports.
+pub(super) struct DonorInput<'c, 't, E> {
+    pub(super) current: &'c [Value],
+    pub(super) stride: usize,
+    pub(super) schema: &'c TableSchema,
+    pub(super) secondary: &'c [Table<'t, E>],
+}
+
 /// Evaluate every derivation over the donor records `rows`, in declaration
-/// order. `current` is one set of current values for every record, or one
-/// set per record when `stride` is its width.
-#[allow(clippy::too_many_arguments)]
+/// order, reading `input`.
 pub(super) fn derive<E>(
     run: &mut Run<'_, '_, E>,
     region: RegionId,
     frame: &mut Frame,
     rows: &[usize],
-    current: &[Value],
-    stride: usize,
-    input_schema: &TableSchema,
-    secondary: &[Table<'_, E>],
+    input: DonorInput<'_, '_, E>,
     item: &Intermediate,
     outer: RegionId,
 ) -> Result<(), Fail<E>> {
+    let DonorInput {
+        current,
+        stride,
+        schema: input_schema,
+        secondary,
+    } = input;
     let plan = run.plan;
     for &column in plan.column_order(region) {
         let binding = plan

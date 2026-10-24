@@ -26,14 +26,13 @@ pub(super) enum Observe {
     Predicate,
 }
 
-/// Resolve one bound read of an expression node for one row.
-#[allow(clippy::too_many_arguments)]
+/// Resolve one bound read of an expression node for one row: the plan's read
+/// and the binding it reads through.
 pub(super) fn resolve_read<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
     owner: Site<'_>,
-    read: Read,
-    bound: &BoundRead,
+    (read, bound): (Read, &BoundRead),
     path: &str,
     row: usize,
     observe: Observe,
@@ -117,8 +116,7 @@ impl<E> Resolver for Formula<'_, '_, '_, '_, E> {
             self.run,
             self.cx,
             Site::node(self.run.plan, self.expr),
-            read,
-            &self.bindings[index].read,
+            (read, &self.bindings[index].read),
             self.path,
             self.row,
             Observe::Operand,
@@ -231,8 +229,7 @@ impl<E> Resolver for FlagOperands<'_, '_, '_, '_, E> {
                     self.run,
                     self.cx,
                     Site::node(self.run.plan, self.expr),
-                    read,
-                    bound,
+                    (read, bound),
                     path,
                     self.row,
                     Observe::Predicate,
@@ -323,8 +320,7 @@ impl<E> Resolver for Condition<'_, '_, '_, '_, E> {
             self.run,
             self.cx,
             self.owner,
-            read,
-            &binding.read,
+            (read, &binding.read),
             path,
             self.row,
             Observe::Predicate,

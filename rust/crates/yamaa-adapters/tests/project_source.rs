@@ -503,14 +503,15 @@ mod project {
             for created in [Some(1), Some(0)] {
                 checked
                     .build_into(
-                        &mut activation,
-                        b"",
+                        (&mut activation, b""),
                         &mut source,
                         &mut decoder,
                         &mut attempt,
-                        None,
-                        yamaa_core::application_observer::Scope::new(
-                            &yamaa_core::application_observer::Noop,
+                        (
+                            None,
+                            yamaa_core::application_observer::Scope::new(
+                                &yamaa_core::application_observer::Noop,
+                            ),
                         ),
                     )
                     .unwrap();
@@ -549,14 +550,15 @@ mod project {
             activation.live_failed = true;
             checked
                 .build_into(
-                    &mut activation,
-                    b"",
+                    (&mut activation, b""),
                     &mut source,
                     &mut decoder,
                     &mut attempt,
-                    None,
-                    yamaa_core::application_observer::Scope::new(
-                        &yamaa_core::application_observer::Noop,
+                    (
+                        None,
+                        yamaa_core::application_observer::Scope::new(
+                            &yamaa_core::application_observer::Noop,
+                        ),
                     ),
                 )
                 .unwrap();
@@ -581,14 +583,15 @@ mod project {
             trace.borrow_mut().clear();
             let Failure::Lock(Payload(original)) = checked
                 .build_into(
-                    &mut activation,
-                    b"",
+                    (&mut activation, b""),
                     &mut source,
                     &mut decoder,
                     &mut attempt,
-                    None,
-                    yamaa_core::application_observer::Scope::new(
-                        &yamaa_core::application_observer::Noop,
+                    (
+                        None,
+                        yamaa_core::application_observer::Scope::new(
+                            &yamaa_core::application_observer::Noop,
+                        ),
                     ),
                 )
                 .unwrap_err()

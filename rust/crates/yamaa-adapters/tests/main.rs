@@ -50,7 +50,6 @@ mod execution_value_semantics;
 mod execution_window_group_sources;
 mod execution_window_semantics;
 mod file_diagnostic_origins;
-mod file_producer_links;
 mod file_project;
 mod file_resources;
 mod file_workflow;

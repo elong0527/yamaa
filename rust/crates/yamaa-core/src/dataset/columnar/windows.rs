@@ -178,7 +178,7 @@ fn build<E>(run: &mut Run<'_, '_, E>, cx: &Cx<'_, E>, expr: ExprId) -> Result<Wi
         vec![(0..len).collect()]
     } else {
         let width = built.schema.as_ref().unwrap_or(cx.schema).columns().len();
-        super::group::admit(&window.group_by, width, len)
+        super::group::admit(&window.group_by, width, len, None)
             .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
         let scope = &built;
         super::group::partition(len, window.group_by.len(), |position, key| {

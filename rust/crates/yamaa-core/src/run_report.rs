@@ -343,24 +343,62 @@ fn nonempty(value: &str) -> Result<(), Error> {
     }
 }
 
-/// One prepared row in column order.
-#[allow(clippy::too_many_arguments)]
-fn row(
-    artifact: &str,
+/// One report row before it is prepared: its kind and path, and each other
+/// column it fills; a column it leaves out is missing ([`Row::new`]).
+struct Row<'a> {
     kind: Kind,
-    path: &str,
-    name: Option<&str>,
-    id: Option<&str>,
-    target: Option<&str>,
-    rule: Option<&str>,
-    severity: Option<&str>,
-    outcome: Option<&str>,
-    condition: Option<&str>,
+    path: &'a str,
+    name: Option<&'a str>,
+    id: Option<&'a str>,
+    target: Option<&'a str>,
+    rule: Option<&'a str>,
+    severity: Option<&'a str>,
+    outcome: Option<&'a str>,
+    condition: Option<&'a str>,
     count: PreparedCell,
     total: PreparedCell,
     keys: PreparedCell,
     details: BTreeMap<String, Json>,
-) -> Vec<PreparedCell> {
+}
+
+impl<'a> Row<'a> {
+    /// A row of `kind` at `path` whose every other column is missing.
+    fn new(kind: Kind, path: &'a str) -> Self {
+        Self {
+            kind,
+            path,
+            name: None,
+            id: None,
+            target: None,
+            rule: None,
+            severity: None,
+            outcome: None,
+            condition: None,
+            count: PreparedCell::Missing,
+            total: PreparedCell::Missing,
+            keys: PreparedCell::Missing,
+            details: BTreeMap::new(),
+        }
+    }
+}
+
+/// One prepared row in column order.
+fn row(artifact: &str, fields: Row<'_>) -> Vec<PreparedCell> {
+    let Row {
+        kind,
+        path,
+        name,
+        id,
+        target,
+        rule,
+        severity,
+        outcome,
+        condition,
+        count,
+        total,
+        keys,
+        details,
+    } = fields;
     vec![
         text(artifact),
         text(kind.name()),
@@ -403,19 +441,12 @@ pub fn prepare(facts: &Facts) -> Result<Vec<Vec<PreparedCell>>, Error> {
     };
     rows.push(row(
         artifact,
-        Kind::Run,
-        "output",
-        None,
-        None,
-        None,
-        None,
-        None,
-        Some(outcome),
-        condition,
-        optional_count(output_rows)?,
-        PreparedCell::Missing,
-        PreparedCell::Missing,
-        BTreeMap::new(),
+        Row {
+            outcome: Some(outcome),
+            condition,
+            count: optional_count(output_rows)?,
+            ..Row::new(Kind::Run, "output")
+        },
     ));
     for input in &facts.inputs {
         let mut details = BTreeMap::from([
@@ -428,55 +459,38 @@ pub fn prepare(facts: &Facts) -> Result<Vec<Vec<PreparedCell>>, Error> {
         }
         rows.push(row(
             artifact,
-            Kind::Input,
-            &format!("input.{}", input.name),
-            Some(&input.name),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            optional_count(input.records)?,
-            PreparedCell::Missing,
-            PreparedCell::Missing,
-            details,
+            Row {
+                name: Some(&input.name),
+                count: optional_count(input.records)?,
+                details,
+                ..Row::new(Kind::Input, &format!("input.{}", input.name))
+            },
         ));
     }
     for template in &facts.rows {
         rows.push(row(
             artifact,
-            Kind::Rows,
-            &template.path,
-            Some(&template.driver),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            optional_count(template.emitted)?,
-            optional_count(template.read)?,
-            PreparedCell::Missing,
-            BTreeMap::new(),
+            Row {
+                name: Some(&template.driver),
+                count: optional_count(template.emitted)?,
+                total: optional_count(template.read)?,
+                ..Row::new(Kind::Rows, &template.path)
+            },
         ));
     }
     for handler in &facts.handlers {
         rows.push(row(
             artifact,
-            Kind::Handler,
-            &handler.path,
-            Some(&handler.name),
-            None,
-            handler_target(&handler.path),
-            handler_condition(&handler.path, &handler.name).and_then(|code| code.definition().rule),
-            None,
-            None,
-            None,
-            PreparedCell::Count(i64::try_from(handler.count).map_err(|_| Error::InvalidRecord)?),
-            PreparedCell::Missing,
-            PreparedCell::Missing,
-            BTreeMap::new(),
+            Row {
+                name: Some(&handler.name),
+                target: handler_target(&handler.path),
+                rule: handler_condition(&handler.path, &handler.name)
+                    .and_then(|code| code.definition().rule),
+                count: PreparedCell::Count(
+                    i64::try_from(handler.count).map_err(|_| Error::InvalidRecord)?,
+                ),
+                ..Row::new(Kind::Handler, &handler.path)
+            },
         ));
     }
     for column in &facts.columns {
@@ -486,19 +500,13 @@ pub fn prepare(facts: &Facts) -> Result<Vec<Vec<PreparedCell>>, Error> {
             .unwrap_or_default();
         rows.push(row(
             artifact,
-            Kind::Column,
-            &format!("columns.{}", column.name),
-            Some(&column.name),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            count(column.missing)?,
-            count(column.rows)?,
-            PreparedCell::Missing,
-            details,
+            Row {
+                name: Some(&column.name),
+                count: count(column.missing)?,
+                total: count(column.rows)?,
+                details,
+                ..Row::new(Kind::Column, &format!("columns.{}", column.name))
+            },
         ));
     }
     for check in &facts.checks {
@@ -514,19 +522,20 @@ pub fn prepare(facts: &Facts) -> Result<Vec<Vec<PreparedCell>>, Error> {
         };
         rows.push(row(
             artifact,
-            Kind::Check,
-            &check.path,
-            Some(&check.name),
-            check.id.as_deref(),
-            check.target.as_deref(),
-            Some(&check.rule),
-            Some(check.severity.name()),
-            Some(outcome),
-            condition,
-            count(failed)?,
-            count(check.evaluated)?,
-            keys,
-            details,
+            Row {
+                name: Some(&check.name),
+                id: check.id.as_deref(),
+                target: check.target.as_deref(),
+                rule: Some(&check.rule),
+                severity: Some(check.severity.name()),
+                outcome: Some(outcome),
+                condition,
+                count: count(failed)?,
+                total: count(check.evaluated)?,
+                keys,
+                details,
+                ..Row::new(Kind::Check, &check.path)
+            },
         ));
     }
     Ok(rows)

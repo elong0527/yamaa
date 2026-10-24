@@ -269,7 +269,7 @@ validation, reporting its file and position. A format's ASCII escape notation
 may denote a non-ASCII value; the decoded value is then an ordinary string.
 
 Fails: `non_ascii_source`.
-Evidence: `rust/crates/yamaa-adapters/tests/file_workflow.rs::original_decode_diagnostics_remain_bounded_and_owned`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::a_yaml_source_byte_outside_ascii_names_the_file_and_its_position`, `rust/crates/yamaa/tests/issue_locations.rs::a_parent_the_reader_refuses_locates_its_issue_in_that_parent`.
+Evidence: `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/workflow.json::a_yaml_entry_byte_outside_ascii_names_the_entry_and_its_position`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::a_yaml_source_byte_outside_ascii_names_the_file_and_its_position`, `rust/crates/yamaa/tests/issue_locations.rs::a_parent_the_reader_refuses_locates_its_issue_in_that_parent`.
 
 For example, the YAML double-quoted escape `"\u00E9"` denotes the
 one-character string U+00E9.

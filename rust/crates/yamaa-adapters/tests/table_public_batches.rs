@@ -140,7 +140,7 @@ fn ids(batch: &RecordBatch) -> Vec<i64> {
 #[test]
 fn a_consumer_that_stops_pulling_stops_production() {
     let source = Arc::new(Counted::new(10, None));
-    let batches = PublicBatches::new(Shared(Arc::clone(&source)), vec![0], rows(2)).unwrap();
+    let batches = PublicBatches::new(Shared(Arc::clone(&source)), vec![0], rows(2), None).unwrap();
     assert_eq!(source.reads(), [0; 10], "before the first pull");
     let schema = batches.schema().clone();
     let stream = FFI_ArrowArrayStream::new(Box::new(RecordBatchIterator::new(
@@ -174,7 +174,7 @@ fn streamed_batches_hold_the_whole_table_and_never_cross_its_batches() {
     let source = Counted::new(65_541, Some("t".into()));
     let projection = [1, 0];
     let whole = PublicTable::from_table(&&source, &projection).unwrap();
-    let batches = PublicBatches::new(&source, projection.to_vec(), rows(3))
+    let batches = PublicBatches::new(&source, projection.to_vec(), rows(3), None)
         .unwrap()
         .collect::<Result<Vec<_>, _>>()
         .unwrap();
@@ -209,7 +209,7 @@ fn streamed_batches_hold_the_whole_table_and_never_cross_its_batches() {
 fn a_table_with_no_record_is_one_empty_batch() {
     let source = Counted::new(0, Some("t".into()));
     let whole = PublicTable::from_table(&&source, &[0, 1]).unwrap();
-    let batches = PublicBatches::new(&source, vec![0, 1], rows(2))
+    let batches = PublicBatches::new(&source, vec![0, 1], rows(2), None)
         .unwrap()
         .collect::<Result<Vec<_>, _>>()
         .unwrap();
@@ -237,7 +237,7 @@ fn a_table_the_whole_view_refuses_is_refused_before_any_batch() {
             TableError::InvalidTable,
         ),
     ] {
-        let streamed = PublicBatches::new(source, projection.clone(), rows(2)).map(|_| ());
+        let streamed = PublicBatches::new(source, projection.clone(), rows(2), None).map(|_| ());
         assert_eq!(
             source.reads().iter().sum::<usize>(),
             0,

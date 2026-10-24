@@ -257,9 +257,9 @@ impl Publisher {
     }
     /// Write `content` completely into a temporary file in a private
     /// directory beside the target, flushed and synced, without making it
-    /// visible. The target's directory stays locked in `locks` until the save
-    /// ends (OUTPUT-8). The file then has the mode it is published with: a
-    /// present target's permission bits, or else 0666 less the umask (D92).
+    /// visible: [`Self::open`], one [`Writing::append`] and
+    /// [`Writing::finish`]. The saved-file bound is checked before anything
+    /// is staged.
     pub fn stage(
         &self,
         locks: &mut Locks,
@@ -270,34 +270,32 @@ impl Publisher {
             return Err(Error::PathMismatch);
         }
         yamaa_core::limits::Limits::output_bytes(content.len()).map_err(Error::Limit)?;
+        let mut writing = self.open(locks, declared)?;
+        match writing.append(content) {
+            Ok(()) => writing.finish(),
+            Err(error) => Err(writing.fail(error)),
+        }
+    }
+    /// Open the staged file of `declared`: an empty temporary file in a
+    /// private directory beside the target, which [`Writing::append`] fills
+    /// piece by piece, such as one partition of an output after another
+    /// (D264), and [`Writing::finish`] stages, without making it visible. The
+    /// target's directory stays locked in `locks` until the save ends
+    /// (OUTPUT-8). The file then has the mode it is published with: a present
+    /// target's permission bits, or else 0666 less the umask (D92).
+    pub fn open(&self, locks: &mut Locks, declared: &str) -> Result<Writing<'_>, Error> {
+        if declared != self.declared {
+            return Err(Error::PathMismatch);
+        }
         locks.hold(&self.parent)?;
         let replaced = self.check_target()?;
-        let (mut temporary, descriptor) = self.temporary()?;
-        let written = (|| {
-            let mut file = File::from(descriptor);
-            file.write_all(content)?;
-            file.flush()?;
-            // Before the sync, so the sync covers the mode too.
-            if let Some(mode) = replaced {
-                fs::fchmod(&file, mode)?;
-            }
-            file.sync_all()?;
-            let held = fs::fstat(&file)?;
-            drop(file);
-            let observed = fs::statat(
-                &temporary.directory,
-                "candidate.part",
-                AtFlags::SYMLINK_NOFOLLOW,
-            )?;
-            if kind(&held) != FileType::RegularFile || identity(&held) != identity(&observed) {
-                return Err(Error::Changed);
-            }
-            Ok(())
-        })();
-        match written {
-            Ok(()) => Ok(temporary.keep()),
-            Err(error) => Err(temporary.failure(error)),
-        }
+        let (temporary, descriptor) = self.temporary()?;
+        Ok(Writing {
+            temporary,
+            file: File::from(descriptor),
+            replaced,
+            written: 0,
+        })
     }
     /// Replace the target with the staged file in one step.
     pub fn commit(&self, staged: Staged) -> Result<(), Error> {
@@ -501,6 +499,63 @@ pub struct Staged {
     name: String,
     directory: (i128, i128, FileType),
     candidate: (i128, i128, FileType),
+}
+/// A staged file being written: the temporary file [`Publisher::open`]
+/// made, which nothing at the target shows. Dropping it before
+/// [`Writing::finish`] removes it, as a failed or cancelled save does.
+pub struct Writing<'a> {
+    temporary: Pending<'a>,
+    file: File,
+    replaced: Option<Mode>,
+    written: usize,
+}
+impl Writing<'_> {
+    /// Append `bytes`, checking the saved-file bound before the file grows.
+    pub fn append(&mut self, bytes: &[u8]) -> Result<(), Error> {
+        yamaa_core::limits::Limits::output_extension(self.written, bytes.len())
+            .map_err(Error::Limit)?;
+        self.file.write_all(bytes)?;
+        self.written += bytes.len();
+        Ok(())
+    }
+    /// Flush and sync the complete file, with its published mode, and keep
+    /// it for a later commit; a file that cannot be staged is removed.
+    pub fn finish(self) -> Result<Staged, Error> {
+        let Self {
+            mut temporary,
+            mut file,
+            replaced,
+            ..
+        } = self;
+        let written = (|| {
+            file.flush()?;
+            // Before the sync, so the sync covers the mode too.
+            if let Some(mode) = replaced {
+                fs::fchmod(&file, mode)?;
+            }
+            file.sync_all()?;
+            let held = fs::fstat(&file)?;
+            drop(file);
+            let observed = fs::statat(
+                &temporary.directory,
+                "candidate.part",
+                AtFlags::SYMLINK_NOFOLLOW,
+            )?;
+            if kind(&held) != FileType::RegularFile || identity(&held) != identity(&observed) {
+                return Err(Error::Changed);
+            }
+            Ok(())
+        })();
+        match written {
+            Ok(()) => Ok(temporary.keep()),
+            Err(error) => Err(temporary.failure(error)),
+        }
+    }
+    /// Stop writing for `error`: remove the file, keeping with the error
+    /// what a removal that fails leaves behind.
+    pub fn fail(mut self, error: Error) -> Error {
+        self.temporary.failure(error)
+    }
 }
 struct Pending<'a> {
     parent: &'a OwnedFd,

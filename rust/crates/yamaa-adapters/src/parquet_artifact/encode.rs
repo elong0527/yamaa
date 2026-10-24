@@ -9,7 +9,7 @@ use parquet::{
     },
     schema::types::Type,
 };
-use std::{io::Write, sync::Arc};
+use std::{io::Write, ops::Range, sync::Arc};
 use yamaa_core::{
     limits::Limits,
     table::{TableAccess, ValueRef},
@@ -62,41 +62,120 @@ fn field<E>(name: &str, kind: ColumnType) -> Result<Arc<Type>, Error<E>> {
         .map_err(Error::Codec)
 }
 
-fn column<T: TableAccess, D: DataType>(
-    table: &T,
-    index: usize,
-    rows: std::ops::Range<usize>,
-    writer: &mut SerializedColumnWriter<'_>,
-    convert: impl Fn(ValueRef<'_>) -> Option<D::T>,
-) -> Result<(), Error<T::Error>> {
-    let mut levels = Vec::with_capacity(rows.len());
-    let mut values = Vec::new();
-    for row in rows {
-        let value = table.cell(row, index).map_err(Error::Cell)?;
-        if matches!(value, ValueRef::Missing) {
-            levels.push(0);
-        } else {
-            values.push(convert(value).ok_or(Error::ValueType)?);
-            levels.push(1);
+/// One projected column's levels and values for the row group being filled.
+struct Pending {
+    levels: Vec<i16>,
+    values: Values,
+}
+
+/// The values of one column type, in Parquet's physical form.
+enum Values {
+    Text(Vec<ByteArray>),
+    Long(Vec<i64>),
+    Double(Vec<f64>),
+    Days(Vec<i32>),
+}
+
+impl Pending {
+    fn new(kind: ColumnType) -> Self {
+        Self {
+            levels: Vec::with_capacity(ROW_GROUP_ROWS),
+            values: match kind {
+                ColumnType::Str => Values::Text(Vec::new()),
+                ColumnType::Int | ColumnType::DateTime => Values::Long(Vec::new()),
+                ColumnType::Float => Values::Double(Vec::new()),
+                ColumnType::Date => Values::Days(Vec::new()),
+            },
         }
     }
-    writer
-        .typed::<D>()
-        .write_batch(&values, Some(&levels), None)
-        .map_err(Error::Codec)?;
+
+    /// Append one cell of a column of `kind`: a missing value as a null level.
+    fn push<E>(&mut self, kind: ColumnType, value: ValueRef<'_>) -> Result<(), Error<E>> {
+        if matches!(value, ValueRef::Missing) {
+            self.levels.push(0);
+            return Ok(());
+        }
+        match (&mut self.values, kind, value) {
+            (Values::Text(values), ColumnType::Str, ValueRef::Str(value)) => {
+                values.push(ByteArray::from(value))
+            }
+            (Values::Long(values), ColumnType::Int, ValueRef::Int(value)) => values.push(value),
+            (Values::Double(values), ColumnType::Float, ValueRef::Float(value)) => {
+                values.push(value.get())
+            }
+            (Values::Days(values), ColumnType::Date, ValueRef::Date(value)) => {
+                values.push(date_days(value))
+            }
+            (Values::Long(values), ColumnType::DateTime, ValueRef::DateTime(value)) => values.push(
+                datetime_seconds(value)
+                    .checked_mul(1_000_000)
+                    .ok_or(Error::ValueType)?,
+            ),
+            _ => return Err(Error::ValueType),
+        }
+        self.levels.push(1);
+        Ok(())
+    }
+
+    /// Write the pending levels and values as one batch of the column chunk,
+    /// then empty them for the next row group.
+    fn write<E>(&mut self, writer: &mut SerializedColumnWriter<'_>) -> Result<(), Error<E>> {
+        fn batch<D: DataType, E>(
+            writer: &mut SerializedColumnWriter<'_>,
+            values: &[D::T],
+            levels: &[i16],
+        ) -> Result<(), Error<E>> {
+            writer
+                .typed::<D>()
+                .write_batch(values, Some(levels), None)
+                .map(drop)
+                .map_err(Error::Codec)
+        }
+        match &mut self.values {
+            Values::Text(values) => batch::<ByteArrayType, E>(writer, values, &self.levels)?,
+            Values::Long(values) => batch::<Int64Type, E>(writer, values, &self.levels)?,
+            Values::Double(values) => batch::<DoubleType, E>(writer, values, &self.levels)?,
+            Values::Days(values) => batch::<Int32Type, E>(writer, values, &self.levels)?,
+        }
+        self.levels.clear();
+        match &mut self.values {
+            Values::Text(values) => values.clear(),
+            Values::Long(values) => values.clear(),
+            Values::Double(values) => values.clear(),
+            Values::Days(values) => values.clear(),
+        }
+        Ok(())
+    }
+}
+
+/// Write every pending row as one row group, column by column.
+fn row_group<W: Write + Send, E>(
+    file: &mut SerializedFileWriter<W>,
+    pending: &mut [Pending],
+) -> Result<(), Error<E>> {
+    let mut group = file.next_row_group().map_err(Error::Codec)?;
+    for column in pending {
+        let mut output = group
+            .next_column()
+            .map_err(Error::Codec)?
+            .ok_or(Error::Projection)?;
+        column.write(&mut output)?;
+        output.close().map_err(Error::Codec)?;
+    }
+    group.close().map_err(Error::Codec)?;
     Ok(())
 }
 
+/// Encode `partitions` of `table`, one after another, returning where each
+/// partition's bytes end. Rows wait in `pending` until a row group is full,
+/// and the last group is written only when the file ends, so the row groups
+/// are the whole table's whatever the partitions (D264, D160).
 fn encode<T: TableAccess>(
     table: &T,
     projection: &[usize],
+    partitions: &[Range<usize>],
     sink: &mut Sink,
-) -> Result<(), Error<T::Error>> {
-    Limits::table(table.row_count(), projection.len()).map_err(|error| Error::Limit {
-        resource: error.resource,
-        limit: error.limit,
-        actual: error.actual,
-    })?;
+) -> Result<Vec<usize>, Error<T::Error>> {
     if projection.is_empty()
         || projection
             .iter()
@@ -126,72 +205,54 @@ fn encode<T: TableAccess>(
             .set_write_batch_size(ROW_GROUP_ROWS)
             .build(),
     );
+    let kinds: Vec<ColumnType> = projection
+        .iter()
+        .map(|&index| table.schema().columns()[index].kind)
+        .collect();
     let mut file = SerializedFileWriter::new(sink, schema, properties).map_err(Error::Codec)?;
-    for start in (0..table.row_count()).step_by(ROW_GROUP_ROWS) {
-        let end = start.saturating_add(ROW_GROUP_ROWS).min(table.row_count());
-        let mut group = file.next_row_group().map_err(Error::Codec)?;
-        for &index in projection {
-            let mut output = group
-                .next_column()
-                .map_err(Error::Codec)?
-                .ok_or(Error::Projection)?;
-            let rows = start..end;
-            match table.schema().columns()[index].kind {
-                ColumnType::Str => column::<T, ByteArrayType>(
-                    table,
-                    index,
-                    rows,
-                    &mut output,
-                    |value| match value {
-                        ValueRef::Str(value) => Some(ByteArray::from(value)),
-                        _ => None,
-                    },
-                )?,
-                ColumnType::Int => {
-                    column::<T, Int64Type>(table, index, rows, &mut output, |value| match value {
-                        ValueRef::Int(value) => Some(value),
-                        _ => None,
-                    })?
-                }
-                ColumnType::Float => {
-                    column::<T, DoubleType>(table, index, rows, &mut output, |value| match value {
-                        ValueRef::Float(value) => Some(value.get()),
-                        _ => None,
-                    })?
-                }
-                ColumnType::Date => {
-                    column::<T, Int32Type>(table, index, rows, &mut output, |value| match value {
-                        ValueRef::Date(value) => Some(date_days(value)),
-                        _ => None,
-                    })?
-                }
-                ColumnType::DateTime => {
-                    column::<T, Int64Type>(table, index, rows, &mut output, |value| match value {
-                        ValueRef::DateTime(value) => datetime_seconds(value).checked_mul(1_000_000),
-                        _ => None,
-                    })?
-                }
+    let mut pending: Vec<Pending> = kinds.iter().map(|&kind| Pending::new(kind)).collect();
+    let mut held = 0;
+    let mut ends = Vec::with_capacity(partitions.len());
+    for rows in partitions {
+        Limits::table(rows.len(), projection.len()).map_err(|error| Error::Limit {
+            resource: error.resource,
+            limit: error.limit,
+            actual: error.actual,
+        })?;
+        for row in rows.clone() {
+            for ((column, &kind), &index) in pending.iter_mut().zip(&kinds).zip(projection) {
+                column.push(kind, table.cell(row, index).map_err(Error::Cell)?)?;
             }
-            output.close().map_err(Error::Codec)?;
+            held += 1;
+            if held == ROW_GROUP_ROWS {
+                row_group(&mut file, &mut pending)?;
+                held = 0;
+            }
         }
-        group.close().map_err(Error::Codec)?;
+        ends.push(file.bytes_written());
+    }
+    if held > 0 {
+        row_group(&mut file, &mut pending)?;
     }
     file.close().map_err(Error::Codec)?;
-    Ok(())
+    Ok(ends)
 }
 
 /// Retain only a complete file. Codec errors or any limit discard all bytes.
 /// Zero records still produce a readable schema with every projected field.
-pub(super) fn render<T: TableAccess>(
+/// The last partition's bytes end with the file, its last row group and
+/// footer included.
+pub(super) fn render_partitions<T: TableAccess>(
     table: &T,
     projection: &[usize],
-) -> Result<Vec<u8>, Error<T::Error>> {
+    partitions: &[Range<usize>],
+) -> Result<super::Partitioned, Error<T::Error>> {
     let mut sink = Sink {
         bytes: Vec::new(),
         exceeded: false,
         actual: None,
     };
-    let result = encode(table, projection, &mut sink);
+    let result = encode(table, projection, partitions, &mut sink);
     if sink.exceeded {
         return Err(Error::Limit {
             resource: "output_bytes",
@@ -199,6 +260,9 @@ pub(super) fn render<T: TableAccess>(
             actual: sink.actual,
         });
     }
-    result?;
-    Ok(sink.bytes)
+    let mut ends = result?;
+    if let Some(last) = ends.last_mut() {
+        *last = sink.bytes.len();
+    }
+    Ok((sink.bytes, ends))
 }

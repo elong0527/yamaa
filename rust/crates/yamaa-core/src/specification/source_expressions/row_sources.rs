@@ -19,11 +19,7 @@ pub(in crate::specification) fn bind(
     if declaration.reject_group_key_filter(path, driver, phase, cx.findings) {
         return Ok(None);
     }
-    let binder::Donors {
-        named,
-        secondary,
-        items,
-    } = cx.donors;
+    let binder::Donors { named, items, .. } = cx.donors;
     let catalog = cx.catalog;
     let before = cx.findings.len();
     let name = &declaration.variable;
@@ -34,34 +30,10 @@ pub(in crate::specification) fn bind(
         if items.get(index).and_then(Option::as_ref).is_none() {
             // An earlier selector may be unavailable in this donor scope.
             // Let the named-read owner report it at the authored operand path.
-            return row_intermediates::bind(
-                name,
-                path,
-                named,
-                secondary,
-                items,
-                cx.output,
-                catalog,
-                cx.row(),
-                cx.scope.available,
-                cx.edges,
-                cx.findings,
-            );
+            return row_intermediates::bind(cx, name, path);
         }
         declaration.bind_row_filter(path, driver, catalog, named, cx.findings)?;
-        row_intermediates::bind(
-            name,
-            path,
-            named,
-            secondary,
-            items,
-            cx.output,
-            catalog,
-            cx.row(),
-            cx.scope.available,
-            cx.edges,
-            cx.findings,
-        )?
+        row_intermediates::bind(cx, name, path)?
     } else {
         let dataset = name.split_once('.').map(|(dataset, _)| dataset);
         let donor = dataset.and_then(|dataset| catalog.joined(dataset));
@@ -137,17 +109,7 @@ pub(in crate::specification) fn bind(
                     );
                 }
                 declaration
-                    .bind_range(
-                        &read.schema,
-                        catalog,
-                        secondary,
-                        items,
-                        cx.row(),
-                        Some(driver),
-                        cx.scope.available,
-                        cx.edges,
-                        cx.findings,
-                    )?
+                    .bind_range(cx, &read.schema, Some(driver))?
                     .map(|range| Expression::JoinedSource {
                         read,
                         range,

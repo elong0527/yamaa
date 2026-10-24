@@ -85,22 +85,22 @@ pub(super) fn match_phase_boundary(
     BindFinding::Lookup(finding)
 }
 
-/// Bind one direct read using the same selector and actual completed outputs.
-/// `row` names the row template that reads it during row construction.
-#[allow(clippy::too_many_arguments)]
+/// Bind one direct read using the same selector and actual completed outputs,
+/// in the scope of `cx`: its row template, when it has one, reads it during
+/// row construction.
 pub(super) fn bind(
+    cx: &mut BindContext<'_, '_>,
     reference: &str,
     path: &str,
-    declarations: &intermediates::Declarations,
-    secondary: &[crate::dataset::SecondarySource],
-    items: &[Option<crate::dataset::Intermediate>],
-    output: &TableSchema,
-    catalog: &Catalog,
-    row: Option<&str>,
-    available: Option<&[usize]>,
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
 ) -> Result<Option<Expression>, BindError> {
+    let binder::Donors {
+        named: declarations,
+        secondary,
+        items,
+    } = cx.donors;
+    let (output, catalog) = (cx.output, cx.catalog);
+    let (row, available) = (cx.row(), cx.scope.available);
+    let (edges, findings) = (&mut *cx.edges, &mut *cx.findings);
     let Some((index, field)) = declarations.reference(reference) else {
         return Ok(None);
     };
