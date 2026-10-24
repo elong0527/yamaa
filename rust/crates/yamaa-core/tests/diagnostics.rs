@@ -224,10 +224,6 @@ mod diagnostics {
             let mut reached = replay::replay();
             // The tables still written in Rust, one group for each part of
             // #3691 that moves them, so the parts never edit the same lines.
-            // Submission and the front end (A1).
-            reached.extend(submission::reached());
-            reached.extend(front_end::reached());
-            reached.extend(front_end::project_binding_reached());
 
             // Preflight and binding (A2).
             reached.extend(preflight::reached());
