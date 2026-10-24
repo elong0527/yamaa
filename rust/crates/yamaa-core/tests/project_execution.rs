@@ -841,14 +841,15 @@ mod project {
                 for created in [Some(1), Some(0)] {
                     checked
                         .build_into(
-                            &mut activation,
-                            b"",
+                            (&mut activation, b""),
                             &mut port,
                             &mut decoder,
                             &mut attempt,
-                            None,
-                            yamaa_core::application_observer::Scope::new(
-                                &yamaa_core::application_observer::Noop,
+                            (
+                                None,
+                                yamaa_core::application_observer::Scope::new(
+                                    &yamaa_core::application_observer::Noop,
+                                ),
                             ),
                         )
                         .unwrap();
@@ -886,14 +887,15 @@ mod project {
                 trace.borrow_mut().clear();
                 assert!(matches!(
                     checked.build_into(
-                        &mut activation,
-                        b"",
+                        (&mut activation, b""),
                         &mut port,
                         &mut decoder,
                         &mut attempt,
-                        None,
-                        yamaa_core::application_observer::Scope::new(
-                            &yamaa_core::application_observer::Noop
+                        (
+                            None,
+                            yamaa_core::application_observer::Scope::new(
+                                &yamaa_core::application_observer::Noop
+                            )
                         )
                     ),
                     Err(Failure::Lock(_))
@@ -924,14 +926,15 @@ mod project {
                     let mut attempt = CapturedAttempt::new(checked.compiled().source());
                     let failure = checked
                         .build_into(
-                            &mut activation,
-                            b"",
+                            (&mut activation, b""),
                             &mut port,
                             &mut decoder,
                             &mut attempt,
-                            None,
-                            yamaa_core::application_observer::Scope::new(
-                                &yamaa_core::application_observer::Noop,
+                            (
+                                None,
+                                yamaa_core::application_observer::Scope::new(
+                                    &yamaa_core::application_observer::Noop,
+                                ),
                             ),
                         )
                         .unwrap_err();
@@ -1005,14 +1008,15 @@ mod project {
                     activation.mode = mode;
                     checked
                         .build_into(
-                            &mut activation,
-                            b"",
+                            (&mut activation, b""),
                             &mut port,
                             &mut decoder,
                             &mut attempt,
-                            Some(&mut observations),
-                            yamaa_core::application_observer::Scope::new(
-                                &yamaa_core::application_observer::Noop,
+                            (
+                                Some(&mut observations),
+                                yamaa_core::application_observer::Scope::new(
+                                    &yamaa_core::application_observer::Noop,
+                                ),
                             ),
                         )
                         .unwrap();
@@ -1058,14 +1062,15 @@ mod project {
                 activation.mode = 1;
                 assert!(matches!(
                     checked.build_into(
-                        &mut activation,
-                        b"",
+                        (&mut activation, b""),
                         &mut port,
                         &mut decoder,
                         &mut attempt,
-                        Some(&mut observations),
-                        yamaa_core::application_observer::Scope::new(
-                            &yamaa_core::application_observer::Noop
+                        (
+                            Some(&mut observations),
+                            yamaa_core::application_observer::Scope::new(
+                                &yamaa_core::application_observer::Noop
+                            )
                         )
                     ),
                     Err(Failure::Lock(_))
@@ -1104,14 +1109,15 @@ mod project {
                     let mut attempt = CapturedAttempt::new(checked.compiled().source());
                     let mut observations = Observations::default();
                     let Err(Failure::Tests(failures)) = checked.build_into(
-                        &mut activation,
-                        b"",
+                        (&mut activation, b""),
                         &mut port,
                         &mut decoder,
                         &mut attempt,
-                        Some(&mut observations),
-                        yamaa_core::application_observer::Scope::new(
-                            &yamaa_core::application_observer::Noop,
+                        (
+                            Some(&mut observations),
+                            yamaa_core::application_observer::Scope::new(
+                                &yamaa_core::application_observer::Noop,
+                            ),
                         ),
                     ) else {
                         panic!("late case failure");
@@ -1174,13 +1180,11 @@ mod project {
                     let observer = Stages::default();
                     checked
                         .build_into(
-                            &mut activation,
-                            b"",
+                            (&mut activation, b""),
                             &mut source,
                             &mut decoder,
                             &mut attempt,
-                            Some(&mut activation_observations),
-                            Scope::new(&observer),
+                            (Some(&mut activation_observations), Scope::new(&observer)),
                         )
                         .unwrap();
                     assert!(attempt.result.unwrap().result.is_ok());
@@ -1244,14 +1248,15 @@ mod project {
                     let mut attempt = CapturedAttempt::new(checked.compiled().source());
                     checked
                         .build_into(
-                            &mut activation,
-                            b"",
+                            (&mut activation, b""),
                             &mut port,
                             &mut decoder,
                             &mut attempt,
-                            None,
-                            yamaa_core::application_observer::Scope::new(
-                                &yamaa_core::application_observer::Noop,
+                            (
+                                None,
+                                yamaa_core::application_observer::Scope::new(
+                                    &yamaa_core::application_observer::Noop,
+                                ),
                             ),
                         )
                         .unwrap();

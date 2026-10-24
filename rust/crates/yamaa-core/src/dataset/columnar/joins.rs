@@ -123,14 +123,16 @@ pub(super) fn join<E>(
                         source: lookup.source,
                         name: None,
                     },
-                    lookup.column,
-                    &keys,
-                    row,
-                    range
-                        .as_ref()
-                        .map(|(range, value)| (*range, ValueRef::from(value))),
-                    filter.as_ref(),
-                    selection.as_ref(),
+                    Match {
+                        column: lookup.column,
+                        keys: &keys,
+                        row,
+                        range: range
+                            .as_ref()
+                            .map(|(range, value)| (*range, ValueRef::from(value))),
+                        filter: filter.as_ref(),
+                        selection: selection.as_ref(),
+                    },
                     site,
                     true,
                 )?
@@ -145,7 +147,6 @@ pub(super) fn join<E>(
 /// One row's read through a qualified implicit join: row templates match
 /// raw driver fields, column joins match completed output keys. `owner` is
 /// the node whose path names the read.
-#[allow(clippy::too_many_arguments)]
 pub(super) fn joined_value<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
@@ -200,14 +201,16 @@ pub(super) fn joined_value<E>(
             source,
             name: Some(&joined.name),
         },
-        joined.column,
-        &keys,
-        row,
-        range
-            .as_ref()
-            .map(|(range, value)| (*range, ValueRef::from(value))),
-        options.filter,
-        options.selection,
+        Match {
+            column: joined.column,
+            keys: &keys,
+            row,
+            range: range
+                .as_ref()
+                .map(|(range, value)| (*range, ValueRef::from(value))),
+            filter: options.filter,
+            selection: options.selection,
+        },
         site,
         true,
     )
@@ -246,23 +249,38 @@ fn cell<'t, E>(
     })
 }
 
+/// One row's match through an implicit join: the donor field it reads, the
+/// match keys with their current values, the row, and the range (with its
+/// current value), filter and selection that narrow and choose the record.
+#[derive(Clone, Copy)]
+struct Match<'m> {
+    column: usize,
+    keys: &'m [(usize, Value)],
+    row: usize,
+    range: Option<(&'m RelationRange, ValueRef<'m>)>,
+    filter: Option<&'m BoundPredicate>,
+    selection: Option<&'m SourceSelection>,
+}
+
 /// Match, narrow and select on the implicit join (LOOKUP-25), preserving raw
 /// match-key evidence. `counted` keeps the handler counts of the read.
-#[allow(clippy::too_many_arguments)]
 fn matching<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
     owner: Site<'_>,
     donor: Donor<'_, '_, E>,
-    column: usize,
-    keys: &[(usize, Value)],
-    row: usize,
-    range: Option<(&RelationRange, ValueRef<'_>)>,
-    filter: Option<&BoundPredicate>,
-    selection: Option<&SourceSelection>,
+    matched: Match<'_>,
     site: JoinSite<'_>,
     counted: bool,
 ) -> Result<Value, Fail<E>> {
+    let Match {
+        column,
+        keys,
+        row,
+        range,
+        filter,
+        selection,
+    } = matched;
     let plan = run.plan;
     let path = owner.path.to_string();
     let table = donor.table;
@@ -286,7 +304,7 @@ fn matching<E>(
         range,
     };
     if probe.incomplete() {
-        return absent(run, cx, owner, &donor, keys, row, site, counted);
+        return absent(run, cx, owner, &donor, &matched, site, counted);
     }
     // The join operator (#2842): the records whose keys equal the match
     // values come from the port's key index when every pair can be answered
@@ -351,7 +369,7 @@ fn matching<E>(
     })?;
     let count = found.rows.len();
     if count == 0 {
-        return absent(run, cx, owner, &donor, keys, row, site, counted);
+        return absent(run, cx, owner, &donor, &matched, site, counted);
     }
     let mut chosen = found.rows[0];
     let name = donor_name(plan, cx, &donor);
@@ -440,17 +458,16 @@ fn donor_name<E>(
 /// (LOOKUP-24): the declared `absent` value, or missing by default, counted
 /// at the read's path except during a predicate; or `unmatched_key` when the
 /// read, or its input, requires a match and the read declares no `absent`.
-#[allow(clippy::too_many_arguments)]
 fn absent<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
     owner: Site<'_>,
     donor: &Donor<'_, '_, E>,
-    keys: &[(usize, Value)],
-    row: usize,
+    matched: &Match<'_>,
     site: JoinSite<'_>,
     counted: bool,
 ) -> Result<Value, Fail<E>> {
+    let Match { keys, row, .. } = *matched;
     let plan = run.plan;
     let dataset = donor_name(plan, cx, donor);
     let input = plan.region(cx.region).required_matches.contains(&dataset);

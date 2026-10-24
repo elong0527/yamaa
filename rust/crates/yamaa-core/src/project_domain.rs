@@ -66,17 +66,20 @@ impl CheckedOwnedProject {
     pub fn check_diagnostics(&self) -> Vec<crate::diagnostic::Diagnostic> {
         self.checked.check_diagnostics()
     }
-    /// [`CheckedProject::build_into`] over the owned environment.
-    #[allow(clippy::too_many_arguments)]
+    /// [`CheckedProject::build_into`] over the owned environment: the host
+    /// functions with the bytes of the project's lock, and where activation
+    /// observations go with the observer's scope, paired as `build` pairs
+    /// them.
     pub fn build_into<A: HostFunctions, P: Resolver, D: Decoder>(
         &self,
-        functions: &mut A,
-        lock: &[u8],
+        (functions, lock): (&mut A, &[u8]),
         source: &mut P,
         decoder: &mut D,
         attempt: &mut CapturedAttempt<P::Error, D::Error, D::Table>,
-        observations: Option<&mut project_activation::Observations>,
-        scope: crate::application_observer::Scope<'_>,
+        (observations, scope): (
+            Option<&mut project_activation::Observations>,
+            crate::application_observer::Scope<'_>,
+        ),
     ) -> Result<(), Failure<A::Error>>
     where
         D::Table: TableAccess<Error = A::Error>,

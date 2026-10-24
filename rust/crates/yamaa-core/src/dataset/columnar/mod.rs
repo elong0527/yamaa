@@ -598,8 +598,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             let mut next_identity = 0usize;
             for (index, &template) in template_ids.iter().enumerate() {
                 self.process_template(
-                    index,
-                    template,
+                    (index, template),
                     &mut frame,
                     &secondary,
                     &mut next_identity,
@@ -725,11 +724,9 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
     /// bindings, apply its filter, complete its window stage and post-window
     /// filter, then publish its SELF rows and verify the SELF intermediates,
     /// a warning's record joining `records`.
-    #[allow(clippy::too_many_arguments)]
     fn process_template<'s>(
         &mut self,
-        index: usize,
-        template: TemplateId,
+        (index, template): (usize, TemplateId),
         frame: &mut Frame,
         secondary: &[Table<'s, E>],
         next_identity: &mut usize,
@@ -825,8 +822,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                             run.complete_binding(
                                 frame,
                                 binding,
-                                table,
-                                secondary,
+                                (table, secondary),
                                 first,
                                 &[row],
                                 None,
@@ -846,7 +842,14 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                     }
                     let rows: Vec<usize> = (start..frame.rows()).collect();
                     for &binding in &prewindow {
-                        run.complete_binding(frame, binding, table, secondary, first, &rows, None)?;
+                        run.complete_binding(
+                            frame,
+                            binding,
+                            (table, secondary),
+                            first,
+                            &rows,
+                            None,
+                        )?;
                     }
                     if let Some(filter) = filter {
                         let cx = run.template_cx(frame, region, table, secondary, first);
@@ -905,8 +908,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                             run.complete_binding(
                                 frame,
                                 binding,
-                                table,
-                                secondary,
+                                (table, secondary),
                                 first,
                                 &[row],
                                 Some(output.clone()),
@@ -917,8 +919,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                         run.complete_binding(
                             frame,
                             binding,
-                            table,
-                            secondary,
+                            (table, secondary),
                             first,
                             unit_rows,
                             Some(output.clone()),
@@ -1057,13 +1058,11 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
     /// Evaluate one binding over `rows` and complete its cells with the
     /// converted results. Row-stage reads see the rows of earlier templates
     /// as SELF donors; a window stage passes the rows its windows range over.
-    #[allow(clippy::too_many_arguments)]
     fn complete_binding<'t>(
         &mut self,
         frame: &mut Frame,
         binding: BindingId,
-        table: Table<'t, E>,
-        secondary: &[Table<'t, E>],
+        (table, secondary): (Table<'t, E>, &[Table<'t, E>]),
         first: usize,
         rows: &[usize],
         output: Option<Range<usize>>,

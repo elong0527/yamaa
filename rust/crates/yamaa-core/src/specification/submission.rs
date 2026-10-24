@@ -325,28 +325,42 @@ fn admit_dataset_model(
     }
 }
 
+/// One column's or value-level entry's declarations, as the rules of the
+/// model read them: its own metadata, the `core` and `mandatory` in effect
+/// for it (an entry's merged over its column's), the entry it is (`None`:
+/// the column itself), and the path its findings report at, the column's
+/// `submission` or the entry.
+#[derive(Clone, Copy)]
+struct ModelSite<'a> {
+    own: &'a SubmissionMetadata,
+    core: Option<&'a ast::Text>,
+    mandatory: Option<bool>,
+    entry: Option<&'a str>,
+    path: &'a str,
+}
+
 /// The rules that read the model a specification declares, over one
-/// column's or value-level entry's own declarations `own`, checked on the
+/// column's or value-level entry's declarations (`site`), checked on the
 /// specification alone (SUB-23): a core designation the model publishes
 /// (SUB-10), `Req` never relaxed by `mandatory: false` under SDTM or SEND, no
 /// `role` under ADaM (SUB-9), the one data type and display format the model
 /// submits a date as (SUB-6, SUB-25), and origin pairs the model admits
-/// (SUB-15). `path` is the
-/// column's `submission` or the entry. `entry` names an entry, whose merged
-/// `core` and `mandatory` the effective arguments give; it reports only what
-/// it declares itself, since the column reports what it inherits.
-#[allow(clippy::too_many_arguments)]
+/// (SUB-15). An entry reports only what it declares itself, since the column
+/// reports what it inherits.
 fn admit_column_model(
     spec: &ast::Spec,
     column: &ast::Column,
-    own: &SubmissionMetadata,
-    effective_core: Option<&ast::Text>,
-    effective_mandatory: Option<bool>,
-    entry: Option<&str>,
-    path: &str,
+    site: ModelSite<'_>,
     model: ModelKind,
     result: &mut Vec<PreflightFinding>,
 ) {
+    let ModelSite {
+        own,
+        core: effective_core,
+        mandatory: effective_mandatory,
+        entry,
+        path,
+    } = site;
     let name = column.name.name.as_str();
     let context = |fields: &[(&'static str, V)]| -> Vec<(&'static str, V)> {
         let mut context = vec![("column", s(name))];
@@ -532,11 +546,13 @@ fn admit_entries(
                 admit_column_model(
                     spec,
                     column,
-                    own,
-                    own.core.as_ref().or(base.core.as_ref()),
-                    own.mandatory.or(base.mandatory),
-                    Some(&entry.id.name),
-                    &path,
+                    ModelSite {
+                        own,
+                        core: own.core.as_ref().or(base.core.as_ref()),
+                        mandatory: own.mandatory.or(base.mandatory),
+                        entry: Some(&entry.id.name),
+                        path: &path,
+                    },
                     model,
                     result,
                 );
@@ -774,11 +790,13 @@ pub(super) fn admit(
             admit_column_model(
                 spec,
                 column,
-                metadata,
-                metadata.core.as_ref(),
-                metadata.mandatory,
-                None,
-                &path,
+                ModelSite {
+                    own: metadata,
+                    core: metadata.core.as_ref(),
+                    mandatory: metadata.mandatory,
+                    entry: None,
+                    path: &path,
+                },
                 model,
                 result,
             );

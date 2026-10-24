@@ -255,7 +255,6 @@ impl Checks<'_> {
         let before = findings.len();
         let typing = |name: &str| sides.left_column(name);
         let reads = DonorReads::pair(
-            self.spec,
             self.prepared,
             (sides.left, sides.left),
             &sides.donor.item.id.name,
@@ -336,7 +335,6 @@ impl Checks<'_> {
         for (at, (binding, &result)) in item.bindings.iter().zip(&donor.results).enumerate() {
             let before = findings.len();
             let reads = DonorReads::pair(
-                spec,
                 self.prepared,
                 (sides.left, sides.right),
                 &item.id.name,
