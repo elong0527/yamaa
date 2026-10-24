@@ -83,9 +83,10 @@ pub(super) struct Donors<'a> {
 /// The inputs binding reads: each declared input in authored order, with
 /// the schema its decoder captured, and the input whose records drive the
 /// rows. Built once where binding starts
-/// ([`PreparedSpecification::bind_sources`]); every binding layer reads an
-/// input's fields and their kinds through this one value, so another
-/// source of schemas can take the captured one's place (#3805).
+/// ([`PreparedSpecification::bind_sources`]) and carried as this one value
+/// to every layer that reads an input's schema, and to the catalogs and
+/// secondary ports built from it, so another source of schemas can take
+/// the captured one's place (#3805).
 #[derive(Clone, Copy)]
 pub(super) struct Inputs<'a> {
     pub sources: &'a [SourceDeclaration],
