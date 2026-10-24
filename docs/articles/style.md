@@ -249,10 +249,11 @@ is written: in an expression field, a handler or a value list
 answers with missing needs no null: a lookup's `absent`, and `missing` on
 `first_available`, `mapping`, `cut`, `str_extract`, `str_replace`,
 `str_case`, `str_substr` and `str_length`, and a flag's `false_value` and
-`missing`, each written as `null`, restate their default. So does any field that writes the default its schema
-declares, such as an input's `relative_to: declaring`, a section's
-`context: Submission` or a codelist's `data_type: text`. Each is reported as
-`restated_default` at its key, and `fix` removes it. A handler whose omission
+`missing`, each written as `null`, restate their default. So does any field
+that writes the default its schema declares, such as an input's
+`relative_to: declaring`, a section's `context: Submission` or a codelist's
+`data_type: text`. Each is reported as `restated_default` at its key, and
+`fix` removes it. A handler whose omission
 fails, such as `unmapped`, declares an answer when it is `null`, a flag's
 `missing` beside a declared `false_value` is required
 ([EXPR-8](../../rules/expressions.md#expr-8)), and an `absent` beside

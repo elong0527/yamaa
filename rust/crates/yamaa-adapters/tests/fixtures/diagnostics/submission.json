@@ -536,6 +536,19 @@
       "issues": [{"condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.BMI.submission"], "context": {"column": "BMI", "origin_type": "Collected", "admitted": ["Assigned", "Derived", "Not Available", "Other"]}}]
     },
     {
+      "case": "a_text_length_refutes_a_collected_origin",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "origins", "edits": [{"from": "derivation: {mapping: {source: SRC.SEX, dict: {Male: M, Female: F}}}", "to": "derivation: {str_length: {source: SRC.SEX}}"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context.column", "context.origin_type", "context.admitted"],
+      "among": true,
+      "issues": [{"condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.SEX.submission"], "context": {"column": "SEX", "origin_type": "Collected", "admitted": ["Assigned", "Derived", "Not Available", "Other"]}}]
+    },
+    {
       "case": "a_case_reading_an_output_column_refutes_a_collected_origin",
       "operation": "check",
       "input": {

@@ -10,8 +10,9 @@ subject and the comment number (`COSEQ`).
 
 - `COVAL` is the first 200 characters of the comment, or the whole comment
   when it is shorter.
-- `COVAL1` is characters 201 to 400 of the comment; it is absent when the
-  comment has 200 characters or fewer.
+- `COVAL1` is characters 201 to 400 of the comment, or the rest of it when
+  the comment ends sooner; it is absent when the comment has 200 characters
+  or fewer.
 - `COVAL2` is characters 401 to 600 of the comment, or the rest of it when
   the comment ends sooner; it is absent when the comment has 400 characters
   or fewer.
