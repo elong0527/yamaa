@@ -1,9 +1,8 @@
-"""The four required lanes carry qualification without duplicate host jobs,
-and a fifth lane, not required, checks both hosts in the loaded mode.
+"""The four required lanes carry qualification without duplicate host jobs.
 
 Real-history path decisions live in test_pr_changes; host installation reuse
 and failure propagation live in test_host_checks. These cases check that
-the workflow connects that selection to its checks.
+the workflow connects that selection to its required checks.
 """
 
 import unittest
@@ -17,10 +16,8 @@ class RequiredLanes(unittest.TestCase):
     def setUp(self):
         self.jobs = support.workflow("ci.yml")["jobs"]
 
-    def test_every_lane_selects_its_work_before_installing_tools(self):
-        self.assertEqual(
-            set(self.jobs), {"repository", "rust", "python", "r", "loaded"}
-        )
+    def test_four_stable_checks_select_work_before_installing_tools(self):
+        self.assertEqual(set(self.jobs), {"repository", "rust", "python", "r"})
         for name, job in self.jobs.items():
             with self.subTest(job=name):
                 # A failed selection fails its required check; it cannot be
@@ -82,54 +79,15 @@ class RequiredLanes(unittest.TestCase):
                 ]
                 self.assertEqual(setup["with"]["package"], "tools")
 
-    def test_only_the_lanes_that_check_the_r_package_install_what_cran_checks_use(
-        self,
-    ):
+    def test_only_the_r_lane_installs_what_cran_checks_use(self):
         programs = [
-            (name, step["if"])
+            (name, step)
             for name, job in self.jobs.items()
             for step in job["steps"]
             if "devscripts aspell" in step.get("run", "")
         ]
-        self.assertEqual(
-            programs,
-            [
-                ("r", "steps.paths.outputs.r == 'true'"),
-                ("loaded", "steps.paths.outputs.loaded == 'true'"),
-            ],
-        )
-
-    def test_the_loaded_lane_checks_both_hosts_with_the_engine_loaded(self):
-        # Each host check, the R one even when the Python one failed, runs
-        # with YAMAA_ENGINE=loaded and without the equivalence gate, which
-        # the required lanes run.
-        checks = [
-            (step["run"], step["env"], step["if"])
-            for step in self.jobs["loaded"]["steps"]
-            if "tools.commands.host_checks" in step.get("run", "")
-        ]
-        command = (
-            "uv run --project python --no-sync python -m tools.commands.host_checks"
-        )
-        self.assertEqual(
-            checks,
-            [
-                (
-                    f"{command} --host python",
-                    {"YAMAA_ENGINE": "loaded"},
-                    "steps.paths.outputs.loaded == 'true'",
-                ),
-                (
-                    f"{command} --host r",
-                    {
-                        "YAMAA_ENGINE": "loaded",
-                        "YAMAA_R_CARGO_TARGET_DIR": "${{ github.workspace }}/rust/target",
-                    },
-                    "steps.paths.outputs.loaded == 'true' && "
-                    "(success() || steps.python.outcome == 'failure')",
-                ),
-            ],
-        )
+        self.assertEqual([name for name, _ in programs], ["r"])
+        self.assertEqual(programs[0][1]["if"], "steps.paths.outputs.r == 'true'")
 
     def test_workflow_lint_runs_inside_the_repository_lane(self):
         [lint] = [
