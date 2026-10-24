@@ -29,6 +29,8 @@ use yamaa::{
     Partitions, ProjectFunctions, ResourceResolver, Run,
 };
 
+use crate::support::issues;
+
 /// A partition-safe specification: W converts V to an integer, and the run
 /// declares its report file.
 const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, V: float}}}\noutput: {path: out.csv, columns: [ID, W], report: report.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n  - {name: W, type: int, label: Whole, derivation: SRC.V}\n";
@@ -156,29 +158,6 @@ struct EndState {
 
 fn subject(text: &str) -> String {
     text.split_inclusive(':').next().unwrap_or("").to_owned()
-}
-
-/// Every issue whole: its severity, phase, condition, rule, spec paths,
-/// context, source span and operand route; its message is not frozen.
-fn issues(diagnostics: &[yamaa::Diagnostic]) -> String {
-    assert!(!diagnostics.is_empty(), "an issue");
-    diagnostics
-        .iter()
-        .map(|issue| {
-            format!(
-                "{:?} {} {} {:?} {:?} {} {:?} {:?}",
-                issue.severity,
-                issue.phase,
-                issue.code,
-                issue.rule,
-                issue.spec_path,
-                issue.context.to_json(),
-                issue.source_span,
-                issue.operand_route,
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("; ")
 }
 
 fn end_state(resolver: &Recording, outcome: String, named: String) -> EndState {

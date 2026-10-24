@@ -212,13 +212,16 @@ fn every_partition_safe_shape_reads_its_input_by_partition() {
 /// size, more than a native runner has, so its output beyond the row limit
 /// is `partitioned_publication.rs`'s, over one column. The input and the run
 /// take several gigabytes and minutes unoptimized, so the test runs in the
-/// optimized `release-test` profile, as the native lane runs every test.
+/// optimized `release-test` profile, as the native lane runs every test, and
+/// no other test beyond the row limit runs beside it
+/// (`support::beyond_the_row_limit`).
 #[test]
 #[cfg_attr(
     debug_assertions,
     ignore = "10,000,002-record inputs run in the optimized release-test profile"
 )]
 fn a_driver_input_beyond_the_row_limit_runs_by_partition_on_the_grouped_shape() {
+    let _alone = crate::support::beyond_the_row_limit();
     check_shapes(
         yamaa_core::limits::Limits::TABLE_ROWS + 2,
         1_000_000,
