@@ -1614,6 +1614,40 @@ fn restated_defaults_are_removed() {
 }
 
 #[test]
+fn a_positional_text_verbs_missing_null_restates_its_default() {
+    // An omitted `missing` answers a missing source with missing (TEXT-13,
+    // TEXT-14), so a written null restates it.
+    for (verb, fields) in [
+        ("str_substr", "source: DM.AGE, start: 1"),
+        ("str_length", "source: DM.AGE"),
+    ] {
+        let written = |missing: &str| {
+            SPELLED.replace(
+                "    derivation: DM.AGE\n",
+                &format!("    derivation:\n      {verb}: {{{fields}{missing}}}\n"),
+            )
+        };
+        let text = written(", missing: null");
+        let path = format!("columns.AGE.derivation.{verb}.missing");
+        assert_eq!(
+            findings(&text)
+                .iter()
+                .map(|item| (item.finding, item.spec_path.as_str(), item.message.as_str()))
+                .collect::<Vec<_>>(),
+            [(
+                "restated_default",
+                path.as_str(),
+                "`missing: null` restates the default; remove it"
+            )],
+            "{verb}"
+        );
+        let after = fixed(&text);
+        assert_eq!(after, written(""), "{verb}");
+        assert!(findings(&after).is_empty(), "{verb}");
+    }
+}
+
+#[test]
 fn a_removed_default_that_leaves_a_long_form_is_written_as_the_shorthand() {
     // Removing a source binding's own absence answer leaves the binding
     // holding only its variable, which the next pass writes as the bare

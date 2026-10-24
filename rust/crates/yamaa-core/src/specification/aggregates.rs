@@ -1350,6 +1350,8 @@ fn visit(expression: &Expression, visitor: &mut impl FnMut(&crate::dataset::Boun
         | Expression::MappingCut { source, .. }
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
+        | Expression::StrSubstr { source, .. }
+        | Expression::StrLength { source, .. }
         | Expression::StrExtract { source, .. }
         | Expression::StrReplace { source, .. }
         | Expression::Round { source, .. } => visit(&source.expression, visitor),

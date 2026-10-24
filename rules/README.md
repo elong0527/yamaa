@@ -116,7 +116,7 @@ profiles in `rules/profiles/`.
 | [Formulas](formulas.md) | FORMULA | Read the one closed expression language in its predicate, aggregate and expression fields, and evaluate it exactly as written. |
 | [Lookup and joins](lookup.md) | LOOKUP | Match declared keys, narrow and select records, answer absence, and scope aggregates to one relation. |
 | [Windows](windows.md) | WINDOW | Declare complete named windows and compute partitions, ranks, neighbors, carried values, and baseline flags. |
-| [Text](text.md) | TEXT | Pad, change case, interpolate templates, and extract and replace with portable regular expressions. |
+| [Text](text.md) | TEXT | Pad, take pieces by position, count scalars, change case, interpolate templates, and extract and replace with portable regular expressions. |
 | [Dates and times](temporal.md) | TIME | Compute differences, study days and times of day, assemble and complete collected dates and times, report collected precision and imputation flags, and apply civil arithmetic. |
 | [Verification](verification.md) | CHECK | Apply assertions, severity, and grouped counts to completed values, and record what each run read, counted and checked in one run report. |
 | [Output](output.md) | OUTPUT | Select artifact columns, keys, profiles, and row order, and publish complete files atomically. |

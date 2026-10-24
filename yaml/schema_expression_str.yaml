@@ -10,6 +10,29 @@ expressions:
             type: int
             required: true
             description: See TEXT-2.
+    str_substr: # See TEXT-13.
+        - source:
+            type: variable
+            required: true
+            description: String variable whose scalars are taken (TEXT-13).
+        - start:
+            type: int
+            required: true
+            description: Position of the first scalar taken, counted from 1 (TEXT-13).
+        - length:
+            type: int
+            description: Most scalars taken; without it, they run to the end of the source (TEXT-13).
+        - missing:
+            type: substitute_value
+            description: Value returned when the source is missing; without it, a missing source gives missing (TEXT-13).
+    str_length: # See TEXT-14.
+        - source:
+            type: variable
+            required: true
+            description: String variable whose scalars are counted (TEXT-14).
+        - missing:
+            type: substitute_value
+            description: Value returned when the source is missing; without it, a missing source gives missing (TEXT-14).
     str_extract: # See TEXT-10.
         - source:
             type: variable
