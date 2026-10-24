@@ -4,8 +4,8 @@
 //! order, or none when it accepts the input. A reader asserts nothing about
 //! what it returns: the replay compares that with the case's authored rows.
 //!
-//! Each part of the move owns one module: its readers and the fixture files
-//! its cases are in, so two parts never edit the same lines here.
+//! Each module holds its readers and declares the fixture files whose cases
+//! they read.
 use super::json::Json;
 use crate::support::roots::{Codelist, CodelistType, External, Item, Source, Standard};
 use std::{collections::BTreeMap, convert::Infallible};
@@ -34,20 +34,16 @@ macro_rules! fixture {
     };
 }
 
+mod binding;
+mod declarations;
 mod document;
+mod findings;
+mod registry;
 mod sources;
+mod submission;
 mod temporal;
 mod text;
 mod values;
-
-// The parts that follow (#3691): A1 submission and the front end, A2
-// preflight and binding, B1 the other declaration tables, B2 the other
-// findings, C the registry walk's own records and the project environment's.
-mod binding;
-mod declarations;
-mod findings;
-mod registry;
-mod submission;
 
 type Reader = fn(&str, &Json) -> Option<Vec<Diagnostic>>;
 

@@ -1,8 +1,13 @@
 //! Independently authored native diagnostic contexts.
 mod diagnostics {
     mod diagnostic {
+        /// A text context value.
+        fn text(value: &str) -> yamaa_core::json::Value {
+            yamaa_core::json::Value::String(value.into())
+        }
+
         mod aggregate {
-            use crate::support::diagnostic::text;
+            use super::text;
             use yamaa_core::{
                 dataset::AggregatePhase,
                 diagnostic::{AggregateFinding as Finding, ConditionCode, ProjectionError},
@@ -176,7 +181,7 @@ mod diagnostics {
             }
         }
         mod dataset {
-            use crate::support::diagnostic::text;
+            use super::text;
             use yamaa_core::json::Value as V;
             use yamaa_core::{
                 diagnostic::{ConditionCode, DatasetFinding as F, ProjectionError},
@@ -311,7 +316,7 @@ mod diagnostics {
             }
         }
         mod grammar {
-            use crate::support::diagnostic::text;
+            use super::text;
             use yamaa_core::expression::{compile, CompileError, Context as Field};
             #[test]
 
@@ -437,7 +442,8 @@ mod diagnostics {
             }
         }
         mod odm {
-            use crate::support::diagnostic::{rendered, text};
+            use super::text;
+            use crate::support::diagnostic::rendered;
             use yamaa_core::{
                 dataset::AggregatePhase,
                 diagnostic::{ConditionCode, OdmFinding as F},
@@ -707,7 +713,7 @@ mod diagnostics {
             }
         }
         mod predicate_evaluation {
-            use crate::support::diagnostic::text;
+            use super::text;
             use std::convert::Infallible;
             use yamaa_core::json::Value as V;
             use yamaa_core::{
@@ -1267,7 +1273,7 @@ mod diagnostics {
             }
         }
         mod project_lock {
-            use crate::support::diagnostic::text;
+            use super::text;
             use yamaa_core::{
                 diagnostic::{
                     lock_diagnostics, ConditionCode, LockDiagnosticError as E, LockFinding,

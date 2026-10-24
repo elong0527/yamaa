@@ -1,9 +1,9 @@
-//! Part A2 of #3691: what preparation refuses (`preflight.json`) and what
-//! binding refuses (`binding.json`). Most cases name the shared document
-//! operations; the readers here serve the entry points below a document that
-//! some of those records are reached through: a generated ordinal, one
-//! qualified read's scope, the column dependency analysis, and the
-//! verification declarations a prepared specification keeps.
+//! What preparation refuses (`preflight.json`) and what binding refuses
+//! (`binding.json`). Most cases name the shared document operations; the
+//! readers here serve the entry points below a document that some of those
+//! records are reached through: a generated ordinal, one qualified read's
+//! scope, the column dependency analysis, and the verification declarations
+//! a prepared specification keeps.
 use super::{column_type, document::prepared, text, File};
 use crate::support::diagnostic::json::Json;
 use yamaa_core::{

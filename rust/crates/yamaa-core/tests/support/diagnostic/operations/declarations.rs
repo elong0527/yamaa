@@ -1,8 +1,7 @@
-//! Part B1 of #3691: the declarations' refusals. A specification's
-//! intermediates, record operations and flags, its producer links, copy
-//! entries and project functions, a project's scope findings, the schema
-//! language's validation of a document or a layer, and the headers a call
-//! reads.
+//! The declarations' refusals. A specification's intermediates, record
+//! operations and flags, its producer links, copy entries and project
+//! functions, a project's scope findings, the schema language's validation
+//! of a document or a layer, and the headers a call reads.
 use super::{
     document::{prepared, schemas, tree},
     language, text, value, File,

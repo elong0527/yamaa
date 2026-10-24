@@ -1,12 +1,11 @@
-//! Part A1 of #3691: the submission and front-end readers. A study is what
-//! composition reads, written as one object: the project file, the
-//! specifications its first submission section lists and those its other
-//! sections list, the codelist sources, the installed version and the
-//! creation time. Its operations compose the study's Define-XML metadata,
-//! admit held rows as a composed dataset's published rows, and make the
-//! findings the adapters' Define-XML and XPT encoders report.
-//! `front_end_checks` runs the 1.0 front end's own checks on a lowered
-//! specification.
+//! The submission and front-end readers. A study is what composition reads,
+//! written as one object: the project file, the specifications its first
+//! submission section lists and those its other sections list, the codelist
+//! sources, the installed version and the creation time. Its operations
+//! compose the study's Define-XML metadata, admit held rows as a composed
+//! dataset's published rows, and make the findings the adapters' Define-XML
+//! and XPT encoders report. `front_end_checks` runs the 1.0 front end's own
+//! checks on a lowered specification.
 use super::{codelist_source, column_type, document::tree, text, value, File};
 use crate::support::{
     diagnostic::{json::Json, Record},

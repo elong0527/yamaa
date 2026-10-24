@@ -384,10 +384,7 @@ scripted ports that log each effect and panic on an unexpected request, and
 the `no_tables!`, `no_raw!`, `no_project_files!` and `no_documents!` halves
 of the decoder port for a test decoder that serves only the others,
 `support::specification_run` (adapters) prepares, compiles and lowers a
-document and replays authored reports against it,
-`support::diagnostic::expect` (core) compares a diagnostic's phase,
-condition, rule, spec paths, context, span and route as one value at the
-caller's line and returns its rendered code, `support::benchmarks`
+document and replays authored reports against it, `support::benchmarks`
 (adapters) reads what a live benchmark states (D120),
 `support::inheritance::Files` (adapters) resolves parents beside their
 declaring file, `support::NoFunctions` (yamaa) stands for a project that

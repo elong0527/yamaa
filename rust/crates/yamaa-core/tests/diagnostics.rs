@@ -1,7 +1,7 @@
 //! Canonical diagnostic vocabulary and complete native assertion families.
 mod diagnostics {
     mod diagnostic {
-        use crate::support::diagnostic::*;
+        use crate::support::diagnostic::{rendered_causes, replay, Record};
         use std::convert::Infallible;
         use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
@@ -215,15 +215,13 @@ mod diagnostics {
             );
         }
 
-        /// Every registry entry must be reached by its evaluator, converter or resource cause. Expected
-        /// vocabulary is independent literal truth, not copied from the registry at runtime.
+        /// Every registry entry must be reached by its evaluator, converter or
+        /// resource cause, in a case of the expected issues written as data
+        /// under `tests/fixtures/diagnostics/`. Expected vocabulary is
+        /// independent literal truth, not copied from the registry at runtime.
         #[test]
         fn every_registered_cause_is_reached_with_its_normative_mapping() {
-            // The expected issues written as data, under tests/fixtures/diagnostics/.
-            let mut reached = replay::replay();
-            // The tables still written in Rust, one group for each part of
-            // #3691 that moves them, so the parts never edit the same lines.
-
+            let reached = replay::replay();
             assert_eq!(reached, CONDITIONS.iter().copied().collect());
             assert_eq!(
                 CONDITIONS.len(),
