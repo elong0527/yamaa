@@ -140,6 +140,7 @@ yamaa::api::Engine::project_run_reusing: pub fn project_run_reusing(&self, proje
 yamaa::api::Engine::project_spec: pub fn project_spec(&self, project: &str, name: &str) -> Result<String, Failure>
 yamaa::api::Engine::project_submission: pub fn project_submission(&self, project: &str, section: Option<&str>, created: Option<&str>, installed: &str, token: &CancellationToken) -> Result<Submission, Error>
 yamaa::api::Engine::spec_check: pub fn spec_check(&self, specification: &str, project: Option<&str>, token: &CancellationToken) -> Result<Check, Error>
+yamaa::api::Engine::spec_check_on: pub fn spec_check_on(&self, specification: &str, project: Option<&str>, parent: &str, token: &CancellationToken) -> Result<Check, Error>
 yamaa::api::Engine::spec_resolve: pub fn spec_resolve(&self, specification: &str, project: Option<&str>) -> Result<ContextValue, Failure>
 yamaa::api::Engine::spec_run: pub fn spec_run(&self, specification: &str, project: Option<&str>, token: &CancellationToken) -> Result<Run, Error>
 yamaa::api::Engine::spec_run_reusing: pub fn spec_run_reusing(&self, specification: &str, project: Option<&str>, plans: &Plans, token: &CancellationToken) -> Result<Run, Error>

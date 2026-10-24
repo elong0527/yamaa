@@ -110,6 +110,18 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 ("entry", "entry"),
             ],
         ),
+        // A parent given for a file that is no fragment is refused at the
+        // argument that names it, its value the path as given (#3694).
+        (
+            F::NotFragment {
+                field: "include",
+                value: "templates/adae.yaml",
+            },
+            "value_not_permitted",
+            "LAYER-4",
+            "parent",
+            vec![("construct", "include"), ("value", "templates/adae.yaml")],
+        ),
     ] {
         let finding = cause.diagnostic().unwrap();
         assert_eq!(

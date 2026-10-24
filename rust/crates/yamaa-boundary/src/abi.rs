@@ -744,6 +744,17 @@ pub struct Engine {
     pub is_stream: OnHandle<u32>,
     /// The release's condition catalogue as a table handle.
     pub conditions: unsafe extern "C" fn(out: *mut Handle, refusal: *mut Refusal) -> Status,
+    /// The check of a fragment, `path`, on the parent a caller names, with
+    /// its project or none (#3694): a check handle, or the refusal of a
+    /// parent given for a specification that declares `parent` or `include`.
+    pub spec_check_on: unsafe extern "C" fn(
+        call: *const Call,
+        path: Str,
+        project: Str,
+        parent: Str,
+        out: *mut Handle,
+        refusal: *mut Refusal,
+    ) -> Status,
 }
 
 /// The Arrow C data interface's schema.

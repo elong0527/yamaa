@@ -9,7 +9,7 @@ use crate::{
 use std::any::Any;
 use yamaa_core::application_issue::{Fault, Step};
 use yamaa_core::application_observer::Scope;
-use yamaa_core::diagnostic::Diagnostic;
+use yamaa_core::diagnostic::{ConditionCode, Diagnostic};
 use yamaa_core::domain_entry::Request;
 use yamaa_core::host_functions::HostFunctions;
 use yamaa_core::json::Value;
@@ -117,23 +117,8 @@ pub(crate) fn resource_fault(error: &crate::file_resources::Error) -> Fault {
 /// failure is its file rule's condition naming the path as given (FILE-7,
 /// FILE-8, FILE-11), and any other stays an opaque resource refusal.
 pub(crate) fn caller_read_failure(path: &str, error: &crate::file_resources::Error) -> Diagnostic {
-    use yamaa_core::resource::ResourceFailure;
     match crate::file_resources::resource_failure(error) {
-        Some(ResourceFailure::Boundary(limit)) => yamaa_core::application_issue::resource_rejected(
-            Step::Prepare,
-            Fault::ResourceLimit,
-            limit.resource,
-            limit.limit,
-            limit.actual,
-            Vec::new(),
-        ),
-        Some(failure) => Diagnostic {
-            code: failure.code(),
-            spec_paths: Vec::new(),
-            context: [("path".to_owned(), Value::String(path.into()))].into(),
-            source_span: None,
-            operand_route: None,
-        },
+        Some(failure) => failure.caller_diagnostic(path),
         None => yamaa_core::application_issue::rejected(Step::Prepare, resource_fault(error)),
     }
 }
@@ -737,7 +722,38 @@ pub fn check_located(
     request: Request<'_>,
     resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
 ) -> (Failure, crate::issue_location::Locator) {
-    match select(host, request, resolver) {
+    located(select(host, request, resolver))
+}
+/// [`check_located`] of a fragment checked on the parent a caller names,
+/// `parent` as given (#3694): the issues of the fragment composed as it would
+/// be in a file that names that parent, includes the fragment and writes
+/// nothing else, with what locates them in the fragment and the parent's
+/// layers. A specification that declares `parent` or `include` is no
+/// fragment: the given parent is refused, as `Err` with the issue that says
+/// so (LAYER-4).
+pub fn check_fragment_located(
+    host: Option<Language>,
+    request: Request<'_>,
+    parent: &str,
+    resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
+) -> Result<(Failure, crate::issue_location::Locator), Failure> {
+    let selected = match resolver {
+        Some(resolver) => {
+            crate::file_workflow::select_fragment_with_resolver(request, parent, host, resolver)
+        }
+        None => crate::file_workflow::select_fragment(request, parent, host),
+    };
+    let (issues, locator) = located(selected);
+    match issues.as_slice() {
+        [refusal] if refusal.code == ConditionCode::InheritanceNotFragment => Err(issues),
+        _ => Ok((issues, locator)),
+    }
+}
+/// The issues of a selection, prepared or refused, with what locates them.
+fn located(
+    selected: Result<FileSpecification, crate::file_workflow::SelectionError>,
+) -> (Failure, crate::issue_location::Locator) {
+    match selected {
         Ok(prepared) => (
             collect(crate::specification_check::issues(prepared.run())),
             crate::issue_location::prepared(&prepared),

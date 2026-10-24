@@ -686,6 +686,23 @@ impl Engine {
         self.handle(handle)
     }
 
+    /// [`Engine::spec_check`] of a fragment on the parent a caller names
+    /// (#3694).
+    pub fn spec_check_on(
+        self,
+        call: &Call<'_>,
+        spec: &str,
+        project: Option<&str>,
+        parent: &str,
+    ) -> Result<Owned, Refused> {
+        let (spec, project, parent) = (Str::of(spec), Str::optional(project), Str::of(parent));
+        // SAFETY: the arguments are valid for the call.
+        let handle = answer(self, |out, refusal| unsafe {
+            (self.0.spec_check_on)(&call.record, spec, project, parent, out, refusal)
+        });
+        self.handle(handle)
+    }
+
     pub fn project_check(self, call: &Call<'_>, project: &str) -> Result<Owned, Refused> {
         let project = Str::of(project);
         // SAFETY: the arguments are valid for the call.

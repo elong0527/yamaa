@@ -629,6 +629,21 @@ entries! {
         insert(Value::Check(Mutex::new(check)))
     }
 
+    fn spec_check_on(call: *const Call, specification: Str, project: Str, parent: Str) -> Handle {
+        // SAFETY: the entry's contract: its texts are valid for the call.
+        let specification = unsafe { required(specification, "the specification") }?;
+        // SAFETY: as above.
+        let project = unsafe { optional(project, "the project") }?;
+        // SAFETY: as above.
+        let parent = unsafe { required(parent, "the parent") }?;
+        let check = call.cancellable(|token| {
+            call.engine()
+                .spec_check_on(specification, project, parent, token)
+                .map_err(|error| failed(Action::Read(specification), error))
+        })?;
+        insert(Value::Check(Mutex::new(check)))
+    }
+
     fn project_check(call: *const Call, project: Str) -> Handle {
         // SAFETY: the entry's contract: its text is valid for the call.
         let project = unsafe { required(project, "the project") }?;
@@ -1193,6 +1208,7 @@ static ENGINE: abi::Engine = abi::Engine {
     spec_stream,
     is_stream,
     conditions,
+    spec_check_on,
 };
 
 /// What the engine reports when it accepts a request, with the texts the

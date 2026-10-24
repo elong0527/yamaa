@@ -179,7 +179,7 @@ check_gate <- function() {
     setNames(rep(list(list(NULL)), length(handles)), handles),
     setNames(rep(list(list(NULL, charToRaw("TEST"))), length(members)), members),
     list(run_observations = list(NULL, FALSE),
-      spec_check = list(path, NULL, r_version),
+      spec_check = list(path, NULL, NULL, r_version),
       spec_summary = list(path),
       spec_run = list(path, NULL, r_version, list(), NULL, FALSE),
       spec_resolve = list(path, NULL, r_version),

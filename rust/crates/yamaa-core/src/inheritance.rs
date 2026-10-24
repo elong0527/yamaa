@@ -30,6 +30,10 @@ pub enum SourceError<E> {
 pub enum Named {
     /// The entry, which no layer names.
     Entry,
+    /// The parent a caller names for an entry checked as a fragment on it
+    /// (#3694). No layer names it either, so a finding about its header is
+    /// reported in that file, as the entry's is in the entry.
+    CallerParent,
     /// The `parent` of the layer below it on the chain (LAYER-2).
     Parent,
     /// The `include` entry at this index of the layer that includes it
@@ -39,10 +43,10 @@ pub enum Named {
 
 impl Named {
     /// The spec path of the field that names the layer, in the layer that
-    /// writes it; the entry has none.
+    /// writes it; the entry and the parent a caller names have none.
     pub fn field(self) -> Option<String> {
         match self {
-            Self::Entry => None,
+            Self::Entry | Self::CallerParent => None,
             Self::Parent => Some("parent".into()),
             Self::Include(index) => Some(format!("include[{index}]")),
         }
@@ -94,6 +98,20 @@ pub enum Error<E> {
         index: usize,
         path: String,
         failure: ResourceFailure,
+    },
+    /// The parent a caller names, `path` as the caller gave it, could not be
+    /// read: missing, not a regular file or a symbolic link (FILE-1).
+    CallerParent {
+        path: String,
+        failure: ResourceFailure,
+    },
+    /// The entry checked as a fragment on a parent the caller names declares
+    /// `field`, `parent` or `include`, which a fragment does not (LAYER-4),
+    /// so that parent, `value` as the caller gave it, is refused before it is
+    /// read.
+    NotFragment {
+        field: &'static str,
+        value: String,
     },
     /// A layer declares a header this traversal does not read: a version the
     /// engine does not read, 0.5 included, or a type other than `spec`
@@ -178,6 +196,10 @@ impl<E> Error<E> {
                 path,
                 failure,
             } => return Ok(Some(included_diagnostic(*failure, declaring, *index, path))),
+            Self::CallerParent { path, failure } => {
+                return Ok(Some(failure.caller_diagnostic(path)))
+            }
+            Self::NotFragment { field, value } => F::NotFragment { field, value },
             Self::Header {
                 source,
                 entry,
@@ -231,6 +253,16 @@ pub fn included_diagnostic(
     diagnostic
 }
 
+/// The parent a caller names for an entry checked as a fragment on it
+/// (#3694): how the resolver is asked for it, as for a file a caller names
+/// ([`Name::Entry`]), and the path as the caller gave it, which a finding
+/// names (FILE-1).
+#[derive(Clone, Copy, Debug)]
+pub struct CallerParent<'a> {
+    pub written: &'a str,
+    pub given: &'a str,
+}
+
 /// What an admitted layer names, as written: its `parent`, if any, and its
 /// `include` entries in list order.
 #[derive(Debug, Default)]
@@ -278,9 +310,10 @@ pub fn declares_parent(document: &Document) -> bool {
 }
 
 /// The traversal error a refused header gives: a malformed header is a
-/// finding in the layer, as is the entry's `schema_version`; a version or type
-/// the traversal does not read, a parent's or a fragment's 0.5 included, names
-/// the layer, the entry, the field `named` that names the layer and the layer
+/// finding in the layer, as is the `schema_version` of a layer no field names,
+/// the entry or the parent a caller names; a version or type the traversal
+/// does not read, a parent's or a fragment's 0.5 included, names the layer,
+/// the entry, the field `named` that names the layer and the layer
 /// `declaring` that writes that field.
 fn header_error<E>(
     fault: HeaderFault,
@@ -290,9 +323,9 @@ fn header_error<E>(
     named: Named,
     declaring: Option<&str>,
 ) -> Error<E> {
-    let is_entry = named == Named::Entry;
+    let unnamed = named.field().is_none();
     let mismatch = match fault {
-        HeaderFault::Legacy { reads } if !is_entry => HeaderMismatch::Version {
+        HeaderFault::Legacy { reads } if !unnamed => HeaderMismatch::Version {
             version: language::LEGACY_LANGUAGE_VERSION.into(),
             reads,
         },
@@ -368,6 +401,28 @@ fn included<R: Resolver, X>(
     }
 }
 
+/// Why the request `name` for the parent a caller names, `given` as the
+/// caller gave it, failed: a missing file, one that is not a regular file or
+/// a symbolic link is the caller's own path, named as given at no field
+/// (FILE-1); any other failure stays the resolver's.
+fn caller_parent_error<R: Resolver, X>(
+    resolver: &R,
+    name: Name<'_>,
+    error: R::Error,
+    given: &str,
+) -> Error<SourceFailure<R::Error, X>> {
+    match resolver
+        .failure(name, &error)
+        .and_then(resolver::Failure::resource)
+    {
+        Some(failure) => Error::CallerParent {
+            path: given.into(),
+            failure,
+        },
+        None => Error::Host(SourceFailure::Host(error)),
+    }
+}
+
 /// Follow each layer's single parent from the entry, admitting each layer
 /// before reading its parent, then read each layer's included fragments, and
 /// return every layer in contribution order: at each layer, its parent chain,
@@ -386,9 +441,19 @@ fn included<R: Resolver, X>(
 /// layer, given the entry identity, the layer's source, its document, the
 /// field that names it and the layer that writes that field, and returns the
 /// layer with what it names.
+///
+/// With a `parent` the caller names, the entry is a fragment checked on it
+/// (#3694): once the entry is admitted, that file is followed as the entry's
+/// parent. It is located and captured as a file the caller names, and one
+/// that cannot be read is the caller's path, named as given (FILE-1); one
+/// that is the entry itself is a cycle. No layer writes the field that names
+/// it. The chain then continues from that file's own parent, so its layers
+/// contribute before the entry, as they do before a child that names it as
+/// its parent and includes the entry.
 fn walk<L, R: Resolver, D: Decoder>(
     entry: Source,
     entry_document: Document,
+    parent: Option<CallerParent<'_>>,
     resolver: &mut R,
     decoder: &mut D,
     layers: &mut Vec<CapturedParent<D::Raw>>,
@@ -414,6 +479,33 @@ fn walk<L, R: Resolver, D: Decoder>(
     };
     let mut chain = vec![frame(entry, entry_document, Named::Entry, None)?];
     let mut followed = 0;
+    if let Some(parent) = parent {
+        followed += 1;
+        crate::limits::Limits::parent_occurrences(followed)?;
+        let name = Name::Entry {
+            declaring: None,
+            written: parent.written,
+        };
+        let source = resolver
+            .inspect(name)
+            .map_err(|error| caller_parent_error(resolver, name, error, parent.given))?;
+        if source.identity.is_empty() || source.display_path.is_empty() {
+            return Err(Error::InvalidIdentity);
+        }
+        if source.identity == entry_identity {
+            return Err(Error::Cycle {
+                path: vec![entry_identity.clone(), source.identity],
+                returns_to_entry: true,
+                named: Named::CallerParent,
+            });
+        }
+        let bytes = resolver
+            .capture(name)
+            .map(resolver::bytes)
+            .map_err(|error| caller_parent_error(resolver, name, error, parent.given))?;
+        let input = decoded::<R, D>(decoder, layers, &source, bytes)?;
+        chain.push(frame(source, input, Named::CallerParent, None)?);
+    }
     loop {
         let frame_ref = chain.last_mut().expect("chain holds the entry");
         let Some(written) = frame_ref.links.parent.take() else {
@@ -593,23 +685,41 @@ pub struct Traversal<R> {
 /// 0.5. A fragment declares neither `parent` nor `include`. Composition is not
 /// part of this traversal. Each layer is located and captured through
 /// `resolver` and decoded through `decoder`.
+///
+/// With a `parent` the caller names, the entry is a fragment checked on it
+/// (#3694): an entry that declares `parent` or `include` refuses that file
+/// before it is read (LAYER-4), and otherwise that file is followed as the
+/// entry's parent, its header refused in that file as the entry's is in the
+/// entry.
 pub fn traverse_versioned<R: Resolver, D: Decoder>(
     schema: &SchemaStructure,
     reads: LanguageVersion,
     entry: Source,
     entry_document: Document,
+    parent: Option<CallerParent<'_>>,
     resolver: &mut R,
     decoder: &mut D,
 ) -> Result<Traversal<D::Raw>, Error<ReadFailure<R, D>>> {
     let mut parents = Vec::new();
+    let given_parent = parent.map(|parent| parent.given);
     let layers = walk(
         entry,
         entry_document,
+        parent,
         resolver,
         decoder,
         &mut parents,
         |entry, source, input, named, declaring| {
-            admit_versioned(schema, reads, entry, source, input, named, declaring)
+            admit_versioned(
+                schema,
+                reads,
+                entry,
+                source,
+                input,
+                named,
+                declaring,
+                given_parent,
+            )
         },
     )?;
     let version = layers
@@ -623,6 +733,10 @@ pub fn traverse_versioned<R: Resolver, D: Decoder>(
     })
 }
 
+/// Admit one layer at the version it declares, named by the field `named` of
+/// the layer `declaring`; `given_parent`, the parent a caller names as the
+/// caller gave it, says the entry is a fragment checked on it.
+#[allow(clippy::too_many_arguments)]
 fn admit_versioned<E>(
     schema: &SchemaStructure,
     reads: LanguageVersion,
@@ -631,22 +745,35 @@ fn admit_versioned<E>(
     input: Document,
     named: Named,
     declaring: Option<&str>,
+    given_parent: Option<&str>,
 ) -> Result<(VersionedLayer, Links), Error<E>> {
     let header = match language::read_header(&input, Some(reads), FileType::Spec) {
         Ok(header) => header,
         Err(fault) => return Err(header_error(fault, entry, source, input, named, declaring)),
     };
     // A fragment composes on the layer that includes it, so it names no
-    // layer of its own (LAYER-4).
-    if matches!(named, Named::Include(_)) {
+    // layer of its own (LAYER-4). An entry checked on a parent the caller
+    // names is a fragment too; one that names a layer refuses that parent.
+    let fragment = match named {
+        Named::Include(_) => true,
+        Named::Entry => given_parent.is_some(),
+        Named::CallerParent | Named::Parent => false,
+    };
+    if fragment {
         if let Some(field) = ["parent", "include"]
             .into_iter()
             .find(|field| input.field(input.root(), field).is_some())
         {
-            return Err(Error::Fragment {
-                source: source.identity,
-                entry: entry.into(),
-                field,
+            return Err(match given_parent.filter(|_| named == Named::Entry) {
+                Some(given) => Error::NotFragment {
+                    field,
+                    value: given.into(),
+                },
+                None => Error::Fragment {
+                    source: source.identity,
+                    entry: entry.into(),
+                    field,
+                },
             });
         }
     }

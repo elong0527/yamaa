@@ -193,11 +193,9 @@ class HandshakeTests(unittest.TestCase):
                 "python imports, before the negotiation or not": [
                     (True, "from yamaa import _native"),
                     (False, "from yamaa._native import Table  # noqa: E402"),
-                    (
-                        False,
-                        "from yamaa._support import __version__, _fspath, _fspaths, "
-                        "_Lazy  # noqa: E402",
-                    ),
+                    # With its reason, the helpers' import is too wide for one
+                    # line, so it is split, the reason on its first line.
+                    (False, "from yamaa._support import (  # noqa: E402"),
                 ],
                 "R load": [
                     ".onLoad <- function(libname, pkgname) {",

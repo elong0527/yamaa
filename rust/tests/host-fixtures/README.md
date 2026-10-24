@@ -51,7 +51,7 @@ the held bytes.
 | conditions | The condition catalogue's seven columns, every condition it names in name order, and one authored row of each shape: rules in card order, a condition whose issues cite no rule, and the four renames and seven retirements of 1.0.0 |
 | printing | A study's files, and the status and printed lines of each result: a check, a failed check, a project check, a run, a failed run, a project run and each of its members, a submission, and a lazy specification and project; `{path}` stands for the path the test gave and `{root}` for its study directory, with forward slashes |
 | issue-locations | One case for each rule of P-ISSUE-1 (`docs/design/interface-1.0/api.md`, "Issue locations"), and for a refusal at the `parent` or `include` entry of a layer above the entry, which is located in that layer (D181): the files a case writes, its call, and its first issue's condition, first spec path, file, line and column, counted by hand in those files |
-| include-fragments | One study whose entries compose a parent chain and an `include` list (LAYER-1 to LAYER-4): the files it writes, each check case's entry and complete issue rows, and the resolve case's layers, `parent` and `include` resources, resolved columns, the layer of each named value and the fields the resolved specification never holds; `{root}` stands for the study's directory |
+| include-fragments | One study whose entries compose a parent chain and an `include` list (LAYER-1 to LAYER-4): the files it writes, each check case's entry and complete issue rows, each parent case's fragment, given parent and child, whose two checks return its rows, each refused parent's error text and rows (#3694), and the resolve case's layers, `parent` and `include` resources, resolved columns, the layer of each named value and the fields the resolved specification never holds; `{root}` stands for the study's directory, `{path}` in an error text for the path the test gave and `{parent}` for the parent it gave |
 | project-parity | Project cases with their complete expected issue rows: the files a case writes, its call (a project check, a member of a project run, a specification the project names, or a submission) and every issue row, or under `calls` each of several calls on those files with its rows; rows and files that depend on the host language are given by language, `{root}` stands for the case's directory and `{version}` for the installed yamaa version |
 | compact-yaml | A specification with a block and a flow input, the block, compact, flow and explicit-key verification forms with their one output and saved CSV, failed row-count bounds, malformed closers, and raw NULs with their `invalid_yaml` context (#2196, #3125) |
 | longitudinal-capacity | The 50,000-row, 100-column profile: its column names, its value rule (the row index for the key, then an offset plus the row and column index modulo a prime), the size its CSV must exceed, and its source and output formats |
@@ -149,6 +149,21 @@ contribution order, the template, then the fragments in list order, then the
 entry, and its columns LAYER-13's: the template's, then the duration that
 reads two of them, then the severity, each after what it reads and otherwise
 by contribution position.
+
+Its parent cases check a fragment with `check(parent=)`, and the child that
+names that parent, includes the fragment and writes nothing else with
+`check()`, and each pair returns the case's rows (#3694). The parent they are
+checked on, `adae-template.yaml`, names the study's template as its own
+parent and outputs `ADURN`. `duration.yaml`, which derives `ADURN`, checks
+clean on it; `onset.yaml` derives `ADURN` from `AONSET`, which no layer
+declares (`unknown_reference` at the fragment's `derivation`, COLUMN-5); and
+`severity.yaml` leaves the `ADURN` that the parent outputs undeclared
+(`undeclared_column` at the parent's `output.columns[2]`, OUTPUT-1). A parent
+given for a layer that names a parent of its own, or for one that includes
+fragments, is refused with `value_not_permitted` at `parent`, the argument,
+which no file holds, its `value` the parent as given (LAYER-4), and D39's
+error text. These rows too were written from the cards, the templates and
+P-ISSUE-1 before the engine ran.
 
 `read-odm` pairs the installed Python and R `read_odm` suites. Its documents
 are the reader suite's own `odm13.xml` and `odm20.xml`, staged from

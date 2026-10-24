@@ -116,28 +116,32 @@ impl CapturedEntry {
 /// its `schema` links name, then verify all held snapshots. No activation,
 /// study, runtime or publisher port is accepted or exposed. `written` names
 /// the entry to `resources`; `given` is the path the caller passed, which an
-/// entry that cannot be read names.
+/// entry that cannot be read names. With a `parent` the caller names, the
+/// entry is a fragment checked on that file as its parent (#3694).
 pub(crate) fn capture(
     mut resources: Resources,
     given: &str,
     written: &str,
     mut environment: OwnedEnvironment,
+    parent: Option<yamaa_core::inheritance::CallerParent<'_>>,
 ) -> Result<CapturedEntry, Box<RejectedEntry>> {
     let written = written.to_owned();
     let mut document = None;
     let mut origin: Option<String> = None;
     let result = (|| {
-        document = Some(
-            file_preparation::prepare_document_from(&mut resources, None, &written).map_err(
-                |error| match error {
-                    file_preparation::Error::Entry(error) => Error::Caller {
-                        path: given.to_owned(),
-                        error,
-                    },
-                    error => Error::Document(error),
-                },
-            )?,
-        );
+        let prepared = match parent {
+            Some(parent) => {
+                file_preparation::prepare_fragment_from(&mut resources, &written, parent)
+            }
+            None => file_preparation::prepare_document_from(&mut resources, None, &written),
+        };
+        document = Some(prepared.map_err(|error| match error {
+            file_preparation::Error::Entry(error) => Error::Caller {
+                path: given.to_owned(),
+                error,
+            },
+            error => Error::Document(error),
+        })?);
         let root = document.as_ref().expect("captured entry");
         crate::file_inventory::prepare(
             &mut resources,

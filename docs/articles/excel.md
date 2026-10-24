@@ -191,13 +191,31 @@ template sets fails as `invalid_clear` on a template that does not set it. A
 file joins one specification at most once: listing a fragment that the
 template already includes fails as `duplicate_layer`.
 
+**Check a fragment on each template.** A fragment names no template, so a
+check of the fragment alone stops at the first value a template would give.
+Check it with each template it serves as its parent instead, for instance in
+CI before any study file lists it: the check composes the template, then the
+fragment, as a file that names the template as its `parent`, lists only that
+fragment and writes nothing else would, and reports what that file's check
+would report, each issue in the fragment or in a layer of the template:
+
+```sh
+yamaa check ae-duration.yaml --parent adae-template.yaml
+yamaa check ae-duration.yaml --parent adce-template.yaml
+```
+
+In R and Python, `check(parent = )` does the same
+([Check a specification without data](api.md#check-a-specification-without-data)).
+
 **From a 0.4.0 `parents:` list.** A 0.4.0 fragment often named the template
 as its own parent, so that it could be checked on its own, and the study's
 file listed both, as `parents: [adae-template.yaml, ae-duration.yaml]`.
 Rewrite the pair by hand in two steps: remove `parent` from the fragment, and
 in the study's file write `parent: adae-template.yaml` and list the fragment
-under `include`, keeping the order the list gave the fragments. A fragment
-that still names a parent fails as `prohibited_construct` at that `parent`.
+under `include`, keeping the order the list gave the fragments. Check the
+fragment with the template as its parent, as above, where it was checked on
+its own. A fragment that still names a parent fails as `prohibited_construct`
+at that `parent`, and a `parent` given to its check is refused.
 The `hint` that a `parents:` key or a list written at `parent` reports shows
 how to write a chain of templates, one `parent` per file; fragments go under
 `include`.

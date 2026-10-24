@@ -276,17 +276,31 @@ pub(crate) fn prepare_versioned<P: Resolver>(
     display_path: String,
     port: &mut P,
 ) -> Result<PreparedDocument, InheritanceError<P::Error>> {
-    prepare_versioned_within(source, display_path, port, &[])
+    prepare_versioned_within(source, display_path, port, &[], None)
+}
+
+/// [`prepare_versioned`] of a fragment checked on the parent a caller names
+/// (#3694). A fragment that declares `parent` or `include` refuses that
+/// parent (LAYER-4).
+pub(crate) fn prepare_fragment<P: Resolver>(
+    source: Source,
+    display_path: String,
+    parent: yamaa_core::inheritance::CallerParent<'_>,
+    port: &mut P,
+) -> Result<PreparedDocument, InheritanceError<P::Error>> {
+    prepare_versioned_within(source, display_path, port, &[], Some(parent))
 }
 
 /// [`prepare_versioned`] for a producer that a copy entry copies from while
 /// the specifications and layers `resolving` names, entry first, are being
-/// resolved (SPEC-9).
+/// resolved (SPEC-9), or, with a `parent` the caller names, of a fragment
+/// checked on it.
 pub(crate) fn prepare_versioned_within<P: Resolver>(
     source: Source,
     display_path: String,
     port: &mut P,
     resolving: &[String],
+    parent: Option<yamaa_core::inheritance::CallerParent<'_>>,
 ) -> Result<PreparedDocument, InheritanceError<P::Error>> {
     use crate::document::{self, Closures};
     use yamaa_core::language::{FileType, LANGUAGE_VERSION};
@@ -301,7 +315,7 @@ pub(crate) fn prepare_versioned_within<P: Resolver>(
         error: Box::new(error),
     };
     let prepared = versioned
-        .prepare_sources_within(display_path, port, resolving)
+        .prepare_sources_within(display_path, port, resolving, parent)
         .map_err(refuse)?;
     PreparedDocument {
         schema,

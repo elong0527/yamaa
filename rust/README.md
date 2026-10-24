@@ -259,6 +259,8 @@ impl Engine {
     // A specification, alone or with its project file.
     pub fn spec_check(&self, specification: &str, project: Option<&str>,
         token: &CancellationToken) -> Result<Check, Error>;
+    pub fn spec_check_on(&self, specification: &str, project: Option<&str>,
+        parent: &str, token: &CancellationToken) -> Result<Check, Error>;
     pub fn spec_run(&self, specification: &str, project: Option<&str>,
         token: &CancellationToken) -> Result<Run, Error>;
     pub fn spec_run_reusing(&self, specification: &str, project: Option<&str>,
@@ -307,6 +309,13 @@ pub fn selftest(host: Host, host_version: Option<&str>) -> SelfTest;
   every adjudicated outcome, with its output, issues and run report. Only
   cancellation fails either: a cancelled call returns `Error::Cancelled`, with
   no result and no issue, as every cancellable operation does.
+- `spec_check_on` checks a fragment on the specification `parent` names, a
+  caller path read as `specification` is: the fragment composes as it would
+  in a file that names `parent` as its parent, includes the fragment and
+  writes nothing else (LAYER-4, #3694). A specification that declares
+  `parent` or `include` is no fragment, so the call refuses the given parent
+  with `Error::Rejected` and the one `value_not_permitted` issue at
+  `parent`.
 - `save` is the one save every result shares: `Run`, `ProjectRun` and
   `Submission` save their outcome through it, a run as an outcome of one
   member. It plans every file, opens and stages all of them,

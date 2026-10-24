@@ -174,11 +174,19 @@ impl Check {
     }
 }
 
+/// The check of a specification, or, with `parent`, of a fragment composed on
+/// the specification `parent` names as its parent (#3694).
 #[pyfunction]
-#[pyo3(signature=(specification, project=None))]
-pub fn _spec_check(py: Python<'_>, specification: &str, project: Option<&str>) -> PyResult<Check> {
-    let check = called(py, true, |engine, call| {
-        engine.spec_check(call, specification, project)
+#[pyo3(signature=(specification, project=None, parent=None))]
+pub fn _spec_check(
+    py: Python<'_>,
+    specification: &str,
+    project: Option<&str>,
+    parent: Option<&str>,
+) -> PyResult<Check> {
+    let check = called(py, true, |engine, call| match parent {
+        Some(parent) => engine.spec_check_on(call, specification, project, parent),
+        None => engine.spec_check(call, specification, project),
     })?;
     Ok(Check { check })
 }

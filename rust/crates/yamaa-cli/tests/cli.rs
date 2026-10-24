@@ -168,7 +168,7 @@ fn help_prints_every_command_and_wins_over_other_arguments() {
          yamaa --version [--format text|json]\n       yamaa --help\n"
     ));
     for synopsis in [
-        "  check PATH [--spec NAME]\n",
+        "  check PATH [--spec NAME | --parent PATH]\n",
         "  run PATH [--spec NAME | --section SECTION]\n",
         "  submission PATH [--section SECTION] [--created TIME]\n",
         "  resolve PATH [--spec NAME]\n",
@@ -226,6 +226,30 @@ fn a_usage_error_exits_with_status_2_and_writes_only_to_standard_error() {
         (
             &["check", "project.yaml", "--spec"],
             "check: --spec needs a value",
+        ),
+        (
+            &[
+                "check",
+                "project.yaml",
+                "--spec",
+                "DM",
+                "--parent",
+                "t.yaml",
+            ],
+            "check: give --spec or --parent, not both",
+        ),
+        (
+            &["check", "a.yaml", "--parent"],
+            "check: --parent needs a value",
+        ),
+        // Only a check takes a parent (#3694).
+        (
+            &["run", "a.yaml", "--parent", "t.yaml"],
+            "run: unknown option --parent",
+        ),
+        (
+            &["resolve", "a.yaml", "--parent", "t.yaml"],
+            "resolve: unknown option --parent",
         ),
         (
             &["run", "project.yaml", "--spec", "DM", "--section", "sdtm"],
@@ -581,8 +605,9 @@ fn a_project_path_is_checked_and_run_whole() {
 /// exits 2, prints nothing on standard output in either format and writes
 /// nothing (D68; `api.md`, "The command line"). That is a codelists or
 /// function file for any command; a spec given `--spec` or `--section`, or
-/// given to `submission`; and a project given to `resolve` without
-/// `--spec`, since a project has no resolved form of its own. The facade
+/// given to `submission`; a project given to `resolve` without `--spec`,
+/// since a project has no resolved form of its own; and a project given to
+/// `check` with `--parent`, which checks only a fragment (#3694). The facade
 /// reads only a file's header to type it, so these files need no body.
 #[test]
 fn a_path_whose_type_the_command_does_not_take_exits_with_status_2() {
@@ -638,6 +663,10 @@ fn a_path_whose_type_the_command_does_not_take_exits_with_status_2() {
             "resolve: project.yaml declares type project, which resolve does not take \
              without --spec",
         ),
+        (
+            &["check", "project.yaml", "--parent", "sdtm/dm.yaml"],
+            "check: project.yaml declares type project, which check does not take with --parent",
+        ),
     ];
     for (arguments, message) in cases {
         assert_eq!(
@@ -647,6 +676,50 @@ fn a_path_whose_type_the_command_does_not_take_exits_with_status_2() {
         );
     }
     assert!(study.files("out").is_empty());
+}
+
+/// `check PATH --parent PARENT` checks the fragment PATH composed on the
+/// specification PARENT as its parent (#3694), and prints the check's summary
+/// line in both formats. PARENT is a path given from the current directory,
+/// as PATH is, not from the fragment's directory: the fragment in
+/// `fragments/` composes on the template in `templates/`.
+#[test]
+fn check_with_a_parent_checks_the_fragment_composed_on_the_parent_it_names() {
+    let directory = Scratch::new("check-parent");
+    directory.write(
+        "templates/dm.yaml",
+        "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\n\
+         input: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [USUBJID, AGE]}\n\
+         columns:\n  - {name: USUBJID, type: str, derivation: RAW.USUBJID}\n",
+    );
+    directory.write("templates/raw.csv", "USUBJID,AGE\nS1,40\n");
+    directory.write(
+        "fragments/age.yaml",
+        "yamaa: \"1.0\"\ntype: spec\ncolumns:\n  - {name: AGE, type: str, derivation: RAW.AGE}\n",
+    );
+    let arguments = ["fragments/age.yaml", "--parent", "templates/dm.yaml"];
+    assert_eq!(
+        outcome(&yamaa_in(
+            &directory,
+            &[&["check"][..], &arguments].concat()
+        )),
+        printed(
+            0,
+            "yamaa check of fragments/age.yaml: succeeded, 0 issues\n".into()
+        )
+    );
+    assert_eq!(
+        outcome(&yamaa_in(
+            &directory,
+            &[&["--format", "json", "check"][..], &arguments].concat()
+        )),
+        printed(
+            0,
+            "{\"command\":\"check\",\"issues\":[],\"path\":\"fragments/age.yaml\",\
+             \"spec\":null,\"status\":\"succeeded\"}\n"
+                .into()
+        )
+    );
 }
 
 /// The facade's refusal to read the type of the file at `path`, after

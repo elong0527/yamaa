@@ -43,6 +43,10 @@ pub type Aliases = BTreeMap<String, Vec<(String, String)>>;
 pub struct AliasCache<'a, P> {
     port: &'a mut P,
     paths: Aliases,
+    /// The files a caller names that the document holds, such as the parent
+    /// a fragment is checked on: each identity with the path that located it
+    /// from the scope's base ([`Name::Entry`] with no declaring file).
+    callers: BTreeMap<String, String>,
     /// The finding the port classified for the last failed parent request or
     /// layer rebase; a failed preparation reports it beside its own error.
     parent_failure: Option<Diagnostic>,
@@ -53,6 +57,7 @@ impl<'a, P: Resolver> AliasCache<'a, P> {
         Self {
             port,
             paths: BTreeMap::new(),
+            callers: BTreeMap::new(),
             parent_failure: None,
         }
     }
@@ -70,7 +75,8 @@ impl<'a, P: Resolver> AliasCache<'a, P> {
     }
     /// Once the document has prepared, capture again every distinct spelling
     /// that located each file it holds, `held` by identity, including its
-    /// first capture, and return the spellings. A file this cache never
+    /// first capture, and return the spellings. A file a caller names is
+    /// captured again by the path that located it. A file this cache never
     /// located is captured as the port captures it. A spelling found changed
     /// fails with the finding `diagnostic` gives it, from the declaring file
     /// and the path as written, when the document names one (FILE-10); any
@@ -81,6 +87,15 @@ impl<'a, P: Resolver> AliasCache<'a, P> {
         diagnostic: impl Fn(&str, &str, ResourceFailure) -> Option<Diagnostic>,
     ) -> Result<Aliases, Error<P::Error, X>> {
         for identity in held {
+            if let Some(written) = self.callers.get(identity) {
+                self.port
+                    .capture(Name::Entry {
+                        declaring: None,
+                        written,
+                    })
+                    .map_err(Error::Resource)?;
+                continue;
+            }
             let Some(paths) = self.paths.get(identity) else {
                 // Every file a document holds was located through this cache;
                 // one it never located is captured as the port captures it.
@@ -158,28 +173,45 @@ impl<P: Resolver> Resolver for AliasCache<'_, P> {
     type Error = P::Error;
     fn inspect(&mut self, name: Name<'_>) -> Result<Located, P::Error> {
         let located = self.port.inspect(name);
-        if let Name::Written {
-            file,
-            declaring,
-            written,
-        } = name
-        {
-            match &located {
+        match name {
+            Name::Written {
+                file,
+                declaring,
+                written,
+            } => match &located {
                 Ok(source) => self.remember(source, declaring, written),
                 Err(error) if file == File::Parent => {
                     self.parent_failure = Self::parent_error(self.port, name, written, error);
                 }
                 Err(_) => {}
+            },
+            Name::Entry {
+                declaring: None,
+                written,
+            } => {
+                if let Ok(source) = &located {
+                    self.callers
+                        .entry(source.identity.clone())
+                        .or_insert_with(|| written.into());
+                }
             }
+            Name::Entry { .. } | Name::Input(_) | Name::Located { .. } => {}
         }
         located
     }
-    /// A located file is captured by the first spelling that located it; one
-    /// this cache never located goes to the port as it is.
+    /// A located file is captured by the first spelling that located it, and
+    /// a file a caller names by the path that located it; one this cache
+    /// never located goes to the port as it is.
     fn capture(&mut self, name: Name<'_>) -> Result<Captured, P::Error> {
         let Name::Located { file, source } = name else {
             return self.port.capture(name);
         };
+        if let Some(written) = self.callers.get(&source.identity) {
+            return self.port.capture(Name::Entry {
+                declaring: None,
+                written,
+            });
+        }
         let Some((declaring, written)) = self
             .paths
             .get(&source.identity)

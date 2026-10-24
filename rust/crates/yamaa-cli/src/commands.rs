@@ -51,15 +51,17 @@
 //!
 //! `check`, `run`, `submission` and `resolve` dispatch on the type their PATH
 //! declares in its `type:` header, which the facade reads before anything
-//! else reads the file (D122). A spec is checked, run or resolved alone; a
-//! project is checked or run whole, or through `--spec NAME` one
+//! else reads the file (D122). A spec is checked, run or resolved alone, or
+//! checked through `--parent` as a fragment on the spec that flag names
+//! (#3694); a project is checked or run whole, or through `--spec NAME` one
 //! specification it lists, or through `--section` one section, and
-//! `submission` composes it. A file the facade cannot type is a file problem
-//! it explains with issues, so the call is refused with exit status 1 (D68,
-//! D125): a path it cannot read, a file written in language version 0.5,
-//! which declares `schema_version`, or a `type` naming no file type. A PATH
-//! whose type the command does not take, at all or with the flags given,
-//! such as `--spec` with a spec, is a usage error, which exits 2.
+//! `submission` composes it.
+//! A file the facade cannot type is a file problem it explains with issues,
+//! so the call is refused with exit status 1 (D68, D125): a path it cannot
+//! read, a file written in language version 0.5, which declares
+//! `schema_version`, or a `type` naming no file type. A PATH whose type the
+//! command does not take, at all or with the flags given, such as `--spec`
+//! with a spec or `--parent` with a project, is a usage error, which exits 2.
 //! `selftest` takes no PATH: it runs the cases the facade carries on an
 //! engine like the command line's, which claims no host language (D108,
 //! D123). `read-odm SOURCE OUT` reads SOURCE as the hosts' `read_odm()` reads
@@ -326,10 +328,14 @@ fn engine() -> Engine {
 }
 
 /// `yamaa check PATH`: `s.check()` of a spec, `p.check()` of a project, or,
-/// with `--spec NAME`, `p.spec(name).check()`.
+/// with `--spec NAME`, `p.spec(name).check()`, or, with `--parent`,
+/// `s.check(parent)` of a spec, a fragment checked on the spec that flag
+/// names as its parent (#3694). The arguments give `--spec` or `--parent`,
+/// not both.
 fn check(call: &Call, token: &CancellationToken) -> Result<Printed, Execution> {
     let path = path(call)?;
     let name = flag(call, "--spec")?;
+    let parent = flag(call, "--parent")?;
     let document = document("check", [("path", text(path)), ("spec", optional(name))]);
     let engine = engine();
     let file_type = match engine.file_type(path) {
@@ -338,17 +344,24 @@ fn check(call: &Call, token: &CancellationToken) -> Result<Printed, Execution> {
     };
     // The path a refusal of the check names: the specification checked, or
     // the project.
-    let (checked, subject) = match (file_type, name) {
-        (FileType::Spec, None) => (engine.spec_check(path, None, token), path.to_owned()),
-        (FileType::Project, None) => (engine.project_check(path, token), path.to_owned()),
-        (FileType::Project, Some(name)) => match engine.project_spec(path, name) {
+    let (checked, subject) = match (file_type, name, parent) {
+        (FileType::Spec, None, None) => (engine.spec_check(path, None, token), path.to_owned()),
+        (FileType::Spec, None, Some(parent)) => (
+            engine.spec_check_on(path, None, parent, token),
+            path.to_owned(),
+        ),
+        (FileType::Project, None, None) => (engine.project_check(path, token), path.to_owned()),
+        (FileType::Project, Some(name), None) => match engine.project_spec(path, name) {
             Ok(spec) => (engine.spec_check(&spec, Some(path), token), spec),
             Err(failure) => return Ok(refusal(document, failure)),
         },
-        (FileType::Spec, Some(_)) => {
+        (FileType::Spec, Some(_), _) => {
             return Err(not_taken(call, path, file_type, Some("with --spec")))
         }
-        (other, _) => return Err(not_taken(call, path, other, None)),
+        (FileType::Project, _, Some(_)) => {
+            return Err(not_taken(call, path, file_type, Some("with --parent")))
+        }
+        (other, ..) => return Err(not_taken(call, path, other, None)),
     };
     Ok(match checked {
         Ok(check) => result(

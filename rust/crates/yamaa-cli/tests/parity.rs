@@ -23,7 +23,10 @@
 //! - **Fragments.** Each check case of `include-fragments` prints every issue
 //!   row that both hosts return for it, and `resolve` prints the layers, the
 //!   `parent` and `include` resources, the resolved columns and the origins
-//!   that both hosts read from the resolved facts.
+//!   that both hosts read from the resolved facts. A fragment checked with
+//!   `--parent` prints the rows that its child, which names that parent and
+//!   includes the fragment, prints, and a parent given for a file that is no
+//!   fragment is refused with the rows and error text both hosts raise.
 //! - **Locations.** Each case of `issue-locations` makes its call, and its
 //!   first issue has the condition, the first spec path, and the file, line
 //!   and column that both hosts compare (P-ISSUE-1).
@@ -422,7 +425,9 @@ fn each_project_parity_case_prints_the_issue_rows_both_hosts_return() {
 }
 
 /// `include-fragments`: each check case of the study prints every issue row
-/// that both hosts return for it, and `resolve` prints the facts both hosts
+/// that both hosts return for it, each fragment checked on a given parent the
+/// rows of the child that includes it under that parent, each refused parent
+/// its rows and error text (#3694), and `resolve` prints the facts both hosts
 /// compare: the layers in contribution order, the `parent` and `include`
 /// resources, the resolved columns, the layer each named value comes from and
 /// the fields the resolved specification never holds (LAYER-1 to LAYER-4,
@@ -442,6 +447,65 @@ fn the_include_fragments_study_prints_the_rows_and_facts_both_hosts_return() {
             printed_rows(&document, name),
             truth_rows(&case["issues"], &directory, &stand_ins),
             "{name}"
+        );
+    }
+    // A fragment checked on a given parent prints the rows that a child
+    // naming that parent and including the fragment prints (#3694).
+    for case in truth["parent_checks"].as_array().unwrap() {
+        let name = text(case, "name");
+        let rows = truth_rows(&case["issues"], &directory, &stand_ins);
+        for arguments in [
+            [
+                "check",
+                text(case, "fragment"),
+                "--parent",
+                text(case, "parent"),
+            ]
+            .as_slice(),
+            &["check", text(case, "child")],
+        ] {
+            let document = document(&directory, arguments, name);
+            assert_eq!(
+                printed_rows(&document, name),
+                rows,
+                "{name}: yamaa {arguments:?}"
+            );
+        }
+    }
+    // A parent given for a file that is no fragment is refused: the error text
+    // and the issue row both hosts raise.
+    for case in truth["parent_refusals"].as_array().unwrap() {
+        let name = text(case, "name");
+        let arguments = [
+            "check",
+            text(case, "path"),
+            "--parent",
+            text(case, "parent"),
+        ];
+        // `{parent}` stands for the parent the case gave.
+        let refused = [stand_ins[0].clone(), ("{parent}", arguments[3].to_owned())];
+        let document = document(&directory, &arguments, name);
+        assert_eq!(
+            printed_rows(&document, name),
+            truth_rows(&case["issues"], &directory, &refused),
+            "{name}"
+        );
+        let output = yamaa_in(&directory, &arguments);
+        assert_eq!(
+            (
+                output.status.code(),
+                String::from_utf8(output.stdout).unwrap()
+            ),
+            (
+                Some(1),
+                format!(
+                    "{}\n",
+                    text(case, "message")
+                        .replace("{path}", arguments[1])
+                        .replace("{parent}", arguments[3])
+                )
+            ),
+            "{name}: the refusal's text"
         );
     }
     let resolve = &truth["resolve"];

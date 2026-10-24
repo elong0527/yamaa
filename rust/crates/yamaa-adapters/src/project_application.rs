@@ -399,6 +399,8 @@ fn inheritance_issues<'a>(
                     | G::Repeated { .. }
                     | G::Fragment { .. }
                     | G::Included { .. }
+                    | G::CallerParent { .. }
+                    | G::NotFragment { .. }
                     | G::Header { .. },
                 ) => true,
                 V::Traversal(G::Layer {

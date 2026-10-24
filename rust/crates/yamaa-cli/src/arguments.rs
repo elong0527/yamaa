@@ -11,8 +11,8 @@
 //! status 2.
 //!
 //! Here a value is checked only for its form: a count is a whole number, and
-//! a name, section, time or file type is any text. The engine checks the rest
-//! against its own vocabularies when the commands run.
+//! a name, section, time, path or file type is any text. The engine checks
+//! the rest against its own vocabularies when the commands run.
 
 use std::ffi::{OsStr, OsString};
 
@@ -38,6 +38,7 @@ const fn flag(name: &'static str, takes: Takes) -> Flag {
 }
 
 const SPEC: Flag = flag("--spec", Takes::Text);
+const PARENT: Flag = flag("--parent", Takes::Text);
 const SECTION: Flag = flag("--section", Takes::Text);
 const CREATED: Flag = flag("--created", Takes::Text);
 const FIX: Flag = flag("--fix", Takes::Nothing);
@@ -62,16 +63,16 @@ pub(crate) struct Command {
 }
 
 /// Every command, in the order of the design's table (#3030 section 2.8,
-/// with D68's `--spec` and `--section`), and `conditions` beside `schema`
-/// (#3700).
+/// with D68's `--spec` and `--section` and #3694's `--parent`), and
+/// `conditions` beside `schema` (#3700).
 pub(crate) static COMMANDS: [Command; 9] = [
     Command {
         name: "check",
-        synopsis: "check PATH [--spec NAME]",
+        synopsis: "check PATH [--spec NAME | --parent PATH]",
         arguments: &["PATH"],
         repeats: false,
-        flags: &[SPEC],
-        exclusive: &[],
+        flags: &[SPEC, PARENT],
+        exclusive: &["--spec", "--parent"],
     },
     Command {
         name: "run",

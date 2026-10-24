@@ -270,13 +270,17 @@ fn save(engine: Engine, result: Handle) -> std::result::Result<Robj, Refusal> {
     Ok(Strings::from_values(engine.save(&call, result)?).into_robj())
 }
 
+/// The check of a specification, or, with `parent`, of a fragment composed on
+/// the specification `parent` names as its parent (#3694).
 #[extendr]
-fn spec_check(specification: Raw, project: Robj, version: Raw) -> List {
+fn spec_check(specification: Raw, project: Robj, parent: Robj, version: Raw) -> List {
     reply(|engine| {
         let project = optional_text(&project)?;
+        let parent = optional_text(&parent)?;
         let specification = text(&specification)?;
-        let check = called(&version, None, |call| {
-            engine.spec_check(call, &specification, project.as_deref())
+        let check = called(&version, None, |call| match parent.as_deref() {
+            Some(parent) => engine.spec_check_on(call, &specification, project.as_deref(), parent),
+            None => engine.spec_check(call, &specification, project.as_deref()),
         })?;
         store(check, HandleKind::Check)
     })

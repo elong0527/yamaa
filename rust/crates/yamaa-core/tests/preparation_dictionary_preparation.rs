@@ -976,9 +976,18 @@ mod preparation {
                         declaring,
                         written,
                     } => ("include", declaring, written),
+                    // A parent a caller names comes from no declaring file.
+                    Name::Entry {
+                        declaring: None,
+                        written,
+                    } => ("caller", "", written),
                     _ => panic!("unexpected inspection {name:?}"),
                 };
-                self.calls.push(format!("{verb}:{declaring}:{written}"));
+                self.calls.push(if verb == "caller" {
+                    format!("{verb}:{written}")
+                } else {
+                    format!("{verb}:{declaring}:{written}")
+                });
                 if self.unavailable == Some(written) {
                     return Err(MISSING);
                 }
@@ -996,16 +1005,25 @@ mod preparation {
                 })
             }
             fn capture(&mut self, name: Name<'_>) -> Result<Captured, Host> {
-                let Name::Located {
-                    file: File::Parent | File::Resource,
-                    source,
-                } = name
-                else {
-                    panic!("unexpected capture {name:?}")
+                let identity = match name {
+                    Name::Located {
+                        file: File::Parent | File::Resource,
+                        source,
+                    } => source.identity.clone(),
+                    // A parent a caller names is read by that name.
+                    Name::Entry {
+                        declaring: None,
+                        written,
+                    } => self
+                        .aliases
+                        .get(written)
+                        .map_or(written, String::as_str)
+                        .to_owned(),
+                    _ => panic!("unexpected capture {name:?}"),
                 };
-                self.calls.push(format!("read:{}", source.identity));
-                if self.documents.contains_key(&source.identity) {
-                    Ok(Captured::resource(source.identity.as_bytes().into(), true))
+                self.calls.push(format!("read:{identity}"));
+                if self.documents.contains_key(&identity) {
+                    Ok(Captured::resource(identity.as_bytes().into(), true))
                 } else {
                     Err(MISSING)
                 }
@@ -1034,12 +1052,38 @@ mod preparation {
         }
         /// The 1.x chain from the entry `input`, root ancestor first.
         fn run(input: Document, port: &mut Port) -> Result<Vec<VersionedLayer>, Failed> {
+            traverse(input, None, port)
+        }
+        /// The chain of the entry `input` checked as a fragment on the parent
+        /// a caller names `parent`, which the caller gave as
+        /// `given/<parent>`.
+        fn run_on(
+            input: Document,
+            parent: &str,
+            port: &mut Port,
+        ) -> Result<Vec<VersionedLayer>, Failed> {
+            let given = format!("given/{parent}");
+            traverse(
+                input,
+                Some(CallerParent {
+                    written: parent,
+                    given: &given,
+                }),
+                port,
+            )
+        }
+        fn traverse(
+            input: Document,
+            parent: Option<CallerParent<'_>>,
+            port: &mut Port,
+        ) -> Result<Vec<VersionedLayer>, Failed> {
             let mut layers = Layers(port.documents.clone());
             traverse_versioned(
                 &schema(),
                 LanguageVersion::new(0),
                 source("entry"),
                 input,
+                parent,
                 port,
                 &mut layers,
             )
@@ -1747,6 +1791,170 @@ mod preparation {
                 );
             }
         }
+
+        #[test]
+        fn a_parent_a_caller_names_contributes_before_the_fragment() {
+            // The fragment checked on the parent b, where b names root as its
+            // own parent and includes g: b's layers contribute before the
+            // fragment, as they do before a child that names b as its parent
+            // and includes the fragment (LAYER-3, #3694). b is asked for as a
+            // file the caller names, and the chain continues from b's parent.
+            let mut port = Port::default()
+                .holding("b", including(Some("root"), &["g"]))
+                .with("root", None)
+                .with("g", None);
+            let layers = run_on(layer(None), "b", &mut port).unwrap();
+            assert_eq!(identities(&layers), ["root", "g", "b", "entry"]);
+            assert_eq!(
+                port.calls,
+                [
+                    "caller:b",
+                    "read:b",
+                    "resolve:b:root",
+                    "read:root",
+                    "include:b:g",
+                    "read:g",
+                ]
+            );
+        }
+
+        #[test]
+        fn a_fragment_that_names_a_layer_refuses_the_given_parent_before_it_is_read() {
+            for (field, entry) in [
+                ("parent", layer(Some("x"))),
+                ("include", including(None, &["x"])),
+            ] {
+                let mut port = Port::default().with("b", None).with("x", None);
+                let error = run_on(entry, "b", &mut port).unwrap_err();
+                assert_eq!(
+                    error,
+                    Error::NotFragment {
+                        field,
+                        value: "given/b".into(),
+                    },
+                    "{field}"
+                );
+                // Neither the given parent nor what the entry names is read.
+                assert!(port.calls.is_empty(), "{field}: {:?}", port.calls);
+                // The value is the parent as the caller gave it.
+                check(
+                    &error,
+                    "value_not_permitted",
+                    "LAYER-4",
+                    "parent",
+                    &[("construct", field), ("value", "given/b")],
+                );
+            }
+        }
+
+        #[test]
+        fn a_given_parent_that_cannot_be_read_is_the_caller_s_path_at_no_field() {
+            use yamaa_core::json::Value as C;
+            let mut port = Port {
+                unavailable: Some("gone"),
+                ..Port::default()
+            };
+            let error = run_on(layer(None), "gone", &mut port).unwrap_err();
+            assert_eq!(
+                error,
+                Error::CallerParent {
+                    path: "given/gone".into(),
+                    failure: ResourceFailure::Missing,
+                }
+            );
+            // FILE-1: the path as the caller gave it, and no spec path.
+            let diagnostic = error.diagnostic().unwrap().unwrap();
+            let definition = diagnostic.definition();
+            assert_eq!(
+                (
+                    definition.phase,
+                    definition.condition,
+                    definition.rule,
+                    diagnostic.spec_paths.as_slice(),
+                    &diagnostic.context,
+                ),
+                (
+                    "validation",
+                    "resource_path_missing",
+                    Some("FILE-7"),
+                    &[][..],
+                    &[("path".to_owned(), C::String("given/gone".into()))]
+                        .into_iter()
+                        .collect(),
+                )
+            );
+            // A failure the port does not classify stays its own.
+            let mut port = Port {
+                raised: Some("raise"),
+                ..Port::default()
+            };
+            assert_eq!(
+                run_on(layer(None), "raise", &mut port).unwrap_err(),
+                Error::Host(SourceFailure::Host(("opaque", 73)))
+            );
+        }
+
+        #[test]
+        fn a_given_parent_that_is_the_fragment_itself_is_a_cycle_at_parent() {
+            let mut port = Port::default();
+            port.aliases.insert("self".into(), "entry".into());
+            let error = run_on(layer(None), "self", &mut port).unwrap_err();
+            assert_eq!(
+                error,
+                Error::Cycle {
+                    path: vec!["entry".into(), "entry".into()],
+                    returns_to_entry: true,
+                    named: Named::CallerParent,
+                }
+            );
+            assert_eq!(port.calls, ["caller:self"]);
+            check(
+                &error,
+                "inheritance_cycle",
+                "LAYER-3",
+                "parent",
+                &[
+                    ("reason", "parent_chain_returns_to_entry"),
+                    ("source", "entry"),
+                ],
+            );
+        }
+
+        #[test]
+        fn a_given_parent_with_an_unread_header_fails_in_that_file() {
+            // No field names the given parent, so its header is refused at
+            // its own `type`, as the entry's is (SCHEMA-2).
+            let parent = document(V::map(vec![
+                ("yamaa", text("1.0")),
+                ("type", text("project")),
+            ]));
+            let mut port = Port::default().holding("b", parent);
+            let error = run_on(layer(None), "b", &mut port).unwrap_err();
+            assert_eq!(
+                error,
+                Error::Header {
+                    source: "b".into(),
+                    entry: "entry".into(),
+                    mismatch: Box::new(HeaderMismatch::FileType {
+                        file_type: "project".into()
+                    }),
+                    named: Named::CallerParent,
+                    declaring: None,
+                }
+            );
+            check(
+                &error,
+                "unexpected_file_type",
+                "SCHEMA-2",
+                "type",
+                &[
+                    ("source", "b"),
+                    ("entry", "entry"),
+                    ("type", "project"),
+                    ("expected", "spec"),
+                ],
+            );
+        }
     }
     mod inheritance_capture {
         //! A 1.x chain's parents are read through the host's port as
@@ -2022,6 +2230,7 @@ mod preparation {
                 LanguageVersion::new(0),
                 entry,
                 layer("entry", Some("b"), true),
+                None,
                 chain,
                 &mut Layers::new(),
             )

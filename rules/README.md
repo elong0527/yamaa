@@ -210,8 +210,9 @@ One term per concept across all rules, schema comments, and messages:
 - **row template** -- one `rows` entry, building a group of output rows. Bare
   `template` means a string template (text operations).
 - **fragment** -- a specification file that an `include` entry names
-  ([LAYER-3](inheritance.md#layer-3)); it declares neither `parent` nor
-  `include`. A layer that is not complete on its own is a partial
+  ([LAYER-3](inheritance.md#layer-3)), or that a check composes on a parent
+  the caller names ([LAYER-4](inheritance.md#layer-4)); it declares neither
+  `parent` nor `include`. A layer that is not complete on its own is a partial
   specification, never a fragment.
 - **record** -- input side (a file or input dataset row). **row** -- output side
   (an output record under construction or built).

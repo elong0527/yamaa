@@ -1,11 +1,11 @@
-//! A path the caller passes, the specification's or the project file's, is
-//! the caller's own (#3321). One that reaches no entry, reaches a directory
-//! or another entry that is not a regular file, or is a link fails with
-//! FILE-7's or FILE-8's condition on every route, at no field, naming the
-//! path as given (FILE-11), exactly as `Engine::file_type` and `lint` refuse
-//! it (D125). The same holds whether the local file resolver or a caller's
-//! resolver reports the kind; any other failure to read the path stays the
-//! opaque engine fault.
+//! A path the caller passes, the specification's, the project file's or the
+//! parent a fragment is checked on, is the caller's own (#3321, #3694). One
+//! that reaches no entry, reaches a directory or another entry that is not a
+//! regular file, or is a link fails with FILE-7's or FILE-8's condition on
+//! every route, at no field, naming the path as given (FILE-11), exactly as
+//! `Engine::file_type` and `lint` refuse it (D125). The same holds whether
+//! the local file resolver or a caller's resolver reports the kind; any
+//! other failure to read the path stays the opaque engine fault.
 #![cfg(feature = "yaml")]
 
 use std::sync::Arc;
@@ -264,32 +264,36 @@ fn a_project_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every
     }
 }
 
+/// Each kind a caller's resolver can report for a path that reaches no
+/// regular file, with the condition and rule that refuse it.
+const KINDS: [(ResourceKind, &str, &str); 6] = [
+    (ResourceKind::Missing, "resource_path_missing", "FILE-7"),
+    (
+        ResourceKind::Directory,
+        "resource_path_not_regular_file",
+        "FILE-7",
+    ),
+    (
+        ResourceKind::Other,
+        "resource_path_not_regular_file",
+        "FILE-7",
+    ),
+    (
+        ResourceKind::SymbolicLink,
+        "resource_path_symlink",
+        "FILE-8",
+    ),
+    (ResourceKind::Junction, "resource_path_symlink", "FILE-8"),
+    (
+        ResourceKind::ReparsePoint,
+        "resource_path_symlink",
+        "FILE-8",
+    ),
+];
+
 #[test]
 fn every_kind_a_caller_resolver_reports_for_a_caller_path_raises_its_file_rule_condition() {
-    for (kind, condition, rule) in [
-        (ResourceKind::Missing, "resource_path_missing", "FILE-7"),
-        (
-            ResourceKind::Directory,
-            "resource_path_not_regular_file",
-            "FILE-7",
-        ),
-        (
-            ResourceKind::Other,
-            "resource_path_not_regular_file",
-            "FILE-7",
-        ),
-        (
-            ResourceKind::SymbolicLink,
-            "resource_path_symlink",
-            "FILE-8",
-        ),
-        (ResourceKind::Junction, "resource_path_symlink", "FILE-8"),
-        (
-            ResourceKind::ReparsePoint,
-            "resource_path_symlink",
-            "FILE-8",
-        ),
-    ] {
+    for (kind, condition, rule) in KINDS {
         let resolver = Arc::new(MemoryResolver::new());
         resolver.insert_kind("/", "study/dm.yaml", kind);
         resolver.insert_kind("/", "study/project.yaml", kind);
@@ -312,6 +316,77 @@ fn every_kind_a_caller_resolver_reports_for_a_caller_path_raises_its_file_rule_c
             &unread(condition, rule, "study/project.yaml"),
         );
     }
+}
+
+/// The parent a fragment is checked on is a caller path too (#3694): one
+/// that reaches no regular file is the check's issue, at no field, naming the
+/// path as given, whether the local file resolver or a caller's resolver
+/// reports the kind. `dm.yaml` declares neither `parent` nor `include`, so it
+/// is a fragment a given parent could compose.
+#[test]
+fn a_parent_path_that_reaches_no_regular_file_is_the_check_s_issue_named_as_given() {
+    let study = Study::new();
+    let token = CancellationToken::new();
+    let fragment = study.path("dm.yaml");
+    for (path, condition, rule) in study.unreadable() {
+        let check = engine()
+            .spec_check_on(&fragment, None, &path, &token)
+            .unwrap();
+        assert_eq!(
+            (rows(&check.diagnostics()), check.status()),
+            (unread(condition, rule, &path), Status::Failed),
+            "check on {path}"
+        );
+    }
+    for (kind, condition, rule) in KINDS {
+        let resolver = Arc::new(MemoryResolver::new());
+        resolver.insert("/", "study/dm.yaml", "dm:1", Arc::from(SPEC.as_bytes()));
+        resolver.insert_kind("/", "study/template.yaml", kind);
+        let check = engine_with(resolver)
+            .spec_check_on("study/dm.yaml", None, "study/template.yaml", &token)
+            .unwrap();
+        assert_eq!(
+            rows(&check.diagnostics()),
+            unread(condition, rule, "study/template.yaml"),
+            "{kind:?}"
+        );
+    }
+}
+
+/// A caller's resolver serves the given parent by the path the caller gives,
+/// as it serves the specification, not from the fragment's directory
+/// (#3694): the fragment in one directory composes on a template in another
+/// and checks clean.
+#[test]
+fn a_caller_resolver_serves_the_given_parent_by_the_path_the_caller_gives() {
+    const TEMPLATE: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [USUBJID, AGE]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: RAW.USUBJID}\n";
+    const FRAGMENT: &str =
+        "yamaa: \"1.0\"\ntype: spec\ncolumns:\n  - {name: AGE, type: str, derivation: RAW.AGE}\n";
+    let resolver = Arc::new(MemoryResolver::new());
+    resolver.insert(
+        "/",
+        "study/templates/dm.yaml",
+        "template:1",
+        Arc::from(TEMPLATE.as_bytes()),
+    );
+    resolver.insert(
+        "/",
+        "study/fragments/age.yaml",
+        "fragment:1",
+        Arc::from(FRAGMENT.as_bytes()),
+    );
+    let check = engine_with(resolver)
+        .spec_check_on(
+            "study/fragments/age.yaml",
+            None,
+            "study/templates/dm.yaml",
+            &CancellationToken::new(),
+        )
+        .unwrap();
+    assert_eq!(
+        (rows(&check.diagnostics()), check.status()),
+        (Vec::new(), Status::Succeeded)
+    );
 }
 
 /// A resolver that reports every caller path as unreadable, a failure no

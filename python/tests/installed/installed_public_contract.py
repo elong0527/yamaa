@@ -261,6 +261,7 @@ class PublicContract(unittest.TestCase):
             self.assertEqual(options[name].default, int(default))
         for name in expected["read_odm"][1:]:
             self.assertEqual(options[name].kind, inspect.Parameter.KEYWORD_ONLY)
+        self.assertIsNone(inspect.signature(spec.check).parameters["parent"].default)
         self.assertIsNone(inspect.signature(project.run).parameters["section"].default)
         submission = inspect.signature(project.submission).parameters
         self.assertIsNone(submission["section"].default)
