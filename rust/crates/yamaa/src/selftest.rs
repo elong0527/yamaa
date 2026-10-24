@@ -10,11 +10,14 @@
 //! line run the same bytes through the shipped runtime.
 //!
 //! A case runs as the benchmark runners run it. Each entry is built with its
-//! project by [`Engine::spec_run`] and saved, and what it saved is served to
+//! project by [`SpecRequest::run`] and saved, and what it saved is served to
 //! the later entries and to the case's declared submission
-//! ([`Engine::project_submission`], with the case's creation time), which is
+//! ([`ProjectRequest::submission`], with the case's creation time), which is
 //! saved in turn. The engine has no project functions, as the command line's
 //! has none: the cases call none (D110).
+//!
+//! [`SpecRequest::run`]: crate::SpecRequest::run
+//! [`ProjectRequest::submission`]: crate::ProjectRequest::submission
 //!
 //! - A case passes when every file it saved, read back from the resolver,
 //!   equals the expected file of that name, and every expected file was
@@ -42,7 +45,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use crate::api::Status;
+use crate::api::{Status, SubmissionOptions};
 use crate::cancel::CancellationToken;
 use crate::diagnostic::{ContextValue, Diagnostic};
 use crate::engine::{Engine, EngineOptions};
@@ -344,9 +347,12 @@ fn check(case: &Case, info: &Info) -> Result<(), String> {
     let mut saved = Vec::new();
     let mut issues = Vec::new();
     for entry in case.entries {
-        let mut run = engine
-            .spec_run(entry.specification, entry.project, &token)
-            .map_err(|error| error.to_string())?;
+        let request = engine.spec(entry.specification).cancel_with(&token);
+        let request = match entry.project {
+            Some(project) => request.project(project),
+            None => request,
+        };
+        let mut run = request.run().map_err(|error| error.to_string())?;
         let diagnostics = run.diagnostics();
         if negative_entries {
             if run.output().is_some() {
@@ -371,13 +377,10 @@ fn check(case: &Case, info: &Info) -> Result<(), String> {
     }
     if let Some(define) = &case.define {
         let mut submission = engine
-            .project_submission(
-                define.project,
-                Some(define.section),
-                Some(define.created),
-                crate::VERSION,
-                &token,
-            )
+            .project(define.project)
+            .section(define.section)
+            .cancel_with(&token)
+            .submission(&SubmissionOptions::new(crate::VERSION).with_created(define.created))
             .map_err(|error| error.to_string())?;
         let diagnostics = submission.diagnostics();
         match expected_issue {

@@ -13,6 +13,7 @@ use std::sync::Arc;
 use yamaa::{
     CancellationToken, Diagnostic, Engine, EngineOptions, Failure, HostLanguage, MemoryResolver,
     ResolverFailure, ResolverReply, ResolverRequest, ResourceKind, ResourceResolver, Status,
+    SubmissionOptions,
 };
 
 const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [USUBJID]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: RAW.USUBJID}\n";
@@ -141,10 +142,10 @@ fn refused(failure: &Failure, call: &str, expected: &[Row]) {
 /// `expected`, and names it as given.
 fn spec_routes(engine: &Engine, path: &str, expected: &[Row]) {
     let token = CancellationToken::new();
-    let check = engine.spec_check(path, None, &token).unwrap();
+    let check = engine.spec(path).cancel_with(&token).check().unwrap();
     assert_eq!(rows(&check.diagnostics()), expected, "check {path}");
     assert_eq!(check.status(), Status::Failed);
-    let mut run = engine.spec_run(path, None, &token).unwrap();
+    let mut run = engine.spec(path).cancel_with(&token).run().unwrap();
     assert_eq!(rows(&run.diagnostics()), expected, "run {path}");
     assert!(run.output().is_none() && run.report().is_none());
     // A run whose file was not read names the path as given.
@@ -156,7 +157,7 @@ fn spec_routes(engine: &Engine, path: &str, expected: &[Row]) {
         );
     }
     refused(
-        &engine.spec_resolve(path, None).unwrap_err(),
+        &engine.spec(path).resolve().unwrap_err(),
         &format!("cannot resolve {path}"),
         expected,
     );
@@ -173,11 +174,18 @@ fn spec_routes(engine: &Engine, path: &str, expected: &[Row]) {
 fn project_routes(engine: &Engine, project: &str, specification: &str, expected: &[Row]) {
     let token = CancellationToken::new();
     assert_eq!(
-        rows(&engine.project_check(project, &token).unwrap().diagnostics()),
+        rows(
+            &engine
+                .project(project)
+                .cancel_with(&token)
+                .check()
+                .unwrap()
+                .diagnostics()
+        ),
         expected,
         "check {project}"
     );
-    let mut run = engine.project_run(project, None, &token).unwrap();
+    let mut run = engine.project(project).cancel_with(&token).run().unwrap();
     assert_eq!(rows(&run.diagnostics()), expected, "run {project}");
     assert!(run.names().is_empty());
     assert_eq!(run.status(), Status::Failed);
@@ -187,18 +195,15 @@ fn project_routes(engine: &Engine, project: &str, specification: &str, expected:
         expected,
     );
     refused(
-        &engine.project_spec(project, "DM").unwrap_err(),
+        &engine.project(project).spec("DM").unwrap_err(),
         "cannot select DM",
         expected,
     );
     let mut submission = engine
-        .project_submission(
-            project,
-            Some("sdtm"),
-            Some("2026-09-11T00:00:00"),
-            "0",
-            &token,
-        )
+        .project(project)
+        .section("sdtm")
+        .cancel_with(&token)
+        .submission(&SubmissionOptions::new("0").with_created("2026-09-11T00:00:00"))
         .unwrap();
     assert_eq!(rows(&submission.diagnostics()), expected);
     refused(
@@ -210,7 +215,10 @@ fn project_routes(engine: &Engine, project: &str, specification: &str, expected:
     assert_eq!(
         rows(
             &engine
-                .spec_check(specification, Some(project), &token)
+                .spec(specification)
+                .project(project)
+                .cancel_with(&token)
+                .check()
                 .unwrap()
                 .diagnostics()
         ),
@@ -220,7 +228,10 @@ fn project_routes(engine: &Engine, project: &str, specification: &str, expected:
     assert_eq!(
         rows(
             &engine
-                .spec_run(specification, Some(project), &token)
+                .spec(specification)
+                .project(project)
+                .cancel_with(&token)
+                .run()
                 .unwrap()
                 .diagnostics()
         ),
@@ -228,7 +239,9 @@ fn project_routes(engine: &Engine, project: &str, specification: &str, expected:
     );
     refused(
         &engine
-            .spec_resolve(specification, Some(project))
+            .spec(specification)
+            .project(project)
+            .resolve()
             .unwrap_err(),
         &format!("cannot resolve {specification}"),
         expected,
@@ -364,11 +377,15 @@ fn a_listed_specification_the_walk_cannot_reach_fails_at_its_listing_as_written(
         );
         let project = study.path("listing.yaml");
         let check = engine
-            .project_check(&project, &token)
+            .project(&project)
+            .cancel_with(&token)
+            .check()
             .unwrap()
             .diagnostics();
         let run = engine
-            .project_run(&project, None, &token)
+            .project(&project)
+            .cancel_with(&token)
+            .run()
             .unwrap()
             .diagnostics();
         for issues in [check, run] {
@@ -402,13 +419,9 @@ fn a_submission_refuses_a_listed_specification_the_walk_cannot_reach_at_its_list
     assert_ne!(moved, project);
     study.write("metadata.yaml", &moved);
     let submission = engine()
-        .project_submission(
-            &study.path("metadata.yaml"),
-            Some("sdtm"),
-            Some("2026-09-11T00:00:00"),
-            "0",
-            &CancellationToken::new(),
-        )
+        .project(&study.path("metadata.yaml"))
+        .section("sdtm")
+        .submission(&SubmissionOptions::new("0").with_created("2026-09-11T00:00:00"))
         .unwrap();
     let issues = submission.diagnostics();
     let [issue] = issues.as_slice() else {

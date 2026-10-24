@@ -307,13 +307,13 @@ struct EntryRun {
 /// with its project when it has one. Only cancellation fails the call.
 fn run_entry(engine: &Engine, call: &EntryCall) -> Result<Run, String> {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        engine
-            .spec_run(
-                &call.specification,
-                call.project.as_deref(),
-                &CancellationToken::new(),
-            )
-            .expect("only cancellation fails a run")
+        let request = engine.spec(&call.specification);
+        match call.project.as_deref() {
+            Some(project) => request.project(project),
+            None => request,
+        }
+        .run()
+        .expect("only cancellation fails a run")
     }))
     .map_err(|payload| {
         payload

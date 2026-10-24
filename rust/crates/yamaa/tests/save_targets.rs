@@ -13,7 +13,7 @@ use std::sync::Arc;
 use yamaa::{
     CancellationToken, Diagnostic, Engine, EngineOptions, Failure, HostLanguage, MemoryResolver,
     ResolverFailure, ResolverOperation, ResolverReply, ResolverRequest, ResourceKind,
-    ResourceResolver,
+    ResourceResolver, SubmissionOptions,
 };
 
 struct Study(crate::support::Scratch);
@@ -126,7 +126,7 @@ fn a_save_refuses_a_target_its_walk_cannot_reach_at_the_field_that_declares_it()
     let token = CancellationToken::new();
     for (output, condition, rule) in cases {
         let spec = study.specification(output, None);
-        let mut run = engine().spec_run(&spec, None, &token).unwrap();
+        let mut run = engine().spec(&spec).cancel_with(&token).run().unwrap();
         assert!(run.output().is_some(), "{output}");
         let expected = [unreached(condition, rule, Some("output.path"), output)];
         for _ in 0..2 {
@@ -152,9 +152,7 @@ fn a_save_refuses_a_target_its_walk_cannot_reach_at_the_field_that_declares_it()
 fn the_report_file_is_refused_at_its_own_field_and_a_later_save_retries() {
     let study = Study::new();
     let spec = study.specification("out/dm.csv", Some("checks/report.csv"));
-    let mut run = engine()
-        .spec_run(&spec, None, &CancellationToken::new())
-        .unwrap();
+    let mut run = engine().spec(&spec).run().unwrap();
     // The report file comes first (OUTPUT-10).
     refused(
         &run.save(&CancellationToken::new()).unwrap_err(),
@@ -196,9 +194,7 @@ fn a_project_run_save_names_the_member_whose_target_it_cannot_reach() {
         "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [spec.yaml]\n",
     );
     let project = study.path("project.yaml");
-    let mut run = engine()
-        .project_run(&project, None, &CancellationToken::new())
-        .unwrap();
+    let mut run = engine().project(&project).run().unwrap();
     let failure = run.save(&CancellationToken::new()).unwrap_err();
     let [issue] = failure.diagnostics.as_slice() else {
         panic!("one issue: {failure:?}")
@@ -237,13 +233,9 @@ fn a_submission_save_refuses_its_files_at_the_section_define() {
     .unwrap();
     std::fs::copy(fixture.join("expected/dm.csv"), study.0.join("dm.csv")).unwrap();
     let mut submission = engine()
-        .project_submission(
-            &study.path("project.yaml"),
-            Some("sdtm"),
-            Some("2026-09-11T00:00:00"),
-            "0.4.0",
-            &CancellationToken::new(),
-        )
+        .project(&study.path("project.yaml"))
+        .section("sdtm")
+        .submission(&SubmissionOptions::new("0.4.0").with_created("2026-09-11T00:00:00"))
         .unwrap();
     assert!(submission.diagnostics().is_empty());
     // A directory where the section's first file, its transport file, goes
@@ -267,9 +259,7 @@ fn a_table_saved_to_a_path_its_caller_names_is_refused_at_no_field() {
     let study = Study::new();
     let spec = study.specification("dm.csv", None);
     let engine = engine();
-    let run = engine
-        .spec_run(&spec, None, &CancellationToken::new())
-        .unwrap();
+    let run = engine.spec(&spec).run().unwrap();
     let table = run.output().unwrap();
     std::fs::create_dir(study.0.join("folder.csv")).unwrap();
     #[cfg_attr(not(unix), allow(unused_mut))]
@@ -343,9 +333,7 @@ fn a_kind_a_caller_resolver_reports_for_a_target_is_refused_as_the_walk_refuses_
                     kind,
                 })),
         );
-        let mut run = engine
-            .spec_run("spec.yaml", None, &CancellationToken::new())
-            .unwrap();
+        let mut run = engine.spec("spec.yaml").run().unwrap();
         let expected = [unreached(
             condition,
             rule,

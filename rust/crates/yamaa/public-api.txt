@@ -84,6 +84,7 @@ yamaa::Partitions: pub use yamaa::engine::Partitions
 yamaa::Plans: pub use yamaa::api::Plans
 yamaa::Position: pub use yamaa::diagnostic::Position
 yamaa::ProjectFunctions: pub use yamaa::functions::ProjectFunctions
+yamaa::ProjectRequest: pub use yamaa::api::ProjectRequest
 yamaa::ProjectRun: pub use yamaa::api::ProjectRun
 yamaa::REPORT_COLUMNS: pub use yamaa::diagnostic::REPORT_COLUMNS
 yamaa::REPORT_KINDS: pub use yamaa::diagnostic::REPORT_KINDS
@@ -113,12 +114,14 @@ yamaa::SelfTestCase: pub use yamaa::selftest::SelfTestCase
 yamaa::Severity: pub use yamaa::diagnostic::Severity
 yamaa::Signature: pub use yamaa::functions::Signature
 yamaa::SourceSpan: pub use yamaa::diagnostic::SourceSpan
+yamaa::SpecRequest: pub use yamaa::api::SpecRequest
 yamaa::Status: pub use yamaa::api::Status
 yamaa::StreamProgress: pub use yamaa::stream::StreamProgress [cfg(feature = "arrow")]
 yamaa::Streamed: pub use yamaa::stream::Streamed [cfg(feature = "arrow")]
 yamaa::StringArray: pub use yamaa::table::StringArray [cfg(feature = "arrow")]
 yamaa::StringViewArray: pub use yamaa::table::StringViewArray [cfg(feature = "arrow")]
 yamaa::Submission: pub use yamaa::api::Submission
+yamaa::SubmissionOptions: pub use yamaa::api::SubmissionOptions
 yamaa::Summary: pub use yamaa::text::Summary
 yamaa::Table: pub use yamaa::table::Table
 yamaa::TableError: pub use yamaa::error::TableError
@@ -132,18 +135,8 @@ yamaa::api::Check::issues: pub fn issues(&self) -> Table
 yamaa::api::Check::status: pub fn status(&self) -> Status
 yamaa::api::Check::summary: pub fn summary(&self) -> Summary
 yamaa::api::Engine: impl Engine
-yamaa::api::Engine: impl Engine
-yamaa::api::Engine::project_check: pub fn project_check(&self, project: &str, token: &CancellationToken) -> Result<Check, Error>
-yamaa::api::Engine::project_names: pub fn project_names(&self, project: &str) -> Result<Vec<String>, Failure>
-yamaa::api::Engine::project_run: pub fn project_run(&self, project: &str, section: Option<&str>, token: &CancellationToken) -> Result<ProjectRun, Error>
-yamaa::api::Engine::project_run_reusing: pub fn project_run_reusing(&self, project: &str, section: Option<&str>, plans: &Plans, token: &CancellationToken) -> Result<ProjectRun, Error>
-yamaa::api::Engine::project_spec: pub fn project_spec(&self, project: &str, name: &str) -> Result<String, Failure>
-yamaa::api::Engine::project_submission: pub fn project_submission(&self, project: &str, section: Option<&str>, created: Option<&str>, installed: &str, token: &CancellationToken) -> Result<Submission, Error>
-yamaa::api::Engine::spec_check: pub fn spec_check(&self, specification: &str, project: Option<&str>, token: &CancellationToken) -> Result<Check, Error>
-yamaa::api::Engine::spec_resolve: pub fn spec_resolve(&self, specification: &str, project: Option<&str>) -> Result<ContextValue, Failure>
-yamaa::api::Engine::spec_run: pub fn spec_run(&self, specification: &str, project: Option<&str>, token: &CancellationToken) -> Result<Run, Error>
-yamaa::api::Engine::spec_run_reusing: pub fn spec_run_reusing(&self, specification: &str, project: Option<&str>, plans: &Plans, token: &CancellationToken) -> Result<Run, Error>
-yamaa::api::Engine::spec_stream: pub fn spec_stream(&self, specification: &str, project: Option<&str>, plans: &Plans, token: &CancellationToken) -> Result<Streamed, Error> [cfg(feature = "arrow")]
+yamaa::api::Engine::project: pub fn project<'a>(&'a self, path: &'a str) -> ProjectRequest<'a>
+yamaa::api::Engine::spec: pub fn spec<'a>(&'a self, path: &'a str) -> SpecRequest<'a>
 yamaa::api::Failure: impl Failure
 yamaa::api::Failure: impl std::error::Error for Failure
 yamaa::api::Failure: impl std::fmt::Display for Failure
@@ -157,6 +150,17 @@ yamaa::api::Failure::paths: pub paths: Vec<String>
 yamaa::api::Plans: impl Plans
 yamaa::api::Plans: pub struct Plans [derive(Default)]
 yamaa::api::Plans::new: pub fn new() -> Self
+yamaa::api::ProjectRequest: impl std::fmt::Debug for ProjectRequest<'_>
+yamaa::api::ProjectRequest: impl<'a> ProjectRequest<'a>
+yamaa::api::ProjectRequest: pub struct ProjectRequest<'a> [derive(Clone)] [non_exhaustive]
+yamaa::api::ProjectRequest::cancel_with: pub fn cancel_with(mut self, token: &'a CancellationToken) -> Self
+yamaa::api::ProjectRequest::check: pub fn check(&self) -> Result<Check, Error>
+yamaa::api::ProjectRequest::names: pub fn names(&self) -> Result<Vec<String>, Failure>
+yamaa::api::ProjectRequest::reusing: pub fn reusing(mut self, plans: &'a Plans) -> Self
+yamaa::api::ProjectRequest::run: pub fn run(&self) -> Result<ProjectRun, Error>
+yamaa::api::ProjectRequest::section: pub fn section(mut self, section: &'a str) -> Self
+yamaa::api::ProjectRequest::spec: pub fn spec(&self, name: &str) -> Result<SpecRequest<'a>, Failure>
+yamaa::api::ProjectRequest::submission: pub fn submission(&self, options: &SubmissionOptions) -> Result<Submission, Error>
 yamaa::api::ProjectRun: impl ProjectRun
 yamaa::api::ProjectRun: pub struct ProjectRun
 yamaa::api::ProjectRun::diagnostics: pub fn diagnostics(&self) -> Vec<yamaa::diagnostic::Diagnostic>
@@ -181,6 +185,17 @@ yamaa::api::Run::status: pub fn status(&self) -> Status
 yamaa::api::Run::summary: pub fn summary(&self) -> Summary
 yamaa::api::SECTIONS: pub const SECTIONS: [&str; 3]
 yamaa::api::STATUSES: pub const STATUSES: [&str; 3]
+yamaa::api::SpecRequest: impl std::fmt::Debug for SpecRequest<'_>
+yamaa::api::SpecRequest: impl<'a> SpecRequest<'a>
+yamaa::api::SpecRequest: pub struct SpecRequest<'a> [derive(Clone)] [non_exhaustive]
+yamaa::api::SpecRequest::cancel_with: pub fn cancel_with(mut self, token: &'a CancellationToken) -> Self
+yamaa::api::SpecRequest::check: pub fn check(&self) -> Result<Check, Error>
+yamaa::api::SpecRequest::path: pub fn path(&self) -> &str
+yamaa::api::SpecRequest::project: pub fn project(mut self, project: &'a str) -> Self
+yamaa::api::SpecRequest::resolve: pub fn resolve(&self) -> Result<ContextValue, Failure>
+yamaa::api::SpecRequest::reusing: pub fn reusing(mut self, plans: &'a Plans) -> Self
+yamaa::api::SpecRequest::run: pub fn run(&self) -> Result<Run, Error>
+yamaa::api::SpecRequest::stream: pub fn stream(&self) -> Result<Streamed, Error> [cfg(feature = "arrow")]
 yamaa::api::Status: impl Status
 yamaa::api::Status: pub enum Status [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::api::Status::Failed: Failed
@@ -195,6 +210,12 @@ yamaa::api::Submission::issues: pub fn issues(&self) -> Table
 yamaa::api::Submission::save: pub fn save(&mut self, token: &CancellationToken) -> Result<Vec<String>, Failure>
 yamaa::api::Submission::status: pub fn status(&self) -> Status
 yamaa::api::Submission::summary: pub fn summary(&self) -> Summary
+yamaa::api::SubmissionOptions: impl SubmissionOptions
+yamaa::api::SubmissionOptions: pub struct SubmissionOptions [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::api::SubmissionOptions::created: pub created: Option<String>
+yamaa::api::SubmissionOptions::installed_version: pub installed_version: String
+yamaa::api::SubmissionOptions::new: pub fn new(installed_version: impl Into<String>) -> Self
+yamaa::api::SubmissionOptions::with_created: pub fn with_created(mut self, created: impl Into<String>) -> Self
 yamaa::cancel::CancellationToken: impl CancellationToken
 yamaa::cancel::CancellationToken: impl std::fmt::Debug for CancellationToken
 yamaa::cancel::CancellationToken: pub struct CancellationToken [derive(Clone, Default)] [non_exhaustive]

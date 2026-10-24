@@ -488,7 +488,7 @@ fn a_spec_path_is_checked_run_and_resolved_alone() {
         )
     );
     let spec = study.path("sdtm/dm.yaml");
-    let resolved = engine().spec_resolve(&spec, None).unwrap().to_json();
+    let resolved = engine().spec(&spec).resolve().unwrap().to_json();
     for format in ["text", "json"] {
         assert_eq!(
             outcome(&yamaa(&["resolve", &spec, "--format", format])),
@@ -510,7 +510,9 @@ fn a_project_path_is_checked_and_run_whole() {
     let engine = engine();
     let token = CancellationToken::new();
     let found = engine
-        .project_check(&project, &token)
+        .project(&project)
+        .cancel_with(&token)
+        .check()
         .unwrap()
         .diagnostics();
     assert_eq!(found.len(), 1);
@@ -537,7 +539,9 @@ fn a_project_path_is_checked_and_run_whole() {
     );
     assert!(study.files("out").is_empty());
     let issues = engine
-        .project_run(&project, None, &token)
+        .project(&project)
+        .cancel_with(&token)
+        .run()
         .unwrap()
         .diagnostics();
     assert_eq!(issues.len(), 2);
@@ -860,9 +864,11 @@ fn a_failed_run_prints_its_issues_and_the_report_it_saved() {
     let study = Study::new();
     let project = study.path("project.yaml");
     let engine = engine();
-    let adae = engine.project_spec(&project, "ADAE").unwrap();
     let issues = engine
-        .spec_run(&adae, Some(&project), &CancellationToken::new())
+        .project(&project)
+        .spec("ADAE")
+        .unwrap()
+        .run()
         .unwrap()
         .diagnostics();
     assert_eq!(issues.len(), 1);
@@ -901,7 +907,9 @@ fn a_section_run_prints_its_members_every_issue_and_the_files_it_saved() {
     let study = Study::new();
     let project = study.path("project.yaml");
     let issues = engine()
-        .project_run(&project, Some("adam"), &CancellationToken::new())
+        .project(&project)
+        .section("adam")
+        .run()
         .unwrap()
         .diagnostics();
     assert_eq!(issues.len(), 2);
@@ -971,7 +979,9 @@ fn a_member_whose_listing_cannot_be_read_is_named_by_its_path() {
     );
     let project = study.path("project.yaml");
     let issues = engine()
-        .project_run(&project, Some("sdtm"), &CancellationToken::new())
+        .project(&project)
+        .section("sdtm")
+        .run()
         .unwrap()
         .diagnostics();
     assert_eq!(issues.len(), 1);
@@ -1017,7 +1027,9 @@ fn a_save_with_nothing_to_write_prints_its_issue_and_exits_1() {
     study.write("project.yaml", format!("{PROJECT}send:\n  specs: []\n"));
     let project = study.path("project.yaml");
     let refusal = engine()
-        .project_run(&project, Some("send"), &CancellationToken::new())
+        .project(&project)
+        .section("send")
+        .run()
         .unwrap()
         .save(&CancellationToken::new())
         .unwrap_err();
@@ -1064,10 +1076,7 @@ fn a_save_that_cannot_write_its_target_prints_why_and_exits_1() {
     study.write("sdtm/dm.yaml", DM.replace("../out/", "../missing/"));
     let project = study.path("project.yaml");
     let engine = engine();
-    let dm = engine.project_spec(&project, "DM").unwrap();
-    let mut run = engine
-        .spec_run(&dm, Some(&project), &CancellationToken::new())
-        .unwrap();
+    let mut run = engine.project(&project).spec("DM").unwrap().run().unwrap();
     assert!(run.diagnostics().is_empty());
     let refusal = run.save(&CancellationToken::new()).unwrap_err();
     assert!(refusal.paths.is_empty());
@@ -1106,10 +1115,13 @@ fn check_of_a_listed_specification_prints_its_summary_and_every_issue() {
     let study = Study::new();
     let project = study.path("project.yaml");
     let engine = engine();
-    let dm = engine.project_spec(&project, "DM").unwrap();
+    let dm = engine.project(&project).spec("DM").unwrap();
     assert_eq!(
         outcome(&yamaa(&["check", &project, "--spec", "DM"])),
-        printed(0, format!("yamaa check of {dm}: succeeded, 0 issues\n"))
+        printed(
+            0,
+            format!("yamaa check of {}: succeeded, 0 issues\n", dm.path())
+        )
     );
     assert_eq!(
         outcome(&yamaa(&[
@@ -1123,17 +1135,18 @@ fn check_of_a_listed_specification_prints_its_summary_and_every_issue() {
             )
         )
     );
-    let adae = engine.project_spec(&project, "ADAE").unwrap();
-    let issues = engine
-        .spec_check(&adae, Some(&project), &CancellationToken::new())
-        .unwrap()
-        .diagnostics();
+    let adae = engine.project(&project).spec("ADAE").unwrap();
+    let issues = adae.check().unwrap().diagnostics();
     assert_eq!(issues.len(), 1);
     assert_eq!(
         outcome(&yamaa(&["check", &project, "--spec", "ADAE"])),
         printed(
             1,
-            format!("yamaa check of {adae}: failed, 1 issue\n{}", lines(&issues))
+            format!(
+                "yamaa check of {}: failed, 1 issue\n{}",
+                adae.path(),
+                lines(&issues)
+            )
         )
     );
     assert_eq!(
@@ -1160,8 +1173,8 @@ fn resolve_prints_the_resolved_specification_as_canonical_json() {
     let study = Study::new();
     let project = study.path("project.yaml");
     let engine = engine();
-    let dm = engine.project_spec(&project, "DM").unwrap();
-    let resolved = engine.spec_resolve(&dm, Some(&project)).unwrap().to_json();
+    let dm = engine.project(&project).spec("DM").unwrap();
+    let resolved = dm.resolve().unwrap().to_json();
     assert!(
         resolved.starts_with("{\"artifact_version\":1,"),
         "{resolved}"
@@ -1185,7 +1198,7 @@ fn a_refused_call_prints_its_error_text_and_exits_1() {
     let study = Study::new();
     let project = study.path("project.yaml");
     let engine = engine();
-    let unknown = engine.project_spec(&project, "ADXX").unwrap_err();
+    let unknown = engine.project(&project).spec("ADXX").unwrap_err();
     assert_eq!(unknown.diagnostics.len(), 1);
     assert!(unknown.message.starts_with("cannot select ADXX: "));
     let issues = json(&unknown.diagnostics);
@@ -1225,7 +1238,7 @@ fn a_refused_call_prints_its_error_text_and_exits_1() {
             "{command}"
         );
     }
-    let Err(error) = engine.project_run(&project, Some("sdtn"), &CancellationToken::new()) else {
+    let Err(error) = engine.project(&project).section("sdtn").run() else {
         panic!("an unknown section refuses the run");
     };
     let section = yamaa::Failure::from_error(yamaa::Action::Select("sdtn"), &error);
@@ -1278,7 +1291,7 @@ fn a_refusal_with_two_issues_prints_the_second_after_its_error_text() {
     // Two fields the project schema does not know give two findings.
     study.write("project.yaml", format!("{PROJECT}bogus: 1\nother: 2\n"));
     let project = study.path("project.yaml");
-    let refusal = engine().project_spec(&project, "DM").unwrap_err();
+    let refusal = engine().project(&project).spec("DM").unwrap_err();
     let [first, second] = refusal.diagnostics.as_slice() else {
         panic!("two issues: {:?}", refusal.diagnostics);
     };
@@ -1982,10 +1995,13 @@ fn the_engine_reads_no_host_lock_and_refuses_a_run_that_calls_a_function() {
     let project = study.path("project.yaml");
     let engine = engine();
     for name in ["PLAIN", "CALLS"] {
-        let spec = engine.project_spec(&project, name).unwrap();
+        let spec = engine.project(&project).spec(name).unwrap();
         assert_eq!(
             outcome(&yamaa(&["check", &project, "--spec", name])),
-            printed(0, format!("yamaa check of {spec}: succeeded, 0 issues\n")),
+            printed(
+                0,
+                format!("yamaa check of {}: succeeded, 0 issues\n", spec.path())
+            ),
             "{name}"
         );
     }
@@ -1999,11 +2015,8 @@ fn the_engine_reads_no_host_lock_and_refuses_a_run_that_calls_a_function() {
             )
         )
     );
-    let calls = engine.project_spec(&project, "CALLS").unwrap();
-    let issues = engine
-        .spec_run(&calls, Some(&project), &CancellationToken::new())
-        .unwrap()
-        .diagnostics();
+    let calls = engine.project(&project).spec("CALLS").unwrap();
+    let issues = calls.run().unwrap().diagnostics();
     let [refused] = issues.as_slice() else {
         panic!("one issue: {issues:?}");
     };
@@ -2026,7 +2039,7 @@ fn the_engine_reads_no_host_lock_and_refuses_a_run_that_calls_a_function() {
             "unsupported_operation",
             None,
             ["columns.LOUD.derivation".to_owned()].as_slice(),
-            calls.replace('\\', "/"),
+            calls.path().replace('\\', "/"),
             Some((9, 42)),
             r#"{"operation":"environment"}"#,
         ),

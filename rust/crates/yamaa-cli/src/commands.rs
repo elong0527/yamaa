@@ -76,7 +76,8 @@ use std::ffi::OsStr;
 
 use yamaa::{
     Action, CancellationToken, Condition, ContextValue, Diagnostic, Engine, EngineOptions, Error,
-    Failure, FileType, Host, Info, LintFinding, OdmOptions, ProjectRun, Run, Status, Summary,
+    Failure, FileType, Host, Info, LintFinding, OdmOptions, ProjectRequest, ProjectRun, Run,
+    Status, SubmissionOptions, Summary,
 };
 
 use crate::arguments::{Call, Format, Usage};
@@ -325,6 +326,21 @@ fn engine() -> Engine {
     ))
 }
 
+/// The request of the project `path`, polling `token`, whose run and
+/// submission take `section` when one is given.
+fn project_request<'a>(
+    engine: &'a Engine,
+    path: &'a str,
+    section: Option<&'a str>,
+    token: &'a CancellationToken,
+) -> ProjectRequest<'a> {
+    let request = engine.project(path).cancel_with(token);
+    match section {
+        Some(section) => request.section(section),
+        None => request,
+    }
+}
+
 /// `yamaa check PATH`: `s.check()` of a spec, `p.check()` of a project, or,
 /// with `--spec NAME`, `p.spec(name).check()`.
 fn check(call: &Call, token: &CancellationToken) -> Result<Printed, Execution> {
@@ -339,12 +355,20 @@ fn check(call: &Call, token: &CancellationToken) -> Result<Printed, Execution> {
     // The path a refusal of the check names: the specification checked, or
     // the project.
     let (checked, subject) = match (file_type, name) {
-        (FileType::Spec, None) => (engine.spec_check(path, None, token), path.to_owned()),
-        (FileType::Project, None) => (engine.project_check(path, token), path.to_owned()),
-        (FileType::Project, Some(name)) => match engine.project_spec(path, name) {
-            Ok(spec) => (engine.spec_check(&spec, Some(path), token), spec),
-            Err(failure) => return Ok(refusal(document, failure)),
-        },
+        (FileType::Spec, None) => (
+            engine.spec(path).cancel_with(token).check(),
+            path.to_owned(),
+        ),
+        (FileType::Project, None) => (
+            engine.project(path).cancel_with(token).check(),
+            path.to_owned(),
+        ),
+        (FileType::Project, Some(name)) => {
+            match engine.project(path).cancel_with(token).spec(name) {
+                Ok(spec) => (spec.check(), spec.path().to_owned()),
+                Err(failure) => return Ok(refusal(document, failure)),
+            }
+        }
         (FileType::Spec, Some(_)) => {
             return Err(not_taken(call, path, file_type, Some("with --spec")))
         }
@@ -389,37 +413,39 @@ fn run(call: &Call, token: &CancellationToken) -> Result<Printed, Execution> {
     };
     // The arguments give `--spec` or `--section`, not both.
     Ok(match (file_type, name, section) {
-        (FileType::Spec, None, None) => {
-            saved(document, engine.spec_run(path, None, token), path, token)
+        (FileType::Spec, None, None) => saved(
+            document,
+            engine.spec(path).cancel_with(token).run(),
+            path,
+            token,
+        ),
+        (FileType::Project, Some(name), _) => {
+            match engine.project(path).cancel_with(token).spec(name) {
+                Ok(spec) => saved(document, spec.run(), spec.path(), token),
+                Err(failure) => refusal(document, failure),
+            }
         }
-        (FileType::Project, Some(name), _) => match engine.project_spec(path, name) {
-            Ok(spec) => saved(
-                document,
-                engine.spec_run(&spec, Some(path), token),
-                &spec,
-                token,
-            ),
-            Err(failure) => refusal(document, failure),
-        },
         // Every section, or the one named; an unknown section refuses the
         // run (D98).
-        (FileType::Project, None, section) => match engine.project_run(path, section, token) {
-            Ok(mut runs) => {
-                let saved = runs.save(token);
-                document.insert("members".into(), members(&runs));
-                result(
-                    document,
-                    &runs.summary(),
-                    runs.status(),
-                    runs.diagnostics(),
-                    Some(saved),
-                )
+        (FileType::Project, None, section) => {
+            match project_request(&engine, path, section, token).run() {
+                Ok(mut runs) => {
+                    let saved = runs.save(token);
+                    document.insert("members".into(), members(&runs));
+                    result(
+                        document,
+                        &runs.summary(),
+                        runs.status(),
+                        runs.diagnostics(),
+                        Some(saved),
+                    )
+                }
+                Err(error) => {
+                    let action = section.map_or(Action::Read(path), Action::Select);
+                    refusal(document, Failure::from_error(action, &error))
+                }
             }
-            Err(error) => {
-                let action = section.map_or(Action::Read(path), Action::Select);
-                refusal(document, Failure::from_error(action, &error))
-            }
-        },
+        }
         (FileType::Spec, Some(_), _) => {
             return Err(not_taken(call, path, file_type, Some("with --spec")))
         }
@@ -501,7 +527,9 @@ fn submission(call: &Call, token: &CancellationToken) -> Result<Printed, Executi
         Ok(other) => return Err(not_taken(call, path, other, None)),
         Err(failure) => return Ok(refusal(document, failure)),
     }
-    let composed = engine.project_submission(path, section, created, yamaa::VERSION, token);
+    let mut options = SubmissionOptions::new(yamaa::VERSION);
+    options.created = created.map(str::to_owned);
+    let composed = project_request(&engine, path, section, token).submission(&options);
     Ok(match composed {
         Ok(mut submission) => {
             let saved = submission.save(token);
@@ -545,10 +573,11 @@ fn resolve(call: &Call) -> Result<Printed, Execution> {
         Err(failure) => return Ok(refusal(document, failure)),
     };
     let resolved = match (file_type, name) {
-        (FileType::Spec, None) => engine.spec_resolve(path, None),
+        (FileType::Spec, None) => engine.spec(path).resolve(),
         (FileType::Project, Some(name)) => engine
-            .project_spec(path, name)
-            .and_then(|spec| engine.spec_resolve(&spec, Some(path))),
+            .project(path)
+            .spec(name)
+            .and_then(|spec| spec.resolve()),
         (FileType::Spec, Some(_)) => {
             return Err(not_taken(call, path, file_type, Some("with --spec")))
         }

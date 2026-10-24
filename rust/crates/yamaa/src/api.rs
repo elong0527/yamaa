@@ -1,9 +1,11 @@
 //! The host API both bindings expose: operations on a specification or a
-//! project path. Hosts keep the paths in their own lazy objects; every call
-//! here rereads the files, and every result is a fixed snapshot that writes
-//! nothing until `save`. A lazy object also keeps a [`Plans`] holder, so a
-//! later run reuses what an earlier run compiled once the run-start check
-//! finds the files unchanged.
+//! project path. [`Engine::spec`] and [`Engine::project`] give one request
+//! for each, a [`SpecRequest`] or a [`ProjectRequest`], which holds what a
+//! host's lazy object holds and reads nothing until one of its operations
+//! runs. Every operation rereads the files, and every result is a fixed
+//! snapshot that writes nothing until `save`. A lazy object also keeps a
+//! [`Plans`] holder, which its requests reuse, so a later run reuses what an
+//! earlier run compiled once the run-start check finds the files unchanged.
 //!
 //! Every operation produces one outcome: its members in run order and the
 //! project-level issues that refused the whole operation. A specification run
@@ -14,6 +16,7 @@
 //! Each prints its [`Summary`] (D37), and a refusal's message is D39's error
 //! text, both rendered by [`crate::text`].
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
@@ -122,8 +125,8 @@ pub enum Status {
 pub const STATUSES: [&str; 3] = ["succeeded", "failed", "skipped"];
 
 /// The sections a project file declares, as written, in run order: the closed
-/// vocabulary of the `section` that [`Engine::project_run`] and
-/// [`Engine::project_submission`] take (PROJECT-3).
+/// vocabulary of the `section` that [`ProjectRequest::section`] takes
+/// (PROJECT-3).
 pub const SECTIONS: [&str; 3] = ["sdtm", "adam", "send"];
 
 impl Status {
@@ -269,20 +272,21 @@ pub(crate) type PlanKey = (String, Option<String>);
 /// The compiled plans a host's lazy object keeps between runs (#2821), one
 /// for each specification and project identity its runs compiled.
 ///
-/// [`Engine::spec_run_reusing`] and [`Engine::project_run_reusing`] first
-/// resolve the request's paths exactly as compilation does: absolute against
-/// the current working directory, with each parent directory canonical. A
-/// kept plan is reused only when those identities equal the ones it was
-/// compiled from, so a relative path after a working-directory change, or a
-/// path through a retargeted link, compiles anew (#3069). Its run-start check
-/// must then find every file it was compiled from unchanged: the
-/// specification, its layers, dictionaries and linked producing
-/// specifications, the project file, and the lock, function files and
-/// codelist files it declares. Otherwise the run
-/// compiles again, exactly as a one-shot run does, and keeps the new plan; a
-/// refused compilation keeps nothing. Every run reads its inputs and activates
-/// the project functions afresh, so a reused run differs from a one-shot run
-/// only in time.
+/// The run of a request given a holder with [`SpecRequest::reusing`] or
+/// [`ProjectRequest::reusing`] first resolves the request's paths exactly as
+/// compilation does: absolute against the current working directory, with
+/// each parent directory canonical. A kept plan is reused only when those
+/// identities equal the ones it was compiled from, so a relative path after
+/// a working-directory change, or a path through a retargeted link, compiles
+/// anew (#3069). Its run-start check must then find every file it was
+/// compiled from unchanged: the specification, its layers, dictionaries and
+/// linked producing specifications, the project file, and the lock, function
+/// files and codelist files it declares. Otherwise the run compiles again,
+/// exactly as a one-shot run does, and keeps the new plan; a refused
+/// compilation keeps nothing. Every run reads its inputs and activates the
+/// project functions afresh, so a reused run differs from a one-shot run
+/// only in time. A request given no holder runs through an empty one: each
+/// of its runs is a one-shot run.
 ///
 /// A kept plan holds no project functions or observer: it runs through the
 /// calling engine's. A holder is `Send` and `Sync`. Its lock is held only to
@@ -372,6 +376,36 @@ struct Node<'a> {
 }
 
 impl Engine {
+    /// The request of the specification `path`, which reads nothing until
+    /// one of its operations runs, as a host's specification object reads
+    /// nothing until a method runs. Its builders name the project file the
+    /// specification is read with, the [`Plans`] holder its runs reuse and
+    /// the [`CancellationToken`] its operations poll.
+    pub fn spec<'a>(&'a self, path: &'a str) -> SpecRequest<'a> {
+        SpecRequest {
+            engine: self,
+            path: Cow::Borrowed(path),
+            project: None,
+            plans: None,
+            token: None,
+        }
+    }
+
+    /// The request of the project file `path`, which reads nothing until one
+    /// of its operations runs, as a host's project object reads nothing
+    /// until a method runs. Its builders name the section its run and
+    /// submission take, the [`Plans`] holder its runs reuse and the
+    /// [`CancellationToken`] its operations poll.
+    pub fn project<'a>(&'a self, path: &'a str) -> ProjectRequest<'a> {
+        ProjectRequest {
+            engine: self,
+            path,
+            section: None,
+            plans: None,
+            token: None,
+        }
+    }
+
     /// Build every member of a producer graph once, in order. A producer
     /// hands its artifact to its consumers in memory; a member whose own
     /// findings refuse it, or whose producer did not complete, does not
@@ -433,11 +467,86 @@ impl Engine {
             locator: Arc::new(Locator::none()),
         })
     }
+}
 
-    /// Check one specification without reading study data or running project
-    /// code, with the project's codelists and functions when it has one.
-    /// Admission and preparation failures are the check's issues, never a
-    /// second error channel; only cancellation fails the call.
+/// One specification's operations: its path and the project file it is read
+/// with, the [`Plans`] holder its runs reuse and the [`CancellationToken`]
+/// its operations poll, which [`Engine::spec`] or [`ProjectRequest::spec`]
+/// gives and the builders below add to. A request reads nothing until an
+/// operation runs, and each operation rereads the files, so one request can
+/// run any of them, any number of times.
+///
+/// Without [`SpecRequest::project`] the specification is read alone; without
+/// [`SpecRequest::reusing`] each run compiles it, through an empty holder;
+/// without [`SpecRequest::cancel_with`] its operations poll a token that
+/// nothing cancels. [`SpecRequest::check`], [`SpecRequest::run`] and
+/// [`SpecRequest::stream`] poll the token; [`SpecRequest::resolve`] polls
+/// none and keeps no plan.
+#[non_exhaustive]
+#[must_use = "a request reads nothing until one of its operations runs"]
+#[derive(Clone)]
+pub struct SpecRequest<'a> {
+    engine: &'a Engine,
+    /// The specification's path: as given, or the listed specification's
+    /// path resolved against the project file.
+    path: Cow<'a, str>,
+    project: Option<&'a str>,
+    plans: Option<&'a Plans>,
+    token: Option<&'a CancellationToken>,
+}
+
+impl<'a> SpecRequest<'a> {
+    /// The same request, read with the project file `project`: its
+    /// codelists, functions and environment.
+    pub fn project(mut self, project: &'a str) -> Self {
+        self.project = Some(project);
+        self
+    }
+
+    /// The same request, whose runs reuse the plans `plans` keeps, as a
+    /// host's specification object runs: the first run compiles the
+    /// specification and keeps its plan, and a later run reuses that plan
+    /// when its paths still resolve to the files it was compiled from and the
+    /// run-start check finds every one of them unchanged, and compiles again
+    /// otherwise, so no run uses stale or moved files. The holder keeps this
+    /// specification's plan alone. See [`Plans`].
+    pub fn reusing(mut self, plans: &'a Plans) -> Self {
+        self.plans = Some(plans);
+        self
+    }
+
+    /// The same request, whose operations poll `token`: a cancelled
+    /// operation fails with [`Error::Cancelled`], with no result and no
+    /// issue. See [`CancellationToken`] for where an operation polls it.
+    pub fn cancel_with(mut self, token: &'a CancellationToken) -> Self {
+        self.token = Some(token);
+        self
+    }
+
+    /// The specification's path: as given to [`Engine::spec`], or, for a
+    /// request [`ProjectRequest::spec`] gives, the listed specification's
+    /// path resolved against the project file, as checks and builds receive
+    /// it.
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
+    /// The request as compilation and the check read it.
+    fn request(&self) -> Request<'_> {
+        request(&self.path, self.project)
+    }
+
+    /// The token the operations poll: the request's, or else one that
+    /// nothing cancels. A clone shares the request's flag and probe.
+    fn token(&self) -> CancellationToken {
+        self.token.cloned().unwrap_or_default()
+    }
+
+    /// Check the specification without reading study data or running project
+    /// code, with the project's codelists and functions when the request
+    /// names a project. Admission and preparation failures are the check's
+    /// issues, never a second error channel; only cancellation fails the
+    /// call.
     ///
     /// # Example
     ///
@@ -448,7 +557,7 @@ impl Engine {
     /// ```
     /// use std::sync::Arc;
     ///
-    /// use yamaa::{CancellationToken, Engine, EngineOptions, HostLanguage, MemoryResolver};
+    /// use yamaa::{Engine, EngineOptions, HostLanguage, MemoryResolver};
     ///
     /// let resolver = Arc::new(MemoryResolver::new());
     /// resolver.insert("/", "spec.yaml", "spec:1", Arc::from(
@@ -458,23 +567,20 @@ impl Engine {
     ///     EngineOptions::new(HostLanguage::Python, "doctest".into(), "0".into())
     ///         .with_resolver(resolver),
     /// );
-    /// let check = engine
-    ///     .spec_check("spec.yaml", None, &CancellationToken::new())
-    ///     .unwrap();
+    /// let check = engine.spec("spec.yaml").check().unwrap();
     /// if cfg!(feature = "yaml") {
     ///     assert!(check.diagnostics().is_empty());
     /// } else {
     ///     assert!(!check.diagnostics().is_empty());
     /// }
     /// ```
-    pub fn spec_check(
-        &self,
-        specification: &str,
-        project: Option<&str>,
-        token: &CancellationToken,
-    ) -> Result<Check, Error> {
-        let (issues, locator) =
-            crate::internal::run_check(self.shared(), specification, project, token)?;
+    pub fn check(&self) -> Result<Check, Error> {
+        let (issues, locator) = crate::internal::run_check(
+            self.engine.shared(),
+            &self.path,
+            self.project,
+            &self.token(),
+        )?;
         Ok(Check {
             outcome: Outcome {
                 members: vec![Member {
@@ -485,11 +591,11 @@ impl Engine {
                 issues: Vec::new(),
                 locator: Arc::new(Locator::none()),
             },
-            subject: specification.to_owned(),
+            subject: self.path.clone().into_owned(),
         })
     }
 
-    /// Build one specification in memory; nothing is written until `save`.
+    /// Build the specification in memory; nothing is written until `save`.
     /// Every adjudicated outcome is a [`Run`] carrying its output, issues and
     /// run report; only cancellation fails the call.
     ///
@@ -535,7 +641,7 @@ impl Engine {
     ///         .with_resolver(resolver.clone()),
     /// );
     /// let token = CancellationToken::new();
-    /// let mut run = engine.spec_run("spec.yaml", None, &token).unwrap();
+    /// let mut run = engine.spec("spec.yaml").cancel_with(&token).run().unwrap();
     /// if cfg!(feature = "yaml") {
     ///     assert_eq!(run.output().unwrap().rows(), 2);
     ///     assert!(run.diagnostics().is_empty());
@@ -546,30 +652,11 @@ impl Engine {
     ///     assert!(!run.diagnostics().is_empty());
     /// }
     /// ```
-    pub fn spec_run(
-        &self,
-        specification: &str,
-        project: Option<&str>,
-        token: &CancellationToken,
-    ) -> Result<Run, Error> {
-        self.spec_run_reusing(specification, project, &Plans::new(), token)
-    }
-
-    /// [`Engine::spec_run`] through `plans`, as a host's specification object
-    /// runs. The first run compiles the specification and keeps its plan; a
-    /// later run reuses that plan when its paths still resolve to the files
-    /// it was compiled from and the run-start check finds every one of them
-    /// unchanged, and compiles again otherwise, so no run uses stale or moved
-    /// files. See [`Plans`].
-    pub fn spec_run_reusing(
-        &self,
-        specification: &str,
-        project: Option<&str>,
-        plans: &Plans,
-        token: &CancellationToken,
-    ) -> Result<Run, Error> {
-        let request = request(specification, project);
-        let identity = crate::internal::request_identity(self.shared(), &request);
+    pub fn run(&self) -> Result<Run, Error> {
+        let once = Plans::new();
+        let plans = self.plans.unwrap_or(&once);
+        let request = self.request();
+        let identity = crate::internal::request_identity(self.engine.shared(), &request);
         // A spec object names one specification: a plan kept for another
         // identity, such as the one its relative path named before the
         // working directory changed, is dropped.
@@ -585,7 +672,7 @@ impl Engine {
             artifact: None,
             locator: Arc::new(Locator::none()),
         };
-        let outcome = self.run_graph(vec![node], plans, token)?;
+        let outcome = self.engine.run_graph(vec![node], plans, &self.token())?;
         let member = outcome
             .members
             .into_iter()
@@ -597,15 +684,15 @@ impl Engine {
         }
     }
 
-    /// [`Engine::spec_run_reusing`] with its output read as a stream (#3697):
-    /// a [`Streamed`] run, which reads no study data and calls no project
+    /// [`SpecRequest::run`] with its output read as a stream (#3697): a
+    /// [`Streamed`] run, which reads no study data and calls no project
     /// function until its output is read or its result asked for. The call
-    /// compiles the specification, or reuses the plan `plans` keeps, as
-    /// [`Engine::spec_run_reusing`] does; a refused compilation's run has
-    /// already ended, with its issues and no output. The run polls `token`
-    /// from then on: at every checkpoint of its schedule, and before each
-    /// batch. See [`crate::stream`] for how its output is produced and how
-    /// it ends.
+    /// compiles the specification, or reuses the plan the request's holder
+    /// keeps, as [`SpecRequest::run`] does; a refused compilation's run has
+    /// already ended, with its issues and no output. The run polls the
+    /// request's token from then on: at every checkpoint of its schedule,
+    /// and before each batch. See [`crate::stream`] for how its output is
+    /// produced and how it ends.
     ///
     /// # Example
     ///
@@ -627,8 +714,13 @@ impl Engine {
     ///     EngineOptions::new(HostLanguage::Python, "doctest".into(), "0".into())
     ///         .with_resolver(resolver.clone()),
     /// );
-    /// let token = CancellationToken::new();
-    /// let streamed = engine.spec_stream("spec.yaml", None, &Plans::new(), &token).unwrap();
+    /// let (plans, token) = (Plans::new(), CancellationToken::new());
+    /// let streamed = engine
+    ///     .spec("spec.yaml")
+    ///     .reusing(&plans)
+    ///     .cancel_with(&token)
+    ///     .stream()
+    ///     .unwrap();
     /// if cfg!(feature = "yaml") {
     ///     // Nothing is read until the first pull.
     ///     assert!(resolver.published("memory:/out.csv").is_none());
@@ -643,45 +735,52 @@ impl Engine {
     /// }
     /// ```
     #[cfg(feature = "arrow")]
-    pub fn spec_stream(
-        &self,
-        specification: &str,
-        project: Option<&str>,
-        plans: &Plans,
-        token: &CancellationToken,
-    ) -> Result<Streamed, Error> {
+    pub fn stream(&self) -> Result<Streamed, Error> {
+        let token = self.token();
         if token.is_cancelled() {
             return Err(Error::Cancelled);
         }
-        let request = request(specification, project);
-        let identity = crate::internal::request_identity(self.shared(), &request);
-        // As a run reusing `plans` keeps only this specification's plan.
+        let once = Plans::new();
+        let plans = self.plans.unwrap_or(&once);
+        let request = self.request();
+        let identity = crate::internal::request_identity(self.engine.shared(), &request);
+        // As a run reusing the holder keeps only this specification's plan.
         plans.retain(|kept| identity.as_ref() == Some(kept));
         let measurements = Arc::new(yamaa_adapters::application_measurements::Measurements::new());
-        let (plan, compiled) = self.plan_reusing(plans, &request, identity.as_ref(), &measurements);
+        let (plan, compiled) =
+            self.engine
+                .plan_reusing(plans, &request, identity.as_ref(), &measurements);
         if compiled {
-            self.keep(plans, &request, identity, &plan);
+            self.engine.keep(plans, &request, identity, &plan);
         }
         Ok(Streamed::new(
-            self,
+            self.engine,
             plan,
-            specification,
+            &self.path,
             measurements,
-            token,
+            &token,
         ))
     }
 
     /// The specification after its layers are composed, as one structured
     /// tree: the normalized model, each field's origin and each resource.
-    pub fn spec_resolve(
-        &self,
-        specification: &str,
-        project: Option<&str>,
-    ) -> Result<ContextValue, Failure> {
+    pub fn resolve(&self) -> Result<ContextValue, Failure> {
         let resolved = self
-            .resolve_specification(&request(specification, project))
-            .map_err(|error| Failure::from_error(Action::Resolve(specification), &error))?;
-        resolved_value(specification, resolved.to_value())
+            .engine
+            .resolve_specification(&self.request())
+            .map_err(|error| Failure::from_error(Action::Resolve(&self.path), &error))?;
+        resolved_value(&self.path, resolved.to_value())
+    }
+}
+
+impl std::fmt::Debug for SpecRequest<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SpecRequest")
+            .field("path", &self.path)
+            .field("project", &self.project)
+            .field("reusing", &self.plans.is_some())
+            .field("token", &self.token)
+            .finish_non_exhaustive()
     }
 }
 
@@ -960,15 +1059,85 @@ impl Submission {
     }
 }
 
-impl Engine {
-    /// Path of the listed specification whose `domain` is `name`.
+/// One project file's operations: its path, the section its run and
+/// submission take, the [`Plans`] holder its runs reuse and the
+/// [`CancellationToken`] its operations poll, which [`Engine::project`] gives
+/// and the builders below add to. A request reads nothing until an operation
+/// runs, and each operation reads the project file afresh, so the scope and
+/// order of each follow the current file; one request can run any of them,
+/// any number of times.
+///
+/// Without [`ProjectRequest::section`] a run builds, and a submission
+/// composes, every section; without [`ProjectRequest::reusing`] each run
+/// compiles every specification, through an empty holder; without
+/// [`ProjectRequest::cancel_with`] its operations poll a token that nothing
+/// cancels. [`ProjectRequest::check`], [`ProjectRequest::run`] and
+/// [`ProjectRequest::submission`] poll the token; [`ProjectRequest::names`]
+/// and [`ProjectRequest::spec`] read the project file alone and poll none.
+#[non_exhaustive]
+#[must_use = "a request reads nothing until one of its operations runs"]
+#[derive(Clone)]
+pub struct ProjectRequest<'a> {
+    engine: &'a Engine,
+    path: &'a str,
+    section: Option<&'a str>,
+    plans: Option<&'a Plans>,
+    token: Option<&'a CancellationToken>,
+}
+
+impl<'a> ProjectRequest<'a> {
+    /// The same request, whose run builds, and whose submission composes,
+    /// the one section `section`, one of [`SECTIONS`]. Once the project file
+    /// is read, a section it does not declare, or any other text, fails the
+    /// run or the submission with `unknown_section` (PROJECT-14) as
+    /// [`Error::Rejected`]. [`ProjectRequest::check`],
+    /// [`ProjectRequest::names`] and [`ProjectRequest::spec`] read every
+    /// section, whichever the request names.
+    pub fn section(mut self, section: &'a str) -> Self {
+        self.section = Some(section);
+        self
+    }
+
+    /// The same request, whose runs reuse the plans `plans` keeps, as a
+    /// host's project object runs. The project file is read afresh every
+    /// time, so the run scope and order follow the current file, and each
+    /// listed specification is identified from that read: the plan an
+    /// earlier run kept for the same specification and project identities is
+    /// reused under the rule of [`SpecRequest::reusing`]. Plans kept for
+    /// anything the file no longer lists, or for another project file, are
+    /// dropped. See [`Plans`].
+    pub fn reusing(mut self, plans: &'a Plans) -> Self {
+        self.plans = Some(plans);
+        self
+    }
+
+    /// The same request, whose operations poll `token`: a cancelled
+    /// operation fails with [`Error::Cancelled`], with no result and no
+    /// issue. See [`CancellationToken`] for where an operation polls it.
+    pub fn cancel_with(mut self, token: &'a CancellationToken) -> Self {
+        self.token = Some(token);
+        self
+    }
+
+    /// The token the operations poll: the request's, or else one that
+    /// nothing cancels. A clone shares the request's flag and probe.
+    fn token(&self) -> CancellationToken {
+        self.token.cloned().unwrap_or_default()
+    }
+
+    /// The request of the listed specification whose `domain` is `name`,
+    /// read with this project file, as a host's project object gives a
+    /// specification object: its [`SpecRequest::path`] is the listed
+    /// specification's, and its operations poll this request's token. It
+    /// reuses none of this request's plans: [`SpecRequest::reusing`] gives it
+    /// a holder of its own, as each host object keeps its own.
     ///
     /// Every refusal names the call as `cannot select <name>` (D39): a
     /// project that cannot be read, one that lists a name twice, or a name it
     /// does not list, whose issue names the listed names.
-    pub fn project_spec(&self, project: &str, name: &str) -> Result<String, Failure> {
+    pub fn spec(&self, name: &str) -> Result<SpecRequest<'a>, Failure> {
         let action = Action::Select(name);
-        let read = crate::internal::read_project(self.shared(), project).map_err(
+        let read = crate::internal::read_project(self.engine.shared(), self.path).map_err(
             |(issues, locator)| Failure::new(action, &Report::located(&issues, &locator)),
         )?;
         let duplicates = read.duplicates();
@@ -979,7 +1148,13 @@ impl Engine {
             ));
         }
         match read.find(name) {
-            Ok(listed) => Ok(listed.path().to_owned()),
+            Ok(listed) => Ok(SpecRequest {
+                engine: self.engine,
+                path: Cow::Owned(listed.path().to_owned()),
+                project: Some(self.path),
+                plans: None,
+                token: self.token,
+            }),
             Err(issues) => Err(Failure::from_issues(action, &issues)),
         }
     }
@@ -991,15 +1166,15 @@ impl Engine {
     /// listing that could not be read has no name and is left out, as a run
     /// leaves it out. A project whose run another project finding refuses,
     /// such as two listings that write one file, still names its
-    /// specifications, each of which [`Engine::project_spec`] selects; the
+    /// specifications, each of which [`ProjectRequest::spec`] selects; the
     /// refusal stays the run's, which names nothing (D180).
     ///
     /// Every refusal names the call as `cannot read <project>` (D39): a
     /// project that cannot be read, or one that lists a name twice, whose
     /// issue names both listings.
-    pub fn project_names(&self, project: &str) -> Result<Vec<String>, Failure> {
-        let action = Action::Read(project);
-        let read = crate::internal::read_project(self.shared(), project).map_err(
+    pub fn names(&self) -> Result<Vec<String>, Failure> {
+        let action = Action::Read(self.path);
+        let read = crate::internal::read_project(self.engine.shared(), self.path).map_err(
             |(issues, locator)| Failure::new(action, &Report::located(&issues, &locator)),
         )?;
         let duplicates = read.duplicates();
@@ -1022,11 +1197,13 @@ impl Engine {
     /// read a listed artifact without a `schema` link, and colliding files.
     /// Only cancellation fails the call, with no result: a check cancelled
     /// between specifications returns none of the findings it gathered.
-    pub fn project_check(&self, project: &str, token: &CancellationToken) -> Result<Check, Error> {
+    pub fn check(&self) -> Result<Check, Error> {
+        let (project, token) = (self.path, self.token());
         if token.is_cancelled() {
             return Err(Error::Cancelled);
         }
-        let read = match crate::internal::read_project(self.shared(), project) {
+        let shared = self.engine.shared();
+        let read = match crate::internal::read_project(shared, project) {
             Ok(read) => read,
             Err((issues, locator)) => {
                 return Ok(Check {
@@ -1041,7 +1218,7 @@ impl Engine {
                 return Err(Error::Cancelled);
             }
             let (issues, locator) = if listed.failure().is_empty() {
-                crate::internal::run_check(self.shared(), listed.path(), Some(project), token)?
+                crate::internal::run_check(shared, listed.path(), Some(project), &token)?
             } else {
                 (listed.failure().to_vec(), Arc::clone(read.locator()))
             };
@@ -1061,44 +1238,26 @@ impl Engine {
         })
     }
 
-    /// Build every listed specification of `section`, one of [`SECTIONS`],
-    /// or of all sections in that order. Each builds once, producer first; a
-    /// producer in the run scope hands its artifact to its consumers in
-    /// memory, and one outside it is read from its saved artifact file. A
+    /// Build every listed specification of the request's section, or of all
+    /// sections in the order of [`SECTIONS`]. Each builds once, producer
+    /// first; a producer in the run scope hands its artifact to its consumers
+    /// in memory, and one outside it is read from its saved artifact file. A
     /// failed specification stops only its consumers. Project problems come
     /// back as issues of a run that built nothing; only an unknown section
     /// and cancellation fail the call, and a user interrupt in project code
     /// cancels it (D46), so no later specification builds. Once the project
     /// file is read, a section it does not declare, or any other text, fails
-    /// with `unknown_section` (PROJECT-14) as `Error::Rejected`.
-    pub fn project_run(
-        &self,
-        project: &str,
-        section: Option<&str>,
-        token: &CancellationToken,
-    ) -> Result<ProjectRun, Error> {
-        self.project_run_reusing(project, section, &Plans::new(), token)
-    }
-
-    /// [`Engine::project_run`] through `plans`, as a host's project object
-    /// runs. The project file is read afresh every time, so the run scope and
-    /// order follow the current file, and each listed specification is
-    /// identified from that read: the plan an earlier run kept for the same
-    /// specification and project identities is reused under the rule of
-    /// [`Engine::spec_run_reusing`]. Plans kept for anything the file no
-    /// longer lists, or for another project file, are dropped.
-    pub fn project_run_reusing(
-        &self,
-        project: &str,
-        section: Option<&str>,
-        plans: &Plans,
-        token: &CancellationToken,
-    ) -> Result<ProjectRun, Error> {
+    /// with `unknown_section` (PROJECT-14) as [`Error::Rejected`].
+    pub fn run(&self) -> Result<ProjectRun, Error> {
+        let (project, section, token) = (self.path, self.section, self.token());
         if token.is_cancelled() {
             return Err(Error::Cancelled);
         }
+        let once = Plans::new();
+        let plans = self.plans.unwrap_or(&once);
+        let shared = self.engine.shared();
         let subject = project_subject(project, section);
-        let read = match crate::internal::read_project(self.shared(), project) {
+        let read = match crate::internal::read_project(shared, project) {
             Ok(read) => read,
             Err((issues, locator)) => {
                 return Ok(ProjectRun {
@@ -1117,7 +1276,7 @@ impl Engine {
                 (listed.failure().is_empty())
                     .then(|| {
                         let request = Request::new(listed.path()).with_environment(project);
-                        crate::internal::request_identity(self.shared(), &request)
+                        crate::internal::request_identity(shared, &request)
                     })
                     .flatten()
             })
@@ -1162,61 +1321,54 @@ impl Engine {
             })
             .collect();
         Ok(ProjectRun {
-            outcome: self.run_graph(nodes, plans, token)?,
+            outcome: self.engine.run_graph(nodes, plans, &token)?,
             subject,
         })
     }
 
-    /// One define.xml per section, selected or all declared, plus
-    /// Dataset-JSON where the section sets `transport: dataset_json`. Without a
-    /// section, every declared section that names `define` is composed.
-    /// Every section is composed with one creation time,
-    /// [`Submission::created`]: `created` as given, or else the current UTC
-    /// time, read once before the project file (D129).
+    /// One define.xml for the request's section, or for every declared
+    /// section that names `define`, plus Dataset-JSON where the section sets
+    /// `transport: dataset_json`. Every section is composed with one creation
+    /// time, [`Submission::created`]: the options' `created` as given, or
+    /// else the current UTC time, read once before the project file (D129).
     /// Project problems come back as issues; only an unknown section and
     /// cancellation fail the call. Once the project file is read, a section
     /// it does not declare, or any other text, fails with `unknown_section`
-    /// (PROJECT-14) as `Error::Rejected`.
-    pub fn project_submission(
-        &self,
-        project: &str,
-        section: Option<&str>,
-        created: Option<&str>,
-        installed: &str,
-        token: &CancellationToken,
-    ) -> Result<Submission, Error> {
+    /// (PROJECT-14) as [`Error::Rejected`].
+    pub fn submission(&self, options: &SubmissionOptions) -> Result<Submission, Error> {
+        let token = self.token();
         if token.is_cancelled() {
             return Err(Error::Cancelled);
         }
         // One creation time for every section (D129). A clock that gives no
         // time leaves each section to read it and refuse it (DEFINE-3).
-        let created = created
-            .map(str::to_owned)
+        let created = options
+            .created
+            .clone()
             .or_else(yamaa_adapters::file_define::current_time);
         let outcome =
-            self.compose_sections(project, section, created.as_deref(), installed, token)?;
+            self.compose_sections(created.as_deref(), &options.installed_version, &token)?;
         Ok(Submission {
             outcome,
-            subject: project_subject(project, section),
+            subject: project_subject(self.path, self.section),
             created: created.unwrap_or_default(),
         })
     }
 
-    /// What [`Engine::project_submission`] composes, every section with
-    /// `created`.
+    /// What [`ProjectRequest::submission`] composes, every section with
+    /// `created` and `installed_version`.
     fn compose_sections(
         &self,
-        project: &str,
-        section: Option<&str>,
         created: Option<&str>,
-        installed: &str,
+        installed_version: &str,
         token: &CancellationToken,
     ) -> Result<Outcome, Error> {
-        let read = match crate::internal::read_project(self.shared(), project) {
+        let (project, shared) = (self.path, self.engine.shared());
+        let read = match crate::internal::read_project(shared, project) {
             Ok(read) => read,
             Err((issues, locator)) => return Ok(Outcome::refused(issues, locator)),
         };
-        let selected = select(&read, section)?;
+        let selected = select(&read, self.section)?;
         let duplicates = read.duplicates();
         if !duplicates.is_empty() {
             return Ok(Outcome::refused(duplicates, Arc::clone(read.locator())));
@@ -1230,7 +1382,7 @@ impl Engine {
             if token.is_cancelled() {
                 return Err(Error::Cancelled);
             }
-            let define = DefineBuild::compose(self.shared(), project, section, created, installed);
+            let define = DefineBuild::compose(shared, project, section, created, installed_version);
             members.push(Member {
                 name: Some(yamaa_core::project_scope::key(section).to_owned()),
                 identity: None,
@@ -1242,6 +1394,54 @@ impl Engine {
             issues: Vec::new(),
             locator: Arc::clone(read.locator()),
         })
+    }
+}
+
+impl std::fmt::Debug for ProjectRequest<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProjectRequest")
+            .field("path", &self.path)
+            .field("section", &self.section)
+            .field("reusing", &self.plans.is_some())
+            .field("token", &self.token)
+            .finish_non_exhaustive()
+    }
+}
+
+/// What [`ProjectRequest::submission`] composes with. The struct is
+/// `#[non_exhaustive]`: start from [`SubmissionOptions::new`] and the
+/// `with_*` methods.
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SubmissionOptions {
+    /// The source-system version Define-XML and Dataset-JSON carry for a
+    /// section that names none (DEFINE-12): the version of the package that
+    /// calls the engine, such as [`crate::VERSION`] for the hosts and the
+    /// command line. An empty version refuses each section with
+    /// `source_system_incomplete` at `source_system_version`, whether or not
+    /// the section names a version of its own.
+    pub installed_version: String,
+    /// The creation time every section is composed with, as ISO 8601 text,
+    /// or none to read the current UTC time once for every section (D69,
+    /// D129). A time DEFINE-3 refuses is kept as given, and each section
+    /// fails with `value_not_permitted` at `created`.
+    pub created: Option<String>,
+}
+
+impl SubmissionOptions {
+    /// Compose with `installed_version` as the source-system version, at
+    /// the current UTC time.
+    pub fn new(installed_version: impl Into<String>) -> Self {
+        Self {
+            installed_version: installed_version.into(),
+            created: None,
+        }
+    }
+
+    /// Compose every section with the creation time `created`.
+    pub fn with_created(mut self, created: impl Into<String>) -> Self {
+        self.created = Some(created.into());
+        self
     }
 }
 
@@ -1303,9 +1503,7 @@ mod plan_tests {
         );
         let plans = Plans::new();
         let run = || {
-            let runs = engine
-                .project_run_reusing(&project, None, &plans, &CancellationToken::new())
-                .unwrap();
+            let runs = engine.project(&project).reusing(&plans).run().unwrap();
             assert_eq!(runs.issues().rows(), 0);
         };
         listing("dm.yaml, ae.yaml");
@@ -1358,6 +1556,16 @@ mod tests {
             }
         }
         assert_eq!(statuses.map(Status::as_str), STATUSES);
+    }
+
+    /// A request and the submission options are `Send` and `Sync`, as the
+    /// engine, the holder and the token they hold are.
+    #[test]
+    fn requests_are_send_and_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<SpecRequest<'_>>();
+        assert_send_sync::<ProjectRequest<'_>>();
+        assert_send_sync::<SubmissionOptions>();
     }
 
     #[test]

@@ -18,7 +18,10 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
-use yamaa::{Action, CancellationToken, ContextValue, EngineOptions, HostLanguage};
+use yamaa::{
+    Action, CancellationToken, ContextValue, EngineOptions, HostLanguage, ProjectRequest,
+    SpecRequest, SubmissionOptions,
+};
 use yamaa_boundary::abi::{
     self, ArrowArray, ArrowArrayStream, ArrowSchema, Buffer, Call, Handle, Refusal, Status, Str,
 };
@@ -613,6 +616,33 @@ fn run<T>(
     }
 }
 
+/// The request of `specification`, read with `project` when one is given.
+fn spec_request<'a>(
+    engine: &'a yamaa::Engine,
+    specification: &'a str,
+    project: Option<&'a str>,
+) -> SpecRequest<'a> {
+    let request = engine.spec(specification);
+    match project {
+        Some(project) => request.project(project),
+        None => request,
+    }
+}
+
+/// The request of `project`, its run and submission scoped to `section`
+/// when one is given.
+fn project_request<'a>(
+    engine: &'a yamaa::Engine,
+    project: &'a str,
+    section: Option<&'a str>,
+) -> ProjectRequest<'a> {
+    let request = engine.project(project);
+    match section {
+        Some(section) => request.section(section),
+        None => request,
+    }
+}
+
 // -- the entries ------------------------------------------------------------------
 
 entries! {
@@ -622,8 +652,9 @@ entries! {
         // SAFETY: as above.
         let project = unsafe { optional(project, "the project") }?;
         let check = call.cancellable(|token| {
-            call.engine()
-                .spec_check(specification, project, token)
+            spec_request(&call.engine(), specification, project)
+                .cancel_with(token)
+                .check()
                 .map_err(|error| failed(Action::Read(specification), error))
         })?;
         insert(Value::Check(Mutex::new(check)))
@@ -634,7 +665,9 @@ entries! {
         let project = unsafe { required(project, "the project") }?;
         let check = call.cancellable(|token| {
             call.engine()
-                .project_check(project, token)
+                .project(project)
+                .cancel_with(token)
+                .check()
                 .map_err(|error| failed(Action::Read(project), error))
         })?;
         insert(Value::Check(Mutex::new(check)))
@@ -648,10 +681,12 @@ entries! {
         let built = run(plans, "spec_run", |plans| {
             call.cancellable(|token| {
                 let engine = call.engine();
+                let request = spec_request(&engine, specification, project).cancel_with(token);
                 match plans {
-                    Some(plans) => engine.spec_run_reusing(specification, project, plans, token),
-                    None => engine.spec_run(specification, project, token),
+                    Some(plans) => request.reusing(plans),
+                    None => request,
                 }
+                .run()
                 .map_err(|error| failed(Action::Read(specification), error))
             })
         })?;
@@ -664,10 +699,15 @@ entries! {
         // SAFETY: as above.
         let project = unsafe { optional(project, "the project") }?;
         let streamed = run(plans, "spec_stream", |plans| {
-            let once = yamaa::Plans::new();
             call.cancellable(|token| {
-                call.engine().spec_stream(specification, project, plans.unwrap_or(&once), token)
-                    .map_err(|error| failed(Action::Read(specification), error))
+                let engine = call.engine();
+                let request = spec_request(&engine, specification, project).cancel_with(token);
+                match plans {
+                    Some(plans) => request.reusing(plans),
+                    None => request,
+                }
+                .stream()
+                .map_err(|error| failed(Action::Read(specification), error))
             })
         })?;
         insert(Value::Streamed(Arc::new(streamed)))
@@ -685,10 +725,12 @@ entries! {
         let built = run(plans, "project_run", |plans| {
             call.cancellable(|token| {
                 let engine = call.engine();
+                let request = project_request(&engine, project, section).cancel_with(token);
                 match plans {
-                    Some(plans) => engine.project_run_reusing(project, section, plans, token),
-                    None => engine.project_run(project, section, token),
+                    Some(plans) => request.reusing(plans),
+                    None => request,
                 }
+                .run()
                 // Only an unknown section refuses the call with issues.
                 .map_err(|error| failed(Action::Select(section.unwrap_or_default()), error))
             })
@@ -703,9 +745,12 @@ entries! {
         let section = unsafe { optional(section, "the section") }?;
         // SAFETY: as above.
         let created = unsafe { optional(created, "the creation time") }?;
+        let mut options = SubmissionOptions::new(yamaa::VERSION);
+        options.created = created.map(str::to_owned);
         let submission = call.cancellable(|token| {
-            call.engine()
-                .project_submission(project, section, created, yamaa::VERSION, token)
+            project_request(&call.engine(), project, section)
+                .cancel_with(token)
+                .submission(&options)
                 .map_err(|error| failed(Action::Select(section.unwrap_or_default()), error))
         })?;
         insert(Value::Submission(Mutex::new(submission)))
@@ -768,7 +813,7 @@ entries! {
         let specification = unsafe { required(specification, "the specification") }?;
         // SAFETY: as above.
         let project = unsafe { optional(project, "the project") }?;
-        tree(call.engine().spec_resolve(specification, project)?)
+        tree(spec_request(&call.engine(), specification, project).resolve()?)
     }
 
     fn project_spec(call: *const Call, project: Str, name: Str) -> abi::Text {
@@ -776,13 +821,13 @@ entries! {
         let project = unsafe { required(project, "the project") }?;
         // SAFETY: as above.
         let name = unsafe { required(name, "the name") }?;
-        Ok(text(call.engine().project_spec(project, name)?))
+        Ok(text(call.engine().project(project).spec(name)?.path()))
     }
 
     fn project_names(call: *const Call, project: Str) -> abi::Texts {
         // SAFETY: the entry's contract: its text is valid for the call.
         let project = unsafe { required(project, "the project") }?;
-        Ok(texts(call.engine().project_names(project)?))
+        Ok(texts(call.engine().project(project).names()?))
     }
 
     fn spec_summary(specification: Str) -> abi::Texts {

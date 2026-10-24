@@ -36,9 +36,7 @@ fn engine(resolver: &Arc<MemoryResolver>) -> Engine {
 }
 
 fn run(engine: &Engine, plans: &Plans) -> Run {
-    engine
-        .spec_run_reusing("spec.yaml", None, plans, &CancellationToken::new())
-        .unwrap()
+    engine.spec("spec.yaml").reusing(plans).run().unwrap()
 }
 
 /// How the run got its plan, from its private measurements.
