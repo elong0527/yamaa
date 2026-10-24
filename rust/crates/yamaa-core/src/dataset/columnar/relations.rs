@@ -603,6 +603,14 @@ pub(super) fn named_value<E>(
         .copied();
     let secondary = &plan.region(cx.region).secondary;
     let name = source_name(item, secondary);
+    let reading = Reading {
+        site,
+        relation,
+        item,
+        name,
+        row,
+        identity,
+    };
     let (prepared, choice) = match cached {
         Some(choice) => (
             donor::materialize(run, cx, relation, Some(site), Some(row))?,
@@ -611,8 +619,7 @@ pub(super) fn named_value<E>(
         // Derivations that read the current record augment only the records
         // the match values select (LOOKUP-15), so those values resolve first.
         None if run.relations.derives_matched(plan, relation) => {
-            let (data, choice) =
-                matched_choice(run, cx, site, relation, item, name, row, identity)?;
+            let (data, choice) = matched_choice(run, cx, reading)?;
             (Some(data), choice)
         }
         None => {
@@ -624,13 +631,8 @@ pub(super) fn named_value<E>(
             let choice = resolve_choice(
                 run,
                 cx,
-                site,
-                relation,
-                item,
+                reading,
                 table,
-                name,
-                row,
-                identity,
                 None,
                 prepared.as_ref().map(Built::donor),
             )?;
@@ -672,17 +674,12 @@ pub(super) fn named_value<E>(
 /// the source rows; a failure stops the run, so this happens once. A unit
 /// that may call the host builds at source positions from the start: a call
 /// cannot be undone.
-#[allow(clippy::too_many_arguments)]
 fn matched_choice<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
-    site: Site<'_>,
-    relation: RelationId,
-    item: &Intermediate,
-    name: &str,
-    row: usize,
-    identity: Identity,
+    reading: Reading<'_>,
 ) -> Result<(Built, Choice), Fail<E>> {
+    let relation = reading.relation;
     let plan = run.plan;
     let donor = plan
         .relation(relation)
@@ -690,37 +687,32 @@ fn matched_choice<E>(
         .expect("a derived intermediate has a donor region");
     if !run.calls && plan.region_relations(donor).next().is_none() {
         let checkpoint = run.checkpoint();
-        match matched_attempt(run, cx, site, relation, item, name, row, identity, true) {
+        match matched_attempt(run, cx, reading, true) {
             Ok(found) => return Ok(found),
             Err(_) => run.undo(checkpoint),
         }
     }
-    matched_attempt(run, cx, site, relation, item, name, row, identity, false)
+    matched_attempt(run, cx, reading, false)
 }
 
-#[allow(clippy::too_many_arguments)]
 fn matched_attempt<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
-    site: Site<'_>,
-    relation: RelationId,
-    item: &Intermediate,
-    name: &str,
-    row: usize,
-    identity: Identity,
+    reading: Reading<'_>,
     compact: bool,
 ) -> Result<(Built, Choice), Fail<E>> {
+    let Reading {
+        site,
+        relation,
+        row,
+        ..
+    } = reading;
     let (data, keys) = donor::materialize_matched(run, cx, relation, site, row, compact)?;
     let choice = resolve_choice(
         run,
         cx,
-        site,
-        relation,
-        item,
+        reading,
         data.table(),
-        name,
-        row,
-        identity,
         Some(keys),
         Some(data.donor()),
     )?;
@@ -833,13 +825,15 @@ fn prepare_rows<E>(
         resolve_choice(
             run,
             cx,
-            site,
-            relation,
-            item,
+            Reading {
+                site,
+                relation,
+                item,
+                name,
+                row,
+                identity,
+            },
             built.table(),
-            name,
-            row,
-            identity,
             Some(row_keys),
             None,
         )?;
@@ -862,22 +856,38 @@ fn matched_key(
         .collect()
 }
 
+/// One row's read of a named intermediate, as its record is chosen: the
+/// node whose path counts the read's handlers, the relation and its
+/// intermediate, the name its dataset is known by, and the row with its
+/// identity, under which the choice is kept.
+#[derive(Clone, Copy)]
+struct Reading<'r> {
+    site: Site<'r>,
+    relation: RelationId,
+    item: &'r Intermediate,
+    name: &'r str,
+    row: usize,
+    identity: Identity,
+}
+
 /// Resolve and cache the record choice for one read: match the records on
 /// the resolved keys and range, narrow them by the filter, then select.
-#[allow(clippy::too_many_arguments)]
 fn resolve_choice<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
-    site: Site<'_>,
-    relation: RelationId,
-    item: &Intermediate,
+    reading: Reading<'_>,
     table: Table<'_, E>,
-    source_name: &str,
-    row: usize,
-    identity: Identity,
     keys: Option<MatchValues>,
     donor: Option<&Donor>,
 ) -> Result<Choice, Fail<E>> {
+    let Reading {
+        site,
+        relation,
+        item,
+        name: source_name,
+        row,
+        identity,
+    } = reading;
     let plan = run.plan;
     let secondary = &plan.region(cx.region).secondary;
     let keys = match keys {
@@ -946,8 +956,7 @@ fn resolve_choice<E>(
                 };
                 if filter.correlated() {
                     return Ok(
-                        correlated(run, cx, site, filter, table, item, source_row, row)?
-                            == Truth::True,
+                        correlated(run, cx, &reading, filter, table, source_row)? == Truth::True
                     );
                 }
                 if reusable {
@@ -1265,17 +1274,17 @@ fn key_bucket<E>(
 }
 
 /// A correlated filter over one donor record and the current row.
-#[allow(clippy::too_many_arguments)]
 fn correlated<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
-    site: Site<'_>,
+    reading: &Reading<'_>,
     filter: &RelationPredicate,
     table: Table<'_, E>,
-    item: &Intermediate,
     source_row: usize,
-    row: usize,
 ) -> Result<Truth, Fail<E>> {
+    let Reading {
+        site, item, row, ..
+    } = *reading;
     use crate::bound_expression::Read as BoundRead;
     use crate::expression::{ErrorKind, Resolver};
     struct Context<'r, 'p, 'a, 'c, 't, E> {
