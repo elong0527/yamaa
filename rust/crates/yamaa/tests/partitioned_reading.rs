@@ -8,9 +8,10 @@
 //! runs over an input the test generates in a scratch directory, and its
 //! output is compared with a whole-table run over a subset of the same
 //! records: the first and the last subjects. Nothing is compared with a
-//! captured file. A shape whose output has a row for every record still
-//! refuses beyond the row limit at its output, which this issue leaves
-//! whole: the refusal names the output, not the input.
+//! captured file. The output is admitted, encoded and saved one partition
+//! at a time too (#3793), so a shape whose output has a row for every
+//! record runs beyond the row limit as well, and its saved file holds a
+//! line for every subject, the last ones the subset run's.
 //!
 //! The seam is the facade's partitioned engine mode, which neither the
 //! benchmark reader nor the host fixtures run before #3794, and inputs
@@ -129,14 +130,34 @@ fn rows(batches: &[RecordBatch], rows: impl Iterator<Item = usize>) -> Vec<Recor
     .collect()
 }
 
-/// The first issue of a run that refused, as its phase, condition, spec
-/// paths and context.
-type Issue = (String, String, Vec<String>, String);
+/// The lines of the file at `path` and its last `count` lines, read without
+/// holding the file.
+fn tail(path: &str, count: usize) -> (usize, Vec<String>) {
+    use std::io::BufRead as _;
+    let mut lines = 0;
+    let mut last = std::collections::VecDeque::with_capacity(count + 1);
+    for line in std::io::BufReader::new(std::fs::File::open(path).unwrap()).lines() {
+        lines += 1;
+        last.push_back(line.unwrap());
+        if last.len() > count {
+            last.pop_front();
+        }
+    }
+    (lines, last.into())
+}
+
+/// The output file a run's save wrote: the last path it returns, after the
+/// run report a specification may declare (OUTPUT-10).
+fn saved_output(run: &mut yamaa::Run) -> String {
+    let token = yamaa::CancellationToken::new();
+    run.save(&token).unwrap().pop().unwrap()
+}
 
 /// Run every partition-safe shape over `records` generated driver records,
-/// in partitions of `rows`. A shape whose output fits the row limit gives,
-/// for its first and its last subjects, the rows a whole-table run of only
-/// their records gives; one whose output does not fit refuses at its output.
+/// in partitions of `rows`: for its first and its last subjects, the output
+/// holds the rows a whole-table run of only their records gives, and its
+/// saved file holds a header and a line for every subject, the last ones
+/// those of the whole-table run's saved file.
 fn check_every_shape(records: usize, rows_per_partition: usize) {
     const EDGE: usize = 3;
     let partitions = Partitions::new(NonZeroUsize::new(rows_per_partition).unwrap());
@@ -149,29 +170,7 @@ fn check_every_shape(records: usize, rows_per_partition: usize) {
         );
         let scratch = Scratch::new("partitioned-reading");
         let spec = stage(&scratch, &shape, 1..=subjects);
-        let run = engine(Some(partitions)).spec(&spec).run().unwrap();
-        if subjects > yamaa_core::limits::Limits::TABLE_ROWS {
-            // One output row per subject, beyond the row limit: the input is
-            // admitted a partition at a time, and the output refuses whole.
-            let first = run.diagnostics().first().map(|issue| -> Issue {
-                (
-                    issue.phase.as_str().to_owned(),
-                    issue.code.as_str().to_owned(),
-                    issue.spec_path.clone(),
-                    issue.context.to_json().to_owned(),
-                )
-            });
-            let expected: Issue = (
-                "engine".into(),
-                "engine_rejected".into(),
-                Vec::new(),
-                format!(
-                    r#"{{"actual":{subjects},"code":"execution_limit","limit":10000000,"resource":"output_rows","step":"execute"}}"#
-                ),
-            );
-            assert_eq!(first, Some(expected), "{case}");
-            continue;
-        }
+        let mut run = engine(Some(partitions)).spec(&spec).run().unwrap();
         let output = run.output().unwrap_or_else(|| {
             panic!("{case}: {:?}", run.diagnostics());
         });
@@ -180,7 +179,7 @@ fn check_every_shape(records: usize, rows_per_partition: usize) {
         let subset = Scratch::new("partitioned-reading-subset");
         let edges = (1..=EDGE).chain(subjects - EDGE + 1..=subjects);
         let subset_spec = stage(&subset, &shape, edges);
-        let whole = engine(None).spec(&subset_spec).run().unwrap();
+        let mut whole = engine(None).spec(&subset_spec).run().unwrap();
         let expected = whole
             .output()
             .unwrap_or_else(|| panic!("{case}: the subset's {:?}", whole.diagnostics()));
@@ -189,6 +188,12 @@ fn check_every_shape(records: usize, rows_per_partition: usize) {
             rows(output.batches(), (0..EDGE).chain(subjects - EDGE..subjects)),
             rows(expected.batches(), 0..2 * EDGE),
             "{case}"
+        );
+        let (_, expected) = tail(&saved_output(&mut whole), EDGE);
+        assert_eq!(
+            tail(&saved_output(&mut run), EDGE),
+            (subjects + 1, expected),
+            "{case}: the saved file"
         );
     }
 }
@@ -202,10 +207,11 @@ fn every_partition_safe_shape_reads_its_input_by_partition() {
 }
 
 /// Inputs of 10,000,002 driver records, beyond the row limit, in partitions
-/// of 1,000,000 (#3792): the grouped shape runs, and the shapes with a row
-/// for every record refuse at their output. The inputs and the runs take
-/// several gigabytes and minutes unoptimized, so the test runs in the
-/// optimized `release-test` profile, as the native lane runs every test.
+/// of 1,000,000 (#3792): every shape runs, and the shapes with a row for
+/// every record save an output beyond the row limit, a partition at a time
+/// (#3793). The inputs and the runs take several gigabytes and minutes
+/// unoptimized, so the test runs in the optimized `release-test` profile, as
+/// the native lane runs every test.
 #[test]
 #[cfg_attr(
     debug_assertions,

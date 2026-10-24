@@ -2,7 +2,8 @@
 //! The cancel-or-fail by phase matrix (#3697, the contract in its comment of
 //! 2026-10-23): one test per cell of the before-start, mid-partition,
 //! mid-stream and publication rows, on a partitioned engine over a memory
-//! resolver. The mid-stream cells read a streamed run's output one record per
+//! resolver. A save writes a partitioned run's output one partition at a
+//! time (#3793), so its publication row covers each partition. The mid-stream cells read a streamed run's output one record per
 //! batch (`SpecRequest::stream`). The before-start and mid-partition cells
 //! hold for key-bounded partitions too (#3763), each over a specification
 //! that the strategy divides by its subjects or refuses.
@@ -785,45 +786,71 @@ fn mid_stream_a_failed_run_ends_its_stream_with_its_issue() {
     );
 }
 
-/// During publication, cancelled: the save's one poll comes after both files
-/// are staged and before the first commit (D74). Both staged files are
-/// removed, nothing is committed, and the save fails with D39's text; the
-/// result saves whole later.
+/// During publication, cancelled (#3793): the save writes the output one
+/// partition at a time, and its three one-record partitions give it three
+/// polls, one before each partition after the first, then D74's after both
+/// files are staged and before the first commit. Whichever poll finds the
+/// token cancelled, nothing is committed or left staged, and the save fails
+/// with D39's text: before the second or a later partition, the staged
+/// report is removed and the output, which the resolver stages whole, was
+/// never staged; at the last poll both staged files are removed. The result
+/// saves whole later.
 #[test]
 fn during_publication_a_cancelled_save_removes_what_it_staged() {
+    let polls = Arc::new(AtomicUsize::new(0));
+    let cancelling = |from: Option<usize>| {
+        let polls = Arc::clone(&polls);
+        CancellationToken::with_probe(move || {
+            let poll = polls.fetch_add(1, Ordering::SeqCst) + 1;
+            from.is_some_and(|from| poll >= from)
+        })
+    };
     let resolver = Recording::new(SPEC, INPUT, None);
     let mut run = engine(Arc::clone(&resolver), false)
         .spec("spec.yaml")
         .run()
         .unwrap();
-    let token = CancellationToken::new();
-    token.cancel();
-    let failure = run.save(&token).unwrap_err();
-    assert_eq!(
-        (
-            failure.message.as_str(),
-            failure.diagnostics.len(),
-            failure.paths.len()
-        ),
-        ("cannot save TEST: operation cancelled", 0, 0),
-        "the cancelled save"
-    );
-    assert_eq!(
-        end_state(&resolver, "cancelled".into(), subject(&failure.message)),
-        EndState {
-            outcome: "cancelled".into(),
-            named: "cannot save TEST:".into(),
-            published: vec![],
-            staged: 2,
-            committed: 0,
-            left: 0,
-        }
-    );
-    assert_eq!(
-        run.save(&CancellationToken::new()).unwrap(),
-        [REPORT, OUTPUT],
-        "the later save"
-    );
+    run.save(&cancelling(None)).unwrap();
+    assert_eq!(polls.swap(0, Ordering::SeqCst), 3, "the polls of a save");
+    for (label, from, staged) in [
+        ("before the output's second partition", 1, 1),
+        ("before its third partition", 2, 1),
+        ("after every file is staged", 3, 2),
+    ] {
+        let resolver = Recording::new(SPEC, INPUT, None);
+        let mut run = engine(Arc::clone(&resolver), false)
+            .spec("spec.yaml")
+            .run()
+            .unwrap();
+        polls.store(0, Ordering::SeqCst);
+        let failure = run.save(&cancelling(Some(from))).unwrap_err();
+        assert_eq!(
+            (
+                failure.message.as_str(),
+                failure.diagnostics.len(),
+                failure.paths.len()
+            ),
+            ("cannot save TEST: operation cancelled", 0, 0),
+            "the save cancelled {label}"
+        );
+        assert_eq!(
+            end_state(&resolver, "cancelled".into(), subject(&failure.message)),
+            EndState {
+                outcome: "cancelled".into(),
+                named: "cannot save TEST:".into(),
+                published: vec![],
+                staged,
+                committed: 0,
+                left: 0,
+            },
+            "cancelled {label}"
+        );
+        assert_eq!(
+            run.save(&CancellationToken::new()).unwrap(),
+            [REPORT, OUTPUT],
+            "the later save, cancelled {label}"
+        );
+    }
 }
 
 /// During publication, failed before the first commit: the output cannot be
