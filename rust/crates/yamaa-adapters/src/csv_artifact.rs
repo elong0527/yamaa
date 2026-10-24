@@ -68,8 +68,14 @@ pub fn render<T: TableAccess>(
     projection: &[usize],
     decimals: Option<&str>,
 ) -> Result<Vec<u8>, Error<T::Error>> {
-    render_partitions(table, projection, decimals, &[0..table.row_count()]).map(|(bytes, _)| bytes)
+    let whole = 0..table.row_count();
+    render_partitions(table, projection, decimals, std::slice::from_ref(&whole))
+        .map(|(bytes, _)| bytes)
 }
+
+/// An encoded file, and where each of its partitions' bytes end, the last at
+/// its length.
+pub type Partitioned = (Vec<u8>, Vec<usize>);
 
 /// [`render`] one partition of rows at a time (D264): the header once, then
 /// the records of each of `partitions`, the consecutive ranges that divide
@@ -83,7 +89,7 @@ pub fn render_partitions<T: TableAccess>(
     projection: &[usize],
     decimals: Option<&str>,
     partitions: &[std::ops::Range<usize>],
-) -> Result<(Vec<u8>, Vec<usize>), Error<T::Error>> {
+) -> Result<Partitioned, Error<T::Error>> {
     if projection.is_empty()
         || projection
             .iter()

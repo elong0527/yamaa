@@ -246,7 +246,7 @@ pub(super) fn render_partitions<T: TableAccess>(
     table: &T,
     projection: &[usize],
     partitions: &[Range<usize>],
-) -> Result<(Vec<u8>, Vec<usize>), Error<T::Error>> {
+) -> Result<super::Partitioned, Error<T::Error>> {
     let mut sink = Sink {
         bytes: Vec::new(),
         exceeded: false,

@@ -26,8 +26,13 @@ pub enum Error<E> {
 
 /// Artifact encoding retains a capability boundary without the codec dependency.
 pub fn render<T: TableAccess>(table: &T, projection: &[usize]) -> Result<Vec<u8>, Error<T::Error>> {
-    render_partitions(table, projection, &[0..table.row_count()]).map(|(bytes, _)| bytes)
+    let whole = 0..table.row_count();
+    render_partitions(table, projection, std::slice::from_ref(&whole)).map(|(bytes, _)| bytes)
 }
+
+/// An encoded file, and where each of its partitions' bytes end, the last at
+/// its length.
+pub type Partitioned = (Vec<u8>, Vec<usize>);
 
 /// [`render`] one partition of rows at a time (D264), over `partitions`, the
 /// consecutive ranges that divide the table's rows in order. The writer
@@ -40,7 +45,7 @@ pub fn render_partitions<T: TableAccess>(
     table: &T,
     projection: &[usize],
     partitions: &[std::ops::Range<usize>],
-) -> Result<(Vec<u8>, Vec<usize>), Error<T::Error>> {
+) -> Result<Partitioned, Error<T::Error>> {
     #[cfg(feature = "parquet")]
     {
         encode::render_partitions(table, projection, partitions)
