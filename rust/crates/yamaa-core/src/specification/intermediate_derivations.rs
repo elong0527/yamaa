@@ -679,6 +679,16 @@ fn donor_scope_findings(
     unavailable: &BTreeMap<usize, String>,
 ) {
     for finding in findings {
+        // The donor's own cause replaces a withheld one, whose wording it
+        // does not keep, so it is decided.
+        if matches!(finding, BindFinding::Withheld(inner) if matches!(
+            **inner,
+            BindFinding::UnknownReference { .. }
+                | BindFinding::OutputReference { .. }
+                | BindFinding::QualifiedReference { .. }
+        )) {
+            finding.release();
+        }
         let reference = match finding {
             BindFinding::UnknownReference { path, name }
             | BindFinding::OutputReference { path, name, .. }

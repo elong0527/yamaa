@@ -91,13 +91,20 @@ pub(super) fn bind(
                 .enumerate()
                 .any(|(column, metadata)| metadata.name == bare && admits(column))
                 .then(|| format!("{donor_name}.{bare}"));
-            findings.push(BindFinding::Lookup(LookupFinding::reference(
+            // The suggestion names a field of the donor, so it is withheld
+            // unless the donor's schema decides whether it stores it.
+            let finding = BindFinding::Lookup(LookupFinding::reference(
                 plan.spec_path(),
                 name,
                 Some(intermediate),
                 ReferenceCause::Selection,
                 suggestion,
-            )));
+            ));
+            findings.push(if inputs.decides(donor_name, bare) {
+                finding
+            } else {
+                BindFinding::Withheld(std::boxed::Box::new(finding))
+            });
         }
     }
     // A type refusal still retains the donor's bound fields for later checks.

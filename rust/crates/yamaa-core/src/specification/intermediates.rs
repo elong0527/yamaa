@@ -463,13 +463,22 @@ fn bind_one(
             let suggestion = (!name.contains('.')
                 && schema.columns().iter().any(|c| c.name == name))
             .then(|| format!("{source_name}.{name}"));
-            findings.push(BindFinding::Lookup(LookupFinding::reference(
+            let finding = BindFinding::Lookup(LookupFinding::reference(
                 path,
                 name,
                 Some(&item.name),
                 ReferenceCause::Selection,
                 suggestion,
-            )));
+            ));
+            // A bare name's suggestion is withheld unless the donor's schema
+            // decides whether it stores the name.
+            findings.push(
+                if name.contains('.') || inputs.decides(source_name, name) {
+                    finding
+                } else {
+                    BindFinding::Withheld(std::boxed::Box::new(finding))
+                },
+            );
         }
         field
     };
@@ -806,6 +815,16 @@ impl Declarations {
             self_relations::Relation::Input(index) if index < self.2 => Some(index),
             _ => None,
         }
+    }
+    /// Whether the named intermediate `name` derives the field `field`.
+    pub(super) fn derives(&self, name: &str, field: &str) -> bool {
+        self.0.iter().any(|item| {
+            item.name == name
+                && item
+                    .derivations
+                    .iter()
+                    .any(|derivation| derivation.name == field)
+        })
     }
     /// Whether `name` selects one record for each row: it declares `keep`
     /// or `nearest` (LOOKUP-22).

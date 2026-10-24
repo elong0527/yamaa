@@ -945,6 +945,15 @@ fn bind_derivations(
 /// path.
 fn reference_findings(findings: &mut [BindFinding], intermediate: &str) {
     for finding in findings {
+        // The pair relation's own cause does not keep a withheld wording.
+        if matches!(finding, BindFinding::Withheld(inner) if matches!(
+            **inner,
+            BindFinding::UnknownReference { .. }
+                | BindFinding::OutputReference { .. }
+                | BindFinding::QualifiedReference { .. }
+        )) {
+            finding.release();
+        }
         let reference = match finding {
             BindFinding::UnknownReference { path, name }
             | BindFinding::OutputReference { path, name, .. }

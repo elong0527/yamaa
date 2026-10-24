@@ -214,8 +214,9 @@ fn odm_items(spec: &ast::Spec) -> BTreeSet<ExprId> {
 
 /// Every field the specification reads from the input `input`, in the
 /// order it first reads each: a name it qualifies by the input, wherever it
-/// is read; a bare name a lookup over the input reads of its donor record,
-/// other than one the lookup derives; the fields a lookup over the input
+/// is read; a bare name a lookup over the input reads of its donor record in
+/// its derivations or range bounds, other than one the lookup derives (its
+/// filter and order read a bare name of SELF alone); the fields a lookup over the input
 /// names as its key, `unique` columns, `columns` and nearest `source`; the
 /// input's declared `key`, which an implicit join of it pairs; and a pair
 /// relation's right key fields when the input is its right side.
@@ -234,6 +235,10 @@ fn read_fields(spec: &ast::Spec, input: &str, odm_items: &BTreeSet<ExprId>) -> V
         add(&column.name);
     }
     for site in spec.sites() {
+        let donor_record = matches!(
+            site.owner,
+            ast::Owner::Binding { .. } | ast::Owner::Range { .. }
+        );
         for read in spec.reads(site.root, site.scope) {
             if odm_items.contains(&read.at) {
                 continue;
@@ -248,7 +253,7 @@ fn read_fields(spec: &ast::Spec, input: &str, odm_items: &BTreeSet<ExprId>) -> V
                             .bindings
                             .iter()
                             .any(|binding| binding.name.name == read.name.as_str());
-                        if over(index) && !derived {
+                        if donor_record && over(index) && !derived {
                             add(read.name.as_str());
                         }
                     }

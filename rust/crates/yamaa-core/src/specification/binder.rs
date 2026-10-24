@@ -89,6 +89,37 @@ impl Donors<'_> {
     pub(super) fn kind(&self, item: &Intermediate, column: usize) -> Option<ColumnType> {
         self.inputs.source_kind(item, self.secondary, column)
     }
+    /// Whether the schemas decide if the relation `relation` stores the
+    /// field `field` ([`InputSchema::stores`]): an input's schema says, a
+    /// named intermediate leaves a field it does not derive to the input it
+    /// reads, and any other relation's fields are what its binding laid out.
+    pub(super) fn decides(&self, relation: &str, field: &str) -> bool {
+        if self.inputs.schema(relation).is_some() {
+            return self.inputs.decides(relation, field);
+        }
+        match self.named.input(relation) {
+            Some(index) if !self.named.derives(relation, field) => self
+                .inputs
+                .schemas
+                .get(index)
+                .is_none_or(|schema| schema.stores(field).is_some()),
+            _ => true,
+        }
+    }
+    /// `finding`, withheld from `check()` unless the schemas decide whether
+    /// `relation` stores `field`, on which its wording depends.
+    pub(super) fn withhold_unless(
+        &self,
+        relation: &str,
+        field: &str,
+        finding: BindFinding,
+    ) -> BindFinding {
+        if self.decides(relation, field) {
+            finding
+        } else {
+            BindFinding::Withheld(std::boxed::Box::new(finding))
+        }
+    }
 }
 
 /// The inputs binding reads: each declared input in authored order, with
@@ -129,6 +160,13 @@ impl<'a> Inputs<'a> {
                 schema: schema.layout().clone(),
             })
             .collect()
+    }
+    /// Whether the schemas decide if the relation `relation` stores the
+    /// field `field`: an input's schema says ([`InputSchema::stores`]), and
+    /// any other relation's fields are what its binding laid out.
+    pub(super) fn decides(&self, relation: &str, field: &str) -> bool {
+        self.schema(relation)
+            .is_none_or(|schema| schema.stores(field).is_some())
     }
     /// The kind of the field `field` of the relation `relation`, laid out as
     /// `layout`: an input's stored field as its schema decides it, and any
@@ -231,6 +269,34 @@ impl<'a> BindContext<'a, '_> {
     /// The tree binding reads.
     pub(super) fn spec(&self) -> &'a ast::Spec {
         self.tree.spec()
+    }
+    /// `finding`, a bare name's finding whose cause the catalog's own
+    /// dataset decides (`unknown_field` against `unresolvable_name`,
+    /// NAME-3, FORMULA-9): withheld unless the schemas decide whether that
+    /// dataset stores `name` ([`Donors::withhold_unless`]).
+    pub(super) fn bare_name(&self, name: &str, finding: BindFinding) -> BindFinding {
+        match self.catalog.dataset_name(0) {
+            Some(relation) => self.donors.withhold_unless(relation, name, finding),
+            None => finding,
+        }
+    }
+    /// Each bare-name finding from `start` on that the catalog's own dataset
+    /// decides ([`Self::bare_name`]).
+    pub(super) fn bare_names_from(&mut self, start: usize) {
+        for index in start..self.findings.len() {
+            if let BindFinding::OutputReference {
+                name,
+                finding:
+                    reference_binding::Diagnostic::UnknownField
+                    | reference_binding::Diagnostic::UnresolvableName { .. },
+                ..
+            } = &self.findings[index]
+            {
+                let name = name.clone();
+                let finding = self.findings[index].take();
+                self.findings[index] = self.bare_name(&name, finding);
+            }
+        }
     }
 
     /// Bind one derivation: the expression `e`, which derives `column`.
@@ -471,6 +537,7 @@ impl<'a> BindContext<'a, '_> {
     /// The binder still runs after a refused group read, so it reports the
     /// unknown and foreign fields that `group_findings` leaves to it.
     fn window(&mut self, window: &windows::Declaration) -> Result<Option<Expression>, BindError> {
+        let mark = self.findings.len();
         let refused = window.group_findings(
             self.catalog,
             self.scope.driver,
@@ -485,6 +552,7 @@ impl<'a> BindContext<'a, '_> {
             self.edges,
             self.findings,
         )?;
+        self.bare_names_from(mark);
         Ok(if refused { None } else { bound })
     }
 
@@ -519,8 +587,10 @@ impl<'a> BindContext<'a, '_> {
                 Ok(Some(Expression::ProjectFunction(bound.function)))
             }
             Err(project_call_binding::Error::Findings(errors)) => {
+                let mark = self.findings.len();
                 self.findings
                     .extend(functions::bind_findings(calls, call, errors, self.row())?);
+                self.bare_names_from(mark);
                 Ok(None)
             }
             Err(project_call_binding::Error::Reference(error)) => Err(BindError::Catalog(error)),
@@ -609,6 +679,7 @@ impl<'a> BindContext<'a, '_> {
                 row: self.row().map(String::from),
                 finding,
             });
+            self.bare_names_from(self.findings.len() - 1);
             return Ok(None);
         }
         Ok(Some(match catalog.bind(name) {
@@ -670,6 +741,7 @@ impl<'a> BindContext<'a, '_> {
                     row: None,
                     finding,
                 });
+                self.bare_names_from(self.findings.len() - 1);
                 return Ok(None);
             }
         }
@@ -833,6 +905,7 @@ impl<'a> BindContext<'a, '_> {
                     row: None,
                     finding,
                 });
+                self.bare_names_from(self.findings.len() - 1);
                 continue;
             }
             match self.catalog.bind(name) {

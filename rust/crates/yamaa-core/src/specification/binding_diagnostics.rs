@@ -292,3 +292,24 @@ impl BindFinding {
         Some(vec![finding(code, vec![path.clone()], values)])
     }
 }
+
+impl BindFinding {
+    /// Move this finding out, leaving one that holds nothing.
+    pub(super) fn take(&mut self) -> Self {
+        std::mem::replace(
+            self,
+            Self::UnknownReference {
+                path: String::new(),
+                name: String::new(),
+            },
+        )
+    }
+    /// A withheld finding that a rewrite no longer words by what an input
+    /// stores: the finding itself again, which the schemas decide.
+    pub(super) fn release(&mut self) {
+        if let Self::Withheld(inner) = self {
+            let inner = inner.take();
+            *self = inner;
+        }
+    }
+}

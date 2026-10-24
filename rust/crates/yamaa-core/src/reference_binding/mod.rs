@@ -324,6 +324,14 @@ impl Catalog {
             .find(|(_, dataset)| dataset.index == index)
             .map(|(name, _)| name.as_str())
     }
+    /// The name of every relation the catalog holds a record of: its datasets
+    /// and the relations it joins.
+    pub(crate) fn relation_names(&self) -> impl Iterator<Item = &str> {
+        self.datasets
+            .keys()
+            .chain(self.joined.keys())
+            .map(String::as_str)
+    }
     /// Suggest a qualifier only when exactly one admitted dataset owns a bare field.
     pub(crate) fn unique_field_owner(&self, field: &str) -> Option<&str> {
         let mut owners = self

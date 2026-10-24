@@ -818,6 +818,7 @@ fn bind_implicit_source(
                 row: None,
                 finding,
             });
+            cx.bare_names_from(cx.findings.len() - 1);
             return Ok(None);
         }
         declaration.bind_filter_named(path, cx.scope.driver, base, named, cx.findings)?;

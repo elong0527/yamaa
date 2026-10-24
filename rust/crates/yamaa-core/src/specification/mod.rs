@@ -23,6 +23,8 @@ mod binder;
 use binder::BindContext;
 mod binding_diagnostics;
 mod checks;
+#[doc(hidden)]
+pub mod check_oracle;
 mod input_schemas;
 use input_schemas::{InputSchema, InputSchemas};
 mod intermediate_derivations;
@@ -944,7 +946,19 @@ impl PreparedSpecification {
                 .ok_or(PrepareError::Internal)?;
             self.check_expressions.extend(diagnostics);
         }
+        if check_oracle::active() {
+            self.compare();
+        }
         Ok(self)
+    }
+    /// Every finding binding reports over the input schemas `schemas`, in
+    /// binding's order: none when it builds a plan.
+    fn bind_findings(&self, schemas: &InputSchemas) -> Result<Vec<BindFinding>, BindError> {
+        match self.rows.bind(self, self.inputs(schemas)) {
+            Ok(_) => Ok(Vec::new()),
+            Err(BindError::Invalid(findings)) => Ok(findings),
+            Err(error) => Err(error),
+        }
     }
     /// All intrinsically known declaration findings, without study binding.
     /// Actual dataset fields and values remain a build-time responsibility.
