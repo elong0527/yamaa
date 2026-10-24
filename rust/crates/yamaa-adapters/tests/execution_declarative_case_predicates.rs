@@ -77,6 +77,28 @@ mod execution {
         fn refused_case_predicate_domains_have_no_output_and_fail_saves() {
             use crate::support::diagnostic::{operations, replay};
 
+            // These original tests unwrapped their domain (including the
+            // intermediate-key fixture's run helper), so preparation must
+            // not short-circuit the output and save assertions.
+            let must_return_domain = [
+                "case_predicate_multiplicity_retains_its_complete_report_and_blocks_publication",
+                "an_incomplete_verification_predicate_refuses_a_column_case",
+                "an_incomplete_verification_predicate_refuses_a_record_row",
+                "an_incomplete_verification_predicate_refuses_a_grouped_row",
+                "false_when_still_resolves_require_lookup_and_refuses_a_required_match",
+                "empty_output_validates_lookup_operand_types_without_selecting_a_donor",
+                "a_warning_assertion_refuses_a_missing_lookup_field_at_its_when",
+                "a_warning_assertion_refuses_a_missing_lookup_field_at_its_require",
+                "resolved_source_keys_still_refuse_the_original_bad_donor_filter",
+                "ordinary_source_keys_keep_static_filter_types_before_key_cardinality",
+                "a_deferred_filter_type_is_refused_over_an_empty_donor",
+                "a_deferred_filter_type_is_refused_over_an_empty_driver",
+                "a_deferred_filter_type_is_refused_over_a_missing_operand",
+                "a_deferred_filter_type_is_refused_in_an_unread_branch",
+                "a_deferred_filter_type_is_refused_beside_a_false_conjunct",
+                "a_hidden_read_has_the_complete_original_reference_finding_and_no_output",
+                "a_root_filter_forbids_a_constructed_column",
+            ];
             let cases = replay::cases()
                 .into_iter()
                 .filter(|case| {
@@ -89,18 +111,37 @@ mod execution {
                 })
                 .collect::<Vec<_>>();
             assert!(!cases.is_empty(), "the family has authored refusals");
+            for name in must_return_domain {
+                let label = format!("declarative_case_predicates.json::{name}");
+                assert!(
+                    cases.iter().any(|case| case.label == label),
+                    "{label}: an original domain-producing refusal has its fixture"
+                );
+            }
             for case in cases {
+                let name = case
+                    .label
+                    .strip_prefix("declarative_case_predicates.json::")
+                    .unwrap();
                 let fixture = Fixture(operations::study(&case.input));
                 let body = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
-                if let Ok(mut result) = fixture.run(&body) {
-                    let has_output = result.output().is_some();
-                    let save_failed = matches!(result.save(), Err(file_application::FailedBuild));
-                    assert_eq!(
-                        (has_output, save_failed),
-                        (false, true),
-                        "{}: a refused domain has no output and fails its save",
+                match fixture.run(&body) {
+                    Ok(mut result) => {
+                        let has_output = result.output().is_some();
+                        let save_failed =
+                            matches!(result.save(), Err(file_application::FailedBuild));
+                        assert_eq!(
+                            (has_output, save_failed),
+                            (false, true),
+                            "{}: a refused domain has no output and fails its save",
+                            case.label
+                        );
+                    }
+                    Err(issues) => assert!(
+                        !must_return_domain.contains(&name),
+                        "{}: expected a domain, got a preparation refusal: {issues:?}",
                         case.label
-                    );
+                    ),
                 }
             }
         }
