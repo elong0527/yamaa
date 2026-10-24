@@ -211,7 +211,7 @@ set SDTM 9, ADaM 1), the rest sponsor-defined.
 | JSON-3, no file for `has_no_data` | `records` may be 0 | Dataset-JSON 1.1 | differs, deliberately (matches DEFINE-16) |
 | JSON-9, column members | `itemOID`, `name`, `label`, `dataType`, `targetDataType`, `length`, `displayFormat`, `keySequence` | Dataset-JSON 1.1 | aligned |
 | JSON-10, data types | supported combinations; ADaM dates as text with `targetDataType: integer` | Dataset-JSON 1.1 | aligned |
-| JSON-4, single-object form | an NDJSON representation | Dataset-JSON 1.1 | NDJSON excluded by design (keep) |
+| JSON-4, the representation `transport` selects | the JSON and NDJSON representations | Dataset-JSON 1.1 | aligned: `dataset_ndjson` writes the NDJSON form (#3821 reversed the earlier keep) |
 | XPT-5, XPT-7, DEFINE-22 | names up to 8 characters, labels up to 40, values up to 200 bytes, ASCII | TS-140; FDA TCG (to verify) | aligned |
 | XPT-10 | files above 5 GB are split | FDA TCG (to verify) | aligned as a refusal; splitting is D29 |
 

@@ -1556,6 +1556,21 @@ mod schema {
             assert_eq!(s.transport, Some(ast::Transport::DatasetJson));
             assert_eq!(s.context, DefineContext::Submission);
             assert_eq!(s.xml_lang.text, "en");
+            // Each transport spelling lowers to its own variant (JSON-1).
+            for (spelling, transport) in [
+                ("dataset_json", ast::Transport::DatasetJson),
+                ("dataset_ndjson", ast::Transport::DatasetNdjson),
+                ("xpt", ast::Transport::Xpt),
+            ] {
+                let mut a = Arena::default();
+                let specs = a.node(N::Sequence(vec![]));
+                let value = a.text(spelling);
+                let section = a.map(vec![("specs", specs), ("transport", value)]);
+                let root = a.map(vec![("sdtm", section)]);
+                let input = a.finish(root);
+                let owned = sections(&input).unwrap();
+                assert_eq!(owned.sections[0].transport, Some(transport), "{spelling}");
+            }
         }
         fn invalid() -> Document {
             let mut a = Arena::default();
@@ -1648,7 +1663,8 @@ mod schema {
                     Step::Field(F::Link)
                 ]
             );
-            // `transport` is a closed choice of `dataset_json` and `xpt`.
+            // `transport` is a closed choice of `dataset_json`, `dataset_ndjson`
+            // and `xpt`.
             assert_eq!(
                 findings[12].path.steps().collect::<Vec<_>>(),
                 [Step::Field(F::Adam), Step::Field(F::Transport)]

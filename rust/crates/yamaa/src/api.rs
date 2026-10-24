@@ -1327,9 +1327,10 @@ impl<'a> ProjectRequest<'a> {
 
     /// One define.xml for the request's section, or for every declared
     /// section that names `define`, plus Dataset-JSON where the section sets
-    /// `transport: dataset_json`. Every section is composed with one creation
-    /// time, [`Submission::created`]: the options' `created` as given, or
-    /// else the current UTC time, read once before the project file (D129).
+    /// `transport: dataset_json` or `dataset_ndjson`. Every section is
+    /// composed with one creation time, [`Submission::created`]: the
+    /// options' `created` as given, or else the current UTC time, read once
+    /// before the project file (D129).
     /// Project problems come back as issues; only an unknown section and
     /// cancellation fail the call. Once the project file is read, a section
     /// it does not declare, or any other text, fails as

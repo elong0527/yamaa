@@ -80,10 +80,12 @@ define:
 
 `expected/` then holds the Define-XML document and each transport file the
 section's `transport` requests (`.xpt` for `xpt`, `.json` for
-`dataset_json`) beside the published tables, or, for a negative case,
-`expected/error.yaml` with the submission's first issue; its domain build must
-still succeed. `.xpt` goldens are written by
-`python -m tools.conformance.xpt_goldens` from the hand-authored tables there.
+`dataset_json`, `.ndjson` for `dataset_ndjson`) beside the published tables,
+or, for a negative case, `expected/error.yaml` with the submission's first
+issue; its domain build must still succeed. `.xpt` goldens are written by
+`python -m tools.conformance.xpt_goldens` from the hand-authored tables there,
+and `.ndjson` goldens by `python -m tools.conformance.ndjson_goldens` from the
+authored `.json` golden of the same dataset.
 
 `sdtm-dm-race-ethnicity` is the worked producer/consumer example. Each producer
 commits its own expected artifact beside the entry's. A `schema` link only types

@@ -155,6 +155,7 @@ mod transport {
             "negative-transport-name-too-long",
             "negative-transport-non-ascii",
             "negative-transport-trailing-blank",
+            "schema-transport-dataset-ndjson",
             "sdtm-dm-metadata",
             "sdtm-dm-xpt",
             "sdtm-ta-sponsor-epoch",
@@ -205,6 +206,7 @@ mod transport {
                         assert!(
                             !file.ends_with(".xpt")
                                 && !file.ends_with(".json")
+                                && !file.ends_with(".ndjson")
                                 && file != "define.xml",
                             "{name}: a refused Define wrote {file}"
                         );
@@ -392,6 +394,76 @@ mod transport {
             .unwrap()
             .replace("adsl.xpt", "adsl.json");
         assert_eq!(xml, expected);
+    }
+
+    /// JSON-4 and JSON-13: the newline-delimited form of a dataset is the
+    /// single-object form's object without `rows` on its first line, then one
+    /// row per line, so the two representations carry one value. The byte
+    /// goldens fix each form; this proves the seam between them, which no
+    /// golden reader reaches.
+    #[test]
+    fn the_newline_delimited_form_carries_the_single_object_forms_value() {
+        let mut checked = 0;
+        for case in define_cases() {
+            if case.join("expected/error.yaml").is_file() {
+                continue;
+            }
+            let name = case.file_name().unwrap().to_str().unwrap().to_owned();
+            let metadata = yaml(&case.join("benchmark.yaml"));
+            let environment = metadata["define"]["environment"]
+                .as_str()
+                .unwrap()
+                .to_owned();
+            let temp = stage(&case);
+            let project = temp.0.join(&environment);
+            let text = fs::read_to_string(&project).unwrap();
+            if !text.contains("transport: dataset_json") {
+                continue;
+            }
+            fs::write(
+                &project,
+                text.edit("transport: dataset_json", "transport: dataset_ndjson"),
+            )
+            .unwrap();
+            let result = run(&case, &temp);
+            assert!(result.issues().is_empty(), "{name}: {:?}", result.issues());
+            for (written, bytes, _) in result.artifacts() {
+                let Some(dataset) = written.strip_suffix(".ndjson") else {
+                    continue;
+                };
+                let text = std::str::from_utf8(bytes).unwrap();
+                assert!(
+                    text.ends_with('\n') && !text.contains('\r'),
+                    "{name}: {written} line terminators"
+                );
+                let mut lines = text.strip_suffix('\n').unwrap().split('\n');
+                let mut value: serde_json::Value =
+                    serde_json::from_str(lines.next().unwrap()).unwrap();
+                assert!(
+                    value.get("rows").is_none(),
+                    "{name}: {written} carries rows on its first line"
+                );
+                let rows: Vec<serde_json::Value> = lines
+                    .map(|line| serde_json::from_str(line).unwrap())
+                    .collect();
+                assert_eq!(
+                    value["records"],
+                    serde_json::Value::from(rows.len()),
+                    "{name}: {written} records"
+                );
+                value["rows"] = serde_json::Value::Array(rows);
+                let golden: serde_json::Value = serde_json::from_slice(
+                    &fs::read(case.join("expected").join(format!("{dataset}.json"))).unwrap(),
+                )
+                .unwrap();
+                assert_eq!(
+                    value, golden,
+                    "{name}: {written} against its single-object golden"
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked >= 2, "{checked} datasets compared");
     }
 
     /// SUB-24: one column name has one length across the section's datasets,

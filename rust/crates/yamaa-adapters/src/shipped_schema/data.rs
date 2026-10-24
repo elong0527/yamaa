@@ -1335,8 +1335,8 @@ submission_section_class:
     - transport:
         type: str
         required: false
-        values: [dataset_json, xpt]
-        description: Optional transport file written for each composed dataset in the document's directory, read from its published artifact, dataset_json for Dataset-JSON and xpt for SAS Transport; omission writes only the Define-XML document (JSON-1, XPT-1).
+        values: [dataset_json, dataset_ndjson, xpt]
+        description: Optional transport file written for each composed dataset in the document's directory, read from its published artifact, dataset_json for Dataset-JSON in its single-object form, dataset_ndjson for its newline-delimited form and xpt for SAS Transport; omission writes only the Define-XML document (JSON-1, JSON-4, XPT-1).
     - context:
         type: str
         default: Submission
@@ -8765,9 +8765,10 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           "type": "string",
           "enum": [
             "dataset_json",
+            "dataset_ndjson",
             "xpt"
           ],
-          "description": "Optional transport file written for each composed dataset in the document's directory, read from its published artifact, dataset_json for Dataset-JSON and xpt for SAS Transport; omission writes only the Define-XML document (JSON-1, XPT-1).",
+          "description": "Optional transport file written for each composed dataset in the document's directory, read from its published artifact, dataset_json for Dataset-JSON in its single-object form, dataset_ndjson for its newline-delimited form and xpt for SAS Transport; omission writes only the Define-XML document (JSON-1, JSON-4, XPT-1).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
