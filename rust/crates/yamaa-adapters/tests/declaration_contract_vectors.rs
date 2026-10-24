@@ -47,7 +47,7 @@ mod declaration {
         vocabulary!(
             reducer_vocabulary,
             Reducer,
-            [Sum, Count, Min, Max, Mean, Only]
+            [Sum, Count, Min, Max, Mean, Only, StrJoin]
         );
 
         fn quote(text: &str) -> String {

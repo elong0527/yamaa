@@ -316,6 +316,15 @@ EXPECTED = {
     ],
     "new.spec.clear": [Field("root_class", "clear", "list[spec_path]")],
     "new.spec.include": [Field("root_class", "include", "list[project_path]")],
+    # #3774: the fields STR_JOIN and COUNT(x) read besides their argument
+    # (FORMULA-18).
+    "new.spec.aggregate_class.order_by": [
+        Field("aggregate_class", "order_by", "list[order_by_term]")
+    ],
+    "new.spec.aggregate_class.separator": [
+        Field("aggregate_class", "separator", "str")
+    ],
+    "new.spec.aggregate_class.distinct": [Field("aggregate_class", "distinct", "bool")],
     # A lint suppression comment and a profile chosen by the path's
     # extension: neither is a schema field.
     "new.any.suppression_comment": [],

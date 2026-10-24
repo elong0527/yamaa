@@ -36,6 +36,11 @@
 #   group_by    aggregate, optional: the columns whose one value each group's
 #               records share, which the text may read outside a reduction
 #               (FORMULA-22); a case that names them gives no empty group
+#   order_by, separator, distinct
+#               aggregate, optional: the fields of the aggregate that a
+#               reducer reads besides its argument (FORMULA-18), written as a
+#               specification writes them, each order term naming a column
+#               as R.<column>
 #   type        derivation and aggregate: the result type the rules give the
 #               text (VALUE-10, EXPR-14, FORMULA-23)
 #   values      the expected value of each row or group, in order
@@ -2326,6 +2331,211 @@ cases:
     phase: derivation
     condition: aggregate_multiple_records
     rule: FORMULA-20
+
+  # STR_JOIN writes each present value as the text a str column converts it
+  # to, in the aggregate's order_by order, records tied on every term keeping
+  # relation record order, with its separator between two values; distinct
+  # writes each text once, where it first occurs; no present value gives
+  # missing, never empty text. COUNT(x) with distinct counts the different
+  # present values, 0 when every value is missing and missing for no record.
+  # A field beside a reducer that does not read it, a field STR_JOIN lacks
+  # and arithmetic over STR_JOIN are refused before any record is read
+  # (FORMULA-18, FORMULA-19, FORMULA-23, FORMULA-24, LOOKUP-10, VALUE-3,
+  # VALUE-8, VALUE-17, VALUE-19, VALUE-22, VALUE-23).
+  - id: str-join-joins-numbers-in-declared-order-not-stored-order
+    context: aggregate
+    covers: [STR_JOIN, declared-order, missing]
+    text: "STR_JOIN(R.X)"
+    columns: {X: int}
+    order_by: [R.X]
+    separator: ", "
+    groups:
+      - [{X: 10}, {X: 2}, {X: null}]
+      - [{X: 3}]
+      - [{X: null}]
+      - []
+    type: str
+    values: ["2, 10", "3", null, null]
+  - id: str-join-keeps-record-order-between-tied-records
+    context: aggregate
+    covers: [STR_JOIN, declared-order, record-order]
+    text: "STR_JOIN(R.S)"
+    columns: {N: int, S: str}
+    order_by: [R.N]
+    separator: "|"
+    groups:
+      - [{N: 2, S: "b"}, {N: 1, S: "z"}, {N: 2, S: "a"}]
+    type: str
+    values: ["z|b|a"]
+  - id: str-join-orders-descending-with-a-missing-term-last
+    context: aggregate
+    covers: [STR_JOIN, declared-order, missing]
+    text: "STR_JOIN(R.S)"
+    columns: {N: int, S: str}
+    order_by: [{variable: R.N, direction: desc}]
+    separator: "-"
+    groups:
+      - [{N: 1, S: "a"}, {N: null, S: "m"}, {N: 3, S: "c"}]
+    type: str
+    values: ["c-a-m"]
+  - id: str-join-writes-a-float-as-its-shortest-text
+    context: aggregate
+    covers: [STR_JOIN, typing]
+    text: "STR_JOIN(R.F)"
+    columns: {F: float}
+    order_by: [R.F]
+    separator: ", "
+    groups:
+      - [{F: 2.5}, {F: 0.1}, {F: 2.0}]
+    type: str
+    values: ["0.1, 2, 2.5"]
+  - id: str-join-writes-a-date-as-its-canonical-text
+    context: aggregate
+    covers: [STR_JOIN, temporal]
+    text: "STR_JOIN(R.D)"
+    columns: {D: date}
+    order_by: [{variable: R.D, direction: desc}]
+    separator: " / "
+    groups:
+      - [{D: "2024-12-31"}, {D: "2025-03-01"}]
+    type: str
+    values: ["2025-03-01 / 2024-12-31"]
+  - id: str-join-writes-a-datetime-as-its-canonical-text
+    context: aggregate
+    covers: [STR_JOIN, temporal]
+    text: "STR_JOIN(R.DT)"
+    columns: {DT: datetime}
+    order_by: [R.DT]
+    separator: "; "
+    groups:
+      - [{DT: "2025-03-01T08:00:00"}, {DT: "2025-03-01T07:59:59"}]
+    type: str
+    values: ["2025-03-01T07:59:59; 2025-03-01T08:00:00"]
+  - id: str-join-with-distinct-writes-each-text-once
+    context: aggregate
+    covers: [STR_JOIN, distinct, text-order]
+    text: "STR_JOIN(R.S)"
+    columns: {S: str}
+    order_by: [R.S]
+    separator: ", "
+    distinct: true
+    groups:
+      - [{S: "HEADACHE"}, {S: "FEVER"}, {S: "HEADACHE"}]
+      - [{S: "a"}, {S: "A"}, {S: "a"}]
+    type: str
+    values: ["FEVER, HEADACHE", "A, a"]
+  - id: str-join-with-distinct-keeps-the-first-occurrence-in-order
+    context: aggregate
+    covers: [STR_JOIN, distinct, declared-order]
+    text: "STR_JOIN(R.S)"
+    columns: {N: int, S: str}
+    order_by: [R.N]
+    separator: ", "
+    distinct: true
+    groups:
+      - [{N: 3, S: "b"}, {N: 1, S: "b"}, {N: 2, S: "a"}]
+    type: str
+    values: ["b, a"]
+  - id: str-join-takes-an-empty-separator
+    context: aggregate
+    covers: [STR_JOIN]
+    text: "STR_JOIN(R.S)"
+    columns: {S: str}
+    order_by: [R.S]
+    separator: ""
+    groups:
+      - [{S: "b"}, {S: "a"}]
+    type: str
+    values: ["ab"]
+  - id: count-with-distinct-counts-each-different-value-once
+    context: aggregate
+    covers: [COUNT, distinct, missing]
+    text: "COUNT(R.S)"
+    columns: {S: str}
+    distinct: true
+    groups:
+      - [{S: "a"}, {S: "b"}, {S: "a"}, {S: null}]
+      - [{S: null}]
+      - []
+    type: int
+    values: [2, 0, null]
+  - id: count-with-distinct-compares-numbers-by-value
+    context: aggregate
+    covers: [COUNT, distinct, exactness]
+    text: "COUNT(R.F)"
+    columns: {F: float}
+    distinct: true
+    groups:
+      - [{F: 0.0}, {F: -0.0}, {F: 1.5}, {F: 1.5}]
+    type: int
+    values: [2]
+  - id: arithmetic-over-a-join-is-refused
+    context: aggregate
+    covers: [STR_JOIN, "+", typing]
+    text: "STR_JOIN(R.X) + 1"
+    columns: {X: int}
+    order_by: [R.X]
+    separator: ", "
+    groups:
+      - [{X: 1}]
+    phase: validation
+    condition: incompatible_input_type
+    rule: FORMULA-23
+  - id: a-join-without-its-order-is-refused
+    context: aggregate
+    covers: [STR_JOIN, declared-order]
+    text: "STR_JOIN(R.X)"
+    columns: {X: int}
+    separator: ", "
+    groups:
+      - [{X: 1}]
+    phase: validation
+    condition: unpaired_fields
+    rule: LOOKUP-10
+  - id: a-join-without-its-separator-is-refused
+    context: aggregate
+    covers: [STR_JOIN]
+    text: "STR_JOIN(R.X)"
+    columns: {X: int}
+    order_by: [R.X]
+    groups:
+      - [{X: 1}]
+    phase: validation
+    condition: unpaired_fields
+    rule: LOOKUP-10
+  - id: an-order-beside-sum-is-refused
+    context: aggregate
+    covers: [SUM, declared-order]
+    text: "SUM(R.X)"
+    columns: {X: int}
+    order_by: [R.X]
+    groups:
+      - [{X: 1}]
+    phase: validation
+    condition: unpaired_fields
+    rule: LOOKUP-10
+  - id: distinct-beside-sum-is-refused
+    context: aggregate
+    covers: [SUM, distinct]
+    text: "SUM(R.X)"
+    columns: {X: int}
+    distinct: true
+    groups:
+      - [{X: 1}]
+    phase: validation
+    condition: unpaired_fields
+    rule: LOOKUP-10
+  - id: distinct-beside-a-record-count-is-refused
+    context: aggregate
+    covers: [COUNT, distinct]
+    text: "COUNT(R.*)"
+    columns: {X: int}
+    distinct: true
+    groups:
+      - [{X: 1}]
+    phase: validation
+    condition: unpaired_fields
+    rule: LOOKUP-10
 
   # Arithmetic and the numeric functions combine reductions and stand in
   # their arguments: a record whose argument is missing contributes nothing,

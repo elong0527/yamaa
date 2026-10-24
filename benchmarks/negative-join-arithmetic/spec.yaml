@@ -1,0 +1,40 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+
+input:
+  DM: input/dm.csv
+  AE:
+    path: input/ae.csv
+    types:
+      AESEQ: int
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, NEXTSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  # One is added to the sequence numbers joined into text, which is not a
+  # number: the run is rejected before any data is read.
+  - name: NEXTSEQ
+    type: int
+    label: Next Adverse Event Sequence Number
+    derivation:
+      aggregate:
+        key: [STUDYID, USUBJID]
+        order_by: [AE.AESEQ]
+        separator: ", "
+        expr: "STR_JOIN(AE.AESEQ) + 1"

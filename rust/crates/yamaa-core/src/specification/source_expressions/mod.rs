@@ -168,7 +168,7 @@ impl Declaration {
             } else {
                 ("order_by", "keep")
             };
-            lookup::selection_unpaired(&path, Owner::Source(&variable), declared, missing)
+            lookup::selection_unpaired(&path, Owner::Source(&variable), &[declared], &[missing])
         }));
         let absent = checks::handler(spec, read.absent.as_ref())?;
         // Asserting a match and answering its absence are two absence policies.

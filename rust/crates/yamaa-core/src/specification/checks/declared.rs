@@ -1815,7 +1815,12 @@ impl Checks<'_> {
             } else {
                 ("order_by", "keep")
             };
-            defects.push(lookup::selection_unpaired(&path, owner, declared, missing));
+            defects.push(lookup::selection_unpaired(
+                &path,
+                owner,
+                &[declared],
+                &[missing],
+            ));
         }
         if source.require_match && source.absent.is_some() {
             defects.push(lookup::absence_conflict(

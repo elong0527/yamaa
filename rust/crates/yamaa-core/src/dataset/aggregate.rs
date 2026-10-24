@@ -77,6 +77,13 @@ pub struct BoundAggregate {
     range: Option<RelationRange>,
     derivations: Vec<AggregateDerivation>,
     derived_schema: Option<TableSchema>,
+    /// The order `STR_JOIN` joins the group's values in: columns of the
+    /// relation, a binding's after the relation's own (LOOKUP-10).
+    order: Vec<OrderTerm>,
+    /// The text `STR_JOIN` writes between two values (FORMULA-18).
+    separator: String,
+    /// Whether `STR_JOIN` and `COUNT(x)` take each value once (FORMULA-18).
+    distinct: bool,
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct AggregateDerivation {
@@ -126,7 +133,32 @@ impl BoundAggregate {
             range: None,
             derivations: Vec::new(),
             derived_schema: None,
+            order: Vec::new(),
+            separator: String::new(),
+            distinct: false,
         })
+    }
+    /// The fields a reducer reads besides its argument (FORMULA-18): the
+    /// order and separator of `STR_JOIN`, and `distinct`.
+    pub fn with_reducer_fields(
+        mut self,
+        order: Vec<OrderTerm>,
+        separator: String,
+        distinct: bool,
+    ) -> Self {
+        self.order = order;
+        self.separator = separator;
+        self.distinct = distinct;
+        self
+    }
+    pub fn order(&self) -> &[OrderTerm] {
+        &self.order
+    }
+    pub fn separator(&self) -> &str {
+        &self.separator
+    }
+    pub fn distinct(&self) -> bool {
+        self.distinct
     }
     pub fn with_record_operations(
         mut self,

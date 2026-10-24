@@ -550,29 +550,91 @@ divides a reduction by a grouping column ([FORMULA-22](#formula-22)).
 
 <a id="formula-18"></a>
 
-### FORMULA-18. The reducers are exactly SUM, COUNT, MIN, MAX, MEAN and ONLY
+### FORMULA-18. The reducers are exactly SUM, COUNT, MIN, MAX, MEAN, ONLY and STR_JOIN
 
 A reduction applies one of the reducers below to one expression, or `COUNT` to
 `D.*`. Any other reducer name or argument count fails. `AVG` is not an alias:
-the reducer name is `MEAN`, and no median is registered. Any new reduction
-amends this table.
+the reducer name is `MEAN`, and no median is registered. A field of the
+aggregate that a reducer reads is written only beside that reducer, and
+`STR_JOIN` needs its `order_by` and `separator`. Any new reduction amends this
+table.
 
-Fails: `prohibited_function`, `invalid_expression`.
-Evidence: `schema-aggregation`, `adam-adlb-mean`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`.
+Fails: `prohibited_function`, `invalid_expression`, `unpaired_fields`.
+Evidence: `schema-aggregation`, `adam-adlb-mean`, `adam-adcm-related-events`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::str_join_writes_present_values_as_column_text_in_the_given_order`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::count_with_distinct_counts_each_different_present_value_once`.
 
 | Reducer | Result |
 |---|---|
 | `SUM(x)` | total of the non-missing values |
-| `COUNT(x)` | how many values of `x` are non-missing |
+| `COUNT(x)` | how many values of `x` are non-missing; with `distinct`, how many different ones |
 | `COUNT(D.*)` | how many records the group contains |
 | `MIN(x)` | smallest non-missing value |
 | `MAX(x)` | largest non-missing value |
 | `MEAN(x)` | arithmetic mean of the non-missing numeric values |
 | `ONLY(x)` | value from the group's only record; more than one fails |
+| `STR_JOIN(x)` | the non-missing values of `x` as text, in the aggregate's `order_by` order, its `separator` between two; with `distinct`, each text once |
 
 A name outside the reducers and functions, such as `AVG(x)`, fails with
 `prohibited_function`. A reducer written with other than one argument, and a
-record star outside `COUNT`, fail with `invalid_expression`.
+record star outside `COUNT`, fail with `invalid_expression`, so
+`STR_JOIN(SEQN, ', ')` fails there: the separator is a field of the aggregate,
+not an argument, and `COUNT(DISTINCT AETERM)` fails the same way.
+
+A reducer reads the fields of the aggregate below besides its argument. A
+field written beside an expression that does not read it, and a field that a
+reducer needs and lacks, fail validation before any input is read as
+`unpaired_fields` under [LOOKUP-10](lookup.md#lookup-10), at the aggregate:
+`declared` names what is written and `missing` what it lacks, a reducer in the
+form this table writes it. Any new field of a reducer amends this table.
+
+| Field | Read by | Needed beside it |
+|---|---|---|
+| `order_by` | `STR_JOIN(x)` | yes, with at least one term |
+| `separator` | `STR_JOIN(x)` | yes |
+| `distinct` | `STR_JOIN(x)` or `COUNT(x)` written as the whole expression | no; omitted, every value counts |
+
+`order_by` beside `SUM(AVAL)` reports `order_by` declared and `STR_JOIN(x)`
+missing, and `STR_JOIN(SEQN)` without `order_by` reports `STR_JOIN(x)`
+declared and `order_by` missing. `distinct` beside any other expression, such
+as `SUM(x)`, `COUNT(D.*)` or `COUNT(x) + 1`, reports `distinct` declared and
+`STR_JOIN(x)` and `COUNT(x)` missing. A `STR_JOIN` written inside arithmetic
+still reads `order_by` and `separator`, and the arithmetic fails under
+[FORMULA-23](#formula-23).
+
+`STR_JOIN(x)` writes each non-missing value of `x` as the text a `str` column
+converts it to ([VALUE-3](values.md#value-3)): an `int` as decimal text, a
+`float` as the shortest positional text of [VALUE-8](values.md#value-8), a
+`date` or `datetime` as the canonical text of [VALUE-17](values.md#value-17),
+and text as it is. It is the one reduction that converts its argument. It
+joins the values in the aggregate's `order_by` order
+([LOOKUP-10](lookup.md#lookup-10)), writing `separator`, which may be the
+empty string, between two of them; with `distinct: true` it writes each text
+once, where it first occurs in that order, comparing the written text scalar
+for scalar ([VALUE-12](values.md#value-12)). `COUNT(x)` with `distinct: true`
+counts the different non-missing values of `x`: text equal scalar for scalar,
+numbers by exact value, an `int` and a `float` alike
+([VALUE-19](values.md#value-19)), and dates and datetimes on the day or second
+they name ([VALUE-21](values.md#value-21)). `COUNT(D.*)` counts records and
+takes no `distinct`. A joined text has no length limit of its own: a value too
+long for an output is refused there, as any other text is, by
+[XPT-7](profiles/xpt.md#xpt-7) and [SUB-8](profiles/submission.md#sub-8).
+
+```yaml
+- name: AESEQS
+  type: str
+  derivation:
+    aggregate:
+      key: {USUBJID: USUBJID, RELID: RELID}
+      filter: "RELREC.RDOMAIN = 'AE' AND RELREC.IDVAR = 'AESEQ'"
+      derivations:
+        SEQN: {type: int, derivation: RELREC.IDVARVAL}
+      order_by: [SEQN]
+      separator: ", "
+      expr: "STR_JOIN(SEQN)"
+```
+
+The related records store the sequence numbers as text, `10` before `2`, and
+the column holds `2, 10`: the binding makes them numbers, which `order_by`
+sorts numerically.
 
 `COUNT(D.*)` takes no other argument. `D` stands for the relation named by the
 expression's qualified identifiers, as in `COUNT(EX.*)`, and a `COUNT(D.*)`
@@ -601,19 +663,27 @@ numeric `+`. Summation is never reordered, reassociated or partitioned, and
 never compensated or correctly rounded. For a group with at least one
 non-missing value, `MEAN(x)` is that ordered `SUM(x)` divided by `COUNT(x)`
 with the numeric `/`, and it inherits the binary64 rounding of `SUM`. A
-reduction does not sort the records.
+reduction does not sort the records, except that `STR_JOIN` joins them in the
+aggregate's `order_by` order ([FORMULA-18](#formula-18)).
 
-Evidence: `adam-adlb-ordered-sum`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `rust/crates/yamaa-adapters/tests/execution_value_semantics.rs::sum_adds_matched_donor_records_in_stored_order_and_mean_divides_that_sum`.
+Evidence: `adam-adlb-ordered-sum`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `rust/crates/yamaa-adapters/tests/execution_value_semantics.rs::sum_adds_matched_donor_records_in_stored_order_and_mean_divides_that_sum`.
 
 The `filter`, when present, removes records and keeps the order of the records
 that remain. [Inputs](inputs.md) defines stored-source
 record order, and [Column derivation](columns.md) defines
 constructed-output and grouped-input record order. `COUNT`, `MIN` and `MAX`
-are independent of record order, and `ONLY` accepts no group in which an order
-could choose among records ([FORMULA-20](#formula-20)). A rule that needs one
-record chosen by value order uses a window or the `order_by` plus `keep`
-selection ([LOOKUP-10](lookup.md#lookup-10)), where the value order is
-declared.
+are independent of record order, `COUNT(x)` with `distinct` too, and `ONLY`
+accepts no group in which an order could choose among records
+([FORMULA-20](#formula-20)). A rule that needs one record chosen by value
+order uses a window or the `order_by` plus `keep` selection
+([LOOKUP-10](lookup.md#lookup-10)), where the value order is declared.
+
+`STR_JOIN` alone reads the records in a declared order: the aggregate's
+`order_by` sorts them for it, records equal on every term keeping relation
+record order ([LOOKUP-10](lookup.md#lookup-10)). An `order_by` beside any
+other reducer is refused ([FORMULA-18](#formula-18)), and `STR_JOIN` stands
+only as the whole expression ([FORMULA-23](#formula-23)), so `SUM` and `MEAN`
+always add in relation record order.
 
 <a id="formula-20"></a>
 
@@ -685,22 +755,27 @@ in `group_by`.
 
 ### FORMULA-23. A reduction keeps the type it reduces, and arithmetic over reductions is numeric
 
-`COUNT` returns `int` and `MEAN` returns `float`; `SUM` keeps its argument's
-numeric type, and `MIN`, `MAX` and `ONLY` keep the type they reduce, whatever
-it is. `SUM` and `MEAN` require a numeric argument, `MIN` and `MAX` mutually
-comparable values, and `COUNT` and `ONLY` accept any type. An expression using
-an operator or numeric function is numeric: every reduction and grouped
-identifier in it must be numeric, and [Values](values.md)
-promotion gives its type.
+`COUNT` returns `int`, `MEAN` returns `float` and `STR_JOIN` returns `str`;
+`SUM` keeps its argument's numeric type, and `MIN`, `MAX` and `ONLY` keep the
+type they reduce, whatever it is. `SUM` and `MEAN` require a numeric argument,
+`MIN` and `MAX` mutually comparable values, and `COUNT`, `ONLY` and
+`STR_JOIN` accept any type. An expression using an operator or numeric
+function is numeric: every reduction and grouped identifier in it must be
+numeric, and [Values](values.md) promotion gives its type.
 
 Fails: `incompatible_input_type`, `incomparable_sources`.
-Evidence: `negative-sum-non-numeric`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`.
+Evidence: `negative-sum-non-numeric`, `negative-join-arithmetic`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`.
 
 `SUM` or `MEAN` over a non-numeric argument fails, as does arithmetic over a
 non-numeric reduction or grouped identifier. `MIN` or `MAX` over incomparable
 values fails: a column mixing incomparable types is an error rather than an
 implementation-defined order. Their string order is that of
 [Values](values.md).
+
+`STR_JOIN` is text whatever it joins, so it stands only as the whole
+expression: `STR_JOIN(SEQN) + 1` fails before any record is read as
+arithmetic over a non-numeric reduction, naming `STR_JOIN(SEQN)` as the
+operand, even when `SEQN` is a number.
 
 No implicit conversion happens inside the grammar.
 [Values](values.md) converts the completed derivation
@@ -715,19 +790,20 @@ types of the relation's fields and of the aggregate's `derivations`, give
 Inside a reduction's argument a missing operand propagates, so a record whose
 operand is missing contributes a missing value rather than a zero:
 `SUM(EX.EXDOSE * EX.EXDUR)` skips a record missing either factor. `SUM`,
-`COUNT(x)`, `MIN`, `MAX` and `MEAN` then ignore missing values, while `ONLY`
-counts records ([FORMULA-20](#formula-20)). A group with no record after
-`filter` yields missing. When every value is missing, `SUM`, `MIN`, `MAX` and
-`MEAN` yield missing, never zero, and `COUNT(x)` yields `0`.
+`COUNT(x)`, `MIN`, `MAX`, `MEAN` and `STR_JOIN` then ignore missing values,
+while `ONLY` counts records ([FORMULA-20](#formula-20)). A group with no
+record after `filter` yields missing. When every value is missing, `SUM`,
+`MIN`, `MAX`, `MEAN` and `STR_JOIN` yield missing, never zero or empty text,
+and `COUNT(x)` yields `0`, with or without `distinct`.
 
-Evidence: `adam-adex-uncollected`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`.
+Evidence: `adam-adex-uncollected`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`.
 
 | Group | Result |
 |---|---|
 | No record in the group after `filter` | missing, uncounted: an aggregate declares no handler ([COLUMN-11](columns.md#column-11)) |
-| Every value missing -- `SUM`, `MIN`, `MAX`, `MEAN` | missing, never zero |
-| Every value missing -- `COUNT(x)` | `0` |
-| No record in the group -- `COUNT(x)`, `COUNT(D.*)` | missing |
+| Every value missing -- `SUM`, `MIN`, `MAX`, `MEAN`, `STR_JOIN` | missing, never zero or empty text |
+| Every value missing -- `COUNT(x)`, with or without `distinct` | `0` |
+| No record in the group -- `COUNT(x)`, `COUNT(D.*)`, `STR_JOIN(x)` | missing |
 | No record in the group -- `ONLY(x)` | missing |
 | One record whose value is missing -- `ONLY(x)` | missing |
 

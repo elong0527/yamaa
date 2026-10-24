@@ -292,7 +292,7 @@ in its short form is listed under the field it fills.
 | `str_template` | `template` | | | `missing` | |
 | `str_case` | | `source` | | `to`, `missing` | |
 | `round_half_away_from_zero` | | `source` | | `digits` | |
-| `aggregate` | `key`, `filter`, `expr` | `group_by` | | | `between`, `derivations` |
+| `aggregate` | `key`, `filter`, `expr` | `group_by`, `order_by` | | `separator`, `distinct` | `between`, `derivations` |
 | An `aggregate` derivation | `derivation` | | | `type` | |
 | `diff` | | `start`, `end` | | `type`, `unit`, `closed` | |
 | `impute` | | `source`, `not_before`, `not_after`, `fallback` | | `type`, `month`, `day`, `time`, `invalid` | |

@@ -461,8 +461,17 @@ pub struct Aggregate {
     pub group_by: Vec<ExprId>,
     /// Per-record bindings evaluated before the reduction (P-BIND-1).
     pub bindings: Vec<Binding>,
+    /// The order `STR_JOIN` joins the group's values in, each term a field
+    /// of the relation or a binding (LOOKUP-10).
+    pub order_by: Vec<OrderTerm>,
+    /// The text `STR_JOIN` writes between two values (FORMULA-18).
+    pub separator: Option<Text>,
+    /// Whether `STR_JOIN` and `COUNT(x)` take each value once; `None` when
+    /// omitted (FORMULA-18).
+    pub distinct: Option<bool>,
     pub expr: ExprId,
-    /// Of the bindings, written `derivations`.
+    /// Of the bindings and the reducer fields, the ones written:
+    /// `derivations`, `order_by`, `separator` and `distinct`.
     pub written: super::Written,
 }
 

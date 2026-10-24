@@ -1,0 +1,96 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADCM
+keys: [STUDYID, USUBJID, CMSEQ]
+
+input:
+  CM: input/cm.csv
+  RELREC: input/relrec.csv
+  # RELAE is the artifact spec_relae.yaml saves before this entry is built:
+  # each adverse event a relationship names, with its reported term.
+  RELAE:
+    path: relae.csv
+    schema: spec_relae.yaml
+base: CM
+
+output:
+  path: adcm.csv
+  columns: [STUDYID, USUBJID, CMSEQ, CMTRT, AESEQS, AETERMS, AETERMN]
+  order_by: [STUDYID, USUBJID, CMSEQ]
+
+# The relationship the medication record belongs to, found through its own
+# RELREC record. A medication in two relationships has no one answer and
+# fails the run.
+intermediates:
+  - id: CMREL
+    dataset: RELREC
+    key: {STUDYID: STUDYID, USUBJID: USUBJID, IDVARVAL: CMSEQTXT}
+    filter: "RELREC.RDOMAIN = 'CM' AND RELREC.IDVAR = 'CMSEQ'"
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: CM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: CM.USUBJID
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number
+    derivation: CM.CMSEQ
+
+  - name: CMTRT
+    type: str
+    label: Reported Name of Drug, Med, or Therapy
+    derivation: CM.CMTRT
+
+  # RELREC names the medication record by its sequence number as text.
+  - name: CMSEQTXT
+    type: str
+    label: Sequence Number as Text
+    derivation: CM.CMSEQ
+
+  - name: RELID
+    type: str
+    label: Relationship Identifier
+    derivation: CMREL.RELID
+
+  # The related sequence numbers are text in RELREC, where 10 sorts before
+  # 2; each becomes a number first, so the list is in numeric order.
+  - name: AESEQS
+    type: str
+    label: Related Adverse Event Sequence Numbers
+    derivation:
+      aggregate:
+        key: {STUDYID: STUDYID, USUBJID: USUBJID, RELID: RELID}
+        filter: "RELREC.RDOMAIN = 'AE' AND RELREC.IDVAR = 'AESEQ'"
+        derivations:
+          SEQN: {type: int, derivation: RELREC.IDVARVAL}
+        order_by: [SEQN]
+        separator: ", "
+        expr: "STR_JOIN(SEQN)"
+
+  - name: AETERMS
+    type: str
+    label: Related Adverse Event Terms
+    derivation:
+      aggregate:
+        key: {STUDYID: STUDYID, USUBJID: USUBJID, RELID: RELID}
+        order_by: [RELAE.AETERM]
+        separator: ", "
+        distinct: true
+        expr: "STR_JOIN(RELAE.AETERM)"
+
+  - name: AETERMN
+    type: int
+    label: Number of Distinct Related Adverse Event Terms
+    derivation:
+      aggregate:
+        key: {STUDYID: STUDYID, USUBJID: USUBJID, RELID: RELID}
+        distinct: true
+        expr: "COUNT(RELAE.AETERM)"

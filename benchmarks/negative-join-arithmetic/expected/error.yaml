@@ -1,0 +1,9 @@
+phase: validation
+condition: incompatible_input_type
+spec_paths:
+  - columns.NEXTSEQ.derivation.aggregate.expr
+rule: FORMULA-23
+context:
+  source: STR_JOIN(AE.AESEQ)
+  expected: numeric
+  actual: str
