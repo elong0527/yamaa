@@ -11,6 +11,7 @@ pub mod project_codelist_compiler;
 pub mod project_environment;
 pub mod roots;
 pub mod specification;
+pub mod submission;
 
 /// A CSV text table, authored: the header's names and each record's fields,
 /// `None` for an empty one, as the adapters' parser admits a source.

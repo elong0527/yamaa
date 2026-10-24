@@ -41,7 +41,7 @@ target whose extension is not `.xml`, or that is not named `define.xml` beside
 a transport, fails validation.
 
 Fails: `value_not_permitted`.
-Evidence: `sdtm-dm-metadata`, `negative-transport-define-name`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDefineExtension`.
+Evidence: `sdtm-dm-metadata`, `negative-transport-define-name`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_define_target_without_the_xml_extension_is_not_permitted`.
 
 The transport files are written beside the document
 ([JSON-1](dataset-json.md#json-1)) and Dataset-JSON names it as `define.xml`
@@ -79,7 +79,7 @@ requirement unmet under `Submission` fails, reporting the requirement and the
 position.
 
 Fails: `missing_required_field`, `sas_name_too_long`, `transport_label_invalid`, `transport_text_invalid`.
-Evidence: `sdtm-dm-metadata`, `sdtm-ta-sponsor-epoch`, `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionCdiscAliasMissing`, `rust/tests/host-fixtures/cases.json::submission-column-label`, `rust/crates/yamaa-adapters/tests/file_resources.rs::collected_origins_name_their_form_page_under_submission`.
+Evidence: `sdtm-dm-metadata`, `sdtm-ta-sponsor-epoch`, `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_published_codelist_without_its_nci_code_is_refused_under_submission`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_published_item_without_its_nci_code_is_refused_under_submission`, `rust/tests/host-fixtures/cases.json::submission-column-label`, `rust/crates/yamaa-adapters/tests/file_resources.rs::collected_origins_name_their_form_page_under_submission`.
 
 Nothing in this profile is relaxed by `Other`; that context only omits the
 requirements a regulator imposes. Under `Submission`:
@@ -134,7 +134,7 @@ name the same specification, and two entries must not resolve to the same
 artifact path.
 
 Fails: `duplicate_dataset_entry`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDuplicateDataset`, `rust/crates/yamaa-core/tests/schema_submission.rs::thirty_domains_with_fifteen_hundred_nodes_admit_complete_column_and_row_scans`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_section_listing_one_dataset_twice_is_refused`, `rust/crates/yamaa-core/tests/schema_submission.rs::thirty_domains_with_fifteen_hundred_nodes_admit_complete_column_and_row_scans`.
 
 Written resource and output paths retain their original declaring layer under
 [File resolution](../reference/files.md). This profile imposes no other order:
@@ -158,7 +158,7 @@ separate documents, and each document carries the controlled-terminology
 standards cited by its bound codelists' sources.
 
 Fails: `standard_model_mismatch`, `duplicate_identifier`.
-Evidence: `sdtm-dm-metadata`, `schema-section-standards`, `negative-section-standard-model`, `negative-section-standard-repeated`, `rust/crates/yamaa/tests/language_header.rs::a_section_lists_only_specifications_of_its_model`, `rust/crates/yamaa/tests/language_header.rs::a_dataset_binds_the_section_standard_it_selects`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_names_a_1_0_section_s_guides_by_their_place_in_standards`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_requires_a_1_0_section_s_standards_by_their_1_0_name`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SectionStandardModel`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SectionStandardDuplicate`, `rust/crates/yamaa-core/tests/schema_submission.rs::every_shipped_guide_spelling_is_closed_metadata_not_family_composition`.
+Evidence: `sdtm-dm-metadata`, `schema-section-standards`, `negative-section-standard-model`, `negative-section-standard-repeated`, `rust/crates/yamaa/tests/language_header.rs::a_section_lists_only_specifications_of_its_model`, `rust/crates/yamaa/tests/language_header.rs::a_dataset_binds_the_section_standard_it_selects`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_names_a_1_0_section_s_guides_by_their_place_in_standards`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_requires_a_1_0_section_s_standards_by_their_1_0_name`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_section_guide_of_another_model_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_section_guide_listed_twice_is_refused`, `rust/crates/yamaa-core/tests/schema_submission.rs::every_shipped_guide_spelling_is_closed_metadata_not_family_composition`.
 
 Composition checks every entry of the list. A guide outside the section's
 model fails with `standard_model_mismatch` at `<section>.standards[<i>].name`,
@@ -190,7 +190,7 @@ column in its `output.columns` must declare both `label` and
 `column.submission`, fails.
 
 Fails: `submission_metadata_missing`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionMetadataMissing`, `rust/crates/yamaa-adapters/tests/submission_service.rs::missing_study_is_the_real_typed_owner_before_any_metadata_verification`, `rust/crates/yamaa/tests/language_header.rs::missing_submission_metadata_is_reported_at_the_listing_or_the_column_submission`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_output_column_without_submission_metadata_is_refused`, `rust/crates/yamaa-adapters/tests/submission_service.rs::missing_study_is_the_real_typed_owner_before_any_metadata_verification`, `rust/crates/yamaa/tests/language_header.rs::missing_submission_metadata_is_reported_at_the_listing_or_the_column_submission`.
 
 A document reports on the whole artifact, so a column with nothing to report is
 a gap in the document, not an omitted row. A specification without
@@ -221,7 +221,7 @@ checks that the selected standard is an implementation guide of the model the
 specification declares ([SUB-3](submission.md#sub-3)).
 
 Fails: `unknown_standard`, `unknown_codelist`, `unknown_document`.
-Evidence: `sdtm-dm-metadata`, `schema-section-standards`, `negative-unknown-standard`, `rust/crates/yamaa/tests/language_header.rs::a_dataset_binds_the_section_standard_it_selects`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionUnknownStandard`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionUnknownDocument`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::per_value_codelist_unknown_and_type_failures_retain_the_authored_row_path`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::an_unknown_per_value_codelist_fails_at_its_row_path`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_per_value_codelist_of_another_type_fails_at_its_row_path`.
+Evidence: `sdtm-dm-metadata`, `schema-section-standards`, `negative-unknown-standard`, `rust/crates/yamaa/tests/language_header.rs::a_dataset_binds_the_section_standard_it_selects`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_dataset_selecting_a_guide_its_section_lacks_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_origin_citing_an_undeclared_document_is_refused`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::per_value_codelist_unknown_and_type_failures_retain_the_authored_row_path`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::an_unknown_per_value_codelist_fails_at_its_row_path`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_per_value_codelist_of_another_type_fails_at_its_row_path`.
 
 A `submission.standard`, `codelist` or document reference naming no
 declaration fails with `unknown_standard`, `unknown_codelist` or
@@ -301,7 +301,7 @@ one identifier space, `def:leaf`, so a document identifier must not equal a
 dataset identifier.
 
 Fails: `duplicate_define_identifier`.
-Evidence: `negative-terminology-version-collision`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDuplicateIdentifier`, `rust/crates/yamaa-core/tests/diagnostics_aggregate.rs::sources_share_one_terminology_standard_and_another_with_its_publishing_set_is_refused`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::sources_citing_one_terminology_standard_share_its_one_definition`, `rust/crates/yamaa-core/tests/project_rows.rs::independent_complete_sixteen_record_project_report_preserves_every_field_and_order`.
+Evidence: `negative-terminology-version-collision`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_document_identifier_equal_to_a_dataset_identifier_collides`, `rust/crates/yamaa-core/tests/diagnostics_aggregate.rs::sources_share_one_terminology_standard_and_another_with_its_publishing_set_is_refused`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::sources_citing_one_terminology_standard_share_its_one_definition`, `rust/crates/yamaa-core/tests/project_rows.rs::independent_complete_sixteen_record_project_report_preserves_every_field_and_order`.
 
 The shared `def:leaf` space is checked, not disambiguated. A duplicate dataset
 `id`, codelist `id` or document `id`, or a document `id` equal to a dataset
@@ -376,7 +376,7 @@ order, from `study.name`, `study.description` and `study.protocol_name`.
 that order.
 
 Fails: `source_system_incomplete`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionSourceVersion`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_empty_generator_version_leaves_the_source_system_incomplete`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`.
 
 | Attribute | Source |
 |---|---|
@@ -432,7 +432,7 @@ fails. More than one document of kind `annotated_crf`, or none where this rule
 requires one, fails validation.
 
 Fails: `origin_document_missing`, `value_not_permitted`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionAnnotatedCrfMultiplicity`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionAnnotatedCrfMissing`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::two_annotated_crfs_are_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_collected_origin_without_an_annotated_crf_is_refused`.
 
 [SUB-17](submission.md#sub-17) names that document and, under `context: Other`,
 derives the reference to it, and neither is possible unless exactly one exists.
@@ -486,7 +486,7 @@ is the path's final component. The href must not begin with a parent
 traversal. A dataset with no data and no transport file has no leaf.
 
 Fails: `artifact_outside_document`.
-Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `rust/crates/yamaa-adapters/tests/file_resources.rs::inherited_original_output_supplies_both_json_capture_and_publication_target`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::DefineArtifactOutsidePackage`.
+Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `rust/crates/yamaa-adapters/tests/file_resources.rs::inherited_original_output_supplies_both_json_capture_and_publication_target`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_artifact_outside_the_define_directory_is_refused`.
 
 A document that pointed outside its own directory would describe a file that is
 not in the package it belongs to. Without a transport, an artifact path that
@@ -515,7 +515,7 @@ planned dataset holds no records. A `has_no_data` dataset with no
 `submission.comment` fails validation, reporting the dataset.
 
 Fails: `submission_metadata_missing`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionNoDataComment`, `rust/crates/yamaa-core/tests/schema_submission.rs::dataset_defaults_and_comment_survive_original_document_drop`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_dataset_without_data_needs_a_comment`, `rust/crates/yamaa-core/tests/schema_submission.rs::dataset_defaults_and_comment_survive_original_document_drop`.
 
 <a id="define-18"></a>
 
@@ -656,7 +656,7 @@ instead under `Submission` or when the section sets `transport: xpt`. Define-XML
 carries a long `Alias` element, which [DEFINE-26](#define-26) defers.
 
 Fails: `sas_name_too_long`.
-Evidence: `sdtm-dm-metadata`, `negative-transport-name-too-long`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionSasName`.
+Evidence: `sdtm-dm-metadata`, `negative-transport-name-too-long`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_domain_longer_than_eight_characters_is_refused_under_submission`.
 
 A transport name this rule does not admit fails with `sas_name_too_long` at the
 dataset's or column's position, reporting the name and the pattern; lower case,
