@@ -123,6 +123,9 @@ const UNGROUPED: &str = "keys: [USUBJID, VSSEQ, SRCSEQ, ROWSRC]\n\
     \x20     AVAL: VS.VSSTRESN\n\
     \x20     ROWSRC: \"'B'\"\n";
 
+/// `sdtm-suppmh-linkage` promotes a key default that reads a named lookup into
+/// filtered templates, where every candidate has a record. No benchmark's
+/// grouped template suppresses a candidate the lookup has no record for.
 #[test]
 fn grouped_suppressed_candidate_does_not_read_lookup() {
     let fixture = Fixture::new(
@@ -137,6 +140,9 @@ fn grouped_suppressed_candidate_does_not_read_lookup() {
     );
 }
 
+/// `sdtm-suppmh-linkage` promotes a key default that reads a named lookup into
+/// filtered templates, where every candidate has a record. No benchmark's
+/// template suppresses a candidate the lookup has no record for.
 #[test]
 fn ungrouped_suppressed_candidate_does_not_read_lookup() {
     let fixture = Fixture::new(
