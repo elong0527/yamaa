@@ -1473,23 +1473,10 @@ mod tests {
     #[test]
     fn a_failure_or_a_cancellation_between_two_partitions_of_the_output_publishes_nothing() {
         use crate::publication::Interruption;
-        let cases: [(&str, fn() -> Interruption, Fault); 2] = [
-            (
-                "an I/O failure",
-                || {
-                    Interruption::Failed(crate::file_publication::Error::Io(std::io::Error::other(
-                        "disk full",
-                    )))
-                },
-                Fault::PublicationFailed,
-            ),
-            (
-                "a cancellation",
-                || Interruption::Cancelled,
-                Fault::PublicationCancelled,
-            ),
-        ];
-        for (label, interruption, fault) in cases {
+        for (label, cancelled, fault) in [
+            ("an I/O failure", false, Fault::PublicationFailed),
+            ("a cancellation", true, Fault::PublicationCancelled),
+        ] {
             let root = std::env::temp_dir().join(format!(
                 "yamaa-partitioned-save-{}-{}",
                 std::process::id(),
@@ -1525,7 +1512,10 @@ mod tests {
                 |file, partition| {
                     asked.push((file, partition));
                     match (file, partition) {
-                        (1, 2) => Err(interruption()),
+                        (1, 2) if cancelled => Err(Interruption::Cancelled),
+                        (1, 2) => Err(Interruption::Failed(crate::file_publication::Error::Io(
+                            std::io::Error::other("disk full"),
+                        ))),
                         _ => Ok(()),
                     }
                 },
