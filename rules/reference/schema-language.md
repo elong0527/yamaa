@@ -217,7 +217,7 @@ error. A registry-backed value with zero or multiple keywords fails with
 A naming list is the set of names used in one place. Two things in one naming
 list may not share a name. The rules name each place's list explicitly.
 
-Evidence: `negative-lookup-id-collision`, `negative-source-self-reference`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs::a_reachable_qualifier_collision_is_rejected_in_flat_and_composed_specs`.
+Evidence: `negative-lookup-id-collision`, `negative-source-self-reference`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/inheritance.json::a_reachable_qualifier_collision_is_rejected_in_a_flat_spec`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/inheritance.json::a_reachable_qualifier_collision_is_rejected_in_a_composed_spec`.
 
 - a schema descriptor's `type`, a column's declared `type` and a value's
   runtime type belong to different naming lists
