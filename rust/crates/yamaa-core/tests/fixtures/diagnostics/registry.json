@@ -109,8 +109,20 @@
       "case": "the_logarithm_of_zero_fails_the_derivation",
       "operation": "evaluate_number",
       "input": {"expression": "LN(0)", "path": "columns.X", "bindings": {}},
-      "compares": ["phase", "condition", "rule", "spec_paths", "context.expr"],
-      "issues": [{"phase": "derivation", "condition": "ln_of_nonpositive", "rule": "FORMULA-15", "spec_paths": ["columns.X"], "context": {"expr": "LN(0)"}}]
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "derivation", "condition": "ln_of_nonpositive", "rule": "FORMULA-15", "spec_paths": ["columns.X"], "context": {"expr": "LN(0)", "function": "LN"}}]
+    },
+    {
+      "case": "the_base_10_logarithm_of_a_negative_number_names_its_function",
+      "operation": "evaluate_number",
+      "input": {"expression": "LOG10(-1)", "path": "columns.X", "bindings": {}},
+      "issues": [{"phase": "derivation", "condition": "ln_of_nonpositive", "rule": "FORMULA-15", "spec_paths": ["columns.X"], "context": {"expr": "LOG10(-1)", "function": "LOG10"}, "source_span": {"start": 0, "end": 9}, "operand_route": []}]
+    },
+    {
+      "case": "the_normal_quantile_of_a_probability_of_one_fails_the_derivation",
+      "operation": "evaluate_number",
+      "input": {"expression": "NORM_INV(1)", "path": "columns.X", "bindings": {}},
+      "issues": [{"phase": "derivation", "condition": "invalid_probability", "rule": "FORMULA-15", "spec_paths": ["columns.X"], "context": {"expr": "NORM_INV(1)", "function": "NORM_INV", "value": 1.0}, "source_span": {"start": 0, "end": 11}, "operand_route": []}]
     },
     {
       "case": "a_negative_base_to_a_fractional_power_fails_the_derivation",

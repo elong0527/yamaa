@@ -874,7 +874,15 @@ class PublicEnvironment(unittest.TestCase):
                 case = study / name
                 shutil.copytree(ROOT / name, case)
                 shutil.rmtree(case / "input")
-                domain = yaml.safe_load((case / "spec.yaml").read_text())["domain"]
+                # The one specification the project lists, whatever its file
+                # name: a case with variants names it spec_<variant>.yaml.
+                listed = yaml.safe_load((case / "project.yaml").read_text())
+                (entry,) = [
+                    spec
+                    for section in ("sdtm", "adam", "send")
+                    for spec in (listed.get(section) or {}).get("specs", [])
+                ]
+                domain = yaml.safe_load((case / entry).read_text())["domain"]
                 project = self.project(case)
                 with no_activation():
                     self.assertEqual(project.check().issues.num_rows, 0)

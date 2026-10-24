@@ -298,8 +298,8 @@ produces a stable decimal.
 operand is a `float`; `ABS`, `MOD` and `NULLIF` likewise return `int` when
 every argument is `int` and otherwise `float`. `/` always returns `float`,
 widening each `int` operand first under [VALUE-8](#value-8); there is no
-integer division. `SQRT`, `POWER`, `EXP`, `LN`, `CEIL`, `FLOOR` and `TRUNC`
-return `float`.
+integer division. `SQRT`, `POWER`, `EXP`, `LN`, `LOG10`, `NORM_CDF`,
+`NORM_INV`, `CEIL`, `FLOOR` and `TRUNC` return `float`.
 
 Evidence: `schema-numeric-functions`, `rust/crates/yamaa-core/tests/fixtures/numeric_math.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_integral.tsv`, `rust/crates/yamaa-adapters/tests/intermediate_result_kinds.rs::nullif_widens_its_int_result_when_the_float_argument_is_missing`.
 

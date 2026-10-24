@@ -516,13 +516,19 @@ impl<'a, R: Resolver> Evaluator<'a, R> {
                             value,
                         ));
                     }
-                    Function::Exp | Function::Ln => {
+                    Function::Exp
+                    | Function::Ln
+                    | Function::Log10
+                    | Function::NormCdf
+                    | Function::NormInv => {
                         let value = self.nested(Step::Unary, |e| e.number(arguments[0]))?;
                         numeric::math(
-                            if function == Function::Exp {
-                                MathFunction::Exp
-                            } else {
-                                MathFunction::Ln
+                            match function {
+                                Function::Exp => MathFunction::Exp,
+                                Function::Ln => MathFunction::Ln,
+                                Function::Log10 => MathFunction::Log10,
+                                Function::NormCdf => MathFunction::NormCdf,
+                                _ => MathFunction::NormInv,
                             },
                             value,
                             expression,
