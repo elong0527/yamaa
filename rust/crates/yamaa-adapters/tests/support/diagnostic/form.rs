@@ -7,9 +7,13 @@
 //! A fixture file holds `about`, its `documents` and its `cases`. A case
 //! names the behaviour it proves (`case`), the operation that reaches it
 //! (`operation`, or a list of several that must each report the same issues,
-//! their complete rows compared with each other whatever `compares` and
-//! `among` leave out), that operation's `input`, and the issue rows it
-//! reports (`issues`, which each replay reads with `compares` and `among`).
+//! their complete rows compared with each other whatever `compares`,
+//! `prefix` and `among` leave out), that operation's `input`, and the issue
+//! rows it reports (`issues`, which each replay reads with `compares`, and
+//! in the [`Order`] that `prefix` or `among` writes). Its rows are every
+//! issue reported, in order, unless it writes `"prefix": true`, for the first
+//! issues reported, in order, the issues after them not compared, or
+//! `"among": true`, for some of them, each a distinct one, in any order.
 //! A positive case also states what its operation built and saved:
 //!
 //! - `output`, the output table, whole: a header row of its column names,
@@ -62,11 +66,12 @@ use yamaa_core::{
 pub const FIXTURE: [&str; 3] = ["about", "documents", "cases"];
 
 /// The members a case may write.
-pub const CASE: [&str; 9] = [
+pub const CASE: [&str; 10] = [
     "case",
     "operation",
     "input",
     "compares",
+    "prefix",
     "among",
     "issues",
     "output",
@@ -85,6 +90,56 @@ pub type Files = BTreeMap<String, Vec<u8>>;
 /// changed, by its path there, with its bytes, and each file it removed,
 /// with none.
 pub type Saved = BTreeMap<String, Option<Vec<u8>>>;
+
+/// How a case's issue rows stand to the issues its operation reports, each
+/// row compared through the case's `compares`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Order {
+    /// The rows are every issue reported, in order.
+    Complete,
+    /// The rows are the first issues reported, in order (`"prefix": true`):
+    /// a test that read the first of several issues by position.
+    Prefix,
+    /// Each row is a distinct issue reported, in any order (`"among": true`):
+    /// a test that found its issues by their cause among others.
+    Among,
+}
+
+impl Order {
+    /// The order `case` writes, whose `issues` hold `rows` rows: `prefix`
+    /// or `among`, each written only as `true`, never both, and each naming
+    /// at least one row; `label` names the case in a failure.
+    pub fn read(case: &Value, rows: usize, label: &str) -> Self {
+        let written = |member: &str| match case.get(member) {
+            None => false,
+            Some(Value::Bool(true)) => true,
+            Some(other) => panic!("{label}: {member} is written only as true, not {other:?}"),
+        };
+        let order = match (written("prefix"), written("among")) {
+            (false, false) => return Self::Complete,
+            (true, false) => Self::Prefix,
+            (false, true) => Self::Among,
+            (true, true) => panic!("{label}: a case writes prefix or among, not both"),
+        };
+        assert!(
+            rows > 0,
+            "{label}: a case whose rows are some of the issues names at least one"
+        );
+        order
+    }
+
+    /// The reported rows a case's `written` rows are compared with: for a
+    /// prefix, the first `written`, or every one when fewer were reported,
+    /// so that the comparison fails; otherwise every one, which a complete
+    /// case's rows equal in order and among which an `among` case finds each
+    /// of its rows.
+    pub fn compared<T>(self, reported: &[T], written: usize) -> &[T] {
+        match self {
+            Self::Prefix => &reported[..written.min(reported.len())],
+            Self::Complete | Self::Among => reported,
+        }
+    }
+}
 
 /// What an operation reports beside its issues: the output table and the run
 /// report it built, each as its rows, header first, and what an operation

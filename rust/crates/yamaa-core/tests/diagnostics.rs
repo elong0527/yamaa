@@ -581,7 +581,10 @@ mod diagnostics {
     /// How the replay compares an authored case with what its operation
     /// reports (#3691).
     mod replay {
-        use crate::support::diagnostic::replay::{among, compared};
+        use crate::support::diagnostic::{
+            form::Order,
+            replay::{among, compared},
+        };
         use yamaa_core::json::Value;
 
         /// A case that compares some keys of the context reads a reported
@@ -675,6 +678,24 @@ mod diagnostics {
                 ),
             ] {
                 assert_eq!(among(&authored, &reported), expected, "{label}");
+            }
+        }
+
+        /// A `prefix` case's rows are compared with the first rows its
+        /// operation reports, in order, and the rows after them are not
+        /// compared; when fewer are reported than it writes, every reported
+        /// row is compared, so the case fails, as a complete case's rows are
+        /// compared with every reported row.
+        #[test]
+        fn prefix_rows_are_compared_with_the_first_reported_rows_in_order() {
+            let reported = ["a", "b", "c"];
+            for (order, written, expected, label) in [
+                (Order::Prefix, 1, &["a"][..], "the first of three rows"),
+                (Order::Prefix, 2, &["a", "b"][..], "the first two, in order"),
+                (Order::Prefix, 4, &["a", "b", "c"][..], "more than reported"),
+                (Order::Complete, 1, &["a", "b", "c"][..], "a complete case"),
+            ] {
+                assert_eq!(order.compared(&reported, written), expected, "{label}");
             }
         }
     }
