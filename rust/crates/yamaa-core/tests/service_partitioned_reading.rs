@@ -7,9 +7,10 @@
 //! The seam is the run's choice of read and its admission of inputs beyond
 //! the row limit, which no fixture can hold. The inputs are geometry alone:
 //! a table reports its schema and record count and panics on any cell read,
-//! so admission is observed before data. A run that passes admission is
-//! cancelled at its key grain's first key, so the attempt ends as cancelled
-//! rather than with a limit.
+//! so admission is observed before data. Only the partitions a scan visits
+//! answer a cell, each record's key, which a key-bounded cut reads (#3830).
+//! A run that passes admission is cancelled at its key grain's first key, so
+//! the attempt ends as cancelled rather than with a limit.
 mod service {
     mod partitioned_reading {
         use std::cell::{Cell, RefCell};
@@ -206,27 +207,37 @@ mod service {
             }
         }
 
-        /// An input read whole, or by partition.
+        /// An input read whole; a partition its scan visits, whose records
+        /// all hold the key `key`; or the input the scan read, which holds
+        /// no record.
         enum Input {
             Whole(Geometry),
-            Partitions(Vec<Geometry>),
+            Visited(Geometry, i64),
+            Scanned(Geometry),
         }
         impl TableAccess for Input {
             type Error = Payload;
             fn schema(&self) -> &TableSchema {
                 match self {
-                    Self::Whole(table) => table.schema(),
-                    Self::Partitions(parts) => parts[0].schema(),
+                    Self::Whole(table) | Self::Visited(table, _) | Self::Scanned(table) => {
+                        table.schema()
+                    }
                 }
             }
             fn row_count(&self) -> usize {
                 match self {
-                    Self::Whole(table) => table.row_count(),
-                    Self::Partitions(parts) => parts.iter().map(Geometry::row_count).sum(),
+                    Self::Whole(table) | Self::Visited(table, _) | Self::Scanned(table) => {
+                        table.row_count()
+                    }
                 }
             }
+            /// Only the scan reads cells: a key-bounded cut reads each
+            /// record's key.
             fn cell(&self, _: usize, _: usize) -> Result<ValueRef<'_>, CellError<Payload>> {
-                panic!("admission precedes every cell read")
+                match self {
+                    Self::Visited(_, key) => Ok(ValueRef::Int(*key)),
+                    _ => panic!("admission precedes every cell read"),
+                }
             }
         }
 
@@ -262,6 +273,8 @@ mod service {
                 self.requests.borrow_mut().push("header");
                 Some(schema())
             }
+            /// Visits partitions of `rows` records, the records of the
+            /// `n`th all holding the key `n`.
             fn partitioned(
                 &mut self,
                 _: &SourceDeclaration,
@@ -269,22 +282,29 @@ mod service {
                 _: SourceInterpretation,
                 _: Option<&yamaa_core::producer_contract::Contract>,
                 rows: NonZeroUsize,
-            ) -> Result<Input, Payload> {
+                visit: &mut dyn FnMut(&Input, usize),
+            ) -> Option<Result<Input, Payload>> {
                 self.requests.borrow_mut().push("partitioned");
-                let parts = (0..self.records)
-                    .step_by(rows.get())
-                    .map(|start| Geometry(schema(), rows.get().min(self.records - start)))
-                    .collect();
-                Ok(Input::Partitions(parts))
-            }
-            fn partitions(input: &Input) -> Vec<&dyn TableAccess<Error = Payload>> {
-                match input {
-                    Input::Whole(_) => vec![input],
-                    Input::Partitions(parts) => parts
-                        .iter()
-                        .map(|part| part as &dyn TableAccess<Error = Payload>)
-                        .collect(),
+                for (key, start) in (0..self.records.max(1)).step_by(rows.get()).enumerate() {
+                    let records = rows.get().min(self.records - start);
+                    visit(
+                        &Input::Visited(Geometry(schema(), records), key as i64),
+                        start,
+                    );
                 }
+                Some(Ok(Input::Scanned(Geometry(schema(), self.records))))
+            }
+            fn partition(
+                &mut self,
+                _: &Input,
+                _: &SourceDeclaration,
+                _: &[u8],
+                _: SourceInterpretation,
+                _: Option<&yamaa_core::producer_contract::Contract>,
+                range: std::ops::Range<usize>,
+            ) -> Result<Input, Payload> {
+                self.requests.borrow_mut().push("partition");
+                Ok(Input::Whole(Geometry(schema(), range.len())))
             }
         }
 
@@ -379,8 +399,8 @@ mod service {
                     RECORDS,
                     partitions(6_000_000, None, false),
                     End::Cancelled,
-                    vec!["header", "partitioned"],
-                    "partitions of 6,000,000 and 5,000,000 records, each admitted",
+                    vec!["header", "partitioned", "partition", "partition"],
+                    "partitions of 6,000,000 and 5,000,000 records, each admitted, then decoded",
                 ),
                 (
                     &["SRC"],
@@ -426,9 +446,9 @@ mod service {
                     windowed(&["ID"]),
                     RECORDS,
                     partitions(6_000_000, Some(1), false),
-                    refused(RECORDS),
-                    vec!["header", "whole"],
-                    "a key-bounded window reads and admits the whole input before cutting keys",
+                    End::Cancelled,
+                    vec!["header", "partitioned", "partition", "partition"],
+                    "a key-bounded window reads by partition, cut between the runs of its key",
                 ),
                 (
                     &["SRC", "LOOKUP"],

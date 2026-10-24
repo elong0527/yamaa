@@ -59,12 +59,14 @@ pub fn decode(
         .map(|snapshot| snapshot.into_table().expect("an input read whole"))
 }
 
-/// Decode held bytes by partition too (#3792), in partitions of each of a
-/// few sizes, and require the whole read's outcome: the same table, cell by
-/// cell, or the same finding. The one exception is a whole read refused for
-/// its table's size, which each partition may stay within. The schema the
-/// run binds to choose the read, from the header or footer alone, must be
-/// the decoded table's.
+/// Scan held bytes by partition too (#3792), in partitions of each of a few
+/// sizes, and require the whole read's outcome: the same finding, or the
+/// partitions the scan visited, consecutive from the first record, and each
+/// of them, as well as a range across them, decoded again from the bytes
+/// (#3830), holding the whole read's records cell by cell. The one exception
+/// is a whole read refused for its table's size, which each partition may
+/// stay within. The schema the run binds to choose the read, from the header
+/// or footer alone, must be the decoded table's.
 pub fn partitioned_reads_match_the_whole_read(
     source: &SourceDeclaration,
     bytes: &[u8],
@@ -85,11 +87,34 @@ pub fn partitioned_reads_match_the_whole_read(
     }
     for rows in [1, 2, 3, 7] {
         let rows = NonZeroUsize::new(rows).expect("a positive partition size");
-        let divided = decoder.partitioned(source, bytes, interpretation, None, rows);
+        let mut visited = Vec::new();
+        let divided = decoder
+            .partitioned(source, bytes, interpretation, None, rows, &mut |part, first| {
+                visited.push(first..first + part.row_count())
+            })
+            .expect("a CSV or Parquet input scans by partition");
         match (&whole, &divided) {
-            (Ok(whole), Ok(divided)) => {
-                assert_eq!(whole.schema(), divided.schema());
-                assert_eq!(cells(whole), cells(divided));
+            (Ok(whole), Ok(scanned)) => {
+                assert_eq!(whole.schema(), scanned.schema());
+                assert_eq!(whole.row_count(), scanned.row_count());
+                let len = whole.row_count();
+                let mut ranges = visited.clone();
+                assert!(ranges.windows(2).all(|pair| pair[0].end == pair[1].start));
+                assert_eq!(ranges.first().map(|range| range.start), Some(0));
+                assert_eq!(ranges.last().map(|range| range.end), Some(len));
+                // A key-bounded cut need not fall where the scan's do.
+                ranges.push(len.min(1)..len.saturating_sub(1).max(len.min(1)));
+                let mut decode = |range: std::ops::Range<usize>| {
+                    decoder
+                        .partition(scanned, source, bytes, interpretation, None, range)
+                        .expect("a scanned range decodes")
+                };
+                let parts: Vec<_> = visited.iter().cloned().map(&mut decode).collect();
+                let joined: Vec<_> = parts.iter().flat_map(|part| cells(part)).collect();
+                assert_eq!(cells(whole), joined);
+                let across = ranges.pop().expect("the range across the partitions");
+                let part = decode(across.clone());
+                assert_eq!(cells(whole)[across], cells(&part)[..]);
             }
             (Err(whole), Err(divided)) => {
                 assert_eq!(format!("{whole:?}"), format!("{divided:?}"));

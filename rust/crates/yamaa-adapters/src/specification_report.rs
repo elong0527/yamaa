@@ -6,7 +6,7 @@ use crate::json;
 use crate::{
     dataset_result::{Condition, Outcome},
     project_report::{Classified, FactMap},
-    report_storage::{StoredReport, StoredTable},
+    report_storage::{Rows, StoredReport, StoredTable},
     specification_diagnostics,
     specification_run::{Attempt, BoundaryFailure, CapturedAttempt, PortError, PreparedRun},
 };
@@ -388,7 +388,7 @@ pub(crate) fn table_observation_projected<T: TableAccess>(
 
 /// The observation of a table whose records divide into `partitions` of
 /// these sizes, each admitted on its own: one partition for a table held
-/// whole, and those of an input read by partition (#3792).
+/// whole.
 fn table_observation<T: TableAccess>(
     table: &T,
     id: &Identity<'_>,
@@ -396,13 +396,59 @@ fn table_observation<T: TableAccess>(
     name: &str,
     partitions: &[usize],
 ) -> Result<StoredTable, Error> {
-    let columns = table.schema().columns();
-
     let rows = crate::report_storage::encode_partitions(table, partitions)?;
     Ok(StoredTable {
-        metadata: json!({"specification":id.specification,"stage":stage,"name":name,"columns":columns.iter().map(|c|&c.name).collect::<Vec<_>>(),"types":columns.iter().map(|c|specification_diagnostics::type_name(c.kind)).collect::<Vec<_>>(),"rows":null}),
-        rows,
+        metadata: table_metadata(table.schema(), id, stage, name),
+        rows: Rows::Encoded(rows),
     })
+}
+
+/// The report metadata of a table of `schema`.
+fn table_metadata(
+    schema: &yamaa_core::table::TableSchema,
+    id: &Identity<'_>,
+    stage: &str,
+    name: &str,
+) -> Value {
+    let columns = schema.columns();
+    json!({"specification":id.specification,"stage":stage,"name":name,"columns":columns.iter().map(|c|&c.name).collect::<Vec<_>>(),"types":columns.iter().map(|c|specification_diagnostics::type_name(c.kind)).collect::<Vec<_>>(),"rows":null})
+}
+
+/// The records a source read by partition encodes at a time when its
+/// observation is serialized: a streamed batch's.
+const OBSERVED_RECORDS: usize = 65_536;
+
+/// The observation of a source read by partition (#3792), whose records the
+/// run holds no copy of (#3830): its rows are decoded again from `bytes`,
+/// the held bytes its scan read, a partition at a time, and encoded only
+/// when the observations are serialized, so they are the rows a whole read
+/// would give.
+fn scanned_observation(
+    scanned: &std::sync::Arc<crate::specification_run::Scanned>,
+    bytes: std::sync::Arc<[u8]>,
+    id: &Identity<'_>,
+    name: &str,
+) -> StoredTable {
+    let metadata = table_metadata(&scanned.schema, id, "source", name);
+    let scanned = std::sync::Arc::clone(scanned);
+    StoredTable {
+        metadata,
+        rows: Rows::Deferred(std::sync::Arc::new(move || {
+            let mut writer = crate::report_storage::RowWriter::default();
+            let mut start = 0;
+            loop {
+                let end = scanned.records.min(start + OBSERVED_RECORDS);
+                let part = crate::specification_run::decode_range(&scanned, &bytes, start..end)
+                    .map_err(|_| Error::InvalidObservation)?;
+                writer.table(&part)?;
+                if end == scanned.records {
+                    break;
+                }
+                start = end;
+            }
+            writer.finish()
+        })),
+    }
 }
 
 fn envelope<C, E>(
@@ -436,19 +482,13 @@ pub(crate) fn envelope_sources<E>(
             let Some(table) = source.table.as_ref() else {
                 continue;
             };
-            // An input read by partition is admitted a partition at a time.
-            let partitions = table
-                .partitions()
-                .iter()
-                .map(|part| part.row_count())
-                .collect::<Vec<_>>();
-            tables.push(table_observation(
-                table,
-                id,
-                "source",
-                &source.read.source.name,
-                &partitions,
-            )?);
+            let name = &source.read.source.name;
+            tables.push(match (table.scan(), &source.snapshot) {
+                (Some(scanned), Some(bytes)) => {
+                    scanned_observation(scanned, std::sync::Arc::clone(bytes), id, name)
+                }
+                _ => table_observation(table, id, "source", name, &[table.row_count()])?,
+            });
         }
     }
     let mut reads = Vec::new();

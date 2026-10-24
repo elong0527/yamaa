@@ -2,7 +2,8 @@
 //! input is scanned once and decoded a range of records at a time, a Parquet
 //! input a run of whole row groups at a time, each partition admitted on its
 //! own; the partitions hold the whole read's table, and every finding is the
-//! whole read's.
+//! whole read's. The scan decodes each partition once and drops it, and any
+//! range of records then decodes again from the held bytes (#3830).
 //!
 //! The seam is the decoder port's read by partition, which neither the
 //! benchmark reader nor the host fixtures reach: no host runs partitioned
@@ -46,11 +47,17 @@ mod table {
             NonZeroUsize::new(records).unwrap()
         }
 
-        /// The input read whole, then read by partitions of `records`.
-        type Reads = (
-            Result<Snapshot<Infallible>, Error>,
-            Result<Snapshot<Infallible>, Error>,
-        );
+        /// An input scanned by partition (#3830): the table the scan left,
+        /// which holds no record, the records of each partition it visited,
+        /// and each partition decoded again from its range.
+        struct Divided {
+            scanned: Snapshot<Infallible>,
+            sizes: Vec<usize>,
+            parts: Vec<Snapshot<Infallible>>,
+        }
+
+        /// The input read whole, then scanned by partitions of `records`.
+        type Reads = (Result<Snapshot<Infallible>, Error>, Result<Divided, Error>);
         fn read(
             source: &SourceDeclaration,
             bytes: &[u8],
@@ -58,10 +65,36 @@ mod table {
             records: usize,
         ) -> Reads {
             let mut decoder = Decoder::<Infallible>::default();
-            (
-                decoder.table(source, bytes, interpretation, None),
-                decoder.partitioned(source, bytes, interpretation, None, size(records)),
-            )
+            let whole = decoder.table(source, bytes, interpretation, None);
+            let mut visited = Vec::new();
+            let scanned = decoder
+                .partitioned(
+                    source,
+                    bytes,
+                    interpretation,
+                    None,
+                    size(records),
+                    &mut |part, first| visited.push(first..first + part.row_count()),
+                )
+                .expect("a CSV or Parquet input scans by partition");
+            let divided = scanned.map(|scanned| Divided {
+                sizes: visited.iter().map(|range| range.len()).collect(),
+                parts: visited
+                    .iter()
+                    .map(|range| {
+                        decoder
+                            .partition(&scanned, source, bytes, interpretation, None, range.clone())
+                            .unwrap()
+                    })
+                    .collect(),
+                scanned,
+            });
+            (whole, divided)
+        }
+
+        /// The records of `parts`, in order, cell by cell.
+        fn joined(parts: &[Snapshot<Infallible>]) -> Vec<Vec<ValueRef<'_>>> {
+            parts.iter().flat_map(|part| cells(part)).collect()
         }
 
         /// A table's records, cell by cell.
@@ -72,15 +105,6 @@ mod table {
                         .map(|column| table.cell(row, column).unwrap())
                         .collect()
                 })
-                .collect()
-        }
-
-        /// The records each partition holds, in order.
-        fn sizes(table: &Snapshot<Infallible>) -> Vec<usize> {
-            table
-                .partitions()
-                .iter()
-                .map(|part| part.row_count())
                 .collect()
         }
 
@@ -140,10 +164,10 @@ mod table {
                     );
                     let (whole, divided) = (whole.unwrap(), divided.unwrap());
                     assert_eq!(cells(&whole), expected, "the whole read");
-                    assert_eq!(cells(&divided), expected, "partitions of {records}");
-                    assert_eq!(sizes(&divided), partitions, "partitions of {records}");
+                    assert_eq!(joined(&divided.parts), expected, "partitions of {records}");
+                    assert_eq!(divided.sizes, partitions, "partitions of {records}");
                     assert_eq!(
-                        divided.schema(),
+                        divided.scanned.schema(),
                         &schema(&[
                             ("ID", ColumnType::Str),
                             ("N", ColumnType::Int),
@@ -151,6 +175,48 @@ mod table {
                         ]),
                         "partitions of {records}"
                     );
+                }
+            }
+
+            /// A range of records decodes as the whole read gives them,
+            /// whether its first and last records fall in one partition of
+            /// the scan or in several (#3830): a key-bounded cut need not
+            /// fall where the scan's partitions of two records do.
+            #[test]
+            fn a_range_of_records_decodes_as_the_whole_read_across_the_scans_partitions() {
+                let bytes = b"ID,NOTE\n1,\"a\nb\"\n2,c\n3,\"d,e\"\n4,f\n5,g\n";
+                let expected = vec![
+                    vec![Str("1"), Str("a\nb")],
+                    vec![Str("2"), Str("c")],
+                    vec![Str("3"), Str("d,e")],
+                    vec![Str("4"), Str("f")],
+                    vec![Str("5"), Str("g")],
+                ];
+                let source = declaration(SourceProfile::Csv, &[], None);
+                let mut decoder = Decoder::<Infallible>::default();
+                let scanned = decoder
+                    .partitioned(
+                        &source,
+                        bytes,
+                        SourceInterpretation::Ordinary,
+                        None,
+                        size(2),
+                        &mut |_, _| {},
+                    )
+                    .unwrap()
+                    .unwrap();
+                for range in [0..5, 1..4, 1..2, 2..4, 3..5, 4..5, 2..2] {
+                    let part = decoder
+                        .partition(
+                            &scanned,
+                            &source,
+                            bytes,
+                            SourceInterpretation::Ordinary,
+                            None,
+                            range.clone(),
+                        )
+                        .unwrap();
+                    assert_eq!(cells(&part), expected[range.clone()], "records {range:?}");
                 }
             }
 
@@ -249,8 +315,11 @@ mod table {
                 let source = declaration(SourceProfile::Csv, &[("N", ColumnType::Int)], None);
                 let bytes = b"ID,N\n1,1\n2,2\n3,3\n4,four\n5,five\n";
                 let (whole, divided) = read(&source, bytes, SourceInterpretation::Ordinary, 2);
-                for (read, case) in [(whole, "the whole read"), (divided, "partitions of 2")] {
-                    match read.err() {
+                for (error, case) in [
+                    (whole.err(), "the whole read"),
+                    (divided.err(), "partitions of 2"),
+                ] {
+                    match error {
                         Some(Error::TypedSource(yamaa_adapters::typed_csv::Error::Typing(
                             yamaa_core::typed_csv::Error::FieldParse {
                                 field,
@@ -275,9 +344,9 @@ mod table {
                 for bytes in [&b"A,B"[..], b"A,B\n", b"A,B\r\n"] {
                     let (_, divided) = read(&source, bytes, SourceInterpretation::Ordinary, 3);
                     let divided = divided.unwrap();
-                    assert_eq!(sizes(&divided), [0], "{bytes:?}");
+                    assert_eq!(divided.sizes, [0], "{bytes:?}");
                     assert_eq!(
-                        divided.schema(),
+                        divided.scanned.schema(),
                         &schema(&[("A", ColumnType::Str), ("B", ColumnType::Str)]),
                         "{bytes:?}"
                     );
@@ -297,11 +366,11 @@ mod table {
                 let (whole, divided) =
                     read(&source, bytes.as_bytes(), SourceInterpretation::Odm, 2);
                 let (whole, divided) = (whole.unwrap(), divided.unwrap());
-                assert_eq!(sizes(&divided), [2, 1]);
-                assert_eq!(divided.schema(), whole.schema());
-                assert_eq!(cells(&divided), cells(&whole));
-                assert_eq!(divided.cell(2, 2).unwrap(), Str("3"));
-                assert_eq!(divided.cell(2, 10).unwrap(), Str("30"));
+                assert_eq!(divided.sizes, [2, 1]);
+                assert_eq!(divided.scanned.schema(), whole.schema());
+                assert_eq!(joined(&divided.parts), cells(&whole));
+                assert_eq!(divided.parts[1].cell(0, 2).unwrap(), Str("3"));
+                assert_eq!(divided.parts[1].cell(0, 10).unwrap(), Str("30"));
             }
         }
 
@@ -381,8 +450,46 @@ mod table {
                         read(&source, &bytes, SourceInterpretation::Ordinary, records);
                     let (whole, divided) = (whole.unwrap(), divided.unwrap());
                     assert_eq!(cells(&whole), expected, "the whole read");
-                    assert_eq!(cells(&divided), expected, "partitions of {records}");
-                    assert_eq!(sizes(&divided), partitions, "partitions of {records}");
+                    assert_eq!(joined(&divided.parts), expected, "partitions of {records}");
+                    assert_eq!(divided.sizes, partitions, "partitions of {records}");
+                }
+            }
+
+            /// A range of records decodes from the row groups that hold
+            /// them, as the whole read gives those records, whether it
+            /// covers whole row groups or parts of them (#3830).
+            #[test]
+            fn a_range_of_records_decodes_as_the_whole_read_from_its_row_groups() {
+                let names: Vec<String> = (1..=15).map(|id| format!("r{id}")).collect();
+                let expected: Vec<Vec<ValueRef<'_>>> = (0..15)
+                    .map(|row| vec![ValueRef::Int(row as i64 + 1), ValueRef::Str(&names[row])])
+                    .collect();
+                let source = declaration(SourceProfile::Parquet, &[], None);
+                let bytes = fifteen();
+                let mut decoder = Decoder::<Infallible>::default();
+                let scanned = decoder
+                    .partitioned(
+                        &source,
+                        &bytes,
+                        SourceInterpretation::Ordinary,
+                        None,
+                        size(6),
+                        &mut |_, _| {},
+                    )
+                    .unwrap()
+                    .unwrap();
+                for range in [0..15, 0..6, 2..7, 3..6, 5..15, 14..15, 7..7] {
+                    let part = decoder
+                        .partition(
+                            &scanned,
+                            &source,
+                            &bytes,
+                            SourceInterpretation::Ordinary,
+                            None,
+                            range.clone(),
+                        )
+                        .unwrap();
+                    assert_eq!(cells(&part), expected[range.clone()], "records {range:?}");
                 }
             }
 
@@ -399,12 +506,50 @@ mod table {
                 );
                 let source = declaration(SourceProfile::Parquet, &[], None);
                 let (whole, divided) = read(&source, &bytes, SourceInterpretation::Ordinary, 3);
-                for (read, case) in [(whole, "the whole read"), (divided, "partitions of 3")] {
-                    match read.err() {
+                for (error, case) in [
+                    (whole.err(), "the whole read"),
+                    (divided.err(), "partitions of 3"),
+                ] {
+                    match error {
                         Some(Error::ParquetSource(
                             yamaa_adapters::parquet_source::Error::Value { field, row, value },
                         )) => {
                             assert_eq!((field.as_str(), row, value), ("D", 8, 2_932_897), "{case}")
+                        }
+                        other => panic!("{case}: {other:?}"),
+                    }
+                }
+            }
+
+            /// Out-of-range dates in two columns: the second column's in the
+            /// first partition, the first column's in the second. The whole
+            /// read checks each column over every record before the next
+            /// column, so both reads report the first column's, at its row in
+            /// the file, 5 (PARQUET-5, #3830).
+            #[test]
+            fn a_parquet_finding_in_an_earlier_column_of_a_later_partition_comes_first() {
+                let mut first: Vec<Option<i32>> = (0..6).map(Some).collect();
+                let mut second = first.clone();
+                first[4] = Some(2_932_897);
+                second[1] = Some(2_932_897);
+                let bytes = written(
+                    vec![
+                        ("A", Arc::new(Date32Array::from(first)) as ArrayRef),
+                        ("B", Arc::new(Date32Array::from(second)) as ArrayRef),
+                    ],
+                    3,
+                );
+                let source = declaration(SourceProfile::Parquet, &[], None);
+                let (whole, divided) = read(&source, &bytes, SourceInterpretation::Ordinary, 3);
+                for (error, case) in [
+                    (whole.err(), "the whole read"),
+                    (divided.err(), "partitions of 3"),
+                ] {
+                    match error {
+                        Some(Error::ParquetSource(
+                            yamaa_adapters::parquet_source::Error::Value { field, row, value },
+                        )) => {
+                            assert_eq!((field.as_str(), row, value), ("A", 5, 2_932_897), "{case}")
                         }
                         other => panic!("{case}: {other:?}"),
                     }
@@ -424,8 +569,11 @@ mod table {
                 let source = declaration(SourceProfile::Parquet, &[], None);
                 let (_, divided) = read(&source, &bytes, SourceInterpretation::Ordinary, 2);
                 let divided = divided.unwrap();
-                assert_eq!(sizes(&divided), [0]);
-                assert_eq!(divided.schema(), &schema(&[("ID", ColumnType::Int)]));
+                assert_eq!(divided.sizes, [0]);
+                assert_eq!(
+                    divided.scanned.schema(),
+                    &schema(&[("ID", ColumnType::Int)])
+                );
             }
 
             /// An `odm` read of a file in row groups binds the eleven fields
@@ -447,10 +595,13 @@ mod table {
                 let source = declaration(SourceProfile::Parquet, &[], None);
                 let (whole, divided) = read(&source, &bytes, SourceInterpretation::Odm, 2);
                 let (whole, divided) = (whole.unwrap(), divided.unwrap());
-                assert_eq!(sizes(&divided), [2, 2, 1]);
-                assert_eq!(divided.schema(), whole.schema());
-                assert_eq!(cells(&divided), cells(&whole));
-                assert_eq!(divided.cell(4, 2).unwrap(), ValueRef::Str("SubjectKey-5"));
+                assert_eq!(divided.sizes, [2, 2, 1]);
+                assert_eq!(divided.scanned.schema(), whole.schema());
+                assert_eq!(joined(&divided.parts), cells(&whole));
+                assert_eq!(
+                    divided.parts[2].cell(0, 2).unwrap(),
+                    ValueRef::Str("SubjectKey-5")
+                );
             }
         }
 
@@ -489,7 +640,7 @@ mod table {
                 let case = source.path.clone();
                 let (whole, divided) = read(&source, &bytes, SourceInterpretation::Ordinary, 2);
                 let (whole, divided) = (whole.unwrap(), divided.unwrap());
-                assert_eq!(sizes(&divided), partitions, "{case}");
+                assert_eq!(divided.sizes, partitions, "{case}");
                 let positions = |table: &Snapshot<Infallible>| -> Vec<ValueRef<'static>> {
                     (0..table.row_count())
                         .map(|row| match table.cell(row, 1).unwrap() {
@@ -500,7 +651,12 @@ mod table {
                 };
                 let expected: Vec<ValueRef<'static>> = (1..=5).map(ValueRef::Int).collect();
                 assert_eq!(positions(&whole), expected, "the whole read of {case}");
-                assert_eq!(positions(&divided), expected, "partitions of {case}");
+                let divided: Vec<ValueRef<'static>> = divided
+                    .parts
+                    .iter()
+                    .flat_map(|part| positions(part))
+                    .collect();
+                assert_eq!(divided, expected, "partitions of {case}");
             }
         }
 

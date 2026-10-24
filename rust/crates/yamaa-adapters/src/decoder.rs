@@ -7,6 +7,7 @@
 //! partitions' tables. Snapshot cells remain infallible; the error type is
 //! only the engine's shared callback boundary. This grants no host access or
 //! activation authority.
+use crate::specification_run::Scanned;
 use crate::{
     column_table::ColumnTable,
     document::Closures,
@@ -14,7 +15,7 @@ use crate::{
     specification_source::{self, CapturedDocument, Source},
     yaml_decode::{decode_yaml, DecodedYaml},
 };
-use std::marker::PhantomData;
+use std::{marker::PhantomData, sync::Arc};
 use yamaa_core::{
     project_environment::LockKind,
     project_preparation::DecodeTarget,
@@ -22,19 +23,15 @@ use yamaa_core::{
     table::{CellError, TableAccess, TableSchema, ValueRef},
 };
 
-/// One decoded input: a table, or the partitions of an input read by
-/// partition (#3792), read as the one table they divide.
+/// One decoded input: a table, or an input read by partition (#3792), which
+/// holds no record: its scan's schema and record count, and what decodes any
+/// range of its records again from the held bytes (#3830).
 pub struct Snapshot<E> {
     storage: Storage<E>,
 }
 enum Storage<E> {
     Whole(ColumnTable, PhantomData<fn() -> E>),
-    /// Each partition's table, in order, and where each starts in the whole
-    /// input, then the input's size.
-    Partitioned {
-        parts: Vec<Snapshot<E>>,
-        starts: Vec<usize>,
-    },
+    Scanned(Arc<Scanned>, PhantomData<fn() -> E>),
 }
 impl<E> Snapshot<E> {
     fn whole(table: ColumnTable) -> Self {
@@ -42,38 +39,24 @@ impl<E> Snapshot<E> {
             storage: Storage::Whole(table, PhantomData),
         }
     }
-    /// The input read as `parts`, its partitions in order: at least one.
-    fn partitioned(parts: Vec<ColumnTable>) -> Self {
-        let mut starts = Vec::with_capacity(parts.len() + 1);
-        let mut start = 0usize;
-        starts.push(start);
-        for part in &parts {
-            start = start.saturating_add(part.row_count());
-            starts.push(start);
-        }
+    fn scanned(scanned: Scanned) -> Self {
         Self {
-            storage: Storage::Partitioned {
-                parts: parts.into_iter().map(Self::whole).collect(),
-                starts,
-            },
+            storage: Storage::Scanned(Arc::new(scanned), PhantomData),
         }
     }
     /// The table of an input read whole; `None` for one read by partition.
     pub fn into_table(self) -> Option<ColumnTable> {
         match self.storage {
             Storage::Whole(table, _) => Some(table),
-            Storage::Partitioned { .. } => None,
+            Storage::Scanned(..) => None,
         }
     }
-    /// The partitions in order: those of an input read by partition, or the
-    /// snapshot alone.
-    pub fn partitions(&self) -> Vec<&dyn TableAccess<Error = E>> {
+    /// What the scan of an input read by partition keeps (#3830); `None`
+    /// for one read whole.
+    pub(crate) fn scan(&self) -> Option<&Arc<Scanned>> {
         match &self.storage {
-            Storage::Whole(..) => vec![self],
-            Storage::Partitioned { parts, .. } => parts
-                .iter()
-                .map(|part| part as &dyn TableAccess<Error = E>)
-                .collect(),
+            Storage::Whole(..) => None,
+            Storage::Scanned(scanned, _) => Some(scanned),
         }
     }
 }
@@ -82,33 +65,24 @@ impl<E> TableAccess for Snapshot<E> {
     fn schema(&self) -> &TableSchema {
         match &self.storage {
             Storage::Whole(table, _) => table.schema(),
-            Storage::Partitioned { parts, .. } => parts[0].schema(),
+            Storage::Scanned(scanned, _) => &scanned.schema,
         }
     }
     fn row_count(&self) -> usize {
         match &self.storage {
             Storage::Whole(table, _) => table.row_count(),
-            Storage::Partitioned { starts, .. } => starts[starts.len() - 1],
+            Storage::Scanned(scanned, _) => scanned.records,
         }
     }
+    /// A cell of an input read whole. An input read by partition holds no
+    /// record: a run reads each range of its records decoded again.
     fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<E>> {
         match &self.storage {
             Storage::Whole(table, _) => table.cell(row, column).map_err(|error| match error {
                 CellError::OutOfBounds { row, column } => CellError::OutOfBounds { row, column },
                 CellError::Access(never) => match never {},
             }),
-            Storage::Partitioned { parts, starts } => {
-                if row >= self.row_count() {
-                    return Err(CellError::OutOfBounds { row, column });
-                }
-                let part = starts.partition_point(|&start| start <= row) - 1;
-                parts[part]
-                    .cell(row - starts[part], column)
-                    .map_err(|error| match error {
-                        CellError::OutOfBounds { .. } => CellError::OutOfBounds { row, column },
-                        error => error,
-                    })
-            }
+            Storage::Scanned(..) => Err(CellError::OutOfBounds { row, column }),
         }
     }
 }
@@ -229,6 +203,8 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
     ) -> Option<TableSchema> {
         crate::specification_run::source_schema(source, bytes, interpretation)
     }
+    /// A CSV or Parquet input scans a partition at a time, each table
+    /// visited and dropped (#3830); every other profile is read whole.
     fn partitioned(
         &mut self,
         source: &SourceDeclaration,
@@ -236,12 +212,31 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
         interpretation: yamaa_core::specification::SourceInterpretation,
         contract: Option<&yamaa_core::producer_contract::Contract>,
         rows: std::num::NonZeroUsize,
-    ) -> Result<Snapshot<E>, Error> {
-        crate::specification_run::decode_partitions(source, bytes, interpretation, contract, rows)
-            .map(Snapshot::partitioned)
+        visit: &mut dyn FnMut(&Snapshot<E>, usize),
+    ) -> Option<Result<Snapshot<E>, Error>> {
+        let scanned = crate::specification_run::scan_partitions(
+            source,
+            bytes,
+            interpretation,
+            contract,
+            rows,
+            &mut |table, first| visit(&Snapshot::whole(table.clone()), first),
+        )?;
+        Some(scanned.map(Snapshot::scanned))
     }
-    fn partitions(table: &Snapshot<E>) -> Vec<&dyn TableAccess<Error = E>> {
-        table.partitions()
+    fn partition(
+        &mut self,
+        scanned: &Snapshot<E>,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        _: yamaa_core::specification::SourceInterpretation,
+        _: Option<&yamaa_core::producer_contract::Contract>,
+        range: std::ops::Range<usize>,
+    ) -> Result<Snapshot<E>, Error> {
+        let scan = scanned
+            .scan()
+            .unwrap_or_else(|| unreachable!("{} was not scanned by partition", source.name));
+        crate::specification_run::decode_range(scan, bytes, range).map(Snapshot::whole)
     }
 }
 

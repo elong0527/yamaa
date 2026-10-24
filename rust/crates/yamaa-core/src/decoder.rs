@@ -3,8 +3,10 @@
 //! names admitted as the type it is read as, or a table by an input's profile.
 //! The adapters implement it with the YAML reader, the shipped closures and
 //! the CSV, Parquet, SAS and ODM codecs; core holds no codec. A CSV or
-//! Parquet input can also be read by partition (#3792), each partition
-//! decoded and admitted on its own.
+//! Parquet input can also be read by partition (#3792): a scan decodes every
+//! partition once, in order, to find what the whole read finds, keeping none
+//! of them, and each range of records then decodes again when the run reads
+//! it (#3830).
 use crate::{
     producer_contract::Contract,
     project_environment::LockKind,
@@ -13,7 +15,7 @@ use crate::{
     specification::{SourceDeclaration, SourceInterpretation},
     table::{TableAccess, TableSchema},
 };
-use std::{any::Any, num::NonZeroUsize};
+use std::{any::Any, num::NonZeroUsize, ops::Range};
 
 /// The engine's one way from held bytes to what it reads. Each request reads
 /// only the bytes it is given, applies its own physical limits before it
@@ -85,29 +87,42 @@ pub trait Decoder {
     ) -> Option<TableSchema> {
         None
     }
-    /// Decode one captured input by partition (#3792), each partition of
-    /// about `rows` records and admitted on its own, in order. Every finding
+    /// Scan one captured input by partition (#3792): decode each partition
+    /// of about `rows` records once, in order, admitted on its own, and give
+    /// it to `visit` with the position of its first record among the
+    /// input's records before dropping it (#3830). Every finding
     /// [`Self::table`] reports is reported in the same order and with the
     /// same context; only the row and cell limits bound each partition
-    /// instead of the whole table. The table holds every partition, which
-    /// [`Self::partitions`] gives.
+    /// instead of the whole table. The table returned holds no record: it
+    /// has the input's schema and record count, and [`Self::partition`]
+    /// decodes any range of its records again. `None` when the decoder reads
+    /// the input only whole.
+    #[allow(clippy::type_complexity)]
     fn partitioned(
         &mut self,
-        source: &SourceDeclaration,
-        bytes: &[u8],
-        interpretation: SourceInterpretation,
-        contract: Option<&Contract>,
+        _source: &SourceDeclaration,
+        _bytes: &[u8],
+        _interpretation: SourceInterpretation,
+        _contract: Option<&Contract>,
         _rows: NonZeroUsize,
-    ) -> Result<Self::Table, Self::Error> {
-        self.table(source, bytes, interpretation, contract)
+        _visit: &mut dyn FnMut(&Self::Table, usize),
+    ) -> Option<Result<Self::Table, Self::Error>> {
+        None
     }
-    /// The partitions of `table` in order, each read by the coordinates of
-    /// its own records: those [`Self::partitioned`] decoded, or the table
-    /// alone for one decoded whole.
-    fn partitions(
-        table: &Self::Table,
-    ) -> Vec<&dyn TableAccess<Error = <Self::Table as TableAccess>::Error>> {
-        vec![table]
+    /// Decode records `range` of an input [`Self::partitioned`] scanned
+    /// into `scanned`, from the same held bytes: a table of `range.len()`
+    /// records, read by their positions in the range. The scan found every
+    /// finding, so this finds none.
+    fn partition(
+        &mut self,
+        _scanned: &Self::Table,
+        source: &SourceDeclaration,
+        _bytes: &[u8],
+        _interpretation: SourceInterpretation,
+        _contract: Option<&Contract>,
+        _range: Range<usize>,
+    ) -> Result<Self::Table, Self::Error> {
+        unreachable!("{} was not scanned by partition", source.name)
     }
     /// Whether a failed input is an ingestion finding, after which the
     /// remaining declared inputs still decode. A resource, transport or
