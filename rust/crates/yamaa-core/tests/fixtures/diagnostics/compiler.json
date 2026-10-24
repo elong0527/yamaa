@@ -1,5 +1,5 @@
 {
-  "about": "What schema expansion and the specification compiler refuse, and admit, before any record is read: a window reference's expansion (WINDOW-1), an aggregate derive binding that is a window operation (LOOKUP-22), grammar findings binding keeps at their authored paths (FORMULA-1), integer literals and handlers outside int's range (VALUE-5), redundant Parquet field types (INPUT-6), verification declarations (CHECK-4) and a qualified aggregate grouped by no output key (LOOKUP-19). The window cases expand a schema whose `windows` declare complete definitions and whose columns' derivations take a `row_number` window, written inline or by name; an unused malformed definition is found in either mode, and only `strict` reports a surviving unknown reference. The specification `value` derives the int column VALUE from SRC, read from input.csv with the schema ID, int, and each case writes VALUE's derivation, type or verifications, its row templates or its input; `aggregate_derive` derives VALUE with an aggregate whose derive binding V reads SRC.ID, and each of its cases writes V's derivation. Each case compares the fields its Rust table compared, and an `among` case finds its record by cause among the others.",
+  "about": "What schema expansion and the specification compiler refuse, and admit, before any record is read: a window reference's expansion (WINDOW-1), an aggregate derive binding that is a window operation (LOOKUP-22), grammar findings binding keeps at their authored paths (FORMULA-1), integer literals outside int's range in conversion handlers and filters (VALUE-5), redundant Parquet field types (INPUT-6), verification declarations (CHECK-4) and a qualified aggregate grouped by no output key (LOOKUP-19). The window cases expand a schema whose `windows` declare complete definitions and whose columns' derivations take a `row_number` window, written inline or by name; an unused malformed definition is found in either mode, and only `strict` reports a surviving unknown reference. The specification `value` derives the int column VALUE from SRC, read from input.csv with the schema ID, int, and each case writes VALUE's derivation, type or verifications, its row templates or its input; `aggregate_derive` derives VALUE with an aggregate whose derive binding V reads SRC.ID, and each of its cases writes V's derivation or adds a binding. A case whose table compared part of a record compares those fields, and an `among` case finds its record by cause among the others.",
   "documents": {
     "value": {
       "yamaa": "1.0",
@@ -51,7 +51,7 @@
       "issues": []
     },
     {
-      "case": "an_unused_malformed_definition_precedes_reference_errors_when_not_strict",
+      "case": "an_unused_malformed_definition_is_refused_by_a_non_strict_expansion",
       "operation": "schema_windows",
       "input": {
         "schema": {"schema.yaml": {
@@ -74,7 +74,7 @@
       "issues": [{"condition": "invalid_field_type", "spec_paths": ["windows.UNUSED"]}]
     },
     {
-      "case": "an_unused_malformed_definition_precedes_reference_errors_when_strict",
+      "case": "an_unused_malformed_definition_is_refused_before_strict_reference_errors",
       "operation": "schema_windows",
       "input": {
         "schema": {"schema.yaml": {
