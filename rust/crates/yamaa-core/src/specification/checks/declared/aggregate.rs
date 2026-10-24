@@ -310,7 +310,9 @@ impl Checks<'_> {
     /// (LOOKUP-19) and its operands' types (FORMULA-23). A row template's
     /// groups are fields of its driver, which binding reads first. `None`
     /// when binding binds nothing more of the aggregate; otherwise the
-    /// relation it reduces, when it names one.
+    /// relation it reduces, when it names one. It mirrors binding's header
+    /// checks in their order, and #3805 removes it with this pass, so it
+    /// stays whole until then.
     fn aggregate(
         &self,
         e: ExprId,

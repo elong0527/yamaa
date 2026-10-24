@@ -577,6 +577,8 @@ impl Checks<'_> {
     /// whose key types fail, which binding does not bind, and those it binds
     /// without their derivations: one whose derivation fails, and every one
     /// derived after one it does not bind (`intermediate_derivations::bind`).
+    /// It mirrors binding's walk of the lookups step for step, and #3805
+    /// removes it with this pass, so it stays whole until then.
     pub(super) fn intermediates(
         &self,
         findings: &mut Vec<BindFinding>,

@@ -646,6 +646,11 @@ impl<'p> Builder<'p> {
     }
 
     /// Lower one assignment and its nested assignments, children first.
+    ///
+    /// This is one dispatch, an arm for each bound expression kind, so it
+    /// grows with the language rather than holding steps to name; a kind
+    /// whose lowering has steps of its own delegates them to a method
+    /// (`aggregate`, `odm`, `first_available`, `window`, `arguments`).
     fn lower(
         &mut self,
         cx: &Cx<'p>,
