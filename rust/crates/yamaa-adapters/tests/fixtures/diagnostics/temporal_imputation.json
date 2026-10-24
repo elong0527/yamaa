@@ -1,0 +1,192 @@
+{
+  "about": "The verbs impute (TIME-8), precision (TIME-7) and to_date (TIME-2) in a specification. A column's precision and to_date read the completed value a row template's impute binds, and a to_date nested in a case reads only the value its branch selects. A bound outside the collected interval is ignored, crossed bounds give not_after, a lone upper bound cannot cross and registers no crossed_bounds path, and a complete source needs no completion, so a bound never moves it (TIME-9). A missing source gives missing, counted at missing, and invalid text takes the declared invalid literal, counted at invalid (TIME-13, COLUMN-14), which, like any derived value, converts to the column's declared type, minute text naming second zero (COLUMN-8, VALUE-15). A fallback answers a missing source with its whole value, counted at fallback, and a present source is completed instead. A completion that is no calendar date fails on the impute stage with the current record's keys (TIME-10), and invalid answers only text that is not collected date text, so it neither answers nor counts that failure; the failed run holds no output, so its report has no column row (CHECK-23). A bound that is not a date is refused at its field (TIME-1), and so is a bound in an intermediate's key, which no plan supports. The documents bad_day and ae are the specification and input of the benchmark negative-impute-bad-day, and that case's row is the benchmark's expected/error.yaml, which its test compared. Moved from the declarative_temporal_imputation module of scalar_declarative_rounding.rs, whose tests compared each issue's phase, condition, rule, spec paths and context, the handler counts as the report's handler rows name them (SPEC_PATH, NAME, COUNT), and the saved bytes.",
+  "documents": {
+    "bad_day": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADAE\nkeys: [STUDYID, USUBJID, AESEQ]\ninput:\n  AE: input/ae.csv\n\noutput:\n  path: adae.csv\n  columns: [STUDYID, USUBJID, AESEQ, AENDT]\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: AE.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: AE.USUBJID\n\n  - name: AESEQ\n    type: int\n    label: Sequence Number\n    derivation: AE.AESEQ\n\n  # Intentionally a fixed day 31: a year alone becomes 31 December, but a\n  # year and month with fewer than 31 days completes to no calendar date,\n  # which fails the run.\n  - name: AENDT\n    type: date\n    label: Analysis End Date\n    derivation:\n      impute:\n        type: date\n        source: AE.AEENDTC\n        month: 12\n        day: 31\n",
+    "ae": "STUDYID,USUBJID,AESEQ,AETERM,AEENDTC\nYAMAA-01,YAMAA-01-101,1,Nausea,2023-07\nYAMAA-01,YAMAA-01-101,2,Fatigue,2023-04\n"
+  },
+  "cases": [
+    {
+      "case": "row_imputation_and_column_precision_use_original_binding_and_completed_values",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, DTM, PR, DATE]}\ncolumns:\n  - {name: ID, type: int}\n  - {name: DTM, type: datetime}\n  - name: PR\n    type: str\n    derivation: {precision: {type: datetime, source: DTM}}\n  - name: DATE\n    type: date\n    derivation: {to_date: {source: DTM}}\nrows:\n  - id: records\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      DTM: {impute: {type: datetime, source: SRC.TEXT, time: last, invalid: null}}\n",
+          "input.csv": "ID,TEXT\n1,2024-02-29\n2,2024-02-29T12:13\n3,\n4,2024-02-29T12\n5,2024-02-29T12:13:14\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"output.csv": "ID,DTM,PR,DATE\n1,2024-02-29T23:59:59,day,2024-02-29\n2,2024-02-29T12:13:59,minute,2024-02-29\n3,,,\n4,2024-02-29T12:59:59,hour,2024-02-29\n5,2024-02-29T12:13:14,second,2024-02-29\n"}
+    },
+    {
+      "case": "nested_case_conversion_reads_only_its_selected_completed_datetime",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, DTM, PR, DATE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: DTM\n    type: datetime\n    derivation: {impute: {type: datetime, source: SRC.TEXT, time: last, invalid: null}}\n  - name: PR\n    type: str\n    derivation: {precision: {type: datetime, source: DTM}}\n  - name: DATE\n    type: date\n    derivation:\n      case:\n        - when: \"PR = 'day'\"\n          then: {to_date: {source: DTM}}\n        - otherwise: null\n",
+          "input.csv": "ID,TEXT\n1,2024-02-29\n2,2024-02-29T12:13\n3,\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"output.csv": "ID,DTM,PR,DATE\n1,2024-02-29T23:59:59,day,2024-02-29\n2,2024-02-29T12:13:59,minute,\n3,,,\n"}
+    },
+    {
+      "case": "upper_and_paired_bounds_ignore_outside_bounds_and_resolve_crossings_to_not_after",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {LOW: date, HIGH: date}}}\noutput: {path: output.csv, columns: [ID, END, BOTH]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: END\n    type: date\n    derivation:\n      impute:\n        type: date\n        source: SRC.TEXT\n        month: 12\n        day: last\n        not_after: SRC.HIGH\n        invalid: null\n  - name: BOTH\n    type: date\n    derivation:\n      impute:\n        type: date\n        source: SRC.TEXT\n        month: 6\n        day: 15\n        not_before: SRC.LOW\n        not_after: SRC.HIGH\n        invalid: null\n",
+          "input.csv": "ID,TEXT,LOW,HIGH\n1,2025-03,,2025-03-12\n2,2025-03-28,,2025-03-12\n3,2025-03,,\n4,2025,,2025-02-10\n5,2025-05,,2025-04-20\n6,2025-03,2025-03-20,2025-03-25\n7,2025-03,2025-03-20,2025-03-10\n8,,,\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.END.derivation.impute.missing", "missing", 1],
+          ["columns.END.derivation.impute.invalid", "invalid", 0],
+          ["columns.BOTH.derivation.impute.missing", "missing", 1],
+          ["columns.BOTH.derivation.impute.invalid", "invalid", 0],
+          ["columns.BOTH.derivation.impute.not_after", "crossed_bounds", 1]
+        ]
+      },
+      "saved": {"output.csv": "ID,END,BOTH\n1,2025-03-12,2025-03-12\n2,2025-03-28,2025-03-28\n3,2025-03-31,2025-03-15\n4,2025-02-10,2025-02-10\n5,2025-05-31,2025-05-15\n6,2025-03-25,2025-03-20\n7,2025-03-10,2025-03-10\n8,,\n"}
+    },
+    {
+      "case": "a_non_date_upper_bound_is_refused_at_its_field",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {HIGH: int}}}\noutput: {path: output.csv, columns: [ID, END]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: END\n    type: date\n    derivation:\n      impute:\n        type: date\n        source: SRC.TEXT\n        month: 12\n        day: last\n        not_after: SRC.HIGH\n        invalid: null\n",
+          "input.csv": "ID,TEXT,HIGH\n1,2025-03,20\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-1", "spec_paths": ["columns.END.derivation.impute.not_after"], "context": {"source": "SRC.HIGH", "expected": "date", "actual": "int"}}]
+    },
+    {
+      "case": "a_bounded_imputation_in_an_intermediate_key_is_refused_at_its_field",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\ninput:\n  SRC: {path: source.csv, types: {ID: str, A: str, B: date}}\n  RIGHT: {path: right.csv, types: {M: date, RESULT: str}}\nbase: SRC\nkeys: [K]\noutput: {path: out.csv, columns: [K, V]}\ncolumns:\n  - {name: K, type: str, derivation: SRC.ID}\n  - {name: A, type: str, derivation: SRC.A}\n  - {name: B, type: date, derivation: SRC.B}\n  - {name: V, type: str, derivation: LOOK.RESULT}\nintermediates:\n  - id: LOOK\n    dataset: RIGHT\n    key:\n      M: {impute: {type: date, source: A, day: first, not_after: B, month: 1}}\n",
+          "source.csv": "ID,A,B\n1,x,\n",
+          "right.csv": "M,RESULT\n,hit\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "planning", "condition": "unsupported_operation", "rule": null, "spec_paths": ["intermediates.LOOK.key.M.impute.not_after"], "context": {"operation": "not_after"}}]
+    },
+    {
+      "case": "complete_sources_ignore_the_bound_and_recovered_values_are_counted",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {REF: date}}}\noutput: {path: output.csv, columns: [ID, DATE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: DATE\n    type: date\n    derivation:\n      impute:\n        type: date\n        source: SRC.TEXT\n        month: 6\n        day: first\n        not_before: SRC.REF\n        invalid: null\n",
+          "input.csv": "ID,TEXT,REF\n1,2024-02-01,2024-02-20\n2,,2024-02-20\n3,invalid,2024-02-20\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.DATE.derivation.impute.missing", "missing", 1],
+          ["columns.DATE.derivation.impute.invalid", "invalid", 1]
+        ]
+      },
+      "saved": {"output.csv": "ID,DATE\n1,2024-02-01\n2,\n3,\n"}
+    },
+    {
+      "case": "runtime_impute_failure_retains_current_key_and_is_not_answered_by_invalid_handler",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "bad_day",
+            "edits": [
+              {
+                "from": "        day: 31\n",
+                "to": "        day: 31\n        invalid: null\n"
+              }
+            ]
+          },
+          "input/ae.csv": {"base": "ae"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "impute", "condition": "invalid_calendar_date", "rule": "TIME-10", "spec_paths": ["columns.AENDT.derivation.impute"], "context": {"value": "2023-04", "completed": "2023-04-31", "keys": [{"STUDYID": "YAMAA-01", "USUBJID": "YAMAA-01-101", "AESEQ": 2}]}}],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.AENDT.derivation.impute.missing", "missing", 0],
+          ["columns.AENDT.derivation.impute.invalid", "invalid", 0]
+        ],
+        "column": [["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"]]
+      }
+    },
+    {
+      "case": "a_fallback_answers_a_missing_source_and_is_counted",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {REF: date}}}\noutput: {path: output.csv, columns: [ID, DATE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: DATE\n    type: date\n    derivation:\n      impute:\n        type: date\n        source: SRC.TEXT\n        month: 6\n        day: first\n        fallback: SRC.REF\n",
+          "input.csv": "ID,TEXT,REF\n1,,2024-02-20\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.DATE.derivation.impute.fallback", "missing", 1]
+        ]
+      },
+      "saved": {"output.csv": "ID,DATE\n1,2024-02-20\n"}
+    },
+    {
+      "case": "a_present_source_is_completed_and_its_fallback_counts_nothing",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {REF: date}}}\noutput: {path: output.csv, columns: [ID, DATE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: DATE\n    type: date\n    derivation:\n      impute:\n        type: date\n        source: SRC.TEXT\n        month: 6\n        day: first\n        fallback: SRC.REF\n",
+          "input.csv": "ID,TEXT,REF\n1,2024-03,2024-02-20\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.DATE.derivation.impute.fallback", "missing", 0]
+        ]
+      },
+      "saved": {"output.csv": "ID,DATE\n1,2024-03-01\n"}
+    },
+    {
+      "case": "recovered_datetime_literal_is_converted_and_its_handler_is_counted",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, DTM]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: DTM\n    type: datetime\n    derivation:\n      impute:\n        type: datetime\n        source: SRC.TEXT\n        time: first\n        invalid: '2024-02-29T12:13'\n",
+          "input.csv": "ID,TEXT\n1,bad\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.DTM.derivation.impute.missing", "missing", 0],
+          ["columns.DTM.derivation.impute.invalid", "invalid", 1]
+        ]
+      },
+      "saved": {"output.csv": "ID,DTM\n1,2024-02-29T12:13:00\n"}
+    }
+  ]
+}
