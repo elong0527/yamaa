@@ -82,6 +82,18 @@ class ExpressionTableTests(unittest.TestCase):
             "ERROR: JOINED names 'AVGMEAN', which no declaration spells",
         )
 
+    def test_a_note_for_an_expression_no_module_registers_alone_is_refused(self):
+        # str_pad shares schema_expression_str.yaml with the other text verbs.
+        for name in ("str_twice", "str_pad"):
+            with self.subTest(case=name):
+                with mock.patch.dict(generator.NOTES, {name: "which pads text"}):
+                    with self.assertRaises(SystemExit) as raised:
+                        generator.page_table()
+                self.assertEqual(
+                    raised.exception.code,
+                    f"ERROR: NOTES names {name!r}, which no module registers alone",
+                )
+
     def test_a_function_s_result_decides_the_contexts_that_admit_it(self):
         lines = generator.functions_rust(
             [
