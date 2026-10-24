@@ -11,12 +11,14 @@
 //! carries them, so a row without them asserts their absence.
 //!
 //! A case whose test compared only part of each record says which fields in
-//! `compares`: a field, or one key of the context written `context.<key>`,
-//! and its rows hold those alone, a compared key in the row's `context`. A
-//! compared field or key that a row leaves out asserts its absence. A case
-//! whose test found its issues by their cause among others says `among`:
-//! each row equals a distinct reported issue, in any order, and the issues no
-//! row names are not compared. Nothing a test did not compare is filled in.
+//! `compares`, and its rows hold those alone: a field, or one key of the
+//! context written `context.<key>`, which every row's `context` then holds,
+//! with no other key. A compared field that a row leaves out asserts its
+//! absence; a case naming a key of the context does not name the context
+//! whole. A case whose test found its issues by their cause among others
+//! says `among`: each row equals a distinct reported issue, in any order, and
+//! the issues no row names are not compared. Nothing a test did not compare
+//! is filled in. Core's replay reads `compares` and `among` alike.
 //!
 //! An input's files are written to a fresh study directory: a file is its
 //! text, or a document of the fixture's `documents` taken by name (`base`)
@@ -208,22 +210,28 @@ fn compared_fields(fields: &Value, label: &str) -> Vec<String> {
     fields
 }
 
-/// `issue` holds only the fields and context keys `fields` names.
+/// `issue` holds only the fields `fields` names, and its `context` exactly
+/// the keys they name.
 fn held_alone(issue: &Value, fields: &[String], label: &str) {
-    for (field, value) in object(issue) {
-        let by_key = field == "context" && !fields.iter().any(|named| named == "context");
+    let keys = fields
+        .iter()
+        .filter_map(|field| field.strip_prefix("context."))
+        .collect::<BTreeSet<_>>();
+    for field in object(issue).keys() {
         assert!(
-            fields.iter().any(|named| named == field) || by_key,
+            fields.iter().any(|named| named == field) || (field == "context" && !keys.is_empty()),
             "{label}: a row holds only the fields it compares, not {field:?}"
         );
-        if by_key {
-            for key in object(value).keys() {
-                assert!(
-                    fields.iter().any(|named| named == &format!("context.{key}")),
-                    "{label}: a row's context holds only the keys it compares, not {key:?}"
-                );
-            }
-        }
+    }
+    if !keys.is_empty() {
+        let written: BTreeSet<&str> = issue
+            .get("context")
+            .map(|context| object(context).keys().map(String::as_str).collect())
+            .unwrap_or_default();
+        assert_eq!(
+            written, keys,
+            "{label}: a row's context holds exactly the keys it compares"
+        );
     }
 }
 

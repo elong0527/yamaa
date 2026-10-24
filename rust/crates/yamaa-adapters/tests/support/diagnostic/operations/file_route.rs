@@ -16,7 +16,10 @@ use crate::support::diagnostic::replay::{closed, field, items, object, text};
 use crate::support::Scratch;
 use yamaa_core::{domain_entry::Request, json::Value, project_function::Language};
 
-pub(super) const FILES: &[File] = &[fixture!("producer_links.json")];
+pub(super) const FILES: &[File] = &[
+    fixture!("producer_links.json"),
+    fixture!("submission.json"),
+];
 
 pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
     let members = match operation {

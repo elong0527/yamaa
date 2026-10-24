@@ -9,14 +9,7 @@
     {
       "case": "a_consumer_built_before_its_producer_is_saved_reads_a_missing_csv_artifact",
       "operation": "build",
-      "input": {
-        "files": {
-          "raw/raw.csv": {"base": "raw"},
-          "producer/p.yaml": {"base": "producer"},
-          "consumer/root.yaml": {"base": "consumer"}
-        },
-        "specification": "consumer/root.yaml"
-      },
+      "input": {"files": {"raw/raw.csv": {"base": "raw"}, "producer/p.yaml": {"base": "producer"}, "consumer/root.yaml": {"base": "consumer"}}, "specification": "consumer/root.yaml"},
       "compares": ["condition", "spec_paths"],
       "issues": [{"condition": "resource_path_missing", "spec_paths": ["input.FIRST.path"]}]
     },
@@ -116,11 +109,7 @@
         "files": {
           "raw/raw.csv": {"base": "raw"},
           "producer/p.yaml": {"base": "producer", "edits": [{"from": "producer.csv", "to": "producer.parquet"}]},
-          "producer/text.yaml": {"base": "producer", "edits": [
-            {"from": "VALUE: {aggregate: 'COUNT(RAW.*)'}", "to": "VALUE: \"'7'\""},
-            {"from": "{name: VALUE, type: int, label: Count}", "to": "{name: VALUE, type: str, label: Count}"},
-            {"from": "producer.csv", "to": "producer.parquet"}
-          ]},
+          "producer/text.yaml": {"base": "producer", "edits": [{"from": "VALUE: {aggregate: 'COUNT(RAW.*)'}", "to": "VALUE: \"'7'\""}, {"from": "{name: VALUE, type: int, label: Count}", "to": "{name: VALUE, type: str, label: Count}"}, {"from": "producer.csv", "to": "producer.parquet"}]},
           "consumer/root.yaml": {"base": "consumer", "edits": [{"from": "producer.csv", "to": "producer.parquet"}]}
         },
         "directories": ["generated"],
