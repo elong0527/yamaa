@@ -1,16 +1,14 @@
 //! The value-level entry points: mapping and cut (EXPR-11 to EXPR-13), the
 //! dataset findings of a run, and predicate evaluation (FORMULA-5 to
 //! FORMULA-9).
-use super::{text, value, value_type, File};
+use super::{bindings, text, value, value_type, File};
 use crate::support::diagnostic::json::Json;
-use std::{collections::BTreeMap, convert::Infallible};
 use yamaa_core::{
     diagnostic::{DatasetFinding, Diagnostic},
-    expression::{compile, Context, Resolver},
+    expression::{compile, Context},
     mapping_cut::{AdmissionError, Cut, Mapping},
     reduction::NumericReducer,
     table::ValueRef,
-    value::{Selection, Value},
 };
 
 pub(super) const FILES: &[File] = &[fixture!("values.json")];
@@ -175,26 +173,8 @@ fn dataset_finding(input: &Json) -> Vec<Diagnostic> {
 /// The evaluation of a predicate, `{expression, path, bindings}`, where each
 /// name `bindings` gives reads its value and every other name is absent.
 fn predicate(input: &Json) -> Vec<Diagnostic> {
-    struct Bindings(BTreeMap<String, Value>);
-    impl Resolver for Bindings {
-        type Error = Infallible;
-        fn resolve(&mut self, name: &str) -> Result<Selection, Infallible> {
-            Ok(self
-                .0
-                .get(name)
-                .cloned()
-                .map_or(Selection::Absent, Selection::Present))
-        }
-    }
     let input = input.closed(&["expression", "path", "bindings"]);
-    let mut bindings = Bindings(
-        input
-            .field("bindings")
-            .members()
-            .iter()
-            .map(|(name, bound)| (name.clone(), value(bound)))
-            .collect(),
-    );
+    let mut bindings = bindings(input.field("bindings"));
     let plan = compile(
         text(input, "expression"),
         Context::Predicate,

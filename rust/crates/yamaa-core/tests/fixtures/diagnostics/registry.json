@@ -1,0 +1,334 @@
+{
+  "about": "The causes the registry walk reaches through one core entry point each, with no specification: an application's refusals (OUTPUT-8, FUNC-3 and the engine's own), a resource path that an input or a save target refuses (FILE-5, FILE-7, FILE-8, FILE-10), numeric evaluation (FORMULA-9, FORMULA-12, FORMULA-15, VALUE-5), value conversion (VALUE-3, VALUE-7, VALUE-15), the column checks of a verification (CHECK-5 to CHECK-9, SUB-11, SUB-13, SUB-26, CT-7), an invalid pattern (TEXT-6), rounding (FORMULA-16) and the extremes of sources that cannot be compared (VALUE-19). A case whose walk compared a record in part names those fields, or those keys of its context, in compares.",
+  "cases": [
+    {
+      "case": "a_failed_publication_names_its_target_at_the_output_path",
+      "operation": "application_issue",
+      "input": {"issue": "publication_failed", "target": "generated/producer.csv"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.path"],
+      "issues": [{"phase": "output", "condition": "publication_failed", "rule": "OUTPUT-8", "spec_paths": ["output.path"], "context": {"path": "generated/producer.csv"}}]
+    },
+    {
+      "case": "a_save_refuses_a_missing_target_under_output_at_its_declaring_field",
+      "operation": "save_target",
+      "input": {"failure": "missing", "field": "output.path", "path": "out/dm.csv"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "output", "condition": "resource_path_missing", "rule": "FILE-7", "spec_paths": ["output.path"], "context": {"path": "out/dm.csv"}}]
+    },
+    {
+      "case": "a_save_refuses_a_missing_target_the_caller_names_at_no_field",
+      "operation": "save_target",
+      "input": {"failure": "missing", "field": null, "path": "out/dm.csv"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": []}]
+    },
+    {
+      "case": "a_save_refuses_a_target_that_is_not_a_regular_file_under_output_at_its_declaring_field",
+      "operation": "save_target",
+      "input": {"failure": "not_regular_file", "field": "output.path", "path": "out/dm.csv"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "output", "condition": "resource_path_not_regular_file", "rule": "FILE-7", "spec_paths": ["output.path"], "context": {"path": "out/dm.csv"}}]
+    },
+    {
+      "case": "a_save_refuses_a_target_the_caller_names_that_is_not_a_regular_file_at_no_field",
+      "operation": "save_target",
+      "input": {"failure": "not_regular_file", "field": null, "path": "out/dm.csv"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": []}]
+    },
+    {
+      "case": "a_save_refuses_a_symbolic_link_target_under_output_at_its_declaring_field",
+      "operation": "save_target",
+      "input": {"failure": "symlink", "field": "output.path", "path": "out/dm.csv"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "output", "condition": "resource_path_symlink", "rule": "FILE-8", "spec_paths": ["output.path"], "context": {"path": "out/dm.csv"}}]
+    },
+    {
+      "case": "a_save_refuses_a_symbolic_link_target_the_caller_names_at_no_field",
+      "operation": "save_target",
+      "input": {"failure": "symlink", "field": null, "path": "out/dm.csv"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": []}]
+    },
+    {
+      "case": "a_target_whose_content_changed_is_no_refusal_of_the_save_walk",
+      "operation": "save_target",
+      "input": {"failure": "content_changed", "field": "output.path", "path": "out/dm.csv"},
+      "issues": []
+    },
+    {
+      "case": "an_unsupported_operation_is_refused_naming_the_operation_and_no_rule",
+      "operation": "application_issue",
+      "input": {"issue": "unsupported", "operation": "environment", "path": "environment"},
+      "compares": ["phase", "condition", "rule", "context.operation"],
+      "issues": [{"phase": "planning", "condition": "unsupported_operation", "rule": null, "context": {"operation": "environment"}}]
+    },
+    {
+      "case": "an_engine_refusal_names_its_step_and_fault_code_and_no_rule",
+      "operation": "application_issue",
+      "input": {"issue": "rejected", "step": "capture", "code": "resource_changed"},
+      "compares": ["phase", "condition", "rule", "context.code", "context.step"],
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "context": {"code": "resource_changed", "step": "capture"}}]
+    },
+    {
+      "case": "a_derivation_reading_an_unbound_name_is_an_unknown_field",
+      "operation": "evaluate_number",
+      "input": {"expression": "MISSING", "path": "columns.X", "bindings": {}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.expr"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "FORMULA-9", "spec_paths": ["columns.X"], "context": {"expr": "MISSING"}}]
+    },
+    {
+      "case": "a_derivation_reading_text_as_a_number_is_an_incompatible_input",
+      "operation": "evaluate_number",
+      "input": {"expression": "TEXT", "path": "columns.X", "bindings": {"TEXT": "not numeric"}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.expr"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-12", "spec_paths": ["columns.X"], "context": {"expr": "TEXT"}}]
+    },
+    {
+      "case": "an_integer_sum_past_the_64_bit_range_overflows",
+      "operation": "evaluate_number",
+      "input": {"expression": "9223372036854775807 + 1", "path": "columns.X", "bindings": {}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.expr"],
+      "issues": [{"phase": "derivation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.X"], "context": {"expr": "9223372036854775807 + 1"}}]
+    },
+    {
+      "case": "a_division_by_zero_fails_the_derivation",
+      "operation": "evaluate_number",
+      "input": {"expression": "1 / 0", "path": "columns.X", "bindings": {}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.expr"],
+      "issues": [{"phase": "derivation", "condition": "division_by_zero", "rule": "FORMULA-15", "spec_paths": ["columns.X"], "context": {"expr": "1 / 0"}}]
+    },
+    {
+      "case": "the_square_root_of_a_negative_number_fails_the_derivation",
+      "operation": "evaluate_number",
+      "input": {"expression": "SQRT(-1)", "path": "columns.X", "bindings": {}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.expr"],
+      "issues": [{"phase": "derivation", "condition": "sqrt_of_negative", "rule": "FORMULA-15", "spec_paths": ["columns.X"], "context": {"expr": "SQRT(-1)"}}]
+    },
+    {
+      "case": "the_logarithm_of_zero_fails_the_derivation",
+      "operation": "evaluate_number",
+      "input": {"expression": "LN(0)", "path": "columns.X", "bindings": {}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.expr"],
+      "issues": [{"phase": "derivation", "condition": "ln_of_nonpositive", "rule": "FORMULA-15", "spec_paths": ["columns.X"], "context": {"expr": "LN(0)"}}]
+    },
+    {
+      "case": "a_negative_base_to_a_fractional_power_fails_the_derivation",
+      "operation": "evaluate_number",
+      "input": {"expression": "POWER(-1, 0.5)", "path": "columns.X", "bindings": {}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.expr"],
+      "issues": [{"phase": "derivation", "condition": "invalid_power", "rule": "FORMULA-15", "spec_paths": ["columns.X"], "context": {"expr": "POWER(-1, 0.5)"}}]
+    },
+    {
+      "case": "a_boolean_does_not_convert_to_an_integer",
+      "operation": "convert",
+      "input": {"value": true, "to": "int", "path": "columns.X"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.value", "source_span", "operand_route"],
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"value": true}}]
+    },
+    {
+      "case": "a_float_with_a_fraction_does_not_convert_to_an_integer",
+      "operation": "convert",
+      "input": {"value": 1.5, "to": "int", "path": "columns.X"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.value", "source_span", "operand_route"],
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-7", "spec_paths": ["columns.X"], "context": {"value": 1.5}}]
+    },
+    {
+      "case": "text_naming_no_calendar_day_does_not_convert_to_a_date",
+      "operation": "convert",
+      "input": {"value": "2026-02-30", "to": "date", "path": "columns.X"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.value", "source_span", "operand_route"],
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-15", "spec_paths": ["columns.X"], "context": {"value": "2026-02-30"}}]
+    },
+    {
+      "case": "a_missing_input_path_names_its_dataset_and_the_path_as_written",
+      "operation": "input_resource",
+      "input": {"failure": "missing", "dataset": "SRC", "path": "input/data.csv"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "resource_path_missing", "rule": "FILE-7", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/data.csv"}}]
+    },
+    {
+      "case": "an_input_path_that_is_not_a_regular_file_names_its_dataset_and_the_path_as_written",
+      "operation": "input_resource",
+      "input": {"failure": "not_regular_file", "dataset": "SRC", "path": "input/data.csv"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "resource_path_not_regular_file", "rule": "FILE-7", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/data.csv"}}]
+    },
+    {
+      "case": "an_input_path_with_a_uri_scheme_names_its_dataset_and_the_path_as_written",
+      "operation": "input_resource",
+      "input": {"failure": "uri_scheme", "dataset": "SRC", "path": "input/data.csv"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "resource_path_uri_scheme", "rule": "FILE-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/data.csv"}}]
+    },
+    {
+      "case": "an_input_path_with_a_backslash_is_not_normalized",
+      "operation": "input_resource",
+      "input": {"failure": "backslash", "dataset": "SRC", "path": "input/data.csv"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "resource_path_not_normalized", "rule": "FILE-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/data.csv"}}]
+    },
+    {
+      "case": "an_input_path_with_an_empty_segment_is_not_normalized",
+      "operation": "input_resource",
+      "input": {"failure": "empty_segment", "dataset": "SRC", "path": "input/data.csv"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "resource_path_not_normalized", "rule": "FILE-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/data.csv"}}]
+    },
+    {
+      "case": "an_input_path_through_a_symbolic_link_names_its_dataset_and_the_path_as_written",
+      "operation": "input_resource",
+      "input": {"failure": "symlink", "dataset": "SRC", "path": "input/data.csv"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "resource_path_symlink", "rule": "FILE-8", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/data.csv"}}]
+    },
+    {
+      "case": "an_input_whose_content_changed_while_it_was_read_fails_at_ingest",
+      "operation": "input_resource",
+      "input": {"failure": "content_changed", "dataset": "SRC", "path": "../authored/data.csv"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.path", "context.dataset"],
+      "issues": [{"phase": "ingest", "condition": "resource_path_content_changed", "rule": "FILE-10", "spec_paths": ["input.SRC.path"], "context": {"path": "../authored/data.csv", "dataset": "SRC"}}]
+    },
+    {
+      "case": "an_installed_package_the_lock_disagrees_with_is_a_runtime_artifact_mismatch",
+      "operation": "application_issue",
+      "input": {"issue": "lock_mismatch", "field": "lock", "context": {"package": "project"}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.package"],
+      "issues": [{"phase": "validation", "condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["lock"], "context": {"package": "project"}}]
+    },
+    {
+      "case": "a_not_missing_verification_counts_the_missing_rows",
+      "operation": "not_missing",
+      "input": {"values": [0, null, "", null], "path": "columns.V.verifications[0].not_missing", "column": "V"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.column", "context.failure_count"],
+      "issues": [{"phase": "verification", "condition": "not_missing_failed", "rule": "CHECK-5", "spec_paths": ["columns.V.verifications[0].not_missing"], "context": {"column": "V", "failure_count": 2}}]
+    },
+    {
+      "case": "a_not_missing_verification_that_no_row_fails_reports_nothing",
+      "operation": "not_missing",
+      "input": {"values": [0, ""], "path": "unused", "column": "V"},
+      "issues": []
+    },
+    {
+      "case": "a_mandatory_column_counts_its_missing_rows",
+      "operation": "column_diagnostic",
+      "input": {"check": "mandatory", "path": "columns.V.verifications[0]", "column": "V", "failures": 1},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.column", "context.failure_count"],
+      "issues": [{"phase": "verification", "condition": "not_missing_failed", "rule": "SUB-11", "spec_paths": ["columns.V.verifications[0]"], "context": {"column": "V", "failure_count": 1}}]
+    },
+    {
+      "case": "a_mandatory_check_that_no_row_fails_reports_nothing",
+      "operation": "column_diagnostic",
+      "input": {"check": "mandatory", "path": "unused", "column": "V", "failures": 0},
+      "issues": []
+    },
+    {
+      "case": "a_value_outside_the_allowed_values_counts_its_rows",
+      "operation": "column_diagnostic",
+      "input": {"check": {"allowed_values": [1]}, "path": "columns.V.verifications[0]", "column": "V", "failures": 1},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.column", "context.failure_count"],
+      "issues": [{"phase": "verification", "condition": "allowed_values_failed", "rule": "CHECK-6", "spec_paths": ["columns.V.verifications[0]"], "context": {"column": "V", "failure_count": 1}}]
+    },
+    {
+      "case": "an_allowed_values_check_that_no_row_fails_reports_nothing",
+      "operation": "column_diagnostic",
+      "input": {"check": {"allowed_values": [1]}, "path": "unused", "column": "V", "failures": 0},
+      "issues": []
+    },
+    {
+      "case": "a_value_outside_its_range_counts_its_rows",
+      "operation": "column_diagnostic",
+      "input": {"check": {"range": {"min": 9223372036854775808.0}}, "path": "columns.V.verifications[0]", "column": "V", "failures": 1},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.column", "context.failure_count"],
+      "issues": [{"phase": "verification", "condition": "range_failed", "rule": "CHECK-7", "spec_paths": ["columns.V.verifications[0]"], "context": {"column": "V", "failure_count": 1}}]
+    },
+    {
+      "case": "a_range_check_that_no_row_fails_reports_nothing",
+      "operation": "column_diagnostic",
+      "input": {"check": {"range": {"min": 9223372036854775808.0}}, "path": "unused", "column": "V", "failures": 0},
+      "issues": []
+    },
+    {
+      "case": "a_value_longer_than_its_maximum_length_names_the_maximum",
+      "operation": "column_diagnostic",
+      "input": {"check": {"max_length": 2}, "path": "columns.V.verifications[0]", "column": "V", "failures": 1},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.column", "context.failure_count", "context.max"],
+      "issues": [{"phase": "verification", "condition": "length_failed", "rule": "CHECK-8", "spec_paths": ["columns.V.verifications[0]"], "context": {"column": "V", "failure_count": 1, "max": 2}}]
+    },
+    {
+      "case": "a_maximum_length_check_that_no_row_fails_reports_nothing",
+      "operation": "column_diagnostic",
+      "input": {"check": {"max_length": 2}, "path": "unused", "column": "V", "failures": 0},
+      "issues": []
+    },
+    {
+      "case": "a_value_that_is_not_its_iso_8601_form_names_the_form",
+      "operation": "column_diagnostic",
+      "input": {"check": {"data_type": "date"}, "path": "columns.V.verifications[0]", "column": "V", "failures": 1},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.column", "context.failure_count", "context.data_type"],
+      "issues": [{"phase": "verification", "condition": "data_type_failed", "rule": "SUB-26", "spec_paths": ["columns.V.verifications[0]"], "context": {"column": "V", "failure_count": 1, "data_type": "date"}}]
+    },
+    {
+      "case": "a_data_type_check_that_no_row_fails_reports_nothing",
+      "operation": "column_diagnostic",
+      "input": {"check": {"data_type": "date"}, "path": "unused", "column": "V", "failures": 0},
+      "issues": []
+    },
+    {
+      "case": "a_row_two_value_level_entries_select_fails_naming_the_column",
+      "operation": "column_diagnostic",
+      "input": {
+        "check": {"value_entries": [{"id": "A", "where": [{"column": 1, "values": ["X"]}]}, {"id": "B", "where": [{"column": 1, "values": ["X"]}]}]},
+        "path": "columns.V.submission.value_level",
+        "column": "V",
+        "failures": 1
+      },
+      "issues": [{"phase": "verification", "condition": "value_level_multiple_matches", "rule": "SUB-13", "spec_paths": ["columns.V.submission.value_level"], "context": {"column": "V", "failure_count": 1}}]
+    },
+    {
+      "case": "a_value_level_entry_that_selects_no_row_names_the_entry",
+      "operation": "column_diagnostic",
+      "input": {
+        "check": {"value_entry_match": {"id": "A", "where": [{"column": 1, "values": ["X"]}]}},
+        "path": "columns.V.submission.value_level.A",
+        "column": "V",
+        "failures": 1
+      },
+      "issues": [{"phase": "verification", "condition": "value_level_unmatched", "rule": "SUB-13", "spec_paths": ["columns.V.submission.value_level.A"], "context": {"column": "V", "entry": "A", "failure_count": 1}}]
+    },
+    {
+      "case": "a_value_that_does_not_match_its_pattern_counts_its_rows",
+      "operation": "column_diagnostic",
+      "input": {"check": {"matches": "b"}, "path": "columns.V.verifications[0].matches", "column": "V", "failures": 1},
+      "compares": ["phase", "condition", "rule", "context"],
+      "issues": [{"phase": "verification", "condition": "matches_failed", "rule": "CHECK-9", "context": {"column": "V", "failure_count": 1}}]
+    },
+    {
+      "case": "an_unbalanced_pattern_is_an_invalid_regex_naming_the_pattern",
+      "operation": "matches_pattern",
+      "input": {"pattern": "(", "path": "columns.V.verifications[0].matches.pattern"},
+      "compares": ["phase", "condition", "rule", "context", "source_span"],
+      "issues": [{"phase": "validation", "condition": "invalid_regex", "rule": "TEXT-6", "context": {"pattern": "("}}]
+    },
+    {
+      "case": "rounding_refuses_a_text_source_at_its_source_field",
+      "operation": "round_half_away_from_zero",
+      "input": {"source": "SEX", "path": "columns.RND.derivation.round_half_away_from_zero", "digits": "1", "value": "F"},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-16", "spec_paths": ["columns.RND.derivation.round_half_away_from_zero.source"], "context": {"source": "SEX", "expected": "numeric", "actual": "str"}}]
+    },
+    {
+      "case": "a_value_outside_a_bound_codelist_names_the_codelist",
+      "operation": "column_diagnostic",
+      "input": {"check": {"codelist": {"id": "SEX", "values": ["F"]}}, "path": "columns.SEX.submission.codelist", "column": "SEX", "failures": 1},
+      "compares": ["phase", "condition", "rule", "context.codelist"],
+      "issues": [{"phase": "verification", "condition": "allowed_values_failed", "rule": "CT-7", "context": {"codelist": "SEX"}}]
+    },
+    {
+      "case": "the_extremes_of_sources_whose_types_cannot_be_compared_name_those_types",
+      "operation": "incomparable_sources",
+      "input": {"sources": ["DTHDT", "DAY"], "types": ["date", "int"], "path": "columns.RESULT.derivation.greatest"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.types"],
+      "issues": [{"phase": "validation", "condition": "incomparable_sources", "rule": "VALUE-19", "spec_paths": ["columns.RESULT.derivation.greatest"], "context": {"types": ["date", "int"]}}]
+    }
+  ]
+}

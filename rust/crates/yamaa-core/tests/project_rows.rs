@@ -347,7 +347,6 @@ mod project {
         };
         #[test]
         fn every_lock_and_terminology_cause_has_independent_normative_paths_and_mapping() {
-            assert_eq!(support::reached().len(), 6);
             let draft = support::draft();
             let projected = diagnostics(&draft, &project_environment::validate(&draft)).unwrap();
             // The host language has no finding of its own; only codelists fail.
@@ -898,7 +897,6 @@ mod project {
         }
         #[test]
         fn independent_complete_sixteen_record_project_report_preserves_every_field_and_order() {
-            assert_eq!(support::reached().len(), 6);
             let draft = support::draft();
             let project = project_root(&[false], Some(0));
             let findings = project_environment::validate(&draft);

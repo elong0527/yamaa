@@ -1,7 +1,7 @@
 //! Canonical diagnostic vocabulary and complete native assertion families.
 mod diagnostics {
     mod diagnostic {
-        use crate::support::diagnostic::*;
+        use crate::support::diagnostic::{rendered_causes, replay, Record};
         use std::convert::Infallible;
         use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
@@ -19,7 +19,6 @@ mod diagnostics {
         }
 
         struct Bindings;
-        use crate::support::project_environment;
         impl NumericResolver for Bindings {
             type Error = Infallible;
             fn resolve(&mut self, name: &str) -> Result<Selection, Self::Error> {
@@ -216,555 +215,13 @@ mod diagnostics {
             );
         }
 
-        /// Every registry entry must be reached by its evaluator, converter or resource cause. Expected
-        /// vocabulary is independent literal truth, not copied from the registry at runtime.
+        /// Every registry entry must be reached by its evaluator, converter or
+        /// resource cause, in a case of the expected issues written as data
+        /// under `tests/fixtures/diagnostics/`. Expected vocabulary is
+        /// independent literal truth, not copied from the registry at runtime.
         #[test]
         fn every_registered_cause_is_reached_with_its_normative_mapping() {
-            // The expected issues written as data, under tests/fixtures/diagnostics/.
-            let mut reached = replay::replay();
-            // The tables still written in Rust, one group for each part of
-            // #3691 that moves them, so the parts never edit the same lines.
-
-            // The project environment (C).
-            reached.extend(project_environment::reached());
-            reached.extend(project_environment::extended_alias_reached());
-            reached.extend(project_environment::format_name_reached());
-            reached.extend(project_environment::function_file_reached());
-
-            let publication =
-                yamaa_core::application_issue::publication_failed("generated/producer.csv");
-            assert_eq!(
-                (
-                    publication.definition().phase,
-                    publication.definition().condition,
-                    publication.definition().rule
-                ),
-                ("output", "publication_failed", Some("OUTPUT-8"))
-            );
-            assert_eq!(publication.spec_paths, ["output.path"]);
-            assert_eq!(
-                publication.context["path"],
-                JsonValue::String("generated/producer.csv".into())
-            );
-            reached.insert(rendered(&publication));
-            // A save's walk refusal of a target: its file rule's condition,
-            // decided while publishing, at the declaring field or none.
-            {
-                use yamaa_core::resource::ResourceFailure as R;
-                for (failure, condition, rule) in [
-                    (R::Missing, "resource_path_missing", "FILE-7"),
-                    (
-                        R::NotRegularFile,
-                        "resource_path_not_regular_file",
-                        "FILE-7",
-                    ),
-                    (R::Symlink, "resource_path_symlink", "FILE-8"),
-                ] {
-                    let finding = failure
-                        .target_diagnostic(Some("output.path"), "out/dm.csv")
-                        .unwrap();
-                    assert_eq!(
-                        (
-                            finding.definition().phase,
-                            finding.definition().condition,
-                            finding.definition().rule
-                        ),
-                        ("output", condition, Some(rule))
-                    );
-                    assert_eq!(finding.spec_paths, ["output.path"]);
-                    assert_eq!(
-                        finding.context,
-                        [("path".into(), JsonValue::String("out/dm.csv".into()))].into()
-                    );
-                    assert!(failure
-                        .target_diagnostic(None, "out/dm.csv")
-                        .unwrap()
-                        .spec_paths
-                        .is_empty());
-                    reached.insert(rendered(&finding));
-                }
-                assert!(R::ContentChanged
-                    .target_diagnostic(Some("output.path"), "out/dm.csv")
-                    .is_none());
-            }
-            for (finding, phase, condition, context) in [
-                (
-                    yamaa_core::application_issue::unsupported("environment", Some("environment")),
-                    "planning",
-                    "unsupported_operation",
-                    [("operation", "environment")].as_slice(),
-                ),
-                (
-                    yamaa_core::application_issue::rejected(
-                        yamaa_core::application_issue::Step::Capture,
-                        yamaa_core::application_issue::Fault::ResourceChanged,
-                    ),
-                    "engine",
-                    "engine_rejected",
-                    [("code", "resource_changed"), ("step", "capture")].as_slice(),
-                ),
-            ] {
-                let definition = finding.definition();
-                assert_eq!(
-                    (definition.phase, definition.condition, definition.rule),
-                    (phase, condition, None)
-                );
-                for &(name, value) in context {
-                    assert_eq!(finding.context[name], JsonValue::String(value.into()));
-                }
-                reached.insert(rendered(&finding));
-            }
-            for (expression, phase, condition, rule) in [
-                ("MISSING", "validation", "unknown_field", "FORMULA-9"),
-                (
-                    "TEXT",
-                    "validation",
-                    "incompatible_input_type",
-                    "FORMULA-12",
-                ),
-                (
-                    "9223372036854775807 + 1",
-                    "derivation",
-                    "integer_overflow",
-                    "VALUE-5",
-                ),
-                ("1 / 0", "derivation", "division_by_zero", "FORMULA-15"),
-                ("SQRT(-1)", "derivation", "sqrt_of_negative", "FORMULA-15"),
-                ("LN(0)", "derivation", "ln_of_nonpositive", "FORMULA-15"),
-                (
-                    "POWER(-1, 0.5)",
-                    "derivation",
-                    "invalid_power",
-                    "FORMULA-15",
-                ),
-            ] {
-                let plan = compile_numeric(expression, "columns.X").unwrap();
-                let error = plan.evaluate_number(&mut Bindings).unwrap_err();
-                let diagnostic = error.diagnostic().unwrap();
-                let definition = diagnostic.definition();
-                assert_eq!(
-                    (definition.phase, definition.condition, definition.rule),
-                    (phase, condition, Some(rule))
-                );
-                assert_eq!(diagnostic.spec_paths, ["columns.X"]);
-                assert_eq!(
-                    diagnostic.context["expr"],
-                    JsonValue::String(expression.into())
-                );
-                reached.insert(rendered(&diagnostic));
-            }
-            for (source, target, rule) in [
-                (Value::Bool(true), ColumnType::Int, "VALUE-3"),
-                (Value::float(1.5), ColumnType::Int, "VALUE-7"),
-                (
-                    Value::Str("2026-02-30".into()),
-                    ColumnType::Date,
-                    "VALUE-15",
-                ),
-            ] {
-                let error = convert(&source, target).unwrap_err();
-                let diagnostic = error.into_diagnostic("columns.X".into());
-                let definition = diagnostic.definition();
-                assert_eq!(
-                    (definition.phase, definition.condition, definition.rule),
-                    ("convert", "conversion_failed", Some(rule))
-                );
-                assert_eq!(diagnostic.context["value"], JsonValue::from(source));
-                assert_eq!(diagnostic.spec_paths, ["columns.X"]);
-                assert_eq!(diagnostic.source_span, None);
-                assert_eq!(diagnostic.operand_route, None);
-                reached.insert(rendered(&diagnostic));
-            }
-            for (cause, condition, rule) in [
-                (
-                    yamaa_core::resource::ResourceFailure::Missing,
-                    "resource_path_missing",
-                    "FILE-7",
-                ),
-                (
-                    yamaa_core::resource::ResourceFailure::NotRegularFile,
-                    "resource_path_not_regular_file",
-                    "FILE-7",
-                ),
-                (
-                    yamaa_core::resource::ResourceFailure::UriScheme,
-                    "resource_path_uri_scheme",
-                    "FILE-5",
-                ),
-                (
-                    yamaa_core::resource::ResourceFailure::Backslash,
-                    "resource_path_not_normalized",
-                    "FILE-5",
-                ),
-                (
-                    yamaa_core::resource::ResourceFailure::EmptySegment,
-                    "resource_path_not_normalized",
-                    "FILE-5",
-                ),
-                (
-                    yamaa_core::resource::ResourceFailure::Symlink,
-                    "resource_path_symlink",
-                    "FILE-8",
-                ),
-            ] {
-                let diagnostic = cause.diagnostic("SRC", "input/data.csv");
-                let definition = diagnostic.definition();
-                assert_eq!(
-                    (definition.phase, definition.condition, definition.rule),
-                    ("validation", condition, Some(rule))
-                );
-                assert_eq!(diagnostic.spec_paths, ["input.SRC.path"]);
-                assert_eq!(
-                    diagnostic.context["dataset"],
-                    JsonValue::String("SRC".into())
-                );
-                assert_eq!(
-                    diagnostic.context["path"],
-                    JsonValue::String("input/data.csv".into())
-                );
-                assert_eq!(diagnostic.context.len(), 2);
-                reached.insert(rendered(&diagnostic));
-            }
-            let changed = yamaa_core::resource::ResourceFailure::ContentChanged
-                .diagnostic("SRC", "../authored/data.csv");
-            assert_eq!(changed.definition().phase, "ingest");
-            assert_eq!(
-                changed.definition().condition,
-                "resource_path_content_changed"
-            );
-            assert_eq!(changed.definition().rule, Some("FILE-10"));
-            assert_eq!(changed.spec_paths, ["input.SRC.path"]);
-            assert_eq!(
-                changed.context["path"],
-                JsonValue::String("../authored/data.csv".into())
-            );
-            assert_eq!(changed.context["dataset"], JsonValue::String("SRC".into()));
-            reached.insert(rendered(&changed));
-            let lock = yamaa_core::application_issue::lock_mismatch(
-                "lock",
-                [("package".into(), JsonValue::String("project".into()))].into(),
-            );
-            assert_eq!(
-                (
-                    lock.definition().phase,
-                    lock.definition().condition,
-                    lock.definition().rule
-                ),
-                ("validation", "runtime_artifact_mismatch", Some("FUNC-3"))
-            );
-            assert_eq!(lock.spec_paths, ["lock"]);
-            assert_eq!(lock.context["package"], JsonValue::String("project".into()));
-            reached.insert(rendered(&lock));
-            let result = yamaa_core::dataset_checks::not_missing(&[
-                Value::Int(0),
-                Value::Missing,
-                Value::Str(String::new()),
-                Value::Missing,
-            ]);
-            assert_eq!(result.offending_rows, [1, 3]);
-            let diagnostic = result
-                .diagnostic("columns.V.verifications[0].not_missing".into(), "V".into())
-                .unwrap();
-            assert_eq!(
-                (
-                    diagnostic.definition().phase,
-                    diagnostic.definition().condition,
-                    diagnostic.definition().rule
-                ),
-                ("verification", "not_missing_failed", Some("CHECK-5"))
-            );
-            assert_eq!(
-                diagnostic.spec_paths,
-                ["columns.V.verifications[0].not_missing"]
-            );
-            assert_eq!(diagnostic.context["column"], JsonValue::String("V".into()));
-            assert_eq!(
-                diagnostic.context["failure_count"],
-                JsonValue::Number(("2").parse().expect("canonical integer"))
-            );
-            assert!(yamaa_core::dataset_checks::not_missing(&[
-                Value::Int(0),
-                Value::Str(String::new())
-            ])
-            .diagnostic("unused".into(), "V".into())
-            .is_none());
-            reached.insert(rendered(&diagnostic));
-            for (check, values, offending, condition, rule) in [
-                (
-                    yamaa_core::dataset::Check::Mandatory(None),
-                    vec![Value::Int(1), Value::Missing, Value::Str(String::new())],
-                    vec![1],
-                    "not_missing_failed",
-                    "SUB-11",
-                ),
-                (
-                    yamaa_core::dataset::Check::AllowedValues(vec![Value::Int(1)]),
-                    vec![Value::Int(1), Value::Missing, Value::Int(2)],
-                    vec![2],
-                    "allowed_values_failed",
-                    "CHECK-6",
-                ),
-                (
-                    yamaa_core::dataset::Check::Range {
-                        min: Some(Value::float(9223372036854775808.0)),
-                        max: None,
-                    },
-                    vec![Value::Int(i64::MAX), Value::Missing],
-                    vec![0],
-                    "range_failed",
-                    "CHECK-7",
-                ),
-                (
-                    yamaa_core::dataset::Check::MaxLength(2),
-                    vec![
-                        Value::Str("é🙂".into()),
-                        Value::Str("é🙂x".into()),
-                        Value::Missing,
-                    ],
-                    vec![1],
-                    "length_failed",
-                    "CHECK-8",
-                ),
-                (
-                    yamaa_core::dataset::Check::DataType {
-                        form: yamaa_core::iso8601::Form::Date,
-                        scope: None,
-                    },
-                    vec![
-                        Value::Str("2025-03-04".into()),
-                        Value::Str("2025-03".into()),
-                        Value::Missing,
-                    ],
-                    vec![1],
-                    "data_type_failed",
-                    "SUB-26",
-                ),
-            ] {
-                let rows = yamaa_core::dataset_checks::column_offenders(&check, &values);
-                assert_eq!(rows, offending);
-                let diagnostic = yamaa_core::dataset_checks::column_diagnostic(
-                    &check,
-                    "columns.V.verifications[0]".into(),
-                    "V".into(),
-                    rows.len(),
-                )
-                .unwrap();
-                assert_eq!(
-                    (
-                        diagnostic.definition().phase,
-                        diagnostic.definition().condition,
-                        diagnostic.definition().rule
-                    ),
-                    ("verification", condition, Some(rule))
-                );
-                assert_eq!(diagnostic.spec_paths, ["columns.V.verifications[0]"]);
-                assert_eq!(diagnostic.context["column"], JsonValue::String("V".into()));
-                assert_eq!(
-                    diagnostic.context["failure_count"],
-                    JsonValue::Number(("1").parse().expect("canonical integer"))
-                );
-                if condition == "length_failed" {
-                    assert_eq!(
-                        diagnostic.context["max"],
-                        JsonValue::Number(("2").parse().expect("canonical integer"))
-                    );
-                }
-                if condition == "data_type_failed" {
-                    assert_eq!(
-                        diagnostic.context["data_type"],
-                        JsonValue::String("date".into())
-                    );
-                }
-                assert!(yamaa_core::dataset_checks::column_diagnostic(
-                    &check,
-                    "unused".into(),
-                    "V".into(),
-                    0
-                )
-                .is_none());
-                reached.insert(rendered(&diagnostic));
-            }
-            // A row two value-level entries select fails; an entry that
-            // selects no row is a warning that names the entry (SUB-13).
-            let clause = |value: &str| yamaa_core::dataset::WhereClause {
-                terms: vec![yamaa_core::dataset::WhereTerm::listed(
-                    1,
-                    vec![value.into()],
-                )],
-            };
-            let one = || JsonValue::from(1usize);
-            for (check, path, condition, context, message) in [
-                (
-                    yamaa_core::dataset::Check::ValueEntries(vec![
-                        ("A".into(), clause("X")),
-                        ("B".into(), clause("X")),
-                    ]),
-                    "columns.V.submission.value_level",
-                    "value_level_multiple_matches",
-                    vec![("column", text("V")), ("failure_count", one())],
-                    "several value-level entries of column V select the same row in 1 of the rows",
-                ),
-                (
-                    yamaa_core::dataset::Check::ValueEntryMatch {
-                        id: "A".into(),
-                        clause: clause("X"),
-                    },
-                    "columns.V.submission.value_level.A",
-                    "value_level_unmatched",
-                    vec![
-                        ("column", text("V")),
-                        ("entry", text("A")),
-                        ("failure_count", one()),
-                    ],
-                    "value-level entry A of column V selects no row",
-                ),
-            ] {
-                assert!(check
-                    .clauses()
-                    .iter()
-                    .all(|clause| clause.columns().eq([1])));
-                let diagnostic = yamaa_core::dataset_checks::column_diagnostic(
-                    &check,
-                    path.into(),
-                    "V".into(),
-                    1,
-                )
-                .unwrap();
-                reached.insert(expect(
-                    &diagnostic,
-                    "verification",
-                    condition,
-                    Some("SUB-13"),
-                    &[path],
-                    context,
-                ));
-                assert_eq!(diagnostic.message(), message, "{condition}");
-            }
-            let pattern = yamaa_core::portable_regex::Pattern::compile("b").unwrap();
-            let rows = yamaa_core::dataset_checks::matches_offenders(
-                &pattern,
-                &[
-                    Value::Str("abc".into()),
-                    Value::Missing,
-                    Value::Str("xxx".into()),
-                ],
-            );
-            assert_eq!(rows, [2]);
-            let diagnostic = yamaa_core::dataset_checks::column_diagnostic(
-                &yamaa_core::dataset::Check::Matches(pattern),
-                "columns.V.verifications[0].matches".into(),
-                "V".into(),
-                rows.len(),
-            )
-            .unwrap();
-            assert_eq!(
-                (
-                    diagnostic.definition().phase,
-                    diagnostic.definition().condition,
-                    diagnostic.definition().rule
-                ),
-                ("verification", "matches_failed", Some("CHECK-9"))
-            );
-            assert_eq!(diagnostic.context.len(), 2);
-            assert_eq!(
-                diagnostic.context["failure_count"],
-                JsonValue::Number(("1").parse().expect("canonical integer"))
-            );
-            reached.insert(rendered(&diagnostic));
-            assert!(matches!(
-                yamaa_core::portable_regex::Pattern::compile("("),
-                Err(yamaa_core::portable_regex::CompileError::Invalid { .. })
-            ));
-            let diagnostic = yamaa_core::dataset_checks::invalid_pattern_diagnostic(
-                "columns.V.verifications[0].matches.pattern".into(),
-                "(".into(),
-            );
-            assert_eq!(
-                (
-                    diagnostic.definition().phase,
-                    diagnostic.definition().condition,
-                    diagnostic.definition().rule
-                ),
-                ("validation", "invalid_regex", Some("TEXT-6"))
-            );
-            assert_eq!(diagnostic.context.len(), 1);
-            assert_eq!(diagnostic.context["pattern"], JsonValue::String("(".into()));
-            assert_eq!(diagnostic.source_span, None);
-            reached.insert(rendered(&diagnostic));
-            let diagnostic = yamaa_core::dataset::Rounding::new(
-                "SEX",
-                "columns.RND.derivation.round_half_away_from_zero",
-                "1",
-            )
-            .unwrap()
-            .apply(yamaa_core::table::ValueRef::Str("F"))
-            .unwrap_err();
-            assert_eq!(
-                (
-                    diagnostic.definition().phase,
-                    diagnostic.definition().condition,
-                    diagnostic.definition().rule
-                ),
-                ("validation", "incompatible_input_type", Some("FORMULA-16"))
-            );
-            assert_eq!(
-                diagnostic.spec_paths,
-                ["columns.RND.derivation.round_half_away_from_zero.source"]
-            );
-            assert_eq!(diagnostic.context.len(), 3);
-            assert_eq!(diagnostic.source_span, None);
-            assert_eq!(diagnostic.operand_route, None);
-            reached.insert(rendered(&diagnostic));
-            let check = yamaa_core::dataset::Check::Codelist {
-                id: "SEX".into(),
-                values: vec![Value::Str("F".into())],
-            };
-            assert_eq!(
-                yamaa_core::dataset_checks::column_offenders(
-                    &check,
-                    &[Value::Missing, Value::Str("X".into())]
-                ),
-                [1]
-            );
-            let finding = yamaa_core::dataset_checks::column_diagnostic(
-                &check,
-                "columns.SEX.submission.codelist".into(),
-                "SEX".into(),
-                1,
-            )
-            .unwrap();
-            assert_eq!(
-                (
-                    finding.definition().phase,
-                    finding.definition().condition,
-                    finding.definition().rule
-                ),
-                ("verification", "allowed_values_failed", Some("CT-7"))
-            );
-            assert_eq!(finding.context["codelist"], JsonValue::String("SEX".into()));
-            reached.insert(rendered(&finding));
-            let extreme = yamaa_core::scalar_language::incomparable_diagnostic(
-                &["DTHDT".into(), "DAY".into()],
-                &[ColumnType::Date, ColumnType::Int],
-                "columns.RESULT.derivation.greatest",
-            );
-            assert_eq!(
-                (
-                    extreme.definition().phase,
-                    extreme.definition().condition,
-                    extreme.definition().rule
-                ),
-                ("validation", "incomparable_sources", Some("VALUE-19"))
-            );
-            assert_eq!(extreme.spec_paths, ["columns.RESULT.derivation.greatest"]);
-            assert_eq!(
-                extreme.context["types"],
-                JsonValue::Array(vec![
-                    JsonValue::String("date".into()),
-                    JsonValue::String("int".into())
-                ])
-            );
-            reached.insert(rendered(&extreme));
+            let reached = replay::replay();
             assert_eq!(reached, CONDITIONS.iter().copied().collect());
             assert_eq!(
                 CONDITIONS.len(),
@@ -809,6 +266,145 @@ mod diagnostics {
                 finding.record().message(),
                 "published_dataset_format is not supported by this engine"
             );
+        }
+
+        /// A column check fails, in row order, each row whose present value
+        /// it does not admit, and a missing value only where a value is
+        /// required (CHECK-5 to CHECK-9, SUB-11, SUB-26, CT-7). The finding
+        /// each check reports is a case of `fixtures/diagnostics/registry.json`.
+        #[test]
+        fn column_checks_fail_the_rows_they_do_not_admit_in_row_order() {
+            use yamaa_core::{
+                dataset::Check,
+                dataset_checks::{column_offenders, matches_offenders, not_missing},
+                iso8601::Form,
+                portable_regex::Pattern,
+            };
+            assert_eq!(
+                not_missing(&[
+                    Value::Int(0),
+                    Value::Missing,
+                    Value::Str(String::new()),
+                    Value::Missing,
+                ])
+                .offending_rows,
+                [1, 3],
+                "not_missing"
+            );
+            for (check, values, offending, label) in [
+                (
+                    Check::Mandatory(None),
+                    vec![Value::Int(1), Value::Missing, Value::Str(String::new())],
+                    vec![1],
+                    "mandatory",
+                ),
+                (
+                    Check::AllowedValues(vec![Value::Int(1)]),
+                    vec![Value::Int(1), Value::Missing, Value::Int(2)],
+                    vec![2],
+                    "allowed_values",
+                ),
+                (
+                    Check::Range {
+                        min: Some(Value::float(9223372036854775808.0)),
+                        max: None,
+                    },
+                    vec![Value::Int(i64::MAX), Value::Missing],
+                    vec![0],
+                    "range",
+                ),
+                (
+                    Check::MaxLength(2),
+                    vec![
+                        Value::Str("é🙂".into()),
+                        Value::Str("é🙂x".into()),
+                        Value::Missing,
+                    ],
+                    vec![1],
+                    "max_length",
+                ),
+                (
+                    Check::DataType {
+                        form: Form::Date,
+                        scope: None,
+                    },
+                    vec![
+                        Value::Str("2025-03-04".into()),
+                        Value::Str("2025-03".into()),
+                        Value::Missing,
+                    ],
+                    vec![1],
+                    "data_type",
+                ),
+                (
+                    Check::Codelist {
+                        id: "SEX".into(),
+                        values: vec![Value::Str("F".into())],
+                    },
+                    vec![Value::Missing, Value::Str("X".into())],
+                    vec![1],
+                    "codelist",
+                ),
+            ] {
+                assert_eq!(column_offenders(&check, &values), offending, "{label}");
+            }
+            let pattern = Pattern::compile("b").unwrap();
+            assert_eq!(
+                matches_offenders(
+                    &pattern,
+                    &[
+                        Value::Str("abc".into()),
+                        Value::Missing,
+                        Value::Str("xxx".into()),
+                    ],
+                ),
+                [2],
+                "matches"
+            );
+        }
+
+        /// A value-level finding names its column in its message, and the
+        /// finding of an entry that selects no row names the entry too
+        /// (SUB-13); each check holds its entries' where clauses. The
+        /// records are cases of `fixtures/diagnostics/registry.json`, whose
+        /// rows hold no message.
+        #[test]
+        fn value_level_findings_name_their_column_and_entry_in_their_messages() {
+            use yamaa_core::dataset::{Check, WhereClause, WhereTerm};
+            let clause = |value: &str| WhereClause {
+                terms: vec![WhereTerm::listed(1, vec![value.into()])],
+            };
+            for (check, path, message) in [
+                (
+                    Check::ValueEntries(vec![("A".into(), clause("X")), ("B".into(), clause("X"))]),
+                    "columns.V.submission.value_level",
+                    "several value-level entries of column V select the same row in 1 of the rows",
+                ),
+                (
+                    Check::ValueEntryMatch {
+                        id: "A".into(),
+                        clause: clause("X"),
+                    },
+                    "columns.V.submission.value_level.A",
+                    "value-level entry A of column V selects no row",
+                ),
+            ] {
+                assert!(
+                    check
+                        .clauses()
+                        .iter()
+                        .all(|clause| clause.columns().eq([1])),
+                    "{path} holds the clauses of its entries"
+                );
+                let diagnostic = yamaa_core::dataset_checks::column_diagnostic(
+                    &check,
+                    path.into(),
+                    "V".into(),
+                    1,
+                )
+                .unwrap();
+                assert_eq!(diagnostic.message(), message, "{path}");
+            }
         }
 
         #[test]

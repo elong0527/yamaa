@@ -4,13 +4,18 @@
 //! order, or none when it accepts the input. A reader asserts nothing about
 //! what it returns: the replay compares that with the case's authored rows.
 //!
-//! Each part of the move owns one module: its readers and the fixture files
-//! its cases are in, so two parts never edit the same lines here.
+//! Each module holds its readers and declares the fixture files whose cases
+//! they read.
 use super::json::Json;
+use crate::support::roots::{Codelist, CodelistType, External, Item, Source, Standard};
+use std::{collections::BTreeMap, convert::Infallible};
 use yamaa_core::{
+    ast::Codelists,
     diagnostic::Diagnostic,
+    expression::Resolver,
+    project_function::Language,
     temporal::{Date, Precision},
-    value::{ColumnType, Value, ValueType},
+    value::{ColumnType, Selection, Value, ValueType},
 };
 
 /// A fixture file of `tests/fixtures/diagnostics/`, read at compile time, so
@@ -29,20 +34,16 @@ macro_rules! fixture {
     };
 }
 
+mod binding;
+mod declarations;
 mod document;
+mod findings;
+mod registry;
 mod sources;
+mod submission;
 mod temporal;
 mod text;
 mod values;
-
-// The parts that follow (#3691): A1 submission and the front end, A2
-// preflight and binding, B1 the other declaration tables, B2 the other
-// findings, C the registry walk's own records and the project environment's.
-mod binding;
-mod declarations;
-mod findings;
-mod registry;
-mod submission;
 
 type Reader = fn(&str, &Json) -> Option<Vec<Diagnostic>>;
 
@@ -121,6 +122,122 @@ fn value(json: &Json) -> Value {
         }
         Json::Array(_) => panic!("a value is not an array: {json:?}"),
     }
+}
+
+/// The names an evaluation reads, `{name: value, ...}`: each name given reads
+/// its value, written as [`value`] reads one, and every other name is absent.
+struct Bindings(BTreeMap<String, Value>);
+
+impl Resolver for Bindings {
+    type Error = Infallible;
+    fn resolve(&mut self, name: &str) -> Result<Selection, Infallible> {
+        Ok(self
+            .0
+            .get(name)
+            .cloned()
+            .map_or(Selection::Absent, Selection::Present))
+    }
+}
+
+#[track_caller]
+fn bindings(json: &Json) -> Bindings {
+    Bindings(
+        json.members()
+            .iter()
+            .map(|(name, bound)| (name.clone(), value(bound)))
+            .collect(),
+    )
+}
+
+/// A host language as a project names it.
+#[track_caller]
+fn language(written: &str) -> Language {
+    match written {
+        "python" => Language::Python,
+        "r" => Language::R,
+        other => panic!("no host language {other:?}"),
+    }
+}
+
+/// A codelist source as a codelist file writes it (`codelist_source_class` in
+/// `yaml/schema_terminology.yaml`), `{standard, codelists}`: an optional
+/// `standard`, `{name, publishing_set, version}`, and its lists, each `{id,
+/// name, data_type, extensible, alias, format_name, items, external}`, with
+/// `items` each `{value, decode, rank, alias, extended}` and `external`
+/// `{dictionary, version, href}`. As the schema says, `data_type` defaults to
+/// text, `extensible` and an item's `extended` to false, and an optional
+/// member left out is absent.
+#[track_caller]
+fn codelist_source(json: &Json) -> Codelists {
+    let json = json.closed(&["standard", "codelists"]);
+    let optional = |json: &Json, key: &str| json.get(key).map(|written| written.text().to_owned());
+    let flag = |json: &Json, key: &str| json.get(key).is_some_and(Json::boolean);
+    Source {
+        standard: json.get("standard").map(|standard| {
+            let standard = standard.closed(&["name", "publishing_set", "version"]);
+            Standard {
+                name: text(standard, "name").into(),
+                publishing_set: text(standard, "publishing_set").into(),
+                version: text(standard, "version").into(),
+            }
+        }),
+        codelists: json
+            .field("codelists")
+            .items()
+            .iter()
+            .map(|list| {
+                let list = list.closed(&[
+                    "id",
+                    "name",
+                    "data_type",
+                    "extensible",
+                    "alias",
+                    "format_name",
+                    "items",
+                    "external",
+                ]);
+                Codelist {
+                    id: text(list, "id").into(),
+                    name: text(list, "name").into(),
+                    data_type: match list.get("data_type").map_or("text", Json::text) {
+                        "text" => CodelistType::Text,
+                        "integer" => CodelistType::Integer,
+                        "float" => CodelistType::Float,
+                        other => panic!("no codelist data type {other:?}"),
+                    },
+                    extensible: flag(list, "extensible"),
+                    alias: optional(list, "alias"),
+                    format_name: optional(list, "format_name"),
+                    items: list.get("items").map(|items| {
+                        items
+                            .items()
+                            .iter()
+                            .map(|item| {
+                                let item =
+                                    item.closed(&["value", "decode", "rank", "alias", "extended"]);
+                                Item {
+                                    value: value(item.field("value")),
+                                    decode: optional(item, "decode"),
+                                    rank: item.get("rank").map(|rank| rank.integer()),
+                                    alias: optional(item, "alias"),
+                                    extended: flag(item, "extended"),
+                                }
+                            })
+                            .collect()
+                    }),
+                    external: list.get("external").map(|external| {
+                        let external = external.closed(&["dictionary", "version", "href"]);
+                        External {
+                            dictionary: text(external, "dictionary").into(),
+                            version: text(external, "version").into(),
+                            href: optional(external, "href"),
+                        }
+                    }),
+                }
+            })
+            .collect(),
+    }
+    .root()
 }
 
 /// A column type as the language spells it.
