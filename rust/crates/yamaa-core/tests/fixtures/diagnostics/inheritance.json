@@ -1,5 +1,5 @@
 {
-  "about": "The inheritance refusals of a layered specification, each reported at the field of the declaring layer that names the refused one: a remote or missing parent (LAYER-2), a parent on another share (LAYER-10), a cycle and a repeated layer (LAYER-3) and a fragment that declares a parent (LAYER-4); a parent a caller gives for a file that is no fragment, at the argument that names it (LAYER-4); then a composed column that reads a name no layer declares (COLUMN-5). Three cases compare the fields their table compared.",
+  "about": "The inheritance refusals of a layered specification, each reported at the field of the declaring layer that names the refused one: a remote or missing parent (LAYER-2), a parent on another share (LAYER-10), a cycle and a repeated layer (LAYER-3) and a fragment that declares a parent (LAYER-4); a parent a caller gives for a file that is no fragment, at the argument that names it (LAYER-4); then a composed column that reads a name no layer declares (COLUMN-5) and composed columns whose derivations form a cycle, named by its closed loop (COLUMN-6). Three cases compare the fields their table compared.",
   "cases": [
     {
       "case": "a_remote_parent_is_an_invalid_parent_path",
@@ -57,6 +57,18 @@
       "input": {"issues": [{"unknown": {"column": "VALUE", "dependency": "MISSING"}}]},
       "compares": ["phase", "condition", "rule", "spec_paths", "context"],
       "issues": [{"phase": "validation", "condition": "unknown_reference", "rule": "COLUMN-5", "spec_paths": ["columns.VALUE.derivation"], "context": {"column": "VALUE", "dependency": "MISSING"}}]
+    },
+    {
+      "case": "complete_ordered_facts_name_each_cycle_by_its_closed_loop",
+      "operation": "inherited_dependencies",
+      "input": {"issues": [
+        {"unknown": {"column": "VALUE\u0000\u00e9", "dependency": "MISSING\ud83d\ude42"}},
+        {"cycle": {"cycle": ["A", "B", "A"], "paths": ["columns.A.derivation.compute", "columns.B.derivation.compute"]}}
+      ]},
+      "issues": [
+        {"phase": "validation", "condition": "unknown_reference", "rule": "COLUMN-5", "spec_paths": ["columns.VALUE\u0000\u00e9.derivation"], "context": {"column": "VALUE\u0000\u00e9", "dependency": "MISSING\ud83d\ude42"}},
+        {"phase": "validation", "condition": "dependency_cycle", "rule": "COLUMN-6", "spec_paths": ["columns.A.derivation.compute", "columns.B.derivation.compute"], "context": {"cycle": ["A", "B", "A"]}}
+      ]
     }
   ]
 }
