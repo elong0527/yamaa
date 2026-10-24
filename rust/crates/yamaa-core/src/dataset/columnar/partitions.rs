@@ -430,7 +430,6 @@ impl ResolvedPlan {
     /// A successful or failed attempt equals the whole-table attempt on the
     /// same input: the same dataset, failure, handler counts, verifications
     /// and template rows. A cancelled one keeps nothing.
-    #[allow(clippy::too_many_arguments)]
     pub fn execute_partitioned<E>(
         &self,
         partitions: &[&dyn TableAccess<Error = E>],
@@ -438,8 +437,7 @@ impl ResolvedPlan {
         functions: &mut dyn FunctionPort<Error = E>,
         observer: Option<&mut dyn FnMut(ExecutionEvent)>,
         cancelled: &dyn Fn() -> bool,
-        whole_table_fallback: bool,
-        keys: usize,
+        (whole_table_fallback, keys): (bool, usize),
     ) -> ExecutionAttempt<E> {
         let input = Concatenated::new(partitions, self.driver_schema());
         let divided = Partitions::new(&input, keys.min(self.keys().len()), whole_table_fallback);
