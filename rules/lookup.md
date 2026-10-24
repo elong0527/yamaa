@@ -1417,7 +1417,7 @@ use a window operation, and `derivations` is not available on unqualified or
 grouped-input aggregates.
 
 Fails: `invalid_derive_step`, `unknown_derive_variable`.
-Evidence: `schema-derive-text-score`, `schema-derive-date-epoch`, `schema-aggregate-derive-intermediate`, `negative-donor-function-unkept`, `rust/crates/yamaa-core/tests/support/diagnostic/project_functions.rs::donor_keep_reached`.
+Evidence: `schema-derive-text-score`, `schema-derive-date-epoch`, `schema-aggregate-derive-intermediate`, `negative-donor-function-unkept`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::a_donor_function_argument_reads_only_intermediates_that_select_one_record`.
 
 An aggregate derivation is not an expression function. Text becomes a number
 only through the entry's declared `type`, and a date becomes an integer only

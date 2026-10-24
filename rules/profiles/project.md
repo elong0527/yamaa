@@ -118,7 +118,7 @@ one file listed twice included, fail with `duplicate_specification_name` at
 the project path of each listing, such as `sdtm.specs[0]`.
 
 Fails: `duplicate_specification_name`.
-Evidence: `rust/crates/yamaa/tests/project_operations.rs::names_select_listed_specifications_and_refuse_unknown_or_shared_names`, `rust/crates/yamaa-adapters/tests/project_scope.rs::listings_follow_section_run_order_and_names_are_their_domains`, `rust/crates/yamaa-core/tests/support/diagnostic/project_scope.rs`.
+Evidence: `rust/crates/yamaa/tests/project_operations.rs::names_select_listed_specifications_and_refuse_unknown_or_shared_names`, `rust/crates/yamaa-adapters/tests/project_scope.rs::listings_follow_section_run_order_and_names_are_their_domains`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::a_name_two_listings_share_is_refused_at_both`.
 
 Every project operation reports that finding; a project run or submission then
 builds nothing, and selecting a specification by name fails.
@@ -135,7 +135,7 @@ resolved exactly as it is when the caller names its file together with the
 project file.
 
 Fails: `unknown_specification_name`.
-Evidence: `rust/crates/yamaa/tests/project_operations.rs::names_select_listed_specifications_and_refuse_unknown_or_shared_names`, `rust/crates/yamaa/tests/project_operations.rs::a_project_run_refuses_a_name_it_did_not_build`, `rust/crates/yamaa-core/tests/support/diagnostic/project_scope.rs`.
+Evidence: `rust/crates/yamaa/tests/project_operations.rs::names_select_listed_specifications_and_refuse_unknown_or_shared_names`, `rust/crates/yamaa/tests/project_operations.rs::a_project_run_refuses_a_name_it_did_not_build`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::an_unknown_specification_name_lists_the_available_names_sorted`.
 
 Selecting one specification's run from a project run by name accepts only a
 name of that run. Any other name, one that another section lists included,
@@ -155,7 +155,7 @@ section the project declares, whether the name is outside `sdtm`, `adam` and
 `send` or names one of them that the project does not declare.
 
 Fails: `unknown_section`.
-Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_section_the_project_does_not_declare_refuses_the_call`, `rust/crates/yamaa-core/tests/support/diagnostic/project_scope.rs`, `python/tests/installed/installed_public_contract.py::test_project_refusals_are_issues_and_unknown_sections_raise`, `python/tests/installed/installed_public_define.py::test_every_declared_define_section_is_composed_without_a_section`.
+Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_section_the_project_does_not_declare_refuses_the_call`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::a_section_the_project_does_not_declare_lists_the_declared_sections_sorted`, `python/tests/installed/installed_public_contract.py::test_project_refusals_are_issues_and_unknown_sections_raise`, `python/tests/installed/installed_public_define.py::test_every_declared_define_section_is_composed_without_a_section`.
 
 The project file is read first: a project file that cannot be read reports
 its own findings as the operation's issues, as every project operation does,
@@ -255,7 +255,7 @@ earlier run saved, not the one this run builds. An input that names no
 run-scope artifact is an ordinary source.
 
 Fails: `unlinked_producer`.
-Evidence: `rust/crates/yamaa/tests/project_operations.rs::an_input_that_reads_a_run_scope_artifact_without_a_link_fails_alone`, `rust/crates/yamaa-adapters/tests/project_scope.rs::unlinked_inputs_cycles_and_collisions_are_project_findings`, `rust/crates/yamaa-core/tests/support/diagnostic/project_scope.rs`.
+Evidence: `rust/crates/yamaa/tests/project_operations.rs::an_input_that_reads_a_run_scope_artifact_without_a_link_fails_alone`, `rust/crates/yamaa-adapters/tests/project_scope.rs::unlinked_inputs_cycles_and_collisions_are_project_findings`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::an_input_that_reads_a_run_scope_artifact_without_a_link_names_its_producer`.
 
 The finding fails only the consumer that declares the input, at its
 `input.<dataset>.path`; the other specifications of the run scope still build.
@@ -271,7 +271,7 @@ builds no output and no run report. Every specification that ran keeps its own
 output, findings and run report.
 
 Fails: `producer_not_completed`.
-Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_failed_specification_stops_only_its_consumers_and_saves_reports_alone`, `rust/crates/yamaa-adapters/tests/project_scope.rs::blocked_consumers_name_each_failed_producer`, `rust/crates/yamaa-core/tests/support/diagnostic/project_scope.rs`.
+Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_failed_specification_stops_only_its_consumers_and_saves_reports_alone`, `rust/crates/yamaa-adapters/tests/project_scope.rs::blocked_consumers_name_each_failed_producer`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::a_consumer_of_a_producer_that_did_not_complete_names_the_producer`.
 
 The finding is reported at the consumer's `input.<dataset>.schema` for each
 link to a producer that did not complete.
@@ -352,7 +352,7 @@ and each declared input's `input` row must record the byte length and record
 count the input has now. Any mismatch fails with `stale_artifact`.
 
 Fails: `stale_artifact`.
-Evidence: `negative-stale-artifact`, `rust/crates/yamaa-core/src/submission_staleness.rs::each_mismatch_names_its_reason_and_the_facts_it_compared`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs::a_saved_report_reads_back_its_run_and_its_inputs`, `rust/crates/yamaa-adapters/tests/submission_staleness.rs::a_matching_report_composes`, `rust/crates/yamaa-adapters/tests/submission_staleness.rs::a_specification_without_a_report_is_not_compared`, `rust/crates/yamaa/tests/project_operations.rs::a_submission_composes_the_artifacts_their_run_reports_record_and_refuses_stale_ones`, `rust/crates/yamaa-core/tests/support/diagnostic/project_scope.rs`.
+Evidence: `negative-stale-artifact`, `rust/crates/yamaa-core/src/submission_staleness.rs::each_mismatch_names_its_reason_and_the_facts_it_compared`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs::a_saved_report_reads_back_its_run_and_its_inputs`, `rust/crates/yamaa-adapters/tests/submission_staleness.rs::a_matching_report_composes`, `rust/crates/yamaa-adapters/tests/submission_staleness.rs::a_specification_without_a_report_is_not_compared`, `rust/crates/yamaa/tests/project_operations.rs::a_submission_composes_the_artifacts_their_run_reports_record_and_refuses_stale_ones`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::a_report_that_records_another_artifact_than_the_section_composes_is_stale`.
 
 The comparison uses declared identities only, the facts the report records
 under [CHECK-24](../verification.md#check-24), and no timestamp or digest: the

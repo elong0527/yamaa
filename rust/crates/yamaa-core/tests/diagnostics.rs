@@ -248,20 +248,6 @@ mod diagnostics {
             reached.extend(binding::verification_reached());
             reached.extend(binding::verification_declarations_reached());
 
-            // The other declarations (B1).
-            reached.extend(intermediate_scopes::reached());
-            reached.extend(intermediate_ranges::reached());
-            reached.extend(intermediate_ranges::match_phase_reached());
-            reached.extend(record_operations::reached());
-            reached.extend(project_functions::reached());
-            reached.extend(project_functions::donor_keep_reached());
-            reached.extend(project_scope::reached());
-            reached.extend(producer::reached());
-            reached.extend(copy_entry::reached());
-            reached.extend(declarative_flags::reached());
-            reached.extend(schema::reached());
-            reached.extend(language::reached());
-
             // The other findings (B2).
             reached.extend(aggregate::reached());
             reached.extend(odm::reached());

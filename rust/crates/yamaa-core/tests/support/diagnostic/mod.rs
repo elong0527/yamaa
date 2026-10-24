@@ -15,17 +15,6 @@ pub mod submission;
 pub mod binding;
 pub mod preflight;
 
-pub mod copy_entry;
-pub mod declarative_flags;
-pub mod intermediate_ranges;
-pub mod intermediate_scopes;
-pub mod language;
-pub mod producer;
-pub mod project_functions;
-pub mod project_scope;
-pub mod record_operations;
-pub mod schema;
-
 pub mod aggregate;
 pub mod grammar;
 pub mod inheritance;

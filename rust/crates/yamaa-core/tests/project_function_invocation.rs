@@ -426,6 +426,21 @@ mod project {
         fn text(s: &str) -> V {
             V::String(s.into())
         }
+        /// A producer whose copies lead back to a specification being resolved
+        /// names each specification on the cycle in its message (SPEC-9). The
+        /// refusal's record is a case of `fixtures/diagnostics/producers.json`,
+        /// whose rows hold no message.
+        #[test]
+        fn a_copy_cycle_names_each_specification_on_it_in_its_message() {
+            let cycle = yamaa_core::copy_expansion::producer_cycle(
+                "SRC",
+                &["/adae.yaml", "/adsl.yaml", "/adae.yaml"],
+            );
+            assert_eq!(
+                cycle.message(),
+                "the producer links form a cycle: /adae.yaml, /adsl.yaml, /adae.yaml"
+            );
+        }
         #[test]
         fn linked_contract_types_the_stored_fields_without_compiling_the_producer() {
             // The producer's own source and derivations never enter the

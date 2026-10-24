@@ -1,0 +1,114 @@
+{
+  "about": "The 1.x header refusals (SCHEMA-2, LAYER-4, P-VER-1), each raised by its own detector: the header of a file a call reads, by the type it expects or the type the file declares, a file type a call takes as its argument, the file a referencing field names, a layer of an inheritance chain, and a field newer than the version a document declares. A finding in a file names a node of that file by the node's value.",
+  "cases": [
+    {
+      "case": "an_engine_refuses_a_newer_language_version_at_the_file_s_own_yamaa",
+      "operation": "language_header",
+      "input": {"document": {"yamaa": "1.1", "type": "spec"}, "file_type": "spec"},
+      "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "SCHEMA-2", "spec_paths": ["yamaa"], "context": {"version": "1.1", "language_versions": ["1.0"]}}]
+    },
+    {
+      "case": "a_file_of_another_type_than_the_call_reads_is_unexpected_at_its_own_type",
+      "operation": "language_header",
+      "input": {"document": {"yamaa": "1.0", "type": "project"}, "file_type": "spec"},
+      "issues": [{"phase": "validation", "condition": "unexpected_file_type", "rule": "SCHEMA-2", "spec_paths": ["type"], "context": {"type": "project", "expected": "spec"}}]
+    },
+    {
+      "case": "a_file_that_declares_schema_version_is_language_0_5_which_no_route_reads",
+      "operation": "language_header",
+      "input": {"document": {"schema_version": "1.0"}},
+      "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "SCHEMA-2", "spec_paths": ["schema_version"], "context": {"version": "0.5", "language_versions": ["1.0"]}}]
+    },
+    {
+      "case": "a_type_naming_none_of_the_four_is_unexpected_where_any_is_expected",
+      "operation": "language_header",
+      "input": {"document": {"yamaa": "1.0", "type": "environment"}},
+      "issues": [{"phase": "validation", "condition": "unexpected_file_type", "rule": "SCHEMA-2", "spec_paths": ["type"], "context": {"type": "environment", "expected": ["spec", "project", "codelists", "function"]}}]
+    },
+    {
+      "case": "a_file_type_argument_naming_none_of_the_four_is_unexpected_with_no_spec_path",
+      "operation": "file_type_argument",
+      "input": {"type": "specs"},
+      "issues": [{"phase": "validation", "condition": "unexpected_file_type", "rule": "SCHEMA-2", "spec_paths": [], "context": {"type": "specs", "expected": ["spec", "project", "codelists", "function"]}}]
+    },
+    {
+      "case": "a_named_file_in_a_newer_version_is_refused_at_the_field_that_names_it",
+      "operation": ["reference_check", "reference_refuse"],
+      "input": {"field": "functions[0]", "written": "functions/bmi.yaml", "expected": "function", "relative_to": "declaring", "source": "study/bmi.yaml", "document": {"yamaa": "1.2", "type": "function"}},
+      "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "SCHEMA-2", "spec_paths": ["functions[0]"], "context": {"source": "study/bmi.yaml", "version": "1.2", "language_versions": ["1.0"]}}]
+    },
+    {
+      "case": "a_named_file_with_a_malformed_header_keeps_its_finding_in_that_file",
+      "operation": "reference_refuse",
+      "input": {"field": "functions[0]", "written": "functions/bmi.yaml", "expected": "function", "relative_to": "declaring", "source": "study/bmi.yaml", "document": {"name": "bmi"}},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "SCHEMA-13", "spec_paths": ["yamaa"]}]
+    },
+    {
+      "case": "a_named_file_of_another_type_is_refused_at_the_field_that_names_it",
+      "operation": "reference_check",
+      "input": {"field": "functions[0]", "written": "functions/bmi.yaml", "expected": "function", "relative_to": "declaring", "source": "study/bmi.yaml", "document": {"yamaa": "1.0", "type": "spec"}},
+      "issues": [{"phase": "validation", "condition": "unexpected_file_type", "rule": "SCHEMA-2", "spec_paths": ["functions[0]"], "context": {"source": "study/bmi.yaml", "type": "spec", "expected": "function"}}]
+    },
+    {
+      "case": "a_newer_parent_layer_is_refused_at_the_child_s_parent_naming_the_child",
+      "operation": "layer_header",
+      "input": {"finding": "language_version", "source": "base", "entry": "entry", "version": "1.3", "reads": ["1.0"], "named": "parent", "declaring": "child"},
+      "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "LAYER-4", "spec_paths": ["parent"], "context": {"source": "base", "entry": "entry", "declaring_source": "child", "version": "1.3", "language_versions": ["1.0"]}}]
+    },
+    {
+      "case": "a_parent_layer_of_another_type_is_refused_at_the_child_s_parent_naming_the_child",
+      "operation": "layer_header",
+      "input": {"finding": "file_type", "source": "base", "entry": "entry", "file_type": "project", "named": "parent", "declaring": "child"},
+      "issues": [{"phase": "validation", "condition": "unexpected_file_type", "rule": "LAYER-4", "spec_paths": ["parent"], "context": {"source": "base", "entry": "entry", "declaring_source": "child", "type": "project", "expected": "spec"}}]
+    },
+    {
+      "case": "a_newer_entry_of_a_chain_is_refused_at_its_own_yamaa_under_the_call_s_rule",
+      "operation": "layer_header",
+      "input": {"finding": "language_version", "source": "entry", "entry": "entry", "version": "1.3", "reads": ["1.0"], "named": "entry", "declaring": null},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.source"],
+      "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "SCHEMA-2", "spec_paths": ["yamaa"], "context": {"source": "entry"}}]
+    },
+    {
+      "case": "an_entry_of_a_chain_of_another_type_is_refused_at_its_own_type_under_the_call_s_rule",
+      "operation": "layer_header",
+      "input": {"finding": "file_type", "source": "entry", "entry": "entry", "file_type": "project", "named": "entry", "declaring": null},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.source"],
+      "issues": [{"phase": "validation", "condition": "unexpected_file_type", "rule": "SCHEMA-2", "spec_paths": ["type"], "context": {"source": "entry"}}]
+    },
+    {
+      "case": "a_field_newer_than_the_version_a_document_declares_is_unknown_naming_its_version",
+      "operation": "schema_types",
+      "input": {
+        "schema": {"schema_spec.yaml": {"version": "1.0", "root_class": [{"kept": {"type": "str"}}, {"added": {"type": "str", "since": "1.1"}}]}},
+        "version": "1.0",
+        "types": ["root_class"],
+        "document": {"kept": "a", "added": "b"}
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "SCHEMA-2", "spec_paths": ["added"], "context": {"field": "added", "class": "root_class", "identifier": "added", "since": "1.1"}}]
+    },
+    {
+      "case": "a_field_of_the_version_a_document_declares_is_admitted",
+      "operation": "schema_types",
+      "input": {
+        "schema": {"schema_spec.yaml": {"version": "1.0", "root_class": [{"kept": {"type": "str"}}, {"added": {"type": "str", "since": "1.1"}}]}},
+        "version": "1.1",
+        "types": ["root_class"],
+        "document": {"kept": "a", "added": "b"}
+      },
+      "issues": []
+    },
+    {
+      "case": "a_field_no_version_declares_keeps_the_plain_unknown_field",
+      "operation": "schema_types",
+      "input": {
+        "schema": {"schema_spec.yaml": {"version": "1.0", "root_class": [{"kept": {"type": "str"}}, {"added": {"type": "str", "since": "1.1"}}]}},
+        "version": "1.0",
+        "types": ["root_class"],
+        "document": {"other": null}
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "SCHEMA-13"}]
+    }
+  ]
+}

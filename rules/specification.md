@@ -185,7 +185,7 @@ expands to ordinary columns in the resolved specification, and a copied column
 is published only when `output.columns` lists it.
 
 Fails: `unknown_field`, `duplicate_identifier`, `prohibited_construct`, `producer_workflow_cycle`.
-Evidence: `schema-copy-producer-columns`, `negative-copy-unknown-column`, `negative-copy-duplicate-column`, `negative-copy-unlinked-input`, `rust/crates/yamaa/tests/copy_entry.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/copy_entry.rs`.
+Evidence: `schema-copy-producer-columns`, `negative-copy-unknown-column`, `negative-copy-duplicate-column`, `negative-copy-unlinked-input`, `rust/crates/yamaa/tests/copy_entry.rs`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/producers.json::a_name_a_copy_entry_lists_that_another_column_of_its_layer_declares_is_repeated`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/producers.json::a_copy_entry_dataset_that_names_no_input_is_unknown`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/producers.json::a_copy_entry_dataset_whose_input_has_no_schema_link_refuses_the_copy`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/producers.json::a_copy_entry_dataset_whose_input_links_its_producer_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/producers.json::a_copied_name_that_is_not_an_output_column_of_the_producer_is_unknown`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/producers.json::a_producer_whose_copies_lead_back_to_a_specification_being_resolved_is_a_cycle`, `rust/crates/yamaa-core/tests/project_function_invocation.rs::a_copy_cycle_names_each_specification_on_it_in_its_message`.
 
 ```yaml
 input:

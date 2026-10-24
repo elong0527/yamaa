@@ -432,9 +432,58 @@ mod relations {
         }
     }
     mod declarative_flags {
-        use crate::support::diagnostic::declarative_flags::*;
+        use crate::support::project_call_compiler::{self as support, specification, Tree};
         use crate::support::resolved;
+        use crate::support::specification::prepare;
         use yamaa_core::dataset::resolved::{Op, OperandRole};
+        use yamaa_core::{
+            bound_expression::Read,
+            dataset::{Flag, FlagBinding, FlagError, FlagRead},
+            diagnostic::{ConditionCode as C, Diagnostic},
+            expression::{
+                compile, Condition, Context, ErrorKind, EvaluationError, Step as Route, Truth,
+            },
+            schema::DocumentNode as N,
+            specification::BindError,
+            table::{Column, TableSchema, ValueRef},
+            value::{ColumnType, Value, ValueType},
+        };
+        /// A column's `flag` derivation of `condition`, with the `false_value`
+        /// and `missing` it declares.
+        fn flag(condition: &str, false_value: Option<Tree>, missing: Option<Tree>) -> Tree {
+            let mut fields = vec![("condition", Tree::text(condition))];
+            if let Some(v) = false_value {
+                fields.push(("false_value", v));
+            }
+            if let Some(v) = missing {
+                fields.push(("missing", v));
+            }
+            Tree::map(vec![("flag", Tree::map(fields))])
+        }
+        /// What binding the specification of `columns` to a source of the
+        /// integer columns ID and EXTRA refuses with.
+        fn diagnostics(columns: Vec<(&str, &str, Tree)>) -> Vec<Diagnostic> {
+            let spec = specification(columns);
+            let prepared = prepare(&spec).unwrap();
+            let source = TableSchema::new(vec![
+                Column {
+                    name: "ID".into(),
+                    kind: ColumnType::Int,
+                },
+                Column {
+                    name: "EXTRA".into(),
+                    kind: ColumnType::Int,
+                },
+            ])
+            .unwrap();
+            let Err(BindError::Invalid(findings)) = prepared.bind(&source) else {
+                panic!("findings")
+            };
+            findings
+                .iter()
+                .flat_map(|f| f.diagnostics(prepared.source()).unwrap())
+                .collect()
+        }
         #[test]
 
         fn raw_truth_literals_presence_null_and_complete_name_map() {

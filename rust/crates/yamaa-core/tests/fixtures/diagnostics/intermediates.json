@@ -1,0 +1,265 @@
+{
+  "about": "The refusals of a specification's named intermediates: a lookup's range and projection (LOOKUP-2, LOOKUP-9, LOOKUP-11), what its derivations and unique verifications read (LOOKUP-15 to LOOKUP-17), and a driver of row templates (ROW-2). `range` is a lookup P of the donor D, `lookup` one of D beside the base SRC, `driver` an intermediate of D that drives the row template `selected`, and `reads` a lookup P whose derivation reads the lookup EARLIER declared before it.",
+  "documents": {
+    "range": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "base": "SRC",
+      "input": {"SRC": {"path": "src.csv"}, "D": {"path": "donor.csv"}},
+      "keys": ["ID"],
+      "intermediates": [{"id": "P", "dataset": "D", "key": ["ID"]}],
+      "columns": [{"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}}],
+      "output": {"path": "out.csv", "columns": ["ID"]}
+    },
+    "lookup": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "OUT",
+      "base": "SRC",
+      "keys": ["ID"],
+      "input": {"SRC": {"path": "src.csv"}, "D": {"path": "d.csv"}},
+      "intermediates": [{"id": "P", "dataset": "D", "key": ["ID"]}],
+      "output": {"path": "out.csv", "columns": ["ID"]},
+      "columns": [{"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}}]
+    },
+    "driver": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "OUT",
+      "base": "SRC",
+      "keys": ["ID"],
+      "input": {"SRC": {"path": "src.csv"}, "D": {"path": "d.csv"}},
+      "intermediates": [{"id": "P", "dataset": "D"}],
+      "output": {"path": "out.csv", "columns": ["ID"]},
+      "columns": [{"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}}],
+      "rows": [{"id": "selected", "dataset": "P", "derivations": {"ID": {"value": "P.ID"}}}]
+    },
+    "reads": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "OUT",
+      "base": "SRC",
+      "keys": ["ID"],
+      "input": {"SRC": {"path": "src.csv"}, "D": {"path": "d.csv"}},
+      "intermediates": [
+        {"id": "EARLIER", "dataset": "SRC", "key": {"ID": "D.ABSENT"}},
+        {"id": "P", "dataset": "D", "key": ["ID"], "derivations": {"NEXT": {"value": "EARLIER.ID"}}}
+      ],
+      "output": {"path": "out.csv", "columns": ["ID"]},
+      "columns": [{"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}}]
+    }
+  },
+  "cases": [
+    {
+      "case": "a_lookup_range_with_neither_bound_is_refused",
+      "operation": "prepare",
+      "input": {
+        "base": "range",
+        "edits": [{"set": ["intermediates", "0", "between"], "to": {"value": "ID"}}]
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "LOOKUP-9", "spec_paths": ["intermediates.P.between"], "context": {"intermediate": "P", "expected": "at least one of lower, upper"}}]
+    },
+    {
+      "case": "each_lookup_range_bound_and_value_that_no_field_holds_is_unknown",
+      "operation": "bind",
+      "input": {
+        "base": "range",
+        "edits": [{"set": ["intermediates", "0", "between"], "to": {"value": "UNKNOWN", "lower": "ABSENT_LOW", "upper": "ABSENT_HIGH"}}],
+        "sources": {"SRC": [["ID", "int"]], "D": [["ID", "int"], ["LOW", "int"], ["HIGH", "float"], ["V", "str"]]}
+      },
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["intermediates.P.between"], "context": {"intermediate": "P", "identifier": "ABSENT_LOW"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["intermediates.P.between"], "context": {"intermediate": "P", "identifier": "ABSENT_HIGH"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["intermediates.P.between.value"], "context": {"intermediate": "P", "identifier": "UNKNOWN"}}
+      ]
+    },
+    {
+      "case": "a_lookup_range_value_no_column_takes_is_unknown_whatever_its_bound_binds",
+      "operation": "bind",
+      "input": {
+        "base": "range",
+        "edits": [{"set": ["intermediates", "0", "between"], "to": {"value": "UNKNOWN", "lower": "LOW"}}],
+        "sources": {"SRC": [["ID", "int"]], "D": [["ID", "int"], ["LOW", "int"], ["HIGH", "float"], ["V", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["intermediates.P.between.value"], "context": {"intermediate": "P", "identifier": "UNKNOWN"}}]
+    },
+    {
+      "case": "lookup_range_bounds_whose_types_do_not_compare_with_the_value_are_refused",
+      "operation": "bind",
+      "input": {
+        "base": "range",
+        "edits": [{"set": ["intermediates", "0", "between"], "to": {"value": "ID", "lower": "LOW", "upper": "HIGH"}}],
+        "sources": {"SRC": [["ID", "int"]], "D": [["ID", "int"], ["LOW", "str"], ["HIGH", "float"], ["V", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "incomparable_range_types", "rule": "LOOKUP-9", "spec_paths": ["intermediates.P.between"], "context": {"intermediate": "P", "value_type": "int", "lower_type": "str", "upper_type": "float"}}]
+    },
+    {
+      "case": "a_lookup_column_its_donor_lacks_is_unknown",
+      "operation": "bind",
+      "input": {
+        "base": "range",
+        "edits": [{"set": ["intermediates", "0", "columns"], "to": ["ABSENT"]}],
+        "sources": {"SRC": [["ID", "int"]], "D": [["ID", "int"], ["LOW", "int"], ["HIGH", "float"], ["V", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-11", "spec_paths": ["intermediates.P.columns"], "context": {"intermediate": "P", "identifier": "D.ABSENT"}}]
+    },
+    {
+      "case": "a_row_template_cannot_read_a_lookup_whose_range_value_only_the_column_phase_completes",
+      "operation": "bind",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "src.csv"}, "D": {"path": "donor.csv"}},
+          "keys": ["ID"],
+          "intermediates": [{"id": "P", "dataset": "D", "key": ["ID"], "between": {"value": "RANK", "lower": "LOW"}}],
+          "columns": [
+            {"name": "ID", "type": "int"},
+            {"name": "RANK", "type": "int", "derivation": {"value": {"row_number": {"window": {"order_by": ["ID"]}}}}},
+            {"name": "VALUE", "type": "str"}
+          ],
+          "rows": [{"id": "record", "dataset": "SRC", "derivations": {"ID": {"value": "SRC.ID"}, "VALUE": {"value": "P.V"}}}],
+          "output": {"path": "out.csv", "columns": ["ID", "VALUE"]}
+        },
+        "sources": {"SRC": [["ID", "int"]], "D": [["ID", "int"], ["LOW", "int"], ["V", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-2", "spec_paths": ["rows.record.derivations.VALUE.source"], "context": {"identifier": "RANK", "intermediate": "P", "row": "record", "available_phase": "column_derivation", "required_phase": "row_construction"}}]
+    },
+    {
+      "case": "a_derivation_that_reads_an_earlier_lookup_with_an_unknown_key_field_names_that_lookup",
+      "operation": "bind",
+      "input": {
+        "base": "reads",
+        "sources": {"SRC": [["ID", "int"]], "D": [["ID", "int"], ["X", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-16", "spec_paths": ["intermediates.P.derivations.NEXT.source"], "context": {"intermediate": "P", "identifier": "D.ABSENT", "read": "EARLIER"}}]
+    },
+    {
+      "case": "a_derivation_cannot_read_an_earlier_intermediate_of_the_specification_itself",
+      "operation": "bind",
+      "input": {
+        "base": "reads",
+        "edits": [
+          {"set": ["intermediates", "0", "dataset"], "to": "SELF"},
+          {"set": ["intermediates", "0", "key", "ID"], "to": "ID"},
+          {"set": ["rows"], "to": [{"id": "first", "dataset": "SRC", "derivations": {"ID": {"value": "SRC.ID"}}}]}
+        ],
+        "sources": {"SRC": [["ID", "int"]], "D": [["ID", "int"], ["X", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-16", "spec_paths": ["intermediates.P.derivations.NEXT.source"], "context": {"intermediate": "P", "identifier": "EARLIER.ID"}}]
+    },
+    {
+      "case": "a_derivation_reading_its_own_intermediate_is_a_cycle",
+      "operation": "prepare_or_bind",
+      "input": {
+        "base": "lookup",
+        "edits": [{"set": ["intermediates", "0", "derivations"], "to": {"NEXT": {"value": "P.ID"}}}],
+        "sources": {"SRC": [["ID", "int"]], "D": [["ID", "int"], ["X", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "dependency_cycle", "rule": "LOOKUP-16", "spec_paths": ["intermediates.P.derivations.NEXT.source"], "context": {"cycle": ["P", "P"]}}]
+    },
+    {
+      "case": "a_derivation_reading_a_field_its_donor_lacks_is_unknown",
+      "operation": "prepare_or_bind",
+      "input": {
+        "base": "lookup",
+        "edits": [{"set": ["intermediates", "0", "derivations"], "to": {"NEXT": {"value": "D.ABSENT"}}}],
+        "sources": {"SRC": [["ID", "int"]], "D": [["ID", "int"], ["X", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.NEXT.source"], "context": {"intermediate": "P", "identifier": "D.ABSENT"}}]
+    },
+    {
+      "case": "a_derivation_named_as_a_donor_field_repeats_it",
+      "operation": "prepare_or_bind",
+      "input": {
+        "base": "lookup",
+        "edits": [{"set": ["intermediates", "0", "derivations"], "to": {"ID": {"value": "D.X"}}}],
+        "sources": {"SRC": [["ID", "int"]], "D": [["ID", "int"], ["X", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "duplicate_derivation", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.ID"], "context": {"intermediate": "P", "derivation": "ID", "identifier": "D.ID"}}]
+    },
+    {
+      "case": "a_derivation_window_cannot_group_by_its_own_intermediate",
+      "operation": "prepare_or_bind",
+      "input": {
+        "base": "lookup",
+        "edits": [{"set": ["intermediates", "0", "derivations"], "to": {"NEXT": {"value": {"row_number": {"window": {"group_by": ["P.ID"], "order_by": ["D.ID"]}}}}}}],
+        "sources": {"SRC": [["ID", "int"]], "D": [["ID", "int"], ["X", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-16", "spec_paths": ["intermediates.P.derivations.NEXT.row_number.window.group_by[0]"], "context": {"intermediate": "P", "identifier": "P.ID"}}]
+    },
+    {
+      "case": "a_unique_verification_of_a_column_its_donor_lacks_is_unknown",
+      "operation": "prepare_or_bind",
+      "input": {
+        "base": "lookup",
+        "edits": [{"set": ["intermediates", "0", "verifications"], "to": [{"unique": {"columns": ["ABSENT"]}}]}],
+        "sources": {"SRC": [["ID", "int"]], "D": [["ID", "int"], ["X", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-17", "spec_paths": ["intermediates.P.verifications[0].unique.columns[0]"], "context": {"intermediate": "P", "identifier": "D.ABSENT"}}]
+    },
+    {
+      "case": "a_filter_that_reads_the_base_cannot_carry_a_unique_verification",
+      "operation": "prepare_or_bind",
+      "input": {
+        "base": "lookup",
+        "edits": [
+          {"set": ["intermediates", "0", "verifications"], "to": [{"unique": {"columns": ["ID"]}}]},
+          {"set": ["intermediates", "0", "filter"], "to": "D.X > SRC.ID"}
+        ],
+        "sources": {"SRC": [["ID", "int"]], "D": [["ID", "int"], ["X", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "correlated_filter_with_unique_verification", "rule": "LOOKUP-17", "spec_paths": ["intermediates.P.verifications[0].unique"], "context": {"intermediate": "P"}}]
+    },
+    {
+      "case": "a_derivation_that_reads_the_base_cannot_carry_a_unique_verification",
+      "operation": "prepare_or_bind",
+      "input": {
+        "base": "lookup",
+        "edits": [
+          {"set": ["intermediates", "0", "verifications"], "to": [{"unique": {"columns": ["ID"]}}]},
+          {"set": ["intermediates", "0", "derivations"], "to": {"NEXT": {"value": "X + SRC.ID"}}}
+        ],
+        "sources": {"SRC": [["ID", "int"]], "D": [["ID", "int"], ["X", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "correlated_derivation_with_unique_verification", "rule": "LOOKUP-17", "spec_paths": ["intermediates.P.verifications[0].unique"], "context": {"intermediate": "P"}}]
+    },
+    {
+      "case": "an_intermediate_that_drives_row_templates_declares_no_key",
+      "operation": "prepare_or_bind",
+      "input": {
+        "base": "driver",
+        "edits": [{"set": ["intermediates", "0", "key"], "to": ["ID"]}],
+        "sources": {"SRC": [["ID", "int"]], "D": [["ID", "int"], ["X", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "ROW-2", "spec_paths": ["rows.selected.dataset"], "context": {"intermediate": "P", "fields": ["key"]}}]
+    },
+    {
+      "case": "a_driving_intermediate_field_whose_type_is_decided_per_value_has_no_layout",
+      "operation": "prepare_or_bind",
+      "input": {
+        "base": "driver",
+        "edits": [
+          {"set": ["intermediates", "0", "derivations"], "to": {"NEXT": {"value": {"case": [{"when": "X > 0", "then": 1}, {"otherwise": "'none'"}]}}}},
+          {"set": ["intermediates", "0", "columns"], "to": ["ID", "NEXT"]}
+        ],
+        "sources": {"SRC": [["ID", "int"]], "D": [["ID", "int"], ["X", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_intermediate_driver_type", "rule": "ROW-2", "spec_paths": ["rows.selected.dataset"], "context": {"intermediate": "P", "columns": ["NEXT"]}}]
+    },
+    {
+      "case": "a_unique_verification_names_the_columns_and_the_duplicate_records_it_counts",
+      "operation": "unique_verification",
+      "input": {
+        "base": "lookup",
+        "edits": [{"set": ["intermediates", "0", "verifications"], "to": [{"unique": {"columns": ["ID"]}}]}],
+        "sources": {"SRC": [["ID", "int"]], "D": [["ID", "int"], ["X", "int"]]},
+        "dataset": "D",
+        "duplicate_count": 1
+      },
+      "issues": [{"phase": "verification", "condition": "duplicate_intermediate_records", "rule": "LOOKUP-17", "spec_paths": ["intermediates.P.verifications[0].unique"], "context": {"intermediate": "P", "dataset": "D", "columns": ["ID"], "duplicate_count": 1}}]
+    }
+  ]
+}
