@@ -503,7 +503,8 @@ Rounding to `digits` places, where a negative `digits` rounds left of the
 decimal point, sends a value exactly halfway between two candidates, or within
 `2^-26 * 10^-digits` below such a tie, away from zero; a result of zero is
 positive zero. The `round_half_away_from_zero` verb, CSV display precision
-([CSV-9](reference/csv.md#csv-9)), project-function result comparison
+([CSV-9](reference/csv.md#csv-9)), fixed-decimal text
+([TEXT-15](text.md#text-15)), project-function result comparison
 ([FUNC-13](profiles/functions.md#func-13)) and second resolution in
 `shift` of a datetime ([TIME-14](temporal.md#time-14)) all use it. No other
 rounding exists.

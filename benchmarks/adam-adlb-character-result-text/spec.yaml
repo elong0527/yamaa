@@ -1,0 +1,55 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADLB
+keys: [STUDYID, USUBJID, PARAMCD]
+input:
+  LB: {path: input/lb.csv, types: {AVAL: float}}
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, PARAMCD, AVAL, AVALC, AVALCS]
+  order_by: [USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: LB.PARAMCD
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: LB.AVAL
+
+  # Two decimals right-aligned in eight characters, as put(AVAL, 8.2) writes
+  # them, and NOT DONE for a value that was not collected.
+  - name: AVALC
+    type: str
+    label: Analysis Value (C)
+    derivation:
+      str_decimal: {source: AVAL, decimals: 2, width: 8, missing: NOT DONE}
+
+  # One decimal and no alignment; a value that was not collected stays
+  # missing.
+  - name: AVALCS
+    type: str
+    label: Analysis Value (C) to One Decimal
+    derivation:
+      str_decimal: {source: AVAL, decimals: 1}
+
+verifications:
+  - assert:
+      id: text-is-missing-only-without-a-value
+      when: "AVALCS IS NULL"
+      require: "AVAL IS NULL"

@@ -24,6 +24,7 @@ mod imputation;
 mod mapping_cut;
 mod rounding;
 mod str_case;
+mod str_decimal;
 mod str_extract;
 mod str_pad;
 mod str_position;
@@ -40,6 +41,7 @@ use crate::diagnostic::Diagnostic;
 use crate::mapping_cut::MappingCut;
 use crate::result_type::ResultType;
 use crate::text_case::StringCase;
+use crate::text_decimal::StringDecimal;
 use crate::text_extract::StringExtract;
 use crate::text_pad::StringPad;
 use crate::text_position::{StringLength, StringSubstr};
@@ -87,6 +89,7 @@ impl ScalarOp {
             | Self::StrCase { .. }
             | Self::StrPad { .. }
             | Self::StrSubstr { .. }
+            | Self::StrDecimal { .. }
             | Self::StrExtract { .. }
             | Self::StrReplace { .. }
             | Self::StrTemplate { .. }
@@ -167,6 +170,7 @@ impl ScalarOp {
             Self::StrExtract { .. } | Self::StrReplace { .. } => Preflight::Extraction,
             Self::StrTemplate { .. } => Preflight::Template,
             Self::StrSubstr { .. } | Self::StrLength => Preflight::Position,
+            Self::StrDecimal { .. } => Preflight::Decimal,
             Self::StrPad { .. } | Self::Mapping { .. } | Self::Cut { .. } => return None,
         })
     }
@@ -180,7 +184,8 @@ impl ScalarOp {
             | Self::StrExtract { .. }
             | Self::StrReplace { .. }
             | Self::StrSubstr { .. }
-            | Self::StrLength => CheckTyping::LeftToBinding,
+            | Self::StrLength
+            | Self::StrDecimal { .. } => CheckTyping::LeftToBinding,
             _ => CheckTyping::Never,
         }
     }
@@ -241,11 +246,13 @@ pub(crate) enum Preflight {
     Template,
     /// The positional text verbs, `str_substr` and `str_length`.
     Position,
+    /// Fixed-decimal text, `str_decimal`.
+    Decimal,
 }
 
 impl Preflight {
     /// Every check, in the order preparation reports them.
-    pub(crate) const ORDER: [Self; 8] = [
+    pub(crate) const ORDER: [Self; 9] = [
         Self::Rounding,
         Self::Temporal,
         Self::Imputation,
@@ -254,6 +261,7 @@ impl Preflight {
         Self::Extraction,
         Self::Template,
         Self::Position,
+        Self::Decimal,
     ];
 
     /// The derivations the check visits.
@@ -261,7 +269,7 @@ impl Preflight {
         match self {
             Self::Rounding | Self::Temporal => Sites::Defaults,
             Self::Imputation | Self::Case | Self::Extremes => Sites::Derivations,
-            Self::Extraction | Self::Template | Self::Position => Sites::Everywhere,
+            Self::Extraction | Self::Template | Self::Position | Self::Decimal => Sites::Everywhere,
         }
     }
 
@@ -294,8 +302,8 @@ pub(crate) enum CheckTyping {
     /// None: preflight types them, or only binding can.
     Never,
     /// Those preflight leaves to binding: a template's placeholders, and the
-    /// source of an extraction, a replacement or a positional verb, in row
-    /// templates and in a lookup's own derivations.
+    /// source of an extraction, a replacement, a positional verb or a
+    /// decimal text, in row templates and in a lookup's own derivations.
     LeftToBinding,
     /// Every operand it reads: a `mapping`'s or a `cut`'s source.
     Always,
@@ -340,6 +348,7 @@ pub(crate) fn preflight(
         Some(Preflight::Extraction) => str_extract::preflight(spec, e, declared, rows),
         Some(Preflight::Template) => str_template::preflight(spec, e, declared, rows),
         Some(Preflight::Position) => str_position::preflight(spec, e, declared, rows),
+        Some(Preflight::Decimal) => str_decimal::preflight(spec, e, declared, rows),
         None => Ok(Vec::new()),
     }
 }
@@ -388,6 +397,7 @@ enum Kind {
     /// operation, only its declaration defect (TEXT-13).
     StrSubstr(Result<StringSubstr, Diagnostic>),
     StrLength(StringLength),
+    StrDecimal(StringDecimal),
     StrExtract(StringExtract),
     StrReplace(StringReplace),
     StrTemplate(StringTemplate),
@@ -443,7 +453,7 @@ pub(crate) enum Typing {
     RowTemplates,
     /// Each operand once it binds, by what it binds to: a lookup's field by
     /// its donor's captured type, anything else by the catalog (the temporal
-    /// verbs).
+    /// verbs, `str_decimal`).
     Bound,
     /// Each operand once it binds, by its captured type: a name a lookup
     /// selects by its donor's, anything else by the catalog (`mapping`,
@@ -498,6 +508,7 @@ impl Operation {
             ScalarOp::StrCase { .. } => str_case::from_tree(spec, e),
             ScalarOp::StrPad { .. } => str_pad::from_tree(spec, e),
             ScalarOp::StrSubstr { .. } | ScalarOp::StrLength => str_position::from_tree(spec, e),
+            ScalarOp::StrDecimal { .. } => str_decimal::from_tree(spec, e),
             ScalarOp::StrExtract { .. } | ScalarOp::StrReplace { .. } => {
                 str_extract::from_tree(spec, e)
             }
@@ -533,6 +544,10 @@ impl Operation {
             Kind::StrCase(operation) => (!text).then(|| operation.input_diagnostic(actual)),
             Kind::StrSubstr(Ok(operation)) => (!text).then(|| operation.input_diagnostic(actual)),
             Kind::StrLength(operation) => (!text).then(|| operation.input_diagnostic(actual)),
+            Kind::StrDecimal(operation) => (!matches!(kind, ColumnType::Int | ColumnType::Float))
+                .then(|| {
+                    StringDecimal::input_diagnostic(operation.source(), operation.path(), actual)
+                }),
             Kind::StrExtract(operation) => (!text).then(|| operation.input_diagnostic(actual)),
             Kind::StrReplace(operation) => {
                 (!text).then(|| operation.search().input_diagnostic(actual))
@@ -559,7 +574,7 @@ impl Operation {
             | Kind::StrSubstr(_)
             | Kind::StrLength(_) => Typing::Catalog,
             Kind::StrCase(_) => Typing::RowTemplates,
-            Kind::Temporal(_) => Typing::Bound,
+            Kind::Temporal(_) | Kind::StrDecimal(_) => Typing::Bound,
             Kind::MappingCut(_) => Typing::Captured,
             Kind::Extreme { .. } => Typing::Together,
         }
@@ -674,6 +689,10 @@ impl Operation {
                 operation: operation.clone(),
             },
             Kind::StrLength(operation) => Expression::StrLength {
+                source: source()?,
+                operation: operation.clone(),
+            },
+            Kind::StrDecimal(operation) => Expression::StrDecimal {
                 source: source()?,
                 operation: operation.clone(),
             },

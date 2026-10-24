@@ -526,6 +526,21 @@ expressions:
             type: int
             required: true
             description: Integer decimal places; negative rounds left of the decimal point (FORMULA-16).
+    str_decimal: # See TEXT-15.
+        - source:
+            type: variable
+            required: true
+            description: Numeric variable written as text (TEXT-15).
+        - decimals:
+            type: int
+            required: true
+            description: Digits written after the decimal point, zero or more, to which the value is rounded (TEXT-15).
+        - width:
+            type: int
+            description: Minimum length of the text, reached with leading spaces; longer text is never truncated (TEXT-15).
+        - missing:
+            type: substitute_value
+            description: Value returned when the source is missing; without it, a missing source gives missing (TEXT-15).
 "#),
     ("schema_expression_odm.yaml", r#"version: "1.0"
 
@@ -4271,6 +4286,36 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           },
           "additionalProperties": false
         },
+        "str_decimal": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "Numeric variable written as text (TEXT-15).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "decimals": {
+              "type": "integer",
+              "description": "Digits written after the decimal point, zero or more, to which the value is rounded (TEXT-15).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
+            },
+            "width": {
+              "type": "integer",
+              "description": "Minimum length of the text, reached with leading spaces; longer text is never truncated (TEXT-15).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
+            },
+            "missing": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Value returned when the source is missing; without it, a missing source gives missing (TEXT-15).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            }
+          },
+          "additionalProperties": false
+        },
         "diff": {
           "type": "object",
           "properties": {
@@ -6424,6 +6469,40 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           "required": [
             "source",
             "digits"
+          ],
+          "additionalProperties": false
+        },
+        "str_decimal": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "Numeric variable written as text (TEXT-15).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "decimals": {
+              "type": "integer",
+              "description": "Digits written after the decimal point, zero or more, to which the value is rounded (TEXT-15).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
+            },
+            "width": {
+              "type": "integer",
+              "description": "Minimum length of the text, reached with leading spaces; longer text is never truncated (TEXT-15).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "int"
+            },
+            "missing": {
+              "$ref": "#/$defs/substitute_value",
+              "description": "Value returned when the source is missing; without it, a missing source gives missing (TEXT-15).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "substitute_value"
+            }
+          },
+          "required": [
+            "source",
+            "decimals"
           ],
           "additionalProperties": false
         },

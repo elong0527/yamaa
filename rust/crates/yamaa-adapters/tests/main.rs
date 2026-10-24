@@ -77,6 +77,7 @@ mod resolved_artifact_wire;
 mod resolved_plan;
 mod run_scopes;
 mod scalar_declarative_rounding;
+mod scalar_declarative_text_decimal;
 mod scalar_declarative_text_replace;
 mod scalar_language;
 mod scalar_text_positions;

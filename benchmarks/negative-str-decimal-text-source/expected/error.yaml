@@ -1,0 +1,9 @@
+phase: validation
+condition: incompatible_input_type
+spec_paths:
+  - columns.AVALC.derivation.str_decimal.source
+rule: TEXT-15
+context:
+  source: LBSTRESC
+  expected: numeric
+  actual: str
