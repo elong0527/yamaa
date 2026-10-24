@@ -1,10 +1,11 @@
 # yamaa agent guide
 
 This file is the single entry point for agents. It maps the repository,
-states the hard rules, and says what to run before a push. Area guides
-(linked below) add detail; none of them overrides this file. Release docs
-are not needed for normal changes: read `docs/release.md` only for a
-release, a supported-platform change, or a migration decision.
+states the hard rules and the design principles, and says what to run
+before a push. Area guides (linked below) add detail; none of them
+overrides this file. Release docs are not needed for normal changes: read
+`docs/release.md` only for a release, a supported-platform change, or a
+migration decision.
 
 Run `make help` at the repository root for the supported checks and
 their prerequisites. Local targets and CI share the owned scripts under
@@ -18,7 +19,9 @@ The whole of this guide is the contract; this list is the order of work.
    yourself to it, or link your pull request on it; that is the claim.
 2. Create a worktree from `origin/main` (below) and point it at the
    machine's shared Cargo target.
-3. Build the change, with the tests nearest it, and nothing else.
+3. Build the change, in its data form first
+   ([Design principles](#design-principles)), with the tests nearest it,
+   and nothing else.
 4. Run the local checks of [Before a push](#before-a-push) once, then push
    once, with the explicit refspec. Open the pull request ready for review.
 5. Get CI green on the exact head, answer its reviews, and stop. The
@@ -94,6 +97,44 @@ The whole of this guide is the contract; this list is the order of work.
   page and `rules/README.md` for the rules index. MkDocs reads those
   files through `tools/docs/canonical_pages.py`; do not create
   `docs/index.md` or `docs/articles/rules.md`.
+
+## Design principles
+
+The hard rules say what never changes; these say how the engine stays
+small while it grows. `CONTRIBUTING.md#design-principles-in-practice`
+holds the mechanics: which data form owns which behaviour, the fixture
+homes and their readers, and how to measure the ceilings.
+
+- **Behaviour is data first.** A new behaviour goes into the data form
+  the repository already owns before any Rust: a schema module or grammar
+  file under `yaml/`, the condition registry, the vocabulary, a
+  conformance case or a benchmark, the host interface in `bindings.yaml`.
+  Rust holds semantics and execution. When no form can express the
+  behaviour, extend the form once, with its generator or check, rather
+  than writing the behaviour by hand where the form's consumers would
+  have read it.
+- **One implementation per judgement.** Never add a second code path that
+  must agree with an existing one: a check that mirrors binding, a
+  validator that mirrors a decoder, a hand copy of a generated list. Put
+  the judgement behind one abstraction with two sources, or generate both
+  copies from one declaration and check them equal in
+  `make check-repository`.
+- **A fixture before a test function.** A case of the form "files or
+  documents, one call, the expected rows or bytes" is a fixture in an
+  owned home (a benchmark, a `rust/tests/host-fixtures/` family, a
+  crate's `tests/fixtures/`), read by that home's reader. A Rust, Python
+  or R test function proves an internal seam the readers cannot reach,
+  and its first comment names the seam.
+- **Generate from one declaration; keep data as data.** When two artifacts
+  describe one thing, one is the source and the other is generated from
+  it and checked current. Data stays in its own format, a copied file
+  behind `include_str!`, not a generated source file of string constants.
+- **Size has a ceiling.** A source or test file splits by feature before
+  3,000 lines (#2413). A function over 250 lines, or with more than seven
+  parameters, is a context struct or a split waiting to happen. An
+  `allow` for either names the issue that removes it. Generated files are
+  exempt from the file ceiling, not from being data. Growth is measured
+  per crate and recorded on the planning issue, never in committed files.
 
 ## Pull requests
 
@@ -271,6 +312,13 @@ the patterns and helpers of each language; these are the rules.
   readers beside `rust/tests/host-fixtures/cases.json`. The second file
   that needs a helper moves it there; a helper stays in the crate or
   package whose tests use it.
+- **A fixture before a test function.** A case that writes files or
+  documents, makes one call and compares rows or bytes is a case in an
+  owned fixture home (a benchmark, a `host-fixtures` family, a crate's
+  `tests/fixtures/`), run by that home's reader
+  ([Design principles](#design-principles)). A test function is written
+  only for a seam the readers cannot reach, and says which in its first
+  comment.
 - **Assert the whole record, once, with a label.** Compare the complete
   observable value, such as a diagnostic's phase, condition, rule, paths,
   context and optional `source_span` and `operand_route` (including their
@@ -290,7 +338,8 @@ the patterns and helpers of each language; these are the rules.
 - **Keep each behaviour tested once.** A behaviour moved or rewritten
   takes its tests with it. A case both hosts check lives once, in the
   shared `host-fixtures` truth that each host's suite reads. Split a
-  file by feature before it passes about 3,000 lines (#2413).
+  file by feature before it passes 3,000 lines (#2413), the ceiling of
+  [Design principles](#design-principles).
 
 ## Pointers
 
@@ -302,6 +351,7 @@ the patterns and helpers of each language; these are the rules.
 - Benchmark authoring: `benchmarks/AGENTS.md`
 - Architecture, crate boundaries, and local verification: `CONTRIBUTING.md`
 - Writing tests: `CONTRIBUTING.md#writing-tests`
+- Design principles in practice: `CONTRIBUTING.md#design-principles-in-practice`
 - Rust workspace entry point: `rust/README.md`
 - Host usage: `docs/articles/api.md`
 - Site build and canonical pages: `CONTRIBUTING.md#documentation`
