@@ -451,10 +451,10 @@ impl<R: Resolver> Resolver for Asked<R> {
 
 /// FILE-5 and LAYER-2: a `parent` spelled with an empty segment, a trailing
 /// separator, a network share's root or a backslash fails validation with
-/// the written-form condition at `parent`, naming the path as written, never
-/// with the engine's own refusal. The spelling is judged before any resolver
-/// is asked for the parent: the local file resolver or a caller's, which here
-/// would serve the name.
+/// the written-form condition at `parent`, naming the path as written and the
+/// layer that writes it, never with the engine's own refusal. The spelling is
+/// judged before any resolver is asked for the parent: the local file
+/// resolver or a caller's, which here would serve the name.
 #[cfg(feature = "yaml")]
 #[test]
 fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
@@ -475,6 +475,9 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
     let child = directory.join("child.yaml");
     let child = child.to_str().unwrap();
     let header = "yamaa: \"1.0\"\ntype: spec\n";
+    // The entry writes the `parent`: by its path through the local file
+    // resolver, and through the caller's by the name it serves it under.
+    let local = child.replace('\\', "/");
     for parent in [
         "std//base.yaml",
         "std/base.yaml/",
@@ -482,7 +485,7 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
         "std\\base.yaml",
     ] {
         let entry = format!("{header}parent: '{parent}'\ndomain: CHILD\n");
-        let refused = |issues: &[yamaa_core::diagnostic::Diagnostic], route: &str| {
+        let refused = |issues: &[yamaa_core::diagnostic::Diagnostic], route: &str, source: &str| {
             assert_eq!(issues.len(), 1, "{parent} {route}: {issues:?}");
             let issue = &issues[0];
             assert_eq!(
@@ -493,7 +496,7 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
             assert_eq!(issue.spec_paths, ["parent"], "{parent} {route}");
             assert_eq!(
                 yamaa_core::json::Value::Object(issue.context.clone()),
-                yamaa_adapters::json!({"path": parent}),
+                yamaa_adapters::json!({"path": parent, "source": source}),
                 "{parent} {route}"
             );
         };
@@ -511,24 +514,26 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
         refused(
             &yamaa_adapters::project_application::selection_failure(&error),
             "select",
+            &local,
         );
         refused(
             &yamaa_adapters::file_application::check(Language::Python, request(), identity()),
             "check",
+            &local,
         );
         let Err(issues) =
             yamaa_adapters::resolved_artifact::resolve(child, None, Some(Language::Python), None)
         else {
             panic!("{parent}: resolved a malformed parent");
         };
-        refused(&issues, "resolve");
+        refused(&issues, "resolve", &local);
         let resources = Resources::for_entry(directory.to_str().unwrap()).unwrap();
         let Err(Prepared::PreparationFinding { diagnostic, .. }) =
             FileSpecification::prepare(resources, "child.yaml")
         else {
             panic!("{parent}: the refusal lost its finding");
         };
-        refused(&[*diagnostic], "prepare");
+        refused(&[*diagnostic], "prepare", &local);
         // Through a caller's resolver that serves the parent under that name.
         let served = || {
             let files = MemoryResolver::default();
@@ -560,6 +565,7 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
         refused(
             &yamaa_adapters::project_application::selection_failure(&error),
             "select through a resolver",
+            "/child.yaml",
         );
         assert!(
             resolver
@@ -579,6 +585,7 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
                 Some(served()),
             ),
             "check through a resolver",
+            "/child.yaml",
         );
         let Err(issues) = yamaa_adapters::resolved_artifact::resolve(
             "child.yaml",
@@ -588,24 +595,24 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
         ) else {
             panic!("{parent}: resolved a malformed parent through a resolver");
         };
-        refused(&issues, "resolve through a resolver");
+        refused(&issues, "resolve through a resolver", "/child.yaml");
         let Err(Prepared::PreparationFinding { diagnostic, .. }) = FileSpecification::prepare(
             Resources::with_resolver(served(), "child.yaml"),
             "child.yaml",
         ) else {
             panic!("{parent}: the refusal through a resolver lost its finding");
         };
-        refused(&[*diagnostic], "prepare through a resolver");
+        refused(&[*diagnostic], "prepare through a resolver", "/child.yaml");
     }
 }
 
 /// FILE-8 and LAYER-2: a `parent` that reaches a symbolic link, as the
 /// layer's own name or as a directory on its way, fails validation with
-/// `resource_path_symlink` at `parent`, naming the path as written, as every
-/// other declared file a run reads does, never with the engine's own refusal
-/// (#3030 D73). A caller's resolver that reports a link, a junction or
-/// another reparse point for the parent is refused from that report alone
-/// (FILE-7).
+/// `resource_path_symlink` at `parent`, naming the path as written and the
+/// layer that writes it, as every other declared file a run reads does, never
+/// with the engine's own refusal (#3030 D73). A caller's resolver that
+/// reports a link, a junction or another reparse point for the parent is
+/// refused from that report alone (FILE-7).
 #[cfg(feature = "yaml")]
 #[test]
 fn a_linked_parent_is_refused_at_parent_on_every_route() {
@@ -622,21 +629,25 @@ fn a_linked_parent_is_refused_at_parent_on_every_route() {
         specification: "child.yaml",
         base_directory: ".",
     };
-    let refused = |issues: &[yamaa_core::diagnostic::Diagnostic], parent: &str, route: &str| {
-        assert_eq!(issues.len(), 1, "{parent} {route}: {issues:?}");
-        let issue = &issues[0];
-        assert_eq!(
-            (issue.phase(), issue.condition(), issue.rule()),
-            ("validation", "resource_path_symlink", Some("FILE-8")),
-            "{parent} {route}"
-        );
-        assert_eq!(issue.spec_paths, ["parent"], "{parent} {route}");
-        assert_eq!(
-            yamaa_core::json::Value::Object(issue.context.clone()),
-            yamaa_adapters::json!({"path": parent}),
-            "{parent} {route}"
-        );
-    };
+    // The entry writes the `parent`, and the finding names it as `source`: by
+    // its path through the local file resolver, and through a caller's by the
+    // name the resolver is asked for the parent from, `/child.yaml`.
+    let refused =
+        |issues: &[yamaa_core::diagnostic::Diagnostic], parent: &str, source: &str, route: &str| {
+            assert_eq!(issues.len(), 1, "{parent} {route}: {issues:?}");
+            let issue = &issues[0];
+            assert_eq!(
+                (issue.phase(), issue.condition(), issue.rule()),
+                ("validation", "resource_path_symlink", Some("FILE-8")),
+                "{parent} {route}"
+            );
+            assert_eq!(issue.spec_paths, ["parent"], "{parent} {route}");
+            assert_eq!(
+                yamaa_core::json::Value::Object(issue.context.clone()),
+                yamaa_adapters::json!({"path": parent, "source": source}),
+                "{parent} {route}"
+            );
+        };
     // Through the local file resolver: a link in the layer's own name, in a
     // directory on its way, and a link whose target does not exist.
     #[cfg(unix)]
@@ -652,6 +663,7 @@ fn a_linked_parent_is_refused_at_parent_on_every_route() {
         let directory = yamaa_adapters::canonical_path::canonicalize(&scratch).unwrap();
         let child = directory.join("child.yaml");
         let child = child.to_str().unwrap();
+        let local = child.to_owned();
         for (surface, header) in HEADERS {
             for parent in ["base.yaml", "linked/base.yaml", "dangling.yaml"] {
                 let route = |name: &str| format!("{surface} {name}");
@@ -669,6 +681,7 @@ fn a_linked_parent_is_refused_at_parent_on_every_route() {
                 refused(
                     &yamaa_adapters::project_application::selection_failure(&error),
                     parent,
+                    &local,
                     &route("select"),
                 );
                 refused(
@@ -678,6 +691,7 @@ fn a_linked_parent_is_refused_at_parent_on_every_route() {
                         identity(),
                     ),
                     parent,
+                    &local,
                     &route("check"),
                 );
                 let Err(issues) = yamaa_adapters::resolved_artifact::resolve(
@@ -688,14 +702,14 @@ fn a_linked_parent_is_refused_at_parent_on_every_route() {
                 ) else {
                     panic!("{surface} {parent}: resolved a linked parent");
                 };
-                refused(&issues, parent, &route("resolve"));
+                refused(&issues, parent, &local, &route("resolve"));
                 let resources = Resources::for_entry(directory.to_str().unwrap()).unwrap();
                 let Err(Prepared::PreparationFinding { diagnostic, .. }) =
                     FileSpecification::prepare(resources, "child.yaml")
                 else {
                     panic!("{surface} {parent}: the refusal lost its finding");
                 };
-                refused(&[*diagnostic], parent, &route("prepare"));
+                refused(&[*diagnostic], parent, &local, &route("prepare"));
             }
         }
     }
@@ -729,6 +743,7 @@ fn a_linked_parent_is_refused_at_parent_on_every_route() {
             refused(
                 &yamaa_adapters::project_application::selection_failure(&error),
                 "base.yaml",
+                "/child.yaml",
                 &route("select"),
             );
             refused(
@@ -739,6 +754,7 @@ fn a_linked_parent_is_refused_at_parent_on_every_route() {
                     Some(served()),
                 ),
                 "base.yaml",
+                "/child.yaml",
                 &route("check"),
             );
             let Err(issues) = yamaa_adapters::resolved_artifact::resolve(
@@ -749,14 +765,19 @@ fn a_linked_parent_is_refused_at_parent_on_every_route() {
             ) else {
                 panic!("{surface} {kind:?}: resolved a linked parent through a resolver");
             };
-            refused(&issues, "base.yaml", &route("resolve"));
+            refused(&issues, "base.yaml", "/child.yaml", &route("resolve"));
             let Err(Prepared::PreparationFinding { diagnostic, .. }) = FileSpecification::prepare(
                 Resources::with_resolver(served(), "child.yaml"),
                 "child.yaml",
             ) else {
                 panic!("{surface} {kind:?}: the refusal through a resolver lost its finding");
             };
-            refused(&[*diagnostic], "base.yaml", &route("prepare"));
+            refused(
+                &[*diagnostic],
+                "base.yaml",
+                "/child.yaml",
+                &route("prepare"),
+            );
         }
     }
 }

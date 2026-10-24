@@ -1813,12 +1813,12 @@ mod file {
                 study.0.join("entry/link.yaml"),
             )
             .unwrap();
-            // A linked parent fails at `parent` as any linked file a run reads
-            // (FILE-8, LAYER-2).
+            // A linked parent fails at `parent` as any linked file a run reads,
+            // naming the entry that writes it (FILE-8, LAYER-2).
             let actual = failure(&study, &format!("{VALID}parent: link.yaml\n"));
             assert_eq!(
                 actual,
-                json!([{"phase":"validation","condition":"resource_path_symlink","rule":"FILE-8","spec_paths":["parent"],"context":{"path":"link.yaml"}}])
+                json!([{"phase":"validation","condition":"resource_path_symlink","rule":"FILE-8","spec_paths":["parent"],"context":{"path":"link.yaml","source":study.resource_key("entry/spec.yaml")}}])
             );
             let resources =
                 Resources::new(&study.text("entry"), &study.text("entry"), &[]).unwrap();
