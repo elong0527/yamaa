@@ -693,13 +693,6 @@ fn execute_inner_into<R: Resolver, D: Decoder>(
         }
     };
     let cancelled = || scope.cancelled();
-    // The row and cell limits bound a SAS or ODM driver input whole, and its
-    // output too (D264); only a CSV or Parquet driver's output is admitted a
-    // partition at a time.
-    let whole_output = !matches!(
-        prepared.sources()[driver].profile,
-        SourceProfile::Csv | SourceProfile::Parquet
-    );
     attempt.result = Ok(match &by_partition {
         // The partitions the scan cut the input into are the run's (#3792).
         Some((read, _)) => plan.execute_partitioned(
@@ -712,12 +705,7 @@ fn execute_inner_into<R: Resolver, D: Decoder>(
             read.keys,
         ),
         None => plan.execute_divided(
-            scope
-                .partitioning()
-                .map(|partitioning| dataset::Partitioning {
-                    whole_output: partitioning.whole_output || whole_output,
-                    ..partitioning
-                }),
+            divided(prepared, scope.partitioning()),
             primary,
             &secondary,
             &mut functions,
@@ -725,6 +713,24 @@ fn execute_inner_into<R: Resolver, D: Decoder>(
             &cancelled,
         ),
     });
+}
+
+/// How a run that reads its driver input whole divides it: as `partitioning`
+/// asks, admitting the output whole when the driver input is SAS or ODM. The
+/// row and cell limits bound such an input whole, and its output too (D264);
+/// only a CSV or Parquet driver's output is admitted a partition at a time.
+fn divided(
+    prepared: &PreparedSpecification,
+    partitioning: Option<dataset::Partitioning>,
+) -> Option<dataset::Partitioning> {
+    let whole_output = !matches!(
+        prepared.sources()[prepared.driver_index()].profile,
+        SourceProfile::Csv | SourceProfile::Parquet
+    );
+    partitioning.map(|partitioning| dataset::Partitioning {
+        whole_output: partitioning.whole_output || whole_output,
+        ..partitioning
+    })
 }
 
 /// How a partitioned run reads its driver input by partition (#3792), if it
