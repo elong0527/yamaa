@@ -116,3 +116,40 @@ fn a_check_that_fires_in_two_partitions_saves_the_whole_table_report() {
         );
     }
 }
+
+/// An output of 10,000,002 rows, beyond the row limit, saves in partitions of
+/// 1,000,000 records (D264): one keyed column copied from an input of as
+/// many records, read by partition (#3792), each record its own row, so the
+/// saved file has a header and 10,000,002 lines, the last two the last two
+/// records' IDs. The one column keeps the run near 3 GB; the input and the
+/// run take minutes unoptimized, so the test runs in the optimized
+/// `release-test` profile, as the native lane runs every test.
+#[test]
+#[cfg_attr(
+    debug_assertions,
+    ignore = "a 10,000,002-row output runs in the optimized release-test profile"
+)]
+fn an_output_beyond_the_row_limit_saves_a_partition_at_a_time() {
+    use std::io::Write as _;
+    const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+    let records = yamaa_core::limits::Limits::TABLE_ROWS + 2;
+    let scratch = Scratch::new("partitioned-publication-limit");
+    scratch.write("spec.yaml", SPEC);
+    let mut input =
+        std::io::BufWriter::new(std::fs::File::create(scratch.join("input.csv")).unwrap());
+    writeln!(input, "ID").unwrap();
+    for id in 1..=records {
+        writeln!(input, "{id}").unwrap();
+    }
+    input.flush().unwrap();
+    drop(input);
+    let million = Partitions::new(NonZeroUsize::new(1_000_000).unwrap());
+    let (rows, mut files) = saved(&scratch.join("spec.yaml"), Some(million));
+    let saved = String::from_utf8(files.remove("out.csv").unwrap()).unwrap();
+    let last = saved.lines().rev().take(2).collect::<Vec<_>>();
+    assert_eq!(
+        (rows, saved.lines().count(), last),
+        (records, records + 1, vec!["10000002", "10000001"]),
+        "the output's rows, the saved file's lines and its last two"
+    );
+}

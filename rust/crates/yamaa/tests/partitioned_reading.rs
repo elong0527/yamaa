@@ -9,9 +9,8 @@
 //! output is compared with a whole-table run over a subset of the same
 //! records: the first and the last subjects. Nothing is compared with a
 //! captured file. The output is admitted, encoded and saved one partition
-//! at a time too (#3793), so a shape whose output has a row for every
-//! record runs beyond the row limit as well, and its saved file holds a
-//! line for every subject, the last ones the subset run's.
+//! at a time too (#3793), and its saved file holds a line for every
+//! subject, the last ones the subset run's.
 //!
 //! The seam is the facade's partitioned engine mode, which neither the
 //! benchmark reader nor the host fixtures run before #3794, and inputs
@@ -153,15 +152,15 @@ fn saved_output(run: &mut yamaa::Run) -> String {
     run.save(&token).unwrap().pop().unwrap()
 }
 
-/// Run every partition-safe shape over `records` generated driver records,
-/// in partitions of `rows`: for its first and its last subjects, the output
-/// holds the rows a whole-table run of only their records gives, and its
-/// saved file holds a header and a line for every subject, the last ones
-/// those of the whole-table run's saved file.
-fn check_every_shape(records: usize, rows_per_partition: usize) {
+/// Run each partition-safe shape `chosen` keeps over `records` generated
+/// driver records, in partitions of `rows`: for its first and its last
+/// subjects, the output holds the rows a whole-table run of only their
+/// records gives, and its saved file holds a header and a line for every
+/// subject, the last ones those of the whole-table run's saved file.
+fn check_shapes(records: usize, rows_per_partition: usize, chosen: impl Fn(&Shape) -> bool) {
     const EDGE: usize = 3;
     let partitions = Partitions::new(NonZeroUsize::new(rows_per_partition).unwrap());
-    for shape in shapes() {
+    for shape in shapes().into_iter().filter(|shape| chosen(shape)) {
         let subjects = records.div_ceil(shape.records);
         let case = format!(
             "{} over {} records",
@@ -203,22 +202,28 @@ fn check_every_shape(records: usize, rows_per_partition: usize) {
 /// whole-table run's.
 #[test]
 fn every_partition_safe_shape_reads_its_input_by_partition() {
-    check_every_shape(10_002, 1_000);
+    check_shapes(10_002, 1_000, |_| true);
 }
 
-/// Inputs of 10,000,002 driver records, beyond the row limit, in partitions
-/// of 1,000,000 (#3792): every shape runs, and the shapes with a row for
-/// every record save an output beyond the row limit, a partition at a time
-/// (#3793). The inputs and the runs take several gigabytes and minutes
-/// unoptimized, so the test runs in the optimized `release-test` profile, as
-/// the native lane runs every test.
+/// An input of 10,000,002 driver records, beyond the row limit, in
+/// partitions of 1,000,000 (#3792): the grouped shape runs. Each shape with
+/// a row for every record saves its output a partition at a time (#3793),
+/// but holds it whole in memory with its observations, some 12 GB at this
+/// size, more than a native runner has, so its output beyond the row limit
+/// is `partitioned_publication.rs`'s, over one column. The input and the run
+/// take several gigabytes and minutes unoptimized, so the test runs in the
+/// optimized `release-test` profile, as the native lane runs every test.
 #[test]
 #[cfg_attr(
     debug_assertions,
     ignore = "10,000,002-record inputs run in the optimized release-test profile"
 )]
-fn a_driver_input_beyond_the_row_limit_runs_by_partition_on_every_partition_safe_shape() {
-    check_every_shape(yamaa_core::limits::Limits::TABLE_ROWS + 2, 1_000_000);
+fn a_driver_input_beyond_the_row_limit_runs_by_partition_on_the_grouped_shape() {
+    check_shapes(
+        yamaa_core::limits::Limits::TABLE_ROWS + 2,
+        1_000_000,
+        |shape| shape.records > 1,
+    );
 }
 
 /// A defect in a record past the first partition of two refuses the

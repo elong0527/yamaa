@@ -1521,15 +1521,16 @@ mod tests {
                 )
             })
             .collect::<Vec<_>>();
+        // The publication failure an I/O error is, by the registry's code.
+        let context = format!(
+            r#"{{"code":"{}","completed":0,"entered":2,"path":"out.csv","step":"output"}}"#,
+            Fault::PublicationFailed.as_str()
+        );
         assert_eq!(
             (saved.ok(), issues, entries),
             (
                 Some(false),
-                vec![(
-                    "engine_rejected",
-                    vec!["output.path".to_owned()],
-                    r#"{"code":"publication_failed","completed":0,"entered":2,"path":"out.csv","step":"output"}"#.to_owned(),
-                )],
+                vec![("engine_rejected", vec!["output.path".to_owned()], context)],
                 vec!["input.csv".to_owned(), "spec.yaml".to_owned()],
             ),
             "the save stopped before the output's third partition"
