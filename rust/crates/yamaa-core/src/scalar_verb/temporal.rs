@@ -6,27 +6,16 @@ use crate::dataset::{CalendarUnit, DateBounds, ElapsedUnit, TemporalKind, DATE_P
 const CALENDAR_UNITS: &[&str] = &["day", "week", "month", "year"];
 const ELAPSED_UNITS: &[&str] = &["second", "minute", "hour", "day"];
 
-fn elapsed_unit(unit: &str) -> Option<ElapsedUnit> {
+/// The elapsed unit a datetime counts or moves in, of the units a verb
+/// writes (TIME-4, TIME-14).
+fn elapsed_unit(unit: ast::TimeUnit) -> Option<ElapsedUnit> {
     Some(match unit {
-        "second" => ElapsedUnit::Second,
-        "minute" => ElapsedUnit::Minute,
-        "hour" => ElapsedUnit::Hour,
-        "day" => ElapsedUnit::Day,
+        ast::TimeUnit::Second => ElapsedUnit::Second,
+        ast::TimeUnit::Minute => ElapsedUnit::Minute,
+        ast::TimeUnit::Hour => ElapsedUnit::Hour,
+        ast::TimeUnit::Day => ElapsedUnit::Day,
         _ => return None,
     })
-}
-
-/// A written unit's name.
-fn unit_name(unit: ast::TimeUnit) -> &'static str {
-    match unit {
-        ast::TimeUnit::Day => "day",
-        ast::TimeUnit::Week => "week",
-        ast::TimeUnit::Month => "month",
-        ast::TimeUnit::Year => "year",
-        ast::TimeUnit::Second => "second",
-        ast::TimeUnit::Minute => "minute",
-        ast::TimeUnit::Hour => "hour",
-    }
 }
 
 /// What `diff` counts from one value of `kind` to another in `unit`, the
@@ -38,10 +27,10 @@ pub(crate) fn difference(
     unit: ast::TimeUnit,
     path: &str,
 ) -> Result<TemporalKind, Diagnostic> {
-    let name = unit_name(unit);
+    let name = unit.name();
     let refusal = |permitted| Temporal::unit_diagnostic(path, name, permitted);
     match kind {
-        ast::TemporalType::DateTime => elapsed_unit(name)
+        ast::TemporalType::DateTime => elapsed_unit(unit)
             .map(|unit| TemporalKind::DateTimeDifference { unit })
             .ok_or_else(|| refusal(ELAPSED_UNITS)),
         ast::TemporalType::Date => match unit {
@@ -72,31 +61,25 @@ fn date_bounds(closed: ast::Closed) -> Result<DateBounds, Refusal> {
 /// unit coarser than a day, as `closed` writes them, permitting `right`
 /// (P-ORD-2).
 fn bounds_finding(path: String, closed: ast::Closed) -> Result<Diagnostic, Refusal> {
-    let value = match closed {
-        ast::Closed::Both => "both",
-        ast::Closed::Neither => "neither",
-        _ => return Err(Refusal::Internal),
-    };
-    Ok(Temporal::bounds_diagnostic(&path, "closed", value, "right"))
+    if !matches!(closed, ast::Closed::Both | ast::Closed::Neither) {
+        return Err(Refusal::Internal);
+    }
+    Ok(Temporal::bounds_diagnostic(
+        &path,
+        "closed",
+        closed.name(),
+        ast::Closed::Right.name(),
+    ))
 }
 
 /// The operand field of a temporal verb that `field` names: each verb's
-/// fields in the executor's order ([`TemporalKind::fields`]).
+/// fields in the executor's order ([`TemporalKind::fields`]), which call
+/// `study_day`'s `source` its date.
 fn slot(field: &str) -> Option<Slot> {
-    Some(match field {
-        "start" => Slot::Start,
-        "end" => Slot::End,
-        "date" | "source" => Slot::Source,
-        "reference" => Slot::Reference,
-        "days" | "amount" => Slot::Amount,
-        "year" => Slot::Year,
-        "month" => Slot::Month,
-        "day" => Slot::Day,
-        "hour" => Slot::Hour,
-        "minute" => Slot::Minute,
-        "second" => Slot::Second,
-        _ => return None,
-    })
+    match field {
+        "date" => Some(Slot::Source),
+        field => Slot::from_name(field),
+    }
 }
 
 /// `operation` with each operand's path as the tree writes it, whose operand
@@ -142,30 +125,29 @@ pub(super) fn tree_kind(
     Ok(Ok(match op {
         ScalarOp::Diff { kind, unit, closed } => {
             let bounds = date_bounds(*closed)?;
-            let unit = unit_name(*unit);
             if *kind == ast::TemporalType::DateTime {
-                let Some(unit) = elapsed_unit(unit) else {
+                let Some(elapsed) = elapsed_unit(*unit) else {
                     return Ok(Err(vec![Temporal::unit_diagnostic(
                         &path,
-                        unit,
+                        unit.name(),
                         ELAPSED_UNITS,
                     )]));
                 };
                 if bounds != DateBounds::Exclusive {
                     return Ok(Err(vec![bounds_finding(path, *closed)?]));
                 }
-                TemporalKind::DateTimeDifference { unit }
+                TemporalKind::DateTimeDifference { unit: elapsed }
             } else {
                 TemporalKind::Difference {
                     unit: match unit {
-                        "day" => CalendarUnit::Day,
-                        "week" => CalendarUnit::Week,
-                        "month" => CalendarUnit::Month,
-                        "year" => CalendarUnit::Year,
+                        ast::TimeUnit::Day => CalendarUnit::Day,
+                        ast::TimeUnit::Week => CalendarUnit::Week,
+                        ast::TimeUnit::Month => CalendarUnit::Month,
+                        ast::TimeUnit::Year => CalendarUnit::Year,
                         other => {
                             return Ok(Err(vec![Temporal::unit_diagnostic(
                                 &path,
-                                other,
+                                other.name(),
                                 CALENDAR_UNITS,
                             )]))
                         }
@@ -191,9 +173,7 @@ pub(super) fn tree_kind(
             }
             if datetime {
                 TemporalKind::DateTimeShift {
-                    unit: unit
-                        .and_then(|unit| elapsed_unit(unit_name(unit)))
-                        .ok_or(Refusal::Internal)?,
+                    unit: unit.and_then(elapsed_unit).ok_or(Refusal::Internal)?,
                 }
             } else {
                 TemporalKind::DateShift
@@ -202,10 +182,10 @@ pub(super) fn tree_kind(
         ScalarOp::StudyDay => TemporalKind::StudyDay,
         ScalarOp::ToEpochDay => TemporalKind::EpochDay,
         ScalarOp::DurationValue { unit } => TemporalKind::DurationValue {
-            unit: elapsed_unit(unit_name(*unit)).ok_or(Refusal::Internal)?,
+            unit: elapsed_unit(*unit).ok_or(Refusal::Internal)?,
         },
         ScalarOp::DurationText { unit } => TemporalKind::DurationText {
-            unit: elapsed_unit(unit_name(*unit)).ok_or(Refusal::Internal)?,
+            unit: elapsed_unit(*unit).ok_or(Refusal::Internal)?,
         },
         ScalarOp::TimeOfDay => TemporalKind::TimeOfDay,
         ScalarOp::Dtc => {

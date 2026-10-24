@@ -8,53 +8,13 @@ mod declaration {
         use yamaa_adapters::json;
         use yamaa_adapters::yaml_decode::decode_yaml;
         use yamaa_core::expression::{
-            compile, Comparison, CompileError, CompiledExpression, Context, Failure, Function,
-            NodeKind, Reducer, TemporalKind, RESERVED,
+            compile, Comparison, CompileError, CompiledExpression, Context, Failure, NodeKind,
+            TemporalKind, RESERVED,
         };
         use yamaa_core::json::Value as Json;
         use yamaa_core::numeric::{BinaryOperator, UnaryOperator};
         use yamaa_core::schema::{Document, DocumentNode};
         use yamaa_core::text_template::{Part, StringTemplate};
-
-        // Exhaustive matches force a new native variant to enter the YAML inventory.
-        macro_rules! vocabulary {
-    ($name:ident, $kind:ident, [$($variant:ident),+]) => {
-        fn $name() -> Vec<&'static str> {
-            fn name(value: $kind) -> &'static str {
-                match value { $($kind::$variant => value.name()),+ }
-            }
-            vec![$(name($kind::$variant)),+]
-        }
-    };
-}
-        vocabulary!(
-            function_vocabulary,
-            Function,
-            [
-                Abs,
-                Ceil,
-                Floor,
-                Trunc,
-                Sqrt,
-                Power,
-                Exp,
-                Ln,
-                Log10,
-                NormCdf,
-                NormInv,
-                Mod,
-                NullIf,
-                StrContains
-            ]
-        );
-        vocabulary!(
-            reducer_vocabulary,
-            Reducer,
-            [
-                Sum, Count, Min, Max, Mean, Only, StrJoin, Median, Q1, Q3, Quantile, StdDev,
-                Variance, GeoMean
-            ]
-        );
 
         fn quote(text: &str) -> String {
             format!("'{}'", text.replace('\'', "''"))
@@ -480,32 +440,6 @@ mod declaration {
             let expression = &documents[0].1;
             for case in expansions(expression) {
                 grammar_case("expression", &case);
-            }
-            for (key, names) in [
-                ("function", function_vocabulary()),
-                ("reducer", reducer_vocabulary()),
-            ] {
-                let actual = names.into_iter().collect::<BTreeSet<_>>();
-                let declared = expression["vocabulary"][key]
-                    .as_object()
-                    .unwrap()
-                    .keys()
-                    .map(String::as_str)
-                    .collect::<BTreeSet<_>>();
-                assert_eq!(actual, declared, "{key}: closed native vocabulary");
-            }
-            for function in Function::ALL {
-                let declared = &expression["vocabulary"]["function"][function.name()];
-                assert_eq!(declared["min_arguments"], function.arity() as u64);
-                assert_eq!(declared["max_arguments"], function.arity() as u64);
-                assert_eq!(
-                    declared["result"],
-                    if function.is_numeric() {
-                        "numeric"
-                    } else {
-                        "boolean"
-                    }
-                );
             }
             let reserved = expression["reserved"]
                 .as_array()

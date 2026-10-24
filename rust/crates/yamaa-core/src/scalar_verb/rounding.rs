@@ -5,7 +5,7 @@ use super::*;
 /// scope decides.
 pub(super) fn from_tree(spec: &Spec, e: ExprId) -> Result<Operation, Refusal> {
     let ExprKind::Scalar {
-        op: ScalarOp::Round { digits },
+        op: ScalarOp::RoundHalfAwayFromZero { digits },
         operands,
         ..
     } = &spec.expr(e).kind

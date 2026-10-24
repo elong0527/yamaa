@@ -1,5 +1,6 @@
 //! Typed civil arithmetic and duration conversion share the existing temporal binder.
 use super::temporal::{ordinal, ElapsedUnit, Temporal, TemporalKind, DATE_PARTS};
+use crate::expression_table::Verb;
 use crate::json::Value as JsonValue;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
@@ -283,7 +284,10 @@ impl Temporal {
                     code: C::DateTextInvalid,
                     spec_paths: vec![self.path.clone()],
                     context: [
-                        ("operation".into(), JsonValue::String("dtc".into())),
+                        (
+                            "operation".into(),
+                            JsonValue::String(Verb::Dtc.name().into()),
+                        ),
                         ("part".into(), JsonValue::String(DATE_PARTS[index].into())),
                         (
                             "source".into(),

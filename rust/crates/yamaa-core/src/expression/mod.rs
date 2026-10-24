@@ -22,6 +22,11 @@ pub use syntax::{
 };
 pub use types::TypeFinding;
 
+/// The closed function and reducer vocabularies, generated from the
+/// grammar's `vocabulary`: each name with its argument bounds, its result
+/// and the contexts that admit it.
+pub use crate::expression_table::{Function, FunctionResult, Reducer};
+
 use crate::temporal::TemporalError;
 
 /// The field kind an expression is written in, which fixes its root type and
@@ -59,149 +64,6 @@ impl Construct {
             Self::String => "string",
             Self::Temporal => "temporal",
         }
-    }
-}
-
-/// Closed reducer vocabulary; only the aggregate context admits a reduction.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Reducer {
-    Sum,
-    Count,
-    Min,
-    Max,
-    Mean,
-    Only,
-    /// Joins a group's values into one text in the aggregate's declared
-    /// order, with its separator (FORMULA-18).
-    StrJoin,
-    /// The statistical reducers, each with one named definition
-    /// (FORMULA-18, FORMULA-19): the type 7 quantile at 0.5, 0.25, 0.75 and
-    /// at the aggregate's `quantile`, the sample variance and its square
-    /// root, and the geometric mean.
-    Median,
-    Q1,
-    Q3,
-    Quantile,
-    StdDev,
-    Variance,
-    GeoMean,
-}
-
-impl Reducer {
-    pub const ALL: [Self; 14] = [
-        Self::Sum,
-        Self::Count,
-        Self::Min,
-        Self::Max,
-        Self::Mean,
-        Self::Only,
-        Self::StrJoin,
-        Self::Median,
-        Self::Q1,
-        Self::Q3,
-        Self::Quantile,
-        Self::StdDev,
-        Self::Variance,
-        Self::GeoMean,
-    ];
-    /// Canonical spelling from the grammar contract.
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Sum => "SUM",
-            Self::Count => "COUNT",
-            Self::Min => "MIN",
-            Self::Max => "MAX",
-            Self::Mean => "MEAN",
-            Self::Only => "ONLY",
-            Self::StrJoin => "STR_JOIN",
-            Self::Median => "MEDIAN",
-            Self::Q1 => "Q1",
-            Self::Q3 => "Q3",
-            Self::Quantile => "QUANTILE",
-            Self::StdDev => "STDDEV",
-            Self::Variance => "VARIANCE",
-            Self::GeoMean => "GEOMEAN",
-        }
-    }
-    /// Recognize a reducer call without reserving the spelling as a name.
-    pub(crate) fn lookup(name: &str) -> Option<Self> {
-        Self::ALL
-            .into_iter()
-            .find(|reducer| name.eq_ignore_ascii_case(reducer.name()))
-    }
-}
-
-/// Closed function vocabulary; the binder checks arity and context.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Function {
-    Abs,
-    Ceil,
-    Floor,
-    Trunc,
-    Sqrt,
-    Power,
-    Exp,
-    Ln,
-    Log10,
-    NormCdf,
-    NormInv,
-    Mod,
-    NullIf,
-    StrContains,
-}
-
-impl Function {
-    pub const ALL: [Self; 14] = [
-        Self::Abs,
-        Self::Ceil,
-        Self::Floor,
-        Self::Trunc,
-        Self::Sqrt,
-        Self::Power,
-        Self::Exp,
-        Self::Ln,
-        Self::Log10,
-        Self::NormCdf,
-        Self::NormInv,
-        Self::Mod,
-        Self::NullIf,
-        Self::StrContains,
-    ];
-    /// Canonical spelling from the grammar contract.
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Abs => "ABS",
-            Self::Ceil => "CEIL",
-            Self::Floor => "FLOOR",
-            Self::Trunc => "TRUNC",
-            Self::Sqrt => "SQRT",
-            Self::Power => "POWER",
-            Self::Exp => "EXP",
-            Self::Ln => "LN",
-            Self::Log10 => "LOG10",
-            Self::NormCdf => "NORM_CDF",
-            Self::NormInv => "NORM_INV",
-            Self::Mod => "MOD",
-            Self::NullIf => "NULLIF",
-            Self::StrContains => "STR_CONTAINS",
-        }
-    }
-    /// Look up a case-insensitive spelling without extending the vocabulary.
-    pub(crate) fn lookup(name: &str) -> Option<Self> {
-        Self::ALL
-            .into_iter()
-            .find(|function| name.eq_ignore_ascii_case(function.name()))
-    }
-    /// Every function takes exactly this many arguments.
-    pub fn arity(self) -> usize {
-        match self {
-            Self::Power | Self::Mod | Self::NullIf | Self::StrContains => 2,
-            _ => 1,
-        }
-    }
-    /// `str_contains` is the one function whose result is a truth value.
-    pub fn is_numeric(self) -> bool {
-        self != Self::StrContains
     }
 }
 

@@ -25,6 +25,7 @@ pub mod define_diagnostics;
 pub mod dependency_analysis;
 pub mod diagnostic;
 pub mod expression;
+pub mod expression_table;
 pub mod function_signature;
 pub mod intermediate_reference;
 pub mod iso8601;

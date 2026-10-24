@@ -48,15 +48,14 @@ fn tree_type(kind: ast::TemporalType) -> TemporalType {
 fn tree_completion(
     kind: ast::TemporalType,
     month: Option<&str>,
-    day: Option<&ast::DayRule>,
+    day: Option<&ast::ImputeDay>,
     time: Option<ast::TimeRule>,
     path: &str,
 ) -> Result<ImputationKind, Refusal> {
     let target = tree_type(kind);
     let day = day.map(|day| match day {
-        ast::DayRule::Day(value) => DayDeclaration::Number(value),
-        ast::DayRule::First => DayDeclaration::Position("first"),
-        ast::DayRule::Last => DayDeclaration::Position("last"),
+        ast::ImputeDay::Int(value) => DayDeclaration::Number(value),
+        ast::ImputeDay::DayRule(rule) => DayDeclaration::Position(rule.name()),
     });
     let time = time.map(|time| match time {
         ast::TimeRule::First => TimeRule::First,

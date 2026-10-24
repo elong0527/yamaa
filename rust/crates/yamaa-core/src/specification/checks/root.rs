@@ -2,6 +2,7 @@
 //! duplicates, keys, drivers and row templates, then the inputs.
 use super::*;
 use crate::diagnostic::{ConditionCode as C, Context as DiagnosticContext, Diagnostic};
+use crate::expression_table::Verb;
 use crate::limits::Limits;
 use std::collections::BTreeSet;
 
@@ -276,7 +277,7 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
 fn aggregate(spec: &Spec, e: ExprId) -> bool {
     match &spec.expr(e).kind {
         ExprKind::Aggregate(_) => true,
-        ExprKind::Unsupported(operation) => operation == "aggregate",
+        ExprKind::Unsupported(operation) => operation == Verb::Aggregate.name(),
         _ => false,
     }
 }
