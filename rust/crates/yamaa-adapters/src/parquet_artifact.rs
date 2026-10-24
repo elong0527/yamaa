@@ -98,10 +98,12 @@ pub fn records<T: TableAccess>(
     {
         return Err(Error::Projection);
     }
-    Limits::partitioned(table.row_count(), partition, projection.len()).map_err(|error| Error::Limit {
-        resource: error.resource,
-        limit: error.limit,
-        actual: error.actual,
+    Limits::partitioned(table.row_count(), partition, projection.len()).map_err(|error| {
+        Error::Limit {
+            resource: error.resource,
+            limit: error.limit,
+            actual: error.actual,
+        }
     })?;
     let mut text = RecordText {
         current: String::new(),

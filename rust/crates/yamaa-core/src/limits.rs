@@ -234,7 +234,13 @@ mod tests {
             })
         };
         let cases = [
-            ("partitions of a million", 25_000_000, rows(1_000_000), 64, Ok(())),
+            (
+                "partitions of a million",
+                25_000_000,
+                rows(1_000_000),
+                64,
+                Ok(()),
+            ),
             (
                 "the same rows whole",
                 25_000_000,

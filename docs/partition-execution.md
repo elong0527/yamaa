@@ -359,6 +359,42 @@ such a run. The consumer's pull drives it:
 A run whose output nobody has started to read runs whole when its result is
 asked for, and a reader then reads the table it keeps.
 
+### Partitioned publication
+
+A partitioned run whose plan has no step that needs the whole table under
+its partitions holds its output in partitions too (#3793, D264): consecutive
+output rows, in output order, each holding at most as many rows as the run's
+largest driver partition (`Execution::partition_rows`). Wherever the output
+is admitted, each partition is admitted on its own rather than the whole
+output: the executor's row capacity, the output keys and the dataset checks'
+groupings, the encoders, the host view, a stream's batches and the run's
+observations. A fallback run that runs a whole-table step admits its output
+whole.
+
+- **CSV and Parquet, one partition at a time.** The build encodes the output
+  one partition after another (`csv_artifact::render_partitions`,
+  `parquet_artifact::render_partitions`), checking the saved-file limit as
+  the bytes grow, and keeps where each partition's bytes end. A CSV record is
+  row-local and its display precision per value, so the file is the
+  whole-table render's. The Parquet writer holds rows until its row group of
+  1,024 is full and writes the last group when the file ends, so the row
+  groups, and the bytes D160 keeps, are the whole-table write's whatever the
+  partition size.
+- **The staged commit.** A save writes such an output into one staged file,
+  opened once, appending each partition in turn (`file_publication::Writing`),
+  and polls its token before each partition after the first; a caller's
+  resolver, whose `Stage` takes complete bytes, is asked once every partition
+  has passed. A cancellation or a failure there removes the partial staged
+  file and every file staged before it, and publishes nothing (OUTPUT-8,
+  D74).
+- **The run report combined.** The report is built once, after the last
+  partition, from the combined state: the handler counts and check records
+  the executor combines, and the column facts, whose counts add up over the
+  partitions and whose longest value is the longest in any. It is one table,
+  admitted and written whole.
+- **Written whole.** The run report, and a submission's SAS Transport and
+  Dataset-JSON files, which state their record count in their header.
+
 ### End states
 
 The cancel-or-fail by phase matrix is #3697's accepted contract. It derives
@@ -371,7 +407,7 @@ of `save()`.
 | Mid-partition, through output keys and verification | a `FailureKind::Cancelled` failure; every partition's partial state is dropped; nothing staged or published | The whole-table run's first failure, handler counts and retained records; no output; its save writes only the report file |
 | Between key-bounded partitions (#3763), through output keys and verification | a `FailureKind::Cancelled` failure, at every checkpoint and between the partitions of each divided unit, windows and aggregates included; every partition's partial state is dropped; nothing staged or published | The whole-table run's first failure, in base-record order whether the input divides or runs as one partition, with its handler counts and retained records; no output; its save writes only the report file |
 | Mid-stream, while a reader pulls the batches of a streamed run | Releasing the reader or a token found before a batch ends production; no batch is retained; no result, so nothing published | A batch that cannot be produced, at the first pull a failed run's, ends the stream with the run's issue; its save writes only the report file |
-| During publication | Polled once, after every file is staged and before the first commit (D74): every staged file removed, nothing published | Before the first commit: nothing published, staged files removed. During the commit: earlier files stay replaced whole, later staged files removed, `Failure.paths` lists the files written |
+| During publication | Polled before each partition of a run's output after the first (#3793), and once after every file is staged and before the first commit (D74): every staged file removed, nothing published | Between two partitions of the output, or before the first commit: nothing published, staged files removed. During the commit: earlier files stay replaced whole, later staged files removed, `Failure.paths` lists the files written |
 
 In every cell a cancellation is a `FailureKind::Cancelled` failure with no
 result and no issue (D186), and a failure is an issue of the run's result,
@@ -398,7 +434,10 @@ which runs every single-specification benchmark over one-record partitions
 and over key-bounded partitions of one key group each against its expected
 files, reads each as a stream of one-record batches, and lists the ADaM
 benchmarks key-bounded partitions must admit, and `end_states.rs`, one test
-per cell of the end states. The schedule's classes under key-bounded
+per cell of the end states. The partitioned publication's are the facade's
+`partitioned_publication.rs` and `partitioned_reading.rs`, the adapters'
+`table_parquet_bytes.rs` and `table_arrow_table.rs` for the encoders, and
+`file_application.rs`'s save that fails between two partitions. The schedule's classes under key-bounded
 partitions are stated case by case in `dataset/resolved/tests.rs`. The streamed run's
 are the facade's `streaming.rs`, the adapters' `table_public_batches.rs`, whose
 counting source proves that a consumer that stops pulling stops production,

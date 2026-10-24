@@ -1785,7 +1785,9 @@ fn the_output_divides_into_partitions_as_large_as_the_largest_driver_partition()
         );
     }
     assert_eq!(
-        rows(divided_run(&resolved, &input, by_keys(3, 1, true), &|| false)),
+        rows(divided_run(&resolved, &input, by_keys(3, 1, true), &|| {
+            false
+        })),
         None,
         "the fallback runs the windows over the whole input"
     );

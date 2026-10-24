@@ -1104,9 +1104,13 @@ mod tests {
         let marker = Arc::new(());
         measurements.save_entered();
         assert!(!result
-            .save_with(false, |_, _| Ok(()), |_| Err(crate::file_publication::Error::Io(
-                std::io::Error::other(Marker(Arc::clone(&marker)))
-            )))
+            .save_with(
+                false,
+                |_, _| Ok(()),
+                |_| Err(crate::file_publication::Error::Io(std::io::Error::other(
+                    Marker(Arc::clone(&marker))
+                )))
+            )
             .unwrap());
         measurements.save_completed("refused");
         let Some(crate::file_publication::Error::Io(error)) = &result.publication_attempt.failure
@@ -1165,15 +1169,19 @@ mod tests {
             let marker = Arc::new(());
             let mut entered = 0;
             assert!(!result
-                .save_with(false, |_, _| Ok(()), |index| {
-                    entered += 1;
-                    if index == fail_at {
-                        return Err(crate::file_publication::Error::Io(std::io::Error::other(
-                            Marker(Arc::clone(&marker)),
-                        )));
+                .save_with(
+                    false,
+                    |_, _| Ok(()),
+                    |index| {
+                        entered += 1;
+                        if index == fail_at {
+                            return Err(crate::file_publication::Error::Io(std::io::Error::other(
+                                Marker(Arc::clone(&marker)),
+                            )));
+                        }
+                        Ok(())
                     }
-                    Ok(())
-                })
+                )
                 .unwrap());
             assert_eq!(entered, fail_at + 1);
             assert_eq!(result.publication_attempt.entered, fail_at + 1);
@@ -1230,11 +1238,15 @@ mod tests {
         let original = result.observations();
         let marker = Arc::new(());
         assert!(result
-            .save_with(false, |_, _| Ok(()), |_| {
-                Err(crate::file_publication::Error::Io(std::io::Error::other(
-                    Marker(Arc::clone(&marker)),
-                )))
-            })
+            .save_with(
+                false,
+                |_, _| Ok(()),
+                |_| {
+                    Err(crate::file_publication::Error::Io(std::io::Error::other(
+                        Marker(Arc::clone(&marker)),
+                    )))
+                }
+            )
             .is_err());
         assert_eq!(result.publication_attempt.entered, 1);
         assert_eq!(result.publication_attempt.completed, 0);
@@ -1277,7 +1289,11 @@ mod tests {
         fs::create_dir(study.0.join("foreign")).unwrap();
         std::os::unix::fs::symlink("foreign", study.0.join("nested")).unwrap();
         assert!(!result
-            .save_with(false, |_, _| Ok(()), |_| panic!("linked parent entered publisher"))
+            .save_with(
+                false,
+                |_, _| Ok(()),
+                |_| panic!("linked parent entered publisher")
+            )
             .unwrap());
         assert_eq!(result.publication_attempt.entered, 0);
         assert_eq!(result.publication_attempt.completed, 0);
@@ -1315,13 +1331,17 @@ mod tests {
         let marker = Arc::new(());
         let mut entered = 0;
         assert!(!result
-            .save_with(false, |_, _| Ok(()), |_| {
-                entered += 1;
-                if entered == 2 {
-                    std::panic::panic_any(Arc::clone(&marker));
+            .save_with(
+                false,
+                |_, _| Ok(()),
+                |_| {
+                    entered += 1;
+                    if entered == 2 {
+                        std::panic::panic_any(Arc::clone(&marker));
+                    }
+                    Ok(())
                 }
-                Ok(())
-            })
+            )
             .unwrap());
         assert!(Arc::ptr_eq(
             result

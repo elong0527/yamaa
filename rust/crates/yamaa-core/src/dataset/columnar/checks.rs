@@ -452,9 +452,8 @@ pub(super) fn verify_output<'a, E>(
             });
         }
     }
-    let groups =
-        partition(frame, &keys, run.output_partition)
-            .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
+    let groups = partition(frame, &keys, run.output_partition)
+        .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
     let duplicates: Vec<usize> = groups
         .iter()
         .filter(|members| members.len() > 1)

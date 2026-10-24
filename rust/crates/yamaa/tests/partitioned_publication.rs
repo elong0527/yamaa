@@ -61,9 +61,12 @@ fn a_benchmark_saves_its_parquet_files_in_partitions_that_divide_no_row_group() 
     let mut compared = Vec::new();
     for case in cases() {
         let expected = case.join("expected");
-        let parquet = std::fs::read_dir(&expected)
-            .unwrap()
-            .any(|file| file.unwrap().file_name().to_string_lossy().ends_with(".parquet"));
+        let parquet = std::fs::read_dir(&expected).unwrap().any(|file| {
+            file.unwrap()
+                .file_name()
+                .to_string_lossy()
+                .ends_with(".parquet")
+        });
         if !parquet || expected.join("error.yaml").is_file() {
             continue;
         }
@@ -114,7 +117,10 @@ fn a_check_that_fires_in_two_partitions_saves_the_whole_table_report() {
         ("report.csv".to_owned(), report.as_bytes().to_vec()),
     ]);
     let two = Partitions::new(NonZeroUsize::new(2).unwrap());
-    for (label, partitions) in [("the whole-table run", None), ("partitions of two", Some(two))] {
+    for (label, partitions) in [
+        ("the whole-table run", None),
+        ("partitions of two", Some(two)),
+    ] {
         let scratch = Scratch::new("partitioned-publication-report");
         scratch.write("spec.yaml", SPEC);
         scratch.write("input.csv", INPUT);

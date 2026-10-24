@@ -955,31 +955,28 @@ fn encode(
     let dataset = &execution.dataset;
     let partitions = execution.output_partitions();
     match profile {
-        Some("csv") => crate::csv_artifact::render_partitions(
-            dataset,
-            projection,
-            decimals,
-            &partitions,
-        )
-        .map_err(|error| match error {
-            crate::csv_artifact::Error::Limit {
-                resource,
-                limit,
-                actual,
-                decimal_formatting,
-            } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                resource,
-                limit,
-                actual,
-                vec![if decimal_formatting {
-                    "output.decimals"
-                } else {
-                    "output.path"
-                }
-                .into()],
-            )),
-            _ => Error::InvalidObservation,
-        }),
+        Some("csv") => {
+            crate::csv_artifact::render_partitions(dataset, projection, decimals, &partitions)
+                .map_err(|error| match error {
+                    crate::csv_artifact::Error::Limit {
+                        resource,
+                        limit,
+                        actual,
+                        decimal_formatting,
+                    } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                        resource,
+                        limit,
+                        actual,
+                        vec![if decimal_formatting {
+                            "output.decimals"
+                        } else {
+                            "output.path"
+                        }
+                        .into()],
+                    )),
+                    _ => Error::InvalidObservation,
+                })
+        }
         Some("parquet") => {
             crate::parquet_artifact::render_partitions(dataset, projection, &partitions).map_err(
                 |error| match error {
@@ -1058,9 +1055,8 @@ pub(crate) fn artifact_report(
             .collect::<Vec<_>>();
         (content, records)
     } else {
-        let records =
-            crate::parquet_artifact::records(table, projection, execution.partition_rows).map_err(
-                |error| match error {
+        let records = crate::parquet_artifact::records(table, projection, execution.partition_rows)
+            .map_err(|error| match error {
                 crate::parquet_artifact::Error::Limit {
                     resource,
                     limit,
@@ -1072,8 +1068,7 @@ pub(crate) fn artifact_report(
                     vec!["output.path".into()],
                 )),
                 _ => Error::InvalidObservation,
-                },
-            )?;
+            })?;
         ("", records)
     };
     report["artifacts"] = json!([{"name":run.compiled().output_name(),"profile":profile,"columns":run.compiled().projection(),"types":projection.iter().map(|&c|specification_diagnostics::type_name(table.schema().columns()[c].kind)).collect::<Vec<_>>(),"row_count":table.row_count(),"records":records,"byte_length":bytes.len(),"content":content}]);
@@ -1083,7 +1078,13 @@ pub(crate) fn artifact_report(
         .iter()
         .map(|rows| rows.len())
         .collect::<Vec<_>>();
-    report.push_table(table_observation(table, id, "derived", "output", &partitions)?)?;
+    report.push_table(table_observation(
+        table,
+        id,
+        "derived",
+        "output",
+        &partitions,
+    )?)?;
     report["outcome"] = json!("success");
     report["nodes"][0]["outcome"] = json!("success");
     Ok(report)
