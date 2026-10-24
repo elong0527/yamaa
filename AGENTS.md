@@ -241,7 +241,9 @@ Run only these locally (D148 on #3030):
 - the tests nearest the change, listed below;
 - after a Rust change, `cargo fmt --all --check` and Clippy on each
   touched crate, from `rust/`:
-  `cargo clippy --locked -p <crate> --all-targets --all-features -- -D warnings`;
+  `cargo clippy --locked -p <crate> --all-targets --all-features -- -D warnings`,
+  and the 3,000-line file ceiling, from the root:
+  `uv run --project python --no-sync python -m tools.validation.check_source_size`;
 - `make quick`, only for a change to generated files, rule cards,
   schemas, docs generators or Python. It runs the lint and repository
   checks CI runs, leaving out only the R binding's Clippy, and no test
