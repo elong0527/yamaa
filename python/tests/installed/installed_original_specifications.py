@@ -989,6 +989,54 @@ class PublicDomains(unittest.TestCase):
                         case["invalid_count"],
                     )
 
+    def test_public_text_positions_match_the_shared_truth(self):
+        import yamaa
+
+        def rows(frame):
+            """The issue rows as the shared truth writes them."""
+            found = frame.to_polars().select(FIELDS).to_dicts()
+            for row in found:
+                row["context"] = json.loads(row["context"])
+            return found
+
+        for case in TRUTH["text_positions"]:
+            with (
+                self.subTest(case=case["name"]),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                root = Path(directory)
+                entry = root / "spec.yaml"
+                entry.write_bytes(case["spec"].encode("utf-8"))
+                expected = case["issues"] or []
+                checked = yamaa.spec(entry).check()
+                self.assertEqual(rows(checked.issues), expected, "the check")
+                for name, content in case["inputs"].items():
+                    (root / name).write_bytes(content.encode("utf-8"))
+                result = yamaa.spec(entry).run()
+                self.assertEqual(rows(result.issues), expected, "the run")
+                if case["csv"] is None:
+                    self.assertIsNone(result.output)
+                    with self.assertRaises(yamaa.Error):
+                        result.save()
+                    self.assertFalse((root / "result.csv").exists())
+                else:
+                    result.save()
+                    self.assertEqual(
+                        (root / "result.csv").read_bytes(), case["csv"].encode("utf-8")
+                    )
+                observations = result._native.observations()
+                if observations is not None:
+                    counts = json.loads(observations)["handler_counts"]
+                    self.assertEqual(
+                        sum(
+                            item["count"]
+                            for item in counts
+                            if item["handler"] == "missing"
+                        ),
+                        case["missing_count"],
+                        "the missing answers",
+                    )
+
     def test_public_typed_intermediate_derivations(self):
         import yamaa
 

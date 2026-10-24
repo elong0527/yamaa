@@ -1,0 +1,61 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: input/ae.csv
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, AETERMPC, AETERMPB]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE.AETERM
+
+  # Proper case as SAS PROPCASE writes it: every letter lowered, then the
+  # first character and each character after a blank, slash, hyphen, open
+  # parenthesis, period or tab raised. A letter after an apostrophe, a
+  # digit, a comma or a bracket stays lower: PAIN,BACK -> Pain,back.
+  - name: AETERMPC
+    type: str
+    label: Reported Term in Proper Case
+    derivation:
+      str_case:
+        source: AETERM
+        to: proper
+        missing: Not Reported
+    verifications:
+      - not_missing
+
+  # The declared list replaces the six: here a comma and an open bracket
+  # also start a word, and the tab does not. PAIN,BACK -> Pain,Back.
+  - name: AETERMPB
+    type: str
+    label: Proper Case Term, Comma and Bracket
+    derivation:
+      str_case:
+        source: AETERM
+        to: proper
+        delimiters: " /-(.,["
+        missing: Not Reported
+    verifications:
+      - not_missing

@@ -28,12 +28,38 @@
           "upper",
           "lower",
           "sentence",
-          "title"
+          "title",
+          "proper"
         ],
         "source": "/private/tmp/yamaa-root-text-operators/benchmarks/negative-str-case-unknown/spec.yaml",
         "entry": "/private/tmp/yamaa-root-text-operators/benchmarks/negative-str-case-unknown/spec.yaml"
       }
     }
   ],
-  "missing": []
+  "missing": [],
+  "proper": [
+    {"source": "NOT RECOVERED/NOT RESOLVED", "expected": "Not Recovered/Not Resolved"},
+    {"source": "NON-CARDIAC CHEST PAIN", "expected": "Non-Cardiac Chest Pain"},
+    {"source": "MILD (GRADE 1)", "expected": "Mild (Grade 1)"},
+    {"source": "INVESTIGATOR'S DECISION", "expected": "Investigator's Decision"},
+    {"source": "2ND DEGREE BURN", "expected": "2nd Degree Burn"},
+    {"source": "PAIN,BACK", "expected": "Pain,back"},
+    {"source": "RASH [LEFT ARM]", "expected": "Rash [left Arm]"},
+    {"source": "PAIN,BACK", "delimiters": " /-(.,[", "expected": "Pain,Back"},
+    {"source": "RASH [LEFT ARM]", "delimiters": " /-(.,[", "expected": "Rash [Left Arm]"},
+    {"source": "NON-CARDIAC CHEST PAIN", "delimiters": "-", "expected": "Non-Cardiac chest pain"},
+    {"source": "SKIN\tRASH", "expected": "Skin\tRash"},
+    {"source": "SKIN\tRASH ON ARM", "delimiters": "\t", "expected": "Skin\tRash on arm"},
+    {"source": "AXBXC", "delimiters": "X", "expected": "Axbxc"},
+    {"source": "AxBxC", "delimiters": "X", "expected": "Axbxc"},
+    {"source": "axbxc", "delimiters": "X", "expected": "Axbxc"},
+    {"source": "AXBXC", "delimiters": "x", "expected": "AxBxC"},
+    {"source": "AxBxC", "delimiters": "x", "expected": "AxBxC"},
+    {"source": "axbxc", "delimiters": "x", "expected": "AxBxC"},
+    {"source": "MCDONALD", "delimiters": "c", "expected": "McDonald"},
+    {"source": "mcdonald", "delimiters": "c", "expected": "McDonald"},
+    {"source": "\u00c9COLE PRIMAIRE", "expected": "\u00c9cole Primaire"},
+    {"source": "PAIN\u00a0BACK", "expected": "Pain\u00a0back"},
+    {"source": "STRA\u00dfE", "expected": "Stra\u00dfe"}
+  ]
 }

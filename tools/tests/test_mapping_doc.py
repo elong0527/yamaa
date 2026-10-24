@@ -605,6 +605,24 @@ class DerivationShapeTests(unittest.TestCase):
         self.assertIn('"N" otherwise', rule)
         self.assertIn('"U" when the condition is unknown', rule)
 
+    def test_proper_case_names_its_declared_word_separators(self):
+        # SAS's six separators are the default and go unstated; a declared
+        # list replaces them, so the sheet quotes it (TEXT-5).
+        for node, expected in (
+            (
+                {"source": "AETERM", "to": "proper"},
+                "Convert AETERM to proper case.",
+            ),
+            (
+                {"source": "AETERM", "to": "proper", "delimiters": " /-(.,["},
+                'Convert AETERM to proper case, starting a word after any of " /-(.,[".',
+            ),
+        ):
+            with self.subTest(case=node):
+                self.assertEqual(
+                    mapping_doc.describe_derivation({"str_case": node}), expected
+                )
+
     def test_case_otherwise_branch_carries_its_own_value(self):
         rule = mapping_doc.describe_derivation(
             {
@@ -932,6 +950,30 @@ class DerivationShapeTests(unittest.TestCase):
             ),
             "Write EXDURMIN, a number of minutes, as ISO 8601 duration text with "
             "days as the largest unit.",
+        )
+
+    def test_str_substr_names_the_characters_it_keeps_and_when_it_is_blank(self):
+        for source, expected in [
+            (
+                {"source": "COMMENT", "start": 201, "length": 200},
+                "Take characters 201 to 400 of COMMENT, blank when it has fewer "
+                "than 201 characters.",
+            ),
+            (
+                {"source": "COMMENT", "start": 1, "missing": "NONE"},
+                "Take characters 1 to the end of COMMENT, blank when it is empty; "
+                "a missing source " + mapping_doc.ARROW + ' "NONE".',
+            ),
+        ]:
+            with self.subTest(source=source):
+                self.assertEqual(
+                    mapping_doc.describe_derivation({"str_substr": source}), expected
+                )
+
+    def test_str_length_counts_the_characters(self):
+        self.assertEqual(
+            mapping_doc.describe_derivation({"str_length": {"source": "COMMENT"}}),
+            "Number of characters in COMMENT.",
         )
 
     def test_cut_names_the_closed_side_of_each_interval(self):

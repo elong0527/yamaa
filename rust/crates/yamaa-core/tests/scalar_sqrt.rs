@@ -1,5 +1,5 @@
 //! Scalar contracts: sqrt, temporal, temporal arithmetic, text case, text
-//! extract, text pad, text template and values.
+//! extract, text pad, text positions, text template and values.
 mod scalar {
     mod sqrt {
         use yamaa_core::numeric::{sqrt, ArithmeticErrorKind, Number};
@@ -640,7 +640,54 @@ mod scalar {
         }
     }
     mod text_case {
-        use yamaa_core::text_case::{transform, Case};
+        use yamaa_core::text_case::{transform, Case, Delimiters};
+
+        /// The proper-case rows of the adapters' shared truth (TEXT-5), which
+        /// both crates read, so each proves the same authored rows.
+        #[test]
+        fn proper_raises_the_first_scalar_and_each_scalar_after_a_delimiter() {
+            let reference = crate::support::diagnostic::json::read(
+                include_str!("../../yamaa-adapters/tests/fixtures/text_case_reference.json"),
+                "text_case_reference.json",
+            );
+            let rows = reference.field("proper").items();
+            assert_eq!(rows.len(), 23, "the authored proper-case rows");
+            for row in rows {
+                let row = row.closed(&["source", "delimiters", "expected"]);
+                let source = row.field("source").text();
+                let list = row.get("delimiters").map(|list| list.text());
+                let delimiters = list
+                    .map_or(Some(Delimiters::PROPCASE), Delimiters::new)
+                    .expect("a row declares an admitted list");
+                let actual = transform(source, Case::Proper(delimiters));
+                assert_eq!(
+                    (actual.as_str(), actual.len()),
+                    (row.field("expected").text(), source.len()),
+                    "{source:?} with {list:?}"
+                );
+            }
+        }
+
+        /// Without a list, `proper` takes SAS PROPCASE's six delimiters; a
+        /// list names a set only when it holds ASCII scalars, each once, from
+        /// `U+0000` to `U+007F` (TEXT-5).
+        #[test]
+        fn proper_takes_sas_six_delimiters_or_a_list_of_distinct_ascii_scalars() {
+            assert_eq!(
+                Delimiters::new(" /-(.\t"),
+                Some(Delimiters::PROPCASE),
+                "the blank, slash, hyphen, open parenthesis, period and tab"
+            );
+            for (list, admitted, label) in [
+                ("", false, "an empty list"),
+                ("-/-", false, "a repeated scalar"),
+                ("-\u{80}", false, "the first scalar outside ASCII"),
+                ("\0", true, "the first ASCII scalar"),
+                ("\u{7f}", true, "the last ASCII scalar"),
+            ] {
+                assert_eq!(Delimiters::new(list).is_some(), admitted, "{label}");
+            }
+        }
 
         #[test]
         fn normative_ascii_modes_preserve_foreign_scalars_and_first_scalar_boundaries() {
@@ -729,11 +776,21 @@ mod scalar {
             for source in [
                 "\u{00df}", "\u{0130}", "\u{0131}", "\u{212a}", "\u{00e9}", "\u{00c9}",
             ] {
-                for mode in [Case::Upper, Case::Lower, Case::Sentence, Case::Title] {
+                for mode in [
+                    Case::Upper,
+                    Case::Lower,
+                    Case::Sentence,
+                    Case::Title,
+                    Case::Proper(Delimiters::PROPCASE),
+                ] {
                     assert_eq!(transform(source, mode), source);
                 }
             }
-            for mode in [Case::Sentence, Case::Title] {
+            for mode in [
+                Case::Sentence,
+                Case::Title,
+                Case::Proper(Delimiters::PROPCASE),
+            ] {
                 assert_eq!(transform("", mode), "");
             }
         }
@@ -1107,6 +1164,181 @@ mod scalar {
             assert_eq!(finding.definition().condition, "invalid_field_type");
             assert_eq!(finding.definition().rule, Some("TEXT-2"));
             assert_eq!(finding.spec_paths, ["columns.C0.derivation.str_pad.width"]);
+        }
+    }
+    mod text_position {
+        //! TEXT-13 and TEXT-14: pieces and lengths by Unicode scalar position.
+        use yamaa_core::{
+            table::ValueRef,
+            text_position::{DeclarationError, Step, StringLength, StringSubstr},
+            value::Value,
+        };
+
+        const BEYOND: &str = "100000000000000000000000";
+
+        fn substr(start: &str, length: Option<&str>) -> Result<StringSubstr, DeclarationError> {
+            StringSubstr::new(
+                "SRC.T".into(),
+                "columns.T.derivation.str_substr".into(),
+                start,
+                length,
+                None,
+            )
+        }
+
+        #[test]
+        fn a_piece_takes_scalars_from_a_start_counted_from_one() {
+            for (label, text, start, length, expected) in [
+                ("the first two", "ABCDEFG", "1", Some("2"), Some("AB")),
+                ("every one to the end", "ABCDEFG", "3", None, Some("CDEFG")),
+                (
+                    "a short tail keeps those left",
+                    "ABCDEFG",
+                    "6",
+                    Some("5"),
+                    Some("FG"),
+                ),
+                ("the last scalar", "ABCDEFG", "7", Some("1"), Some("G")),
+                ("a start past the end", "ABCDEFG", "8", Some("1"), None),
+                ("any start on the empty string", "", "1", None, None),
+                (
+                    "scalars, not bytes",
+                    "\u{e9}\u{1f980}xyz",
+                    "2",
+                    Some("2"),
+                    Some("\u{1f980}x"),
+                ),
+                (
+                    "a start past five scalars",
+                    "\u{e9}\u{1f980}xyz",
+                    "6",
+                    None,
+                    None,
+                ),
+                (
+                    "a length beyond any integer",
+                    "ABC",
+                    "2",
+                    Some(BEYOND),
+                    Some("BC"),
+                ),
+                ("a start beyond any integer", "ABC", BEYOND, None, None),
+            ] {
+                let expected =
+                    expected.map_or(Value::Missing, |piece: &str| Value::Str(piece.into()));
+                assert_eq!(
+                    substr(start, length).unwrap().apply(ValueRef::Str(text)),
+                    Ok(Step::Value(expected)),
+                    "{label}"
+                );
+            }
+        }
+
+        #[test]
+        fn a_length_counts_scalars_not_bytes() {
+            let operation = StringLength::new(
+                "SRC.T".into(),
+                "columns.N.derivation.str_length".into(),
+                None,
+            )
+            .unwrap();
+            for (label, text, expected) in [
+                ("ASCII", "ABC", 3),
+                ("the empty string", "", 0),
+                ("a two-byte and a four-byte scalar", "\u{e9}\u{1f980}", 2),
+                ("a line break", "A\nB", 3),
+            ] {
+                assert_eq!(
+                    operation.apply(ValueRef::Str(text)),
+                    Ok(Step::Value(Value::Int(expected))),
+                    "{label}"
+                );
+            }
+        }
+
+        #[test]
+        fn a_missing_source_is_answered_by_the_declared_missing_or_missing() {
+            for handler in [None, Some(Value::Str("NONE".into())), Some(Value::Int(-1))] {
+                let substitute = handler.clone().unwrap_or(Value::Missing);
+                let piece =
+                    StringSubstr::new("SRC.T".into(), "p".into(), "1", None, handler.clone())
+                        .unwrap();
+                let length =
+                    StringLength::new("SRC.T".into(), "p".into(), handler.clone()).unwrap();
+                assert_eq!(
+                    (
+                        piece.apply(ValueRef::Missing),
+                        piece.missing_substitute(),
+                        length.apply(ValueRef::Missing),
+                        length.missing_substitute(),
+                    ),
+                    (
+                        Ok(Step::Recovered),
+                        substitute.clone(),
+                        Ok(Step::Recovered),
+                        substitute,
+                    ),
+                    "{handler:?}"
+                );
+            }
+        }
+
+        #[test]
+        fn a_start_or_length_below_one_is_the_declaration_defect() {
+            for (label, start, length, expected) in [
+                ("a zero start", "0", None, DeclarationError::Start),
+                (
+                    "a negative start",
+                    "-1",
+                    Some("200"),
+                    DeclarationError::Start,
+                ),
+                ("a zero length", "1", Some("0"), DeclarationError::Length),
+                (
+                    "a negative length",
+                    "201",
+                    Some("-200"),
+                    DeclarationError::Length,
+                ),
+                ("both below one", "0", Some("0"), DeclarationError::Start),
+                (
+                    "a start below any integer",
+                    "-100000000000000000000000",
+                    None,
+                    DeclarationError::Start,
+                ),
+            ] {
+                assert_eq!(substr(start, length), Err(expected), "{label}");
+            }
+        }
+
+        #[test]
+        fn only_what_lowering_never_writes_is_a_shape_failure() {
+            for (label, source, path, start, length) in [
+                ("no source", "", "p", "1", None),
+                ("no path", "SRC.T", "", "1", None),
+                ("a start that is not an integer", "SRC.T", "p", "1.5", None),
+                (
+                    "a length that is not an integer",
+                    "SRC.T",
+                    "p",
+                    "1",
+                    Some("x"),
+                ),
+            ] {
+                assert_eq!(
+                    StringSubstr::new(source.into(), path.into(), start, length, None),
+                    Err(DeclarationError::Shape),
+                    "{label}"
+                );
+            }
+            for (source, path) in [("", "p"), ("SRC.T", "")] {
+                assert_eq!(
+                    StringLength::new(source.into(), path.into(), None),
+                    None,
+                    "{source:?} {path:?}"
+                );
+            }
         }
     }
     mod text_template {

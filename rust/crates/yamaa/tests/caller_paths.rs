@@ -10,10 +10,10 @@
 
 use std::sync::Arc;
 
+use yamaa::host::resolver::{ResolverFailure, ResolverReply, ResolverRequest, ResourceKind};
 use yamaa::{
     CancellationToken, Diagnostic, Engine, EngineOptions, Failure, HostLanguage, MemoryResolver,
-    ResolverFailure, ResolverReply, ResolverRequest, ResourceKind, ResourceResolver, Status,
-    SubmissionOptions,
+    ResourceResolver, Status, SubmissionOptions,
 };
 
 const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [USUBJID]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: RAW.USUBJID}\n";

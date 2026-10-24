@@ -59,6 +59,7 @@ mod temporal_arithmetic;
 pub use crate::text_case::StringCase;
 pub use crate::text_extract::StringExtract;
 pub use crate::text_pad::StringPad;
+pub use crate::text_position::{StringLength, StringSubstr};
 pub use crate::text_replace::StringReplace;
 pub use crate::text_template::StringTemplate;
 pub use temporal::{
@@ -109,6 +110,14 @@ pub enum Expression {
     StrPad {
         source: std::boxed::Box<Assignment>,
         operation: StringPad,
+    },
+    StrSubstr {
+        source: std::boxed::Box<Assignment>,
+        operation: StringSubstr,
+    },
+    StrLength {
+        source: std::boxed::Box<Assignment>,
+        operation: StringLength,
     },
     /// Only the first TRUE branch is evaluated; FALSE and UNKNOWN continue.
     Case(Vec<CaseBranch>),

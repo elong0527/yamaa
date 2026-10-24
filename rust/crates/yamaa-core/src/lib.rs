@@ -59,6 +59,7 @@ mod submission_values;
 pub mod temporal;
 pub mod text_case;
 pub mod text_extract;
+pub mod text_position;
 pub mod text_replace;
 pub mod text_template;
 pub mod typed_csv;

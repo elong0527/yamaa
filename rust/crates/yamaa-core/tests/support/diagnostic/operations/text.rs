@@ -1,4 +1,4 @@
-//! The text verbs' entry points (TEXT-1 to TEXT-10).
+//! The text verbs' entry points (TEXT-1 to TEXT-10, TEXT-13, TEXT-14).
 use super::{text, value, File};
 use crate::support::diagnostic::json::Json;
 use yamaa_core::{
@@ -7,6 +7,7 @@ use yamaa_core::{
     text_case::{Case, Error as CaseError, StringCase},
     text_extract::{Error as ExtractError, Step, StringExtract},
     text_pad::StringPad,
+    text_position::{DeclarationError, Error as PositionError, StringLength, StringSubstr},
     text_template::StringTemplate,
 };
 
@@ -19,11 +20,69 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
         "str_extract_apply" => str_extract_apply(input),
         "str_extract_unknown" => str_extract_unknown(input),
         "str_extract_unmatched" => str_extract_unmatched(input),
+        "str_length" => str_length(input),
         "str_pad" => str_pad(input),
+        "str_substr" => str_substr(input),
+        "str_substr_apply" => str_substr_apply(input),
         "str_template" => str_template(input),
         "str_template_missing" => str_template_missing(input),
         _ => return None,
     })
+}
+
+/// The members every `str_substr` operation reads; `length` is optional.
+const SUBSTR: [&str; 4] = ["source", "path", "start", "length"];
+
+/// `str_substr`'s declaration, `{source, path, start, length}`: its refusal
+/// at `path`.
+fn str_substr(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&SUBSTR);
+    match substr(input) {
+        Ok(_) => Vec::new(),
+        Err(refusal) => refusal
+            .diagnostic(text(input, "path"))
+            .into_iter()
+            .collect(),
+    }
+}
+
+/// `str_substr` applied to `value`.
+fn str_substr_apply(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&[SUBSTR.as_slice(), &["value"]].concat());
+    let value = value(input.field("value"));
+    match substr(input)
+        .expect("an admitted declaration")
+        .apply(ValueRef::from(&value))
+    {
+        Ok(_) => Vec::new(),
+        Err(PositionError::Diagnostic(diagnostic)) => vec![diagnostic],
+    }
+}
+
+fn substr(input: &Json) -> Result<StringSubstr, DeclarationError> {
+    StringSubstr::new(
+        text(input, "source").into(),
+        text(input, "path").into(),
+        text(input, "start"),
+        input.get("length").map(Json::text),
+        None,
+    )
+}
+
+/// `str_length` applied to `value`, `{source, path, value}`.
+fn str_length(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&["source", "path", "value"]);
+    let operation = StringLength::new(
+        text(input, "source").into(),
+        text(input, "path").into(),
+        None,
+    )
+    .expect("an admitted declaration");
+    let value = value(input.field("value"));
+    match operation.apply(ValueRef::from(&value)) {
+        Ok(_) => Vec::new(),
+        Err(PositionError::Diagnostic(diagnostic)) => vec![diagnostic],
+    }
 }
 
 /// `str_pad`'s declaration, `{source, path, width}`: its refusal at `path`.

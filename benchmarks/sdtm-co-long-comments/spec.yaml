@@ -1,0 +1,60 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: CO
+keys: [STUDYID, USUBJID, COSEQ]
+input:
+  CO_RAW: {path: input/co_raw.csv, types: {COSEQ: int}}
+# A comment left blank on the form gives no comment record.
+filter: "CO_RAW.COMMENT IS NOT NULL"
+
+output:
+  path: co.csv
+  columns: [DOMAIN, STUDYID, USUBJID, COSEQ, COVAL, COVAL1, COVAL2]
+
+columns:
+  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: "'CO'"}
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: CO_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: CO_RAW.USUBJID
+
+  - {name: COSEQ, type: int, label: Sequence Number, derivation: CO_RAW.COSEQ}
+
+  # SDTM caps a text value at 200 characters, so the comment continues in
+  # COVAL1 and COVAL2, 200 characters each, counted from position 1.
+  - name: COVAL
+    type: str
+    label: Comment
+    derivation:
+      str_substr: {source: CO_RAW.COMMENT, start: 1, length: 200}
+    verifications:
+      - not_missing
+
+  - name: COVAL1
+    type: str
+    label: Comment
+    derivation:
+      str_substr: {source: CO_RAW.COMMENT, start: 201, length: 200}
+
+  - name: COVAL2
+    type: str
+    label: Comment
+    derivation:
+      str_substr: {source: CO_RAW.COMMENT, start: 401, length: 200}
+
+  # The three pieces hold 600 characters: a longer comment stops the run
+  # instead of losing its end. The length is not published.
+  - name: COLEN
+    type: int
+    label: Comment Length
+    derivation:
+      str_length: {source: CO_RAW.COMMENT}
+    verifications:
+      - range: {max: 600}

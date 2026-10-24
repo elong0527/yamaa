@@ -1,0 +1,44 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: input/ae.csv
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, AETERMTC]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE.AETERM
+
+  # The defect: only proper case takes a list of delimiters. Title case
+  # starts a word at every run of letters, so it takes none, and the spec
+  # is rejected before any data is read.
+  - name: AETERMTC
+    type: str
+    label: Reported Term in Title Case
+    derivation:
+      str_case:
+        source: AETERM
+        to: title
+        delimiters: " /-(.,["

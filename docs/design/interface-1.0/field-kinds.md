@@ -321,6 +321,7 @@ derived columns (NAME-5).
 | `columns[].copy` | copy: {dataset: INPUT, columns: [NAME, ...], submission: {core, mandatory, role}} | structure | | proposed, P-COPY-1 |
 | `input.*.key` | key: [COLUMN, ...] | identifier | | proposed, P-JOIN-1 |
 | `columns[].derivation.cut.closed` | closed: left \| right (default left) | value | | proposed, P-ORD-2 |
+| `columns[].derivation.str_case.delimiters` | delimiters: CHARACTERS, beside to: proper | value | | decided (D264) |
 
 ## Project files (`type: project`)
 

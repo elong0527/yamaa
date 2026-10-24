@@ -223,6 +223,21 @@ existing prepare, bind, execute and publish workflow -- there is no second
 admission or evaluation route. All physical access goes through a resolver;
 local files are just the default resolver.
 
+The crate has two audiences (#3766). An embedder looks at the crate root,
+which re-exports what configures an engine or comes back from one: `Engine`,
+its options and requests, the results, tables and diagnostics, the
+`CancellationToken`, the `MemoryResolver`, `ResourceResolver`,
+`ProjectFunctions` and `HostLanguage` an engine is configured with, the
+`InputFrame` a resolver serves, and, with the `arrow` feature, the Arrow
+types of a table's Arrow form. A binding author, who implements a port, looks
+in `yamaa::host` and `yamaa::scalar`. `yamaa::scalar` holds the values project
+functions exchange: `Scalar`, `ScalarRef`, `Date` and `DateTime`.
+`host::functions` holds `ProjectFunctions` and every other type its methods
+take and return, its `FunctionError`, `CallError` and lock types included,
+and `host::resolver` holds `ResourceResolver`, `MemoryResolver` and the
+resolver requests, replies, kinds and `ResolverFailure`. The root re-exports
+nothing else from `host` or `scalar`.
+
 ### Operations and signatures
 
 An embedder configures one `Engine` and calls its use cases, the verbs in
@@ -485,7 +500,7 @@ pub struct Diagnostic {           // #[non_exhaustive]
     pub operand_route: Option<Vec<String>>,  // root-to-node operand steps
 }
 pub struct SourceSpan { pub start: usize, pub end: usize }  // #[non_exhaustive]
-pub struct Report { pub diagnostics: Vec<Diagnostic> }  // #[non_exhaustive]
+pub fn issues(diagnostics: &[Diagnostic]) -> Table;  // yamaa::diagnostic, the issues table
 
 pub enum Phase {                  // #[non_exhaustive], the twelve in run order
     Validation, Planning, Ingest, RowConstruction, Join, Mapping,
@@ -515,21 +530,23 @@ table, an issue's line and its JSON object write the same text as before; the
 catalogue's `Condition` names its condition and phases with the same types.
 `DiagnosticContext` is
 a structured value map, not a formatted string: `ContextValue` keeps integer
-tokens exact (`Int`, `Uint`, or `Wide` with the decimal spelling of a token
-outside both 64-bit ranges), fraction/exponent tokens as `Float`, and nested
+tokens exact (`Int`, or `Wide` with the decimal spelling of a token outside
+the signed 64-bit range), fraction/exponent tokens as `Float`, and nested
 lists and maps; `to_json()` returns the canonical text the host frames show.
 Geometry is optional and absent means unrecorded: a present zero-width span or
 empty route is a fact, never a default. `location` names the YAML file, line
 and column where the first spec path is written (P-ISSUE-1), and is `None`
 when no file the operation read holds that path. The one record feeds every
-form of an issue: `Report::table()` builds the twelve-column issues table
-both hosts return (D28), `text()` its printed line and `to_value()` its JSON
+form of an issue: `yamaa::diagnostic::issues` builds the twelve-column
+issues table both hosts return (D28), as a result's `issues()` gives it for
+its `diagnostics()`, `text()` its printed line and `to_value()` its JSON
 object, whose `context` is an object. The boundary version and record definition in #2674
 conform to this struct; the cross-host parity tests are #2677.
 
-Every result prints a `Summary` rendered here (`yamaa::text`, D37), and a
-refusal's `Failure::message` is D39's error text: the `Action` that refused,
-the first issue's line and the count of the others.
+Every result prints a `Summary` rendered here (`yamaa::text`, D37), whose
+`lines()` and `Display` form are its printed text, and a refusal's
+`Failure::message` is D39's error text: the call that refused, the first
+issue's line and the count of the others.
 
 ### Errors
 
@@ -570,17 +587,19 @@ reading its subject. Only a `Rejected` failure carries issues, and only a
 refused save carries paths. A table's failure is boxed, so every
 `Result<_, Failure>` stays small. The engine answers a `Cancelled` failure
 with the hosts' cancellation and every other failure with their one error.
-No operation fails because a caller's project function or resolver failed:
-those failures are issues of the result, and a host's interrupt cancels the
-call.
+No failure's kind is a caller's project function or resolver failing. A
+failed project function is an issue of the result, and a host's interrupt
+cancels the call. A refused resolver request is an issue too: of the result,
+or of the `Rejected` failure of an operation with no result to hold it, such
+as `read_odm`, `file_type` or a save.
 
-The ports keep their own errors, which a `Failure` never carries:
-`FunctionError` and `CallError` are the `ProjectFunctions` port's,
-`ResolverFailure` the resolver's, and `LockSyntaxError` and
-`ScalarDecodeError` belong to the port helpers; `InputFrame::import`, a
-value constructor with no action to name, keeps `TableError`. Each is a
-small facade-owned type (also `#[non_exhaustive]`) carrying a stable code
-and a message. Internal
+The ports keep their own errors, which a `Failure` never carries, in
+`yamaa::host` (#3766): `FunctionError` and `CallError` are the
+`ProjectFunctions` port's, with `LockSyntaxError` for its lock helper, in
+`host::functions`, and `ResolverFailure` the resolver's, in
+`host::resolver`. `InputFrame::import`, a value constructor with no action
+to name, keeps `TableError`. Each is a small facade-owned type (also
+`#[non_exhaustive]`) carrying a stable code and a message. Internal
 error enums -- `file_workflow::SelectionError`, `file_resources::Error`,
 `yaml_decode::DecodeFailure`, the `file_define::Failure` family and the rest --
 never appear in a facade signature; #2658's per-module consolidation is what
@@ -697,7 +716,7 @@ was removed. Any module not listed here is internal by default.
 
 | Module the hosts used | Facade disposition |
 | --- | --- |
-| `application_measurements` | Internal -- a host-side timing helper; the facade `Report` carries no measurements in the first surface. |
+| `application_measurements` | Internal -- a host-side timing helper; a run's measurements reach only the hosts' qualification suites, through `Run::measured_observations`. |
 | `arrow_bridge` | Facade -- the Arrow form of `Table` and `InputFrame::import` (the `arrow` feature). |
 | `arrow_table` | Removed -- `column_table`, the engine's own columnar table, replaced it; `Table` is the public form. |
 | `callback` | Facade -- the `ProjectFunctions` trait and `FunctionError`; `BoundaryError`/`CallbackError` convert into `FunctionError`. |
@@ -707,9 +726,9 @@ was removed. Any module not listed here is internal by default.
 | `file_project` | Internal -- project environment capture for preparation. |
 | `file_resources` | Internal -- its `Error` converts into `ResolverFailure`/`FailureKind::Internal`. |
 | `file_workflow` | Internal -- `SelectionError` converts into diagnostics/`Failure`. |
-| `host_resources` | Facade -- the `ResourceResolver` trait, `MemoryResolver`, and the resolver request/reply/failure types. |
+| `host_resources` | Facade -- `yamaa::host::resolver`: the `ResourceResolver` trait, `MemoryResolver`, and the resolver request/reply/failure types. |
 | `ipc_table` | Removed -- `public_table::TableError` converts into the facade `TableError`; no IPC route remains. |
-| `issue_rows` | Removed -- core's `Diagnostic` is the one record; the facade's `Diagnostic` and `Report` are its public form. |
+| `issue_rows` | Removed -- core's `Diagnostic` is the one record; the facade's `Diagnostic` is its public form, and `diagnostic::issues` builds its issues table. |
 | `project_application` | Internal -- selection failures convert into diagnostics. |
 | `project_attempt` | Internal -- host-failure traversal; failures surface as the result's issues, and a host interrupt as `FailureKind::Cancelled`. |
 | `project_lock` | Facade -- `LockFinding`/`LockReason` are the public lock-finding types, `decode_renv_lock` is the public renv admission, and `verify_uv_lock` compares a uv lock with the installation an `InstalledDistributions` reports (#3030 D172); lock-kind detection stays internal (the engine supplies `LockKind` through `LockContext`). |
@@ -802,7 +821,7 @@ Key files: `rust/crates/yamaa-core/src/dataset/columnar/mod.rs`, `eval.rs`,
 | `Expression::Source(column)` | `columnar/eval.rs` | `safe` | Reads `candidate.members[0]` in the active partition; cell errors translate `source_row` to `base_i + local_row`. |
 | `Expression::SourceBinding` | `columnar/eval.rs` | `safe-with-combine-step` | Row evaluation delegates to `source` or returns the `absent` literal; the handler counts (`absent`, `multiple_matches`) combine across partitions by checked addition. |
 | `Expression::FirstAvailable` | `columnar/eval.rs` | `safe` (row-local operands) / `safe-with-combine-step` (with `Collect` or handlers) | Evaluates operands in authored order per candidate; combines handler counts and any per-key `SelectionRead::Collect` state. |
-| Pure scalar and string/temporal expressions (`Compute`, `Round`, `Extreme`, `StrTemplate`, `StrExtract`, `StrCase`, `StrPad`, `Imputation`, `Temporal`, `Flag`, `Case`) | `columnar/scalar.rs`, `predicates.rs`, `eval.rs` | `safe` (pure) / `safe-with-combine-step` (with recovery handlers or `Collect`) | Value computation is row-local when bindings are `Read::Column` or `Read::Source`. Recovery counts (`Missing`, `Invalid`, `Unconvertible`) in the handler counts combine by checked sum in registration order. |
+| Pure scalar and string/temporal expressions (`Compute`, `Round`, `Extreme`, `StrTemplate`, `StrExtract`, `StrCase`, `StrPad`, `StrSubstr`, `StrLength`, `Imputation`, `Temporal`, `Flag`, `Case`) | `columnar/scalar.rs`, `predicates.rs`, `eval.rs` | `safe` (pure) / `safe-with-combine-step` (with recovery handlers or `Collect`) | Value computation is row-local when bindings are `Read::Column` or `Read::Source`. Recovery counts (`Missing`, `Invalid`, `Unconvertible`) in the handler counts combine by checked sum in registration order. |
 | `Expression::SourceLookup` | `columnar/joins.rs` | `safe` (no selection handler) / `safe-with-combine-step` (with `selection`) | Matches candidate keys against the immutable whole-table `secondary[lookup.source]`. When `selection` resolves `count > 1`, `HandlerKind::MultipleMatches` combines in the handler counts. |
 | `Expression::Joined`, `Expression::JoinedSource` | `columnar/joins.rs` | `safe-with-combine-step` (`Secondary`) / `global` (`Primary`) | Secondary joins scan immutable `secondary[index]` and combine `MultipleMatches` handler counts. Primary self-joins (`AggregateSource::Primary`) scan all primary rows and are `global`. |
 | `Expression::Collect` | `columnar/scalar.rs` | `safe` (`RowMode::Records`) / `safe-with-combine-step` (grouped/key-grain) | In `Records` mode `candidate.members` has length 1. Across partitions in `Keys`/`Groups` mode, `Collect` merges distinct present `Key` sets plus the best `(order_by, global_source_row)` extremum and `MultipleMatches` handler count. |

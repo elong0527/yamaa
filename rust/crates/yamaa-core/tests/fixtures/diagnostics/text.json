@@ -1,5 +1,16 @@
 {
-  "about": "The refusals of the text verbs str_pad, str_case, str_template and str_extract (TEXT-1 to TEXT-10, COLUMN-10, NAME-3), each reached by the verb's own declaration or step.",
+  "about": "The refusals of the text verbs str_pad, str_substr, str_length, str_case, str_template and str_extract (TEXT-1 to TEXT-10, TEXT-13, COLUMN-10, NAME-3), each reached by the verb's own declaration or step. The specification `spec`, which preparation reads for the declarations it refuses, reads SRC and writes one key column ID.",
+  "documents": {
+    "spec": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "input": {"SRC": {"path": "source.csv"}},
+      "keys": ["ID"],
+      "columns": [{"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}}],
+      "output": {"path": "result.csv", "columns": ["ID"]}
+    }
+  },
   "cases": [
     {
       "case": "str_pad_refuses_a_width_that_is_not_a_positive_integer",
@@ -8,10 +19,82 @@
       "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-2", "spec_paths": ["columns.V.derivation.str_pad.width"], "context": {"expected": "a positive integer width"}}]
     },
     {
+      "case": "str_substr_refuses_a_start_below_one",
+      "operation": "str_substr",
+      "input": {"source": "SRC.V", "path": "columns.V.derivation.str_substr", "start": "0"},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-13", "spec_paths": ["columns.V.derivation.str_substr.start"], "context": {"expected": "a positive integer start"}}]
+    },
+    {
+      "case": "str_substr_refuses_a_length_below_one",
+      "operation": "str_substr",
+      "input": {"source": "SRC.V", "path": "columns.V.derivation.str_substr", "start": "1", "length": "-3"},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-13", "spec_paths": ["columns.V.derivation.str_substr.length"], "context": {"expected": "a positive integer length"}}]
+    },
+    {
+      "case": "str_substr_refuses_a_source_that_is_not_text",
+      "operation": "str_substr_apply",
+      "input": {"source": "SRC.V", "path": "columns.V.derivation.str_substr", "start": "1", "value": {"date": "2024-03-10"}},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.V.derivation.str_substr.source"], "context": {"source": "SRC.V", "expected": "str", "actual": "date"}}]
+    },
+    {
+      "case": "str_length_refuses_a_source_that_is_not_text",
+      "operation": "str_length",
+      "input": {"source": "SRC.V", "path": "columns.V.derivation.str_length", "value": 1.5},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.V.derivation.str_length.source"], "context": {"source": "SRC.V", "expected": "str", "actual": "float"}}]
+    },
+    {
       "case": "str_case_refuses_a_source_that_is_not_text",
       "operation": "str_case",
       "input": {"source": "SRC.V", "path": "columns.V.derivation.str_case", "case": "title", "value": 1},
       "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.V.derivation.str_case.source"], "context": {"source": "SRC.V", "expected": "str", "actual": "int"}}]
+    },
+    {
+      "case": "str_case_takes_delimiters_only_with_proper",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [
+          {
+            "set": ["columns"],
+            "to": [
+              {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+              {"name": "UP", "type": "str", "derivation": {"value": {"str_case": {"source": "SRC.TEXT", "to": "upper", "delimiters": " "}}}},
+              {"name": "LOW", "type": "str", "derivation": {"value": {"str_case": {"source": "SRC.TEXT", "to": "lower", "delimiters": " "}}}},
+              {"name": "SENT", "type": "str", "derivation": {"value": {"str_case": {"source": "SRC.TEXT", "to": "sentence", "delimiters": " "}}}},
+              {"name": "TITLE", "type": "str", "derivation": {"value": {"str_case": {"source": "SRC.TEXT", "to": "title", "delimiters": " "}}}}
+            ]
+          }
+        ]
+      },
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "TEXT-5", "spec_paths": ["columns.UP.derivation.str_case.delimiters"], "context": {"field": "delimiters", "to": "upper", "identifier": "delimiters"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "TEXT-5", "spec_paths": ["columns.LOW.derivation.str_case.delimiters"], "context": {"field": "delimiters", "to": "lower", "identifier": "delimiters"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "TEXT-5", "spec_paths": ["columns.SENT.derivation.str_case.delimiters"], "context": {"field": "delimiters", "to": "sentence", "identifier": "delimiters"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "TEXT-5", "spec_paths": ["columns.TITLE.derivation.str_case.delimiters"], "context": {"field": "delimiters", "to": "title", "identifier": "delimiters"}}
+      ]
+    },
+    {
+      "case": "str_case_refuses_delimiters_that_name_no_scalar_repeat_one_or_leave_ascii",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [
+          {
+            "set": ["columns"],
+            "to": [
+              {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+              {"name": "EMPTY", "type": "str", "derivation": {"value": {"str_case": {"source": "SRC.TEXT", "to": "proper", "delimiters": ""}}}},
+              {"name": "TWICE", "type": "str", "derivation": {"value": {"str_case": {"source": "SRC.TEXT", "to": "proper", "delimiters": " /-(.\t/"}}}},
+              {"name": "WIDE", "type": "str", "derivation": {"value": {"str_case": {"source": "SRC.TEXT", "to": "proper", "delimiters": " \u00a0"}}}}
+            ]
+          }
+        ]
+      },
+      "issues": [
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-5", "spec_paths": ["columns.EMPTY.derivation.str_case.delimiters"], "context": {"expected": "a non-empty string of ASCII characters, each listed once"}},
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-5", "spec_paths": ["columns.TWICE.derivation.str_case.delimiters"], "context": {"expected": "a non-empty string of ASCII characters, each listed once"}},
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-5", "spec_paths": ["columns.WIDE.derivation.str_case.delimiters"], "context": {"expected": "a non-empty string of ASCII characters, each listed once"}}
+      ]
     },
     {
       "case": "str_template_refuses_a_placeholder_that_is_not_a_name",

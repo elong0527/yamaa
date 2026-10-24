@@ -590,7 +590,14 @@ impl Lower<'_> {
                         "lower" => TextCase::Lower,
                         "sentence" => TextCase::Sentence,
                         "title" => TextCase::Title,
+                        "proper" => TextCase::Proper,
                         _ => return None,
+                    },
+                    // Which modes take a list is the executor's to decide
+                    // (TEXT-5).
+                    delimiters: match self.field(p, "delimiters") {
+                        Some(_) => Some(text("delimiters")?.into()),
+                        None => None,
                     },
                 },
                 SOURCE,
@@ -601,6 +608,17 @@ impl Lower<'_> {
                 },
                 SOURCE,
             ),
+            "str_substr" => (
+                ScalarOp::StrSubstr {
+                    start: integer("start")?,
+                    length: match self.field(p, "length") {
+                        Some(_) => Some(integer("length")?),
+                        None => None,
+                    },
+                },
+                SOURCE,
+            ),
+            "str_length" => (ScalarOp::StrLength, SOURCE),
             "str_extract" => (
                 ScalarOp::StrExtract {
                     pattern: text("pattern")?.into(),

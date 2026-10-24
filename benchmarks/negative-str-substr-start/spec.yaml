@@ -1,0 +1,34 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: CO
+keys: [STUDYID, USUBJID, COSEQ]
+input:
+  CO_RAW: {path: input/co_raw.csv, types: {COSEQ: int}}
+
+output:
+  path: co.csv
+  columns: [DOMAIN, STUDYID, USUBJID, COSEQ, COVAL]
+
+columns:
+  - {name: DOMAIN, type: str, label: Domain Abbreviation, derivation: "'CO'"}
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: CO_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: CO_RAW.USUBJID
+
+  - {name: COSEQ, type: int, label: Sequence Number, derivation: CO_RAW.COSEQ}
+
+  # The defect: positions count from 1, so no piece starts at position 0,
+  # and the spec is rejected before any data is read.
+  - name: COVAL
+    type: str
+    label: Comment
+    derivation:
+      str_substr: {source: CO_RAW.COMMENT, start: 0, length: 200}

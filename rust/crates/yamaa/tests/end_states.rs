@@ -16,11 +16,14 @@ use std::sync::{
     Arc, Mutex,
 };
 
+use yamaa::host::functions::{
+    Argument, CallError, FunctionError, FunctionHandle, FunctionIdentity, LockContext, Signature,
+};
+use yamaa::host::resolver::{ResolverFailure, ResolverReply, ResolverRequest};
+use yamaa::scalar::{Scalar, ScalarRef};
 use yamaa::{
-    Argument, CallError, CancellationToken, Engine, EngineOptions, Failure, FailureKind,
-    FunctionError, FunctionHandle, FunctionIdentity, HostLanguage, LockContext, MemoryResolver,
-    Partitions, ProjectFunctions, ResolverFailure, ResolverReply, ResolverRequest,
-    ResourceResolver, Run, Scalar, ScalarRef, Signature,
+    CancellationToken, Engine, EngineOptions, Failure, FailureKind, HostLanguage, MemoryResolver,
+    Partitions, ProjectFunctions, ResourceResolver, Run,
 };
 
 /// A partition-safe specification: W converts V to an integer, and the run
