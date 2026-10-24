@@ -450,6 +450,24 @@ impl<'a> Parser<'a> {
     fn invalid(&self, message: &'static str) -> CompileError {
         invalid(self.text, self.token().span.start, Failure::Syntax, message)
     }
+    /// A record star written where no reducer takes it, naming the
+    /// reducers whose declaration takes one (FORMULA-18).
+    fn misplaced_star(&self) -> CompileError {
+        let reducers: Vec<&str> = Reducer::ALL
+            .into_iter()
+            .filter(|reducer| reducer.takes_star())
+            .map(Reducer::name)
+            .collect();
+        invalid(
+            self.text,
+            self.token().span.start,
+            Failure::Syntax,
+            format!(
+                "a record star is only the argument of {}",
+                reducers.join(" or ")
+            ),
+        )
+    }
     /// Keywords are case-insensitive; a qualified name never spells one.
     fn keyword(&self, word: &str) -> bool {
         let token = self.token();
@@ -778,7 +796,7 @@ impl<'a> Parser<'a> {
                 self.push(NodeKind::Group(inner), start, start, &[inner])
             }
             TokenKind::Name => self.name(nesting),
-            TokenKind::Star => Err(self.invalid("a record star is only the argument of COUNT")),
+            TokenKind::Star => Err(self.misplaced_star()),
             _ => Err(self.invalid("expected an operand")),
         }
     }
@@ -836,7 +854,7 @@ impl<'a> Parser<'a> {
         if let Some(reducer) = Reducer::lookup(spelling) {
             let operand = if self.token().kind == TokenKind::Star {
                 if !reducer.takes_star() {
-                    return Err(self.invalid("a record star is only the argument of COUNT"));
+                    return Err(self.misplaced_star());
                 }
                 let star = self.advance().span.start;
                 self.push(NodeKind::Star, star, star, &[])?
