@@ -185,7 +185,7 @@ mod table {
             #[test]
             fn a_range_of_records_decodes_as_the_whole_read_across_the_scans_partitions() {
                 let bytes = b"ID,NOTE\n1,\"a\nb\"\n2,c\n3,\"d,e\"\n4,f\n5,g\n";
-                let expected = vec![
+                let expected = [
                     vec![Str("1"), Str("a\nb")],
                     vec![Str("2"), Str("c")],
                     vec![Str("3"), Str("d,e")],
@@ -651,11 +651,8 @@ mod table {
                 };
                 let expected: Vec<ValueRef<'static>> = (1..=5).map(ValueRef::Int).collect();
                 assert_eq!(positions(&whole), expected, "the whole read of {case}");
-                let divided: Vec<ValueRef<'static>> = divided
-                    .parts
-                    .iter()
-                    .flat_map(|part| positions(part))
-                    .collect();
+                let divided: Vec<ValueRef<'static>> =
+                    divided.parts.iter().flat_map(positions).collect();
                 assert_eq!(divided, expected, "partitions of {case}");
             }
         }
