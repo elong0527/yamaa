@@ -102,7 +102,7 @@ column is never missing under [OUTPUT-3](output.md#output-3), so a
 `not_missing` on a key column restates the keys and fails validation.
 
 Fails: `not_missing_failed`, `redundant_declaration`.
-Evidence: `negative-not-missing-age`, `schema-not-missing-share`, `negative-not-missing-share`, `negative-not-missing-when`, `rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.json`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::VerificationNotMissingRedundant`.
+Evidence: `negative-not-missing-age`, `schema-not-missing-share`, `negative-not-missing-share`, `negative-not-missing-when`, `rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.json`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_not_missing_check_restating_a_mandatory_column_is_redundant`.
 
 `when` is a [Formulas](formulas.md) predicate over one constructed output row
 that selects rows as the `when` of `assert` does ([CHECK-12](#check-12)), not
@@ -398,7 +398,7 @@ writes the report file for a failed run too; the report is diagnostic output,
 never an accepted artifact.
 
 Fails: `missing_report`.
-Evidence: `schema-adsl-age-quality`, `schema-verification-log`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `python/tests/installed/installed_run_report.py::test_fatal_check_saves_only_the_report_and_keeps_original_issues`, `rust/crates/yamaa-adapters/tests/specification_sources.rs::verification_declarations_preserve_completed_prefix_and_phase_precedence`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::an_intermediate_warning_needs_a_report_file`.
+Evidence: `schema-adsl-age-quality`, `schema-verification-log`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_warning_verification_needs_a_report_file`, `python/tests/installed/installed_run_report.py::test_fatal_check_saves_only_the_report_and_keeps_original_issues`, `rust/crates/yamaa-adapters/tests/specification_sources.rs::verification_declarations_preserve_completed_prefix_and_phase_precedence`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::an_intermediate_warning_needs_a_report_file`.
 
 A specification declaring a `warning` without `output.report` fails validation
 with `missing_report`, a `warning` on an intermediate's `unique`

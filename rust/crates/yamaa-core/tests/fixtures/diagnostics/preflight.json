@@ -1,0 +1,485 @@
+{
+  "about": "What preparation refuses in a 1.0 specification before any input is read: the declarations of inputs, keys, columns, row templates, named intermediates and the output, and the temporal operations' fields (SPEC, NAME, INPUT, SAS-2, OUTPUT, CSV-6, ROW, LOOKUP, TIME, CHECK-22, VALUE-5); then what output declarations, binding a root filter and admitting a generated ordinal report. The specification `spec` reads two inputs from `base` SRC, and `one_input` reads SRC alone, naming no `base`; each writes one key column ID.",
+  "documents": {
+    "spec": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "input": {"SRC": {"path": "source.csv"}, "SECOND": {"path": "second.csv"}},
+      "keys": ["ID"],
+      "columns": [{"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}}],
+      "output": {"path": "result.csv", "columns": ["ID"]},
+      "base": "SRC"
+    },
+    "one_input": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "input": {"SRC": {"path": "source.csv"}},
+      "keys": ["ID"],
+      "columns": [{"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}}],
+      "output": {"path": "result.csv", "columns": ["ID"]}
+    }
+  },
+  "cases": [
+    {
+      "case": "an_integer_literal_past_the_int_range_overflows_before_any_input_is_read",
+      "operation": "prepare",
+      "input": {"base": "one_input", "edits": [{"set": ["columns", "0", "derivation"], "to": {"value": 9223372036854775808}}]},
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.ID.derivation"], "context": {"actual": 9223372036854775808, "value": "9223372036854775808", "minimum": -9223372036854775808, "maximum": 9223372036854775807}}]
+    },
+    {
+      "case": "keys_name_at_least_one_column",
+      "operation": "prepare",
+      "input": {"base": "one_input", "edits": [{"set": ["keys"], "to": []}]},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "OUTPUT-2", "spec_paths": ["keys"], "context": {"expected": "at least one key column", "actual": "empty list"}}]
+    },
+    {
+      "case": "keys_name_each_column_once",
+      "operation": "prepare",
+      "input": {"base": "one_input", "edits": [{"set": ["keys"], "to": ["ID", "ID"]}]},
+      "issues": [{"phase": "validation", "condition": "duplicate_identifier", "rule": "OUTPUT-2", "spec_paths": ["keys[1]"], "context": {"identifier": "ID"}}]
+    },
+    {
+      "case": "a_column_name_is_declared_once",
+      "operation": "prepare",
+      "input": {
+        "base": "one_input",
+        "edits": [{"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}}, {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}}]}]
+      },
+      "issues": [{"phase": "validation", "condition": "duplicate_identifier", "rule": "SPEC-2", "spec_paths": ["columns[1].name"], "context": {"identifier": "ID"}}]
+    },
+    {
+      "case": "an_input_an_odm_read_uses_declares_no_ordinal",
+      "operation": "prepare",
+      "input": {
+        "base": "one_input",
+        "edits": [
+          {"set": ["input"], "to": {"SRC": {"path": "source.parquet", "ordinal": "REC"}}},
+          {"set": ["columns", "0", "derivation"], "to": {"value": {"odm": {"item": "SRC.ITEM"}}}}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "odm_schema_field_type", "rule": "INPUT-4", "spec_paths": ["input.SRC.ordinal"], "context": {"dataset": "SRC", "declared": "ordinal"}}]
+    },
+    {
+      "case": "an_input_path_extension_names_a_known_profile",
+      "operation": "prepare",
+      "input": {"base": "one_input", "edits": [{"set": ["input"], "to": {"SRC": {"path": "input.txt", "empty_string": "missing"}}}]},
+      "issues": [{"phase": "validation", "condition": "source_profile_unknown", "rule": "INPUT-1", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input.txt"}}]
+    },
+    {
+      "case": "a_csv_input_may_not_declare_a_present_empty_string",
+      "operation": "prepare",
+      "input": {"base": "one_input", "edits": [{"set": ["input"], "to": {"SRC": {"path": "input.CSV", "empty_string": "present"}}}]},
+      "issues": [{"phase": "validation", "condition": "empty_string_present_unsupported", "rule": "INPUT-9", "spec_paths": ["input.SRC.empty_string"], "context": {"dataset": "SRC"}}]
+    },
+    {
+      "case": "a_transport_input_declares_its_encoding",
+      "operation": "prepare",
+      "input": {"base": "one_input", "edits": [{"set": ["input"], "to": {"SRC": {"path": "source.xpt"}}}]},
+      "issues": [{"phase": "validation", "condition": "source_encoding_required", "rule": "SAS-2", "spec_paths": ["input.SRC.encoding"], "context": {"dataset": "SRC"}}]
+    },
+    {
+      "case": "a_sas_dataset_input_declares_its_encoding",
+      "operation": "prepare",
+      "input": {"base": "one_input", "edits": [{"set": ["input"], "to": {"SRC": {"path": "source.sas7bdat"}}}]},
+      "issues": [{"phase": "validation", "condition": "source_encoding_required", "rule": "SAS-2", "spec_paths": ["input.SRC.encoding"], "context": {"dataset": "SRC"}}]
+    },
+    {
+      "case": "a_csv_input_declares_no_encoding",
+      "operation": "prepare",
+      "input": {"base": "one_input", "edits": [{"set": ["input"], "to": {"SRC": {"path": "source.csv", "encoding": "windows-1252"}}}]},
+      "issues": [{"phase": "validation", "condition": "source_encoding_required", "rule": "SAS-2", "spec_paths": ["input.SRC.encoding"], "context": {"dataset": "SRC"}}]
+    },
+    {
+      "case": "a_parquet_input_declares_no_encoding",
+      "operation": "prepare",
+      "input": {"base": "one_input", "edits": [{"set": ["input"], "to": {"SRC": {"path": "source.parquet", "encoding": "utf-8"}}}]},
+      "issues": [{"phase": "validation", "condition": "source_encoding_required", "rule": "SAS-2", "spec_paths": ["input.SRC.encoding"], "context": {"dataset": "SRC"}}]
+    },
+    {
+      "case": "the_report_file_is_not_the_output_file",
+      "operation": "prepare",
+      "input": {
+        "base": "one_input",
+        "edits": [
+          {"set": ["input"], "to": {"SRC": {"path": "input.csv"}}},
+          {"set": ["output"], "to": {"path": "result.csv", "columns": ["ID"], "report": "result.csv"}}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "artifact_path_collision", "rule": "OUTPUT-9", "spec_paths": ["output.path", "output.report"], "context": {"path": "result.csv"}}]
+    },
+    {
+      "case": "the_report_file_extension_names_a_known_profile",
+      "operation": "prepare",
+      "input": {
+        "base": "one_input",
+        "edits": [
+          {"set": ["input"], "to": {"SRC": {"path": "input.csv"}}},
+          {"set": ["output"], "to": {"path": "result.csv", "columns": ["ID"], "report": "report.arrow"}}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_artifact_profile", "rule": "OUTPUT-5", "spec_paths": ["output.report"], "context": {"path": "report.arrow", "permitted": [".csv", ".parquet"]}}]
+    },
+    {
+      "case": "a_warning_verification_needs_a_report_file",
+      "operation": "prepare",
+      "input": {
+        "base": "one_input",
+        "edits": [
+          {"set": ["input"], "to": {"SRC": {"path": "input.csv"}}},
+          {"set": ["verifications"], "to": [{"row_count": {"min": 1, "severity": "warning"}}]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "missing_report", "rule": "CHECK-22", "spec_paths": ["output.report"], "context": {"warnings": ["verifications[0].row_count"]}}]
+    },
+    {
+      "case": "preparation_reports_column_name_key_and_base_refusals_in_that_order",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [
+          {"set": ["domain"], "to": "SRC"},
+          {"set": ["keys"], "to": ["MISSING"]},
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int"}]},
+          {"set": ["base"], "to": "ABSENT"}
+        ]
+      },
+      "issues": [
+        {"phase": "validation", "condition": "missing_derivation", "rule": "SPEC-4", "spec_paths": ["columns.ID.derivation"], "context": {"column": "ID"}},
+        {"phase": "validation", "condition": "duplicate_identifier", "rule": "NAME-2", "spec_paths": ["input.SRC", "domain"], "context": {"identifier": "SRC"}},
+        {"phase": "validation", "condition": "undeclared_column", "rule": "OUTPUT-2", "spec_paths": ["keys[0]"], "context": {"column": "MISSING"}},
+        {"phase": "validation", "condition": "driver_unavailable", "rule": "ROW-8", "spec_paths": ["base"], "context": {"dataset": "ABSENT", "row": null}}
+      ]
+    },
+    {
+      "case": "without_row_templates_two_inputs_need_a_base",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"remove": ["base"]}]},
+      "issues": [{"phase": "validation", "condition": "driver_unavailable", "rule": "ROW-8", "spec_paths": ["base"], "context": {"dataset": null, "row": null}}]
+    },
+    {
+      "case": "row_templates_report_derivation_construction_and_template_refusals_in_that_order",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [
+          {"remove": ["base"]},
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int"}, {"name": "X", "type": "int", "derivation": {"value": {"aggregate": {"expr": "SUM(SRC.ID)"}}}}]},
+          {"set": ["filter"], "to": "TRUE"},
+          {
+            "set": ["rows"],
+            "to": [
+              {"id": "first", "dataset": "ABSENT", "group_by": [], "derivations": {"BOGUS": {"value": "SRC.ID"}, "X": {"value": "SRC.ID"}}},
+              {"id": "second", "dataset": "SRC", "group_by": ["SECOND.ID"], "derivations": {"ID": {"value": "SRC.ID"}, "X": {"value": "SRC.ID"}}},
+              {"id": "third", "derivations": {"ID": {"value": "SRC.ID"}, "X": {"value": "SRC.ID"}}}
+            ]
+          }
+        ]
+      },
+      "issues": [
+        {"phase": "validation", "condition": "undeclared_column", "rule": "SPEC-5", "spec_paths": ["rows.first.derivations.BOGUS"], "context": {"column": "BOGUS"}},
+        {"phase": "validation", "condition": "missing_derivation", "rule": "SPEC-5", "spec_paths": ["columns.ID.derivation"], "context": {"column": "ID", "rows": ["first"]}},
+        {"phase": "validation", "condition": "duplicate_derivation", "rule": "SPEC-6", "spec_paths": ["columns.X.derivation"], "context": {"column": "X", "identifier": "X", "rows": ["first", "second", "third"], "not_row_local": "aggregate"}},
+        {"phase": "validation", "condition": "conflicting_row_construction", "rule": "ROW-9", "spec_paths": ["filter", "rows"], "context": {"rows": ["first", "second", "third"]}},
+        {"phase": "validation", "condition": "driver_unavailable", "rule": "ROW-1", "spec_paths": ["rows.first.dataset"], "context": {"row": "first", "dataset": "ABSENT"}},
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "ROW-4", "spec_paths": ["rows.first.group_by"], "context": {"row": "first", "group_by": [], "expected": "at least one driver variable, each once"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "ROW-4", "spec_paths": ["rows.second.group_by"], "context": {"row": "second", "identifier": "SECOND.ID", "dataset": "SRC"}},
+        {"phase": "validation", "condition": "driver_unavailable", "rule": "ROW-1", "spec_paths": ["rows.third.dataset"], "context": {"row": "third", "dataset": null}}
+      ]
+    },
+    {
+      "case": "a_repeated_group_variable_keeps_its_written_order",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [
+          {"remove": ["base"]},
+          {"set": ["rows"], "to": [{"id": "duplicates", "dataset": "SRC", "group_by": ["SRC.ID", "SRC.ID"]}]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "ROW-4", "spec_paths": ["rows.duplicates.group_by"], "context": {"row": "duplicates", "group_by": ["SRC.ID", "SRC.ID"], "expected": "at least one driver variable, each once"}}]
+    },
+    {
+      "case": "a_parquet_input_types_no_str_field",
+      "operation": "prepare",
+      "input": {"base": "one_input", "edits": [{"set": ["input"], "to": {"SRC": {"path": "source.PARQUET", "types": {"ID": "str"}}}}]},
+      "issues": [{"phase": "validation", "condition": "redundant_field_type", "rule": "INPUT-6", "spec_paths": ["input.SRC.types.ID"], "context": {"dataset": "SRC", "field": "ID", "type": "str"}}]
+    },
+    {
+      "case": "a_parquet_input_types_no_int_field",
+      "operation": "prepare",
+      "input": {"base": "one_input", "edits": [{"set": ["input"], "to": {"SRC": {"path": "source.PARQUET", "types": {"ID": "int"}}}}]},
+      "issues": [{"phase": "validation", "condition": "redundant_field_type", "rule": "INPUT-6", "spec_paths": ["input.SRC.types.ID"], "context": {"dataset": "SRC", "field": "ID", "type": "int"}}]
+    },
+    {
+      "case": "a_parquet_input_types_no_float_field",
+      "operation": "prepare",
+      "input": {"base": "one_input", "edits": [{"set": ["input"], "to": {"SRC": {"path": "source.PARQUET", "types": {"ID": "float"}}}}]},
+      "issues": [{"phase": "validation", "condition": "redundant_field_type", "rule": "INPUT-6", "spec_paths": ["input.SRC.types.ID"], "context": {"dataset": "SRC", "field": "ID", "type": "float"}}]
+    },
+    {
+      "case": "a_parquet_input_types_no_date_field",
+      "operation": "prepare",
+      "input": {"base": "one_input", "edits": [{"set": ["input"], "to": {"SRC": {"path": "source.PARQUET", "types": {"ID": "date"}}}}]},
+      "issues": [{"phase": "validation", "condition": "redundant_field_type", "rule": "INPUT-6", "spec_paths": ["input.SRC.types.ID"], "context": {"dataset": "SRC", "field": "ID", "type": "date"}}]
+    },
+    {
+      "case": "a_parquet_input_types_no_datetime_field",
+      "operation": "prepare",
+      "input": {"base": "one_input", "edits": [{"set": ["input"], "to": {"SRC": {"path": "source.PARQUET", "types": {"ID": "datetime"}}}}]},
+      "issues": [{"phase": "validation", "condition": "redundant_field_type", "rule": "INPUT-6", "spec_paths": ["input.SRC.types.ID"], "context": {"dataset": "SRC", "field": "ID", "type": "datetime"}}]
+    },
+    {
+      "case": "temporal_declarations_report_their_refusals_before_the_imputations",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [
+          {
+            "set": ["columns"],
+            "to": [
+              {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+              {"name": "DIFF", "type": "int", "derivation": {"value": {"diff": {"type": "date", "start": "ID", "end": "ID", "unit": "month", "closed": "both"}}}},
+              {"name": "UNIT", "type": "int", "derivation": {"value": {"diff": {"type": "date", "start": "ID", "end": "ID", "unit": "hour"}}}},
+              {"name": "SHIFT", "type": "int", "derivation": {"value": {"shift": {"type": "date", "source": "ID", "amount": "ID", "unit": "day"}}}},
+              {"name": "IMPUTED", "type": "int", "derivation": {"value": {"impute": {"type": "date", "source": "ID", "day": "first", "time": "first"}}}},
+              {"name": "GAP", "type": "int", "derivation": {"value": {"dtc": {"year": "ID", "day": "ID"}}}}
+            ]
+          }
+        ]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "value_not_permitted", "rule": "TIME-5", "spec_paths": ["columns.DIFF.derivation.diff.closed"], "context": {"value": "both", "permitted": ["right"]}},
+        {"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-1", "spec_paths": ["columns.DIFF.derivation.diff.start"], "context": {"source": "ID", "expected": "date", "actual": "int"}},
+        {"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-1", "spec_paths": ["columns.DIFF.derivation.diff.end"], "context": {"source": "ID", "expected": "date", "actual": "int"}},
+        {"phase": "validation", "condition": "value_not_permitted", "rule": "TIME-4", "spec_paths": ["columns.UNIT.derivation.diff.unit"], "context": {"value": "hour", "permitted": ["day", "week", "month", "year"]}},
+        {"phase": "validation", "condition": "missing_required_field", "rule": "TIME-1", "spec_paths": ["columns.SHIFT.derivation.shift.days"], "context": {"field": "days", "type": "date"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "TIME-1", "spec_paths": ["columns.SHIFT.derivation.shift.amount"], "context": {"field": "amount", "type": "date", "identifier": "amount"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "TIME-1", "spec_paths": ["columns.SHIFT.derivation.shift.unit"], "context": {"field": "unit", "type": "date", "identifier": "unit"}},
+        {"phase": "validation", "condition": "missing_required_field", "rule": "TIME-19", "spec_paths": ["columns.GAP.derivation.dtc.month"], "context": {"field": "month", "finer": "day"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "TIME-1", "spec_paths": ["columns.IMPUTED.derivation.impute.time"], "context": {"field": "time", "type": "date", "identifier": "time"}}
+      ]
+    },
+    {
+      "case": "the_first_row_template_reads_no_self_intermediate",
+      "operation": "prepare",
+      "input": {
+        "base": "one_input",
+        "edits": [
+          {"set": ["input"], "to": {"SRC": {"path": "src.csv"}}},
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int"}]},
+          {"set": ["intermediates"], "to": [{"id": "P", "dataset": "SELF", "key": ["ID"]}]},
+          {"set": ["rows"], "to": [{"id": "first", "dataset": "SRC", "derivations": {"ID": {"value": "P.ID"}}}]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-7", "spec_paths": ["rows.first.derivations.ID.source"], "context": {"identifier": "P.ID", "available_phase": "completed_prior_row_template", "required_phase": "row_construction"}}]
+    },
+    {
+      "case": "self_names_no_input",
+      "operation": "prepare",
+      "input": {
+        "base": "one_input",
+        "edits": [
+          {"set": ["input"], "to": {"SRC": {"path": "src.csv"}, "SELF": {"path": "self.csv"}}},
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int"}]},
+          {"set": ["intermediates"], "to": [{"id": "P", "dataset": "SELF", "key": ["ID"]}]},
+          {"set": ["rows"], "to": [{"id": "first", "dataset": "SRC", "derivations": {"ID": {"value": "SRC.ID"}}}]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "duplicate_identifier", "rule": "LOOKUP-3", "spec_paths": ["intermediates.P.dataset", "input.SELF"], "context": {"identifier": "SELF"}}]
+    },
+    {
+      "case": "an_intermediate_key_mapping_holds_a_match_pair",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": {}}]}]},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "LOOKUP-5", "spec_paths": ["intermediates.P.key"], "context": {"intermediate": "P", "dataset": "SECOND", "expected": "at least one match pair"}}]
+    },
+    {
+      "case": "an_intermediate_key_list_holds_a_match_pair",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": []}]}]},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "LOOKUP-5", "spec_paths": ["intermediates.P.key"], "context": {"intermediate": "P", "dataset": "SECOND", "expected": "at least one match pair"}}]
+    },
+    {
+      "case": "an_intermediate_key_reports_every_entry_that_repeats_a_column_at_that_entry",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": ["ID", "ID", "OTHER", "ID"]}]}]},
+      "issues": [
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "LOOKUP-5", "spec_paths": ["intermediates.P.key[1]"], "context": {"intermediate": "P", "dataset": "SECOND", "identifier": "ID", "expected": "each column once"}},
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "LOOKUP-5", "spec_paths": ["intermediates.P.key[3]"], "context": {"intermediate": "P", "dataset": "SECOND", "identifier": "ID", "expected": "each column once"}}
+      ]
+    },
+    {
+      "case": "an_intermediate_keyed_as_its_input_with_a_missing_absence_answer_only_renames_it",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [
+          {"set": ["input"], "to": {"SRC": {"path": "source.csv"}, "SECOND": {"path": "second.csv", "key": ["ID"]}}},
+          {"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": ["ID"], "absent": null}]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "rename_only_intermediate", "rule": "LOOKUP-4", "spec_paths": ["intermediates.P"], "context": {"intermediate": "P", "dataset": "SECOND"}}]
+    },
+    {
+      "case": "an_intermediate_order_without_keep_is_unpaired",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [
+          {"set": ["input"], "to": {"SRC": {"path": "source.csv"}, "SECOND": {"path": "second.csv", "key": ["ID"]}}},
+          {"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": ["ID"], "order_by": [{"variable": "SECOND.ID", "direction": "asc", "nulls": "last"}]}]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "unpaired_fields", "rule": "LOOKUP-10", "spec_paths": ["intermediates.P"], "context": {"intermediate": "P", "declared": ["order_by"], "missing": ["keep"]}}]
+    },
+    {
+      "case": "an_intermediate_keep_without_an_order_is_unpaired",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [
+          {"set": ["input"], "to": {"SRC": {"path": "source.csv"}, "SECOND": {"path": "second.csv", "key": ["ID"]}}},
+          {"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": ["ID"], "keep": "last"}]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "unpaired_fields", "rule": "LOOKUP-10", "spec_paths": ["intermediates.P"], "context": {"intermediate": "P", "declared": ["keep"], "missing": ["order_by"]}}]
+    },
+    {
+      "case": "an_intermediate_keyed_as_its_input_and_declaring_nothing_else_only_renames_it",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [
+          {"set": ["input"], "to": {"SRC": {"path": "source.csv"}, "SECOND": {"path": "second.csv", "key": ["ID"]}}},
+          {"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": ["ID"]}]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "rename_only_intermediate", "rule": "LOOKUP-4", "spec_paths": ["intermediates.P"], "context": {"intermediate": "P", "dataset": "SECOND"}}]
+    },
+    {
+      "case": "an_intermediate_may_not_answer_its_absence_and_require_a_match",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [
+          {"set": ["input"], "to": {"SRC": {"path": "source.csv"}, "SECOND": {"path": "second.csv", "key": ["ID"]}}},
+          {"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": ["ID"], "absent": null, "require_match": true}]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "conflicting_absence_policy", "rule": "LOOKUP-24", "spec_paths": ["intermediates.P.absent", "intermediates.P.require_match"], "context": {"intermediate": "P", "dataset": "SECOND"}}]
+    },
+    {
+      "case": "an_intermediate_order_with_no_term_leaves_keep_unpaired",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [
+          {"set": ["input"], "to": {"SRC": {"path": "source.csv"}, "SECOND": {"path": "second.csv", "key": ["ID"]}}},
+          {"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": ["ID"], "order_by": [], "keep": "last"}]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "unpaired_fields", "rule": "LOOKUP-10", "spec_paths": ["intermediates.P"], "context": {"intermediate": "P", "declared": ["keep"], "missing": ["order_by"]}}]
+    },
+    {
+      "case": "a_nearest_selection_refuses_a_keep_written_beside_it",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": ["ID"], "keep": "first", "nearest": {"source": "DAY", "to": "ID", "unit": "day"}}]}]
+      },
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-26", "spec_paths": ["intermediates.P.keep", "intermediates.P.nearest"], "context": {"intermediate": "P", "construct": "keep"}}]
+    },
+    {
+      "case": "a_nearest_selection_refuses_an_order_and_a_keep_written_beside_it_naming_the_order",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SECOND", "key": ["ID"], "order_by": ["SECOND.ID"], "keep": "first", "nearest": {"source": "DAY", "to": "ID", "unit": "day"}}]}]
+      },
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-26", "spec_paths": ["intermediates.P.order_by", "intermediates.P.keep", "intermediates.P.nearest"], "context": {"intermediate": "P", "construct": "order_by"}}]
+    },
+    {
+      "case": "a_repeated_row_template_id_is_refused_at_the_path_both_share",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["rows"], "to": [{"id": "repeated", "dataset": "SRC"}, {"id": "repeated", "dataset": "SRC"}]}]},
+      "issues": [{"phase": "validation", "condition": "duplicate_identifier", "rule": "ROW-1", "spec_paths": ["rows.repeated.id", "rows.repeated.id"], "context": {"identifier": "repeated"}}]
+    },
+    {
+      "case": "an_intermediate_reads_a_declared_input",
+      "operation": "prepare",
+      "input": {"base": "spec", "edits": [{"set": ["intermediates"], "to": [{"id": "LOOK", "dataset": "ABSENT", "key": ["ID"], "require_match": true}]}]},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-1", "spec_paths": ["intermediates.LOOK.dataset"], "context": {"identifier": "ABSENT", "intermediate": "LOOK"}}]
+    },
+    {
+      "case": "an_output_reports_its_profile_then_each_column_entry_then_a_key_it_leaves_out",
+      "operation": "output",
+      "input": {"base": "spec", "edits": [{"set": ["output"], "to": {"path": "result.bad", "columns": ["ABSENT", "ABSENT"]}}]},
+      "issues": [
+        {"phase": "validation", "condition": "unknown_artifact_profile", "rule": "OUTPUT-5", "spec_paths": ["output.path"], "context": {"path": "result.bad", "permitted": [".csv", ".parquet"]}},
+        {"phase": "validation", "condition": "undeclared_column", "rule": "OUTPUT-1", "spec_paths": ["output.columns[0]"], "context": {"column": "ABSENT"}},
+        {"phase": "validation", "condition": "duplicate_identifier", "rule": "OUTPUT-1", "spec_paths": ["output.columns[1]"], "context": {"column": "ABSENT", "identifier": "ABSENT"}},
+        {"phase": "validation", "condition": "internal_column_in_keys", "rule": "OUTPUT-2", "spec_paths": ["keys[0]"], "context": {"column": "ID"}}
+      ]
+    },
+    {
+      "case": "output_decimals_below_the_int_range_are_refused_with_their_full_spelling",
+      "operation": "output",
+      "input": {"base": "spec", "edits": [{"set": ["output"], "to": {"path": "result.csv", "decimals": -9223372036854775809, "columns": ["ID"]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"expected": "an integer from 0 through 18", "actual": -9223372036854775809}}]
+    },
+    {
+      "case": "output_decimals_do_not_apply_to_a_parquet_output",
+      "operation": "output",
+      "input": {"base": "spec", "edits": [{"set": ["output"], "to": {"path": "result.parquet", "decimals": 2, "columns": ["ID"]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "decimals_not_applicable", "rule": "CSV-6", "spec_paths": ["output.decimals"], "context": {"path": "result.parquet", "profile": "parquet"}}]
+    },
+    {
+      "case": "an_output_order_term_is_refused_where_it_repeats_a_column",
+      "operation": "output",
+      "input": {
+        "base": "spec",
+        "edits": [
+          {
+            "set": ["output"],
+            "to": {
+              "path": "result.csv",
+              "columns": ["ID"],
+              "order_by": [{"variable": "ID", "direction": "asc", "nulls": "last"}, {"variable": "ID", "direction": "asc", "nulls": "last"}]
+            }
+          }
+        ]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "duplicate_order_term", "rule": "OUTPUT-12", "spec_paths": ["output.order_by[1]"], "context": {"column": "ID"}}]
+    },
+    {
+      "case": "an_output_order_term_names_an_output_column",
+      "operation": "output",
+      "input": {
+        "base": "spec",
+        "edits": [{"set": ["output"], "to": {"path": "result.csv", "columns": ["ID"], "order_by": [{"variable": "SRC.ID", "direction": "asc", "nulls": "last"}]}}]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "undeclared_column", "rule": "OUTPUT-12", "spec_paths": ["output.order_by[0]"], "context": {"column": "SRC.ID"}}]
+    },
+    {
+      "case": "a_root_filter_reads_no_derived_column",
+      "operation": "bind",
+      "input": {"base": "one_input", "edits": [{"set": ["filter"], "to": "ID = 1"}], "sources": {"SRC": [["ID", "int"]]}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "phase_boundary", "rule": "ROW-9", "spec_paths": ["filter"], "context": {"identifier": "ID", "available_phase": "column_derivation", "required_phase": "row_filter"}}]
+    },
+    {
+      "case": "a_generated_ordinal_may_not_take_a_stored_field_name",
+      "operation": "ordinal",
+      "input": {"dataset": "SRC", "columns": [["ID", "int"]], "rows": 0, "field": "ID"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "ordinal_field_collision", "rule": "INPUT-4", "spec_paths": ["input.SRC.ordinal"], "context": {"dataset": "SRC", "field": "ID"}}]
+    }
+  ]
+}

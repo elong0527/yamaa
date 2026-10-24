@@ -1,0 +1,161 @@
+{
+  "about": "The findings of a qualified or row aggregate: its keys and key types (LOOKUP-5, LOOKUP-9), its context and relations (LOOKUP-18, LOOKUP-19), a reduction that reads several records (FORMULA-20), an identifier outside a reduction (FORMULA-22) and operands of no common or numeric type (FORMULA-23), then the derive bindings that preparation refuses (LOOKUP-22). All but the static type findings compare the fields their table compared, and each derive binding's case finds its issue among those preparation reports (among). The specification `aggregate` derives RESULT from an aggregate whose derive bindings each case writes.",
+  "documents": {
+    "aggregate": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "input": {"SRC": {"path": "input.csv"}},
+      "keys": ["ID"],
+      "columns": [
+        {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+        {"name": "RESULT", "type": "float", "derivation": {"value": {"aggregate": {"derivations": {}, "expr": "SUM(V)"}}}}
+      ],
+      "output": {"path": "output.csv", "columns": ["ID", "RESULT"]}
+    }
+  },
+  "cases": [
+    {
+      "case": "an_aggregate_key_naming_no_pair_is_the_empty_key_of_every_lookup",
+      "operation": "aggregate_finding",
+      "input": {"finding": "missing_keys", "path": "aggregate", "dataset": "D"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "LOOKUP-5", "spec_paths": ["aggregate"], "context": {"dataset": "D", "expected": "at least one match pair"}}]
+    },
+    {
+      "case": "an_only_reduction_of_several_records_in_a_derivation_counts_them",
+      "operation": "aggregate_finding",
+      "input": {"finding": "multiple_records", "path": "rows[0].derivations.V.aggregate", "expression": "ONLY(D.V)", "phase": "derivation", "count": 3, "row": null, "group": {}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "derivation", "condition": "aggregate_multiple_records", "rule": "FORMULA-20", "spec_paths": ["rows[0].derivations.V.aggregate"], "context": {"expr": "ONLY(D.V)", "reducer": "ONLY", "record_count": 3}}]
+    },
+    {
+      "case": "an_only_reduction_of_several_records_in_row_construction_names_the_row_and_group",
+      "operation": "aggregate_finding",
+      "input": {"finding": "multiple_records", "path": "rows[0].derivations.V.aggregate", "expression": "ONLY(D.V)", "phase": "row_construction", "count": 3, "row": "total", "group": {"D.ID": null}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "row_construction", "condition": "aggregate_multiple_records", "rule": "FORMULA-20", "spec_paths": ["rows[0].derivations.V.aggregate"], "context": {"expr": "ONLY(D.V)", "reducer": "ONLY", "record_count": 3, "row": "total", "group": {"D.ID": null}}}]
+    },
+    {
+      "case": "an_identifier_read_outside_a_reduction_must_be_grouped",
+      "operation": "aggregate_finding",
+      "input": {"finding": "identifier_not_grouped", "path": "aggregate.expr", "expression": "V + SUM(D.N)", "dataset": "D", "identifier": "V"},
+      "compares": ["phase", "condition", "rule", "context", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "aggregate_identifier_not_grouped", "rule": "FORMULA-22", "context": {"expr": "V + SUM(D.N)", "dataset": "D", "identifier": "V"}}]
+    },
+    {
+      "case": "a_reduction_over_sources_of_no_common_type_names_each_type_once",
+      "operation": "aggregate_finding",
+      "input": {"finding": "incomparable_sources", "path": "aggregate.expr", "expression": "MAX(D.V)", "source": "D.V", "types": ["str", "int", "str"]},
+      "compares": ["phase", "condition", "rule", "context", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "incomparable_sources", "rule": "FORMULA-23", "context": {"expr": "MAX(D.V)", "sources": ["D.V"], "types": ["int", "str"]}}]
+    },
+    {
+      "case": "an_aggregate_reading_a_relation_and_the_output_mixes_relations",
+      "operation": "aggregate_finding",
+      "input": {"finding": "mixed_relations", "path": "aggregate.expr", "expression": "SUM(D.N) + V", "relations": ["D", "<output>"]},
+      "compares": ["phase", "condition", "rule", "context", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "mixed_relations", "rule": "LOOKUP-18", "context": {"expr": "SUM(D.N) + V", "relations": ["D", "<output>"]}}]
+    },
+    {
+      "case": "an_output_row_reduction_with_groups_has_no_aggregate_context",
+      "operation": "aggregate_finding",
+      "input": {"finding": "invalid_context", "path": "aggregate", "expression": "SUM(V)", "cause": "output_needs_groups"},
+      "compares": ["phase", "condition", "rule", "context", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "invalid_aggregate_context", "rule": "LOOKUP-19", "context": {"expr": "SUM(V)", "reason": "an output-row reduction declares group_by"}}]
+    },
+    {
+      "case": "a_qualified_group_that_is_no_output_key_has_no_aggregate_context",
+      "operation": "aggregate_finding",
+      "input": {"finding": "invalid_context", "path": "aggregate.group_by", "expression": "SUM(D.N)", "cause": "qualified_group_not_output_key"},
+      "compares": ["phase", "condition", "rule", "context", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "invalid_aggregate_context", "rule": "LOOKUP-19", "context": {"expr": "SUM(D.N)", "reason": "a qualified aggregate group_by column must also be an output key"}}]
+    },
+    {
+      "case": "a_grouped_row_aggregate_without_key_pairs_has_no_aggregate_context",
+      "operation": "aggregate_finding",
+      "input": {"finding": "invalid_context", "path": "aggregate.key", "expression": "SUM(D.N)", "cause": "row_no_keys"},
+      "compares": ["phase", "condition", "rule", "context", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "invalid_aggregate_context", "rule": "LOOKUP-5", "context": {"expr": "SUM(D.N)", "reason": "a grouped row aggregate reads its own group and declares no key pairs"}}]
+    },
+    {
+      "case": "an_ungrouped_row_template_has_no_aggregate_context",
+      "operation": "aggregate_finding",
+      "input": {"finding": "invalid_context", "path": "aggregate", "expression": "SUM(D.N)", "cause": "ungrouped_row"},
+      "compares": ["phase", "condition", "rule", "context", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "invalid_aggregate_context", "rule": "LOOKUP-18", "context": {"expr": "SUM(D.N)", "reason": "an ungrouped row template has no aggregate context"}}]
+    },
+    {
+      "case": "an_aggregate_key_column_the_relation_lacks_is_an_unknown_field",
+      "operation": "aggregate_finding",
+      "input": {"finding": "donor_key_reference", "path": "aggregate.expr", "identifier": "D.ABSENT"},
+      "compares": ["phase", "condition", "rule", "context", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-5", "context": {"identifier": "D.ABSENT"}}]
+    },
+    {
+      "case": "an_aggregate_match_value_reading_no_current_value_is_an_unknown_field",
+      "operation": "aggregate_finding",
+      "input": {"finding": "match_value_reference", "path": "aggregate.expr", "identifier": "ABSENT"},
+      "compares": ["phase", "condition", "rule", "context", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-5", "context": {"identifier": "ABSENT"}}]
+    },
+    {
+      "case": "an_aggregate_key_of_another_type_than_its_match_is_refused",
+      "operation": "aggregate_finding",
+      "input": {"finding": "key_type", "path": "aggregate.expr", "source": "ID", "expected": "str", "actual": "int"},
+      "compares": ["phase", "condition", "rule", "context", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "context": {"source": "ID", "expected": "str", "actual": "int"}}]
+    },
+    {
+      "case": "a_qualified_aggregate_without_a_key_reads_an_input_that_declares_none",
+      "operation": "aggregate_finding",
+      "input": {"finding": "undeclared_input_key", "path": "aggregate", "dataset": "D"},
+      "compares": ["phase", "condition", "rule", "context", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "no_applicable_keys", "rule": "LOOKUP-5", "context": {"dataset": "D", "hint": "declare `key` on the input or on the aggregate"}}]
+    },
+    {
+      "case": "arithmetic_over_a_reduction_that_is_not_numeric_is_refused_before_any_record",
+      "operation": "aggregate_types",
+      "input": {"expression": "MIN(D.S) + 1", "path": "aggregate.expr", "types": {"D.S": "str", "G": "str", "D.N": "int"}},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-23", "spec_paths": ["aggregate.expr"], "context": {"expr": "MIN(D.S) + 1", "source": "MIN(D.S)", "expected": "numeric", "actual": "str"}}]
+    },
+    {
+      "case": "arithmetic_over_a_grouping_column_that_is_not_numeric_is_refused_before_any_record",
+      "operation": "aggregate_types",
+      "input": {"expression": "SUM(D.N) + G", "path": "aggregate.expr", "types": {"D.S": "str", "G": "str", "D.N": "int"}},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-23", "spec_paths": ["aggregate.expr"], "context": {"expr": "SUM(D.N) + G", "source": "G", "expected": "numeric", "actual": "str"}}]
+    },
+    {
+      "case": "an_aggregate_whose_derivations_bind_nothing_is_an_invalid_derive_step",
+      "operation": "prepare",
+      "input": {"base": "aggregate"},
+      "compares": ["phase", "condition", "rule"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22"}]
+    },
+    {
+      "case": "a_derive_binding_that_reads_no_relation_is_an_invalid_derive_step",
+      "operation": "prepare",
+      "input": {"base": "aggregate", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations"], "to": {"V": {"type": "float", "derivation": {"value": 1}}}}]},
+      "compares": ["phase", "condition", "rule"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22"}]
+    },
+    {
+      "case": "a_derive_binding_that_reads_an_unbound_name_is_an_unknown_derive_variable",
+      "operation": "prepare",
+      "input": {"base": "aggregate", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations"], "to": {"V": {"type": "float", "derivation": {"value": "W"}}}}]},
+      "compares": ["phase", "condition", "rule"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_derive_variable", "rule": "LOOKUP-22"}]
+    },
+    {
+      "case": "a_derive_binding_that_reads_an_intermediate_without_keep_is_an_invalid_derive_step",
+      "operation": "prepare",
+      "input": {"base": "aggregate", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations"], "to": {"V": {"type": "float", "derivation": {"value": "SRC.ID"}}, "C": {"type": "int", "derivation": {"value": "CAP.ID"}}}}, {"set": ["intermediates"], "to": [{"id": "CAP", "dataset": "SRC", "key": {"ID": "SRC.ID"}}]}]},
+      "compares": ["phase", "condition", "rule", "context.intermediate"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "context": {"intermediate": "CAP"}}]
+    }
+  ]
+}

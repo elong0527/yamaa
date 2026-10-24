@@ -24,7 +24,7 @@ carries, and declaring it for an internal column fails validation, reporting
 the column.
 
 Fails: `submission_not_output_column`.
-Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionColumnNotOutput`, `rust/crates/yamaa-core/tests/schema_submission.rs::absent_submission_remains_absent_and_preserves_ordinary_column_declarations`.
+Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_column_with_submission_metadata_that_is_not_output_is_refused`, `rust/crates/yamaa-core/tests/schema_submission.rs::absent_submission_remains_absent_and_preserves_ordinary_column_declarations`.
 
 An internal column is not in the artifact, so it is not in the document that
 describes the artifact; declaring metadata for one is an error rather than an
@@ -69,7 +69,7 @@ lists for that model; a guide of another model, or a standard of type `CT`,
 fails.
 
 Fails: `missing_required_field`, `standard_model_mismatch`.
-Evidence: `sdtm-dm-metadata`, `negative-submission-model-missing`, `negative-section-model-mismatch`, `rust/crates/yamaa/tests/language_header.rs::submission_metadata_needs_a_model`, `rust/crates/yamaa/tests/language_header.rs::a_section_lists_only_specifications_of_its_model`, `rust/crates/yamaa-core/tests/support/diagnostic/front_end.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionModelMismatch`, `python/tests/installed/installed_public_define.py::test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes`.
+Evidence: `sdtm-dm-metadata`, `negative-submission-model-missing`, `negative-section-model-mismatch`, `rust/crates/yamaa/tests/language_header.rs::submission_metadata_needs_a_model`, `rust/crates/yamaa/tests/language_header.rs::a_section_lists_only_specifications_of_its_model`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_specification_declaring_submission_metadata_names_its_model`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_specification_naming_its_model_may_declare_submission_metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_listed_specification_of_another_model_is_refused`, `python/tests/installed/installed_public_define.py::test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes`.
 
 | Model | Standard names |
 |---|---|
@@ -120,7 +120,7 @@ declaring `reference_data: true` must declare `repeating: false`.
 data.
 
 Fails: `reference_data_repeating_conflict`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionReferenceRepeating`, `rust/crates/yamaa-core/tests/schema_submission.rs::dataset_defaults_and_comment_survive_original_document_drop`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::reference_data_that_repeats_is_refused`, `rust/crates/yamaa-core/tests/schema_submission.rs::dataset_defaults_and_comment_survive_original_document_drop`.
 
 `label` states what the dataset is. It is the dataset's own description and is
 distinct from `domain`: `DM` is the domain and `Demographics` is the label.
@@ -149,7 +149,7 @@ not its parent domain. `domain` is declared only for a dataset whose model is
 fails validation, reporting the field.
 
 Fails: `value_not_permitted`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionAdamField`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::rules_that_read_the_model_are_checked_on_the_specification_alone`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_adam_column_role_is_not_permitted`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::rules_that_read_the_model_are_checked_on_the_specification_alone`.
 
 A domain declared for the `ADaM` model is an error rather than an unused
 value. A `role` declared for that model fails the same way under
@@ -174,7 +174,7 @@ a date or time type's form ([SUB-26](#sub-26)) reads it. A `data_type` outside
 the admitted set fails validation.
 
 Fails: `submission_data_type_not_admitted`.
-Evidence: `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDataType`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::submission_fields_do_not_change_any_original_domain_artifact`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::rules_that_read_the_model_are_checked_on_the_specification_alone`.
+Evidence: `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_integer_data_type_is_not_admitted_for_a_text_column`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::submission_fields_do_not_change_any_original_domain_artifact`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::rules_that_read_the_model_are_checked_on_the_specification_alone`.
 
 | Declared type | Default | Also admits |
 |---|---|---|
@@ -220,7 +220,7 @@ integer, and is required when `data_type` resolves to `float` and must not be
 declared otherwise.
 
 Fails: `submission_length_missing`, `submission_length_not_applicable`, `submission_length_invalid`.
-Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionLengthMissing`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::effective_value_metadata_rejects_invalid_bounds_types_and_explicit_length_conflicts_before_data`.
+Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_text_column_without_a_length_is_refused`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::effective_value_metadata_rejects_invalid_bounds_types_and_explicit_length_conflicts_before_data`.
 
 The other submission types carry fixed-form values, so a length for such a type
 restates that form. A `date` or `datetime` column has the fixed length its
@@ -319,7 +319,7 @@ for a dataset whose model is `ADaM`; a role there fails validation, reporting
 the field.
 
 Fails: `value_not_permitted`.
-Evidence: `sdtm-dm-metadata`, `negative-role-unknown`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionAdamField`, `rust/crates/yamaa-core/tests/schema_submission.rs::complete_nested_metadata_retains_integer_text_documents_pages_and_order_after_drop`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::a_role_outside_the_nine_fails_where_the_specification_is_read`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::rules_that_read_the_model_are_checked_on_the_specification_alone`.
+Evidence: `sdtm-dm-metadata`, `negative-role-unknown`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_adam_column_role_is_not_permitted`, `rust/crates/yamaa-core/tests/schema_submission.rs::complete_nested_metadata_retains_integer_text_documents_pages_and_order_after_drop`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::a_role_outside_the_nine_fails_where_the_specification_is_read`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::rules_that_read_the_model_are_checked_on_the_specification_alone`.
 
 | Role | The column |
 |---|---|
@@ -371,7 +371,7 @@ resolves without a study document. A key column is mandatory, and declaring
 dataset's class is a tabulation class and its `core` is `Req`.
 
 Fails: `core_mandatory_conflict`, `value_not_permitted`.
-Evidence: `sdtm-dm-metadata`, `negative-required-sex-missing`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::mandatory_columns_are_checked_without_a_study_document`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::rules_that_read_the_model_are_checked_on_the_specification_alone`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionCoreMandatory`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionClassFamily`.
+Evidence: `sdtm-dm-metadata`, `negative-required-sex-missing`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::mandatory_columns_are_checked_without_a_study_document`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::rules_that_read_the_model_are_checked_on_the_specification_alone`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_column_submission_without_core_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_class_outside_the_model_is_not_permitted`.
 
 For `SDTM` and `SEND`, `Req` is required, `Exp` expected and `Perm`
 permissible. For `ADaM`, `Req` is required, `Cond` conditionally required and
@@ -456,7 +456,7 @@ verification on a column that is mandatory on every row restates the fact and
 fails validation.
 
 Fails: `not_missing_failed`, `redundant_declaration`.
-Evidence: `negative-mandatory-arm-missing`, `negative-required-sex-missing`, `negative-value-level-mandatory-missing`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::value_level_mandatory_applies_only_to_the_rows_of_its_test_code`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionMandatoryRedundant`.
+Evidence: `negative-mandatory-arm-missing`, `negative-required-sex-missing`, `negative-value-level-mandatory-missing`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::value_level_mandatory_applies_only_to_the_rows_of_its_test_code`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_not_missing_check_restating_a_mandatory_column_is_redundant`.
 
 The domain build enforces the resolution of [SUB-10](#sub-10) without a study
 document. The check runs after the column's declared verifications and before
@@ -583,7 +583,7 @@ row its where clause selects, and against every derivation of the column when
 that cannot be known.
 
 Fails: `value_level_multiple_matches`, `value_level_unmatched`, `refuted_value_origin`.
-Evidence: `negative-value-level-ambiguous-row`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::a_row_two_entries_select_fails_with_its_keys_and_both_entries`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::an_entry_that_matches_no_row_is_a_warning_and_scoped_checks_read_their_rows`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::predecessor_columns_copy_the_column_their_description_names`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionValueOriginRefuted`, `rust/tests/host-fixtures/cases.json::value_level_report`.
+Evidence: `negative-value-level-ambiguous-row`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::a_row_two_entries_select_fails_with_its_keys_and_both_entries`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::an_entry_that_matches_no_row_is_a_warning_and_scoped_checks_read_their_rows`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::predecessor_columns_copy_the_column_their_description_names`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_literal_refutes_the_derived_origin_of_the_rows_an_entry_selects`, `rust/tests/host-fixtures/cases.json::value_level_report`.
 
 Both checks run where [Verification](../verification.md) runs a column
 verification, after the column's declared verifications and before its other
@@ -637,7 +637,7 @@ or `Not Available` origin beside another, fail, as does a column carrying
 submission metadata without `origins`.
 
 Fails: `origin_missing`, `conflicting_origins`.
-Evidence: `sdtm-dm-metadata`, `schema-column-origins`, `negative-conflicting-origins`, `rust/crates/yamaa/tests/language_header.rs::a_column_declares_several_origins`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginMissing`, `rust/crates/yamaa-core/tests/support/diagnostic/front_end.rs`, `rust/crates/yamaa-core/tests/schema_submission.rs::portable_choice_and_identifier_failures_use_only_applicable_current_causes`.
+Evidence: `sdtm-dm-metadata`, `schema-column-origins`, `negative-conflicting-origins`, `rust/crates/yamaa/tests/language_header.rs::a_column_declares_several_origins`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_column_submission_without_origins_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::two_origins_of_one_type_and_source_conflict_at_the_later`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::an_origin_beside_a_not_available_one_conflicts`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::an_origin_beside_a_predecessor_one_conflicts`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_value_level_entry_origins_conflict_naming_the_entry`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::distinct_origins_do_not_conflict`, `rust/crates/yamaa-core/tests/schema_submission.rs::portable_choice_and_identifier_failures_use_only_applicable_current_causes`.
 
 A submission document states where every value came from, and a column with no
 declared origin has no place in a submission document. An empty `origins`
@@ -665,7 +665,7 @@ For `ADaM`, the admitted types are `Derived`, `Assigned`, `Predecessor` and
 model does not admit fails.
 
 Fails: `origin_source_not_admitted`.
-Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::original_lb_source_rejection_and_per_value_published_vocabulary_have_zero_writes`, `rust/crates/yamaa-adapters/tests/file_resources.rs::not_available_and_send_sources_follow_the_family_pairs`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::rules_that_read_the_model_are_checked_on_the_specification_alone`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginSource`.
+Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::original_lb_source_rejection_and_per_value_published_vocabulary_have_zero_writes`, `rust/crates/yamaa-adapters/tests/file_resources.rs::not_available_and_send_sources_follow_the_family_pairs`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::rules_that_read_the_model_are_checked_on_the_specification_alone`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_assigned_origin_from_the_investigator_is_not_admitted`.
 
 | Type | Admitted sources for `SDTM` |
 |---|---|
@@ -707,7 +707,7 @@ written for reviewers. The description is also required when its `type` is
 `Predecessor` description of another form, fails.
 
 Fails: `origin_description_missing`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginDescription`, `rust/crates/yamaa-core/src/submission_origin.rs::predecessor_descriptions_name_one_column_and_an_optional_condition`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::predecessor_columns_copy_the_column_their_description_names`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_other_origin_without_a_description_is_refused`, `rust/crates/yamaa-core/src/submission_origin.rs::predecessor_descriptions_name_one_column_and_an_optional_condition`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::predecessor_columns_copy_the_column_their_description_names`.
 
 Neither `Other` nor `Not Available` states anything alone. The dataset and the
 column are identifiers joined by one period, and the condition after the
@@ -733,7 +733,7 @@ omitted. Such an origin with no document reference, or under `Submission` with
 no page reference, fails.
 
 Fails: `origin_document_missing`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginDocument`, `rust/crates/yamaa-adapters/tests/file_resources.rs::collected_origins_name_their_form_page_under_submission`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_collected_origin_citing_another_document_misses_the_annotated_crf`, `rust/crates/yamaa-adapters/tests/file_resources.rs::collected_origins_name_their_form_page_under_submission`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
 
 A value collected from a person is traceable to the form it was collected on.
 The annotated case report form is the only document the reference can name,
@@ -753,7 +753,7 @@ A column with a `Derived` origin must declare `method`. A `Derived` origin
 with no `method` fails.
 
 Fails: `method_missing`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::metadata_admission_has_exact_causes_before_study_access`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionMethodMissing`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::metadata_admission_has_exact_causes_before_study_access`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_derived_origin_without_a_method_is_refused`.
 
 The algorithm is what a derived origin claims exists; a claim with no
 algorithm attached is not traceable. One `Derived` origin among several
@@ -775,7 +775,7 @@ collected values `Protocol` and `Predecessor`, and any other derivation
 types all its `rows` entries admit, and no shared type fails.
 
 Fails: `origin_contradicts_derivation`.
-Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::independent_metadata_refutations_preserve_shared_conditions_and_zero_writes`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::recodes_literals_and_stored_values_admit_their_published_origins`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::computed_values_and_case_reads_of_derived_columns_refute_collected`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::pivots_and_plain_lookups_are_bare_reads_that_admit_collected`, `rust/crates/yamaa-core/src/submission_origin.rs::every_derivation_row_refutes_exactly_its_published_types`, `rust/crates/yamaa-core/src/submission_origin.rs::only_the_reduction_of_one_variable_to_its_one_value_is_a_pivot`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginRefuted`.
+Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::independent_metadata_refutations_preserve_shared_conditions_and_zero_writes`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::recodes_literals_and_stored_values_admit_their_published_origins`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::computed_values_and_case_reads_of_derived_columns_refute_collected`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::pivots_and_plain_lookups_are_bare_reads_that_admit_collected`, `rust/crates/yamaa-core/src/submission_origin.rs::every_derivation_row_refutes_exactly_its_published_types`, `rust/crates/yamaa-core/src/submission_origin.rs::only_the_reduction_of_one_variable_to_its_one_value_is_a_pivot`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_literal_derivation_refutes_a_derived_origin`.
 
 | Derivation | Admitted `origin.type` | Refuted |
 |---|---|---|
@@ -862,7 +862,7 @@ the project file lists declares that column, their labels must be equal; a
 renamed column keeps its own label.
 
 Fails: `origin_contradicts_derivation`, `refuted_value_origin`, `predecessor_label_mismatch`.
-Evidence: `negative-mandatory-arm-missing`, `schema-copy-producer-columns`, `rust/crates/yamaa/tests/copy_entry.rs::each_copy_refusal_names_what_it_refuses`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::predecessor_columns_copy_the_column_their_description_names`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::pivots_and_plain_lookups_are_bare_reads_that_admit_collected`, `rust/crates/yamaa-adapters/tests/file_resources.rs::predecessor_labels_and_the_dataset_inventory_span_every_section`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionPredecessorLabel`.
+Evidence: `negative-mandatory-arm-missing`, `schema-copy-producer-columns`, `rust/crates/yamaa/tests/copy_entry.rs::each_copy_refusal_names_what_it_refuses`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::predecessor_columns_copy_the_column_their_description_names`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::pivots_and_plain_lookups_are_bare_reads_that_admit_collected`, `rust/crates/yamaa-adapters/tests/file_resources.rs::predecessor_labels_and_the_dataset_inventory_span_every_section`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_predecessor_column_labelled_otherwise_than_its_predecessor_is_refused`.
 
 The derivation reads the predecessor through the input dataset declared under
 the predecessor's name: a `description` of `DM.AGE` requires the bare reference
@@ -928,7 +928,7 @@ not shared between two datasets or two columns. A document reference names a
 document the study document declares, and optionally the place within it: as a
 string the reference is the identifier, and as a mapping it adds `pages`.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::complete_nested_metadata_retains_integer_text_documents_pages_and_order_after_drop`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionUnknownDocument`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::complete_nested_metadata_retains_integer_text_documents_pages_and_order_after_drop`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_origin_citing_an_undeclared_document_is_refused`.
 
 [Define-XML](define-xml.md) mints each comment an identifier from the place it
 is declared, so a shared comment would need an identifier space the profile
@@ -1041,7 +1041,7 @@ format, fails when a document composes the specification. Under `SDTM` and
 [SUB-27](#sub-27) refuses a `datetime`.
 
 Fails: `submission_data_type_not_admitted`, `value_not_permitted`.
-Evidence: `adam-adsl-xpt`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDisplayFormatConflict`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::rules_that_read_the_model_are_checked_on_the_specification_alone`.
+Evidence: `adam-adsl-xpt`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::an_adam_date_with_another_display_format_is_not_permitted`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::rules_that_read_the_model_are_checked_on_the_specification_alone`.
 
 Dataset-JSON keeps the ISO value and asks for the integer with
 `targetDataType` ([JSON-10](dataset-json.md#json-10)), and a SAS Transport file

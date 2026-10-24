@@ -224,41 +224,6 @@ mod diagnostics {
             let mut reached = replay::replay();
             // The tables still written in Rust, one group for each part of
             // #3691 that moves them, so the parts never edit the same lines.
-            // Submission and the front end (A1).
-            reached.extend(submission::reached());
-            reached.extend(front_end::reached());
-            reached.extend(front_end::project_binding_reached());
-
-            // Preflight and binding (A2).
-            reached.extend(preflight::reached());
-            reached.extend(preflight::self_reached());
-            reached.extend(preflight::intermediate_reached());
-            reached.extend(preflight::namespace_reached());
-            reached.extend(preflight::output_reached());
-            reached.extend(preflight::temporal_reached());
-            reached.extend(binding::reached());
-            reached.extend(binding::key_record_reached());
-            reached.extend(binding::window_reached());
-            reached.extend(binding::window_driver_reached());
-            reached.extend(binding::lookup_reached());
-            reached.extend(binding::nearest_reached());
-            reached.extend(binding::source_filter_reached());
-            reached.extend(binding::source_match_reached());
-            reached.extend(binding::source_range_reached());
-            reached.extend(binding::verification_reached());
-            reached.extend(binding::verification_declarations_reached());
-
-            // The other findings (B2).
-            reached.extend(aggregate::reached());
-            reached.extend(odm::reached());
-            reached.extend(odm_read::reached());
-            reached.extend(grammar::reached());
-            reached.extend(grammar::predicate_reached());
-            reached.extend(inheritance::reached());
-            reached.extend(verification::reached());
-            reached.extend(project_lock::reached());
-            reached.extend(project_activation::reached());
-            reached.extend(project_codelist_binding::reached());
 
             // The project environment (C).
             reached.extend(project_environment::reached());

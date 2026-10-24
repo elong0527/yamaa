@@ -2,7 +2,13 @@
 mod diagnostics {
     mod diagnostic {
         mod aggregate {
-            use crate::support::diagnostic::aggregate::*;
+            use crate::support::diagnostic::text;
+            use yamaa_core::{
+                dataset::AggregatePhase,
+                diagnostic::{AggregateFinding as Finding, ConditionCode, ProjectionError},
+                json::Value as V,
+                value::{Value, ValueType},
+            };
             #[test]
 
             fn invalid_causes_refuse_and_large_group_values_stay_complete() {
@@ -85,9 +91,79 @@ mod diagnostics {
                 .unwrap();
                 assert_eq!(diagnostic.context["record_count"], V::from(usize::MAX));
             }
+            /// Preparation refuses each faulty derive binding with its own
+            /// cause, located inside the aggregate that declares the binding
+            /// (LOOKUP-22).
+            #[test]
+            fn each_derive_binding_refusal_has_its_cause_inside_its_aggregate() {
+                use crate::support::{
+                    project_call_compiler::{specification, Tree as T},
+                    specification::prepare,
+                };
+                use yamaa_core::{
+                    schema::DocumentNode,
+                    specification::{PreflightFinding, PrepareError},
+                };
+                // An aggregate's bindings are a map keyed by name (P-BIND-1).
+                let binding = |value| {
+                    (
+                        "V",
+                        T::map(vec![
+                            ("type", T::text("float")),
+                            ("derivation", T::map(vec![("value", value)])),
+                        ]),
+                    )
+                };
+                for (bindings, code, label) in [
+                    (
+                        vec![],
+                        ConditionCode::AggregateDeriveDeclaration,
+                        "derivations that bind nothing",
+                    ),
+                    (
+                        vec![binding(T::Scalar(DocumentNode::Integer("1".into())))],
+                        ConditionCode::AggregateDeriveRelation,
+                        "a binding that reads no relation",
+                    ),
+                    (
+                        vec![binding(T::text("W"))],
+                        ConditionCode::AggregateDeriveVariable,
+                        "a binding that reads an unbound name",
+                    ),
+                ] {
+                    let document = specification(vec![(
+                        "RESULT",
+                        "float",
+                        T::map(vec![(
+                            "aggregate",
+                            T::map(vec![
+                                ("derivations", T::map(bindings)),
+                                ("expr", T::text("SUM(V)")),
+                            ]),
+                        )]),
+                    )]);
+                    let Err(PrepareError::Invalid(findings)) = prepare(&document) else {
+                        panic!("{label}: the invalid derive declaration was admitted");
+                    };
+                    let diagnostic = findings
+                        .iter()
+                        .find_map(|finding| match finding {
+                            PreflightFinding::Scalar(diagnostic) if diagnostic.code == code => {
+                                Some(diagnostic)
+                            }
+                            _ => None,
+                        })
+                        .unwrap_or_else(|| panic!("{label}: no {code:?} finding"));
+                    assert!(
+                        diagnostic.spec_paths[0].starts_with("columns.RESULT.derivation.aggregate"),
+                        "{label}: {:?}",
+                        diagnostic.spec_paths
+                    );
+                }
+            }
         }
         mod binding {
-            use crate::support::diagnostic::binding::*;
+            use yamaa_core::column_dependencies;
             #[test]
 
             fn malformed_dependency_metadata_has_no_projection_or_panic() {
@@ -235,7 +311,8 @@ mod diagnostics {
             }
         }
         mod grammar {
-            use crate::support::diagnostic::grammar::*;
+            use crate::support::diagnostic::text;
+            use yamaa_core::expression::{compile, CompileError, Context as Field};
             #[test]
 
             fn arithmetic_is_a_comparison_operand_and_refusals_keep_their_text_and_position() {
@@ -303,7 +380,11 @@ mod diagnostics {
             }
         }
         mod inheritance {
-            use crate::support::diagnostic::inheritance::*;
+            use yamaa_core::{
+                diagnostic::{ConditionCode, InheritanceFinding as F},
+                inheritance::Named,
+                json::Value as JsonValue,
+            };
             #[test]
 
             fn contradictory_cycle_carriers_refuse_without_relabeling_the_cause() {
@@ -356,31 +437,51 @@ mod diagnostics {
             }
         }
         mod odm {
-            use crate::support::diagnostic::odm::*;
+            use crate::support::diagnostic::{rendered, text};
+            use yamaa_core::{
+                dataset::AggregatePhase,
+                diagnostic::{ConditionCode, OdmFinding as F},
+                json::Value as V,
+                value::Value,
+            };
             #[test]
 
             fn complete_odm_projection_preserves_nested_values_and_escaped_metadata() {
                 let large = "\"".repeat(400);
                 let names = [large.clone()];
-                let finding = F::AmbiguousField {
+                let diagnostic = F::AmbiguousField {
                     dataset: "D",
                     field: "ItemOID",
                     stored: &names,
-                };
-                let mut reached = BTreeSet::new();
-                check(
-                    finding,
-                    "validation",
-                    "odm_schema_field_ambiguous",
-                    "NAME-8",
-                    "input.D.path",
-                    vec![
-                        ("dataset", text("D")),
-                        ("field", text("ItemOID")),
-                        ("stored", V::Array(vec![text(&large)])),
-                    ],
-                    &mut reached,
+                }
+                .diagnostic();
+                let definition = diagnostic.definition();
+                assert_eq!(
+                    (
+                        definition.phase,
+                        definition.condition,
+                        definition.rule,
+                        diagnostic.spec_paths.as_slice(),
+                        &diagnostic.context,
+                        diagnostic.source_span,
+                        &diagnostic.operand_route,
+                    ),
+                    (
+                        "validation",
+                        "odm_schema_field_ambiguous",
+                        Some("NAME-8"),
+                        ["input.D.path".to_string()].as_slice(),
+                        &[
+                            ("dataset".into(), text("D")),
+                            ("field".into(), text("ItemOID")),
+                            ("stored".into(), V::Array(vec![text(&large)])),
+                        ]
+                        .into(),
+                        None,
+                        &None,
+                    )
                 );
+                rendered(&diagnostic);
                 let value = "\\".repeat(400);
                 let differ = [("FormOID".into(), vec![Value::Str(value.clone())])];
                 let diagnostic = F::NotUnique {
@@ -416,6 +517,154 @@ mod diagnostics {
                 );
                 assert_eq!(diagnostic.source_span, None);
                 assert_eq!(diagnostic.operand_route, None);
+            }
+            /// Each refusal of the ODM source `read_odm` reads renders its
+            /// condition's message from its facts (ODM-1, P-MSG-1).
+            #[test]
+            fn each_odm_source_refusal_renders_its_message() {
+                use yamaa_core::{
+                    diagnostic::OdmReadFinding,
+                    odm_items::{Definition, Document, Error, Layout, Limit, Member, ValueRefusal},
+                };
+                for (refusal, message) in [
+                    (
+                        Error::Archive {
+                            reason: "truncated TAR header",
+                        },
+                        "the archive edc/odm.xml cannot be read: truncated TAR header",
+                    ),
+                    (
+                        Error::Compression { format: "xz" },
+                        "edc/odm.xml uses xz compression, but only plain and gzip TAR archives are read",
+                    ),
+                    (
+                        Error::Member(Member::Candidates { count: 2 }),
+                        "no member of edc/odm.xml can be read: TAR input must contain exactly one XML \
+                         member or receive archive_member",
+                    ),
+                    (
+                        Error::Member(Member::Matches {
+                            name: "study/odm.xml".into(),
+                            count: 0,
+                        }),
+                        "no member of edc/odm.xml can be read: TAR input contains 0 entries named \
+                         \"study/odm.xml\"",
+                    ),
+                    (
+                        Error::Limit(Limit::Depth(64)),
+                        "edc/odm.xml exceeds a read limit: XML depth exceeds 64",
+                    ),
+                    (
+                        Error::Malformed {
+                            position: 41,
+                            reason: "unclosed element".into(),
+                        },
+                        "edc/odm.xml is not well-formed XML at byte 41: unclosed element",
+                    ),
+                    (
+                        Error::Doctype,
+                        "edc/odm.xml uses XML the reader does not support: DOCTYPE declarations are not \
+                         supported",
+                    ),
+                    (
+                        Error::Encoding {
+                            encoding: "UTF-16".into(),
+                        },
+                        "edc/odm.xml uses XML the reader does not support: ODM XML must be encoded as \
+                         UTF-8, not UTF-16",
+                    ),
+                    (
+                        Error::Document(Document::Namespace { namespace: None }),
+                        "edc/odm.xml is not a supported ODM 1.3 or 2.0 document: unsupported ODM \
+                         namespace (none)",
+                    ),
+                    (
+                        Error::Layout(Layout::Nested("FormData")),
+                        "edc/odm.xml holds clinical data the item table cannot represent: nested FormData \
+                         is not supported",
+                    ),
+                    (
+                        Error::MissingAttribute {
+                            element: "ItemData",
+                            attribute: "ItemOID",
+                        },
+                        "ItemData in edc/odm.xml requires a non-empty ItemOID",
+                    ),
+                    (
+                        Error::AmbiguousAttribute {
+                            name: "StudySubjectID",
+                        },
+                        "edc/odm.xml has more than one namespaced attribute named StudySubjectID",
+                    ),
+                    (
+                        Error::InvalidAttribute {
+                            element: "ItemData".into(),
+                            attribute: "IsNull",
+                            value: "maybe".into(),
+                        },
+                        "ItemData in edc/odm.xml has the unsupported IsNull value 'maybe'",
+                    ),
+                    (
+                        Error::InvalidAttribute {
+                            element: "ODM".into(),
+                            attribute: "FileType",
+                            value: "Archive".into(),
+                        },
+                        "ODM in edc/odm.xml has the unsupported FileType value 'Archive'",
+                    ),
+                    (
+                        Error::MetadataConflict {
+                            kind: Definition::Item,
+                            study: "S".into(),
+                            version: "M".into(),
+                            oid: "I.AGE".into(),
+                        },
+                        "edc/odm.xml gives the item I.AGE of S/M different names",
+                    ),
+                    (
+                        Error::Value {
+                            item: "I.AGE".into(),
+                            refusal: ValueRefusal::MultipleChildren,
+                        },
+                        "the ItemData I.AGE in edc/odm.xml holds a value the item table cannot represent: \
+                         has multiple Value children",
+                    ),
+                    (
+                        Error::Transactional {
+                            element: "ODM".into(),
+                            attribute: "FileType",
+                            value: "Transactional".into(),
+                        },
+                        "edc/odm.xml is not a snapshot: ODM declares FileType Transactional",
+                    ),
+                    (
+                        Error::Transactional {
+                            element: "ItemGroupData".into(),
+                            attribute: "TransactionType",
+                            value: "Remove".into(),
+                        },
+                        "edc/odm.xml is not a snapshot: ItemGroupData declares TransactionType Remove",
+                    ),
+                    (
+                        Error::NoClinicalData,
+                        "edc/odm.xml holds no ClinicalData",
+                    ),
+                    (
+                        Error::Option {
+                            option: "max_xml_depth",
+                            minimum: 8,
+                            value: 7,
+                        },
+                        "max_xml_depth has the value 7, which is not permitted",
+                    ),
+                ] {
+                    let finding = OdmReadFinding {
+                        refusal: &refusal,
+                        path: "edc/odm.xml",
+                        dataset: None,
+                    };
+                    assert_eq!(finding.diagnostic().message(), message, "{refusal:?}");
+                }
             }
         }
         mod parquet {
@@ -682,7 +931,59 @@ mod diagnostics {
             }
         }
         mod project_activation {
-            use crate::support::diagnostic::project_activation::*;
+            use crate::support::project_call_compiler as support;
+            use std::rc::Rc;
+            use yamaa_core::{
+                dataset::RowIdentity,
+                diagnostic::ConditionCode,
+                function_invocation::{FailureKind, InvocationFailure},
+                function_signature::ProjectFunctionIdentity,
+                project_activation::{BindingFailure, TestFailure},
+                project_diagnostics::{
+                    self as projection, DefinitionSource, Diagnostic, Error, Fact, HostDetails,
+                },
+                value::{FiniteFloat, Value},
+            };
+            /// A projection borrows the facts it names from the failure it
+            /// projects: the invoked function's name, and the result a
+            /// conformance case produced.
+            #[test]
+            fn projected_facts_borrow_the_failure_they_name() {
+                let failure = InvocationFailure {
+                    identity: ProjectFunctionIdentity {
+                        name: "id".into(),
+                        call: "pkg.id".into(),
+                    },
+                    kind: FailureKind::<()>::BooleanResult,
+                };
+                let diagnostic =
+                    projection::invocation("columns.X.derivation", &failure, None, &[], None)
+                        .unwrap();
+                let Fact::Text(name) = diagnostic.context["function"] else {
+                    panic!("borrowed function")
+                };
+                assert!(std::ptr::eq(name.as_ptr(), failure.identity.name.as_ptr()));
+                let function = support::function("id");
+                let definitions = [DefinitionSource {
+                    function: &function,
+                    path: "functions[0]",
+                }];
+                let failures: [TestFailure<()>; 1] = [TestFailure::Result {
+                    function: 0,
+                    case: 0,
+                    actual: Value::Int(8),
+                    expected: function.definition().tests[0].result.clone(),
+                }];
+                let diagnostic = projection::test_diagnostics(&definitions, &failures, &[None])
+                    .unwrap()
+                    .remove(0);
+                let Fact::Scalar(held) = diagnostic.context["actual"] else {
+                    panic!("borrowed actual")
+                };
+                assert!(
+                    matches!(&failures[0], TestFailure::Result { actual, .. } if std::ptr::eq(held, actual))
+                );
+            }
             #[test]
 
             fn opaque_payloads_remain_borrowed_with_original_precedence() {
@@ -966,11 +1267,30 @@ mod diagnostics {
             }
         }
         mod project_lock {
-            use crate::support::diagnostic::project_lock::*;
-            #[test]
-
-            fn every_classified_reason_preserves_independent_complete_context_and_order() {
-                assert_eq!(reached(), [ConditionCode::ProjectLockMismatch].into());
+            use crate::support::diagnostic::text;
+            use yamaa_core::{
+                diagnostic::{
+                    lock_diagnostics, ConditionCode, LockDiagnosticError as E, LockFinding,
+                    LockOrigins, LockReason as R,
+                },
+                json::Value as V,
+            };
+            fn origins() -> LockOrigins<'static> {
+                LockOrigins {
+                    source: "study/environment.yaml",
+                    entry: "study/project.yaml",
+                    field: "lock",
+                    lock_source: "held/uv.lock",
+                    written: "../uv.lock",
+                }
+            }
+            fn finding(reason: R, expected: &[&str], actual: Option<&str>) -> LockFinding {
+                LockFinding {
+                    package: "program".into(),
+                    reason,
+                    expected: expected.iter().map(|v| (*v).into()).collect(),
+                    actual: actual.map(str::to_owned),
+                }
             }
             #[test]
 
@@ -1012,6 +1332,15 @@ mod diagnostics {
                 assert_eq!(lock_diagnostics(None, &[]).unwrap(), vec![]);
                 let first = || finding(R::VersionMismatch, &["1.0"], Some("2.0"));
                 assert_eq!(lock_diagnostics(None, &[first()]), Err(E::InvalidContext));
+                // A lock declared at no field has no place to be reported.
+                let fieldless = LockOrigins {
+                    field: "",
+                    ..origins()
+                };
+                assert_eq!(
+                    lock_diagnostics(Some(fieldless), &[first()]),
+                    Err(E::InvalidContext)
+                );
                 for bad in [
                     finding(R::DistributionNotIdentified, &["1"], None),
                     finding(R::VersionNotLocked, &[], Some("1")),
@@ -1098,7 +1427,68 @@ mod diagnostics {
             }
         }
         mod submission {
-            use crate::support::diagnostic::submission::*;
+            use crate::support::{
+                document::Tree,
+                roots as rt,
+                submission::{catalogue, column, one, project, specification},
+            };
+            use std::convert::Infallible;
+            use yamaa_core::{
+                diagnostic::ConditionCode,
+                json::Value as JsonValue,
+                project_terminology as ct, submission_transport,
+                table::{CellError, Column, TableAccess, TableSchema, ValueRef},
+                value::{ColumnType, Value},
+            };
+            /// CT-11: transport admission refuses a published value outside
+            /// the study's dataset inventory with eight facts; the case
+            /// `submission.json::a_published_value_outside_the_dataset_inventory_fails`
+            /// compares its path and four of them.
+            #[test]
+            fn an_inventory_refusal_at_transport_names_eight_facts() {
+                struct Held(TableSchema, Value);
+                impl TableAccess for Held {
+                    type Error = Infallible;
+                    fn schema(&self) -> &TableSchema {
+                        &self.0
+                    }
+                    fn row_count(&self) -> usize {
+                        1
+                    }
+                    fn cell(
+                        &self,
+                        row: usize,
+                        column: usize,
+                    ) -> Result<ValueRef<'_>, CellError<Infallible>> {
+                        match (row, column) {
+                            (0, 0) => Ok((&self.1).into()),
+                            _ => Err(CellError::OutOfBounds { row, column }),
+                        }
+                    }
+                }
+                let mut spec = specification();
+                spec.set(
+                    &["columns", "0", "submission", "inventory_vocabulary"],
+                    Tree::boolean(true),
+                );
+                let study = one(project(), spec, &ct::Catalogue::admit(vec![]).unwrap()).unwrap();
+                let table = Held(
+                    TableSchema::new(vec![Column {
+                        name: "VALUE".into(),
+                        kind: ColumnType::Str,
+                    }])
+                    .unwrap(),
+                    Value::Str("UNKNOWN_DATASET".into()),
+                );
+                let finding =
+                    submission_transport::admit(&study, &study.datasets()[0], &table).unwrap_err();
+                assert_eq!(
+                    (finding.code, finding.context.len()),
+                    (ConditionCode::SubmissionInventoryFailed, 8),
+                    "{:?}",
+                    finding.context
+                );
+            }
             #[test]
             fn large_binding_values_are_retained_and_a_restating_verification_is_redundant() {
                 // Held semantic metadata has no cumulative copy allowance. File loaders
@@ -1312,7 +1702,83 @@ mod diagnostics {
             }
         }
         mod verification {
-            use crate::support::diagnostic::verification::*;
+            use crate::support::{
+                project_call_compiler::{specification_with_verifications, Tree as T},
+                specification::prepare,
+            };
+            use yamaa_core::{
+                dataset::{CheckRecord, RowIdentity},
+                diagnostic::ConditionCode,
+                project_diagnostics::{Context, Fact},
+                schema::DocumentNode,
+                specification::PreparedSpecification,
+                value::Value,
+                verification_diagnostics::{project, Error, Phase},
+            };
+            struct Row(Vec<Value>);
+            /// A specification declaring a `unique` check of warning
+            /// severity, an `all_or_none`, an `assert` and a `row_count`.
+            fn compiled() -> PreparedSpecification {
+                let list = || T::List(vec![T::text("VAL"), T::text("ID")]);
+                let spec = specification_with_verifications(
+                    vec![("VAL", "int", T::text("SRC.VAL"))],
+                    vec![],
+                    vec![
+                        T::map(vec![(
+                            "unique",
+                            T::map(vec![
+                                ("columns", list()),
+                                ("id", T::text("u")),
+                                ("severity", T::text("warning")),
+                            ]),
+                        )]),
+                        T::map(vec![(
+                            "all_or_none",
+                            T::map(vec![("columns", list()), ("id", T::text("a"))]),
+                        )]),
+                        T::map(vec![(
+                            "assert",
+                            T::map(vec![("require", T::text("VAL > 0")), ("id", T::text("b"))]),
+                        )]),
+                        T::map(vec![(
+                            "row_count",
+                            T::map(vec![
+                                ("min", T::Scalar(DocumentNode::Integer("1".into()))),
+                                ("id", T::text("r")),
+                            ]),
+                        )]),
+                    ],
+                    Some("warnings.csv"),
+                );
+                prepare(&spec).unwrap()
+            }
+            fn record(code: ConditionCode, path: &str, rows: &[Row]) -> CheckRecord {
+                CheckRecord {
+                    path: path.into(),
+                    code,
+                    evaluated_count: 9,
+                    failed_count: 1,
+                    output_rows: 9,
+                    offending_rows: rows
+                        .iter()
+                        .map(|row| RowIdentity {
+                            position: 0,
+                            values: row.0.clone(),
+                        })
+                        .collect(),
+                    codelist: None,
+                    inventory: None,
+                    row_count: None,
+                    entries: None,
+                    denominator: None,
+                }
+            }
+            fn object<'a>(fact: &'a Fact<'a>) -> &'a Context<'a> {
+                match fact {
+                    Fact::Object(fields) => fields,
+                    _ => panic!("complete context"),
+                }
+            }
             #[test]
 
             fn warning_display_is_bounded_but_all_keys_and_exact_scalars_remain_in_order() {
@@ -1340,10 +1806,13 @@ mod diagnostics {
                     project(&compiled, &records, Phase::Verification, "study.yaml").unwrap();
                 assert!(projected.diagnostics.is_empty());
                 let observation = object(&projected.observations[0]);
+                assert_eq!(observation["specification"], Fact::Text("study.yaml"));
                 assert_eq!(observation["severity"], Fact::Text("warning"));
                 assert_eq!(observation["verification_id"], Fact::Text("u"));
                 assert_eq!(observation["evaluated_count"], Fact::Unsigned(usize::MAX));
                 let failure = object(&observation["failure"]);
+                assert_eq!(failure["condition"], Fact::Text("unique_failed"));
+                assert_eq!(failure["rule"], Fact::Text("CHECK-10"));
                 let context = object(&failure["context"]);
                 assert_eq!(
                     context["columns"],
@@ -1378,6 +1847,8 @@ mod diagnostics {
                     &rows,
                 )];
                 let result = project(&compiled, &records, Phase::Output, "s.yaml").unwrap();
+                // The output phase observes no verification.
+                assert!(result.observations.is_empty());
                 let context = &result.diagnostics[0].context;
                 assert_eq!(context["column"], Fact::Text("ID"));
                 let Fact::Sequence(keys) = &context["keys"] else {

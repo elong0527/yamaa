@@ -1,0 +1,288 @@
+{
+  "about": "The 1.0 front end's own checks on a lowered specification, the rules of the surface its schema cannot state (FUNC-6, WINDOW-5, TIME-10, LOOKUP-3, LOOKUP-17, CSV-10, SUB-3, SUB-14), and CT-13's refusal of each binding that a specification prepared without its project names. Each case takes `specification` and replaces its second column, adding the root fields it needs; the CSV-10 cases edit its input `SRC` instead, and the CT-13 case replaces all its columns.",
+  "documents": {
+    "specification": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "T",
+      "keys": ["ID"],
+      "input": {"SRC": {"path": "src.csv"}},
+      "columns": [
+        {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+        {"name": "V", "type": "str", "derivation": {"value": "SRC.V"}}
+      ],
+      "output": {"path": "out.csv", "columns": ["ID"]}
+    }
+  },
+  "cases": [
+    {
+      "case": "a_call_argument_holding_an_operator_is_not_one_leaf",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [{"set": ["columns", "1"], "to": {"name": "BMI", "type": "float", "derivation": {"value": {"function": {"name": "bmi", "args": {"weight": "SRC.WEIGHT * 2"}}}}}}]
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_function_argument", "rule": "FUNC-6", "spec_paths": ["columns.BMI.derivation.function.args.weight"], "context": {"argument": "weight", "cause": "expression", "function": "bmi"}}]
+    },
+    {
+      "case": "a_baseline_order_starting_with_another_variable_than_the_date_is_not_permitted",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [{"set": ["columns", "1"], "to": {"name": "ABLFL", "type": "str", "derivation": {"value": {"baseline_flag": {"date": "ADT", "reference": "TRTSDT", "source": "AVAL", "window": {"order_by": ["ATM", "ADT"]}}}}}}]
+      },
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "WINDOW-5", "spec_paths": ["columns.ABLFL.derivation.baseline_flag.window.order_by[0]"], "context": {"date": "ADT", "direction": "asc", "value": "ATM", "variable": "ATM"}}]
+    },
+    {
+      "case": "an_impute_month_rule_needs_a_day_rule",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [{"set": ["columns", "1"], "to": {"name": "ADT", "type": "date", "derivation": {"value": {"impute": {"type": "date", "source": "SRC.DTC", "month": 6}}}}}]
+      },
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "TIME-10", "spec_paths": ["columns.ADT.derivation.impute"], "context": {"field": "day"}}]
+    },
+    {
+      "case": "an_intermediate_without_a_key_is_refused",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [
+          {"set": ["columns", "1"], "to": {"name": "NAME", "type": "str", "derivation": {"value": "NAMES.NAME"}}},
+          {"set": ["intermediates"], "to": [{"id": "NAMES", "dataset": "SRC", "filter": "SRC.KEEP = 'Y'"}]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "LOOKUP-3", "spec_paths": ["intermediates.NAMES.key"], "context": {"class": "intermediate_class", "field": "key"}}]
+    },
+    {
+      "case": "a_warning_unique_without_a_selection_is_not_permitted",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [
+          {"set": ["columns", "1"], "to": {"name": "V", "type": "str", "derivation": {"value": "LAST.V"}}},
+          {"set": ["intermediates"], "to": [{"id": "LAST", "dataset": "SRC", "key": ["ID"], "verifications": [{"unique": {"columns": ["ID"], "severity": "warning"}}]}]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "LOOKUP-17", "spec_paths": ["intermediates.LAST.verifications[0].unique.severity"], "context": {"intermediate": "LAST", "permitted": ["error"], "value": "warning"}}]
+    },
+    {
+      "case": "a_warning_unique_beside_keep_alone_is_not_permitted",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [
+          {"set": ["columns", "1"], "to": {"name": "V", "type": "str", "derivation": {"value": "LAST.V"}}},
+          {"set": ["intermediates"], "to": [{"id": "LAST", "dataset": "SRC", "key": ["ID"], "keep": "last", "verifications": [{"unique": {"columns": ["ID"], "severity": "warning"}}]}]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "LOOKUP-17", "spec_paths": ["intermediates.LAST.verifications[0].unique.severity"], "context": {"intermediate": "LAST", "permitted": ["error"], "value": "warning"}}]
+    },
+    {
+      "case": "a_warning_unique_beside_an_order_of_no_term_is_not_permitted",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [
+          {"set": ["columns", "1"], "to": {"name": "V", "type": "str", "derivation": {"value": "LAST.V"}}},
+          {"set": ["intermediates"], "to": [{"id": "LAST", "dataset": "SRC", "key": ["ID"], "order_by": [], "keep": "last", "verifications": [{"unique": {"columns": ["ID"], "severity": "warning"}}]}]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "LOOKUP-17", "spec_paths": ["intermediates.LAST.verifications[0].unique.severity"], "context": {"intermediate": "LAST", "permitted": ["error"], "value": "warning"}}]
+    },
+    {
+      "case": "a_warning_unique_beside_an_order_and_keep_is_admitted",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [
+          {"set": ["columns", "1"], "to": {"name": "V", "type": "str", "derivation": {"value": "LAST.V"}}},
+          {"set": ["intermediates"], "to": [{"id": "LAST", "dataset": "SRC", "key": ["ID"], "order_by": ["SRC.SEQ"], "keep": "last", "verifications": [{"unique": {"columns": ["ID"], "severity": "warning"}}]}]}
+        ]
+      },
+      "issues": []
+    },
+    {
+      "case": "a_warning_unique_beside_nearest_is_admitted",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [
+          {"set": ["columns", "1"], "to": {"name": "V", "type": "str", "derivation": {"value": "LAST.V"}}},
+          {"set": ["intermediates"], "to": [{"id": "LAST", "dataset": "SRC", "key": ["ID"], "nearest": {"source": "DAY", "to": "ID", "unit": "day"}, "verifications": [{"unique": {"columns": ["ID"], "severity": "warning"}}]}]}
+        ]
+      },
+      "issues": []
+    },
+    {
+      "case": "an_error_unique_without_a_selection_is_admitted",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [
+          {"set": ["columns", "1"], "to": {"name": "V", "type": "str", "derivation": {"value": "LAST.V"}}},
+          {"set": ["intermediates"], "to": [{"id": "LAST", "dataset": "SRC", "key": ["ID"], "verifications": [{"unique": {"columns": ["ID"], "severity": "error"}}]}]}
+        ]
+      },
+      "issues": []
+    },
+    {
+      "case": "a_parquet_input_declares_no_byte_order_mark",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [{"set": ["input", "SRC"], "to": {"path": "src.parquet", "byte_order_mark": true}}]
+      },
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "CSV-10", "spec_paths": ["input.SRC.byte_order_mark"], "context": {"dataset": "SRC", "value": true}}]
+    },
+    {
+      "case": "an_xpt_input_declares_no_byte_order_mark_even_false",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [{"set": ["input", "SRC"], "to": {"path": "src.xpt", "byte_order_mark": false}}]
+      },
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "CSV-10", "spec_paths": ["input.SRC.byte_order_mark"], "context": {"dataset": "SRC", "value": false}}]
+    },
+    {
+      "case": "a_csv_input_may_declare_a_byte_order_mark",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [{"set": ["input", "SRC"], "to": {"path": "src.csv", "byte_order_mark": true}}]
+      },
+      "issues": []
+    },
+    {
+      "case": "a_csv_input_may_declare_no_byte_order_mark",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [{"set": ["input", "SRC"], "to": {"path": "src.csv", "byte_order_mark": false}}]
+      },
+      "issues": []
+    },
+    {
+      "case": "an_input_selecting_no_profile_leaves_its_byte_order_mark_to_input_1",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [{"set": ["input", "SRC"], "to": {"path": "src.txt", "byte_order_mark": true}}]
+      },
+      "issues": []
+    },
+    {
+      "case": "an_input_selecting_no_profile_leaves_its_byte_order_mark_false_to_input_1",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [{"set": ["input", "SRC"], "to": {"path": "src.txt", "byte_order_mark": false}}]
+      },
+      "issues": []
+    },
+    {
+      "case": "a_specification_declaring_submission_metadata_names_its_model",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [{"set": ["columns", "1"], "to": {"name": "SEX", "type": "str", "derivation": {"value": "SRC.SEX"}, "submission": {"origins": [{"type": "Collected", "source": "Subject"}]}}}]
+      },
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "SUB-3", "spec_paths": ["model"], "context": {"class": "root_class", "field": "model"}}]
+    },
+    {
+      "case": "a_specification_naming_its_model_may_declare_submission_metadata",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [
+          {"set": ["columns", "1"], "to": {"name": "SEX", "type": "str", "derivation": {"value": "SRC.SEX"}, "submission": {"origins": [{"type": "Collected", "source": "Subject"}]}}},
+          {"set": ["model"], "to": "SDTM"}
+        ]
+      },
+      "issues": []
+    },
+    {
+      "case": "distinct_origins_do_not_conflict",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [
+          {"set": ["columns", "1"], "to": {"name": "SEX", "type": "str", "derivation": {"value": "SRC.SEX"}, "submission": {"origins": [{"type": "Collected", "source": "Investigator"}, {"type": "Collected", "source": "Subject"}, {"type": "Derived", "source": "Sponsor"}]}}},
+          {"set": ["model"], "to": "SEND"}
+        ]
+      },
+      "issues": []
+    },
+    {
+      "case": "two_origins_of_one_type_and_source_conflict_at_the_later",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [
+          {"set": ["columns", "1"], "to": {"name": "SEX", "type": "str", "derivation": {"value": "SRC.SEX"}, "submission": {"origins": [{"type": "Collected", "source": "Subject"}, {"type": "Collected", "source": "Subject"}]}}},
+          {"set": ["model"], "to": "SEND"}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "conflicting_origins", "rule": "SUB-14", "spec_paths": ["columns.SEX.submission.origins[1]"], "context": {"column": "SEX", "origin_source": "Subject", "origin_type": "Collected", "reason": "same_type_and_source"}}]
+    },
+    {
+      "case": "an_origin_beside_a_not_available_one_conflicts",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [
+          {"set": ["columns", "1"], "to": {"name": "SEX", "type": "str", "derivation": {"value": "SRC.SEX"}, "submission": {"origins": [{"type": "Collected", "source": "Subject"}, {"type": "Not Available", "description": "SRC.SEX"}]}}},
+          {"set": ["model"], "to": "SEND"}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "conflicting_origins", "rule": "SUB-14", "spec_paths": ["columns.SEX.submission.origins[1]"], "context": {"column": "SEX", "origin_type": "Not Available", "reason": "exclusive_type"}}]
+    },
+    {
+      "case": "an_origin_beside_a_predecessor_one_conflicts",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [
+          {"set": ["columns", "1"], "to": {"name": "SEX", "type": "str", "derivation": {"value": "SRC.SEX"}, "submission": {"origins": [{"type": "Predecessor", "description": "SRC.SEX"}, {"type": "Derived", "source": "Sponsor"}]}}},
+          {"set": ["model"], "to": "SEND"}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "conflicting_origins", "rule": "SUB-14", "spec_paths": ["columns.SEX.submission.origins[1]"], "context": {"column": "SEX", "origin_source": "Sponsor", "origin_type": "Derived", "reason": "exclusive_type"}}]
+    },
+    {
+      "case": "a_value_level_entry_origins_conflict_naming_the_entry",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [
+          {"set": ["columns", "1"], "to": {"name": "SEX", "type": "str", "derivation": {"value": "SRC.SEX"}, "submission": {"origins": [{"type": "Collected", "source": "Subject"}], "value_level": [{"id": "CODED", "where": {"ID": ["1"]}, "origins": [{"type": "Assigned", "source": "Sponsor"}, {"type": "Assigned", "source": "Sponsor"}]}]}}},
+          {"set": ["model"], "to": "SDTM"}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "conflicting_origins", "rule": "SUB-14", "spec_paths": ["columns.SEX.submission.value_level.CODED.origins[1]"], "context": {"column": "SEX", "entry": "CODED", "origin_source": "Sponsor", "origin_type": "Assigned", "reason": "same_type_and_source"}}]
+    },
+    {
+      "case": "each_binding_of_a_specification_prepared_without_its_project_is_missing",
+      "operation": "prepare",
+      "input": {
+        "base": "specification",
+        "edits": [
+          {"set": ["columns"], "to": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "SEX", "type": "str", "derivation": {"value": "SRC.SEX"}, "submission": {"codelist": "SEX"}},
+            {"name": "SRCDOM", "type": "str", "derivation": {"value": "SRC.SRCDOM"}, "submission": {"value_level": [{"id": "AE", "where": {"SEX": ["F"]}, "inventory_vocabulary": true}]}},
+            {"name": "BMI", "type": "float", "derivation": {"value": {"function": {"name": "bmi", "args": {"weight": "SRC.WEIGHT"}}}}}
+          ]},
+          {"set": ["output", "columns"], "to": ["ID", "SEX", "SRCDOM", "BMI"]}
+        ]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "among": true,
+      "issues": [
+        {"phase": "validation", "condition": "project_binding_missing", "rule": "CT-13", "spec_paths": ["columns.BMI.derivation.function.name"], "context": {"binding": "function", "function": "bmi"}},
+        {"phase": "validation", "condition": "project_binding_missing", "rule": "CT-13", "spec_paths": ["columns.SEX.submission.codelist"], "context": {"binding": "codelist", "codelist": "SEX", "column": "SEX"}},
+        {"phase": "validation", "condition": "project_binding_missing", "rule": "CT-13", "spec_paths": ["columns.SRCDOM.submission.value_level.AE.inventory_vocabulary"], "context": {"binding": "inventory_vocabulary", "column": "SRCDOM"}}
+      ]
+    }
+  ]
+}

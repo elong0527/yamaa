@@ -17,7 +17,7 @@ that omits `dataset` builds from that dataset. When `input` declares more than
 one, every row template must state `dataset`.
 
 Fails: `driver_unavailable`, `duplicate_identifier`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv`, `schema-rows-override`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::row_templates_report_derivation_construction_and_template_refusals_in_that_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_repeated_row_template_id_is_refused_at_the_path_both_share`, `rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv`, `schema-rows-override`.
 
 An omitted driver when no single input is implied, or a driver that names
 neither a declared input nor a named intermediate, fails validation with
@@ -111,7 +111,7 @@ literals, earlier row-derived columns, or a record lookup with already-complete
 matching values, in dependency order.
 
 Fails: `ungrouped_driver_field`.
-Evidence: `negative-row-window-ungrouped`, `negative-row-ungrouped-second-template`, `rust/crates/yamaa-adapters/tests/fixtures/binding_diagnostics.tsv`, `rust/crates/yamaa-adapters/tests/execution_grouped_driver_dataset.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`.
+Evidence: `negative-row-window-ungrouped`, `negative-row-ungrouped-second-template`, `rust/crates/yamaa-adapters/tests/fixtures/binding_diagnostics.tsv`, `rust/crates/yamaa-adapters/tests/execution_grouped_driver_dataset.rs`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_grouped_row_reads_a_driver_field_outside_its_group_by_only_through_an_aggregate`.
 
 The aggregate reduces the group under
 [Expressions](expressions.md) and
@@ -185,7 +185,7 @@ records; it is required unless `input` declares exactly one dataset, which then
 supplies them.
 
 Fails: `driver_unavailable`.
-Evidence: `sdtm-se-subject-elements`, `schema-window-key-records`, `schema-window-key-odm-records`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `rust/crates/yamaa-adapters/tests/execution_no_rows_record_reads.rs`.
+Evidence: `sdtm-se-subject-elements`, `schema-window-key-records`, `schema-window-key-odm-records`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::without_row_templates_two_inputs_need_a_base`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::preparation_reports_column_name_key_and_base_refusals_in_that_order`, `rust/crates/yamaa-adapters/tests/execution_no_rows_record_reads.rs`.
 
 The key table is standalone: it has one row per unique key combination and no
 link back to the input records. The input records a key combination was
@@ -219,7 +219,7 @@ and evaluates before any derivation. A root `filter` declared together with
 `rows` fails.
 
 Fails: `phase_boundary`, `conflicting_row_construction`.
-Evidence: `adam-adtte-dor`, `adam-adrs-response-records`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`.
+Evidence: `adam-adtte-dor`, `adam-adrs-response-records`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_root_filter_reads_no_derived_column`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::row_templates_report_derivation_construction_and_template_refusals_in_that_order`.
 
 The base driver is the declared `base`, or the single declared dataset when
 `base` is omitted. Unlike an ungrouped row template's `filter`

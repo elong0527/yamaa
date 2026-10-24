@@ -50,7 +50,7 @@ validation, as does a published artifact equal to the document, reporting the
 conflicting paths.
 
 Fails: `transport_path_collision`, `artifact_path_collision`.
-Evidence: `rust/crates/yamaa-adapters/tests/file_resources.rs::transport_targets_equal_after_lowercasing_are_refused_before_overwriting_a_sentinel`, `rust/crates/yamaa-adapters/tests/submission_transport.rs::a_transport_file_never_replaces_a_declared_input`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::DefineTransportCollision`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::DefineArtifactCollision`.
+Evidence: `rust/crates/yamaa-adapters/tests/file_resources.rs::transport_targets_equal_after_lowercasing_are_refused_before_overwriting_a_sentinel`, `rust/crates/yamaa-adapters/tests/submission_transport.rs::a_transport_file_never_replaces_a_declared_input`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::two_listings_writing_one_transport_file_collide`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::two_listings_writing_one_artifact_collide`.
 
 A transport file equal to another transport file or to a declared input path
 fails with `transport_path_collision`, reporting the specification or the
@@ -71,7 +71,7 @@ artifact has no rows and that does not declare `has_no_data` fails, reporting
 the dataset and the artifact.
 
 Fails: `transport_dataset_empty`.
-Evidence: `rust/crates/yamaa-adapters/tests/submission_transport.rs::datasets_without_data_have_no_file_and_empty_ones_must_declare_it`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionTransportEmpty`, `negative-transport-empty-dataset`.
+Evidence: `rust/crates/yamaa-adapters/tests/submission_transport.rs::datasets_without_data_have_no_file_and_empty_ones_must_declare_it`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_published_dataset_without_rows_must_declare_it`, `negative-transport-empty-dataset`.
 
 The document still describes a dataset with no data, with `def:HasNoData`; it
 names no file for it ([DEFINE-15](define-xml.md#define-15)). The failure
@@ -88,7 +88,7 @@ this profile. A generated file that is not valid against the Dataset-JSON 1.1
 schema fails, reporting the violation, and the generation publishes nothing.
 
 Fails: `value_not_permitted`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionJsonInvalid`, `python/tests/installed/installed_public_define.py::test_dm_goldens_public_issues_and_held_save`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_published_boolean_in_a_text_column_is_not_permitted`, `python/tests/installed/installed_public_define.py::test_dm_goldens_public_issues_and_held_save`.
 
 A later release of the standard is a new profile under a new name rather than a
 redefinition of this one. The newline-delimited form carries the same
@@ -113,7 +113,7 @@ An unpublished artifact, one that does not match its producing specification,
 or a composed `output.decimals` fails.
 
 Fails: `producer_contract_mismatch`, `decimals_not_applicable`.
-Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `negative-transport-display-decimals`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionTransportDecimals`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
+Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `negative-transport-display-decimals`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::display_decimals_are_not_applicable_under_a_transport`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
 
 The artifact is read:
 
