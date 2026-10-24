@@ -16,8 +16,6 @@ mod diagnostics;
 
 mod arrow_host_bridge;
 mod ast_lowering;
-mod check_donor_reads;
-mod check_keyless_reads;
 mod check_row_phase_boundaries;
 mod check_row_scopes;
 mod check_unknown_reads;

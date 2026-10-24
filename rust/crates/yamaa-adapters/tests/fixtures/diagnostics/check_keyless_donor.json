@@ -1,0 +1,1273 @@
+{
+  "about": "What check reports for a specification, build reports too, in binding's order. Keyless reads (#3307, D111, D164, #3533): a 1.0 input that declares no key has nothing to match a join on, so an implicit join's read of it, a qualified aggregate without key or a copy from it fails as no_applicable_keys (LOOKUP-5); a declared key's columns are columns of the specification, stored by the input, of types that compare (LOOKUP-5, LOOKUP-9, ROW-5, NAME-3); a column that holds an aggregate binds once over the whole dataset, so it reads the primary input through its join where the rows share no record; and a read binding refuses admits no range. Donor reads (#3474, #2844 decision 3): a lookup's own derivations and an aggregate's derive bindings read the records of one relation, with no implicit join, so join options are refused once a read binds (LOOKUP-24, LOOKUP-9); a read of a derivation not yet derived or of a name nothing declares fails (LOOKUP-15, FORMULA-9), as do a window's read of another record, a read of a lookup it cannot match there (LOOKUP-3, LOOKUP-16) and an aggregate (LOOKUP-18); placeholders and mapping sources are typed (TEXT-1, EXPR-11, EXPR-13); and a lookup's derivations come before its key types, which come before its filter. In `implicit` VS is the base and X, C and N derive constants; `record` is one row template over VS, `two` one over VS and one over HOME, `dosed` one over DOSES, a lookup of PLAN, and `whole` two whose columns hold an aggregate; `copied` and `copied_rows` copy AGE and SEX from ADSL, which `adsl_spec` produces; `grouped` groups a template over VS by subject, `linked` reads DM in a template over that ADSL, and `subject` has a grouped template's read and a column's. In `lookup` the lookup P of PLAN derives D, which X reads, and `driven` adds row templates over VS and over DOSES. Moved from check_keyless_reads.rs and check_donor_reads.rs, whose tests ran check and build and compared, for both, the spec paths of every issue in order and the first issue's condition and rule, with its context where the test wrote it and its phase in the donor half. Where the first issue is not the only one, one case states the spec paths of every issue and a second states that first issue among them. Each case writes the files its specification reads and runs for the default host, since a request without a project reads no environment entry.",
+  "documents": {
+    "implicit": "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\nkeys: [STUDYID, USUBJID, VSDY]\ninput:\n  VS: {path: vs.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}\n  HOME: {path: home.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}\n  PLAN: {path: plan.csv, key: [USUBJID], types: {DOSENUM: int, PLANDOSE: float}}\n  DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}\nbase: VS\noutput: {path: out.csv, columns: [STUDYID, USUBJID, VSDY, X, C, N]}\ncolumns:\n  - {name: STUDYID, type: str, derivation: VS.STUDYID}\n  - {name: USUBJID, type: str, derivation: VS.USUBJID}\n  - {name: VSDY, type: int, derivation: VS.VSDY}\n  - {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: \"'A'\"}\n  - {name: N, type: int, derivation: 0}\n",
+    "record": "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\nkeys: [STUDYID, USUBJID, PARAMCD, VSDY]\ninput:\n  VS: {path: vs.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}\n  HOME: {path: home.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}\n  PLAN: {path: plan.csv, key: [USUBJID], types: {DOSENUM: int, PLANDOSE: float}}\n  DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, PARAMCD, VSDY, AVAL, X, C, N]}\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: PARAMCD, type: str}\n  - {name: VSDY, type: int}\n  - {name: AVAL, type: float}\n  - {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: \"'A'\"}\n  - {name: N, type: int, derivation: 0}\nrows:\n  - id: record\n    dataset: VS\n    derivations:\n      STUDYID: VS.STUDYID\n      USUBJID: VS.USUBJID\n      PARAMCD: \"'SYSBP'\"\n      VSDY: VS.VSDY\n      AVAL: VS.SYSBP\n",
+    "two": "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\nkeys: [STUDYID, USUBJID, PARAMCD, VSDY]\ninput:\n  VS: {path: vs.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}\n  HOME: {path: home.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}\n  PLAN: {path: plan.csv, key: [USUBJID], types: {DOSENUM: int, PLANDOSE: float}}\n  DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, PARAMCD, VSDY, AVAL, X]}\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: PARAMCD, type: str}\n  - {name: VSDY, type: int}\n  - {name: AVAL, type: float}\n  - {name: X, type: float, derivation: 0.0}\nrows:\n  - id: clinic\n    dataset: VS\n    derivations:\n      STUDYID: VS.STUDYID\n      USUBJID: VS.USUBJID\n      PARAMCD: \"'CLINIC'\"\n      VSDY: VS.VSDY\n      AVAL: VS.SYSBP\n  - id: home\n    dataset: HOME\n    derivations:\n      STUDYID: HOME.STUDYID\n      USUBJID: HOME.USUBJID\n      PARAMCD: \"'HOME'\"\n      VSDY: HOME.VSDY\n      AVAL: HOME.SYSBP\n",
+    "dosed": "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\nkeys: [STUDYID, USUBJID, PARAMCD]\ninput:\n  PLAN: {path: plan.csv, types: {DOSENUM: int, PLANDOSE: float}}\nintermediates:\n  - {id: DOSES, dataset: PLAN, filter: \"PLAN.DOSENUM > 0\"}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, PARAMCD, AVAL, X]}\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: PARAMCD, type: str}\n  - {name: AVAL, type: float}\n  - {name: X, type: float, derivation: 0.0}\nrows:\n  - id: dose\n    dataset: DOSES\n    derivations:\n      STUDYID: DOSES.STUDYID\n      USUBJID: DOSES.USUBJID\n      PARAMCD: \"'DOSE'\"\n      AVAL: DOSES.PLANDOSE\n",
+    "copied": "yamaa: \"1.0\"\ntype: spec\ndomain: ADAE\nkeys: [STUDYID, USUBJID, AESEQ]\ninput:\n  AE: {path: ae.csv, types: {AESEQ: int}}\n  ADSL: {path: adsl.csv, schema: spec_adsl.yaml}\nbase: AE\noutput:\n  path: adae.csv\n  columns: [STUDYID, USUBJID, AESEQ, AGE, SEX]\ncolumns:\n  - {name: STUDYID, type: str, derivation: AE.STUDYID}\n  - {name: USUBJID, type: str, derivation: AE.USUBJID}\n  - {name: AESEQ, type: int, derivation: AE.AESEQ}\n  - copy: {dataset: ADSL, columns: [AGE, SEX]}\n",
+    "copied_rows": "yamaa: \"1.0\"\ntype: spec\ndomain: ADAE\nkeys: [STUDYID, USUBJID, AESEQ]\ninput:\n  AE: {path: ae.csv, types: {AESEQ: int}}\n  ADSL: {path: adsl.csv, schema: spec_adsl.yaml}\noutput:\n  path: adae.csv\n  columns: [STUDYID, USUBJID, AESEQ, AGE, SEX]\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: AESEQ, type: int}\n  - copy: {dataset: ADSL, columns: [AGE, SEX]}\nrows:\n  - id: events\n    dataset: AE\n    derivations:\n      STUDYID: AE.STUDYID\n      USUBJID: AE.USUBJID\n      AESEQ: AE.AESEQ\n",
+    "whole": "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\nkeys: [STUDYID, USUBJID, PARAMCD]\ninput:\n  VS: {path: vs.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}\n  HOME: {path: home.csv, key: [USUBJID], types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}\n  PLAN: {path: plan.csv, key: [USUBJID], types: {DOSENUM: int, PLANDOSE: float}}\n  DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, PARAMCD, X, C]}\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: PARAMCD, type: str}\n  - {name: X, type: float, derivation: {case: [{when: \"PARAMCD = 'CLINIC'\", then: VS.SYSBP}, {otherwise: {aggregate: \"MAX(HOME.SYSBP)\"}}]}}\n  - {name: C, type: str, derivation: \"'A'\"}\nrows:\n  - id: clinic\n    dataset: VS\n    derivations:\n      STUDYID: VS.STUDYID\n      USUBJID: VS.USUBJID\n      PARAMCD: \"'CLINIC'\"\n  - id: home\n    dataset: HOME\n    derivations:\n      STUDYID: HOME.STUDYID\n      USUBJID: HOME.USUBJID\n      PARAMCD: \"'HOME'\"\n",
+    "grouped": "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\nkeys: [STUDYID, USUBJID, PARAMCD]\ninput:\n  VS: {path: vs.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}\n  HOME: {path: home.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}\n  PLAN: {path: plan.csv, key: [USUBJID], types: {DOSENUM: int, PLANDOSE: float}}\n  DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, PARAMCD, VSDY, AVAL]}\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: PARAMCD, type: str}\n  - {name: VSDY, type: int, derivation: 0}\n  - {name: AVAL, type: float}\nrows:\n  - id: subject\n    dataset: VS\n    group_by: [VS.STUDYID, VS.USUBJID]\n    derivations:\n      STUDYID: VS.STUDYID\n      USUBJID: VS.USUBJID\n      PARAMCD: \"'HOME'\"\n      AVAL: HOME.SYSBP\n",
+    "linked": "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\nkeys: [STUDYID, USUBJID]\ninput:\n  ADSL: {path: adsl.csv, schema: spec_adsl.yaml}\n  DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, RFSTDTC, X]}\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: RFSTDTC, type: str}\n  - {name: X, type: int}\nrows:\n  - id: subjects\n    dataset: ADSL\n    derivations:\n      STUDYID: ADSL.STUDYID\n      USUBJID: ADSL.USUBJID\n      RFSTDTC: ADSL.USUBJID\n      X: DM.AGE\n",
+    "subject": "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\nkeys: [STUDYID, USUBJID, PARAMCD]\ninput:\n  VS: {path: vs.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}\n  HOME: {path: home.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}\n  PLAN: {path: plan.csv, key: [USUBJID], types: {DOSENUM: int, PLANDOSE: float}}\n  DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, PARAMCD, AVAL, X, C]}\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: PARAMCD, type: str}\n  - {name: AVAL, type: float}\n  - {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: {mapping: {source: VS.VSTESTCD, dict: {\"1\": one}}}}\nrows:\n  - id: subject\n    dataset: VS\n    group_by: [VS.STUDYID, VS.USUBJID]\n    derivations:\n      STUDYID: VS.STUDYID\n      USUBJID: VS.USUBJID\n      PARAMCD: \"'MAXBP'\"\n      AVAL: {aggregate: \"MAX(VS.SYSBP)\"}\n      X: VS.SYSBP\n",
+    "vs": "STUDYID,USUBJID,VSTESTCD,VSDTC,VSDY,SYSBP,DIABP\nS,S-1,SYSBP,2025-01-01,1,120,80\n",
+    "home": "STUDYID,USUBJID,VSTESTCD,VSDTC,VSDY,SYSBP,DIABP\nS,S-1,DIABP,2025-01-03,3,119,79\n",
+    "plan": "STUDYID,USUBJID,DOSENUM,PLANDOSE\nS,S-1,1,10\n",
+    "dm": "STUDYID,USUBJID,RFSTDTC,AGE,VSTESTCD\nS,S-1,2025-01-01,40,1\n",
+    "adsl_spec": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [STUDYID, USUBJID]\ninput:\n  DM: subjects.csv\noutput:\n  path: adsl.csv\n  columns: [STUDYID, USUBJID, AGE, SEX]\ncolumns:\n  - {name: STUDYID, type: str, label: Study Identifier, derivation: DM.STUDYID}\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: DM.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: DM.AGE}\n  - {name: SEX, type: str, label: Sex, derivation: DM.SEX}\n",
+    "subjects": "STUDYID,USUBJID,AGE,SEX\nS,S-1,40,F\n",
+    "adsl": "STUDYID,USUBJID,AGE,SEX\nS,S-1,40,F\n",
+    "ae": "STUDYID,USUBJID,AESEQ\nS,S-1,1\n",
+    "lookup": "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\nkeys: [STUDYID, USUBJID, VSDY]\ninput:\n  VS: {path: vs.csv, types: {VSDTC: date, VSDY: int, SYSBP: float}}\n  PLAN: {path: plan.csv, key: [STUDYID, USUBJID], types: {DOSENUM: int, PLANDOSE: float, FIRST: int, LAST: int}}\nbase: VS\nintermediates:\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, VSDY, X, C, N]}\ncolumns:\n  - {name: STUDYID, type: str, derivation: VS.STUDYID}\n  - {name: USUBJID, type: str, derivation: VS.USUBJID}\n  - {name: VSDY, type: int, derivation: VS.VSDY}\n  - {name: X, type: float, derivation: P.D}\n  - {name: C, type: str, derivation: \"'A'\"}\n  - {name: N, type: int, derivation: 0}\n",
+    "driven": "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\nkeys: [STUDYID, USUBJID, PARAMCD]\ninput:\n  VS: {path: vs.csv, types: {VSDY: int, SYSBP: float}}\n  PLAN: {path: plan.csv, key: [USUBJID], types: {DOSENUM: int, PLANDOSE: float, FIRST: int}}\nintermediates:\n  - {id: DOSES, dataset: PLAN, filter: \"PLAN.DOSENUM > 0\"}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, PARAMCD, AVAL, X]}\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: PARAMCD, type: str}\n  - {name: AVAL, type: float}\n  - {name: X, type: float, derivation: P.D}\nrows:\n  - id: vs\n    dataset: VS\n    derivations: {STUDYID: VS.STUDYID, USUBJID: VS.USUBJID, PARAMCD: \"'V'\", AVAL: VS.SYSBP}\n  - id: dose\n    dataset: DOSES\n    derivations: {STUDYID: DOSES.STUDYID, USUBJID: DOSES.USUBJID, PARAMCD: \"'D'\", AVAL: DOSES.PLANDOSE}\n",
+    "donor_vs": "STUDYID,USUBJID,VSTESTCD,VSDTC,VSDY,SYSBP\nS,S-1,SYSBP,2025-01-01,1,120\n",
+    "donor_plan": "STUDYID,USUBJID,DOSENUM,PLANDOSE,FIRST,LAST,METHOD\nS,S-1,1,10,1,2,AUTO\n"
+  },
+  "cases": [
+    {
+      "case": "without_rows_a_name_of_a_keyless_input_has_no_key_to_match",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: DM.AGE}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.source"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "without_rows_a_keyless_structured_source_fails_after_its_filter",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {source: {variable: DM.AGE, require_match: true, filter: \"VS.VSDY > 1\"}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["columns.X.derivation.source.filter"]}, {"spec_paths": ["columns.X.derivation.source"]}]
+    },
+    {
+      "case": "without_rows_a_structured_source_filter_reading_another_record_fails_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {source: {variable: DM.AGE, require_match: true, filter: \"VS.VSDY > 1\"}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"condition": "unknown_field", "rule": "LOOKUP-8", "spec_paths": ["columns.X.derivation.source.filter"]}]
+    },
+    {
+      "case": "without_rows_a_keyless_source_of_first_available_has_no_key_to_match",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {first_available: {sources: [DM.AGE, VS.SYSBP]}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.first_available.sources[0]"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "without_rows_a_keyless_mapping_source_has_no_key_to_match",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: C, type: str, derivation: {mapping: {source: DM.USUBJID, dict: {\"1\": one}}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.C.derivation.mapping.source"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "without_rows_a_verb_s_keyless_operands_fail_in_written_order",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {greatest: {sources: [VS.SYSBP, DM.AGE, HOME.SYSBP]}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["columns.X.derivation.greatest.sources[1]"]}, {"spec_paths": ["columns.X.derivation.greatest.sources[2]"]}]
+    },
+    {
+      "case": "without_rows_a_verb_s_first_keyless_operand_fails_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {greatest: {sources: [VS.SYSBP, DM.AGE, HOME.SYSBP]}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "among": true,
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.greatest.sources[1]"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "without_rows_a_keyless_operand_of_diff_has_no_key_to_match",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: {diff: {type: date, start: DM.RFSTDTC, end: VS.VSDTC, unit: day}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.N.derivation.diff.start"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "without_rows_a_keyless_operand_of_a_rounding_has_no_key_to_match",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {round_half_away_from_zero: {source: DM.AGE, digits: 0}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.round_half_away_from_zero.source"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "without_rows_a_keyless_placeholder_fails_at_its_template",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: C, type: str, derivation: {str_template: \"{VS.USUBJID}-{DM.USUBJID}\"}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.C.derivation.str_template.template"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "without_rows_a_flag_s_keyless_read_then_names_an_unknown_field",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: C, type: str, derivation: {flag: \"DM.AGE > 1 AND VS.VSDY > 1\"}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["columns.C.derivation.flag.condition"]}, {"spec_paths": ["columns.C.derivation.flag.condition"]}]
+    },
+    {
+      "case": "without_rows_a_flag_s_keyless_read_fails_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: C, type: str, derivation: {flag: \"DM.AGE > 1 AND VS.VSDY > 1\"}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "among": true,
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.C.derivation.flag.condition"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "without_rows_each_case_arm_s_predicate_fails_before_its_result",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {case: [{when: \"DM.AGE > 1\", then: 1.0}, {when: \"VSDY > 1\", then: {source: {variable: VS.SYSBP, require_match: true}}}, {when: \"HOME.VSDY > 1\", then: DM.AGE}, {otherwise: 2.0}]}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["columns.X.derivation.case[0].when"]}, {"spec_paths": ["columns.X.derivation.case[0].when"]}, {"spec_paths": ["columns.X.derivation.case[1].then.source.require_match"]}, {"spec_paths": ["columns.X.derivation.case[2].when"]}, {"spec_paths": ["columns.X.derivation.case[2].when"]}, {"spec_paths": ["columns.X.derivation.case[2].then.source"]}]
+    },
+    {
+      "case": "without_rows_a_case_s_first_keyless_predicate_read_fails_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {case: [{when: \"DM.AGE > 1\", then: 1.0}, {when: \"VSDY > 1\", then: {source: {variable: VS.SYSBP, require_match: true}}}, {when: \"HOME.VSDY > 1\", then: DM.AGE}, {otherwise: 2.0}]}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "among": true,
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.case[0].when"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "without_rows_a_qualified_aggregate_over_a_keyless_input_has_no_key",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: {aggregate: \"COUNT(DM.AGE)\"}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.N.derivation.aggregate"], "context": {"dataset": "DM", "hint": "declare `key` on the input or on the aggregate"}}]
+    },
+    {
+      "case": "without_rows_a_qualified_aggregate_over_the_keyless_base_has_no_key",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: {aggregate: \"COUNT(VS.VSDY)\"}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.N.derivation.aggregate"], "context": {"dataset": "VS", "hint": "declare `key` on the input or on the aggregate"}}]
+    },
+    {
+      "case": "without_rows_a_qualified_aggregate_through_derive_bindings_has_no_key",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: {aggregate: {expr: \"COUNT(D)\", derivations: {D: {type: int, derivation: DM.AGE}}}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.N.derivation.aggregate"], "context": {"dataset": "DM", "hint": "declare `key` on the input or on the aggregate"}}]
+    },
+    {
+      "case": "without_rows_a_keyless_aggregate_fails_after_its_filter_s_grammar",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: {aggregate: {expr: \"COUNT(DM.AGE)\", filter: \"DM.AGE >\"}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["columns.N.derivation.aggregate.filter"]}, {"spec_paths": ["columns.N.derivation.aggregate"]}]
+    },
+    {
+      "case": "without_rows_an_aggregate_filter_s_grammar_fails_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: {aggregate: {expr: \"COUNT(DM.AGE)\", filter: \"DM.AGE >\"}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["columns.N.derivation.aggregate.filter"]}]
+    },
+    {
+      "case": "without_rows_each_column_s_keyless_read_fails_in_declaration_order",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: USUBJID, type: str, derivation: VS.USUBJID}", "to": "- {name: USUBJID, type: str, derivation: DM.USUBJID}"}, {"from": "- {name: C, type: str, derivation: \"'A'\"}\n  - {name: N, type: int, derivation: 0}", "to": "- {name: C, type: str, derivation: {str_template: \"{DM.USUBJID}\"}}\n  - {name: N, type: int, derivation: {case: [{when: \"VSDY > 1\", then: {aggregate: \"COUNT(DM.AGE)\"}}, {otherwise: 0}]}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["columns.USUBJID.derivation.source"]}, {"spec_paths": ["columns.C.derivation.str_template.template"]}, {"spec_paths": ["columns.N.derivation.case[0].then.aggregate"]}]
+    },
+    {
+      "case": "without_rows_a_key_column_s_keyless_read_fails_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "- {name: USUBJID, type: str, derivation: VS.USUBJID}", "to": "- {name: USUBJID, type: str, derivation: DM.USUBJID}"}, {"from": "- {name: C, type: str, derivation: \"'A'\"}\n  - {name: N, type: int, derivation: 0}", "to": "- {name: C, type: str, derivation: {str_template: \"{DM.USUBJID}\"}}\n  - {name: N, type: int, derivation: {case: [{when: \"VSDY > 1\", then: {aggregate: \"COUNT(DM.AGE)\"}}, {otherwise: 0}]}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "among": true,
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.USUBJID.derivation.source"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "without_rows_a_name_of_a_keyed_input_joins",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: DM.AGE}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "without_rows_a_verb_s_operand_of_a_keyed_input_joins",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {greatest: {sources: [VS.SYSBP, DM.AGE]}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "without_rows_a_flag_and_an_aggregate_over_a_keyed_input_join",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: C, type: str, derivation: \"'A'\"}\n  - {name: N, type: int, derivation: 0}", "to": "- {name: C, type: str, derivation: {flag: \"DM.AGE > 1\"}}\n  - {name: N, type: int, derivation: {aggregate: \"COUNT(DM.AGE)\"}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "without_rows_a_case_and_a_placeholder_over_a_keyed_input_join",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: {case: [{when: \"DM.AGE > 1\", then: DM.AGE}, {otherwise: 2.0}]}}\n  - {name: C, type: str, derivation: {str_template: \"{DM.USUBJID}\"}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_keyless_name_has_no_key_to_match_in_the_row_phase",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "AVAL: VS.SYSBP", "to": "AVAL: VS.SYSBP\n      X: DM.AGE"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["rows.record.derivations.X.source"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "a_keyless_structured_source_keeps_its_join_options_in_the_row_phase",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "AVAL: VS.SYSBP", "to": "AVAL: VS.SYSBP\n      X: {source: {variable: DM.AGE, require_match: true, between: {value: VS.VSDY, lower: AGE}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["rows.record.derivations.X.source"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "a_keyless_placeholder_fails_at_its_template_in_the_row_phase",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "AVAL: VS.SYSBP", "to": "AVAL: VS.SYSBP\n      C: {str_template: \"{DM.USUBJID}\"}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["rows.record.derivations.C.str_template.template"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "a_keyless_mapping_source_has_no_key_to_match_in_the_row_phase",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "AVAL: VS.SYSBP", "to": "AVAL: VS.SYSBP\n      C: {mapping: {source: DM.USUBJID, dict: {\"1\": one}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["rows.record.derivations.C.mapping.source"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "a_row_filter_reports_each_keyless_input_once",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "dataset: VS", "to": "dataset: VS\n    filter: \"DM.AGE > 1 AND HOME.VSDY > 1 AND DM.AGE < 9\""}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["rows.record.filter"]}, {"spec_paths": ["rows.record.filter"]}]
+    },
+    {
+      "case": "a_row_filter_s_first_keyless_input_fails_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "dataset: VS", "to": "dataset: VS\n    filter: \"DM.AGE > 1 AND HOME.VSDY > 1 AND DM.AGE < 9\""}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "among": true,
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["rows.record.filter"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "a_keyless_name_has_no_key_to_match_in_the_column_phase",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: DM.AGE}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.source"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "a_keyless_flag_read_has_no_key_to_match_in_the_column_phase",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "- {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: C, type: str, derivation: {flag: \"DM.AGE > 1\"}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.C.derivation.flag.condition"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "a_keyless_case_predicate_read_has_no_key_to_match_in_the_column_phase",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {case: [{when: \"DM.AGE > 1\", then: 1.0}, {otherwise: 2.0}]}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.case[0].when"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "a_qualified_aggregate_over_a_keyless_input_has_no_key_in_the_column_phase",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: {aggregate: \"COUNT(DM.AGE)\"}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.N.derivation.aggregate"], "context": {"dataset": "DM", "hint": "declare `key` on the input or on the aggregate"}}]
+    },
+    {
+      "case": "a_keyless_placeholder_fails_at_its_template_in_the_column_phase",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "- {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: C, type: str, derivation: {str_template: \"{DM.USUBJID}\"}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.C.derivation.str_template.template"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "a_template_s_derivations_and_filter_fail_before_the_column_phase",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: DM.AGE}"}, {"from": "dataset: VS", "to": "dataset: VS\n    filter: \"DM.AGE > 1\""}, {"from": "AVAL: VS.SYSBP", "to": "AVAL: VS.SYSBP\n      C: {str_template: \"{DM.USUBJID}\"}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["rows.record.derivations.C.str_template.template"]}, {"spec_paths": ["rows.record.filter"]}, {"spec_paths": ["columns.X.derivation.source"]}]
+    },
+    {
+      "case": "a_template_s_derivation_fails_before_its_filter",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: DM.AGE}"}, {"from": "dataset: VS", "to": "dataset: VS\n    filter: \"DM.AGE > 1\""}, {"from": "AVAL: VS.SYSBP", "to": "AVAL: VS.SYSBP\n      C: {str_template: \"{DM.USUBJID}\"}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "among": true,
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["rows.record.derivations.C.str_template.template"], "context": {"dataset": "DM", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "the_keyless_input_behind_a_driver_lookup_fails_in_the_row_phase",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "dosed", "edits": [{"from": "AVAL: DOSES.PLANDOSE", "to": "AVAL: DOSES.PLANDOSE\n      X: PLAN.PLANDOSE"}]}, "plan.csv": {"base": "plan"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["rows.dose.derivations.X.source"], "context": {"dataset": "PLAN", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "the_keyless_input_behind_a_driver_lookup_fails_in_the_column_phase",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "dosed", "edits": [{"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: PLAN.PLANDOSE}"}]}, "plan.csv": {"base": "plan"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.source"], "context": {"dataset": "PLAN", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "another_template_s_keyless_driver_fails_in_a_derivation",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "two", "edits": [{"from": "AVAL: HOME.SYSBP", "to": "AVAL: HOME.SYSBP\n      X: VS.SYSBP"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["rows.home.derivations.X.source"], "context": {"dataset": "VS", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "another_template_s_keyless_driver_fails_in_the_column_phase",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "two", "edits": [{"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: VS.SYSBP}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.source"], "context": {"dataset": "VS", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "the_column_phase_binds_a_derivation_for_each_driver_s_rows_in_turn",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "two", "edits": [{"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {greatest: {sources: [VS.SYSBP, HOME.SYSBP]}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["columns.X.derivation.greatest.sources[1]"]}, {"spec_paths": ["columns.X.derivation.greatest.sources[0]"]}]
+    },
+    {
+      "case": "the_first_driver_s_rows_read_the_other_keyless_driver_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "two", "edits": [{"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {greatest: {sources: [VS.SYSBP, HOME.SYSBP]}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "among": true,
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.greatest.sources[1]"], "context": {"dataset": "HOME", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "a_driver_s_own_rows_refuse_the_join_options_the_other_rows_keep",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "two", "edits": [{"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {source: {variable: HOME.SYSBP, require_match: true}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["columns.X.derivation.source"]}, {"spec_paths": ["columns.X.derivation.source.require_match"]}]
+    },
+    {
+      "case": "the_other_driver_s_rows_fail_first_at_the_keyless_join",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "two", "edits": [{"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {source: {variable: HOME.SYSBP, require_match: true}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "among": true,
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.source"], "context": {"dataset": "HOME", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "declared_keys_join_each_read_under_a_row_template",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: DM.AGE}"}, {"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: {aggregate: \"COUNT(DM.AGE)\"}}"}, {"from": "dataset: VS", "to": "dataset: VS\n    filter: \"DM.AGE > 1\""}, {"from": "AVAL: VS.SYSBP", "to": "AVAL: VS.SYSBP\n      C: {str_template: \"{DM.USUBJID}\"}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_keyed_input_behind_a_driver_lookup_joins",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "dosed", "edits": [{"from": "PLAN: {path: plan.csv, types: {DOSENUM: int, PLANDOSE: float}}", "to": "PLAN: {path: plan.csv, key: [USUBJID], types: {DOSENUM: int, PLANDOSE: float}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: PLAN.PLANDOSE}"}, {"from": "AVAL: DOSES.PLANDOSE", "to": "AVAL: DOSES.PLANDOSE\n      X: PLAN.PLANDOSE"}]}, "plan.csv": {"base": "plan"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "keyed_drivers_join_each_other_s_rows",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "two", "edits": [{"from": "VS: {path: vs.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}\n  HOME: {path: home.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}", "to": "VS: {path: vs.csv, key: [USUBJID], types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}\n  HOME: {path: home.csv, key: [USUBJID], types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {greatest: {sources: [VS.SYSBP, HOME.SYSBP]}}}"}, {"from": "AVAL: HOME.SYSBP", "to": "AVAL: HOME.SYSBP\n      X: VS.SYSBP"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_row_template_s_issues_come_before_the_column_phase_s",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "subject"}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["rows.subject.derivations.X.source"]}, {"spec_paths": ["columns.C.derivation.mapping.source"]}]
+    },
+    {
+      "case": "a_grouped_template_s_ungrouped_read_fails_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "subject"}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"condition": "ungrouped_driver_field", "rule": "ROW-5", "spec_paths": ["rows.subject.derivations.X.source"]}]
+    },
+    {
+      "case": "without_rows_a_copy_from_a_keyless_input_fails_at_each_copied_column",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "copied"}, "ae.csv": {"base": "ae"}, "spec_adsl.yaml": {"base": "adsl_spec"}, "subjects.csv": {"base": "subjects"}, "adsl.csv": {"base": "adsl"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["columns.AGE.derivation.source"]}, {"spec_paths": ["columns.SEX.derivation.source"]}]
+    },
+    {
+      "case": "without_rows_a_copy_from_a_keyless_input_fails_first_at_its_first_column",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "copied"}, "ae.csv": {"base": "ae"}, "spec_adsl.yaml": {"base": "adsl_spec"}, "subjects.csv": {"base": "subjects"}, "adsl.csv": {"base": "adsl"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "among": true,
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.AGE.derivation.source"], "context": {"dataset": "ADSL", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "a_copy_from_a_keyless_input_fails_at_each_copied_column_in_the_column_phase",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "copied_rows"}, "ae.csv": {"base": "ae"}, "spec_adsl.yaml": {"base": "adsl_spec"}, "subjects.csv": {"base": "subjects"}, "adsl.csv": {"base": "adsl"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["columns.AGE.derivation.source"]}, {"spec_paths": ["columns.SEX.derivation.source"]}]
+    },
+    {
+      "case": "a_copy_from_a_keyless_input_fails_first_at_its_first_column_in_the_column_phase",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "copied_rows"}, "ae.csv": {"base": "ae"}, "spec_adsl.yaml": {"base": "adsl_spec"}, "subjects.csv": {"base": "subjects"}, "adsl.csv": {"base": "adsl"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "among": true,
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.AGE.derivation.source"], "context": {"dataset": "ADSL", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "without_rows_a_copy_from_a_keyed_input_joins",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "copied", "edits": [{"from": "ADSL: {path: adsl.csv, schema: spec_adsl.yaml}", "to": "ADSL: {path: adsl.csv, schema: spec_adsl.yaml, key: [STUDYID, USUBJID]}"}]}, "ae.csv": {"base": "ae"}, "spec_adsl.yaml": {"base": "adsl_spec"}, "subjects.csv": {"base": "subjects"}, "adsl.csv": {"base": "adsl"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_copy_from_a_keyed_input_joins_in_the_column_phase",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "copied_rows", "edits": [{"from": "ADSL: {path: adsl.csv, schema: spec_adsl.yaml}", "to": "ADSL: {path: adsl.csv, schema: spec_adsl.yaml, key: [STUDYID, USUBJID]}"}]}, "ae.csv": {"base": "ae"}, "spec_adsl.yaml": {"base": "adsl_spec"}, "subjects.csv": {"base": "subjects"}, "adsl.csv": {"base": "adsl"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "an_aggregate_column_reads_the_keyless_primary_through_its_join",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "whole"}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.case[0].then.source"], "context": {"dataset": "VS", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "an_aggregate_column_s_predicate_reads_the_keyless_primary_through_its_join",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "whole", "edits": [{"from": "- {name: X, type: float, derivation: {case: [{when: \"PARAMCD = 'CLINIC'\", then: VS.SYSBP}, {otherwise: {aggregate: \"MAX(HOME.SYSBP)\"}}]}}", "to": "- {name: X, type: float, derivation: {case: [{when: \"VS.SYSBP > 100\", then: 1.0}, {otherwise: {aggregate: \"MAX(HOME.SYSBP)\"}}]}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.case[0].when"], "context": {"dataset": "VS", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "an_aggregate_column_s_flag_reads_the_keyless_primary_through_its_join",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "whole", "edits": [{"from": "- {name: X, type: float, derivation: {case: [{when: \"PARAMCD = 'CLINIC'\", then: VS.SYSBP}, {otherwise: {aggregate: \"MAX(HOME.SYSBP)\"}}]}}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: {case: [{when: \"PARAMCD = 'CLINIC'\", then: {flag: \"VS.SYSBP > 100\"}}, {otherwise: {aggregate: \"MAX(HOME.VSTESTCD)\"}}]}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.C.derivation.case[0].then.flag.condition"], "context": {"dataset": "VS", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "an_aggregate_column_s_operand_reads_the_keyless_primary_through_its_join",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "whole", "edits": [{"from": "- {name: X, type: float, derivation: {case: [{when: \"PARAMCD = 'CLINIC'\", then: VS.SYSBP}, {otherwise: {aggregate: \"MAX(HOME.SYSBP)\"}}]}}", "to": "- {name: X, type: float, derivation: {case: [{when: \"PARAMCD = 'CLINIC'\", then: {greatest: {sources: [VS.SYSBP, HOME.SYSBP]}}}, {otherwise: {aggregate: \"MAX(HOME.SYSBP)\"}}]}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.case[0].then.greatest.sources[0]"], "context": {"dataset": "VS", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "under_a_grouped_template_the_keyless_primary_fails_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "whole", "edits": [{"from": "dataset: VS", "to": "dataset: VS\n    group_by: [VS.STUDYID, VS.USUBJID]"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.case[0].then.source"], "context": {"dataset": "VS", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "under_a_grouped_template_a_range_over_the_keyless_primary_is_not_admitted",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "whole", "edits": [{"from": "- {name: X, type: float, derivation: {case: [{when: \"PARAMCD = 'CLINIC'\", then: VS.SYSBP}, {otherwise: {aggregate: \"MAX(HOME.SYSBP)\"}}]}}", "to": "- {name: X, type: float, derivation: {case: [{when: \"PARAMCD = 'CLINIC'\", then: {source: {variable: VS.SYSBP, between: {value: VS.VSDY, lower: VSDY}}}}, {otherwise: {aggregate: \"MAX(HOME.SYSBP)\"}}]}}"}, {"from": "dataset: VS", "to": "dataset: VS\n    group_by: [VS.STUDYID, VS.USUBJID]"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.case[0].then.source"], "context": {"dataset": "VS", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "once_the_primary_joins_a_range_value_naming_it_is_one_value_of_a_group",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "whole", "edits": [{"from": "VS: {path: vs.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}", "to": "VS: {path: vs.csv, key: [USUBJID], types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}"}, {"from": "- {name: X, type: float, derivation: {case: [{when: \"PARAMCD = 'CLINIC'\", then: VS.SYSBP}, {otherwise: {aggregate: \"MAX(HOME.SYSBP)\"}}]}}", "to": "- {name: X, type: float, derivation: {case: [{when: \"PARAMCD = 'CLINIC'\", then: {source: {variable: VS.SYSBP, between: {value: VS.VSDY, lower: VSDY}}}}, {otherwise: {aggregate: \"MAX(HOME.SYSBP)\"}}]}}"}, {"from": "dataset: VS", "to": "dataset: VS\n    group_by: [VS.STUDYID, VS.USUBJID]"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [{"condition": "ungrouped_driver_field", "rule": "NAME-4", "spec_paths": ["columns.X.derivation.case[0].then.source.between.value"]}]
+    },
+    {
+      "case": "a_template_driven_by_a_lookup_shares_no_record_of_its_input",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "dosed", "edits": [{"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {case: [{when: \"PARAMCD = 'DOSE'\", then: PLAN.PLANDOSE}, {otherwise: {aggregate: {expr: \"MAX(PLAN.PLANDOSE)\", key: [USUBJID]}}}]}}"}]}, "plan.csv": {"base": "plan"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.case[0].then.source"], "context": {"dataset": "PLAN", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "a_keyed_primary_joins_where_the_rows_share_no_record",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "whole", "edits": [{"from": "VS: {path: vs.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}", "to": "VS: {path: vs.csv, key: [USUBJID], types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_keyed_primary_joins_in_a_predicate_and_a_flag",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "whole", "edits": [{"from": "VS: {path: vs.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}", "to": "VS: {path: vs.csv, key: [USUBJID], types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}"}, {"from": "- {name: X, type: float, derivation: {case: [{when: \"PARAMCD = 'CLINIC'\", then: VS.SYSBP}, {otherwise: {aggregate: \"MAX(HOME.SYSBP)\"}}]}}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: {case: [{when: \"VS.SYSBP > 100\", then: 1.0}, {otherwise: {aggregate: \"MAX(HOME.SYSBP)\"}}]}}\n  - {name: C, type: str, derivation: {case: [{when: \"PARAMCD = 'CLINIC'\", then: {flag: \"VS.SYSBP > 100\"}}, {otherwise: {aggregate: \"MAX(HOME.VSTESTCD)\"}}]}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_keyed_primary_joins_under_a_grouped_template",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "whole", "edits": [{"from": "VS: {path: vs.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}", "to": "VS: {path: vs.csv, key: [USUBJID], types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}"}, {"from": "- {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: C, type: str, derivation: {case: [{when: \"PARAMCD = 'CLINIC'\", then: {flag: \"VS.SYSBP > 100\"}}, {otherwise: {aggregate: \"MAX(HOME.VSTESTCD)\"}}]}}"}, {"from": "dataset: VS", "to": "dataset: VS\n    group_by: [VS.STUDYID, VS.USUBJID]"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_keyed_primary_s_predicate_joins_under_a_grouped_template",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "whole", "edits": [{"from": "VS: {path: vs.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}", "to": "VS: {path: vs.csv, key: [USUBJID], types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}"}, {"from": "- {name: X, type: float, derivation: {case: [{when: \"PARAMCD = 'CLINIC'\", then: VS.SYSBP}, {otherwise: {aggregate: \"MAX(HOME.SYSBP)\"}}]}}", "to": "- {name: X, type: float, derivation: {case: [{when: \"VS.SYSBP > 100\", then: 1.0}, {otherwise: {aggregate: \"MAX(HOME.SYSBP)\"}}]}}"}, {"from": "dataset: VS", "to": "dataset: VS\n    group_by: [VS.STUDYID, VS.USUBJID]"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_keyed_primary_s_read_keeps_its_join_options",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "whole", "edits": [{"from": "VS: {path: vs.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}", "to": "VS: {path: vs.csv, key: [USUBJID], types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}"}, {"from": "- {name: X, type: float, derivation: {case: [{when: \"PARAMCD = 'CLINIC'\", then: VS.SYSBP}, {otherwise: {aggregate: \"MAX(HOME.SYSBP)\"}}]}}", "to": "- {name: X, type: float, derivation: {case: [{when: \"PARAMCD = 'CLINIC'\", then: {source: {variable: VS.SYSBP, require_match: true}}}, {otherwise: {aggregate: \"MAX(HOME.SYSBP)\"}}]}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_keyed_input_behind_a_driver_lookup_joins_in_an_aggregate_column",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "dosed", "edits": [{"from": "PLAN: {path: plan.csv, types: {DOSENUM: int, PLANDOSE: float}}", "to": "PLAN: {path: plan.csv, key: [USUBJID], types: {DOSENUM: int, PLANDOSE: float}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {case: [{when: \"PARAMCD = 'DOSE'\", then: PLAN.PLANDOSE}, {otherwise: {aggregate: {expr: \"MAX(PLAN.PLANDOSE)\", key: [USUBJID]}}}]}}"}]}, "plan.csv": {"base": "plan"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "templates_over_one_input_share_its_record",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "whole", "edits": [{"from": "dataset: HOME", "to": "dataset: VS"}, {"from": "STUDYID: HOME.STUDYID\n      USUBJID: HOME.USUBJID", "to": "STUDYID: VS.STUDYID\n      USUBJID: VS.USUBJID"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "templates_over_one_input_share_its_record_in_a_predicate_and_a_flag",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "whole", "edits": [{"from": "- {name: X, type: float, derivation: {case: [{when: \"PARAMCD = 'CLINIC'\", then: VS.SYSBP}, {otherwise: {aggregate: \"MAX(HOME.SYSBP)\"}}]}}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: {case: [{when: \"VS.SYSBP > 100\", then: 1.0}, {otherwise: {aggregate: \"MAX(HOME.SYSBP)\"}}]}}\n  - {name: C, type: str, derivation: {case: [{when: \"PARAMCD = 'CLINIC'\", then: {flag: \"VS.SYSBP > 100\"}}, {otherwise: {aggregate: \"MAX(HOME.VSTESTCD)\"}}]}}"}, {"from": "dataset: HOME", "to": "dataset: VS"}, {"from": "STUDYID: HOME.STUDYID\n      USUBJID: HOME.USUBJID", "to": "STUDYID: VS.STUDYID\n      USUBJID: VS.USUBJID"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "without_rows_a_refused_read_admits_no_range",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {source: {variable: HOME.SYSBP, between: {value: DM.AGE, lower: VSDY}}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.source"], "context": {"dataset": "HOME", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "a_refused_read_admits_no_range_in_the_column_phase",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {source: {variable: HOME.SYSBP, between: {value: DM.AGE, lower: VSDY}}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.source"], "context": {"dataset": "HOME", "hint": "declare `key` on the input"}}]
+    },
+    {
+      "case": "without_rows_once_the_join_binds_a_record_no_row_drives_gives_no_range_value",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "HOME: {path: home.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}", "to": "HOME: {path: home.csv, key: [USUBJID], types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}"}, {"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {source: {variable: HOME.SYSBP, between: {value: DM.AGE, lower: VSDY}}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [{"condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["columns.X.derivation.source.between.value"]}]
+    },
+    {
+      "case": "once_the_join_binds_a_record_no_row_drives_gives_no_range_value_in_the_column_phase",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "HOME: {path: home.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}", "to": "HOME: {path: home.csv, key: [USUBJID], types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}"}, {"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {source: {variable: HOME.SYSBP, between: {value: DM.AGE, lower: VSDY}}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [{"condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["columns.X.derivation.source.between.value"]}]
+    },
+    {
+      "case": "without_rows_an_undeclared_key_column_fails_at_a_name",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID, RFSTDTC], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: DM.AGE}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.source"], "context": {"identifier": "RFSTDTC"}}]
+    },
+    {
+      "case": "without_rows_an_undeclared_key_column_fails_at_a_structured_source",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID, RFSTDTC], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {source: {variable: DM.AGE, require_match: true, filter: \"DM.AGE > 1\"}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.source"], "context": {"identifier": "RFSTDTC"}}]
+    },
+    {
+      "case": "without_rows_an_undeclared_key_column_fails_at_an_operand",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID, RFSTDTC], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {greatest: {sources: [VS.SYSBP, DM.AGE]}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.greatest.sources[1]"], "context": {"identifier": "RFSTDTC"}}]
+    },
+    {
+      "case": "without_rows_an_undeclared_key_column_fails_at_a_placeholder",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID, RFSTDTC], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: C, type: str, derivation: {str_template: \"{VS.USUBJID}-{DM.USUBJID}\"}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.C.derivation.str_template.template"], "context": {"identifier": "RFSTDTC"}}]
+    },
+    {
+      "case": "without_rows_an_undeclared_key_column_fails_at_a_mapping_source",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID, RFSTDTC], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: C, type: str, derivation: {mapping: {source: DM.USUBJID, dict: {\"1\": one}}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.C.derivation.mapping.source"], "context": {"identifier": "RFSTDTC"}}]
+    },
+    {
+      "case": "a_flag_s_refused_key_read_is_also_unknown_to_its_predicate",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID, RFSTDTC], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: C, type: str, derivation: {flag: \"DM.AGE > 1\"}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["columns.C.derivation.flag.condition"]}, {"spec_paths": ["columns.C.derivation.flag.condition"]}]
+    },
+    {
+      "case": "a_flag_s_undeclared_key_column_fails_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID, RFSTDTC], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: C, type: str, derivation: {flag: \"DM.AGE > 1\"}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "among": true,
+      "issues": [{"condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.C.derivation.flag.condition"], "context": {"identifier": "RFSTDTC"}}]
+    },
+    {
+      "case": "a_case_predicate_s_refused_key_read_is_also_unknown_to_it",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID, RFSTDTC], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {case: [{when: \"DM.AGE > 1\", then: 1.0}, {otherwise: 2.0}]}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["columns.X.derivation.case[0].when"]}, {"spec_paths": ["columns.X.derivation.case[0].when"]}]
+    },
+    {
+      "case": "a_case_predicate_s_undeclared_key_column_fails_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID, RFSTDTC], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: {case: [{when: \"DM.AGE > 1\", then: 1.0}, {otherwise: 2.0}]}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "among": true,
+      "issues": [{"condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.case[0].when"], "context": {"identifier": "RFSTDTC"}}]
+    },
+    {
+      "case": "a_key_pair_of_incomparable_types_fails_before_a_later_undeclared_column",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [VSTESTCD, RFSTDTC], types: {RFSTDTC: date, AGE: int, VSTESTCD: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: VSTESTCD, type: str, derivation: VS.VSTESTCD}\n  - {name: X, type: float, derivation: DM.AGE}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.X.derivation.source"], "context": {"actual": "int", "expected": "str", "source": "VSTESTCD"}}]
+    },
+    {
+      "case": "a_qualified_aggregate_reports_each_failing_key_column",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [RFSTDTC, VSTESTCD, USUBJID], types: {RFSTDTC: date, AGE: int, VSTESTCD: int}}"}, {"from": "- {name: VSDY, type: int, derivation: VS.VSDY}", "to": "- {name: VSDY, type: int, derivation: VS.VSDY}\n  - {name: VSTESTCD, type: str, derivation: VS.VSTESTCD}"}, {"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: {aggregate: \"COUNT(DM.AGE)\"}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["columns.N.derivation.aggregate"]}, {"spec_paths": ["columns.N.derivation.aggregate"]}]
+    },
+    {
+      "case": "a_qualified_aggregate_s_first_failing_key_column_fails_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [RFSTDTC, VSTESTCD, USUBJID], types: {RFSTDTC: date, AGE: int, VSTESTCD: int}}"}, {"from": "- {name: VSDY, type: int, derivation: VS.VSDY}", "to": "- {name: VSDY, type: int, derivation: VS.VSDY}\n  - {name: VSTESTCD, type: str, derivation: VS.VSTESTCD}"}, {"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: {aggregate: \"COUNT(DM.AGE)\"}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "among": true,
+      "issues": [{"condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.N.derivation.aggregate"], "context": {"identifier": "RFSTDTC"}}]
+    },
+    {
+      "case": "a_qualified_aggregate_reports_a_key_column_at_the_filter_naming_its_relation",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID, RFSTDTC], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: {aggregate: {expr: \"COUNT(DM.*)\", filter: \"DM.AGE > 1\"}}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.N.derivation.aggregate.filter"], "context": {"identifier": "RFSTDTC"}}]
+    },
+    {
+      "case": "a_generated_ordinal_is_a_stored_int_in_a_key_pair",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [SEQ], ordinal: SEQ, types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: SEQ, type: str, derivation: VS.USUBJID}\n  - {name: X, type: float, derivation: DM.AGE}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.X.derivation.source"], "context": {"actual": "int", "expected": "str", "source": "SEQ"}}]
+    },
+    {
+      "case": "a_linked_producer_decides_what_its_artifact_stores_for_a_key",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "copied", "edits": [{"from": "ADSL: {path: adsl.csv, schema: spec_adsl.yaml}", "to": "ADSL: {path: adsl.csv, schema: spec_adsl.yaml, key: [STUDYID, SUBJID]}"}]}, "ae.csv": {"base": "ae"}, "spec_adsl.yaml": {"base": "adsl_spec"}, "subjects.csv": {"base": "subjects"}, "adsl.csv": {"base": "adsl"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["columns.AGE.derivation.source"]}, {"spec_paths": ["columns.SEX.derivation.source"]}]
+    },
+    {
+      "case": "a_key_column_the_producer_does_not_store_fails_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "copied", "edits": [{"from": "ADSL: {path: adsl.csv, schema: spec_adsl.yaml}", "to": "ADSL: {path: adsl.csv, schema: spec_adsl.yaml, key: [STUDYID, SUBJID]}"}]}, "ae.csv": {"base": "ae"}, "spec_adsl.yaml": {"base": "adsl_spec"}, "subjects.csv": {"base": "subjects"}, "adsl.csv": {"base": "adsl"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "among": true,
+      "issues": [{"condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.AGE.derivation.source"], "context": {"identifier": "ADSL.SUBJID"}}]
+    },
+    {
+      "case": "without_rows_declared_key_columns_that_are_columns_join",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [STUDYID, USUBJID], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: DM.AGE}"}, {"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: {aggregate: \"COUNT(DM.AGE)\"}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_key_pair_of_comparable_types_joins",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [VSTESTCD], types: {RFSTDTC: date, AGE: int, VSTESTCD: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: VSTESTCD, type: int, derivation: VS.VSDY}\n  - {name: X, type: float, derivation: DM.AGE}\n  - {name: C, type: str, derivation: {flag: \"DM.AGE > 1\"}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_key_column_of_an_int_ordinal_joins",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "implicit", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [SEQ], ordinal: SEQ, types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: SEQ, type: int, derivation: VS.VSDY}\n  - {name: X, type: float, derivation: DM.AGE}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_key_its_producer_stores_joins",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "copied", "edits": [{"from": "ADSL: {path: adsl.csv, schema: spec_adsl.yaml}", "to": "ADSL: {path: adsl.csv, schema: spec_adsl.yaml, key: [STUDYID, USUBJID]}"}]}, "ae.csv": {"base": "ae"}, "spec_adsl.yaml": {"base": "adsl_spec"}, "subjects.csv": {"base": "subjects"}, "adsl.csv": {"base": "adsl"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "an_undeclared_key_column_fails_in_the_row_phase",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID, RFSTDTC], types: {RFSTDTC: date, AGE: int}}"}, {"from": "AVAL: VS.SYSBP", "to": "AVAL: VS.SYSBP\n      X: DM.AGE"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["rows.record.derivations.X.source"], "context": {"identifier": "RFSTDTC"}}]
+    },
+    {
+      "case": "an_undeclared_key_column_fails_in_a_row_filter",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID, RFSTDTC], types: {RFSTDTC: date, AGE: int}}"}, {"from": "dataset: VS", "to": "dataset: VS\n    filter: \"DM.AGE > 1\""}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["rows.record.filter"], "context": {"identifier": "RFSTDTC"}}]
+    },
+    {
+      "case": "an_undeclared_key_column_fails_in_the_column_phase",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID, RFSTDTC], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: DM.AGE}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.X.derivation.source"], "context": {"identifier": "RFSTDTC"}}]
+    },
+    {
+      "case": "the_row_phase_pairs_a_key_column_with_its_driver_s_field",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, PARAMCD, VSDY, AVAL, X, C, N]}", "to": "DM: {path: dm.csv, key: [VSTESTCD], types: {RFSTDTC: date, AGE: int, VSTESTCD: int}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, PARAMCD, VSDY, AVAL, VSTESTCD, X, C, N]}"}, {"from": "- {name: AVAL, type: float}", "to": "- {name: AVAL, type: float}\n  - {name: VSTESTCD, type: int}"}, {"from": "AVAL: VS.SYSBP", "to": "AVAL: VS.SYSBP\n      VSTESTCD: 1\n      X: DM.AGE"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["rows.record.derivations.X.source"], "context": {"actual": "int", "expected": "str", "source": "VSTESTCD"}}]
+    },
+    {
+      "case": "a_grouped_template_refuses_a_key_column_outside_its_group",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "grouped", "edits": [{"from": "HOME: {path: home.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}", "to": "HOME: {path: home.csv, key: [VSDY], types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "ungrouped_driver_field", "rule": "ROW-5", "spec_paths": ["rows.subject.derivations.AVAL.source"], "context": {"dataset": "VS", "identifier": "VS.VSDY", "row": "subject"}}]
+    },
+    {
+      "case": "a_linked_driver_stores_exactly_its_producer_s_output_columns",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "linked", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [RFSTDTC], types: {RFSTDTC: date, AGE: int}}"}]}, "spec_adsl.yaml": {"base": "adsl_spec"}, "subjects.csv": {"base": "subjects"}, "adsl.csv": {"base": "adsl"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["rows.subjects.derivations.X.source"], "context": {"identifier": "ADSL.RFSTDTC"}}]
+    },
+    {
+      "case": "the_column_phase_pairs_a_key_column_with_the_output_column",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, PARAMCD, VSDY, AVAL, X, C, N]}", "to": "DM: {path: dm.csv, key: [VSTESTCD], types: {RFSTDTC: date, AGE: int, VSTESTCD: int}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, PARAMCD, VSDY, AVAL, VSTESTCD, X, C, N]}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: VSTESTCD, type: int}\n  - {name: X, type: float, derivation: DM.AGE}"}, {"from": "AVAL: VS.SYSBP", "to": "AVAL: VS.SYSBP\n      VSTESTCD: 1"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_grouped_template_joins_on_a_group_key",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "grouped", "edits": [{"from": "HOME: {path: home.csv, types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}", "to": "HOME: {path: home.csv, key: [USUBJID], types: {VSDTC: date, VSDY: int, SYSBP: float, DIABP: float}}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_linked_driver_joins_on_a_column_it_stores",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "linked", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [USUBJID], types: {RFSTDTC: date, AGE: int}}"}]}, "spec_adsl.yaml": {"base": "adsl_spec"}, "subjects.csv": {"base": "subjects"}, "adsl.csv": {"base": "adsl"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "declared_key_columns_join_under_a_row_template",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "record", "edits": [{"from": "DM: {path: dm.csv, types: {RFSTDTC: date, AGE: int}}", "to": "DM: {path: dm.csv, key: [STUDYID, USUBJID], types: {RFSTDTC: date, AGE: int}}"}, {"from": "- {name: X, type: float, derivation: 0.0}", "to": "- {name: X, type: float, derivation: DM.AGE}"}, {"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: {aggregate: \"COUNT(DM.AGE)\"}}"}, {"from": "dataset: VS", "to": "dataset: VS\n    filter: \"DM.AGE > 1\""}, {"from": "AVAL: VS.SYSBP", "to": "AVAL: VS.SYSBP\n      C: {str_template: \"{DM.USUBJID}\"}"}]}, "vs.csv": {"base": "vs"}, "home.csv": {"base": "home"}, "plan.csv": {"base": "plan"}, "dm.csv": {"base": "dm"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_lookup_derivation_s_donor_read_refuses_require_match",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {source: {variable: PLAN.FIRST, require_match: true}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-24", "spec_paths": ["intermediates.P.derivations.D.source.require_match"]}]
+    },
+    {
+      "case": "a_lookup_derivation_s_donor_read_refuses_between",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {source: {variable: PLAN.FIRST, between: {value: PLAN.LAST, lower: FIRST}}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-9", "spec_paths": ["intermediates.P.derivations.D.source.between"]}]
+    },
+    {
+      "case": "a_lookup_derivation_s_current_record_read_refuses_both_join_options",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {source: {variable: VS.VSDY, require_match: true, between: {value: PLAN.LAST, lower: FIRST}}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["intermediates.P.derivations.D.source.require_match"]}, {"spec_paths": ["intermediates.P.derivations.D.source.between"]}]
+    },
+    {
+      "case": "a_lookup_derivation_refuses_require_match_before_between",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {source: {variable: VS.VSDY, require_match: true, between: {value: PLAN.LAST, lower: FIRST}}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-24", "spec_paths": ["intermediates.P.derivations.D.source.require_match"]}]
+    },
+    {
+      "case": "a_lookup_derivation_s_read_of_an_earlier_derivation_refuses_require_match",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {A: PLAN.FIRST, D: {source: {variable: A, require_match: true}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-24", "spec_paths": ["intermediates.P.derivations.D.source.require_match"]}]
+    },
+    {
+      "case": "a_lookup_derivation_s_read_of_another_lookup_refuses_require_match",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: Q, dataset: PLAN, key: [USUBJID]}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {source: {variable: Q.FIRST, require_match: true}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-24", "spec_paths": ["intermediates.P.derivations.D.source.require_match"]}]
+    },
+    {
+      "case": "a_lookup_derivation_s_source_of_first_available_refuses_require_match",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {first_available: {sources: [{variable: PLAN.FIRST, require_match: true}, PLAN.LAST]}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-24", "spec_paths": ["intermediates.P.derivations.D.first_available.sources[0].require_match"]}]
+    },
+    {
+      "case": "a_lookup_derivation_s_case_result_refuses_require_match",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {case: [{when: \"PLAN.FIRST > 1\", then: {source: {variable: PLAN.LAST, require_match: true}}}, {otherwise: 2.0}]}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-24", "spec_paths": ["intermediates.P.derivations.D.case[0].then.source.require_match"]}]
+    },
+    {
+      "case": "a_typed_lookup_derivation_s_source_refuses_require_match",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {type: date, derivation: {source: {variable: PLAN.FIRST, require_match: true}}}}}"}, {"from": "- {name: X, type: float, derivation: P.D}", "to": "- {name: X, type: float, derivation: 0.0}"}, {"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: P.D}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-24", "spec_paths": ["intermediates.P.derivations.D.derivation.source.require_match"]}]
+    },
+    {
+      "case": "a_source_filter_reading_another_record_binds_nothing_to_refuse",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {source: {variable: PLAN.FIRST, filter: \"VS.VSDY > 1\", require_match: true}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-8", "spec_paths": ["intermediates.P.derivations.D.source.filter"]}]
+    },
+    {
+      "case": "a_source_filter_of_one_value_binds_nothing_to_refuse",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {A: PLAN.FIRST, D: {source: {variable: A, filter: \"PLAN.FIRST > 1\", require_match: true}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-8", "spec_paths": ["intermediates.P.derivations.D.source.filter"]}]
+    },
+    {
+      "case": "a_lookup_derivation_s_read_without_join_options_binds",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {A: PLAN.FIRST, D: {source: {variable: A, absent: 0.0}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_lookup_derivation_reads_another_lookup_an_input_and_its_donor",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: Q, dataset: PLAN, key: [USUBJID]}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {first_available: {sources: [Q.FIRST, VS.VSDY, PLAN.LAST]}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_lookup_derivation_not_yet_derived_is_unread",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: B, B: PLAN.FIRST}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.D.source"]}]
+    },
+    {
+      "case": "a_qualified_lookup_derivation_not_yet_derived_is_unread",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: PLAN.B, B: PLAN.FIRST}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.D.source"]}]
+    },
+    {
+      "case": "a_lookup_derivation_reading_itself_is_unread",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: D}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.D.source"]}]
+    },
+    {
+      "case": "a_record_nothing_names_is_unread_by_a_lookup_derivation",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: XYZ.FIRST}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.D.source"]}]
+    },
+    {
+      "case": "the_self_record_is_unread_by_a_lookup_derivation",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: SELF.FIRST}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.D.source"]}]
+    },
+    {
+      "case": "each_unread_operand_of_a_lookup_derivation_fails_in_written_order",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {greatest: {sources: [B, XYZ.A]}}, B: PLAN.FIRST}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["intermediates.P.derivations.D.greatest.sources[0]"]}, {"spec_paths": ["intermediates.P.derivations.D.greatest.sources[1]"]}]
+    },
+    {
+      "case": "the_first_unread_operand_of_a_lookup_derivation_fails_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {greatest: {sources: [B, XYZ.A]}}, B: PLAN.FIRST}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.D.greatest.sources[0]"]}]
+    },
+    {
+      "case": "each_unread_name_of_a_lookup_derivation_s_expression_fails",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: \"B + XYZ.A\", B: PLAN.FIRST}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["intermediates.P.derivations.D"]}, {"spec_paths": ["intermediates.P.derivations.D"]}]
+    },
+    {
+      "case": "the_first_unread_name_of_a_lookup_derivation_s_expression_fails_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: \"B + XYZ.A\", B: PLAN.FIRST}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.D"]}]
+    },
+    {
+      "case": "an_unread_structured_source_of_a_lookup_derivation_refuses_no_option",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {source: {variable: B, require_match: true}}, B: PLAN.FIRST}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.D.source"]}]
+    },
+    {
+      "case": "each_unread_placeholder_of_a_lookup_derivation_fails",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {str_template: \"{B}-{XYZ.A}\"}, B: PLAN.METHOD}}"}, {"from": "- {name: X, type: float, derivation: P.D}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: P.D}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["intermediates.P.derivations.D.str_template.template"]}, {"spec_paths": ["intermediates.P.derivations.D.str_template.template"]}]
+    },
+    {
+      "case": "the_first_unread_placeholder_of_a_lookup_derivation_fails_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {str_template: \"{B}-{XYZ.A}\"}, B: PLAN.METHOD}}"}, {"from": "- {name: X, type: float, derivation: P.D}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: P.D}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.D.str_template.template"]}]
+    },
+    {
+      "case": "a_lookup_predicate_s_unread_derivation_fails_as_a_read_does",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {case: [{when: \"B > 1\", then: B}, {otherwise: 2.0}]}, B: PLAN.FIRST}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["intermediates.P.derivations.D.case[0].when"]}, {"spec_paths": ["intermediates.P.derivations.D.case[0].then.source"]}]
+    },
+    {
+      "case": "a_lookup_predicate_s_unread_derivation_fails_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {case: [{when: \"B > 1\", then: B}, {otherwise: 2.0}]}, B: PLAN.FIRST}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.D.case[0].when"]}]
+    },
+    {
+      "case": "a_lookup_predicate_s_unreadable_qualified_names_are_unknown_to_it",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {case: [{when: \"XYZ.A > 1 OR PLAN.B > 1\", then: 1.0}, {otherwise: 2.0}]}, B: PLAN.FIRST}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["intermediates.P.derivations.D.case[0].when"]}, {"spec_paths": ["intermediates.P.derivations.D.case[0].when"]}]
+    },
+    {
+      "case": "a_lookup_predicate_s_first_unreadable_name_is_unknown_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {case: [{when: \"XYZ.A > 1 OR PLAN.B > 1\", then: 1.0}, {otherwise: 2.0}]}, B: PLAN.FIRST}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "FORMULA-9", "spec_paths": ["intermediates.P.derivations.D.case[0].when"]}]
+    },
+    {
+      "case": "a_lookup_flag_s_unread_derivation_fails_as_a_read_does",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {flag: \"B > 1\"}, B: PLAN.FIRST}}"}, {"from": "- {name: X, type: float, derivation: P.D}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: P.D}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.D.flag.condition"]}]
+    },
+    {
+      "case": "a_lookup_flag_s_read_of_a_lookup_is_unknown_to_it",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: Q, dataset: PLAN, key: [USUBJID]}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {flag: \"Q.FIRST > 1 OR XYZ.A > 1\"}}}"}, {"from": "- {name: X, type: float, derivation: P.D}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: P.D}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["intermediates.P.derivations.D.flag.condition"]}, {"spec_paths": ["intermediates.P.derivations.D.flag.condition"]}]
+    },
+    {
+      "case": "a_lookup_flag_s_read_of_a_lookup_is_unknown_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: Q, dataset: PLAN, key: [USUBJID]}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {flag: \"Q.FIRST > 1 OR XYZ.A > 1\"}}}"}, {"from": "- {name: X, type: float, derivation: P.D}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: P.D}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "FORMULA-9", "spec_paths": ["intermediates.P.derivations.D.flag.condition"]}]
+    },
+    {
+      "case": "a_lookup_window_reads_the_donor_record_alone",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: Q, dataset: PLAN, key: [USUBJID]}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {row_value: {source: B, offset: 1, window: {order_by: [VS.VSDY, Q.FIRST]}}}, B: PLAN.FIRST}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["intermediates.P.derivations.D.row_value.source"]}, {"spec_paths": ["intermediates.P.derivations.D.row_value.window.order_by[0]"]}, {"spec_paths": ["intermediates.P.derivations.D.row_value.window.order_by[1]"]}]
+    },
+    {
+      "case": "a_lookup_window_s_unread_source_fails_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: Q, dataset: PLAN, key: [USUBJID]}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {row_value: {source: B, offset: 1, window: {order_by: [VS.VSDY, Q.FIRST]}}}, B: PLAN.FIRST}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-15", "spec_paths": ["intermediates.P.derivations.D.row_value.source"]}]
+    },
+    {
+      "case": "an_aggregate_has_no_context_in_a_lookup_derivation",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {aggregate: \"COUNT(PLAN.FIRST)\"}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "invalid_aggregate_context", "rule": "LOOKUP-18", "spec_paths": ["intermediates.P.derivations.D.aggregate"]}]
+    },
+    {
+      "case": "an_aggregate_of_several_relations_fails_in_a_lookup_derivation",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {aggregate: \"COUNT(PLAN.FIRST) + VSDY\"}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "mixed_relations", "rule": "LOOKUP-18", "spec_paths": ["intermediates.P.derivations.D.aggregate"]}]
+    },
+    {
+      "case": "a_lookup_derivation_reads_earlier_derivations_its_donor_an_input_and_a_lookup",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: Q, dataset: PLAN, key: [USUBJID]}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {A: PLAN.FIRST, D: {case: [{when: \"A > 1 AND PLAN.A > 1 AND VS.VSDY > 1 AND Q.LAST > 1\", then: \"A + Q.FIRST\"}, {otherwise: PLAN.LAST}]}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_lookup_flag_reads_an_earlier_derivation_its_donor_and_an_input",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {A: PLAN.FIRST, D: {flag: \"A > 1 AND PLAN.FIRST > 1 AND VS.VSDY > 1\"}}}"}, {"from": "- {name: X, type: float, derivation: P.D}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: P.D}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_lookup_window_reads_an_earlier_derivation_ordered_by_its_donor",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {A: PLAN.FIRST, D: {row_value: {source: A, offset: 1, window: {order_by: [PLAN.DOSENUM]}}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_lookup_placeholder_of_the_donor_s_typed_field_is_typed",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {str_template: \"{PLAN.FIRST}\"}}}"}, {"from": "- {name: X, type: float, derivation: P.D}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: P.D}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["intermediates.P.derivations.D.str_template.template"]}]
+    },
+    {
+      "case": "a_lookup_placeholder_of_an_input_s_typed_field_is_typed",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {str_template: \"{VS.VSDY}\"}}}"}, {"from": "- {name: X, type: float, derivation: P.D}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: P.D}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["intermediates.P.derivations.D.str_template.template"]}]
+    },
+    {
+      "case": "a_lookup_placeholder_of_an_earlier_derivation_s_result_is_typed",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {A: {case: [{when: \"PLAN.FIRST > 1\", then: 1}, {otherwise: 2}]}, D: {str_template: \"{A}\"}}}"}, {"from": "- {name: X, type: float, derivation: P.D}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: P.D}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["intermediates.P.derivations.D.str_template.template"]}]
+    },
+    {
+      "case": "a_lookup_placeholder_of_an_earlier_derivation_s_declared_type_is_typed",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {A: {type: int, derivation: PLAN.METHOD}, D: {str_template: \"{PLAN.A}\"}}}"}, {"from": "- {name: X, type: float, derivation: P.D}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: P.D}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["intermediates.P.derivations.D.str_template.template"]}]
+    },
+    {
+      "case": "a_lookup_placeholder_of_another_lookup_s_field_is_typed",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: Q, dataset: PLAN, key: [USUBJID]}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {str_template: \"{Q.FIRST}\"}}}"}, {"from": "- {name: X, type: float, derivation: P.D}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: P.D}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["intermediates.P.derivations.D.str_template.template"]}]
+    },
+    {
+      "case": "a_lookup_mapping_source_of_the_donor_s_typed_field_is_typed",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {mapping: {source: PLAN.FIRST, dict: {\"1\": one}}}}}"}, {"from": "- {name: X, type: float, derivation: P.D}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: P.D}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "EXPR-11", "spec_paths": ["intermediates.P.derivations.D.mapping.source"]}]
+    },
+    {
+      "case": "a_lookup_mapping_source_of_another_lookup_s_field_is_typed",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: Q, dataset: PLAN, key: [USUBJID]}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {mapping: {source: Q.FIRST, dict: {\"1\": one}}}}}"}, {"from": "- {name: X, type: float, derivation: P.D}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: P.D}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "EXPR-11", "spec_paths": ["intermediates.P.derivations.D.mapping.source"]}]
+    },
+    {
+      "case": "a_lookup_cut_source_of_an_untyped_field_is_typed",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {cut: {source: VS.VSTESTCD, breaks: [1.0], labels: [a, b]}}}}"}, {"from": "- {name: X, type: float, derivation: P.D}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: P.D}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "EXPR-13", "spec_paths": ["intermediates.P.derivations.D.cut.source"]}]
+    },
+    {
+      "case": "an_untyped_field_is_text_in_a_lookup_placeholder",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {A: PLAN.METHOD, D: {str_template: \"{PLAN.METHOD}-{A}-{VS.VSTESTCD}\"}}}"}, {"from": "- {name: X, type: float, derivation: P.D}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: P.D}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_row_driver_lookup_declares_no_key",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "driven", "edits": [{"from": "- {id: DOSES, dataset: PLAN, filter: \"PLAN.DOSENUM > 0\"}", "to": "- {id: DOSES, dataset: PLAN, filter: \"PLAN.DOSENUM > 0\"}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: DOSES.PLANDOSE}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "LOOKUP-3", "spec_paths": ["intermediates.DOSES.key"]}]
+    },
+    {
+      "case": "a_key_value_from_another_input_has_no_value_in_a_lookup_derivation",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: Q, dataset: PLAN, key: {USUBJID: VS.USUBJID}}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {source: {variable: Q.FIRST, require_match: true}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-16", "spec_paths": ["intermediates.P.derivations.D.source"]}]
+    },
+    {
+      "case": "a_lookup_over_self_completes_after_the_lookups",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "driven", "edits": [{"from": "- {id: DOSES, dataset: PLAN, filter: \"PLAN.DOSENUM > 0\"}", "to": "- {id: DOSES, dataset: PLAN, filter: \"PLAN.DOSENUM > 0\"}\n  - {id: S, dataset: SELF, key: [USUBJID]}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: S.AVAL}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-16", "spec_paths": ["intermediates.P.derivations.D.source"]}]
+    },
+    {
+      "case": "each_read_of_a_lookup_whose_key_types_fail_is_unknown",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: R, dataset: PLAN, key: {DOSENUM: VS.USUBJID}}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: R.PLANDOSE}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["intermediates.R.key"]}, {"spec_paths": ["intermediates.P.derivations.D.source"]}]
+    },
+    {
+      "case": "a_lookup_s_failing_key_types_report_before_its_reads",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: R, dataset: PLAN, key: {DOSENUM: VS.USUBJID}}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: R.PLANDOSE}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["intermediates.R.key"]}]
+    },
+    {
+      "case": "a_predicate_s_read_of_a_lookup_whose_key_types_fail_is_unknown_to_it",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: R, dataset: PLAN, key: {DOSENUM: VS.USUBJID}}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {case: [{when: \"R.PLANDOSE > 1\", then: 1.0}, {otherwise: 2.0}]}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["intermediates.R.key"]}, {"spec_paths": ["intermediates.P.derivations.D.case[0].when"]}]
+    },
+    {
+      "case": "a_lookup_s_failing_key_types_report_before_a_predicate_s_read",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: R, dataset: PLAN, key: {DOSENUM: VS.USUBJID}}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {case: [{when: \"R.PLANDOSE > 1\", then: 1.0}, {otherwise: 2.0}]}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["intermediates.R.key"]}]
+    },
+    {
+      "case": "a_key_value_from_the_donor_record_matches",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: Q, dataset: PLAN, key: {DOSENUM: PLAN.FIRST}}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {source: {variable: Q.FIRST, absent: 0.0}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_lookup_s_derivations_report_in_written_order",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {source: {variable: PLAN.FIRST, require_match: true}}, E: B, B: PLAN.LAST}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["intermediates.P.derivations.D.source.require_match"]}, {"spec_paths": ["intermediates.P.derivations.E.source"]}]
+    },
+    {
+      "case": "a_lookup_s_first_derivation_reports_first",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {source: {variable: PLAN.FIRST, require_match: true}}, E: B, B: PLAN.LAST}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-24", "spec_paths": ["intermediates.P.derivations.D.source.require_match"]}]
+    },
+    {
+      "case": "a_lookup_s_filter_grammar_follows_its_derivations",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], filter: \"PLAN.FIRST >\", derivations: {D: {source: {variable: PLAN.FIRST, require_match: true}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["intermediates.P.derivations.D.source.require_match"]}, {"spec_paths": ["intermediates.P.filter"]}]
+    },
+    {
+      "case": "a_lookup_s_derivation_reports_before_its_filter_grammar",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], filter: \"PLAN.FIRST >\", derivations: {D: {source: {variable: PLAN.FIRST, require_match: true}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-24", "spec_paths": ["intermediates.P.derivations.D.source.require_match"]}]
+    },
+    {
+      "case": "a_lookup_s_filter_types_then_a_column_follow_its_derivations",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], filter: \"PLAN.FIRST > 'a'\", derivations: {D: {source: {variable: PLAN.FIRST, require_match: true}}}}"}, {"from": "- {name: VSDY, type: int, derivation: VS.VSDY}", "to": "- {name: VSDY, type: int, derivation: {source: {variable: VS.VSDY, require_match: true}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["intermediates.P.derivations.D.source.require_match"]}, {"spec_paths": ["intermediates.P.filter"]}, {"spec_paths": ["columns.VSDY.derivation.source.require_match"]}]
+    },
+    {
+      "case": "a_lookup_s_derivation_reports_before_its_filter_types",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], filter: \"PLAN.FIRST > 'a'\", derivations: {D: {source: {variable: PLAN.FIRST, require_match: true}}}}"}, {"from": "- {name: VSDY, type: int, derivation: VS.VSDY}", "to": "- {name: VSDY, type: int, derivation: {source: {variable: VS.VSDY, require_match: true}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-24", "spec_paths": ["intermediates.P.derivations.D.source.require_match"]}]
+    },
+    {
+      "case": "a_lookup_s_key_types_come_between_its_derivations_and_its_filter",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: {DOSENUM: VS.USUBJID}, filter: \"PLAN.FIRST > 'a'\", derivations: {D: {source: {variable: PLAN.FIRST, require_match: true}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["intermediates.P.derivations.D.source.require_match"]}, {"spec_paths": ["intermediates.P.key"]}, {"spec_paths": ["intermediates.P.filter"]}, {"spec_paths": ["columns.X.derivation.source"]}]
+    },
+    {
+      "case": "a_lookup_s_derivation_reports_before_its_key_types",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: {DOSENUM: VS.USUBJID}, filter: \"PLAN.FIRST > 'a'\", derivations: {D: {source: {variable: PLAN.FIRST, require_match: true}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-24", "spec_paths": ["intermediates.P.derivations.D.source.require_match"]}]
+    },
+    {
+      "case": "a_derive_binding_s_read_of_the_relation_refuses_require_match",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {A: PLAN.FIRST}}"}, {"from": "- {name: X, type: float, derivation: P.D}", "to": "- {name: X, type: float, derivation: 0.0}"}, {"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: {aggregate: {expr: \"COUNT(F)\", derivations: {F: {type: float, derivation: {source: {variable: PLAN.PLANDOSE, require_match: true}}}}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-24", "spec_paths": ["columns.N.derivation.aggregate.derivations.F.derivation.source.require_match"]}]
+    },
+    {
+      "case": "a_derive_binding_s_read_of_the_relation_refuses_between",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {A: PLAN.FIRST}}"}, {"from": "- {name: X, type: float, derivation: P.D}", "to": "- {name: X, type: float, derivation: 0.0}"}, {"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: {aggregate: {expr: \"COUNT(F)\", derivations: {F: {type: float, derivation: {source: {variable: PLAN.PLANDOSE, between: {value: PLAN.LAST, lower: FIRST}}}}}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-9", "spec_paths": ["columns.N.derivation.aggregate.derivations.F.derivation.source.between"]}]
+    },
+    {
+      "case": "a_derive_binding_s_read_of_an_earlier_binding_refuses_require_match",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {A: PLAN.FIRST}}"}, {"from": "- {name: X, type: float, derivation: P.D}", "to": "- {name: X, type: float, derivation: 0.0}"}, {"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: {aggregate: {expr: \"COUNT(F)\", derivations: {G: {type: float, derivation: PLAN.PLANDOSE}, F: {type: float, derivation: {source: {variable: G, require_match: true}}}}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-24", "spec_paths": ["columns.N.derivation.aggregate.derivations.F.derivation.source.require_match"]}]
+    },
+    {
+      "case": "a_derive_binding_s_placeholder_of_the_relation_s_field_is_typed",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {A: PLAN.FIRST}}"}, {"from": "- {name: X, type: float, derivation: P.D}", "to": "- {name: X, type: float, derivation: 0.0}"}, {"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: {aggregate: {expr: \"COUNT(F)\", derivations: {F: {type: str, derivation: {str_template: \"{PLAN.FIRST}\"}}}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.N.derivation.aggregate.derivations.F.derivation.str_template.template"]}]
+    },
+    {
+      "case": "a_derive_binding_s_placeholder_of_an_earlier_binding_is_typed",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {A: PLAN.FIRST}}"}, {"from": "- {name: X, type: float, derivation: P.D}", "to": "- {name: X, type: float, derivation: 0.0}"}, {"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: {aggregate: {expr: \"COUNT(F)\", derivations: {G: {type: int, derivation: PLAN.FIRST}, F: {type: str, derivation: {str_template: \"{G}\"}}}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.N.derivation.aggregate.derivations.F.derivation.str_template.template"]}]
+    },
+    {
+      "case": "a_derive_binding_s_mapping_source_is_typed",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {A: PLAN.FIRST}}"}, {"from": "- {name: X, type: float, derivation: P.D}", "to": "- {name: X, type: float, derivation: 0.0}"}, {"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: {aggregate: {expr: \"COUNT(F)\", derivations: {F: {type: str, derivation: {mapping: {source: PLAN.FIRST, dict: {\"1\": one}}}}}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "EXPR-11", "spec_paths": ["columns.N.derivation.aggregate.derivations.F.derivation.mapping.source"]}]
+    },
+    {
+      "case": "a_derive_binding_reads_its_relation_and_earlier_bindings",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {A: PLAN.FIRST}}"}, {"from": "- {name: X, type: float, derivation: P.D}", "to": "- {name: X, type: float, derivation: 0.0}"}, {"from": "- {name: N, type: int, derivation: 0}", "to": "- {name: N, type: int, derivation: {aggregate: {expr: \"COUNT(F)\", derivations: {G: {type: float, derivation: PLAN.PLANDOSE}, F: {type: str, derivation: {str_template: \"{PLAN.METHOD}-{PLAN.STUDYID}\"}}}}}}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
+      "issues": []
+    }
+  ]
+}
