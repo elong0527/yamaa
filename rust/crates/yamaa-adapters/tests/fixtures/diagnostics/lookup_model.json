@@ -1,0 +1,1110 @@
+{
+  "about": "One lookup model (LOOKUP-25): an implicit join, a named intermediate and a qualified aggregate match their keys and range (LOOKUP-9), narrow the matched records by their filter (LOOKUP-8) and select or reduce the candidates in stored record order (LOOKUP-10), a named intermediate by distance too (LOOKUP-26), and a row template's lookup reads only its own driver's record and the values available before column derivation (LOOKUP-2). Moved from execution_lookup_model.rs. A test that saved the artifact is a save case with its bytes, and the handler counts it read are the report's handler rows at SPEC_PATH and COUNT: every path COLUMN-14 registers for the specification, a source binding's or a named intermediate read's multiple_matches before its absent. Each count is its test's, except the absent of a_range_with_a_filter_and_a_selection_keeps_the_four_steps, derived: no window holds S-1's event before every window, and the windows hold no S-2 record, so three events find none. A test that read the first issue of a failed or refused run is a build case comparing the fields it compared: a complete list where the input carries one defect and so one issue, and among where it carries more: three events without a period, the same per-value key in an intermediate no row reads, a filter that names the unavailable field twice, and a nearest source the relation lacks, whose selection then binds nothing, so the read of its lookup is unknown too. A test that asserted check and the run report the same issues, and compared their phase, condition, spec paths and context, is a case of both operations at those fields; where the run then saved, it is a checks_clean case beside the save case. A home row has no clinic record. Day 12 falls in LATE only, and day 99 in no window. S-1's first ECG lies an hour from a sample before it and one after it, and the earlier is read; S-2's sample without a time is never read, and of its two samples at one time the one stored first is. From a reference on 1 March 2025, samples 12 and 8 days after it and 9 days before it are each one whole week away. From the 8 January target, the visits 7, 1 and 12 days away give the second.",
+  "documents": {
+    "ae": "STUDYID,USUBJID,AESEQ,ASTDT\nS,S-1,1,2025-01-05\nS,S-1,2,2025-02-01\nS,S-1,3,2025-02-20\nS,S-1,4,2024-12-01\nS,S-2,1,\nS,S-2,2,2025-03-10\n",
+    "periods": "STUDYID,USUBJID,APERIOD,APERSDT,APEREDT\nS,S-1,1,2025-01-01,2025-01-31\nS,S-1,2,2025-02-01,2025-02-28\nS,S-2,1,2025-03-01,\n",
+    "other": "STUDYID,USUBJID,REFDT\nS,S-1,2025-01-05\nS,S-2,2025-03-10\n",
+    "clinic": "STUDYID,USUBJID,SEQ,DAY\nS,S-1,1,3\nS,S-1,2,40\n",
+    "home": "STUDYID,USUBJID,SEQ,DAY\nS,S-1,3,12\nS,S-1,4,99\n",
+    "windows": "STUDYID,NAME,LO,HI\nS,EARLY,1,10\nS,LATE,11,50\n",
+    "doses": "STUDYID,USUBJID,EXSEQ,EXDOSE,EXSTDT\nS,S-1,1,0,2025-01-03\nS,S-1,2,50,2025-01-10\nS,S-1,3,50,2025-02-01\nS,S-2,1,50,2025-03-01\n",
+    "eg": "STUDYID,USUBJID,EGSEQ,EGDTC\nS,S-1,1,2025-01-10T08:00\nS,S-1,2,\nS,S-2,1,2025-01-10T09:30\n",
+    "pc": "STUDYID,USUBJID,PCSEQ,PCDTM,PCDTC\nS,S-1,1,2025-01-10T07:00,2025-01-10T07:00\nS,S-1,2,2025-01-10T09:00,2025-01-10T09:00\nS,S-1,3,2025-01-10T12:00,2025-01-10T12:00\nS,S-2,1,,2025-01\nS,S-2,3,2025-01-10T10:00,2025-01-10T10:00\nS,S-2,2,2025-01-10T10:00,2025-01-10T10:00\n",
+    "dm": "STUDYID,USUBJID\nS,S-1\nS,S-2\n",
+    "visits": "STUDYID,USUBJID,VSSEQ,VSDT\nS,S-1,1,2025-01-01\nS,S-1,2,2025-01-09\nS,S-1,3,2025-01-20\n",
+    "event_periods": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [STUDYID, USUBJID, AESEQ]\ninput:\n  AE: {path: ae.csv, types: {AESEQ: int, ASTDT: date}}\n  PERIODS: {path: periods.csv, key: [STUDYID, USUBJID], types: {APERIOD: int, APERSDT: date, APEREDT: date}}\nbase: AE\noutput:\n  path: out.csv\n  columns: [STUDYID, USUBJID, AESEQ, APERIOD]\ncolumns:\n  - {name: STUDYID, type: str, derivation: AE.STUDYID}\n  - {name: USUBJID, type: str, derivation: AE.USUBJID}\n  - {name: AESEQ, type: int, derivation: AE.AESEQ}\n  - {name: ASTDT, type: date, derivation: AE.ASTDT}\n  - name: APERIOD\n    type: int\n    derivation:\n      source:\n        variable: PERIODS.APERIOD\n        between: {value: ASTDT, lower: APERSDT, upper: APEREDT}\n",
+    "event_ranges": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [STUDYID, USUBJID, AESEQ]\ninput:\n  OTHER: {path: other.csv, types: {REFDT: date}}\n  AE: {path: ae.csv, types: {AESEQ: int, ASTDT: date}}\n  PERIODS: {path: periods.csv, key: [STUDYID, USUBJID], types: {APERIOD: int, APERSDT: date, APEREDT: date}}\nbase: AE\nintermediates:\n  - id: P\n    dataset: PERIODS\n    key: [STUDYID, USUBJID]\n    between: {value: OTHER.REFDT, lower: APERSDT, upper: APEREDT}\n    order_by: [PERIODS.APERIOD]\n    keep: first\n  - id: Q\n    dataset: PERIODS\n    key: [STUDYID, USUBJID]\n    between: {value: P.APERSDT, lower: APERSDT, upper: APEREDT}\n    order_by: [PERIODS.APERIOD]\n    keep: first\noutput:\n  path: out.csv\n  columns: [STUDYID, USUBJID, AESEQ, READ]\ncolumns:\n  - {name: STUDYID, type: str, derivation: AE.STUDYID}\n  - {name: USUBJID, type: str, derivation: AE.USUBJID}\n  - {name: AESEQ, type: int, derivation: AE.AESEQ}\n  - {name: ASTDT, type: date, derivation: AE.ASTDT}\n  - {name: READ, type: int, derivation: P.APERIOD}\n",
+    "event_joins": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [STUDYID, USUBJID, AESEQ]\ninput:\n  OTHER: {path: other.csv, types: {REFDT: date}}\n  AE: {path: ae.csv, types: {AESEQ: int, ASTDT: date}}\n  PERIODS: {path: periods.csv, key: [STUDYID, USUBJID], types: {APERIOD: int, APERSDT: date, APEREDT: date}}\nbase: AE\noutput:\n  path: out.csv\n  columns: [STUDYID, USUBJID, AESEQ, READ]\ncolumns:\n  - {name: STUDYID, type: str, derivation: AE.STUDYID}\n  - {name: USUBJID, type: str, derivation: AE.USUBJID}\n  - {name: AESEQ, type: int, derivation: AE.AESEQ}\n  - {name: ASTDT, type: date, derivation: AE.ASTDT}\n  - {name: READ, type: int, derivation: {source: {variable: PERIODS.APERIOD, between: {value: OTHER.REFDT, lower: APERSDT, upper: APEREDT}}}}\n",
+    "template_windows": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [STUDYID, USUBJID, SEQ]\ninput:\n  CLINIC: {path: clinic.csv, types: {SEQ: int, DAY: int}}\n  HOME: {path: home.csv, types: {SEQ: int, DAY: int}}\n  WINDOWS: {path: windows.csv, key: [STUDYID], types: {LO: int, HI: int}}\noutput:\n  path: out.csv\n  columns: [STUDYID, USUBJID, SEQ, WINDOW]\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: SEQ, type: int}\n  - {name: WINDOW, type: str}\nrows:\n  - id: clinic\n    dataset: CLINIC\n    derivations:\n      STUDYID: CLINIC.STUDYID\n      USUBJID: CLINIC.USUBJID\n      SEQ: CLINIC.SEQ\n      WINDOW: {source: {variable: WINDOWS.NAME, between: {value: CLINIC.DAY, lower: LO, upper: HI}}}\n  - id: home\n    dataset: HOME\n    derivations:\n      STUDYID: HOME.STUDYID\n      USUBJID: HOME.USUBJID\n      SEQ: HOME.SEQ\n      WINDOW: {source: {variable: WINDOWS.NAME, between: {value: HOME.DAY, lower: LO, upper: HI}}}\n",
+    "template_windows_by_w": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [STUDYID, USUBJID, SEQ]\ninput:\n  CLINIC: {path: clinic.csv, types: {SEQ: int, DAY: int}}\n  HOME: {path: home.csv, types: {SEQ: int, DAY: int}}\n  WINDOWS: {path: windows.csv, key: [STUDYID], types: {LO: int, HI: int}}\nintermediates:\n  - id: W\n    dataset: WINDOWS\n    key: [STUDYID]\n    between: {value: CLINIC.DAY, lower: LO, upper: HI}\noutput:\n  path: out.csv\n  columns: [STUDYID, USUBJID, SEQ, WINDOW]\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: SEQ, type: int}\n  - {name: WINDOW, type: str}\nrows:\n  - id: clinic\n    dataset: CLINIC\n    derivations:\n      STUDYID: CLINIC.STUDYID\n      USUBJID: CLINIC.USUBJID\n      SEQ: CLINIC.SEQ\n      WINDOW: W.NAME\n  - id: home\n    dataset: HOME\n    derivations:\n      STUDYID: HOME.STUDYID\n      USUBJID: HOME.USUBJID\n      SEQ: HOME.SEQ\n      WINDOW: W.NAME\n",
+    "column_windows": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [STUDYID, USUBJID, SEQ]\ninput:\n  CLINIC: {path: clinic.csv, types: {SEQ: int, DAY: int}}\n  HOME: {path: home.csv, types: {SEQ: int, DAY: int}}\n  WINDOWS: {path: windows.csv, key: [STUDYID], types: {LO: int, HI: int}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, SEQ, WINDOW]}\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: SEQ, type: int}\n  - {name: WINDOW, type: str, derivation: {source: {variable: WINDOWS.NAME, between: {value: HOME.DAY, lower: LO, upper: HI}}}}\nrows:\n  - id: clinic\n    dataset: CLINIC\n    derivations:\n      STUDYID: CLINIC.STUDYID\n      USUBJID: CLINIC.USUBJID\n      SEQ: CLINIC.SEQ\n      WINDOW: \"'CLINIC'\"\n  - id: home\n    dataset: HOME\n    derivations:\n      STUDYID: HOME.STUDYID\n      USUBJID: HOME.USUBJID\n      SEQ: HOME.SEQ\n",
+    "column_windows_by_w": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [STUDYID, USUBJID, SEQ]\ninput:\n  CLINIC: {path: clinic.csv, types: {SEQ: int, DAY: int}}\n  HOME: {path: home.csv, types: {SEQ: int, DAY: int}}\n  WINDOWS: {path: windows.csv, key: [STUDYID], types: {LO: int, HI: int}}\nintermediates:\n  - id: W\n    dataset: WINDOWS\n    key: [STUDYID]\n    between: {value: HOME.DAY, lower: LO, upper: HI}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, SEQ, WINDOW]}\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: SEQ, type: int}\n  - {name: WINDOW, type: str, derivation: W.NAME}\nrows:\n  - id: clinic\n    dataset: CLINIC\n    derivations:\n      STUDYID: CLINIC.STUDYID\n      USUBJID: CLINIC.USUBJID\n      SEQ: CLINIC.SEQ\n      WINDOW: \"'CLINIC'\"\n  - id: home\n    dataset: HOME\n    derivations:\n      STUDYID: HOME.STUDYID\n      USUBJID: HOME.USUBJID\n      SEQ: HOME.SEQ\n",
+    "aggregate_windows": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [STUDYID, USUBJID, SEQ]\ninput:\n  CLINIC: {path: clinic.csv, types: {SEQ: int, DAY: int}}\n  HOME: {path: home.csv, types: {SEQ: int, DAY: int}}\n  WINDOWS: {path: windows.csv, key: [STUDYID], types: {LO: int, HI: int}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, SEQ, HOLDING]}\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: SEQ, type: int}\n  - name: HOLDING\n    type: int\n    derivation:\n      aggregate:\n        between: {value: HOME.DAY, lower: LO, upper: HI}\n        expr: \"COUNT(WINDOWS.*)\"\nrows:\n  - id: home\n    dataset: HOME\n    derivations:\n      STUDYID: HOME.STUDYID\n      USUBJID: HOME.USUBJID\n      SEQ: HOME.SEQ\n",
+    "row_phase_periods": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [STUDYID, USUBJID, AESEQ]\ninput:\n  AE: {path: ae.csv, key: [STUDYID, USUBJID, AESEQ], types: {AESEQ: int, ASTDT: date}}\n  PERIODS: {path: periods.csv, key: [STUDYID, USUBJID], types: {APERIOD: int, APERSDT: date, APEREDT: date}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, AESEQ, APERIOD]}\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: AESEQ, type: int}\n  - {name: ASTDT, type: date, derivation: AE.ASTDT}\n  - {name: APERIOD, type: int}\nrows:\n  - id: events\n    dataset: AE\n    derivations:\n      STUDYID: AE.STUDYID\n      USUBJID: AE.USUBJID\n      AESEQ: AE.AESEQ\n      APERIOD:\n        source:\n          variable: PERIODS.APERIOD\n          between: {value: ASTDT, lower: APERSDT, upper: APEREDT}\n",
+    "dosed_periods": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [STUDYID, USUBJID, ASEQ]\ninput:\n  EX: {path: ex.csv, types: {EXSEQ: int, EXDOSE: int, EXSTDT: date}}\n  PERIODS: {path: periods.csv, key: [STUDYID, USUBJID], types: {APERIOD: int, APERSDT: date, APEREDT: date}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, ASEQ, APERIOD]}\nintermediates:\n  - id: DOSED\n    dataset: EX\n    filter: \"EX.EXDOSE > 0\"\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: ASEQ, type: int}\n  - name: APERIOD\n    type: int\nrows:\n  - id: dosed\n    dataset: DOSED\n    derivations:\n      STUDYID: DOSED.STUDYID\n      USUBJID: DOSED.USUBJID\n      ASEQ: DOSED.EXSEQ\n      APERIOD: {source: {variable: PERIODS.APERIOD, between: {value: DOSED.EXSTDT, lower: APERSDT, upper: APEREDT}}}\n",
+    "nearest_ecgs": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [STUDYID, USUBJID, EGSEQ]\ninput:\n  EG: {path: eg.csv, types: {EGSEQ: int, EGDTC: datetime}}\n  PC: {path: pc.csv, types: {PCSEQ: int, PCDTM: datetime}}\nbase: EG\noutput: {path: out.csv, columns: [STUDYID, USUBJID, EGSEQ, PCSEQ]}\nintermediates:\n  - id: NEAR\n    dataset: PC\n    key: [STUDYID, USUBJID]\n    nearest: {source: PCDTM, to: EG.EGDTC, unit: hour}\ncolumns:\n  - {name: STUDYID, type: str, derivation: EG.STUDYID}\n  - {name: USUBJID, type: str, derivation: EG.USUBJID}\n  - {name: EGSEQ, type: int, derivation: EG.EGSEQ}\n  - {name: ADTM, type: datetime, derivation: EG.EGDTC}\n  - {name: PCSEQ, type: int, derivation: NEAR.PCSEQ}\n",
+    "nearest_subjects": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [STUDYID, USUBJID]\ninput:\n  DM: dm.csv\n  EG: {path: eg.csv, types: {EGSEQ: int, EGDTC: datetime}}\n  PC: {path: pc.csv, types: {PCSEQ: int, PCDTM: datetime}}\nbase: DM\noutput: {path: out.csv, columns: [STUDYID, USUBJID, PCSEQ]}\nintermediates:\n  - id: NEAR\n    dataset: PC\n    key: [STUDYID, USUBJID]\n    nearest: {source: PCDTM, to: EG.EGDTC, unit: minute}\ncolumns:\n  - {name: STUDYID, type: str, derivation: DM.STUDYID}\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: PCSEQ, type: int, derivation: NEAR.PCSEQ}\n",
+    "self_visits": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [STUDYID, USUBJID, SEQ]\ninput:\n  VS: {path: vs.csv, types: {VSSEQ: int, VSDT: date}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, SEQ, NEARSEQ]}\nintermediates:\n  - id: COVER\n    dataset: SELF\n    key: [STUDYID, USUBJID]\n    nearest: {source: ADT, to: TARGET, unit: day}\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: SEQ, type: int}\n  - {name: ADT, type: date}\n  - {name: TARGET, type: date}\n  - {name: NEARSEQ, type: int}\nrows:\n  - id: collected\n    dataset: VS\n    derivations:\n      STUDYID: VS.STUDYID\n      USUBJID: VS.USUBJID\n      SEQ: VS.VSSEQ\n      ADT: VS.VSDT\n      TARGET: \"NULL\"\n      NEARSEQ: \"NULL\"\n  - id: expected\n    dataset: VS\n    group_by: [VS.STUDYID, VS.USUBJID]\n    derivations:\n      STUDYID: VS.STUDYID\n      USUBJID: VS.USUBJID\n      SEQ: 99\n      ADT: \"NULL\"\n      TARGET: \"DATE '2025-01-08'\"\n      NEARSEQ: COVER.SEQ\n"
+  },
+  "cases": [
+    {
+      "case": "an_implicit_join_matches_its_keys_and_an_inclusive_range",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "event_periods"}, "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "report": {"handler": [["SPEC_PATH", "COUNT"], ["columns.APERIOD.derivation.source.absent", 3]]},
+      "saved": {"out.csv": "STUDYID,USUBJID,AESEQ,APERIOD\nS,S-1,1,1\nS,S-1,2,2\nS,S-1,3,2\nS,S-1,4,\nS,S-2,1,\nS,S-2,2,\n"}
+    },
+    {
+      "case": "a_row_template_range_reads_its_driver_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "event_periods", "edits": [
+            {"from": "  - name: APERIOD\n    type: int\n    derivation:\n      source:\n        variable: PERIODS.APERIOD\n        between: {value: ASTDT, lower: APERSDT, upper: APEREDT}\n", "to": "  - {name: APERIOD, type: int}\n"},
+            {"from": "base: AE\n", "to": "rows:\n  - id: events\n    dataset: AE\n    derivations:\n      APERIOD:\n        source:\n          variable: PERIODS.APERIOD\n          between: {value: AE.ASTDT, lower: APERSDT, upper: APEREDT}\n"}
+          ]},
+          "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID,AESEQ,APERIOD\nS,S-1,1,1\nS,S-1,2,2\nS,S-1,3,2\nS,S-1,4,\nS,S-2,1,\nS,S-2,2,\n"}
+    },
+    {
+      "case": "a_range_with_a_filter_and_a_selection_keeps_the_four_steps",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "event_periods", "edits": [
+            {"from": "        between: {value: ASTDT, lower: APERSDT, upper: APEREDT}\n", "to": "        between: {value: ASTDT, lower: APERSDT, upper: APEREDT}\n        filter: \"PERIODS.APERIOD < 9\"\n        order_by: [PERIODS.APERSDT]\n        keep: last\n"}
+          ]},
+          "ae.csv": {"base": "ae"},
+          "periods.csv": "STUDYID,USUBJID,APERIOD,APERSDT,APEREDT\nS,S-1,1,2025-01-01,2025-12-31\nS,S-1,2,2025-02-01,2025-02-28\nS,S-1,3,2025-02-01,2025-03-31\nS,S-1,9,2025-01-01,2025-12-31\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {"handler": [["SPEC_PATH", "COUNT"], ["columns.APERIOD.derivation.source.multiple_matches", 2], ["columns.APERIOD.derivation.source.absent", 3]]},
+      "saved": {"out.csv": "STUDYID,USUBJID,AESEQ,APERIOD\nS,S-1,1,1\nS,S-1,2,3\nS,S-1,3,3\nS,S-1,4,\nS,S-2,1,\nS,S-2,2,\n"}
+    },
+    {
+      "case": "a_required_range_match_fails_the_row_without_a_record",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"base": "event_periods", "edits": [{"from": "        between:", "to": "        require_match: true\n        between:"}]}, "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"condition": "unmatched_key", "rule": "LOOKUP-24", "spec_paths": ["columns.APERIOD.derivation.source"]}]
+    },
+    {
+      "case": "a_range_value_of_another_input_s_record_is_unknown",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "event_periods", "edits": [{"from": "value: ASTDT", "to": "value: OTHER.REFDT"}, {"from": "input:\n", "to": "input:\n  OTHER: {path: other.csv, types: {REFDT: date}}\n"}]},
+          "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.identifier", "context.variable"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["columns.APERIOD.derivation.source.between.value"], "context": {"identifier": "OTHER.REFDT", "variable": "PERIODS.APERIOD"}}]
+    },
+    {
+      "case": "a_range_value_naming_no_field_is_unknown",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "event_periods", "edits": [{"from": "value: ASTDT", "to": "value: ABSENT"}, {"from": "input:\n", "to": "input:\n  OTHER: {path: other.csv, types: {REFDT: date}}\n"}]},
+          "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.identifier", "context.variable"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["columns.APERIOD.derivation.source.between.value"], "context": {"identifier": "ABSENT", "variable": "PERIODS.APERIOD"}}]
+    },
+    {
+      "case": "a_range_value_of_the_looked_up_input_s_own_field_is_unknown",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "event_periods", "edits": [{"from": "value: ASTDT", "to": "value: PERIODS.APERSDT"}, {"from": "input:\n", "to": "input:\n  OTHER: {path: other.csv, types: {REFDT: date}}\n"}]},
+          "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.identifier", "context.variable"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["columns.APERIOD.derivation.source.between.value"], "context": {"identifier": "PERIODS.APERSDT", "variable": "PERIODS.APERIOD"}}]
+    },
+    {
+      "case": "a_number_range_value_between_dates_is_incomparable",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "event_periods", "edits": [{"from": "value: ASTDT", "to": "value: AESEQ"}, {"from": "input:\n", "to": "input:\n  OTHER: {path: other.csv, types: {REFDT: date}}\n"}]},
+          "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "incomparable_range_types", "rule": "LOOKUP-9", "spec_paths": ["columns.APERIOD.derivation.source.between"]}]
+    },
+    {
+      "case": "a_range_on_a_read_without_an_implicit_join_is_refused",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "event_periods", "edits": [
+            {"from": "AESEQ, APERIOD]", "to": "AESEQ, DRIVER]"},
+            {"from": "  - name: APERIOD\n    type: int\n    derivation:\n      source:\n        variable: PERIODS.APERIOD\n        between: {value: ASTDT, lower: APERSDT, upper: APEREDT}\n", "to": "  - name: DRIVER\n    type: date\n    derivation:\n      source:\n        variable: AE.ASTDT\n        between: {value: ASTDT, lower: ASTDT}\n"}
+          ]},
+          "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [{"condition": "prohibited_construct", "rule": "LOOKUP-9", "spec_paths": ["columns.DRIVER.derivation.source.between"]}]
+    },
+    {
+      "case": "every_kind_narrows_only_the_records_that_match",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "event_periods", "edits": [
+            {"from": "base: AE\n", "to": "base: AE\nintermediates:\n  - id: P\n    dataset: PERIODS\n    key: [STUDYID, USUBJID]\n    filter: \"10 / PERIODS.APERIOD > 1\"\n"},
+            {"from": "AESEQ, APERIOD]", "to": "AESEQ, JOINED, NAMED, COUNTED]"},
+            {"from": "  - name: APERIOD\n    type: int\n    derivation:\n      source:\n        variable: PERIODS.APERIOD\n        between: {value: ASTDT, lower: APERSDT, upper: APEREDT}\n", "to": "  - name: JOINED\n    type: int\n    derivation:\n      source: {variable: PERIODS.APERIOD, filter: \"10 / PERIODS.APERIOD > 1\"}\n  - {name: NAMED, type: int, derivation: P.APERIOD}\n  - name: COUNTED\n    type: int\n    derivation:\n      aggregate: {expr: \"COUNT(PERIODS.*)\", filter: \"10 / PERIODS.APERIOD > 1\"}\n"}
+          ]},
+          "ae.csv": "STUDYID,USUBJID,AESEQ,ASTDT\nS,S-1,1,2025-01-05\n",
+          "periods.csv": "STUDYID,USUBJID,APERIOD,APERSDT,APEREDT\nS,S-1,1,2025-01-01,2025-01-31\nS,S-9,0,2025-01-01,2025-01-31\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID,AESEQ,JOINED,NAMED,COUNTED\nS,S-1,1,1,1,1\n"}
+    },
+    {
+      "case": "a_range_value_reads_the_record_of_the_driver_of_its_own_row",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "template_windows"}, "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID,SEQ,WINDOW\nS,S-1,1,EARLY\nS,S-1,2,LATE\nS,S-1,3,LATE\nS,S-1,4,\n"}
+    },
+    {
+      "case": "a_named_range_value_read_from_both_templates_is_unknown",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "template_windows_by_w"}, "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [{"condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["intermediates.W.between.value"]}]
+    },
+    {
+      "case": "a_named_range_value_read_by_its_driver_s_template_alone_reads_its_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "template_windows_by_w", "edits": [{"from": "HOME.SEQ\n      WINDOW: W.NAME\n", "to": "HOME.SEQ\n      WINDOW: \"'x'\"\n"}]},
+          "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID,SEQ,WINDOW\nS,S-1,1,EARLY\nS,S-1,2,LATE\nS,S-1,3,x\nS,S-1,4,x\n"}
+    },
+    {
+      "case": "a_grouped_row_range_reads_a_group_key_of_its_driver",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [STUDYID, USUBJID]\ninput:\n  CLINIC: {path: clinic.csv, types: {SEQ: int, DAY: int}}\n  WINDOWS: {path: windows.csv, key: [STUDYID], types: {LO: int, HI: int}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, WINDOW]}\ncolumns:\n  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: WINDOW, type: str}\nrows:\n  - id: days\n    dataset: CLINIC\n    group_by: [CLINIC.STUDYID, CLINIC.USUBJID]\n    derivations:\n      STUDYID: CLINIC.STUDYID\n      USUBJID: CLINIC.USUBJID\n      WINDOW:\n        source:\n          variable: WINDOWS.NAME\n          between: {value: CLINIC.DAY, lower: LO, upper: HI}\n",
+          "clinic.csv": {"base": "clinic"}, "windows.csv": {"base": "windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "ungrouped_driver_field", "spec_paths": ["rows.days.derivations.WINDOW.source.between.value"]}]
+    },
+    {
+      "case": "a_per_value_key_type_that_cannot_compare_fails_an_aggregate",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "event_periods", "edits": [
+            {"from": "base: AE\n", "to": "base: AE\nintermediates:\n  - id: P\n    dataset: PERIODS\n    key: {APERIOD: {mapping: {source: USUBJID, dict: {S-1: none, S-2: 1}}}}\n"},
+            {"from": "AESEQ, APERIOD]", "to": "AESEQ, COUNTED]"},
+            {"from": "  - name: APERIOD\n    type: int\n    derivation:\n      source:\n        variable: PERIODS.APERIOD\n        between: {value: ASTDT, lower: APERSDT, upper: APEREDT}\n", "to": "  - name: COUNTED\n    type: int\n    derivation:\n      aggregate:\n        key: {APERIOD: {mapping: {source: USUBJID, dict: {S-1: none, S-2: 1}}}}\n        expr: \"COUNT(PERIODS.*)\"\n"}
+          ]},
+          "ae.csv": "STUDYID,USUBJID,AESEQ,ASTDT\nS,S-1,1,2025-01-05\n",
+          "periods.csv": "STUDYID,USUBJID,APERIOD,APERSDT,APEREDT\nS,S-1,1,2025-01-01,2025-01-31\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.expected", "context.actual"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.COUNTED.derivation.aggregate.key.APERIOD"], "context": {"expected": "str", "actual": "int"}}]
+    },
+    {
+      "case": "a_per_value_key_type_that_cannot_compare_fails_a_named_intermediate",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "event_periods", "edits": [
+            {"from": "base: AE\n", "to": "base: AE\nintermediates:\n  - id: P\n    dataset: PERIODS\n    key: {APERIOD: {mapping: {source: USUBJID, dict: {S-1: none, S-2: 1}}}}\n"},
+            {"from": "AESEQ, APERIOD]", "to": "AESEQ, COUNTED]"},
+            {"from": "  - name: APERIOD\n    type: int\n    derivation:\n      source:\n        variable: PERIODS.APERIOD\n        between: {value: ASTDT, lower: APERSDT, upper: APEREDT}\n", "to": "  - {name: COUNTED, type: int, derivation: P.APERIOD}\n"}
+          ]},
+          "ae.csv": "STUDYID,USUBJID,AESEQ,ASTDT\nS,S-1,1,2025-01-05\n",
+          "periods.csv": "STUDYID,USUBJID,APERIOD,APERSDT,APEREDT\nS,S-1,1,2025-01-01,2025-01-31\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.expected", "context.actual"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["intermediates.P.key.APERIOD"], "context": {"expected": "str", "actual": "int"}}]
+    },
+    {
+      "case": "an_aggregate_range_value_reads_the_driver_of_every_template_row",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "aggregate_windows"}, "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID,SEQ,HOLDING\nS,S-1,3,1\nS,S-1,4,\n"}
+    },
+    {
+      "case": "an_aggregate_range_value_naming_a_driver_of_no_row_is_unknown",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "aggregate_windows", "edits": [{"from": "value: HOME.DAY", "to": "value: CLINIC.DAY"}]},
+          "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context.identifier"],
+      "issues": [{"condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["columns.HOLDING.derivation.aggregate.between.value"], "context": {"identifier": "CLINIC.DAY"}}]
+    },
+    {
+      "case": "a_row_template_range_value_reading_a_row_local_default_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "row_phase_periods"}, "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_row_template_range_value_reads_a_row_local_default",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "row_phase_periods"}, "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID,AESEQ,APERIOD\nS,S-1,1,1\nS,S-1,2,2\nS,S-1,3,2\nS,S-1,4,\nS,S-2,1,\nS,S-2,2,\n"}
+    },
+    {
+      "case": "a_row_template_range_value_cannot_read_a_column_phase_column",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "row_phase_periods", "edits": [{"from": "derivation: AE.ASTDT}", "to": "derivation: {aggregate: \"MIN(AE.ASTDT)\"}}"}]},
+          "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "phase_boundary", "rule": "COLUMN-4", "spec_paths": ["rows.events.derivations.APERIOD.source.between.value"], "context": {"identifier": "ASTDT", "row": "events", "available_phase": "column_derivation", "required_phase": "row_construction"}}]
+    },
+    {
+      "case": "a_range_value_may_read_a_named_intermediate_selection",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "event_periods", "edits": [
+            {"from": "input:\n", "to": "input:\n  OTHER: {path: other.csv, types: {REFDT: date}}\n"},
+            {"from": "base: AE\n", "to": "base: AE\nintermediates:\n  - id: REF\n    dataset: OTHER\n    key: [STUDYID, USUBJID]\n"},
+            {"from": "value: ASTDT", "to": "value: REF.REFDT"}
+          ]},
+          "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {"handler": [["SPEC_PATH", "COUNT"], ["columns.APERIOD.derivation.source.absent", 2]]},
+      "saved": {"out.csv": "STUDYID,USUBJID,AESEQ,APERIOD\nS,S-1,1,1\nS,S-1,2,1\nS,S-1,3,1\nS,S-1,4,1\nS,S-2,1,\nS,S-2,2,\n"}
+    },
+    {
+      "case": "a_range_value_qualified_by_its_driver_intermediate_reads_the_row_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "dosed_periods", "edits": [
+            {"from": "input:\n", "to": "input:\n  SUBJ: {path: subjects.csv, types: {EXSTDT: date}}\n"},
+            {"from": "rows:\n", "to": "rows:\n  - id: subject\n    dataset: SUBJ\n    derivations:\n      STUDYID: SUBJ.STUDYID\n      USUBJID: SUBJ.USUBJID\n      ASEQ: 0\n      APERIOD: null\n"}
+          ]},
+          "subjects.csv": "STUDYID,USUBJID,EXSTDT\nS,S-1,2025-02-15\nS,S-2,2025-03-05\n",
+          "ex.csv": {"base": "doses"}, "periods.csv": {"base": "periods"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {"handler": [["SPEC_PATH", "COUNT"], ["rows.dosed.derivations.APERIOD.source.absent", 1]]},
+      "saved": {"out.csv": "STUDYID,USUBJID,ASEQ,APERIOD\nS,S-1,0,\nS,S-2,0,\nS,S-1,2,1\nS,S-1,3,2\nS,S-2,1,\n"}
+    },
+    {
+      "case": "a_grouped_template_s_driver_qualified_range_value_reads_its_group_key",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "dosed_periods", "edits": [{"from": "    dataset: DOSED\n", "to": "    dataset: DOSED\n    group_by: [DOSED.STUDYID, DOSED.USUBJID, DOSED.EXSEQ, DOSED.EXSTDT]\n"}]},
+          "ex.csv": {"base": "doses"}, "periods.csv": {"base": "periods"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID,ASEQ,APERIOD\nS,S-1,2,1\nS,S-1,3,2\nS,S-2,1,\n"}
+    },
+    {
+      "case": "a_column_s_driver_qualified_range_value_reads_the_row_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "dosed_periods", "edits": [
+            {"from": "      APERIOD: {source: {variable: PERIODS.APERIOD, between: {value: DOSED.EXSTDT, lower: APERSDT, upper: APEREDT}}}\n", "to": ""},
+            {"from": "    type: int\nrows:\n", "to": "    type: int\n    derivation: {source: {variable: PERIODS.APERIOD, between: {value: DOSED.EXSTDT, lower: APERSDT, upper: APEREDT}}}\nrows:\n"}
+          ]},
+          "ex.csv": {"base": "doses"}, "periods.csv": {"base": "periods"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID,ASEQ,APERIOD\nS,S-1,2,1\nS,S-1,3,2\nS,S-2,1,\n"}
+    },
+    {
+      "case": "a_range_value_naming_a_field_its_driver_intermediate_derives_is_unsupported",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "dosed_periods", "edits": [
+            {"from": "    filter: \"EX.EXDOSE > 0\"\n", "to": "    filter: \"EX.EXDOSE > 0\"\n    derivations:\n      ADT: {type: date, derivation: EXSTDT}\n"},
+            {"from": "value: DOSED.EXSTDT", "to": "value: DOSED.ADT"}
+          ]},
+          "ex.csv": {"base": "doses"}, "periods.csv": {"base": "periods"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.operation"],
+      "issues": [{"phase": "planning", "condition": "unsupported_operation", "rule": null, "spec_paths": ["rows.dosed.derivations.APERIOD.source.between.value"], "context": {"operation": "intermediate_driver_range_value"}}]
+    },
+    {
+      "case": "a_column_join_range_on_the_templates_that_leave_the_column_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "column_windows"}, "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_column_join_range_reads_the_driver_of_the_templates_that_leave_the_column",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "column_windows"}, "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID,SEQ,WINDOW\nS,S-1,1,CLINIC\nS,S-1,2,CLINIC\nS,S-1,3,LATE\nS,S-1,4,\n"}
+    },
+    {
+      "case": "a_column_join_range_read_for_every_template_is_unknown",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "column_windows", "edits": [{"from": "      WINDOW: \"'CLINIC'\"\n", "to": ""}]}, "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["columns.WINDOW.derivation.source.between.value"], "context": {"identifier": "HOME.DAY", "variable": "WINDOWS.NAME"}}]
+    },
+    {
+      "case": "a_column_named_range_on_the_templates_that_leave_the_column_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "column_windows_by_w"}, "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_column_named_range_reads_the_driver_of_the_templates_that_leave_the_column",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "column_windows_by_w"}, "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID,SEQ,WINDOW\nS,S-1,1,CLINIC\nS,S-1,2,CLINIC\nS,S-1,3,LATE\nS,S-1,4,\n"}
+    },
+    {
+      "case": "a_column_named_range_read_for_every_template_is_unknown",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "column_windows_by_w", "edits": [{"from": "      WINDOW: \"'CLINIC'\"\n", "to": ""}]}, "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["intermediates.W.between.value"], "context": {"identifier": "HOME.DAY", "intermediate": "W"}}]
+    },
+    {
+      "case": "a_column_named_filter_reads_the_driver_of_the_templates_that_leave_the_column",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "column_windows_by_w", "edits": [{"from": "    between: {value: HOME.DAY, lower: LO, upper: HI}\n", "to": "    filter: \"WINDOWS.LO <= HOME.DAY AND HOME.DAY <= WINDOWS.HI\"\n"}]},
+          "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID,SEQ,WINDOW\nS,S-1,1,CLINIC\nS,S-1,2,CLINIC\nS,S-1,3,LATE\nS,S-1,4,\n"}
+    },
+    {
+      "case": "a_column_named_filter_read_for_every_template_is_unknown",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "column_windows_by_w", "edits": [{"from": "    between: {value: HOME.DAY, lower: LO, upper: HI}\n", "to": "    filter: \"WINDOWS.LO <= HOME.DAY AND HOME.DAY <= WINDOWS.HI\"\n"}, {"from": "      WINDOW: \"'CLINIC'\"\n", "to": ""}]},
+          "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context.identifier"],
+      "among": true,
+      "issues": [{"condition": "unknown_field", "spec_paths": ["intermediates.W.filter"], "context": {"identifier": "HOME.DAY"}}]
+    },
+    {
+      "case": "a_column_named_key_reads_the_driver_of_the_templates_that_leave_the_column",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "column_windows_by_w", "edits": [{"from": "    key: [STUDYID]\n    between: {value: HOME.DAY, lower: LO, upper: HI}\n", "to": "    key: {STUDYID: STUDYID, LO: HOME.DAY}\n"}]},
+          "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": "STUDYID,NAME,LO,HI\nS,EARLY,1,10\nS,LATE,12,50\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID,SEQ,WINDOW\nS,S-1,1,CLINIC\nS,S-1,2,CLINIC\nS,S-1,3,LATE\nS,S-1,4,\n"}
+    },
+    {
+      "case": "a_column_named_key_read_for_every_template_is_unknown",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "column_windows_by_w", "edits": [{"from": "    key: [STUDYID]\n    between: {value: HOME.DAY, lower: LO, upper: HI}\n", "to": "    key: {STUDYID: STUDYID, LO: HOME.DAY}\n"}, {"from": "      WINDOW: \"'CLINIC'\"\n", "to": ""}]},
+          "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": "STUDYID,NAME,LO,HI\nS,EARLY,1,10\nS,LATE,12,50\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context.identifier"],
+      "issues": [{"condition": "unknown_field", "spec_paths": ["intermediates.W.key"], "context": {"identifier": "HOME.DAY"}}]
+    },
+    {
+      "case": "check_reports_an_intermediate_range_value_of_another_input_read_plainly",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "event_ranges"}, "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["intermediates.P.between.value"], "context": {"identifier": "OTHER.REFDT", "intermediate": "P"}}]
+    },
+    {
+      "case": "check_reports_an_intermediate_range_value_of_another_input_read_in_arithmetic",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "event_ranges", "edits": [{"from": "{name: READ, type: int, derivation: P.APERIOD}", "to": "{name: READ, type: int, derivation: 'P.APERIOD + 1'}"}]}, "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["intermediates.P.between.value"], "context": {"identifier": "OTHER.REFDT", "intermediate": "P"}}]
+    },
+    {
+      "case": "check_reports_an_intermediate_range_value_of_another_input_read_by_a_flag",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "event_ranges", "edits": [{"from": "{name: READ, type: int, derivation: P.APERIOD}", "to": "{name: READ, type: str, derivation: {flag: 'P.APERIOD > 1'}}"}]}, "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["intermediates.P.between.value"], "context": {"identifier": "OTHER.REFDT", "intermediate": "P"}}]
+    },
+    {
+      "case": "check_reports_an_intermediate_range_value_of_another_input_read_in_a_case_condition",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "event_ranges", "edits": [{"from": "{name: READ, type: int, derivation: P.APERIOD}", "to": "{name: READ, type: int, derivation: {case: [{when: 'P.APERIOD > 1', then: 1}]}}"}]}, "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["intermediates.P.between.value"], "context": {"identifier": "OTHER.REFDT", "intermediate": "P"}}]
+    },
+    {
+      "case": "check_reports_an_intermediate_range_value_of_another_input_read_in_a_case_result",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "event_ranges", "edits": [{"from": "{name: READ, type: int, derivation: P.APERIOD}", "to": "{name: READ, type: int, derivation: {case: [{when: 'AESEQ > 1', then: P.APERIOD}]}}"}]}, "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["intermediates.P.between.value"], "context": {"identifier": "OTHER.REFDT", "intermediate": "P"}}]
+    },
+    {
+      "case": "check_reports_an_intermediate_range_value_of_another_input_read_among_first_available_sources",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "event_ranges", "edits": [{"from": "{name: READ, type: int, derivation: P.APERIOD}", "to": "{name: READ, type: int, derivation: {first_available: {sources: [P.APERIOD, AESEQ]}}}"}]}, "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["intermediates.P.between.value"], "context": {"identifier": "OTHER.REFDT", "intermediate": "P"}}]
+    },
+    {
+      "case": "check_reports_an_intermediate_range_value_of_another_input_read_among_greatest_sources",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "event_ranges", "edits": [{"from": "{name: READ, type: int, derivation: P.APERIOD}", "to": "{name: READ, type: int, derivation: {greatest: {sources: [P.APERIOD, AESEQ]}}}"}]}, "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["intermediates.P.between.value"], "context": {"identifier": "OTHER.REFDT", "intermediate": "P"}}]
+    },
+    {
+      "case": "check_reports_an_intermediate_range_value_of_another_input_read_in_a_text_template",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "event_ranges", "edits": [{"from": "{name: READ, type: int, derivation: P.APERIOD}", "to": "{name: READ, type: str, derivation: {str_template: 'period {P.APERIOD}'}}"}]}, "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["intermediates.P.between.value"], "context": {"identifier": "OTHER.REFDT", "intermediate": "P"}}]
+    },
+    {
+      "case": "check_reports_an_intermediate_range_value_of_another_input_read_through_another_intermediate_s_range",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "event_ranges", "edits": [{"from": "{name: READ, type: int, derivation: P.APERIOD}", "to": "{name: READ, type: int, derivation: Q.APERIOD}"}]}, "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["intermediates.P.between.value"], "context": {"identifier": "OTHER.REFDT", "intermediate": "P"}}]
+    },
+    {
+      "case": "check_reports_an_intermediate_range_value_of_another_input_read_through_an_aggregate_s_range",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "event_ranges", "edits": [{"from": "{name: READ, type: int, derivation: P.APERIOD}", "to": "{name: READ, type: int, derivation: {aggregate: {between: {value: P.APERSDT, upper: APEREDT}, expr: 'COUNT(PERIODS.*)'}}}"}]}, "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["intermediates.P.between.value"], "context": {"identifier": "OTHER.REFDT", "intermediate": "P"}}]
+    },
+    {
+      "case": "check_reports_an_intermediate_range_value_of_another_input_read_through_a_join_s_range",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "event_ranges", "edits": [{"from": "{name: READ, type: int, derivation: P.APERIOD}", "to": "{name: READ, type: int, derivation: {source: {variable: PERIODS.APERIOD, between: {value: P.APERSDT, lower: APERSDT}, order_by: [PERIODS.APERIOD], keep: first}}}"}]}, "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["intermediates.P.between.value"], "context": {"identifier": "OTHER.REFDT", "intermediate": "P"}}]
+    },
+    {
+      "case": "check_reports_an_intermediate_range_value_of_another_input_read_by_an_aggregate_s_derive_binding",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "event_ranges", "edits": [{"from": "{name: READ, type: int, derivation: P.APERIOD}", "to": "{name: READ, type: int, derivation: {aggregate: {derivations: {START: {type: date, derivation: PERIODS.APERSDT}, FIRST: {type: date, derivation: P.APERSDT}}, expr: 'COUNT(FIRST)'}}}"}]}, "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["intermediates.P.between.value"], "context": {"identifier": "OTHER.REFDT", "intermediate": "P"}}]
+    },
+    {
+      "case": "check_reports_an_intermediate_range_value_of_another_input_read_by_a_dataset_verification",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "event_ranges", "edits": [{"from": "  - {name: READ, type: int, derivation: P.APERIOD}\n", "to": "  - {name: READ, type: int, derivation: 1}\nverifications:\n  - assert: {id: dated, require: 'P.APERIOD IS NOT NULL'}\n"}]}, "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["intermediates.P.between.value"], "context": {"identifier": "OTHER.REFDT", "intermediate": "P"}}]
+    },
+    {
+      "case": "check_admits_an_intermediate_range_value_no_row_reads",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "event_ranges", "edits": [{"from": "{name: READ, type: int, derivation: P.APERIOD}", "to": "{name: READ, type: int, derivation: 1}"}]}, "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}},
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "check_admits_an_intermediate_range_value_of_the_base_driver_record",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {"spec.yaml": {"base": "event_ranges", "edits": [{"from": "value: OTHER.REFDT", "to": "value: AE.ASTDT"}]}, "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}},
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "check_reports_a_join_range_value_of_another_input_at_the_top_of_a_derivation",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "event_joins"}, "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["columns.READ.derivation.source.between.value"], "context": {"identifier": "OTHER.REFDT", "variable": "PERIODS.APERIOD"}}]
+    },
+    {
+      "case": "check_reports_a_join_range_value_of_another_input_in_a_case_result",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "event_joins", "edits": [{"from": "derivation: {source: {variable: PERIODS.APERIOD, between: {value: OTHER.REFDT, lower: APERSDT, upper: APEREDT}}}}", "to": "derivation: {case: [{when: 'AESEQ > 0', then: {source: {variable: PERIODS.APERIOD, between: {value: OTHER.REFDT, lower: APERSDT, upper: APEREDT}}}}]}}"}]},
+          "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["columns.READ.derivation.case[0].then.source.between.value"], "context": {"identifier": "OTHER.REFDT", "variable": "PERIODS.APERIOD"}}]
+    },
+    {
+      "case": "check_reports_a_join_range_value_of_another_input_among_first_available_sources",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "event_joins", "edits": [{"from": "derivation: {source: {variable: PERIODS.APERIOD, between: {value: OTHER.REFDT, lower: APERSDT, upper: APEREDT}}}}", "to": "derivation: {first_available: {sources: [{variable: PERIODS.APERIOD, between: {value: OTHER.REFDT, lower: APERSDT, upper: APEREDT}}, AESEQ]}}}"}]},
+          "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["columns.READ.derivation.first_available.sources[0].between.value"], "context": {"identifier": "OTHER.REFDT", "variable": "PERIODS.APERIOD"}}]
+    },
+    {
+      "case": "check_reports_a_join_range_value_of_another_input_as_a_classified_source",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "event_joins", "edits": [{"from": "{name: READ, type: int, derivation: {source: {variable: PERIODS.APERIOD, between: {value: OTHER.REFDT, lower: APERSDT, upper: APEREDT}}}}", "to": "{name: READ, type: str, derivation: {cut: {source: {variable: PERIODS.APERIOD, between: {value: OTHER.REFDT, lower: APERSDT, upper: APEREDT}}, breaks: [1.5], labels: [first, later]}}}"}]},
+          "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["columns.READ.derivation.cut.source.between.value"], "context": {"identifier": "OTHER.REFDT", "variable": "PERIODS.APERIOD"}}]
+    },
+    {
+      "case": "check_reports_an_aggregate_range_value_of_another_input_at_the_top_of_a_derivation",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "event_joins", "edits": [{"from": "derivation: {source: {variable: PERIODS.APERIOD, between: {value: OTHER.REFDT, lower: APERSDT, upper: APEREDT}}}}", "to": "derivation: {aggregate: {between: {value: OTHER.REFDT, upper: APEREDT}, expr: 'COUNT(PERIODS.*)'}}}"}]},
+          "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["columns.READ.derivation.aggregate.between.value"], "context": {"identifier": "OTHER.REFDT"}}]
+    },
+    {
+      "case": "check_reports_an_aggregate_range_value_of_another_input_in_a_case_result",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "event_joins", "edits": [{"from": "derivation: {source: {variable: PERIODS.APERIOD, between: {value: OTHER.REFDT, lower: APERSDT, upper: APEREDT}}}}", "to": "derivation: {case: [{when: 'AESEQ > 0', then: {aggregate: {between: {value: OTHER.REFDT, upper: APEREDT}, expr: 'COUNT(PERIODS.*)'}}}]}}"}]},
+          "ae.csv": {"base": "ae"}, "periods.csv": {"base": "periods"}, "other.csv": {"base": "other"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["columns.READ.derivation.case[0].then.aggregate.between.value"], "context": {"identifier": "OTHER.REFDT"}}]
+    },
+    {
+      "case": "check_reports_a_named_range_value_of_another_template_s_driver_read_in_the_column_phase",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "template_windows_by_w", "edits": [
+            {"from": "CLINIC.SEQ\n      WINDOW: W.NAME\n", "to": "CLINIC.SEQ\n"},
+            {"from": "HOME.SEQ\n      WINDOW: W.NAME\n", "to": "HOME.SEQ\n"},
+            {"from": "  - {name: WINDOW, type: str}\n", "to": "  - {name: WINDOW, type: str, derivation: W.NAME}\n"}
+          ]},
+          "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["intermediates.W.between.value"], "context": {"identifier": "CLINIC.DAY", "intermediate": "W"}}]
+    },
+    {
+      "case": "check_reports_a_named_range_value_of_another_template_s_driver_read_by_a_dataset_verification",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "template_windows_by_w", "edits": [
+            {"from": "CLINIC.SEQ\n      WINDOW: W.NAME\n", "to": "CLINIC.SEQ\n      WINDOW: \"'x'\"\n"},
+            {"from": "HOME.SEQ\n      WINDOW: W.NAME\n", "to": "HOME.SEQ\n      WINDOW: \"'y'\"\nverifications:\n  - assert: {id: windowed, require: 'W.NAME IS NOT NULL'}\n"}
+          ]},
+          "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["intermediates.W.between.value"], "context": {"identifier": "CLINIC.DAY", "intermediate": "W"}}]
+    },
+    {
+      "case": "check_reports_a_named_range_value_of_another_template_s_driver_read_in_its_derivations",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "template_windows_by_w", "edits": [{"from": "CLINIC.SEQ\n      WINDOW: W.NAME\n", "to": "CLINIC.SEQ\n      WINDOW: \"'x'\"\n"}]},
+          "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["intermediates.W.between.value"], "context": {"identifier": "CLINIC.DAY", "intermediate": "W"}}]
+    },
+    {
+      "case": "check_reports_a_named_range_value_of_another_template_s_driver_read_in_its_text_template",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "template_windows_by_w", "edits": [
+            {"from": "CLINIC.SEQ\n      WINDOW: W.NAME\n", "to": "CLINIC.SEQ\n      WINDOW: \"'x'\"\n"},
+            {"from": "HOME.SEQ\n      WINDOW: W.NAME\n", "to": "HOME.SEQ\n      WINDOW: {str_template: 'in {W.NAME}'}\n"}
+          ]},
+          "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["intermediates.W.between.value"], "context": {"identifier": "CLINIC.DAY", "intermediate": "W"}}]
+    },
+    {
+      "case": "check_reports_a_named_range_value_of_another_template_s_driver_read_in_its_filter",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "template_windows_by_w", "edits": [
+            {"from": "CLINIC.SEQ\n      WINDOW: W.NAME\n", "to": "CLINIC.SEQ\n      WINDOW: \"'x'\"\n"},
+            {"from": "HOME.SEQ\n      WINDOW: W.NAME\n", "to": "HOME.SEQ\n      WINDOW: \"'y'\"\n"},
+            {"from": "    dataset: HOME\n", "to": "    dataset: HOME\n    filter: \"W.NAME IS NOT NULL\"\n"}
+          ]},
+          "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["intermediates.W.between.value"], "context": {"identifier": "CLINIC.DAY", "intermediate": "W"}}]
+    },
+    {
+      "case": "a_named_range_value_read_by_its_driver_s_template_alone_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "template_windows_by_w", "edits": [{"from": "HOME.SEQ\n      WINDOW: W.NAME\n", "to": "HOME.SEQ\n      WINDOW: \"'y'\"\n"}]},
+          "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_named_range_value_read_by_its_driver_s_template_alone_is_admitted",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "template_windows_by_w", "edits": [{"from": "HOME.SEQ\n      WINDOW: W.NAME\n", "to": "HOME.SEQ\n      WINDOW: \"'y'\"\n"}]},
+          "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID,SEQ,WINDOW\nS,S-1,1,EARLY\nS,S-1,2,LATE\nS,S-1,3,y\nS,S-1,4,y\n"}
+    },
+    {
+      "case": "check_reports_a_join_range_value_of_another_template_s_driver",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "template_windows", "edits": [
+            {"from": "      WINDOW: {source: {variable: WINDOWS.NAME, between: {value: CLINIC.DAY, lower: LO, upper: HI}}}\n", "to": "      WINDOW: \"'x'\"\n"},
+            {"from": "value: HOME.DAY", "to": "value: CLINIC.DAY"}
+          ]},
+          "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["rows.home.derivations.WINDOW.source.between.value"], "context": {"identifier": "CLINIC.DAY", "variable": "WINDOWS.NAME"}}]
+    },
+    {
+      "case": "check_reports_a_column_join_range_value_of_one_template_s_driver",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "template_windows", "edits": [
+            {"from": "      WINDOW: {source: {variable: WINDOWS.NAME, between: {value: CLINIC.DAY, lower: LO, upper: HI}}}\n", "to": ""},
+            {"from": "      WINDOW: {source: {variable: WINDOWS.NAME, between: {value: HOME.DAY, lower: LO, upper: HI}}}\n", "to": ""},
+            {"from": "  - {name: WINDOW, type: str}\n", "to": "  - {name: WINDOW, type: str, derivation: {source: {variable: WINDOWS.NAME, between: {value: HOME.DAY, lower: LO, upper: HI}}}}\n"}
+          ]},
+          "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "windows.csv": {"base": "windows"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["columns.WINDOW.derivation.source.between.value"], "context": {"identifier": "HOME.DAY", "variable": "WINDOWS.NAME"}}]
+    },
+    {
+      "case": "a_nearest_selection_in_seconds_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "nearest_ecgs", "edits": [{"from": "unit: hour", "to": "unit: second"}]}, "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_nearest_selection_in_seconds_takes_the_earlier_source_then_the_earlier_record_on_a_tie",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "nearest_ecgs", "edits": [{"from": "unit: hour", "to": "unit: second"}]}, "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "report": {"handler": [["SPEC_PATH", "COUNT"], ["columns.PCSEQ.derivation.source.multiple_matches", 2], ["columns.PCSEQ.derivation.source.absent", 1]]},
+      "saved": {"out.csv": "STUDYID,USUBJID,EGSEQ,PCSEQ\nS,S-1,1,1\nS,S-1,2,\nS,S-2,1,3\n"}
+    },
+    {
+      "case": "a_nearest_selection_in_minutes_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "nearest_ecgs", "edits": [{"from": "unit: hour", "to": "unit: minute"}]}, "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_nearest_selection_in_minutes_takes_the_earlier_source_then_the_earlier_record_on_a_tie",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "nearest_ecgs", "edits": [{"from": "unit: hour", "to": "unit: minute"}]}, "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "report": {"handler": [["SPEC_PATH", "COUNT"], ["columns.PCSEQ.derivation.source.multiple_matches", 2], ["columns.PCSEQ.derivation.source.absent", 1]]},
+      "saved": {"out.csv": "STUDYID,USUBJID,EGSEQ,PCSEQ\nS,S-1,1,1\nS,S-1,2,\nS,S-2,1,3\n"}
+    },
+    {
+      "case": "a_nearest_selection_in_hours_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "nearest_ecgs"}, "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_nearest_selection_in_hours_takes_the_earlier_source_then_the_earlier_record_on_a_tie",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "nearest_ecgs"}, "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "report": {"handler": [["SPEC_PATH", "COUNT"], ["columns.PCSEQ.derivation.source.multiple_matches", 2], ["columns.PCSEQ.derivation.source.absent", 1]]},
+      "saved": {"out.csv": "STUDYID,USUBJID,EGSEQ,PCSEQ\nS,S-1,1,1\nS,S-1,2,\nS,S-2,1,3\n"}
+    },
+    {
+      "case": "a_nearest_selection_in_days_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "nearest_ecgs", "edits": [{"from": "unit: hour", "to": "unit: day"}]}, "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_nearest_selection_in_days_takes_the_earlier_source_then_the_earlier_record_on_a_tie",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "nearest_ecgs", "edits": [{"from": "unit: hour", "to": "unit: day"}]}, "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "report": {"handler": [["SPEC_PATH", "COUNT"], ["columns.PCSEQ.derivation.source.multiple_matches", 2], ["columns.PCSEQ.derivation.source.absent", 1]]},
+      "saved": {"out.csv": "STUDYID,USUBJID,EGSEQ,PCSEQ\nS,S-1,1,1\nS,S-1,2,\nS,S-2,1,3\n"}
+    },
+    {
+      "case": "a_nearest_date_selection_in_days_reads_the_fewest_days_away",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "nearest_ecgs", "edits": [{"from": "unit: hour", "to": "unit: day"}, {"from": "EGDTC: datetime", "to": "EGDTC: date"}, {"from": "PCDTM: datetime", "to": "PCDTM: date"}, {"from": "type: datetime, derivation: EG.EGDTC", "to": "type: date, derivation: EG.EGDTC"}]},
+          "eg.csv": "STUDYID,USUBJID,EGSEQ,EGDTC\nS,S-1,1,2025-03-01\n",
+          "pc.csv": "STUDYID,USUBJID,PCSEQ,PCDTM\nS,S-1,1,2025-03-13\nS,S-1,2,2025-03-09\nS,S-1,3,2025-02-20\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID,EGSEQ,PCSEQ\nS,S-1,1,2\n"}
+    },
+    {
+      "case": "a_calendar_unit_counts_whole_units_so_samples_within_one_unit_tie",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "nearest_ecgs", "edits": [{"from": "unit: hour", "to": "unit: week"}, {"from": "EGDTC: datetime", "to": "EGDTC: date"}, {"from": "PCDTM: datetime", "to": "PCDTM: date"}, {"from": "type: datetime, derivation: EG.EGDTC", "to": "type: date, derivation: EG.EGDTC"}]},
+          "eg.csv": "STUDYID,USUBJID,EGSEQ,EGDTC\nS,S-1,1,2025-03-01\n",
+          "pc.csv": "STUDYID,USUBJID,PCSEQ,PCDTM\nS,S-1,1,2025-03-13\nS,S-1,2,2025-03-09\nS,S-1,3,2025-02-20\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID,EGSEQ,PCSEQ\nS,S-1,1,3\n"}
+    },
+    {
+      "case": "a_literal_nearest_reference_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "nearest_ecgs", "edits": [{"from": "to: EG.EGDTC, unit: hour", "to": "to: \"DATETIME '2025-01-10T11:00'\", unit: hour"}]}, "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_literal_nearest_reference_is_the_same_for_every_ecg",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "nearest_ecgs", "edits": [{"from": "to: EG.EGDTC, unit: hour", "to": "to: \"DATETIME '2025-01-10T11:00'\", unit: hour"}]}, "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID,EGSEQ,PCSEQ\nS,S-1,1,3\nS,S-1,2,3\nS,S-2,1,3\n"}
+    },
+    {
+      "case": "an_expression_nearest_reference_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "nearest_ecgs", "edits": [{"from": "    nearest: {source: PCDTM, to: EG.EGDTC, unit: hour}\n", "to": "    nearest:\n      source: PCDT\n      to: {to_date: {source: EG.EGDTC}}\n      unit: day\n    derivations:\n      PCDT: {to_date: {source: PCDTM}}\n"}]},
+          "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "an_expression_nearest_reference_reads_the_current_row",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "nearest_ecgs", "edits": [{"from": "    nearest: {source: PCDTM, to: EG.EGDTC, unit: hour}\n", "to": "    nearest:\n      source: PCDT\n      to: {to_date: {source: EG.EGDTC}}\n      unit: day\n    derivations:\n      PCDT: {to_date: {source: PCDTM}}\n"}]},
+          "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID,EGSEQ,PCSEQ\nS,S-1,1,1\nS,S-1,2,\nS,S-2,1,3\n"}
+    },
+    {
+      "case": "a_required_nearest_match_fails_an_ecg_without_a_reference",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "nearest_ecgs", "edits": [{"from": "unit: hour}\n", "to": "unit: minute}\n    require_match: true\n"}]}, "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "join", "condition": "unmatched_key", "rule": "LOOKUP-24", "spec_paths": ["intermediates.NEAR"], "context": {"intermediate": "NEAR", "dataset": "PC", "key": ["STUDYID", "USUBJID"], "intermediate_key": {"STUDYID": "S", "USUBJID": "S-1"}, "keys": [{"STUDYID": "S", "USUBJID": "S-1", "EGSEQ": 2}]}}]
+    },
+    {
+      "case": "check_and_the_run_refuse_an_order_and_a_keep_beside_a_nearest_selection",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "nearest_ecgs", "edits": [{"from": "unit: hour}\n", "to": "unit: hour}\n    order_by: [PC.PCSEQ]\n    keep: first\n"}]}, "dm.csv": {"base": "dm"}, "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "spec_paths": ["intermediates.NEAR.order_by", "intermediates.NEAR.keep", "intermediates.NEAR.nearest"], "context": {"intermediate": "NEAR", "construct": "order_by"}}]
+    },
+    {
+      "case": "check_and_the_run_refuse_a_nearest_source_of_collected_date_text",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "nearest_ecgs", "edits": [{"from": "source: PCDTM", "to": "source: PCDTC"}]}, "dm.csv": {"base": "dm"}, "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "incompatible_input_type", "spec_paths": ["intermediates.NEAR.nearest.source"], "context": {"intermediate": "NEAR", "identifier": "PCDTC", "actual": "str", "permitted": ["date", "datetime"]}},
+        {"phase": "validation", "condition": "unknown_field", "spec_paths": ["columns.PCSEQ.derivation.source"], "context": {"identifier": "NEAR.PCSEQ"}}
+      ]
+    },
+    {
+      "case": "check_and_the_run_refuse_a_nearest_unit_a_datetime_does_not_count_in",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "nearest_ecgs", "edits": [{"from": "unit: hour", "to": "unit: week"}]}, "dm.csv": {"base": "dm"}, "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "value_not_permitted", "spec_paths": ["intermediates.NEAR.nearest.unit"], "context": {"value": "week", "permitted": ["second", "minute", "hour", "day"]}},
+        {"phase": "validation", "condition": "unknown_field", "spec_paths": ["columns.PCSEQ.derivation.source"], "context": {"identifier": "NEAR.PCSEQ"}}
+      ]
+    },
+    {
+      "case": "check_and_the_run_refuse_a_date_reference_beside_a_datetime_source",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "nearest_ecgs", "edits": [{"from": "to: EG.EGDTC", "to": "to: \"DATE '2025-01-10'\""}]}, "dm.csv": {"base": "dm"}, "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "incompatible_input_type", "spec_paths": ["intermediates.NEAR.nearest.to"], "context": {"intermediate": "NEAR", "expected": "datetime", "actual": "date"}},
+        {"phase": "validation", "condition": "unknown_field", "spec_paths": ["columns.PCSEQ.derivation.source"], "context": {"identifier": "NEAR.PCSEQ"}}
+      ]
+    },
+    {
+      "case": "check_and_the_run_refuse_a_nearest_reference_that_reads_no_value",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "nearest_ecgs", "edits": [{"from": "to: EG.EGDTC", "to": "to: EGDTM"}]}, "dm.csv": {"base": "dm"}, "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "spec_paths": ["intermediates.NEAR.nearest.to"], "context": {"intermediate": "NEAR", "identifier": "EGDTM"}},
+        {"phase": "validation", "condition": "unknown_field", "spec_paths": ["columns.PCSEQ.derivation.source"], "context": {"identifier": "NEAR.PCSEQ"}}
+      ]
+    },
+    {
+      "case": "check_and_the_run_refuse_a_nearest_reference_to_an_input_that_builds_no_row",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "nearest_subjects"}, "dm.csv": {"base": "dm"}, "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "spec_paths": ["intermediates.NEAR.nearest.to"], "context": {"intermediate": "NEAR", "identifier": "EG.EGDTC"}}]
+    },
+    {
+      "case": "check_and_the_run_refuse_a_grouped_nearest_reference_outside_the_group_keys",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "nearest_subjects", "edits": [
+            {"from": "base: DM\n", "to": ""},
+            {"from": "  - {name: STUDYID, type: str, derivation: DM.STUDYID}\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: PCSEQ, type: int, derivation: NEAR.PCSEQ}\n", "to": "  - {name: STUDYID, type: str}\n  - {name: USUBJID, type: str}\n  - {name: PCSEQ, type: int}\nrows:\n  - id: subjects\n    dataset: EG\n    group_by: [EG.STUDYID, EG.USUBJID]\n    derivations:\n      STUDYID: EG.STUDYID\n      USUBJID: EG.USUBJID\n      PCSEQ: NEAR.PCSEQ\n"}
+          ]},
+          "dm.csv": {"base": "dm"}, "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "ungrouped_driver_field", "spec_paths": ["intermediates.NEAR.nearest.to"], "context": {"intermediate": "NEAR", "identifier": "EG.EGDTC", "row": "subjects", "dataset": "EG"}}]
+    },
+    {
+      "case": "a_nearest_source_the_relation_does_not_have_is_unknown",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "nearest_ecgs", "edits": [{"from": "source: PCDTM", "to": "source: PCTIME"}]}, "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-26", "spec_paths": ["intermediates.NEAR.nearest.source"], "context": {"intermediate": "NEAR", "identifier": "PCTIME"}}]
+    },
+    {
+      "case": "another_intermediate_reading_a_nearest_selection_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "nearest_subjects", "edits": [
+            {"from": "derivation: NEAR.PCSEQ}", "to": "derivation: FIRST.NEARSEQ}"},
+            {"from": "unit: minute}\n", "to": "unit: minute}\n  - id: FIRST\n    dataset: EG\n    key: [STUDYID, USUBJID]\n    order_by: [EG.EGSEQ]\n    keep: first\n    derivations:\n      NEARSEQ: NEAR.PCSEQ\n"}
+          ]},
+          "dm.csv": {"base": "dm"}, "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "another_intermediate_reads_a_nearest_selection_for_its_donor_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "nearest_subjects", "edits": [
+            {"from": "derivation: NEAR.PCSEQ}", "to": "derivation: FIRST.NEARSEQ}"},
+            {"from": "unit: minute}\n", "to": "unit: minute}\n  - id: FIRST\n    dataset: EG\n    key: [STUDYID, USUBJID]\n    order_by: [EG.EGSEQ]\n    keep: first\n    derivations:\n      NEARSEQ: NEAR.PCSEQ\n"}
+          ]},
+          "dm.csv": {"base": "dm"}, "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID,PCSEQ\nS,S-1,1\nS,S-2,3\n"}
+    },
+    {
+      "case": "an_aggregate_derivation_reading_a_nearest_selection_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "nearest_ecgs", "edits": [
+            {"from": "unit: hour", "to": "unit: minute"},
+            {"from": "columns: [STUDYID, USUBJID, EGSEQ, PCSEQ]", "to": "columns: [STUDYID, USUBJID, EGSEQ, NEARMAX]"},
+            {"from": "  - {name: PCSEQ, type: int, derivation: NEAR.PCSEQ}\n", "to": "  - name: NEARMAX\n    type: int\n    derivation:\n      aggregate:\n        key: [STUDYID, USUBJID]\n        derivations:\n          OWN: {type: int, derivation: PC.PCSEQ}\n          SEQ: {type: int, derivation: NEAR.PCSEQ}\n        expr: \"MAX(SEQ)\"\n"}
+          ]},
+          "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "an_aggregate_derivation_may_read_a_nearest_selection",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "nearest_ecgs", "edits": [
+            {"from": "unit: hour", "to": "unit: minute"},
+            {"from": "columns: [STUDYID, USUBJID, EGSEQ, PCSEQ]", "to": "columns: [STUDYID, USUBJID, EGSEQ, NEARMAX]"},
+            {"from": "  - {name: PCSEQ, type: int, derivation: NEAR.PCSEQ}\n", "to": "  - name: NEARMAX\n    type: int\n    derivation:\n      aggregate:\n        key: [STUDYID, USUBJID]\n        derivations:\n          OWN: {type: int, derivation: PC.PCSEQ}\n          SEQ: {type: int, derivation: NEAR.PCSEQ}\n        expr: \"MAX(SEQ)\"\n"}
+          ]},
+          "eg.csv": {"base": "eg"}, "pc.csv": {"base": "pc"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID,EGSEQ,NEARMAX\nS,S-1,1,1\nS,S-1,2,\nS,S-2,1,3\n"}
+    },
+    {
+      "case": "a_nearest_selection_over_self_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "self_visits"}, "vs.csv": {"base": "visits"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_nearest_selection_over_self_measures_the_completed_rows",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "self_visits"}, "vs.csv": {"base": "visits"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "STUDYID,USUBJID,SEQ,NEARSEQ\nS,S-1,1,\nS,S-1,2,\nS,S-1,3,\nS,S-1,99,2\n"}
+    }
+  ]
+}

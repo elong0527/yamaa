@@ -37,6 +37,7 @@ pub(super) const FILES: &[File] = &[
     fixture!("inheritance.json"),
     fixture!("language_header.json"),
     fixture!("lookup_matched_derivations.json"),
+    fixture!("lookup_model.json"),
     fixture!("producer_links.json"),
     fixture!("project_run.json"),
     fixture!("rounding.json"),
