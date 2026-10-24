@@ -409,6 +409,21 @@ fn table_metadata(
 /// observation is serialized: a streamed batch's.
 const OBSERVED_RECORDS: usize = 65_536;
 
+/// Bound each observation decode by both its batch size and an input
+/// partition the scan already admitted. Joining admitted text columns can
+/// exceed Arrow Utf8's offsets even when each partition fits on its own.
+fn observation_ranges(
+    partitions: &[std::ops::Range<usize>],
+) -> impl Iterator<Item = std::ops::Range<usize>> + '_ {
+    partitions.iter().flat_map(|partition| {
+        std::iter::successors(Some(partition.start), move |start| {
+            let end = partition.end.min(start.saturating_add(OBSERVED_RECORDS));
+            (end < partition.end).then_some(end)
+        })
+        .map(move |start| start..partition.end.min(start.saturating_add(OBSERVED_RECORDS)))
+    })
+}
+
 /// The observation of a source read by partition (#3792), whose records the
 /// run holds no copy of (#3830): its rows are decoded again from `bytes`,
 /// the held bytes its scan read, a partition at a time, and encoded only
@@ -426,16 +441,10 @@ fn scanned_observation(
         metadata,
         rows: Rows::Deferred(std::sync::Arc::new(move || {
             let mut writer = crate::report_storage::RowWriter::default();
-            let mut start = 0;
-            loop {
-                let end = scanned.records.min(start + OBSERVED_RECORDS);
-                let part = crate::specification_run::decode_range(&scanned, &bytes, start..end)
+            for range in observation_ranges(&scanned.partitions) {
+                let part = crate::specification_run::decode_range(&scanned, &bytes, range)
                     .map_err(|_| Error::InvalidObservation)?;
                 writer.table(&part)?;
-                if end == scanned.records {
-                    break;
-                }
-                start = end;
             }
             writer.finish()
         })),
@@ -1132,6 +1141,45 @@ pub(crate) fn artifact_report(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Seam: the decode requests of a deferred report must retain the scan's
+    // representation admission, without allocating multi-gigabyte strings.
+    #[test]
+    fn observation_batches_preserve_each_admitted_partitions_text_offset_bound() {
+        let text_bytes = i32::MAX as usize / 2 + 1;
+        assert_eq!(
+            (
+                crate::column_table::fits_utf8_offsets([text_bytes]),
+                crate::column_table::fits_utf8_offsets([text_bytes, text_bytes]),
+            ),
+            (true, false),
+            "one record fits; combining two admitted records would not"
+        );
+        let batch = OBSERVED_RECORDS;
+        for (label, partitions, expected) in [
+            (
+                "empty",
+                std::iter::once(0..0).collect(),
+                std::iter::once(0..0).collect(),
+            ),
+            (
+                "two separately admitted text columns",
+                vec![0..1, 1..2],
+                vec![0..1, 1..2],
+            ),
+            (
+                "a batch cap inside an admitted partition",
+                vec![0..batch + 1, batch + 1..batch + 3],
+                vec![0..batch, batch..batch + 1, batch + 1..batch + 3],
+            ),
+        ] {
+            assert_eq!(
+                observation_ranges(&partitions).collect::<Vec<_>>(),
+                expected,
+                "{label}"
+            );
+        }
+    }
 
     #[test]
     fn identity_constructors_share_engine_facts() {
