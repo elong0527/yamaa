@@ -157,6 +157,7 @@ impl Define {
                     target,
                     written,
                     bytes,
+                    partitions: &[],
                 })
                 .collect(),
         )
@@ -184,6 +185,13 @@ impl Define {
                 written(index),
             )]),
             Cause::Stage(error) | Cause::Commit(error) => Failure::Publication { index, error },
+            // A composition's whole files are never asked between partitions.
+            Cause::Cancelled => Failure::Publication {
+                index,
+                error: crate::file_publication::Error::Host(
+                    crate::host_resources::Failure::Cancelled,
+                ),
+            },
             Cause::Unwind(_) => Failure::Diagnostic(vec![define::publication_diagnostic(
                 index,
                 written(index),

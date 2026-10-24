@@ -1,5 +1,5 @@
 {
-  "about": "A schema link types a stored artifact from its producing specification's output contract (INPUT-10, INPUT-11): the consumer reads the file at its own path, a header or schema other than the producer's output fails, and a consumer may write no file of its producer. The producer counts the seven records of one subject; the consumer reads what it saves. Moved from file_producer_links.rs, whose tests compared the fields each case's compares names.",
+  "about": "A schema link types a stored artifact from its producing specification's output contract (INPUT-3, INPUT-10, INPUT-11, FILE-3, OUTPUT-9): a check of the consumer reads the producer's specification and no data, the consumer reads the file at its own path, which the caller builds and saves first, and never runs the producer; a header or schema other than the producer's output fails; a consumer may write no file of its producer; and a linked ordinal is the consumer's own field. The producer counts the seven records of one subject into one; the consumer counts the records of each stored row. Moved from file_producer_links.rs, whose tests compared the saved bytes, the fields each case's compares names, and that a failed build had no output, which the report's column kind with no row states (CHECK-23 gives a column row to a successful run only).",
   "documents": {
     "producer": "yamaa: \"1.0\"\ntype: spec\ndomain: COUNTED\nkeys: [ID]\ninput: {RAW: {path: ../raw/raw.csv, types: {ID: int, VALUE: int}}}\nrows:\n  - id: counted\n    dataset: RAW\n    group_by: [RAW.ID]\n    derivations: {ID: RAW.ID, VALUE: {aggregate: 'COUNT(RAW.*)'}}\ncolumns:\n  - {name: ID, type: int, label: Identifier}\n  - {name: VALUE, type: int, label: Count}\noutput: {path: ../generated/producer.csv, columns: [ID, VALUE]}\n",
     "consumer": "yamaa: \"1.0\"\ntype: spec\ndomain: ROOT\nkeys: [ID]\ninput: {FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml}}\nrows:\n  - id: counted\n    dataset: FIRST\n    group_by: [FIRST.ID, FIRST.VALUE]\n    derivations: {ID: FIRST.ID, SOURCE_COUNT: FIRST.VALUE, VALUE: {aggregate: 'COUNT(FIRST.*)'}}\ncolumns:\n  - {name: ID, type: int, label: Identifier}\n  - {name: SOURCE_COUNT, type: int, label: Original source count}\n  - {name: VALUE, type: int, label: Count}\noutput: {path: ../generated/root.csv, columns: [ID, SOURCE_COUNT, VALUE]}\n",
@@ -7,15 +7,38 @@
   },
   "cases": [
     {
+      "case": "a_consumer_of_a_csv_artifact_checks_against_its_producers_specification_without_data",
+      "operation": "check",
+      "input": {"files": {"raw/raw.csv": {"base": "raw"}, "producer/p.yaml": {"base": "producer"}, "consumer/root.yaml": {"base": "consumer"}}, "specification": "consumer/root.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_consumer_of_a_parquet_artifact_checks_against_its_producers_specification_without_data",
+      "operation": "check",
+      "input": {
+        "files": {
+          "raw/raw.csv": {"base": "raw"},
+          "producer/p.yaml": {"base": "producer", "edits": [{"from": "producer.csv", "to": "producer.parquet"}]},
+          "consumer/root.yaml": {"base": "consumer", "edits": [{"from": "producer.csv", "to": "producer.parquet"}]}
+        },
+        "specification": "consumer/root.yaml"
+      },
+      "issues": []
+    },
+    {
       "case": "a_consumer_built_before_its_producer_is_saved_reads_a_missing_csv_artifact",
-      "operation": "build",
+      "operation": "save",
       "input": {"files": {"raw/raw.csv": {"base": "raw"}, "producer/p.yaml": {"base": "producer"}, "consumer/root.yaml": {"base": "consumer"}}, "specification": "consumer/root.yaml"},
       "compares": ["condition", "spec_paths"],
-      "issues": [{"condition": "resource_path_missing", "spec_paths": ["input.FIRST.path"]}]
+      "issues": [{"condition": "resource_path_missing", "spec_paths": ["input.FIRST.path"]}],
+      "report": {
+        "column": [["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"]]
+      },
+      "saved": {}
     },
     {
       "case": "a_consumer_built_before_its_producer_is_saved_reads_a_missing_parquet_artifact",
-      "operation": "build",
+      "operation": "save",
       "input": {
         "files": {
           "raw/raw.csv": {"base": "raw"},
@@ -25,11 +48,64 @@
         "specification": "consumer/root.yaml"
       },
       "compares": ["condition", "spec_paths"],
-      "issues": [{"condition": "resource_path_missing", "spec_paths": ["input.FIRST.path"]}]
+      "issues": [{"condition": "resource_path_missing", "spec_paths": ["input.FIRST.path"]}],
+      "report": {
+        "column": [["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"]]
+      },
+      "saved": {}
+    },
+    {
+      "case": "a_producer_saves_the_seven_records_of_its_subject_counted_into_one",
+      "operation": "save",
+      "input": {
+        "files": {"raw/raw.csv": {"base": "raw"}, "producer/p.yaml": {"base": "producer"}, "consumer/root.yaml": {"base": "consumer"}},
+        "directories": ["generated"],
+        "specification": "producer/p.yaml"
+      },
+      "issues": [],
+      "saved": {"generated/producer.csv": "ID,VALUE\n1,7\n"}
+    },
+    {
+      "case": "a_consumer_reads_the_csv_artifact_its_producer_saved_first",
+      "operation": "save",
+      "input": {
+        "files": {"raw/raw.csv": {"base": "raw"}, "producer/p.yaml": {"base": "producer"}, "consumer/root.yaml": {"base": "consumer"}},
+        "directories": ["generated"],
+        "built": ["producer/p.yaml"],
+        "specification": "consumer/root.yaml"
+      },
+      "issues": [],
+      "saved": {"generated/root.csv": "ID,SOURCE_COUNT,VALUE\n1,7,1\n"}
+    },
+    {
+      "case": "a_consumer_reads_the_parquet_artifact_its_producer_saved_first",
+      "operation": "save",
+      "input": {
+        "files": {
+          "raw/raw.csv": {"base": "raw"},
+          "producer/p.yaml": {"base": "producer", "edits": [{"from": "producer.csv", "to": "producer.parquet"}]},
+          "consumer/root.yaml": {"base": "consumer", "edits": [{"from": "producer.csv", "to": "producer.parquet"}]}
+        },
+        "directories": ["generated"],
+        "built": ["producer/p.yaml"],
+        "specification": "consumer/root.yaml"
+      },
+      "issues": [],
+      "saved": {"generated/root.csv": "ID,SOURCE_COUNT,VALUE\n1,7,1\n"}
+    },
+    {
+      "case": "a_consumer_reads_the_stored_artifact_after_its_producers_source_is_gone",
+      "operation": "save",
+      "input": {
+        "files": {"producer/p.yaml": {"base": "producer"}, "consumer/root.yaml": {"base": "consumer"}, "generated/producer.csv": "ID,VALUE\n1,7\n"},
+        "specification": "consumer/root.yaml"
+      },
+      "issues": [],
+      "saved": {"generated/root.csv": "ID,SOURCE_COUNT,VALUE\n1,7,1\n"}
     },
     {
       "case": "a_consumer_may_not_write_its_producers_artifact_as_its_output",
-      "operation": "build",
+      "operation": "save",
       "input": {
         "files": {
           "raw/raw.csv": {"base": "raw"},
@@ -40,11 +116,12 @@
         "specification": "consumer/root.yaml"
       },
       "compares": ["condition", "spec_paths"],
-      "issues": [{"condition": "artifact_path_collision", "spec_paths": ["output.path", "output.path"]}]
+      "issues": [{"condition": "artifact_path_collision", "spec_paths": ["output.path", "output.path"]}],
+      "saved": {}
     },
     {
       "case": "a_consumer_may_not_write_its_producers_artifact_as_its_report",
-      "operation": "build",
+      "operation": "save",
       "input": {
         "files": {
           "raw/raw.csv": {"base": "raw"},
@@ -55,7 +132,22 @@
         "specification": "consumer/root.yaml"
       },
       "compares": ["condition", "spec_paths"],
-      "issues": [{"condition": "artifact_path_collision", "spec_paths": ["output.path", "output.report"]}]
+      "issues": [{"condition": "artifact_path_collision", "spec_paths": ["output.path", "output.report"]}],
+      "saved": {}
+    },
+    {
+      "case": "the_producing_specification_is_read_but_never_compiled_or_executed",
+      "operation": "save",
+      "input": {
+        "files": {
+          "producer/p.yaml": {"base": "producer", "edits": [{"from": "VALUE: {aggregate: 'COUNT(RAW.*)'}", "to": "VALUE: {function: {name: missing, args: {x: RAW.VALUE}}}"}]},
+          "consumer/root.yaml": {"base": "consumer"},
+          "generated/producer.csv": "ID,VALUE\n4,2\n4,2\n5,3\n"
+        },
+        "specification": "consumer/root.yaml"
+      },
+      "issues": [],
+      "saved": {"generated/root.csv": "ID,SOURCE_COUNT,VALUE\n4,2,2\n5,3,1\n"}
     },
     {
       "case": "a_stored_header_in_another_order_mismatches_the_producer_contract",
@@ -70,7 +162,10 @@
         "specification": "consumer/root.yaml"
       },
       "compares": ["condition", "rule", "spec_paths", "context.dataset", "context.expected", "context.reordered", "context.missing", "context.extra"],
-      "issues": [{"condition": "producer_contract_mismatch", "rule": "INPUT-11", "spec_paths": ["input.FIRST.schema", "input.FIRST.path"], "context": {"dataset": "FIRST", "expected": ["ID", "VALUE"], "reordered": true, "missing": [], "extra": []}}]
+      "issues": [{"condition": "producer_contract_mismatch", "rule": "INPUT-11", "spec_paths": ["input.FIRST.schema", "input.FIRST.path"], "context": {"dataset": "FIRST", "expected": ["ID", "VALUE"], "reordered": true, "missing": [], "extra": []}}],
+      "report": {
+        "column": [["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"]]
+      }
     },
     {
       "case": "a_stored_header_without_a_contract_column_mismatches_the_producer_contract",
@@ -85,7 +180,10 @@
         "specification": "consumer/root.yaml"
       },
       "compares": ["condition", "rule", "spec_paths", "context.dataset", "context.expected", "context.reordered", "context.missing", "context.extra"],
-      "issues": [{"condition": "producer_contract_mismatch", "rule": "INPUT-11", "spec_paths": ["input.FIRST.schema", "input.FIRST.path"], "context": {"dataset": "FIRST", "expected": ["ID", "VALUE"], "reordered": false, "missing": ["VALUE"], "extra": []}}]
+      "issues": [{"condition": "producer_contract_mismatch", "rule": "INPUT-11", "spec_paths": ["input.FIRST.schema", "input.FIRST.path"], "context": {"dataset": "FIRST", "expected": ["ID", "VALUE"], "reordered": false, "missing": ["VALUE"], "extra": []}}],
+      "report": {
+        "column": [["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"]]
+      }
     },
     {
       "case": "a_stored_header_with_an_extra_column_mismatches_the_producer_contract",
@@ -100,7 +198,10 @@
         "specification": "consumer/root.yaml"
       },
       "compares": ["condition", "rule", "spec_paths", "context.dataset", "context.expected", "context.reordered", "context.missing", "context.extra"],
-      "issues": [{"condition": "producer_contract_mismatch", "rule": "INPUT-11", "spec_paths": ["input.FIRST.schema", "input.FIRST.path"], "context": {"dataset": "FIRST", "expected": ["ID", "VALUE"], "reordered": false, "missing": [], "extra": ["OTHER"]}}]
+      "issues": [{"condition": "producer_contract_mismatch", "rule": "INPUT-11", "spec_paths": ["input.FIRST.schema", "input.FIRST.path"], "context": {"dataset": "FIRST", "expected": ["ID", "VALUE"], "reordered": false, "missing": [], "extra": ["OTHER"]}}],
+      "report": {
+        "column": [["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"]]
+      }
     },
     {
       "case": "a_stored_parquet_column_of_another_type_mismatches_the_producer_contract",
@@ -117,7 +218,25 @@
         "specification": "consumer/root.yaml"
       },
       "compares": ["condition", "context.reordered", "context.expected_types", "context.actual_types"],
-      "issues": [{"condition": "producer_contract_mismatch", "context": {"reordered": false, "expected_types": ["int", "int"], "actual_types": ["int", "str"]}}]
+      "issues": [{"condition": "producer_contract_mismatch", "context": {"reordered": false, "expected_types": ["int", "int"], "actual_types": ["int", "str"]}}],
+      "report": {
+        "column": [["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"]]
+      }
+    },
+    {
+      "case": "a_linked_ordinal_is_local_to_the_consumer_and_never_part_of_the_contract",
+      "operation": "save",
+      "input": {
+        "files": {
+          "raw/raw.csv": {"base": "raw"},
+          "producer/p.yaml": {"base": "producer"},
+          "consumer/root.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ROOT\nkeys: [ID]\nbase: FIRST\ninput: {FIRST: {path: ../generated/producer.csv, schema: ../producer/p.yaml, ordinal: REC}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: FIRST.ID}\n  - {name: POSITION, type: int, label: Position, derivation: FIRST.REC}\noutput: {path: ../generated/root.csv, columns: [ID, POSITION]}\n",
+          "generated/producer.csv": "ID,VALUE\n1,7\n2,7\n"
+        },
+        "specification": "consumer/root.yaml"
+      },
+      "issues": [],
+      "saved": {"generated/root.csv": "ID,POSITION\n1,1\n2,2\n"}
     },
     {
       "case": "a_linked_ordinal_may_not_name_a_field_of_the_contract",
@@ -132,7 +251,10 @@
         "specification": "consumer/root.yaml"
       },
       "compares": ["phase", "condition", "rule", "spec_paths"],
-      "issues": [{"phase": "validation", "condition": "ordinal_field_collision", "rule": "INPUT-4", "spec_paths": ["input.FIRST.ordinal"]}]
+      "issues": [{"phase": "validation", "condition": "ordinal_field_collision", "rule": "INPUT-4", "spec_paths": ["input.FIRST.ordinal"]}],
+      "report": {
+        "column": [["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"]]
+      }
     }
   ]
 }

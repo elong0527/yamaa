@@ -431,6 +431,10 @@ pub(super) fn verify_output<'a: 's, 's, E>(
     let rows = frame.rows();
     let schema = &plan.region(RegionId::DATASET).output;
     let dataset = Completed { frame, schema };
+    let checked = CheckRows {
+        dataset: &dataset,
+        secondary,
+    };
     let mut failures = Vec::new();
     for (position, &column) in keys.iter().enumerate() {
         let missing: Vec<usize> = (0..rows)
@@ -452,8 +456,8 @@ pub(super) fn verify_output<'a: 's, 's, E>(
             });
         }
     }
-    let groups =
-        partition(frame, &keys).map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
+    let groups = partition(frame, &keys, run.output_partition)
+        .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
     let duplicates: Vec<usize> = groups
         .iter()
         .filter(|members| members.len() > 1)
@@ -533,16 +537,14 @@ pub(super) fn verify_output<'a: 's, 's, E>(
                 let mut offending = Vec::new();
                 for row in 0..rows {
                     let binds = match (when, when_expr) {
-                        (Some(when), Some(expr)) => evaluate_predicate(
-                            run, frame, secondary, &dataset, when, expr, &path, row, records,
-                        )?,
+                        (Some(when), Some(expr)) => {
+                            evaluate_predicate(run, &checked, when, expr, &path, row, records)?
+                        }
                         _ => Truth::True,
                     };
                     let holds = evaluate_predicate(
                         run,
-                        frame,
-                        secondary,
-                        &dataset,
+                        &checked,
                         require,
                         require_expr,
                         &path,
@@ -575,7 +577,7 @@ pub(super) fn verify_output<'a: 's, 's, E>(
                         distinct.push(column);
                     }
                 }
-                let groups = partition(frame, &distinct)
+                let groups = partition(frame, &distinct, run.output_partition)
                     .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
                 let repeated: Vec<&Vec<usize>> =
                     groups.iter().filter(|members| members.len() > 1).collect();
@@ -623,9 +625,9 @@ pub(super) fn verify_output<'a: 's, 's, E>(
                     denominator: None,
                 }
             }
-            Check::ScopedRowCount(count) => row_count_check(
-                run, frame, secondary, &dataset, check, count, &path, records,
-            )?,
+            Check::ScopedRowCount(count) => {
+                row_count_check(run, &checked, check, count, &path, records)?
+            }
             check_declared @ (Check::RowCount { .. } | Check::WideRowCount { .. }) => {
                 let failed = !check_declared.row_count_accepts(rows).unwrap_or(false);
                 CheckRecord {
@@ -767,20 +769,27 @@ fn completed_truth<E>(
     })
 }
 
+/// The rows a dataset check reads: the completed rows, as a table over the
+/// output schema, and the secondary inputs a predicate that reads a lookup
+/// reaches through the case evaluator.
+struct CheckRows<'c, 's, E> {
+    dataset: &'c Completed<'c>,
+    secondary: &'c [Table<'s, E>],
+}
+
 /// One row's truth of a verification predicate: over the completed values,
 /// or through the case evaluator when it reads a lookup.
-#[allow(clippy::too_many_arguments)]
 fn evaluate_predicate<'a: 's, 's, E>(
     run: &mut Run<'_, 'a, E>,
-    frame: &Frame,
-    secondary: &[Table<'s, E>],
-    dataset: &Completed<'_>,
+    checked: &CheckRows<'_, 's, E>,
     predicate: &BoundPredicate,
     expr: crate::dataset::resolved::ExprId,
     path: &str,
     row: usize,
     records: &mut Vec<CheckRecord>,
 ) -> Result<Truth, Fail<E>> {
+    let CheckRows { dataset, secondary } = *checked;
+    let frame = dataset.frame;
     if !predicate
         .bindings()
         .iter()
@@ -816,17 +825,15 @@ fn evaluate_predicate<'a: 's, 's, E>(
 
 /// Partition all artifact rows before applying predicates; a filtered-empty
 /// group remains visible.
-#[allow(clippy::too_many_arguments)]
 fn row_count_check<'a: 's, 's, E>(
     run: &mut Run<'_, 'a, E>,
-    frame: &Frame,
-    secondary: &[Table<'s, E>],
-    dataset: &Completed<'_>,
+    checked: &CheckRows<'_, 's, E>,
     check: CheckId,
     count: &crate::dataset::RowCount,
     path: &str,
     records: &mut Vec<CheckRecord>,
 ) -> Result<CheckRecord, Fail<E>> {
+    let (dataset, frame) = (checked.dataset, checked.dataset.frame);
     let plan = run.plan;
     for predicate in count.filter.iter().chain(&count.when) {
         validate_predicate(plan, predicate, dataset, records)?;
@@ -847,9 +854,7 @@ fn row_count_check<'a: 's, 's, E>(
     for row in 0..rows {
         admitted.push(match (&count.filter, filter_expr) {
             (Some(filter), Some(expr)) => {
-                evaluate_predicate(
-                    run, frame, secondary, dataset, filter, expr, path, row, records,
-                )? == Truth::True
+                evaluate_predicate(run, checked, filter, expr, path, row, records)? == Truth::True
             }
             _ => true,
         });
@@ -859,15 +864,13 @@ fn row_count_check<'a: 's, 's, E>(
     for row in 0..rows {
         bound.push(match (&count.when, when_expr) {
             (Some(when), Some(expr)) => {
-                evaluate_predicate(
-                    run, frame, secondary, dataset, when, expr, path, row, records,
-                )? == Truth::True
+                evaluate_predicate(run, checked, when, expr, path, row, records)? == Truth::True
             }
             _ => true,
         });
     }
     let groups = if let Some(columns) = &count.group_by {
-        partition(frame, columns)
+        partition(frame, columns, run.output_partition)
             .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?
     } else {
         vec![(0..rows).collect()]
@@ -916,12 +919,14 @@ fn row_count_check<'a: 's, 's, E>(
 
 /// Partition rows by columns in first-occurrence order: missing values
 /// compare equal, text is exact, temporal precision and float zero signs do
-/// not affect equality (ROW-4).
+/// not affect equality (ROW-4). The rows are admitted as the output is: each
+/// partition of at most `partition` rows, or whole (D264).
 pub(super) fn partition(
     frame: &Frame,
     columns: &[usize],
+    partition: Option<std::num::NonZeroUsize>,
 ) -> Result<Vec<Vec<usize>>, crate::table_grouping::GroupingError<Infallible>> {
-    super::group::admit(columns, frame.width(), frame.rows())?;
+    super::group::admit(columns, frame.width(), frame.rows(), partition)?;
     Ok(
         super::group::partition(frame.rows(), columns.len(), |row, position| {
             frame.get(row, columns[position])

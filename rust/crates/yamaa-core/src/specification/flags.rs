@@ -95,17 +95,16 @@ fn unknown(path: &str, name: &str) -> BindFinding {
         [("identifier".into(), value_text(name))].into(),
     ))
 }
-#[allow(clippy::too_many_arguments)]
+/// A bare name a flag reads in the scope of `cx`: a column of the output
+/// that the scope may read.
 fn output_binding(
+    cx: &mut BindContext<'_, '_>,
     name: &str,
     path: &str,
-    catalog: &Catalog,
-    driver: &str,
-    available: Option<&[usize]>,
-    row: Option<&str>,
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
 ) -> Result<Option<FlagRead>, BindError> {
+    let (catalog, driver, available, row) =
+        (cx.catalog, cx.scope.driver, cx.scope.available, cx.row());
+    let (edges, findings) = (&mut *cx.edges, &mut *cx.findings);
     if let Some(cause) = catalog
         .validate_output(name, None, available, &[0])
         .map_err(BindError::Catalog)?
@@ -243,16 +242,7 @@ pub(super) fn bind(
             }
             read
         } else if !name.contains('.') {
-            output_binding(
-                name,
-                path,
-                cx.catalog,
-                cx.scope.driver,
-                cx.scope.available,
-                cx.row(),
-                cx.edges,
-                cx.findings,
-            )?
+            output_binding(cx, name, path)?
         } else {
             use crate::reference_scope::{self, Reach, Scope};
             let causes = reference_scope::validate(

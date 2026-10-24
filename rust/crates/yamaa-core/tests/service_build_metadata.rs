@@ -190,14 +190,15 @@ mod service {
                 let mut attempt = CapturedAttempt::new(&source);
                 checked
                     .build_into(
-                        &mut self.activation,
-                        b"",
+                        (&mut self.activation, b""),
                         &mut self.source,
                         &mut self.decoder,
                         &mut attempt,
-                        None,
-                        yamaa_core::application_observer::Scope::new(
-                            &yamaa_core::application_observer::Noop,
+                        (
+                            None,
+                            yamaa_core::application_observer::Scope::new(
+                                &yamaa_core::application_observer::Noop,
+                            ),
                         ),
                     )
                     .map_err(Failure::Activation)?;

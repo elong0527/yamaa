@@ -169,6 +169,29 @@ pub struct CodelistObservation {
 pub struct Execution {
     pub dataset: Dataset,
     pub verifications: Vec<CheckRecord>,
+    /// The most rows one partition of the output holds (D264). A
+    /// partitioned run that divided every step admitted its output in
+    /// consecutive partitions of at most as many rows as its largest driver
+    /// partition holds, and the output is encoded, admitted and published one
+    /// such partition at a time; none when the run admitted its output whole.
+    pub partition_rows: Option<std::num::NonZeroUsize>,
+}
+
+impl Execution {
+    /// The output's partitions, in order (D264): consecutive ranges of at
+    /// most [`Self::partition_rows`] rows, the last holding the rest, or one
+    /// range of the whole output. An empty output is one empty partition, so
+    /// its columns are still admitted.
+    pub fn output_partitions(&self) -> Vec<std::ops::Range<usize>> {
+        let rows = self.dataset.row_count();
+        let size = self
+            .partition_rows
+            .map_or(rows.max(1), std::num::NonZeroUsize::get);
+        (0..rows.max(1))
+            .step_by(size)
+            .map(|start| start..rows.min(start.saturating_add(size)))
+            .collect()
+    }
 }
 
 /// One completed row template: the rows it emitted and the driver records it

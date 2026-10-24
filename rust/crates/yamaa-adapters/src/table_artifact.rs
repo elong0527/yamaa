@@ -62,6 +62,7 @@ pub fn save(
         target: &target,
         written,
         bytes: &bytes,
+        partitions: &[],
     }];
     publication::stage(&files)
         .and_then(publication::Staged::commit)
@@ -186,6 +187,10 @@ fn refusal(cause: Cause, written: &str) -> Failure {
         // A save of one file names no earlier target.
         Cause::Collision { .. } => publication_failure(&PublicationError::InvalidTarget),
         Cause::Stage(error) | Cause::Commit(error) => at(target_failure(&error, None, written)),
+        // A save of one whole file is never asked between partitions.
+        Cause::Cancelled => at(publication_failure(&PublicationError::Host(
+            crate::host_resources::Failure::Cancelled,
+        ))),
         Cause::Unwind(_) => at(vec![issue::rejected(
             Step::Output,
             Fault::PublicationUnwind,

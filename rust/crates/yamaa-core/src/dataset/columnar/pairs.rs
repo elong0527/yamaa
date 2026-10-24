@@ -179,10 +179,12 @@ fn values<E>(
         region,
         &mut frame,
         &rows,
-        &[],
-        0,
-        &input_schema,
-        &[],
+        donor::DonorInput {
+            current: &[],
+            stride: 0,
+            schema: &input_schema,
+            secondary: &[],
+        },
         item,
         cx.region,
     );
