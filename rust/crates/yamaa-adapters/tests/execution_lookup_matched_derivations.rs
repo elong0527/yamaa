@@ -91,6 +91,8 @@ fn overflow() -> Vec<Value> {
     })]
 }
 
+/// No benchmark's run fails while evaluating a lookup's derivation, so none
+/// pins which records it augments.
 #[test]
 fn a_record_no_row_matches_is_never_augmented() {
     // Subject 1 picks SEQ 1 (2 + 5 = 7 before 6 + 5 = 11); subject 2 has no
@@ -99,12 +101,15 @@ fn a_record_no_row_matches_is_never_augmented() {
     assert_eq!(fixture.run().unwrap(), "ID,NEAR\n1,1\n2,\n");
 }
 
+/// No benchmark's run fails while evaluating a lookup's derivation.
 #[test]
 fn a_matched_record_that_fails_still_stops_the_run() {
     let fixture = Fixture::new(&specification(MATCHED), "ID,REF\n1,5\n2,7\n9,1\n");
     assert_eq!(fixture.run().unwrap_err(), overflow());
 }
 
+/// No benchmark's run fails while evaluating a lookup's derivation, so none
+/// pins which records it augments.
 #[test]
 fn a_derived_key_or_bound_or_a_window_augments_every_record() {
     let derived_key = "    key: {KEYN: ID}

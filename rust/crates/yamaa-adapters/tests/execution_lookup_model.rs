@@ -139,6 +139,8 @@ const PERIOD: &str = "  - name: APERIOD\n\
     \x20       variable: PERIODS.APERIOD\n\
     \x20       between: {value: ASTDT, lower: APERSDT, upper: APEREDT}\n";
 
+/// `schema-lookup-source-range` pins the values; no benchmark's run report
+/// counts an absence, so none pins the count of the three causes here.
 #[test]
 fn an_implicit_join_matches_its_keys_and_an_inclusive_range() {
     let fixture = Fixture::new(
@@ -159,6 +161,9 @@ fn an_implicit_join_matches_its_keys_and_an_inclusive_range() {
     assert!(counts.contains(&("columns.APERIOD.derivation.source.absent".into(), 3)));
 }
 
+/// No benchmark builds rows whose join range reads the record of the input
+/// that drives them: `schema-lookup-source-range-driver`'s driver is a named
+/// intermediate and `schema-lookup-source-range-default` reads a column.
 #[test]
 fn a_row_template_range_reads_its_driver_record() {
     let rows = "rows:\n\
@@ -187,6 +192,7 @@ fn a_row_template_range_reads_its_driver_record() {
     );
 }
 
+/// No benchmark gives a join's range a filter and a selection.
 #[test]
 fn a_range_with_a_filter_and_a_selection_keeps_the_four_steps() {
     // Overlapping windows: the filter narrows the matched windows, and keep
@@ -226,6 +232,8 @@ fn a_range_with_a_filter_and_a_selection_keeps_the_four_steps() {
     )));
 }
 
+/// No benchmark fails a required range match for want of a record:
+/// `negative-source-require-match` requires a filtered join's match.
 #[test]
 fn a_required_range_match_fails_the_row_without_a_record() {
     let column = PERIOD.edit(
@@ -245,6 +253,9 @@ fn a_required_range_match_fails_the_row_without_a_record() {
     );
 }
 
+/// No benchmark refuses a join's range value without row templates:
+/// `negative-lookup-range-other-input`, `negative-lookup-range-bare-field`
+/// and `negative-lookup-bad-range` refuse a named intermediate's.
 #[test]
 fn a_range_value_names_a_value_of_the_current_row() {
     let other = "STUDYID,USUBJID,REFDT\nS,S-1,2025-01-05\nS,S-2,2025-03-10\n";
@@ -308,6 +319,7 @@ fn a_range_value_names_a_value_of_the_current_row() {
     }
 }
 
+/// No benchmark ranges a read of the driver's own record.
 #[test]
 fn a_range_on_a_read_without_an_implicit_join_is_refused() {
     let column = "  - name: DRIVER\n\
@@ -330,7 +342,8 @@ fn a_range_on_a_read_without_an_implicit_join_is_refused() {
 }
 
 /// Narrowing reads only matched records (LOOKUP-8): a filter that would fail
-/// on a record no row matches is never asked about it, for every kind.
+/// on a record no row matches is never asked about it, for every kind. No
+/// benchmark holds a record its lookup filter would fail on.
 #[test]
 fn every_kind_narrows_only_the_records_that_match() {
     // PERIOD 0 of an unknown subject divides by zero in each filter.
@@ -419,6 +432,10 @@ fn window(value: &str) -> String {
     )
 }
 
+/// `negative-source-range-other-input` refuses a join's range value that names
+/// another row template's driver. No benchmark builds two row templates whose
+/// join ranges each read their own driver, or refuses a named intermediate
+/// whose range value reads one template's driver for both.
 #[test]
 fn a_range_value_reads_the_record_of_the_driver_of_its_own_row() {
     let inputs = [
@@ -437,21 +454,7 @@ fn a_range_value_reads_the_record_of_the_driver_of_its_own_row() {
         "STUDYID,USUBJID,SEQ,WINDOW\nS,S-1,1,EARLY\nS,S-1,2,LATE\nS,S-1,3,LATE\nS,S-1,4,\n"
     );
     // A home row has no clinic record (LOOKUP-9).
-    let fixture = Fixture::new(
-        &measurements(&window("CLINIC.DAY"), &window("CLINIC.DAY"), ""),
-        &inputs,
-    );
-    let failure = fixture.failure();
-    assert_eq!(failure["condition"], "unknown_field");
-    assert_eq!(failure["rule"], "LOOKUP-9");
-    assert_eq!(
-        failure["spec_paths"],
-        yamaa_adapters::json!(["rows.home.derivations.WINDOW.source.between.value"])
-    );
-    assert_eq!(
-        failure["context"],
-        yamaa_adapters::json!({"identifier": "CLINIC.DAY", "variable": "WINDOWS.NAME"})
-    );
+    crate::support::benchmarks::reproduce("negative-source-range-other-input");
     // The same rule holds for a named intermediate read from both templates,
     // and for an aggregate a column derives for every row.
     let named = "intermediates:\n\
@@ -475,6 +478,8 @@ fn a_range_value_reads_the_record_of_the_driver_of_its_own_row() {
     );
 }
 
+/// No benchmark refuses a join's range value in a grouped row template:
+/// `negative-grouped-range-ungrouped-value` refuses a named intermediate's.
 #[test]
 fn a_grouped_row_range_reads_a_group_key_of_its_driver() {
     let header = "rows:\n\
@@ -517,7 +522,8 @@ fn a_grouped_row_range_reads_a_group_key_of_its_driver() {
 
 /// A key value whose type is decided per value is compared when it is
 /// matched, for every kind (LOOKUP-9): a text value against an integer key
-/// column fails the run instead of matching nothing.
+/// column fails the run instead of matching nothing. No benchmark decides a
+/// match value's type per value.
 #[test]
 fn a_per_value_key_type_that_cannot_compare_fails_for_every_kind() {
     let events = "STUDYID,USUBJID,AESEQ,ASTDT\nS,S-1,1,2025-01-05\n";
@@ -576,7 +582,9 @@ fn a_per_value_key_type_that_cannot_compare_fails_for_every_kind() {
 /// An aggregate a column derives evaluates for every row of every template,
 /// so its range value may read the record of the driver of all of them
 /// (LOOKUP-9): here the one template, driven by HOME, builds every row. A
-/// clinic record is not a value of those rows.
+/// clinic record is not a value of those rows. No benchmark reads an
+/// aggregate's range value under row templates: `schema-aggregate-range-driver`
+/// and `negative-aggregate-range-other-input` have none.
 #[test]
 fn an_aggregate_range_value_reads_the_driver_of_every_template_row() {
     let specification = "yamaa: \"1.0\"\n\
@@ -632,7 +640,9 @@ fn an_aggregate_range_value_reads_the_driver_of_every_template_row() {
 /// and is a read of the template's derivation (SPEC-6): a row-local default
 /// it names completes in the template's row phase, but a column only the
 /// column phase derives, such as an aggregate, is not yet a value of the row.
-/// `check` and the run agree on both.
+/// `check` and the run agree on both. No benchmark refuses a join's range
+/// value for naming such a column: `negative-lookup-match-column-phase`
+/// refuses a named intermediate's.
 #[test]
 fn a_row_template_range_value_cannot_read_a_column_phase_column() {
     let rows = "rows:\n\
@@ -714,7 +724,8 @@ fn a_row_template_range_value_cannot_read_a_column_phase_column() {
 
 /// A range value may name a column a named intermediate selects for the row
 /// (LOOKUP-9): each event takes the period holding its subject's reference
-/// date, which the intermediate reads from another input.
+/// date, which the intermediate reads from another input. No benchmark gives
+/// a join's range a value a named intermediate selects.
 #[test]
 fn a_range_value_may_read_a_named_intermediate_selection() {
     let other = "STUDYID,USUBJID,REFDT\nS,S-1,2025-01-05\nS,S-2,2025-03-10\n";
@@ -810,6 +821,9 @@ fn dosed_period(value: &str) -> String {
 /// would find both of S-1's doses. Here the intermediate reads an input that
 /// is not the first template's: the value is read on that input's own port,
 /// and the subject input's same-named field is not read.
+/// `schema-lookup-source-range-driver` reads the range of the one template a
+/// driving intermediate builds. No benchmark reads it beside a template over
+/// an input with the same field, in a grouped template or in the column phase.
 #[test]
 fn a_range_value_qualified_by_its_driver_intermediate_reads_the_row_record() {
     let subjects = "STUDYID,USUBJID,EXSTDT\nS,S-1,2025-02-15\nS,S-2,2025-03-05\n";
@@ -886,6 +900,8 @@ fn a_range_value_qualified_by_its_driver_intermediate_reads_the_row_record() {
 /// A field the driving intermediate derives is a value of the row (ROW-2), but
 /// a range value reads only the stored record that built the row, so the read
 /// is refused before any record is matched rather than looked up by key.
+/// Public conformance marks an `unsupported_operation` refusal unsupported,
+/// so no benchmark pins it.
 #[test]
 fn a_range_value_naming_a_field_its_driver_intermediate_derives_is_unsupported() {
     let fixture = Fixture::new(
@@ -927,7 +943,8 @@ fn a_range_value_naming_a_field_its_driver_intermediate_derives_is_unsupported()
 /// filter or a key match value it reads must name the driver of those
 /// templates alone (LOOKUP-5, LOOKUP-8, LOOKUP-9). Here the clinic template
 /// derives WINDOW itself and the home template leaves it to the column, which
-/// reads HOME.DAY for home rows only.
+/// reads HOME.DAY for home rows only. No benchmark derives in one template a
+/// column whose lookup reads another template's driver.
 #[test]
 fn a_column_lookup_reads_the_driver_of_the_templates_that_leave_the_column() {
     let specification = |header: &str, derivation: &str, clinic: &str| {
@@ -1111,7 +1128,10 @@ fn named_ranges(value: &str) -> String {
 /// the declarations alone (LOOKUP-9): whichever operation of a row reads the
 /// intermediate, through another intermediate's, an aggregate's or a source
 /// binding's range value, from an aggregate's derive binding, and from a
-/// dataset verification.
+/// dataset verification. `negative-lookup-range-other-input` states the plain
+/// read's refusal as a first issue, not that it is the only issue or that
+/// `check` reports it, as `agreeing` pins; no benchmark refuses the other
+/// reads.
 #[test]
 fn check_reports_an_intermediate_range_value_of_another_input_wherever_binding_does() {
     let inputs = [
@@ -1181,7 +1201,11 @@ fn check_reports_an_intermediate_range_value_of_another_input_wherever_binding_d
 /// `check` reports a source binding's or a qualified aggregate's range value
 /// that names an input driving no row, wherever binding does (LOOKUP-9): at
 /// the top of a derivation, in a case result, among a coalescing selection's
-/// sources and as a classified source.
+/// sources and as a classified source. `negative-aggregate-range-other-input`
+/// states the refusal of an aggregate's at the top of a derivation as a first
+/// issue, not that it is the only issue or that `check` reports it, as
+/// `agreeing` pins; no benchmark refuses a join's range value that names an
+/// input driving no row, or an aggregate's in a case result.
 #[test]
 fn check_reports_a_join_or_aggregate_range_value_of_another_input_wherever_binding_does() {
     let inputs = [
@@ -1252,6 +1276,11 @@ fn check_reports_a_join_or_aggregate_range_value_of_another_input_wherever_bindi
 /// against the drivers of the templates that leave the column to it, a
 /// dataset verification's against the drivers of every template, and a
 /// template's derivations' and filter's against its own driver.
+/// `negative-source-range-other-input` states the refusal of a join's range
+/// in the home template as a first issue, not that it is the only issue or
+/// that `check` reports it, as `agreeing` pins. No benchmark refuses a named
+/// intermediate's range value for naming another row template's driver, or a
+/// join's range that a column derives for every template.
 #[test]
 fn check_admits_a_row_template_range_value_against_the_rows_that_read_it() {
     let inputs = [
@@ -1382,7 +1411,9 @@ fn nearest_in(unit: &str) -> String {
 /// samples at one time the one stored first. Every elapsed unit measures the
 /// same distances, so each chooses the same samples. An ECG without a time
 /// seeks no sample and answers absence; each ECG whose sample was chosen
-/// among several counts one multiple match.
+/// among several counts one multiple match. `schema-lookup-nearest-datetime`
+/// pins both ties in hours; no benchmark pins that every elapsed unit
+/// chooses alike, or the counts of a nearest selection.
 #[test]
 fn a_nearest_selection_takes_the_earlier_source_then_the_earlier_record_on_a_tie() {
     for unit in ["second", "minute", "hour", "day"] {
@@ -1410,7 +1441,8 @@ fn a_nearest_selection_takes_the_earlier_source_then_the_earlier_record_on_a_tie
 
 /// LOOKUP-26 with TIME-4's calendar units: from a reference on 1 March 2025,
 /// samples 12 and 8 days after it and one 9 days before it are 12, 8 and 9
-/// days away, and each is one whole week away, so the earliest is read.
+/// days away, and each is one whole week away, so the earliest is read. No
+/// benchmark measures a nearest selection in weeks.
 #[test]
 fn a_calendar_unit_counts_whole_units_so_samples_within_one_unit_tie() {
     let reference = "STUDYID,USUBJID,EGSEQ,EGDTC\nS,S-1,1,2025-03-01\n";
@@ -1445,6 +1477,8 @@ fn a_calendar_unit_counts_whole_units_so_samples_within_one_unit_tie() {
 /// and the 10:00 samples for S-2. A date source against the date of each
 /// ECG puts every sample of the day at no distance, so the earliest stored
 /// sample with a date is read, and an ECG without a time still seeks none.
+/// No benchmark measures a nearest selection from a literal or an
+/// expression: each measures from a field.
 #[test]
 fn the_reference_may_be_a_literal_or_an_expression_over_the_current_row() {
     for (selection, expected) in [
@@ -1471,7 +1505,7 @@ fn the_reference_may_be_a_literal_or_an_expression_over_the_current_row() {
 
 /// LOOKUP-26 and LOOKUP-24: an ECG without a time seeks no sample, so a
 /// selection that requires a match fails at that ECG, naming the subject it
-/// sought.
+/// sought. No benchmark requires a nearest selection's match.
 #[test]
 fn a_required_nearest_match_fails_an_ecg_without_a_reference() {
     let fixture = Fixture::new(
@@ -1544,7 +1578,8 @@ fn nearest_subjects(base: &str, rows: &str) -> String {
 /// input that does not build the reading rows (LOOKUP-5); and, in grouped
 /// construction, a reference that reads a driver field outside the group
 /// keys (ROW-5). A selection that binds nothing leaves every read of its
-/// lookup unknown.
+/// lookup unknown. `negative-lookup-nearest-keep` states the first refusal
+/// without the `construct` it names; no benchmark pins the others.
 #[test]
 fn nearest_refusals_fail_validation_in_check_and_the_run_alike() {
     let unread = yamaa_adapters::json!({
@@ -1681,7 +1716,8 @@ fn nearest_refusals_fail_validation_in_check_and_the_run_alike() {
 
 /// LOOKUP-26: a source the relation does not have is unknown at
 /// `nearest.source`. Whether a field of a delimited input exists is decided
-/// only when its records are read, so this is the run's finding.
+/// only when its records are read, so this is the run's finding. No
+/// benchmark names a nearest source its input lacks.
 #[test]
 fn a_nearest_source_the_relation_does_not_have_is_unknown() {
     let fixture = Fixture::new(
@@ -1703,7 +1739,8 @@ fn a_nearest_source_the_relation_does_not_have_is_unknown() {
 
 /// LOOKUP-26 and LOOKUP-16: another intermediate's derivation runs the
 /// nearest selection for its donor record, `to` reading that record as a
-/// key value does, so each subject's first ECG takes its nearest sample.
+/// key value does, so each subject's first ECG takes its nearest sample. No
+/// benchmark reads a nearest selection from another intermediate.
 #[test]
 fn another_intermediate_reads_a_nearest_selection_for_its_donor_record() {
     let specification = "yamaa: \"1.0\"\n\
@@ -1747,7 +1784,8 @@ fn another_intermediate_reads_a_nearest_selection_for_its_donor_record() {
 
 /// LOOKUP-22: an aggregate's derivation may read a nearest selection, which
 /// gives each row at most one record, as it may one that declares `keep`:
-/// every sample of the subject sees the ECG's nearest sample.
+/// every sample of the subject sees the ECG's nearest sample. No benchmark
+/// reads a nearest selection in an aggregate.
 #[test]
 fn an_aggregate_derivation_may_read_a_nearest_selection() {
     let specification = nearest_ecgs(&nearest_in("minute"))
@@ -1779,7 +1817,8 @@ fn an_aggregate_derivation_may_read_a_nearest_selection() {
 /// LOOKUP-26 and LOOKUP-7: a nearest selection over `SELF` measures the
 /// completed rows of the earlier template, and the column it measures from
 /// stays a column of those rows though the artifact leaves it out. From the
-/// 8 January target, the visits 7, 1 and 12 days away give the second.
+/// 8 January target, the visits 7, 1 and 12 days away give the second. No
+/// benchmark measures a nearest selection over `SELF`.
 #[test]
 fn a_nearest_selection_over_self_measures_the_completed_rows() {
     let specification = "yamaa: \"1.0\"\n\
