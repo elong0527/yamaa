@@ -526,7 +526,7 @@ mod table {
             };
             let expected = b"S,F,I\n\"\",0.13,1\n\"a,b\",2.68,2\n,,3\nz,0.00,4\n".to_vec();
             let cases = [
-                ("one partition", vec![0..4], vec![42]),
+                ("one partition", std::iter::once(0..4).collect(), vec![42]),
                 (
                     "one record each",
                     vec![0..1, 1..2, 2..3, 3..4],
