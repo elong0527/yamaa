@@ -1,8 +1,15 @@
-//! File contracts: local paths and shared Define-XML.
+//! File contracts: local paths and shared Define-XML. The cases that write
+//! files, make one call and compare what it reports are
+//! `fixtures/diagnostics/local_paths.json` and `shared_define.json`; each
+//! test here proves a seam the replay cannot reach, which its first comment
+//! names, or stays by design (#3778).
 mod file {
     #[cfg(feature = "yaml")]
     mod local_paths {
         use crate::support::issues::assert_issues;
+        /// Seam: the save, after the shared program and each entry's input
+        /// and specification change or go, writes the bytes each build held,
+        /// twice; a case stages its files once, before its one call.
         #[test]
         fn entry_relative_shared_program_uses_each_study_input_and_saves_held_artifacts() {
             use yamaa_adapters::specification_report::Identity;
@@ -60,6 +67,8 @@ mod file {
             assert!(!study.0.join("shared/output").exists());
         }
 
+        /// Seam: the prepared run's resolved source path and the written
+        /// input origin (`FileSpecification`), which no operation reports.
         #[test]
         fn composed_relative_input_base_can_change_without_redeclaring_the_inherited_path() {
             let study = Study::new();
@@ -141,6 +150,10 @@ mod file {
             }
         }
 
+        /// Seam: the composed document's output fields and its written output
+        /// origin, which no operation reports; its save also writes a run
+        /// report whose bytes the test does not compare, and a case's
+        /// `saved` states every file whole.
         #[test]
         fn complete_output_replacement_resets_the_base_for_primary_and_report_files() {
             use yamaa_adapters::specification_report::Identity;
@@ -217,126 +230,13 @@ mod file {
             }
         }
 
+        /// Seam: a symbolic link in the study directory, which a case's
+        /// staged files cannot hold. A link is found when the file is
+        /// inspected, after the layers are composed, so its finding names no
+        /// layer; the URI source refused where its layer is read is
+        /// `local_paths.json::a_uri_input_source_keeps_its_normative_cause_and_authored_path`.
         #[test]
-        fn output_selector_or_path_alone_cannot_patch_an_inherited_output() {
-            use yamaa_adapters::{file_application, specification_report::Identity};
-            use yamaa_core::domain_entry::Request;
-
-            let study = Study::new();
-            fs::write(study.0.join("shared/base.yaml"), "yamaa: \"1.0\"\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: result.csv, relative_to: entry, columns: [ID], report: report.csv}\n").unwrap();
-            for (output, expected) in [
-                (
-                    "{relative_to: declaring}",
-                    vec!["output.columns", "output.path"],
-                ),
-                ("{path: another.csv}", vec!["output.columns"]),
-            ] {
-                fs::write(
-                    study.0.join("entry/spec.yaml"),
-                    format!(
-                        "yamaa: \"1.0\"\ntype: spec\nparent: ../shared/base.yaml\noutput: {output}\n"
-                    ),
-                )
-                .unwrap();
-                let path = study.text("entry/spec.yaml");
-                let issues = file_application::check(
-                    yamaa_core::project_function::Language::Python,
-                    Request {
-                        specification: &path,
-                        environment: None,
-                    },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: "test",
-                        example: "test",
-                        specification: &path,
-                        base_directory: ".",
-                    },
-                );
-                assert_eq!(issues.len(), expected.len(), "{issues:?}");
-                assert!(issues
-                    .iter()
-                    .all(|issue| issue.condition() == "missing_required_field"));
-                let mut paths = issues
-                    .iter()
-                    .flat_map(|issue| issue.spec_paths.iter().map(String::as_str))
-                    .collect::<Vec<_>>();
-                paths.sort_unstable();
-                assert_eq!(paths, expected);
-            }
-        }
-
-        #[test]
-        fn public_check_and_build_validate_written_paths_before_source_profiles() {
-            use yamaa_adapters::{file_application, specification_report::Identity};
-            use yamaa_core::domain_entry::Request;
-            let study = Study::new();
-            for (written, rule) in [
-                ("input\\x.csv", "FILE-5"),
-                ("C:\\input.csv", "FILE-5"),
-                ("input//x.csv", "FILE-5"),
-                ("input/x.csv/", "FILE-5"),
-            ] {
-                for expanded in [false, true] {
-                    let source = if expanded {
-                        format!("{{path: '{written}'}}")
-                    } else {
-                        format!("'{written}'")
-                    };
-                    let spec = format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {source}}}\ncolumns: [{{name: ID, type: int, derivation: SRC.ID}}]\noutput: {{path: output.csv, columns: [ID]}}\n");
-                    fs::write(study.0.join("entry/spec.yaml"), spec).unwrap();
-                    let path = study.text("entry/spec.yaml");
-                    let request = || Request {
-                        specification: &path,
-                        environment: None,
-                    };
-                    let identity = || Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: "test",
-                        example: "test",
-                        specification: &path,
-                        base_directory: ".",
-                    };
-                    let checked = file_application::check(
-                        yamaa_core::project_function::Language::Python,
-                        request(),
-                        identity(),
-                    );
-                    let built = crate::support::study::domain(
-                        yamaa_core::project_function::Language::Python,
-                        request(),
-                        identity(),
-                    )
-                    .map_or_else(
-                        |issues| issues,
-                        |result| {
-                            assert!(result.output().is_none());
-                            result.issues()
-                        },
-                    );
-                    for issues in [checked, built] {
-                        assert_eq!(issues.len(), 1, "{written:?}, expanded={expanded}");
-                        let issue = &issues[0];
-                        assert_eq!(issue.phase(), "validation");
-                        assert_eq!(issue.condition(), "resource_path_not_normalized");
-                        assert_eq!(issue.rule(), Some(rule));
-                        assert_eq!(issue.spec_paths, ["input.SRC.path"]);
-                        // A 1.x specification's finding names the layer that
-                        // writes the path, here the entry itself.
-                        assert_eq!(
-                            yamaa_core::json::Value::Object(issue.context.clone()),
-                            yamaa_adapters::json!({"dataset":"SRC","entry":path,"path":written,"source":path})
-                        );
-                    }
-                    assert!(!study.0.join("entry/output.csv").exists());
-                }
-            }
-        }
-
-        #[test]
-        fn public_uri_and_symlink_sources_keep_their_normative_cause_and_authored_path() {
+        fn public_symlink_sources_keep_their_normative_cause_and_authored_path() {
             use yamaa_adapters::specification_report::Identity;
             use yamaa_core::domain_entry::Request;
             let study = Study::new();
@@ -350,60 +250,44 @@ mod file {
                 study.0.join("entry/link.csv"),
             )
             .unwrap();
-            // The written form is refused where the layer is read, so that
-            // finding names the layer; a link is found when the file is
-            // inspected, after the layers are composed.
-            for (written, condition, rule, names_layer) in [
-                (
-                    "https://example.invalid/source.csv",
-                    "resource_path_uri_scheme",
-                    "FILE-5",
-                    true,
-                ),
-                ("link.csv", "resource_path_symlink", "FILE-8", false),
-            ] {
-                let spec = format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: '{written}'}}\ncolumns: [{{name: ID, type: int, derivation: SRC.ID}}]\noutput: {{path: output.csv, columns: [ID]}}\n");
-                fs::write(study.0.join("entry/spec.yaml"), spec).unwrap();
-                let path = study.text("entry/spec.yaml");
-                let issues = crate::support::study::domain(
-                    yamaa_core::project_function::Language::Python,
-                    Request {
-                        specification: &path,
-                        environment: None,
-                    },
-                    Identity {
-                        runtime: "test",
-                        runtime_version: "test",
-                        engine_version: "test",
-                        example: "test",
-                        specification: &path,
-                        base_directory: ".",
-                    },
-                )
-                .map_or_else(
-                    |issues| issues,
-                    |mut result| {
-                        assert!(result.output().is_none());
-                        assert!(result.save().is_err());
-                        result.issues()
-                    },
-                );
-                let context = if names_layer {
-                    yamaa_adapters::json!({"dataset":"SRC","entry":path,"path":written,"source":path})
-                } else {
-                    yamaa_adapters::json!({"dataset":"SRC","path":written})
-                };
-                assert_issues(
-                    &issues,
-                    &[
-                        yamaa_adapters::json!({"phase":"validation","condition":condition,"rule":rule,"spec_paths":["input.SRC.path"],"context":context}),
-                    ],
-                    written,
-                );
-                assert!(!study.0.join("entry/output.csv").exists());
-            }
+            let spec = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: 'link.csv'}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: output.csv, columns: [ID]}\n";
+            fs::write(study.0.join("entry/spec.yaml"), spec).unwrap();
+            let path = study.text("entry/spec.yaml");
+            let issues = crate::support::study::domain(
+                yamaa_core::project_function::Language::Python,
+                Request {
+                    specification: &path,
+                    environment: None,
+                },
+                Identity {
+                    runtime: "test",
+                    runtime_version: "test",
+                    engine_version: "test",
+                    example: "test",
+                    specification: &path,
+                    base_directory: ".",
+                },
+            )
+            .map_or_else(
+                |issues| issues,
+                |mut result| {
+                    assert!(result.output().is_none());
+                    assert!(result.save().is_err());
+                    result.issues()
+                },
+            );
+            assert_issues(
+                &issues,
+                &[
+                    yamaa_adapters::json!({"phase":"validation","condition":"resource_path_symlink","rule":"FILE-8","spec_paths":["input.SRC.path"],"context":{"dataset":"SRC","path":"link.csv"}}),
+                ],
+                "link.csv",
+            );
+            assert!(!study.0.join("entry/output.csv").exists());
         }
 
+        /// Seam: the prepared run's capture counters and resolved locations,
+        /// which no operation reports.
         #[test]
         fn inherited_parent_keeps_its_own_input_and_output_locations_without_configuration() {
             let study = Study::new();
@@ -445,6 +329,8 @@ mod file {
             assert!(!study.0.join("outputs/out.csv").exists());
         }
 
+        /// Seam: the `Resources` port's captures, their shared snapshot and
+        /// their read counter, which no operation reports.
         #[test]
         fn parent_and_absolute_dot_aliases_share_bytes_and_detect_later_changes() {
             let study = Study::new();
@@ -473,6 +359,8 @@ mod file {
             assert_eq!(resources.capture_reads(), 1);
         }
 
+        /// Seam: the `Resources` port's inspections and locations, which no
+        /// operation reports.
         #[test]
         fn absent_artifact_location_has_no_fallback_and_nonregular_input_is_terminal() {
             let study = Study::new();
@@ -498,6 +386,8 @@ mod file {
             assert_eq!(resources.capture_reads(), 0);
         }
 
+        /// Seam: the `Resources` port's inspection of symbolic links, which a
+        /// case's staged files cannot hold.
         #[test]
         fn outside_parent_and_file_links_remain_terminal() {
             let study = Study::new();
@@ -530,6 +420,8 @@ mod file {
             assert_eq!(resources.capture_reads(), 0);
         }
 
+        /// Seam: the `Resources` port's admission of a written path, by its
+        /// internal failure, which no operation reports.
         #[test]
         fn local_path_admission_still_rejects_uri_backslash_and_empty_segments() {
             use yamaa_core::resource::ResourceFailure;
@@ -554,6 +446,8 @@ mod file {
             assert_eq!(resources.capture_reads(), 0);
         }
 
+        /// Seam: a hard link, which a case's staged files cannot hold, and the
+        /// `Resources` port's snapshots.
         #[test]
         fn metadata_refused_alias_cannot_become_a_snapshot_verification_dependency() {
             use yamaa_core::limits::Limits;
@@ -579,6 +473,8 @@ mod file {
             assert_eq!(resources.capture_reads(), 1);
         }
 
+        /// Seam: the `Resources` port's snapshot of binary bytes and its read
+        /// counter, which no operation reports.
         #[test]
         fn unicode_names_and_binary_snapshots_keep_exact_bytes_without_reopening() {
             let study = Study::new();
@@ -594,6 +490,8 @@ mod file {
             assert_eq!(resources.capture_reads(), 1);
         }
 
+        /// Seam: a junction that `mklink` makes, which a case's staged files
+        /// cannot hold, and the `Resources` port's captures.
         #[cfg(windows)]
         #[test]
         fn retired_python_junctions_reject_descent_and_keep_caller_selected_root_authority() {
@@ -627,46 +525,14 @@ mod file {
     }
     #[cfg(feature = "yaml")]
     mod shared_define {
-        //! Independent fixed-byte DM and structural AE/VS shared-generation witnesses.
+        //! Independent fixed-byte DM and structural AE/VS shared-generation
+        //! witnesses. The compositions that compare what one call reports, its
+        //! issues and the files its save publishes, are the cases of
+        //! `fixtures/diagnostics/shared_define.json`; the tests here compare
+        //! fragments of a generated document, which a case states only whole,
+        //! or what a composition holds and reads between its preparation and
+        //! its save, or stay by design (#3778).
         use crate::support::Edit as _;
-        #[test]
-        fn entry_relative_inherited_output_supplies_json_capture_and_publication_targets() {
-            let temp = Temp::fixture("sdtm-dm-metadata", false);
-            fs::create_dir(temp.0.join("parents")).unwrap();
-            fs::create_dir_all(temp.0.join("children/artifacts")).unwrap();
-            let parent = fs::read_to_string(temp.0.join("spec.yaml")).unwrap().edit(
-                "path: dm.csv",
-                "path: artifacts/dm.csv\n  relative_to: entry",
-            );
-            fs::write(temp.0.join("parents/base.yaml"), parent).unwrap();
-            fs::write(
-                temp.0.join("children/spec.yaml"),
-                "yamaa: \"1.0\"\ntype: spec\nparent: ../parents/base.yaml\n",
-            )
-            .unwrap();
-            let project = fs::read_to_string(temp.0.join("project.yaml"))
-                .unwrap()
-                .edit("  - spec.yaml", "  - children/spec.yaml")
-                .edit(
-                    "define: define.xml",
-                    "define: children/artifacts/define.xml",
-                );
-            fs::write(temp.0.join("project.yaml"), project).unwrap();
-            fs::copy(
-                root().join("benchmarks/sdtm-dm-metadata/expected/dm.csv"),
-                temp.0.join("children/artifacts/dm.csv"),
-            )
-            .unwrap();
-            let mut result = temp.run("2026-09-11T00:00:00");
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(std::str::from_utf8(result.artifacts().nth(1).unwrap().1)
-                .unwrap()
-                .contains("xlink:href=\"dm.json\""));
-            assert!(result.save().unwrap());
-            assert!(temp.0.join("children/artifacts/dm.json").is_file());
-            assert!(!temp.0.join("parents/artifacts").exists());
-        }
-
         use std::{
             fs,
             path::{Path, PathBuf},
@@ -726,6 +592,10 @@ mod file {
                 )
             }
         }
+        /// Seam: what the save writes after the composition's sources change
+        /// or go, and that it reads nothing again; the test also compares
+        /// fragments and counts of the generated Define-XML, which a case
+        /// states only whole, and no authored file holds this document.
         #[test]
         fn lb_value_metadata_uses_original_published_bytes_and_family_valid_completion() {
             let temp = Temp::fixture("sdtm-lb-metadata", true);
@@ -797,36 +667,13 @@ mod file {
                 assert_eq!(fs::read(temp.0.join(artifact.0)).unwrap(), artifact.1);
             }
         }
+        /// Stays beside the replay by design (#3778): it finds its issue by
+        /// substrings of the context, the value-level codelist and the test
+        /// code it names. The original source the creatinine entry inherits
+        /// is refused in
+        /// `shared_define.json::an_lb_value_entry_inheriting_the_original_investigator_source_is_refused_with_zero_writes`.
         #[test]
-        fn original_lb_source_rejection_and_per_value_published_vocabulary_have_zero_writes() {
-            let temp = Temp::fixture("sdtm-lb-metadata", true);
-            let overlay = fs::read_to_string(temp.0.join("submission-spec.yaml")).unwrap();
-            // Drop the completion's value_level block only, so the creatinine
-            // entry inherits the original Investigator source.
-            let mut stripped = String::new();
-            let mut in_values = false;
-            for line in overlay.split_inclusive('\n') {
-                if line.trim_end() == "      value_level:" {
-                    in_values = true;
-                } else if !(in_values && line.starts_with("        ")) {
-                    in_values = false;
-                    stripped.push_str(line);
-                }
-            }
-            assert!(!stripped.contains("value_level"));
-            fs::write(temp.0.join("submission-spec.yaml"), stripped).unwrap();
-            let mut run = temp.run("2026-09-11T00:00:00");
-            assert!(
-                run.issues()
-                    .iter()
-                    .any(|i| i.rule() == Some("SUB-15")
-                        && i.condition() == "origin_source_not_admitted"),
-                "{:?}",
-                run.issues()
-            );
-            assert!(run.save().is_err());
-            assert!(!temp.0.join("define.xml").exists());
-            assert!(!temp.0.join("lb.json").exists());
+        fn a_published_unit_outside_its_value_level_codelist_is_refused_with_zero_writes() {
             let temp = Temp::fixture("sdtm-lb-metadata", true);
             let csv = fs::read_to_string(temp.0.join("lb.csv"))
                 .unwrap()
@@ -847,114 +694,16 @@ mod file {
             assert!(!temp.0.join("define.xml").exists());
             assert!(!temp.0.join("lb.json").exists());
         }
-        /// Drop one YAML mapping entry: its header line and every following
-        /// line indented deeper than the header, or written at its depth as
-        /// an entry of the header's block sequence.
-        fn without_entry(text: &str, header: &str) -> String {
-            let depth = |line: &str| line.len() - line.trim_start().len();
-            let mut kept = String::new();
-            let mut found = false;
-            let mut inside = false;
-            for line in text.split_inclusive('\n') {
-                if line.trim_end() == header {
-                    (found, inside) = (true, true);
-                    continue;
-                }
-                if inside
-                    && (line.trim().is_empty()
-                        || depth(line) > depth(header)
-                        || (depth(line) == depth(header) && line.trim_start().starts_with("- ")))
-                {
-                    continue;
-                }
-                inside = false;
-                kept.push_str(line);
-            }
-            assert!(found, "{header:?}");
-            kept
-        }
-        /// The DM fixture's composition with the entries under `removed` taken
-        /// out of its project file, and its specification deleted, so that
-        /// the refusal must come before any specification is read.
-        fn without_entries(removed: &[&str]) -> (Temp, Define) {
-            let temp = Temp::fixture("sdtm-dm-metadata", true);
-            let path = temp.0.join("project.yaml");
-            let mut project = fs::read_to_string(&path).unwrap();
-            for header in removed {
-                project = without_entry(&project, header);
-            }
-            fs::write(&path, project).unwrap();
-            fs::remove_file(temp.0.join("spec.yaml")).unwrap();
-            let run = temp.run("2026-09-11T00:00:00");
-            (temp, run)
-        }
-        fn records(run: &Define) -> Vec<yamaa_core::json::Value> {
-            run.issues()
-                .iter()
-                .map(crate::support::study::issue_row)
-                .collect()
-        }
-        /// A refused composition holds and writes nothing.
-        fn assert_writes_nothing(temp: &Temp, mut run: Define) {
-            assert_eq!(run.artifacts().len(), 0);
-            assert!(run.save().is_err());
-            assert!(!temp.0.join("define.xml").exists());
-            assert!(!temp.0.join("dm.json").exists());
-        }
-        #[test]
-        fn define_reports_every_missing_study_guide_and_target_before_reading_specifications() {
-            // A run needs only a section's specs; Define requires the study and
-            // the section's standards and define (DEFINE-28).
-            for (removed, expected) in [
-                (
-                    &["study:", "  standards:", "  define: define.xml"][..],
-                    &[
-                        ("study", "study"),
-                        ("sdtm.standards", "standards"),
-                        ("sdtm.define", "define"),
-                    ][..],
-                ),
-                (
-                    &["  define: define.xml"][..],
-                    &[("sdtm.define", "define")][..],
-                ),
-            ] {
-                let (temp, run) = without_entries(removed);
-                let wanted: Vec<_> = expected
-                    .iter()
-                    .map(|(field, detail)| {
-                        yamaa_adapters::json!({
-                            "phase": "validation", "condition": "missing_required_field",
-                            "rule": "DEFINE-28", "spec_paths": [field],
-                            "context": {"detail": detail, "field": detail}
-                        })
-                    })
-                    .collect();
-                assert_eq!(records(&run), wanted, "{removed:?}");
-                assert_writes_nothing(&temp, run);
-            }
-        }
-        #[test]
-        fn a_project_without_the_selected_section_refuses_it_before_reading_specifications() {
-            // The project file no longer declares the section the caller
-            // selected, as when it changes after a submission checked it.
-            let (temp, run) = without_entries(&["sdtm:"]);
-            assert_eq!(
-                records(&run),
-                [yamaa_adapters::json!({
-                    "phase": "validation", "condition": "unknown_section",
-                    "rule": "PROJECT-14", "spec_paths": [],
-                    "context": {"section": "sdtm", "sections": []}
-                })]
-            );
-            assert_writes_nothing(&temp, run);
-        }
         fn root() -> PathBuf {
             Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../../..")
                 .canonicalize()
                 .unwrap()
         }
+        /// Seam: what the save writes after the composition's sources change
+        /// or go, which it holds from its preparation without reading again,
+        /// and a repeated save that restores a removed document; a case stages
+        /// its files once, before its one call.
         #[test]
         fn dm_both_goldens_without_input_execution_and_save_uses_held_bytes() {
             let temp = Temp::fixture("sdtm-dm-metadata", true);
@@ -1007,6 +756,9 @@ mod file {
             );
         }
 
+        /// Stays beside the replay: it is the Rust reader of the `public-define`
+        /// host-fixture family's `xml_text_cases`, which both installed hosts
+        /// read too.
         #[test]
         fn xml_text_findings_keep_field_owners_inheritance_and_render_order_in_both_hosts() {
             let truth: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
@@ -1086,6 +838,9 @@ mod file {
                 }
             }
         }
+        /// Stays beside the replay: it compares fragments and counts of the
+        /// generated Define-XML, which a case states only whole, and neither
+        /// benchmark holds an expected document.
         #[test]
         fn ae_and_vs_metadata_only_fixed_time_projection_has_independent_structure() {
             for (name, id, count, codelist) in [
@@ -1142,51 +897,14 @@ mod file {
                     .exists());
             }
         }
-        /// SUB-27: a document composing an `sdtm` dataset refuses a
-        /// `datetime` column it carries, as the domain build does.
+        /// Seam: a target that becomes a directory between the composition
+        /// and its save, which a case's staged files cannot change, since the
+        /// composition admits its targets when it is prepared, and the
+        /// failure and publication states the save records. A semantic
+        /// failure's zero writes are
+        /// `shared_define.json::a_semantic_failure_writes_nothing`.
         #[test]
-        fn an_sdtm_document_refuses_a_datetime_output_column() {
-            let temp = Temp::fixture("sdtm-vs-epoch-from-subject-elements", false);
-            let spec = fs::read_to_string(temp.0.join("spec.yaml")).unwrap();
-            let spec = spec
-                .edit("VSDTC, EPOCH]", "VSDTC, VSDTM, EPOCH]")
-                .edit(
-                    "        invalid: null\n",
-                    "        invalid: null\n    submission:\n      core: Perm\n      role: Timing\n      origins:\n        - type: Derived\n          source: Sponsor\n      method: VSDTC completed to the start of its day.\n",
-                );
-            fs::write(temp.0.join("spec.yaml"), spec).unwrap();
-            let mut run = temp.run("2026-09-30T00:00:00");
-            let refusal = run
-                .issues()
-                .iter()
-                .find(|issue| issue.rule() == Some("SUB-27"))
-                .unwrap_or_else(|| panic!("{:?}", run.issues()));
-            assert_eq!(refusal.condition(), "value_not_permitted");
-            assert_eq!(refusal.spec_paths, ["sdtm.specs[0].columns.VSDTM.type"]);
-            // The details of the specification's own refusal, beside the
-            // `detail` every composition finding carries.
-            assert_eq!(
-                yamaa_core::json::Value::Object(refusal.context.clone()),
-                yamaa_adapters::json!({"detail": "VSDTM", "column": "VSDTM", "value": "datetime", "class": "FINDINGS", "permitted": ["str", "date"]})
-            );
-            assert!(run.save().is_err());
-            assert!(!temp.0.join("define.xml").exists());
-        }
-        #[test]
-        fn semantic_failure_and_target_admission_have_zero_writes() {
-            let temp = Temp::fixture("sdtm-dm-metadata", true);
-            let spec = fs::read_to_string(temp.0.join("spec.yaml"))
-                .unwrap()
-                .replace("length: 2", "length: 0");
-            fs::write(temp.0.join("spec.yaml"), spec).unwrap();
-            let mut run = temp.run("2026-09-11T00:00:00");
-            assert!(run
-                .issues()
-                .iter()
-                .any(|i| i.condition() == "submission_length_invalid"));
-            assert!(run.save().is_err());
-            assert!(!temp.0.join("define.xml").exists());
-            assert!(!temp.0.join("dm.json").exists());
+        fn a_target_refused_at_save_stops_the_composition_with_zero_writes() {
             let temp = Temp::fixture("sdtm-dm-metadata", true);
             let mut run = temp.run("2026-09-11T00:00:00");
             assert!(run.issues().is_empty());
@@ -1218,6 +936,10 @@ mod file {
                 [PublicationState::Stopped, PublicationState::Failed]
             );
         }
+        /// Stays beside the replay by design (#3778): its finding names the
+        /// colliding file in a context that names both files by their absolute
+        /// paths, which it compares by a substring. It also proves what the
+        /// refused save reads and the publication states it records.
         #[test]
         fn transport_targets_equal_after_lowercasing_are_refused_before_overwriting_a_sentinel() {
             let temp = Temp::fixture("sdtm-dm-metadata", true);
@@ -1269,125 +991,19 @@ mod file {
             after.sort();
             assert_eq!(after, names, "no publication residue");
         }
+        /// Stays beside the replay by design (#3778): it reads one member of
+        /// the context's key values. The relocated dataset, the artifact
+        /// outside the document's directory and the stale published contract
+        /// are `shared_define.json`'s
+        /// `a_transport_file_is_published_beside_the_document_wherever_its_dataset_is`,
+        /// `an_artifact_outside_the_documents_directory_is_refused_without_a_transport`,
+        /// `a_published_dataset_with_reordered_columns_fails_its_producer_contract`
+        /// and `a_published_dataset_missing_a_declared_column_fails_its_producer_contract`.
         #[test]
-        fn explicit_datetime_and_missing_published_artifact_are_refused() {
-            let temp = Temp::fixture("sdtm-dm-metadata", false);
-            let mut run = temp.run("2026-09-11T00:00:00");
-            assert!(run
-                .issues()
-                .iter()
-                .any(|i| i.condition() == "producer_contract_mismatch"));
-            assert!(run.save().is_err());
-            let run = temp.run("2026-09-11");
-            assert!(run.issues().iter().any(|i| i.spec_paths == ["created"]));
-        }
-        #[test]
-        fn inherited_original_output_supplies_both_json_capture_and_publication_target() {
-            let temp = Temp::fixture("sdtm-dm-metadata", false);
-            for directory in ["parents", "children", "artifacts"] {
-                fs::create_dir(temp.0.join(directory)).unwrap();
-            }
-            let parent = fs::read_to_string(temp.0.join("spec.yaml"))
-                .unwrap()
-                .edit("path: dm.csv", "path: ../artifacts/dm.csv");
-            fs::write(temp.0.join("parents/base.yaml"), parent).unwrap();
-            fs::write(
-                temp.0.join("children/spec.yaml"),
-                "yamaa: \"1.0\"\ntype: spec\nparent: ../parents/base.yaml\n",
-            )
-            .unwrap();
-            let project = fs::read_to_string(temp.0.join("project.yaml"))
-                .unwrap()
-                .edit("  - spec.yaml", "  - children/spec.yaml")
-                .edit("define: define.xml", "define: artifacts/define.xml");
-            fs::write(temp.0.join("project.yaml"), project).unwrap();
-            fs::copy(
-                root().join("benchmarks/sdtm-dm-metadata/expected/dm.csv"),
-                temp.0.join("artifacts/dm.csv"),
-            )
-            .unwrap();
-            let mut result = temp.run("2026-09-11T00:00:00");
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            let xml = std::str::from_utf8(result.artifacts().nth(1).unwrap().1).unwrap();
-            assert!(xml.contains("xlink:href=\"dm.json\""));
-            assert!(std::str::from_utf8(result.artifacts().next().unwrap().1)
-                .unwrap()
-                .contains("\"metaDataRef\": \"define.xml\""));
-            let reads = result.capture_reads();
-            assert!(result.save().unwrap());
-            assert!(temp.0.join("artifacts/dm.json").is_file());
-            assert!(!temp.0.join("children/artifacts/dm.json").exists());
-            assert!(!temp.0.join("dm.json").exists());
-            assert_eq!(result.capture_reads(), reads);
-        }
-        #[test]
-        fn mutual_references_and_published_contract_fail_before_any_publication() {
-            // JSON-1 places the transport file beside the document wherever the
-            // artifact is published, so the pair always references one directory.
-            let temp = Temp::fixture("sdtm-dm-metadata", true);
-            fs::create_dir(temp.0.join("artifacts")).unwrap();
-            fs::rename(temp.0.join("dm.csv"), temp.0.join("artifacts/dm.csv")).unwrap();
-            let spec = fs::read_to_string(temp.0.join("spec.yaml"))
-                .unwrap()
-                .edit("path: dm.csv", "path: artifacts/dm.csv");
-            fs::write(temp.0.join("spec.yaml"), spec).unwrap();
-            let mut run = temp.run("2026-09-11T00:00:00");
-            assert!(run.issues().is_empty(), "{:?}", run.issues());
-            let xml = std::str::from_utf8(run.artifacts().nth(1).unwrap().1).unwrap();
-            assert!(xml.contains("xlink:href=\"dm.json\""));
-            assert!(run.save().unwrap());
-            assert!(temp.0.join("dm.json").is_file());
-            assert!(!temp.0.join("artifacts/dm.json").exists());
-            // Without a transport the leaf names the artifact, which must stay
-            // inside the document's directory (DEFINE-16). The finding names
-            // the dataset and both paths as their files write them.
-            temp.edit_project(&[
-                ("  transport: dataset_json\n", ""),
-                ("define: define.xml", "define: package/define.xml"),
-            ]);
-            let mut run = temp.run("2026-09-11T00:00:00");
-            assert_eq!(
-                records(&run),
-                [yamaa_adapters::json!({
-                    "phase": "validation", "condition": "artifact_outside_document",
-                    "rule": "DEFINE-16", "spec_paths": ["sdtm.specs[0]"],
-                    "context": {
-                        "artifact": "artifacts/dm.csv", "dataset": "DM",
-                        "define": "package/define.xml",
-                        "detail": "artifact must be inside the Define package"
-                    }
-                })],
-                "an artifact outside the document's directory"
-            );
-            assert!(run.save().is_err());
-            assert!(!temp.0.join("package").exists());
-            // REQ1230 assigns a stale output contract to REQ0535, before JSON schema.
+        fn a_published_value_outside_its_codelist_keeps_the_verification_phase_and_row_key() {
+            // REQ0957 preserves the verification phase, offending value and row key.
             let temp = Temp::fixture("sdtm-dm-metadata", true);
             let csv = fs::read_to_string(temp.0.join("dm.csv")).unwrap();
-            fs::write(
-                temp.0.join("dm.csv"),
-                csv.edit("STUDYID,USUBJID", "USUBJID,STUDYID"),
-            )
-            .unwrap();
-            let mut run = temp.run("2026-09-11T00:00:00");
-            assert!(run
-                .issues()
-                .iter()
-                .any(|i| i.condition() == "producer_contract_mismatch"
-                    && i.rule() == Some("INPUT-11")));
-            assert!(run.save().is_err());
-            assert!(!temp.0.join("define.xml").exists());
-            // A missing declared field is the same contract cause, before typed CSV
-            // conversion can misclassify the absent field as a scalar/lookup problem.
-            fs::write(temp.0.join("dm.csv"), csv.edit("STUDYID", "WRONG")).unwrap();
-            let mut run = temp.run("2026-09-11T00:00:00");
-            assert!(run
-                .issues()
-                .iter()
-                .any(|issue| issue.rule() == Some("INPUT-11")));
-            assert!(run.save().is_err());
-            assert!(!temp.0.join("define.xml").exists());
-            // REQ0957 preserves the verification phase, offending value and row key.
             fs::write(temp.0.join("dm.csv"), csv.edit(",F,USA", ",Z,USA")).unwrap();
             let mut run = temp.run("2026-09-11T00:00:00");
             let issue = run
@@ -1406,6 +1022,8 @@ mod file {
             assert!(run.save().is_err());
             assert!(!temp.0.join("dm.json").exists());
         }
+        /// Stays beside the replay: it reads two values of the generated
+        /// Dataset-JSON document, which a case states only whole.
         #[test]
         fn integer_terminology_items_admit_equal_float_published_values() {
             let temp = Temp::fixture("sdtm-dm-metadata", true);
@@ -1429,6 +1047,8 @@ mod file {
             assert_eq!(data["columns"][5]["dataType"], "float");
             assert_eq!(data["rows"][0][5].as_f64(), Some(34.0));
         }
+        /// Stays beside the replay: it compares fragments and a count of the
+        /// generated Define-XML, which a case states only whole.
         #[test]
         fn unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files() {
             let temp = Temp::fixture("sdtm-dm-metadata", false);
@@ -1445,45 +1065,14 @@ mod file {
             assert!(!temp.0.join("acrf.pdf").exists());
             assert!(!temp.0.join("input").exists());
         }
+        /// Stays beside the replay by design (#3778): it finds its issue by a
+        /// substring of its first spec path, and asserts that a plain lookup
+        /// raises no such issue. The DM refutations are `shared_define.json`'s
+        /// `an_allowed_values_check_beside_its_codelist_is_redundant`,
+        /// `an_assembled_identifier_refutes_a_protocol_origin` and
+        /// `a_label_in_the_metadata_mapping_is_a_reserved_key`.
         #[test]
-        fn independent_metadata_refutations_preserve_shared_conditions_and_zero_writes() {
-            for (from, to, condition, rule) in [
-                (
-                    "derivation: DM_RAW.SEX\n",
-                    "derivation: DM_RAW.SEX\n    verifications:\n      - allowed_values:\n          values: [F, M, U]\n",
-                    "redundant_declaration",
-                    "CT-9",
-                ),
-                // USUBJID assembles collected identifiers, which refutes Protocol.
-                (
-                    "type: Derived",
-                    "type: Protocol",
-                    "origin_contradicts_derivation",
-                    "SUB-19",
-                ),
-                (
-                    "domain: DM",
-                    "domain: DM\nmetadata: {label: duplicate}",
-                    "reserved_metadata_key",
-                    "SUB-2",
-                ),
-            ] {
-                let temp = Temp::fixture("sdtm-dm-metadata", false);
-                let spec = fs::read_to_string(temp.0.join("spec.yaml"))
-                    .unwrap()
-                    .replace(from, to);
-                fs::write(temp.0.join("spec.yaml"), spec).unwrap();
-                let mut result = temp.run("2026-09-11T00:00:00");
-                assert!(
-                    result.issues().iter().any(|i| i.condition() == condition
-                        && i.rule() == Some(rule)),
-                    "{:?}",
-                    result.issues()
-                );
-                assert!(result.save().is_err());
-                assert!(!temp.0.join("define.xml").exists());
-                assert!(!temp.0.join("dm.json").exists());
-            }
+        fn a_plain_dictionary_lookup_refutes_no_collected_origin_and_a_deriving_lookup_does() {
             // The coded terms are a plain dictionary lookup, which copies the
             // record it selects and refutes no origin; a lookup that derives
             // fields computes what it exposes and refutes Collected.
@@ -1544,67 +1133,41 @@ mod file {
             let begin = xml.find(&format!("<ItemDef OID=\"{oid}\"")).unwrap();
             &xml[begin..begin + xml[begin..].find("</ItemDef>").unwrap()]
         }
+        /// Stays beside the replay: it compares fragments of the generated
+        /// Define-XML, which a case states only whole. Under Submission the
+        /// page is required: `shared_define.json`'s
+        /// `a_collected_origin_without_its_form_is_refused_under_submission`
+        /// and `a_collected_origin_citing_its_form_without_a_page_is_refused_under_submission`.
         #[test]
-        fn collected_origins_name_their_form_page_under_submission() {
+        fn collected_origins_cite_their_form_without_a_page_under_other() {
             // SITEID is collected by the investigator on the first form page.
             let paged = "role: Record Qualifier\n      length: 10\n      origins:\n        - type: Collected\n          source: Investigator\n          documents:\n            - document: acrf\n              pages: {type: PhysicalRef, refs: \"1\"}\n";
             let pageless = "role: Record Qualifier\n      length: 10\n      origins:\n        - type: Collected\n          source: Investigator\n";
             let unpaged = format!("{pageless}          documents: [acrf]\n");
-            for (replacement, context, path) in [
-                (pageless, "Submission", Some("SITEID.submission.origins[0]")),
-                (
-                    unpaged.as_str(),
-                    "Submission",
-                    Some("SITEID.submission.origins[0].documents"),
-                ),
-                (pageless, "Other", None),
-                (unpaged.as_str(), "Other", None),
-            ] {
+            for replacement in [pageless, unpaged.as_str()] {
                 let temp = Temp::fixture("sdtm-dm-metadata", false);
                 replace_spec(&temp, paged, replacement);
-                metadata_only(&temp, "sdtm", context);
-                let mut run = temp.run("2026-09-11T00:00:00");
-                if let Some(path) = path {
-                    assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
-                    let issue = &run.issues()[0];
-                    assert_eq!(
-                        (issue.phase(), issue.condition(), issue.rule()),
-                        ("validation", "origin_document_missing", Some("SUB-17"))
-                    );
-                    assert_eq!(issue.spec_paths, [format!("sdtm.specs[0].columns.{path}")]);
-                    assert!(run.save().is_err());
-                    assert!(!temp.0.join("define.xml").exists());
-                } else {
-                    // Under Other the reference to the form needs no page.
-                    assert!(run.issues().is_empty(), "{:?}", run.issues());
-                    let xml = std::str::from_utf8(run.artifacts().next().unwrap().1).unwrap();
-                    assert!(xml.contains("def:Context=\"Other\""));
-                    assert!(
-                        item(xml, "IT.DM.SITEID").contains("<def:DocumentRef leafID=\"LF.acrf\"/>")
-                    );
-                }
+                metadata_only(&temp, "sdtm", "Other");
+                let run = temp.run("2026-09-11T00:00:00");
+                // Under Other the reference to the form needs no page.
+                assert!(run.issues().is_empty(), "{:?}", run.issues());
+                let xml = std::str::from_utf8(run.artifacts().next().unwrap().1).unwrap();
+                assert!(xml.contains("def:Context=\"Other\""));
+                assert!(item(xml, "IT.DM.SITEID").contains("<def:DocumentRef leafID=\"LF.acrf\"/>"));
             }
         }
+        /// Stays beside the replay: it compares fragments of the generated
+        /// Define-XML, which a case states only whole. The sources neither
+        /// family admits are `shared_define.json`'s
+        /// `a_not_available_origin_is_not_admitted_under_sdtm`,
+        /// `a_not_available_origin_with_a_source_is_not_admitted_under_sdtm`,
+        /// `an_assigned_origin_from_the_investigator_is_not_admitted_under_send`
+        /// and `a_not_available_origin_with_a_source_is_not_admitted_under_send`.
         #[test]
-        fn not_available_and_send_sources_follow_the_family_pairs() {
+        fn send_keeps_an_unsourced_not_available_origin_and_an_unsourced_assigned_one() {
             let assigned =
                 "codelist: AGEU\n      origins:\n        - type: Assigned\n          source: Sponsor\n";
             let not_available = "codelist: AGEU\n      origins:\n        - type: Not Available\n          description: Age units were not collected.\n";
-            // sdtm admits no Not Available origin, with or without a source.
-            let sourced =
-                not_available.edit("description", "source: Sponsor\n          description");
-            for origin in [not_available, sourced.as_str()] {
-                let temp = Temp::fixture("sdtm-dm-metadata", false);
-                replace_spec(&temp, assigned, origin);
-                metadata_only(&temp, "sdtm", "Submission");
-                let run = temp.run("2026-09-11T00:00:00");
-                assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
-                assert_eq!(run.issues()[0].condition(), "origin_source_not_admitted");
-                assert_eq!(
-                    run.issues()[0].spec_paths,
-                    ["sdtm.specs[0].columns.AGEU.submission.origins[0]"]
-                );
-            }
             // send takes the sources the sdtm table admits, or none, and keeps
             // a Not Available origin that declares no source and says why.
             let send = |temp: &Temp| {
@@ -1642,39 +1205,42 @@ mod file {
             assert!(run.issues().is_empty(), "{:?}", run.issues());
             let xml = std::str::from_utf8(run.artifacts().next().unwrap().1).unwrap();
             assert!(item(xml, "IT.DM.AGEU").contains("<def:Origin Type=\"Assigned\"/>"));
-            for origin in [
-                "codelist: AGEU\n      origins:\n        - type: Assigned\n          source: Investigator\n",
-                sourced.as_str(),
-            ] {
-                let temp = Temp::fixture("sdtm-dm-metadata", false);
-                metadata_only(&temp, "send", "Submission");
-                replace_spec(&temp, assigned, origin);
-                let run = send(&temp);
-                assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
-                assert_eq!(run.issues()[0].condition(), "origin_source_not_admitted");
-                assert_eq!(
-                    run.issues()[0].spec_paths,
-                    ["send.specs[0].columns.AGEU.submission.origins[0]"]
-                );
-            }
         }
-        const STUDY_LB: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [USUBJID, LBTESTCD]\ninput: {RAW: raw.csv}\noutput: {path: lb.csv, columns: [USUBJID, LBTESTCD]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: RAW.USUBJID\n    submission: {core: Req, length: 20, origins: [{type: Assigned, source: Sponsor}]}\n  - name: LBTESTCD\n    type: str\n    label: Lab Test or Examination Short Name\n    derivation: RAW.LBTESTCD\n    submission: {core: Req, length: 8, origins: [{type: Assigned, source: Sponsor}]}\nsubmission: {label: Laboratory Test Results, class: FINDINGS, structure: One record per lab test per subject, repeating: true}\n";
-        const STUDY_ADLB: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADLB\nkeys: [USUBJID, PARAMCD]\ninput: {LB: lb.csv}\noutput: {path: adlb.csv, columns: [USUBJID, PARAMCD, SRCDOM]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: LB.USUBJID\n    submission: {core: Req, mandatory: true, length: 20, origins: [{type: Predecessor, description: LB.USUBJID}]}\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: LB.LBTESTCD\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Predecessor, description: LB.LBTESTCD}]}\n  - name: SRCDOM\n    type: str\n    label: Source Data\n    derivation: \"'LB'\"\n    submission: {core: Perm, mandatory: false, length: 8, inventory_vocabulary: true, origins: [{type: Assigned}]}\nsubmission: {label: Laboratory Analysis Dataset, class: BASIC DATA STRUCTURE, structure: One record per subject per parameter, repeating: true}\n";
-        const STUDY_SDTM: &str = "sdtm:\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  specs: [sdtm/lb.yaml]\n  define: sdtm/define.xml\n";
-        const STUDY_ADAM: &str = "yamaa: \"1.0\"\ntype: project\nstudy: {id: STUDY, name: Study, description: Cross-section witness, protocol_name: Protocol}\nadam:\n  standards: [{name: ADaMIG, version: '1.3', status: Final}]\n  specs: [adlb.yaml]\n  define: define.xml\n  transport: dataset_json\n  source_system_version: '1.0'\n";
-        fn cross_section(adlb: &str, published: &str, sdtm: bool) -> (Temp, Define) {
+        /// A document of `shared_define.json`, which holds the cross-section
+        /// study's files for its cases and this test alike.
+        fn document(name: &str) -> String {
+            let fixture: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
+                "fixtures/diagnostics/shared_define.json"
+            ))
+            .unwrap();
+            fixture["documents"][name].as_str().unwrap().to_owned()
+        }
+        /// Stays beside the replay: it compares fragments of the generated
+        /// Define-XML, which a case states only whole. The refusals across
+        /// the sections are `shared_define.json`'s
+        /// `a_predecessor_column_keeps_its_predecessors_label`,
+        /// `a_published_name_outside_the_study_inventory_fails_its_recheck` and
+        /// `without_the_sdtm_section_a_predecessor_names_no_dataset_of_the_study`.
+        #[test]
+        fn predecessor_labels_and_the_dataset_inventory_span_every_section() {
+            // ADLB copies LB from the sdtm section: USUBJID keeps its name and
+            // label, PARAMCD renames LBTESTCD with its own label, and SRCDOM
+            // names the sdtm section's LB.
             let temp = Temp::new();
             fs::create_dir(temp.0.join("sdtm")).unwrap();
-            fs::write(temp.0.join("sdtm/lb.yaml"), STUDY_LB).unwrap();
-            fs::write(temp.0.join("adlb.yaml"), adlb).unwrap();
-            fs::write(temp.0.join("adlb.csv"), published).unwrap();
-            let environment = if sdtm {
-                format!("{STUDY_ADAM}{STUDY_SDTM}")
-            } else {
-                STUDY_ADAM.into()
-            };
-            fs::write(temp.0.join("project.yaml"), environment).unwrap();
-            let run = Define::prepare(
+            fs::write(temp.0.join("sdtm/lb.yaml"), document("study_lb")).unwrap();
+            fs::write(temp.0.join("adlb.yaml"), document("study_adlb")).unwrap();
+            fs::write(
+                temp.0.join("adlb.csv"),
+                "USUBJID,PARAMCD,SRCDOM\nS01-001,GLUC,LB\n",
+            )
+            .unwrap();
+            fs::write(
+                temp.0.join("project.yaml"),
+                document("cross_section_project"),
+            )
+            .unwrap();
+            let mut run = Define::prepare(
                 temp.0.join("project.yaml").to_str().unwrap(),
                 Submission::Adam,
                 Some("2026-09-30T00:00:00"),
@@ -1682,15 +1248,6 @@ mod file {
                 Some(Language::Python),
                 None,
             );
-            (temp, run)
-        }
-        #[test]
-        fn predecessor_labels_and_the_dataset_inventory_span_every_section() {
-            // ADLB copies LB from the sdtm section: USUBJID keeps its name and
-            // label, PARAMCD renames LBTESTCD with its own label, and SRCDOM
-            // names the sdtm section's LB.
-            let published = "USUBJID,PARAMCD,SRCDOM\nS01-001,GLUC,LB\n";
-            let (temp, mut run) = cross_section(STUDY_ADLB, published, true);
             assert!(run.issues().is_empty(), "{:?}", run.issues());
             let artifacts: Vec<_> = run
                 .artifacts()
@@ -1715,51 +1272,6 @@ mod file {
             assert!(run.save().unwrap());
             assert!(temp.0.join("adlb.json").is_file());
             assert!(!temp.0.join("sdtm/define.xml").exists());
-            // A copy that keeps the predecessor's name keeps its label.
-            let (temp, mut run) = cross_section(
-                &STUDY_ADLB.replacen(
-                    "label: Unique Subject Identifier",
-                    "label: Subject Identifier",
-                    1,
-                ),
-                published,
-                true,
-            );
-            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
-            let issue = &run.issues()[0];
-            assert_eq!(
-                (issue.phase(), issue.condition(), issue.rule()),
-                ("validation", "predecessor_label_mismatch", Some("SUB-20"))
-            );
-            assert_eq!(issue.spec_paths, ["adam.specs[0].columns.USUBJID.label"]);
-            assert_eq!(
-                yamaa_core::json::Value::Object(issue.context.clone()),
-                yamaa_adapters::json!({"detail": "USUBJID", "label": "Subject Identifier", "predecessor": "LB.USUBJID", "predecessor_label": "Unique Subject Identifier"})
-            );
-            assert!(run.save().is_err());
-            assert!(!temp.0.join("define.xml").exists());
-            // A name outside the study's inventory fails the published recheck.
-            let (_, run) = cross_section(STUDY_ADLB, &published.edit(",LB\n", ",XX\n"), true);
-            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
-            assert_eq!(
-                (run.issues()[0].condition(), run.issues()[0].rule()),
-                ("allowed_values_failed", Some("CT-11"))
-            );
-            assert_eq!(run.issues()[0].context["value"], "XX");
-            // Without the sdtm section, LB names no dataset of the study and
-            // no predecessor column is declared to compare.
-            let (_, run) = cross_section(
-                &STUDY_ADLB.replacen(
-                    "label: Unique Subject Identifier",
-                    "label: Subject Identifier",
-                    1,
-                ),
-                published,
-                false,
-            );
-            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
-            assert_eq!(run.issues()[0].condition(), "allowed_values_failed");
-            assert_eq!(run.issues()[0].context["value"], "LB");
         }
     }
 }

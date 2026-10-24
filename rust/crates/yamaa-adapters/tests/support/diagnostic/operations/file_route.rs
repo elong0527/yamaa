@@ -18,11 +18,12 @@
 //! its issues afterwards. Refused or not, it also returns each file of the
 //! study directory the request created, changed or removed, read against the
 //! directory as the case staged it, once its `built` specifications saved; a
-//! refused request saves nothing. Each takes `files` (each relative path and
-//! its text), `directories` (empty ones), the `specification` and the
+//! refused request saves nothing, and a save that fails reports its own
+//! issues, such as an output directory that does not exist. Each takes the
+//! study a case stages ([`super::study`]), the `specification` and the
 //! optional `project` a request names, and the `host` it runs for, `python`
 //! unless written.
-use super::{contents, host, path, rows, study, File, Reported};
+use super::{contents, host, path, rows, study, File, Reported, STUDY};
 use crate::support::diagnostic::{
     form::{self, Outcome},
     replay::{closed, field, items, text},
@@ -42,6 +43,7 @@ pub(super) const FILES: &[File] = &[
     fixture!("inheritance.json"),
     fixture!("integer_literals.json"),
     fixture!("language_header.json"),
+    fixture!("local_paths.json"),
     fixture!("lookup_matched_derivations.json"),
     fixture!("lookup_model.json"),
     fixture!("missing_order.json"),
@@ -61,20 +63,11 @@ pub(super) const FILES: &[File] = &[
 
 pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
     let members = match operation {
-        "check" | "check_resources" => {
-            &["files", "directories", "specification", "project", "host"][..]
-        }
-        "build" | "save" => &[
-            "files",
-            "directories",
-            "built",
-            "specification",
-            "project",
-            "host",
-        ][..],
+        "check" | "check_resources" => &["specification", "project", "host"][..],
+        "build" | "save" => &["built", "specification", "project", "host"][..],
         _ => return None,
     };
-    closed(input, members);
+    closed(input, &[&STUDY[..], members].concat());
     let study = study(input);
     let host = host(input);
     let project = input.get("project").map(|name| path(&study, text(name)));
