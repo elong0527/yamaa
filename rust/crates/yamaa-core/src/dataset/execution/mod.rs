@@ -42,15 +42,23 @@ pub enum ExecutionEvent {
     },
 }
 
-/// How a run divides its driver input (#3697): into consecutive partitions
-/// of `rows` records each, the last holding the rest. Each partition-safe
-/// unit of the schedule runs over one partition at a time, and the run
-/// combines only the state the partition inventory marks combinable. A
-/// step that needs the whole table refuses the run at admission, unless
-/// `whole_table_fallback` runs it over the whole input instead.
+/// How a run divides its driver input. Without `leading_keys` (#3697), into
+/// consecutive partitions of `rows` records each, the last holding the
+/// rest. With `leading_keys` (#3763), into key-bounded partitions:
+/// consecutive partitions that never split a group of the specification's
+/// first `leading_keys` declared keys, each holding as many whole groups as
+/// fit in `rows` records, a larger group alone; a window or aggregate
+/// that groups by every one of those keys is then partition-safe. A
+/// specification that declares no key runs over consecutive partitions.
+/// Each partition-safe unit of the schedule runs over one partition at a
+/// time, and the run combines only the state the partition inventory marks
+/// combinable. A step that needs the whole table refuses the run at
+/// admission, unless `whole_table_fallback` runs it over the whole input
+/// instead.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Partitioning {
     pub rows: std::num::NonZeroUsize,
+    pub leading_keys: Option<std::num::NonZeroUsize>,
     pub whole_table_fallback: bool,
 }
 

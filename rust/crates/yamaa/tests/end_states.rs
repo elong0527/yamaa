@@ -3,7 +3,9 @@
 //! 2026-10-23): one test per cell of the before-start, mid-partition,
 //! mid-stream and publication rows, on a partitioned engine over a memory
 //! resolver. The mid-stream cells read a streamed run's output one record per
-//! batch (`SpecRequest::stream`).
+//! batch (`SpecRequest::stream`). The before-start and mid-partition cells
+//! hold for key-bounded partitions too (#3763), each over a specification
+//! that the strategy divides by its subjects or refuses.
 //!
 //! Each cell asserts its end state whole: the outcome and its identity
 //! (cancelled, or the first issue's phase, condition and paths), what names
@@ -36,6 +38,13 @@ const FAILING: &[u8] = b"ID,V\n1,1\n2,2\n3,3.5\n";
 /// A specification whose RN numbers the records: a window, which needs the
 /// whole table.
 const WINDOW: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, V: float}}}\noutput: {path: out.csv, columns: [ID, RN], report: report.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n  - {name: RN, type: int, label: Number, derivation: {row_number: {window: {order_by: [ID]}}}}\n";
+/// A specification keyed by subject and sequence whose RN numbers each
+/// subject's records: a window grouped by the leading key, ID.
+const SUBJECTS: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, SEQ]\ninput: {SRC: {path: input.csv, types: {SEQ: int, V: float}}}\noutput: {path: out.csv, columns: [ID, SEQ, RN, W], report: report.csv}\ncolumns:\n  - {name: ID, type: str, label: Subject, derivation: SRC.ID}\n  - {name: SEQ, type: int, label: Sequence, derivation: SRC.SEQ}\n  - {name: RN, type: int, label: Number, derivation: {row_number: {window: {group_by: [ID], order_by: [SEQ]}}}}\n  - {name: W, type: int, label: Whole, derivation: SRC.V}\n";
+/// Three subjects' records, grouped by subject, whose V converts.
+const VISITS: &[u8] = b"ID,SEQ,V\na,1,1\na,2,2\nb,1,3\nc,1,4\n";
+/// The same records; the third subject's V, 4.5, does not convert.
+const FAILING_VISITS: &[u8] = b"ID,SEQ,V\na,1,1\na,2,2\nb,1,3\nc,1,4.5\n";
 const OUTPUT: &str = "memory:/out.csv";
 const REPORT: &str = "memory:/report.csv";
 
@@ -96,15 +105,35 @@ impl ResourceResolver for Recording {
 /// An engine that runs every build one record per partition.
 fn engine(resolver: Arc<Recording>, fallback: bool) -> Engine {
     let partitions = Partitions::new(NonZeroUsize::MIN);
+    partitioned(
+        resolver,
+        if fallback {
+            partitions.with_whole_table_fallback()
+        } else {
+            partitions
+        },
+    )
+}
+
+/// An engine that runs every build over `partitions`.
+fn partitioned(resolver: Arc<Recording>, partitions: Partitions) -> Engine {
     Engine::new(
         EngineOptions::new(HostLanguage::Python, "test".into(), "0".into())
             .with_resolver(resolver)
-            .with_partitions(if fallback {
-                partitions.with_whole_table_fallback()
-            } else {
-                partitions
-            }),
+            .with_partitions(partitions),
     )
+}
+
+/// Consecutive partitions of one record, and key-bounded partitions of one
+/// subject each, over the leading declared key (#3763).
+fn strategies() -> [(&'static str, Partitions); 2] {
+    [
+        ("consecutive partitions", Partitions::new(NonZeroUsize::MIN)),
+        (
+            "key-bounded partitions",
+            Partitions::by_keys(NonZeroUsize::MIN, NonZeroUsize::MIN),
+        ),
+    ]
 }
 
 /// The end state of one cell.
@@ -235,45 +264,57 @@ fn before_start_a_cancelled_run_returns_no_result_and_publishes_nothing() {
 /// Before start, failed: a step that needs the whole table refuses the
 /// partitioned run before derivation, as `engine_rejected` at the window
 /// node, `columns.RN.derivation.row_number`, as the negative window
-/// benchmarks name it. The failed run has no output, and its save writes
-/// only the report file and fails with the same issue; both name the run.
+/// benchmarks name it. Under key-bounded partitions the window, which
+/// groups by nothing, still omits the partition key ID, so the refusal and
+/// its identity are the same (#3763). The failed run has no output, and its
+/// save writes only the report file and fails with the same issue; both name
+/// the run.
 #[test]
 fn before_start_a_refused_partitioned_run_publishes_only_its_report() {
-    let resolver = Recording::new(WINDOW, INPUT, None);
-    let mut run = engine(Arc::clone(&resolver), false)
-        .spec("spec.yaml")
-        .run()
-        .unwrap();
-    assert!(run.output().is_none());
-    let outcome = r#"Error engine engine_rejected None ["columns.RN.derivation.row_number"] {"code":"partition_global","step":"execute"} None None"#.to_owned();
-    assert_eq!(
-        failed_and_saved(&resolver, &mut run),
-        (
-            EndState {
-                outcome: outcome.clone(),
-                named: "yamaa run of TEST:".into(),
-                published: vec![],
-                staged: 0,
-                committed: 0,
-                left: 0,
-            },
-            EndState {
-                outcome,
-                named: "cannot save TEST:".into(),
-                published: vec![REPORT],
-                staged: 1,
-                committed: 1,
-                left: 0,
-            },
-        )
-    );
+    for (label, partitions) in strategies() {
+        let resolver = Recording::new(WINDOW, INPUT, None);
+        let mut run = partitioned(Arc::clone(&resolver), partitions)
+            .spec("spec.yaml")
+            .run()
+            .unwrap();
+        assert!(run.output().is_none(), "{label}");
+        let outcome = r#"Error engine engine_rejected None ["columns.RN.derivation.row_number"] {"code":"partition_global","step":"execute"} None None"#.to_owned();
+        assert_eq!(
+            failed_and_saved(&resolver, &mut run),
+            (
+                EndState {
+                    outcome: outcome.clone(),
+                    named: "yamaa run of TEST:".into(),
+                    published: vec![],
+                    staged: 0,
+                    committed: 0,
+                    left: 0,
+                },
+                EndState {
+                    outcome,
+                    named: "cannot save TEST:".into(),
+                    published: vec![REPORT],
+                    staged: 1,
+                    committed: 1,
+                    left: 0,
+                },
+            ),
+            "{label}"
+        );
+    }
 }
 
 /// Mid-partition, cancelled: whichever poll of a partitioned run finds its
 /// token cancelled, at a checkpoint or between two partitions, the call
 /// returns no result and no issue, and nothing is staged or published. An
 /// uncancelled partitioned run polls more often than a whole-table run: once
-/// before each partition of a divided unit after its first.
+/// before each partition of a divided unit after its first. Both
+/// specifications have no rows, so each builds the key grain. Over three
+/// one-record partitions, SPEC's key derivation and its column W each
+/// divide, with two polls between partitions. Over key-bounded partitions
+/// of one subject each (#3763), SUBJECTS divides its three subjects in its
+/// key derivation, its window RN, grouped by the partition key, and its
+/// column W.
 #[test]
 fn mid_partition_a_cancelled_run_returns_no_result_and_publishes_nothing() {
     let polls = Arc::new(AtomicUsize::new(0));
@@ -284,55 +325,63 @@ fn mid_partition_a_cancelled_run_returns_no_result_and_publishes_nothing() {
             from.is_some_and(|from| poll >= from)
         })
     };
-    let whole = Engine::new(
-        EngineOptions::new(HostLanguage::Python, "test".into(), "0".into())
-            .with_resolver(Recording::new(SPEC, INPUT, None)),
-    );
-    whole
-        .spec("spec.yaml")
-        .cancel_with(&counting(None))
-        .run()
-        .unwrap();
-    let whole_polls = polls.swap(0, Ordering::SeqCst);
-    engine(Recording::new(SPEC, INPUT, None), false)
-        .spec("spec.yaml")
-        .cancel_with(&counting(None))
-        .run()
-        .unwrap();
-    let total = polls.swap(0, Ordering::SeqCst);
-    // Without rows the specification builds the key grain: its key
-    // derivation and its column W each divide into three partitions, with
-    // two polls between them.
-    assert_eq!(total, whole_polls + 4, "polls between partitions");
-    for from in 1..=total {
-        let resolver = Recording::new(SPEC, INPUT, None);
+    let [consecutive, key_bounded] = strategies();
+    for ((label, partitions), spec, input, between) in [
+        (consecutive, SPEC, INPUT, 4),
+        (key_bounded, SUBJECTS, VISITS, 6),
+    ] {
         polls.store(0, Ordering::SeqCst);
-        let result = engine(Arc::clone(&resolver), false)
+        let whole = Engine::new(
+            EngineOptions::new(HostLanguage::Python, "test".into(), "0".into())
+                .with_resolver(Recording::new(spec, input, None)),
+        );
+        whole
             .spec("spec.yaml")
-            .cancel_with(&counting(Some(from)))
-            .run();
-        assert!(
-            matches!(
-                result,
-                Err(Failure {
-                    kind: FailureKind::Cancelled,
-                    ..
-                })
-            ),
-            "poll {from}"
-        );
+            .cancel_with(&counting(None))
+            .run()
+            .unwrap();
+        let whole_polls = polls.swap(0, Ordering::SeqCst);
+        partitioned(Recording::new(spec, input, None), partitions)
+            .spec("spec.yaml")
+            .cancel_with(&counting(None))
+            .run()
+            .unwrap();
+        let total = polls.swap(0, Ordering::SeqCst);
         assert_eq!(
-            end_state(&resolver, "cancelled".into(), String::new()),
-            EndState {
-                outcome: "cancelled".into(),
-                named: String::new(),
-                published: vec![],
-                staged: 0,
-                committed: 0,
-                left: 0,
-            },
-            "cancelled at poll {from}"
+            total,
+            whole_polls + between,
+            "{label}: polls between partitions"
         );
+        for from in 1..=total {
+            let resolver = Recording::new(spec, input, None);
+            polls.store(0, Ordering::SeqCst);
+            let result = partitioned(Arc::clone(&resolver), partitions)
+                .spec("spec.yaml")
+                .cancel_with(&counting(Some(from)))
+                .run();
+            assert!(
+                matches!(
+                    result,
+                    Err(Failure {
+                        kind: FailureKind::Cancelled,
+                        ..
+                    })
+                ),
+                "{label}: poll {from}"
+            );
+            assert_eq!(
+                end_state(&resolver, "cancelled".into(), String::new()),
+                EndState {
+                    outcome: "cancelled".into(),
+                    named: String::new(),
+                    published: vec![],
+                    staged: 0,
+                    committed: 0,
+                    left: 0,
+                },
+                "{label}: cancelled at poll {from}"
+            );
+        }
     }
 }
 
@@ -504,37 +553,58 @@ fn mid_partition_a_project_function_interrupt_cancels_the_call() {
 
 /// Mid-partition, failed: the third partition's V does not convert, so the
 /// run fails as the whole-table run does, with `conversion_failed` at W in
-/// the `convert` phase, and no output. Its save writes only the report file.
+/// the `convert` phase, and no output: under consecutive partitions at the
+/// third record's 3.5, and under key-bounded partitions (#3763) at the
+/// third subject's 4.5. Its save writes only the report file.
 #[test]
 fn mid_partition_a_failed_run_publishes_only_its_report() {
-    let resolver = Recording::new(SPEC, FAILING, None);
-    let mut run = engine(Arc::clone(&resolver), false)
-        .spec("spec.yaml")
-        .run()
-        .unwrap();
-    assert!(run.output().is_none());
-    let outcome = r#"Error convert conversion_failed Some("VALUE-7") ["columns.W"] {"from":"float","keys":[{"ID":3}],"to":"int","value":3.5} None None"#.to_owned();
-    assert_eq!(
-        failed_and_saved(&resolver, &mut run),
+    let [consecutive, key_bounded] = strategies();
+    for ((label, partitions), spec, input, context) in [
         (
-            EndState {
-                outcome: outcome.clone(),
-                named: "yamaa run of TEST:".into(),
-                published: vec![],
-                staged: 0,
-                committed: 0,
-                left: 0,
-            },
-            EndState {
-                outcome,
-                named: "cannot save TEST:".into(),
-                published: vec![REPORT],
-                staged: 1,
-                committed: 1,
-                left: 0,
-            },
-        )
-    );
+            consecutive,
+            SPEC,
+            FAILING,
+            r#"{"from":"float","keys":[{"ID":3}],"to":"int","value":3.5}"#,
+        ),
+        (
+            key_bounded,
+            SUBJECTS,
+            FAILING_VISITS,
+            r#"{"from":"float","keys":[{"ID":"c","SEQ":1}],"to":"int","value":4.5}"#,
+        ),
+    ] {
+        let resolver = Recording::new(spec, input, None);
+        let mut run = partitioned(Arc::clone(&resolver), partitions)
+            .spec("spec.yaml")
+            .run()
+            .unwrap();
+        assert!(run.output().is_none(), "{label}");
+        let outcome = format!(
+            r#"Error convert conversion_failed Some("VALUE-7") ["columns.W"] {context} None None"#
+        );
+        assert_eq!(
+            failed_and_saved(&resolver, &mut run),
+            (
+                EndState {
+                    outcome: outcome.clone(),
+                    named: "yamaa run of TEST:".into(),
+                    published: vec![],
+                    staged: 0,
+                    committed: 0,
+                    left: 0,
+                },
+                EndState {
+                    outcome,
+                    named: "cannot save TEST:".into(),
+                    published: vec![REPORT],
+                    staged: 1,
+                    committed: 1,
+                    left: 0,
+                },
+            ),
+            "{label}"
+        );
+    }
 }
 
 /// A streamed run of `SPEC` over `input` on a one-record partitioned engine,
