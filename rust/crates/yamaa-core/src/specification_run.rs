@@ -544,9 +544,9 @@ fn execute_inner_into<R: Resolver, D: Decoder>(
                 let admitted = match &scanned {
                     Some(scan) => {
                         let width = table.schema().columns().len();
-                        scan.partitions.iter().try_for_each(|range| {
-                            crate::limits::Limits::table(range.len(), width)
-                        })
+                        scan.partitions
+                            .iter()
+                            .try_for_each(|range| crate::limits::Limits::table(range.len(), width))
                     }
                     None => crate::limits::Limits::table(
                         table.row_count(),
