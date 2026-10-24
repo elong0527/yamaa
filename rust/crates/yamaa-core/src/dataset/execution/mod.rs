@@ -55,6 +55,13 @@ pub enum ExecutionEvent {
 /// combinable. A step that needs the whole table refuses the run at
 /// admission, unless `whole_table_fallback` runs it over the whole input
 /// instead.
+///
+/// A run whose plan is safe under consecutive partitions and whose one
+/// input is CSV or Parquet reads that input by partition (#3792), each
+/// partition decoded and admitted on its own: a CSV input in partitions of
+/// `rows` records, a Parquet input in runs of whole row groups of at most
+/// `rows` records, a larger row group being a partition of its own. A plan
+/// that only key-bounded partitions can divide reads the input whole.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Partitioning {
     pub rows: std::num::NonZeroUsize,

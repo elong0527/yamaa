@@ -1,0 +1,593 @@
+//! Table contracts: CSV and Parquet inputs read by partition (#3792). A CSV
+//! input is scanned once and decoded a range of records at a time, a Parquet
+//! input a run of whole row groups at a time, each partition admitted on its
+//! own; the partitions hold the whole read's table, and every finding is the
+//! whole read's.
+//!
+//! The seam is the decoder port's read by partition, which neither the
+//! benchmark reader nor the host fixtures reach: no host runs partitioned
+//! before #3794.
+mod table {
+    mod partitioned_sources {
+        use std::convert::Infallible;
+        use std::num::NonZeroUsize;
+        use yamaa_adapters::csv_source::{self, Error as CsvError, Field, ProfileCause};
+        use yamaa_adapters::decoder::{Decoder, Snapshot};
+        use yamaa_adapters::specification_run::Error;
+        use yamaa_core::decoder::Decoder as _;
+        use yamaa_core::specification::{SourceDeclaration, SourceInterpretation, SourceProfile};
+        use yamaa_core::table::{Column, TableAccess, TableSchema, ValueRef};
+        use yamaa_core::value::ColumnType;
+
+        fn declaration(
+            profile: SourceProfile,
+            types: &[(&str, ColumnType)],
+            ordinal: Option<&str>,
+        ) -> SourceDeclaration {
+            SourceDeclaration {
+                name: "SRC".into(),
+                path: match profile {
+                    SourceProfile::Parquet => "input.parquet".into(),
+                    _ => "input.csv".into(),
+                },
+                types: types
+                    .iter()
+                    .map(|&(name, kind)| (name.into(), kind))
+                    .collect(),
+                profile,
+                encoding: None,
+                byte_order_mark: false,
+                empty_string_present: false,
+                ordinal: ordinal.map(Into::into),
+            }
+        }
+
+        fn size(records: usize) -> NonZeroUsize {
+            NonZeroUsize::new(records).unwrap()
+        }
+
+        /// The input read whole, then read by partitions of `records`.
+        type Reads = (
+            Result<Snapshot<Infallible>, Error>,
+            Result<Snapshot<Infallible>, Error>,
+        );
+        fn read(
+            source: &SourceDeclaration,
+            bytes: &[u8],
+            interpretation: SourceInterpretation,
+            records: usize,
+        ) -> Reads {
+            let mut decoder = Decoder::<Infallible>::default();
+            (
+                decoder.table(source, bytes, interpretation, None),
+                decoder.partitioned(source, bytes, interpretation, None, size(records)),
+            )
+        }
+
+        /// A table's records, cell by cell.
+        fn cells(table: &dyn TableAccess<Error = Infallible>) -> Vec<Vec<ValueRef<'_>>> {
+            (0..table.row_count())
+                .map(|row| {
+                    (0..table.schema().columns().len())
+                        .map(|column| table.cell(row, column).unwrap())
+                        .collect()
+                })
+                .collect()
+        }
+
+        /// The records each partition holds, in order.
+        fn sizes(table: &Snapshot<Infallible>) -> Vec<usize> {
+            table
+                .partitions()
+                .iter()
+                .map(|part| part.row_count())
+                .collect()
+        }
+
+        fn schema(columns: &[(&str, ColumnType)]) -> TableSchema {
+            TableSchema::new(
+                columns
+                    .iter()
+                    .map(|&(name, kind)| Column {
+                        name: name.into(),
+                        kind,
+                    })
+                    .collect(),
+            )
+            .unwrap()
+        }
+
+        mod csv {
+            use super::*;
+            use ValueRef::{Int, Missing, Str};
+
+            /// Quoted fields hold line feeds, doubled quotes and commas, and
+            /// records end with a line feed or a carriage return and line
+            /// feed: the scan ends each record outside its quotes, so every
+            /// partition boundary falls between two records, and the
+            /// partitions hold the whole read's table (CSV-2, CSV-3, CSV-5).
+            #[test]
+            fn quoted_multiline_records_read_by_partition_equal_the_whole_read() {
+                let bytes = concat!(
+                    "ID,N,NOTE\r\n",
+                    "1,10,\"first\nline, second\"\r\n",
+                    "2,20,\"\"\"quoted\"\"\n\n\"\n",
+                    "3,,\"\"\r\n",
+                    "4,40,\"a\nb\nc\"\n",
+                    "5,50,plain",
+                );
+                let expected = vec![
+                    vec![Str("1"), Int(10), Str("first\nline, second")],
+                    vec![Str("2"), Int(20), Str("\"quoted\"\n\n")],
+                    vec![Str("3"), Missing, Missing],
+                    vec![Str("4"), Int(40), Str("a\nb\nc")],
+                    vec![Str("5"), Int(50), Str("plain")],
+                ];
+                let source = declaration(SourceProfile::Csv, &[("N", ColumnType::Int)], None);
+                for (records, partitions) in [
+                    (1, vec![1, 1, 1, 1, 1]),
+                    (2, vec![2, 2, 1]),
+                    (3, vec![3, 2]),
+                    (4, vec![4, 1]),
+                    (5, vec![5]),
+                    (6, vec![5]),
+                ] {
+                    let (whole, divided) = read(
+                        &source,
+                        bytes.as_bytes(),
+                        SourceInterpretation::Ordinary,
+                        records,
+                    );
+                    let (whole, divided) = (whole.unwrap(), divided.unwrap());
+                    assert_eq!(cells(&whole), expected, "the whole read");
+                    assert_eq!(cells(&divided), expected, "partitions of {records}");
+                    assert_eq!(sizes(&divided), partitions, "partitions of {records}");
+                    assert_eq!(
+                        divided.schema(),
+                        &schema(&[
+                            ("ID", ColumnType::Str),
+                            ("N", ColumnType::Int),
+                            ("NOTE", ColumnType::Str)
+                        ]),
+                        "partitions of {records}"
+                    );
+                }
+            }
+
+            fn profile(cause: ProfileCause, record: usize, field: usize) -> CsvError {
+                CsvError::Profile {
+                    cause,
+                    record,
+                    field: Field::Index(field),
+                }
+            }
+
+            /// A defect past the first partition of two records fails the
+            /// scan with the whole read's finding: its condition and its
+            /// record and field, the header being record 1. Complete syntax
+            /// precedes a width finding, and decoding precedes syntax, as in
+            /// the whole read.
+            #[test]
+            fn a_malformed_record_past_the_first_partition_fails_as_the_whole_read_does() {
+                use ProfileCause::*;
+                for (input, expected, case) in [
+                    (
+                        &b"A,B\n1,x\n2,y\n3,\"z\n"[..],
+                        profile(QuoteUnterminated, 4, 2),
+                        "an unterminated quote",
+                    ),
+                    (
+                        b"A,B\n1,x\n2,y\n3,z\rw\n",
+                        profile(CarriageReturn, 4, 2),
+                        "a carriage return in a bare field",
+                    ),
+                    (
+                        b"A,B\n1,x\n2,y\n3,\"z\r\"\n",
+                        profile(CarriageReturn, 4, 2),
+                        "a carriage return in a quoted field",
+                    ),
+                    (
+                        b"A,B\n1,x\n2,y\n3,\"z\"w\n",
+                        profile(TextAfterQuote, 4, 2),
+                        "text after a closing quote",
+                    ),
+                    (
+                        b"A,B\n1,x\n2,y\n3,z\"w\n",
+                        profile(QuoteInBareField, 4, 2),
+                        "a quote in a bare field",
+                    ),
+                    (
+                        b"A,B\n1,x\n2,y\n3\n",
+                        profile(RecordWidth, 4, 2),
+                        "a record one field short",
+                    ),
+                    (
+                        b"A,B\n1,x\n2,y\n3,z,w\n",
+                        profile(RecordWidth, 4, 3),
+                        "a record one field long",
+                    ),
+                    (
+                        b"A,B\n1,x\n2,y\n3\n4\n",
+                        profile(RecordWidth, 4, 2),
+                        "the first of two width findings",
+                    ),
+                    (
+                        b"A,B\n1\n2,y\n3,\"z\n",
+                        profile(QuoteUnterminated, 4, 2),
+                        "syntax after a width finding in the first partition",
+                    ),
+                    (
+                        b"A,B\n1,\"x\ny\"\n2,y\n3,\"z\n",
+                        profile(QuoteUnterminated, 4, 2),
+                        "a multi-line record before the defect",
+                    ),
+                    (
+                        b"A,B\n1,\"x\ny\"\n2,y\n3,\xff\n",
+                        profile(InvalidText, 4, 2),
+                        "invalid text after a multi-line record",
+                    ),
+                ] {
+                    assert_eq!(
+                        csv_source::parse_declared(input, false),
+                        Err(expected.clone()),
+                        "the whole read: {case}"
+                    );
+                    assert_eq!(
+                        csv_source::scan(input, false, size(2)).err(),
+                        Some(expected),
+                        "partitions of 2: {case}"
+                    );
+                }
+            }
+
+            /// A declared field whose value does not convert, past the first
+            /// partition, fails both reads with the same field, type and
+            /// value; every record before it converts first, in both.
+            #[test]
+            fn a_value_that_does_not_convert_past_the_first_partition_fails_as_the_whole_read_does()
+            {
+                let source = declaration(SourceProfile::Csv, &[("N", ColumnType::Int)], None);
+                let bytes = b"ID,N\n1,1\n2,2\n3,3\n4,four\n5,five\n";
+                let (whole, divided) = read(&source, bytes, SourceInterpretation::Ordinary, 2);
+                for (read, case) in [(whole, "the whole read"), (divided, "partitions of 2")] {
+                    match read.err() {
+                        Some(Error::TypedSource(yamaa_adapters::typed_csv::Error::Typing(
+                            yamaa_core::typed_csv::Error::FieldParse {
+                                field,
+                                target,
+                                value,
+                            },
+                        ))) => assert_eq!(
+                            (field.as_str(), target, value.as_str()),
+                            ("N", ColumnType::Int, "four"),
+                            "{case}"
+                        ),
+                        other => panic!("{case}: {other:?}"),
+                    }
+                }
+            }
+
+            /// A source of a header alone is one empty partition with the
+            /// header's schema.
+            #[test]
+            fn a_source_without_records_is_one_empty_partition() {
+                let source = declaration(SourceProfile::Csv, &[], None);
+                for bytes in [&b"A,B"[..], b"A,B\n", b"A,B\r\n"] {
+                    let (_, divided) = read(&source, bytes, SourceInterpretation::Ordinary, 3);
+                    let divided = divided.unwrap();
+                    assert_eq!(sizes(&divided), [0], "{bytes:?}");
+                    assert_eq!(
+                        divided.schema(),
+                        &schema(&[("A", ColumnType::Str), ("B", ColumnType::Str)]),
+                        "{bytes:?}"
+                    );
+                }
+            }
+
+            /// An `odm` read binds the header's fields once, and each
+            /// partition holds the fixed table's records (NAME-8).
+            #[test]
+            fn an_odm_source_read_by_partition_holds_the_whole_reads_records() {
+                use yamaa_core::odm_source::FIELDS;
+                let header = FIELDS.join(",");
+                let record =
+                    |subject: usize| format!("S,M,{subject},E,1,G,1,I,1,IT.AGE,{subject}0\n");
+                let bytes = format!("{header}\n{}{}{}", record(1), record(2), record(3));
+                let source = declaration(SourceProfile::Csv, &[], None);
+                let (whole, divided) =
+                    read(&source, bytes.as_bytes(), SourceInterpretation::Odm, 2);
+                let (whole, divided) = (whole.unwrap(), divided.unwrap());
+                assert_eq!(sizes(&divided), [2, 1]);
+                assert_eq!(divided.schema(), whole.schema());
+                assert_eq!(cells(&divided), cells(&whole));
+                assert_eq!(divided.cell(2, 2).unwrap(), Str("3"));
+                assert_eq!(divided.cell(2, 10).unwrap(), Str("30"));
+            }
+        }
+
+        mod row_groups {
+            #![cfg(feature = "parquet")]
+            use super::*;
+            use ::parquet::{arrow::ArrowWriter, file::properties::WriterProperties};
+            use arrow_array::{ArrayRef, Date32Array, Int64Array, RecordBatch, StringArray};
+            use arrow_schema::{Field as ArrowField, Schema};
+            use std::sync::Arc;
+
+            /// A file of `columns`, written in row groups of `group` rows.
+            fn written(columns: Vec<(&str, ArrayRef)>, group: usize) -> Vec<u8> {
+                let schema = Arc::new(Schema::new(
+                    columns
+                        .iter()
+                        .map(|(name, array)| {
+                            ArrowField::new(*name, array.data_type().clone(), true)
+                        })
+                        .collect::<Vec<_>>(),
+                ));
+                let batch = RecordBatch::try_new(
+                    schema.clone(),
+                    columns.into_iter().map(|(_, array)| array).collect(),
+                )
+                .unwrap();
+                let properties = WriterProperties::builder()
+                    .set_max_row_group_size(group)
+                    .build();
+                let mut bytes = Vec::new();
+                let mut writer =
+                    ArrowWriter::try_new(&mut bytes, schema, Some(properties)).unwrap();
+                writer.write(&batch).unwrap();
+                writer.close().unwrap();
+                bytes
+            }
+
+            /// Fifteen records `ID` 1 to 15 and `NAME` r1 to r15, in five
+            /// row groups of three.
+            fn fifteen() -> Vec<u8> {
+                written(
+                    vec![
+                        ("ID", Arc::new(Int64Array::from_iter_values(1..=15))),
+                        (
+                            "NAME",
+                            Arc::new(StringArray::from_iter_values(
+                                (1..=15).map(|id| format!("r{id}")),
+                            )),
+                        ),
+                    ],
+                    3,
+                )
+            }
+
+            /// A partition takes whole row groups while they fit in its
+            /// records, and a row group of more records is a partition of
+            /// its own; the partitions hold the whole read's table.
+            #[test]
+            fn a_parquet_input_is_read_a_run_of_whole_row_groups_at_a_time() {
+                let names: Vec<String> = (1..=15).map(|id| format!("r{id}")).collect();
+                let expected: Vec<Vec<ValueRef<'_>>> = (0..15)
+                    .map(|row| vec![ValueRef::Int(row as i64 + 1), ValueRef::Str(&names[row])])
+                    .collect();
+                let source = declaration(SourceProfile::Parquet, &[], None);
+                let bytes = fifteen();
+                for (records, partitions) in [
+                    (1, vec![3, 3, 3, 3, 3]),
+                    (3, vec![3, 3, 3, 3, 3]),
+                    (5, vec![3, 3, 3, 3, 3]),
+                    (6, vec![6, 6, 3]),
+                    (8, vec![6, 6, 3]),
+                    (9, vec![9, 6]),
+                    (15, vec![15]),
+                    (16, vec![15]),
+                ] {
+                    let (whole, divided) =
+                        read(&source, &bytes, SourceInterpretation::Ordinary, records);
+                    let (whole, divided) = (whole.unwrap(), divided.unwrap());
+                    assert_eq!(cells(&whole), expected, "the whole read");
+                    assert_eq!(cells(&divided), expected, "partitions of {records}");
+                    assert_eq!(sizes(&divided), partitions, "partitions of {records}");
+                }
+            }
+
+            /// A stored date outside the years 1 to 9999 in the third row
+            /// group fails both reads at its row in the whole file, 8, not
+            /// at its row in the partition (PARQUET-5).
+            #[test]
+            fn a_parquet_value_past_the_first_partition_fails_at_its_row_in_the_file() {
+                let mut days: Vec<Option<i32>> = (0..9).map(Some).collect();
+                days[7] = Some(2_932_897);
+                let bytes = written(
+                    vec![("D", Arc::new(Date32Array::from(days)) as ArrayRef)],
+                    3,
+                );
+                let source = declaration(SourceProfile::Parquet, &[], None);
+                let (whole, divided) = read(&source, &bytes, SourceInterpretation::Ordinary, 3);
+                for (read, case) in [(whole, "the whole read"), (divided, "partitions of 3")] {
+                    match read.err() {
+                        Some(Error::ParquetSource(
+                            yamaa_adapters::parquet_source::Error::Value { field, row, value },
+                        )) => {
+                            assert_eq!((field.as_str(), row, value), ("D", 8, 2_932_897), "{case}")
+                        }
+                        other => panic!("{case}: {other:?}"),
+                    }
+                }
+            }
+
+            /// A file of no rows is one empty partition with its schema.
+            #[test]
+            fn a_parquet_input_without_rows_is_one_empty_partition() {
+                let bytes = written(
+                    vec![(
+                        "ID",
+                        Arc::new(Int64Array::from(Vec::<i64>::new())) as ArrayRef,
+                    )],
+                    3,
+                );
+                let source = declaration(SourceProfile::Parquet, &[], None);
+                let (_, divided) = read(&source, &bytes, SourceInterpretation::Ordinary, 2);
+                let divided = divided.unwrap();
+                assert_eq!(sizes(&divided), [0]);
+                assert_eq!(divided.schema(), &schema(&[("ID", ColumnType::Int)]));
+            }
+
+            /// An `odm` read of a file in row groups binds the eleven fields
+            /// from the footer once, and each partition holds the whole
+            /// read's records.
+            #[test]
+            fn an_odm_parquet_input_read_by_partition_holds_the_whole_reads_records() {
+                use yamaa_core::odm_source::FIELDS;
+                let columns = FIELDS
+                    .iter()
+                    .map(|name| {
+                        let values = StringArray::from_iter_values(
+                            (1..=5).map(|record| format!("{name}-{record}")),
+                        );
+                        (*name, Arc::new(values) as ArrayRef)
+                    })
+                    .collect();
+                let bytes = written(columns, 2);
+                let source = declaration(SourceProfile::Parquet, &[], None);
+                let (whole, divided) = read(&source, &bytes, SourceInterpretation::Odm, 2);
+                let (whole, divided) = (whole.unwrap(), divided.unwrap());
+                assert_eq!(sizes(&divided), [2, 2, 1]);
+                assert_eq!(divided.schema(), whole.schema());
+                assert_eq!(cells(&divided), cells(&whole));
+                assert_eq!(divided.cell(4, 2).unwrap(), ValueRef::Str("SubjectKey-5"));
+            }
+        }
+
+        /// The generated ordinal of each record is its position in the whole
+        /// source, in every partition, from the CSV scan and from the
+        /// Parquet row groups alike (INPUT-3).
+        #[test]
+        fn each_records_ordinal_is_its_position_in_the_whole_source() {
+            let csv = declaration(SourceProfile::Csv, &[], Some("POSITION"));
+            let mut inputs = vec![(csv, b"ID\nv\nw\nx\ny\nz\n".to_vec(), vec![2, 2, 1])];
+            #[cfg(feature = "parquet")]
+            {
+                use ::parquet::{arrow::ArrowWriter, file::properties::WriterProperties};
+                use arrow_array::{ArrayRef, RecordBatch, StringArray};
+                use arrow_schema::{DataType, Field as ArrowField, Schema};
+                use std::sync::Arc;
+                let schema = Arc::new(Schema::new(vec![ArrowField::new(
+                    "ID",
+                    DataType::Utf8,
+                    true,
+                )]));
+                let values = Arc::new(StringArray::from(vec!["v", "w", "x", "y", "z"])) as ArrayRef;
+                let batch = RecordBatch::try_new(schema.clone(), vec![values]).unwrap();
+                let properties = WriterProperties::builder()
+                    .set_max_row_group_size(2)
+                    .build();
+                let mut bytes = Vec::new();
+                let mut writer =
+                    ArrowWriter::try_new(&mut bytes, schema, Some(properties)).unwrap();
+                writer.write(&batch).unwrap();
+                writer.close().unwrap();
+                let parquet = declaration(SourceProfile::Parquet, &[], Some("POSITION"));
+                inputs.push((parquet, bytes, vec![2, 2, 1]));
+            }
+            for (source, bytes, partitions) in inputs {
+                let case = source.path.clone();
+                let (whole, divided) = read(&source, &bytes, SourceInterpretation::Ordinary, 2);
+                let (whole, divided) = (whole.unwrap(), divided.unwrap());
+                assert_eq!(sizes(&divided), partitions, "{case}");
+                let positions = |table: &Snapshot<Infallible>| -> Vec<ValueRef<'static>> {
+                    (0..table.row_count())
+                        .map(|row| match table.cell(row, 1).unwrap() {
+                            ValueRef::Int(value) => ValueRef::Int(value),
+                            other => panic!("{case}: {other:?}"),
+                        })
+                        .collect()
+                };
+                let expected: Vec<ValueRef<'static>> = (1..=5).map(ValueRef::Int).collect();
+                assert_eq!(positions(&whole), expected, "the whole read of {case}");
+                assert_eq!(positions(&divided), expected, "partitions of {case}");
+            }
+        }
+
+        /// The schema a CSV header or a Parquet footer declares is the
+        /// decoded table's: declared types and the generated ordinal
+        /// included. A header that does not read, and every other profile,
+        /// gives none, so the input is read whole.
+        #[test]
+        fn the_header_or_footer_gives_the_decoded_schema() {
+            let mut decoder = Decoder::<Infallible>::default();
+            let typed = declaration(
+                SourceProfile::Csv,
+                &[("N", ColumnType::Int)],
+                Some("POSITION"),
+            );
+            assert_eq!(
+                decoder.partition_schema(
+                    &typed,
+                    b"ID,\"N\"\r\n1,\"x\ny\"\nnot read\"",
+                    SourceInterpretation::Ordinary
+                ),
+                Some(schema(&[
+                    ("ID", ColumnType::Str),
+                    ("N", ColumnType::Int),
+                    ("POSITION", ColumnType::Int)
+                ]))
+            );
+            let undeclared = declaration(SourceProfile::Csv, &[], None);
+            for (bytes, case) in [
+                (&b""[..], "no header"),
+                (b"A,A\n1,2\n", "a repeated name"),
+                (b"A,\n1,2\n", "an empty name"),
+                (b"A,\"B\n", "an unterminated quote"),
+                (b"\xef\xbb\xbfA\n1\n", "an undeclared byte-order mark"),
+                (b"A,\xff\n", "invalid text"),
+            ] {
+                assert_eq!(
+                    decoder.partition_schema(&undeclared, bytes, SourceInterpretation::Ordinary),
+                    None,
+                    "{case}"
+                );
+            }
+            for profile in [
+                SourceProfile::Xport,
+                SourceProfile::Sas7bdat,
+                SourceProfile::OdmXml,
+            ] {
+                assert_eq!(
+                    decoder.partition_schema(
+                        &declaration(profile, &[], None),
+                        b"ID\n1\n",
+                        SourceInterpretation::Ordinary
+                    ),
+                    None,
+                    "{profile:?}"
+                );
+            }
+            #[cfg(feature = "parquet")]
+            {
+                use ::parquet::arrow::ArrowWriter;
+                use arrow_array::{ArrayRef, Int64Array, RecordBatch};
+                use arrow_schema::{DataType, Field as ArrowField, Schema};
+                use std::sync::Arc;
+                let schema_of = Arc::new(Schema::new(vec![ArrowField::new(
+                    "ID",
+                    DataType::Int64,
+                    true,
+                )]));
+                let values = Arc::new(Int64Array::from(vec![1, 2])) as ArrayRef;
+                let batch = RecordBatch::try_new(schema_of.clone(), vec![values]).unwrap();
+                let mut bytes = Vec::new();
+                let mut writer = ArrowWriter::try_new(&mut bytes, schema_of, None).unwrap();
+                writer.write(&batch).unwrap();
+                writer.close().unwrap();
+                let parquet = declaration(SourceProfile::Parquet, &[], Some("POSITION"));
+                assert_eq!(
+                    decoder.partition_schema(&parquet, &bytes, SourceInterpretation::Ordinary),
+                    Some(schema(&[
+                        ("ID", ColumnType::Int),
+                        ("POSITION", ColumnType::Int)
+                    ]))
+                );
+                assert_eq!(
+                    decoder.partition_schema(&parquet, b"PAR1", SourceInterpretation::Ordinary),
+                    None
+                );
+            }
+        }
+    }
+}
