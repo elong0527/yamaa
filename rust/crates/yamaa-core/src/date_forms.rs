@@ -6,61 +6,19 @@
 //! most one of them, so at most one of its forms reads any text.
 
 use crate::diagnostic::{ConditionCode, Diagnostic};
+pub use crate::expression_table::DateForm;
+use crate::expression_table::Verb;
 use crate::json::Value;
 use crate::temporal::{Date, Precision};
-
-/// One date form a `date_text` may declare.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DateForm {
-    /// Collected date text as TIME-7 reads it, returned unchanged.
-    Iso,
-    /// A two-digit day, a month abbreviation and a four-digit year:
-    /// `04MAR2001`.
-    DdMonYyyy,
-    /// `MM/DD/YYYY`, the month first: `03/04/2001` is March 4.
-    MdySlash,
-    /// `DD/MM/YYYY`, the day first: `03/04/2001` is April 3.
-    DmySlash,
-    /// `YYYYMMDD`: `20010304`.
-    Yyyymmdd,
-    /// A month abbreviation and a four-digit year, `MAR2001`, which denotes
-    /// a month.
-    MonYyyy,
-}
 
 /// The month abbreviations, January first, each matched in any letter case.
 const MONTHS: [&[u8; 3]; 12] = [
     b"JAN", b"FEB", b"MAR", b"APR", b"MAY", b"JUN", b"JUL", b"AUG", b"SEP", b"OCT", b"NOV", b"DEC",
 ];
 
+/// What each date form reads; the forms themselves are the schema type
+/// `date_form`'s values (`crate::expression_table`).
 impl DateForm {
-    /// Every form, in the order the schema lists them.
-    pub const ALL: [Self; 6] = [
-        Self::Iso,
-        Self::DdMonYyyy,
-        Self::MdySlash,
-        Self::DmySlash,
-        Self::Yyyymmdd,
-        Self::MonYyyy,
-    ];
-
-    /// The form's name as a specification writes it.
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Iso => "iso",
-            Self::DdMonYyyy => "ddmonyyyy",
-            Self::MdySlash => "mdy_slash",
-            Self::DmySlash => "dmy_slash",
-            Self::Yyyymmdd => "yyyymmdd",
-            Self::MonYyyy => "monyyyy",
-        }
-    }
-
-    /// The form a written name names.
-    pub fn of(name: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|form| form.name() == name)
-    }
-
     /// The collected date text `text` denotes when the whole of it has this
     /// form's shape and each field lies in its range: `iso` keeps its text,
     /// `monyyyy` gives `YYYY-MM` and every other form `YYYY-MM-DD`. Nothing
@@ -183,7 +141,7 @@ impl FormsFault {
     /// The facts the refusal reports: the operation, a repeated form as
     /// `value`, and what the list must be as `expected`.
     pub fn context(self) -> Vec<(&'static str, String)> {
-        let mut context = vec![("operation", "date_text".to_owned())];
+        let mut context = vec![("operation", Verb::DateText.name().to_owned())];
         if let Self::Repeated { form, .. } = self {
             context.push(("value", form.name().to_owned()));
         }

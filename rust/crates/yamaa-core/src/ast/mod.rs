@@ -18,11 +18,13 @@ pub mod project;
 pub mod traversal;
 mod types;
 
+pub use crate::expression_table::{
+    Closed, DayRule, FlagPart, Handlers, ImputeDay, RankMethod, ScalarOp, Slot, TemporalType,
+    TextCase, TimeRule, TimeUnit, WindowFunction,
+};
 pub use expr::{
-    Aggregate, Arm, Between, Binding, CallShape, Closed, DayRule, Dictionary, Direction, Expr,
-    ExprId, ExprKind, FlagPart, Formula, Handlers, Keep, Literal, Name, Nulls, OdmRead, Operand,
-    OrderTerm, RankMethod, ScalarOp, Slot, SourceRead, TemporalType, TextCase, TimeRule, TimeUnit,
-    Window, WindowFunction,
+    Aggregate, Arm, Between, Binding, CallShape, Dictionary, Direction, Expr, ExprId, ExprKind,
+    Formula, Keep, Literal, Name, Nulls, OdmRead, Operand, OrderTerm, SourceRead, Window,
 };
 pub use path::{PathId, Paths, Segment};
 pub use project::{

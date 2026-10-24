@@ -3,6 +3,7 @@
 //! each collected field. `date_text` reads text written in one of its
 //! declared date forms into such text; no other operation here reads any
 //! other form.
+use crate::expression_table::Verb;
 use crate::json::Value as V;
 use crate::{
     date_forms::DateForms,
@@ -510,11 +511,11 @@ impl Imputation {
     }
     pub fn operation(&self) -> &'static str {
         match self.kind {
-            ImputationKind::Impute(_) => "impute",
-            ImputationKind::Precision { .. } => "precision",
-            ImputationKind::Flag { .. } => "imputation_flag",
-            ImputationKind::ToDate => "to_date",
-            ImputationKind::DateText(_) => "date_text",
+            ImputationKind::Impute(_) => Verb::Impute.name(),
+            ImputationKind::Precision { .. } => Verb::Precision.name(),
+            ImputationKind::Flag { .. } => Verb::ImputationFlag.name(),
+            ImputationKind::ToDate => Verb::ToDate.name(),
+            ImputationKind::DateText(_) => Verb::DateText.name(),
         }
     }
     fn target(&self) -> Option<TemporalType> {
@@ -717,7 +718,7 @@ impl Imputation {
                         C::ToDateIntervalText,
                         &self.path,
                         &[
-                            ("operation", Value::Str("to_date".into())),
+                            ("operation", Value::Str(Verb::ToDate.name().into())),
                             ("source", Value::Str(self.source.clone())),
                             ("value", Value::Str(text.into())),
                         ],
@@ -728,7 +729,7 @@ impl Imputation {
                         C::ToDateInvalid,
                         &self.path,
                         &[
-                            ("operation", Value::Str("to_date".into())),
+                            ("operation", Value::Str(Verb::ToDate.name().into())),
                             ("value", Value::Str(text.into())),
                         ],
                     ))
@@ -746,7 +747,7 @@ impl Imputation {
                         C::DateFormsInvalid,
                         &self.path,
                         &[
-                            ("operation", Value::Str("date_text".into())),
+                            ("operation", Value::Str(Verb::DateText.name().into())),
                             ("source", Value::Str(self.source.clone())),
                             ("value", Value::Str(text.into())),
                         ],

@@ -5,6 +5,7 @@
 //! projected by yamaa-adapters' `run_report`, which encodes the prepared cells
 //! and hands plain rows back to `assemble` here, then calls `verify` before any
 //! byte of the report is written.
+use crate::expression_table::Verb;
 use crate::{
     dataset::{VerificationSeverity, SEVERITIES},
     diagnostic::ConditionCode,
@@ -268,25 +269,25 @@ pub fn handler_condition(path: &str, handler: &str) -> Option<ConditionCode> {
     ]
     .into_iter()
     .find(|kind| kind.name() == handler)?;
-    let operation = path.rsplit('.').nth(1).unwrap_or("");
+    let operation = Verb::from_name(path.rsplit('.').nth(1).unwrap_or(""));
     Some(match kind {
         H::Absent => C::LookupUnmatchedKey,
         H::MultipleMatches => C::DatasetMultipleMatches,
-        H::NoMatch if operation == "str_extract" => C::ExtractNoMatch,
+        H::NoMatch if operation == Some(Verb::StrExtract) => C::ExtractNoMatch,
         H::NoMatch => C::LookupUnmatchedKey,
         H::Unmapped => C::MappingUnmapped,
         H::Unconvertible => C::ConversionInput,
         // A missing input gives missing by default and raises nothing; only a
         // string template fails on a missing part.
         H::Missing => match operation {
-            "str_template" => C::TemplateMissing,
+            Some(Verb::StrTemplate) => C::TemplateMissing,
             _ => return None,
         },
         H::Invalid => match operation {
-            "impute" | "precision" | "to_date" => C::ImputeInvalid,
-            "duration_value" => C::DurationInvalid,
-            "dtc" => C::DateTextInvalid,
-            "date_text" => C::DateFormsInvalid,
+            Some(Verb::Impute | Verb::Precision | Verb::ToDate) => C::ImputeInvalid,
+            Some(Verb::DurationValue) => C::DurationInvalid,
+            Some(Verb::Dtc) => C::DateTextInvalid,
+            Some(Verb::DateText) => C::DateFormsInvalid,
             _ => return None,
         },
         H::Partial | H::CrossedBounds => return None,

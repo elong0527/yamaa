@@ -3,6 +3,7 @@
 
 use super::{Constant, JoinKey, Meta, Named, Text};
 use crate::expression::{CompileError, CompiledExpression, Context};
+use crate::expression_table::{DeclaredDefault, Handlers, ScalarOp, Slot, WindowFunction};
 use crate::value::{ColumnType, Value};
 
 /// An expression: an index into its spec's expression arena.
@@ -121,6 +122,19 @@ impl Literal {
     }
 }
 
+impl From<DeclaredDefault> for Literal {
+    /// The literal a declared default writes; an empty list or mapping is
+    /// no scalar.
+    fn from(default: DeclaredDefault) -> Self {
+        match default {
+            DeclaredDefault::Text(text) => Self::Text(text.into()),
+            DeclaredDefault::Integer(text) => Self::Int(text.into()),
+            DeclaredDefault::Boolean(value) => Self::Bool(value),
+            DeclaredDefault::Empty => Self::Unsupported,
+        }
+    }
+}
+
 /// A name as written: `COLUMN`, `OWNER.FIELD`, or `OWNER.*`.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Name(pub String);
@@ -220,223 +234,11 @@ pub struct Arm {
     pub meta: Meta,
 }
 
-/// The role an operand plays in its verb.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Slot {
-    /// The verb's input (P-OP-1, P-OP-2); every entry of `greatest`,
-    /// `least` and a template's placeholders.
-    Source,
-    /// The date a source is compared with (`study_day`, `baseline_flag`).
-    Reference,
-    Start,
-    End,
-    /// `shift.days` or `shift.amount`.
-    Amount,
-    NotBefore,
-    NotAfter,
-    Fallback,
-    Year,
-    Month,
-    Day,
-    Hour,
-    Minute,
-    Second,
-}
-
+/// One operand of a verb: the field it is written in, and the expression.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Operand {
     pub slot: Slot,
     pub expr: ExprId,
-}
-
-/// The answers a scalar verb declares; each verb has its own subset.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct Handlers {
-    pub missing: Option<Constant>,
-    pub invalid: Option<Constant>,
-    pub no_match: Option<Constant>,
-    pub unmapped: Option<Constant>,
-}
-
-/// A scalar verb and its written parameters; its operands are separate.
-/// Each verb is one of the executor's operation types, named on each
-/// variant. The variant keeps parameters as written so that lowering stays
-/// total: constructing the executor's operation validates them. What each
-/// verb answers about itself, before and after its operation is built,
-/// belongs to the executor (`crate::scalar_verb`), so no analysis names a
-/// verb.
-#[derive(Clone, Debug, PartialEq)]
-pub enum ScalarOp {
-    /// `dataset::Rounding`: `round_half_away_from_zero`, digits as written.
-    Round {
-        digits: String,
-    },
-    /// `dataset::Temporal`: `diff`, with endpoint inclusion (P-ORD-2).
-    Diff {
-        kind: TemporalType,
-        unit: TimeUnit,
-        closed: Closed,
-    },
-    /// `dataset::Temporal`.
-    StudyDay,
-    /// `dataset::Temporal`.
-    ToEpochDay,
-    /// `dataset::Temporal`: the amount is the `Amount` operand.
-    Shift {
-        kind: TemporalType,
-        unit: Option<TimeUnit>,
-    },
-    /// `dataset::Temporal`.
-    DurationValue {
-        unit: TimeUnit,
-    },
-    /// `dataset::Temporal`: the inverse of `DurationValue`.
-    DurationText {
-        unit: TimeUnit,
-    },
-    /// `dataset::Temporal`: the parts are the operands, year first.
-    Dtc,
-    /// `dataset::Temporal`.
-    TimeOfDay,
-    /// `dataset::Imputation`.
-    Impute {
-        kind: TemporalType,
-        month: Option<String>,
-        day: Option<DayRule>,
-        time: Option<TimeRule>,
-    },
-    /// `dataset::Imputation`.
-    Precision {
-        kind: TemporalType,
-    },
-    /// `dataset::Imputation`.
-    ImputationFlag {
-        part: FlagPart,
-        seconds_collected: bool,
-    },
-    /// `dataset::Imputation`.
-    ToDate,
-    /// `dataset::Imputation`: `date_text`, its forms as written, in order.
-    DateText {
-        forms: Vec<crate::date_forms::DateForm>,
-    },
-    /// `text_case::StringCase`, with the `delimiters` list as written.
-    StrCase {
-        to: TextCase,
-        delimiters: Option<String>,
-    },
-    /// `text_pad::StringPad`, width as written.
-    StrPad {
-        width: String,
-    },
-    /// `text_position::StringSubstr`, start and length as written.
-    StrSubstr {
-        start: String,
-        length: Option<String>,
-    },
-    /// `text_position::StringLength`.
-    StrLength,
-    /// `text_decimal::StringDecimal`, decimals and width as written.
-    StrDecimal {
-        decimals: String,
-        width: Option<String>,
-    },
-    /// `text_extract::StringExtract`, group as written.
-    StrExtract {
-        pattern: String,
-        group: String,
-    },
-    /// `text_replace::StringReplace`.
-    StrReplace {
-        pattern: String,
-        replacement: String,
-    },
-    /// `text_template::StringTemplate`; its placeholders are the operands.
-    StrTemplate {
-        template: String,
-    },
-    Greatest,
-    Least,
-    /// `mapping_cut::MappingCut`.
-    Mapping {
-        dict: Dictionary,
-        case_sensitive: bool,
-    },
-    /// `mapping_cut::MappingCut`.
-    Cut {
-        breaks: Vec<f64>,
-        labels: Vec<String>,
-        closed: Closed,
-    },
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TemporalType {
-    Date,
-    DateTime,
-}
-
-/// Calendar units for dates and elapsed units for datetimes, as written.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TimeUnit {
-    Day,
-    Week,
-    Month,
-    Year,
-    Second,
-    Minute,
-    Hour,
-}
-
-/// Which endpoints an interval includes, as `closed` writes it (P-ORD-2).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Closed {
-    Left,
-    Right,
-    Both,
-    Neither,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum DayRule {
-    /// A day number as written.
-    Day(String),
-    First,
-    Last,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TimeRule {
-    First,
-    Last,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FlagPart {
-    Date,
-    Time,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TextCase {
-    Upper,
-    Lower,
-    Sentence,
-    Title,
-    Proper,
-}
-
-impl TextCase {
-    /// The mode as `to` writes it.
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Upper => "upper",
-            Self::Lower => "lower",
-            Self::Sentence => "sentence",
-            Self::Title => "title",
-            Self::Proper => "proper",
-        }
-    }
 }
 
 /// A mapping dictionary, inline or the path of a file holding it.
@@ -455,34 +257,10 @@ pub struct Window {
     /// For `baseline_flag`, the date and then the tie-break terms.
     pub order_by: Vec<OrderTerm>,
     pub filter: Option<ExprId>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum WindowFunction {
-    RowNumber,
-    Rank {
-        method: RankMethod,
-    },
-    /// The offset as written.
-    RowValue {
-        offset: String,
-    },
-    Locf {
-        include_current: bool,
-    },
-    /// `window_order_by` holds a written `window.order_by` that does not
-    /// start with the date ascending, which WINDOW-5 refuses; an order that
-    /// does is folded into the window's `order_by`.
-    BaselineFlag {
-        inclusive: bool,
-        window_order_by: Vec<OrderTerm>,
-    },
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RankMethod {
-    Competition,
-    Dense,
+    /// A `baseline_flag`'s written `window.order_by` that does not start
+    /// with the date ascending, which WINDOW-5 refuses; an order that does
+    /// is folded into `order_by`. Empty for every other window.
+    pub window_order_by: Vec<OrderTerm>,
 }
 
 /// A reduction over the records of one relation.
