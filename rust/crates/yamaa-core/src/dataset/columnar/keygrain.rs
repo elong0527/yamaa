@@ -23,8 +23,11 @@ pub(super) fn construct<'a: 's, 's, E>(
         .expect("the key grain has one template");
     let table = Table::Source(run.primary);
     let rows = table.row_count();
-    crate::limits::Limits::table(rows, plan.keys().len())
-        .map_err(|error| Box::new(ExecutionError::Grouping(GroupingError::Limit(error))))?;
+    // A partitioned run admits each partition's records on its own (#3792).
+    for records in run.driver_admissions() {
+        crate::limits::Limits::table(records, plan.keys().len())
+            .map_err(|error| Box::new(ExecutionError::Grouping(GroupingError::Limit(error))))?;
+    }
     // The template's first step, its filter or else its first key binding,
     // is its checkpoint (#2822).
     let filter = plan.template(template).filter;

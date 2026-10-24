@@ -1,16 +1,18 @@
 //! The scalar verbs' declaration and operand checks, one per verb kind, in
 //! the order preparation has always reported them ([`Preflight::ORDER`]):
-//! rounding, temporal verbs, imputation, `str_case`, the extremes, then text
-//! extraction and templates. Each verb names its check and makes its own
-//! findings ([`crate::scalar_verb::preflight`]).
+//! rounding, temporal verbs, imputation, `str_case`, the extremes, text
+//! extraction and templates, the positional text verbs, then fixed-decimal
+//! text. Each verb names its check and makes its own findings
+//! ([`crate::scalar_verb::preflight`]).
 //!
 //! Each check keeps its site filter ([`Preflight::sites`]). Every check
 //! visits the column defaults and the key values of aggregates and
 //! intermediates; imputation, `str_case` and the extremes also visit row
-//! overrides, and text verbs every derivation and key value. With row
-//! templates a bare name's phase is binding's to decide, so the checks that
-//! type operands leave bare names untyped there, and rounding, which types
-//! only bare names, checks nothing.
+//! overrides, and the extraction, template, positional and decimal text
+//! verbs every derivation and key value. With row templates a bare name's
+//! phase is binding's to decide, so the checks that type operands leave bare
+//! names untyped there, and rounding, which types only bare names, checks
+//! nothing.
 use super::*;
 use crate::scalar_verb::{Preflight, Sites};
 

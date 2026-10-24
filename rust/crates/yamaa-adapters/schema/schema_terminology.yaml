@@ -1,0 +1,122 @@
+version: "1.0"
+
+# See CT-1.
+
+includes:
+    - schema_shared.yaml
+
+codelist_source:
+    type: [project_path, codelist_source_class]
+    kind: structure
+    description: Inline codelist source, or the path of a codelist file holding one (CT-1).
+
+codelist_source_class:
+    - standard:
+        type: terminology_standard_class
+        required: false
+        description: Published terminology the source's codelists are drawn from; a source without one is sponsor-defined (CT-2).
+    - codelists:
+        type: "list[codelist_class]"
+        required: true
+        description: Codelists this source declares (CT-1).
+
+terminology_standard_class:
+    - name:
+        type: standard_name
+        required: true
+        description: Name of the published terminology (CT-2).
+    - publishing_set:
+        type: str
+        required: true
+        values: [ADaM, CDASH, DEFINE-XML, SDTM, SEND]
+        description: Publishing set of the published terminology (CT-2).
+    - version:
+        type: str
+        required: true
+        min_length: 1
+        description: Version of the published terminology (CT-2).
+
+codelist_class:
+    - id:
+        type: identifier
+        required: true
+        description: Name column bindings refer to this codelist by (CT-1).
+    - name:
+        type: str
+        required: true
+        min_length: 1
+        description: Name of the codelist, unique within the document.
+    - data_type:
+        type: str
+        default: text
+        values: [text, integer, float]
+        description: Type of the coded values.
+    - extensible:
+        type: bool
+        default: false
+        description: Whether the published list admits sponsor items marked extended (CT-6).
+    - alias:
+        type: str
+        required: false
+        min_length: 1
+        description: Published concept identifier of the codelist itself.
+    - format_name:
+        type: str
+        required: false
+        min_length: 1
+        description: Transport format name carried for a reader (CT-12).
+    - items:
+        type: "list[codelist_item_class]"
+        required: false
+        description: Coded values this codelist admits, the whole value set of a bound column, in the order the document presents them (CT-7).
+    - external:
+        type: external_codelist_class
+        required: false
+        description: Dictionary this codelist defers to instead of listing values.
+
+codelist_item_class:
+    - value:
+        type: literal_value
+        required: true
+        description: The coded value itself.
+    - decode:
+        type: str
+        required: false
+        min_length: 1
+        description: Text the coded value stands for.
+    - rank:
+        type: int
+        required: false
+        description: Ordering significance of this value relative to the others.
+    - alias:
+        type: str
+        required: false
+        min_length: 1
+        description: Published concept identifier of this value.
+    - extended:
+        type: bool
+        default: false
+        description: Whether the sponsor added this value to an extensible published list (CT-6).
+
+external_codelist_class:
+    - dictionary:
+        type: str
+        required: true
+        min_length: 1
+        description: Name of the external dictionary.
+    - version:
+        type: str
+        required: true
+        min_length: 1
+        description: Version of that dictionary.
+    - href:
+        type: str
+        required: false
+        min_length: 1
+        description: Location the dictionary is published at.
+
+standard_name:
+    type: str
+    values: [ADaMIG, ADaMIG-MD, BIMO, CDISC/NCI, SDTMIG, SDTMIG-AP, SDTMIG-MD,
+        SENDIG, SENDIG-AR, SENDIG-DART, SENDIG-GENETOX]
+    description: Standard name, in the exact case Define-XML 2.1 publishes.

@@ -10,7 +10,7 @@
 #[allow(dead_code)]
 mod support;
 
-// The replay of the expected diagnostics written as data (#3691), apart
+// The replay of the expected outcomes written as data (#3691, #3798), apart
 // from the families below.
 mod diagnostics;
 
@@ -46,7 +46,6 @@ mod execution_implicit_join_absence;
 mod execution_intermediate_driver_columns;
 mod execution_key_lookup_reads;
 mod execution_key_selection_semantics;
-mod execution_lookup_matched_derivations;
 mod execution_lookup_model;
 mod execution_lookup_read_contexts;
 mod execution_no_rows_record_reads;
@@ -77,6 +76,7 @@ mod resolved_artifact_wire;
 mod resolved_plan;
 mod run_scopes;
 mod scalar_declarative_rounding;
+mod scalar_declarative_text_decimal;
 mod scalar_declarative_text_replace;
 mod scalar_language;
 mod scalar_text_positions;
@@ -93,6 +93,7 @@ mod table_arrow_table;
 mod table_csv_source;
 mod table_parquet_bytes;
 mod table_parquet_source;
+mod table_partitioned_sources;
 mod table_public_batches;
 mod table_sas_allocation;
 mod table_sas_source;

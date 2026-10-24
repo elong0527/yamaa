@@ -44,6 +44,7 @@ mod schema_submission;
 mod schema_validation;
 mod schema_windows;
 mod service_build_metadata;
+mod service_partitioned_reading;
 mod service_specification_run;
 mod source_csv_precision;
 mod submission_limits;

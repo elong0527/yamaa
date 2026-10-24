@@ -13,7 +13,9 @@ use crate::json::Value as JsonValue;
 pub(in crate::specification) fn self_findings(spec: &Spec) -> Vec<PreflightFinding> {
     let mut findings = Vec::new();
     for item in &spec.intermediates {
-        if item.dataset.name != "SELF" {
+        // A pair relation refuses either SELF side under LOOKUP-27,
+        // whether or not the specification declares row templates.
+        if item.dataset.name != "SELF" || item.pairs() {
             continue;
         }
         let path = format!("{}.dataset", spec.cite(item.meta));
@@ -106,7 +108,7 @@ fn rename_only(spec: &Spec, item: &ast::Intermediate) -> bool {
 }
 
 /// The fields a pair relation writes beside `inner_join` that it admits none
-/// of (LOOKUP-27), in specification order: each counts once written,
+/// of (LOOKUP-27), in its listed order: each counts once written,
 /// whatever its value, and an absence answer even when written null.
 fn pair_prohibited(spec: &Spec, item: &ast::Intermediate) -> Vec<&'static str> {
     let answer = item
@@ -169,14 +171,14 @@ fn pair_findings(spec: &Spec, item: &ast::Intermediate, path: &str) -> Vec<Prefl
         )));
     }
     let mut refused = Vec::new();
-    if item.dataset.name == "SELF" {
-        refused.push(("SELF", render(spec, item.dataset.meta)));
-    }
     refused.extend(
         pair_prohibited(spec, item)
             .into_iter()
             .map(|field| (field, format!("{path}.{field}"))),
     );
+    if item.dataset.name == "SELF" {
+        refused.push(("SELF", render(spec, item.dataset.meta)));
+    }
     let inner_join = render(spec, right.meta);
     if right.name == "SELF" {
         refused.push(("SELF", inner_join.clone()));

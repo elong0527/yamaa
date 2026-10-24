@@ -383,9 +383,22 @@ pub(crate) fn table_observation_projected<T: TableAccess>(
     stage: &str,
     name: &str,
 ) -> Result<StoredTable, Error> {
+    table_observation(table, id, stage, name, &[table.row_count()])
+}
+
+/// The observation of a table whose records divide into `partitions` of
+/// these sizes, each admitted on its own: one partition for a table held
+/// whole, and those of an input read by partition (#3792).
+fn table_observation<T: TableAccess>(
+    table: &T,
+    id: &Identity<'_>,
+    stage: &str,
+    name: &str,
+    partitions: &[usize],
+) -> Result<StoredTable, Error> {
     let columns = table.schema().columns();
 
-    let rows = crate::report_storage::encode_rows(table)?;
+    let rows = crate::report_storage::encode_partitions(table, partitions)?;
     Ok(StoredTable {
         metadata: json!({"specification":id.specification,"stage":stage,"name":name,"columns":columns.iter().map(|c|&c.name).collect::<Vec<_>>(),"types":columns.iter().map(|c|specification_diagnostics::type_name(c.kind)).collect::<Vec<_>>(),"rows":null}),
         rows,
@@ -412,8 +425,8 @@ fn envelope<C, E>(
     envelope_sources(&attempt.sources, id, false)
 }
 
-pub(crate) fn envelope_sources<T: TableAccess>(
-    sources: &[yamaa_core::specification_run::CapturedSource<T>],
+pub(crate) fn envelope_sources<E>(
+    sources: &[crate::specification_run::CapturedSource<E>],
     id: &Identity<'_>,
     partial: bool,
 ) -> Result<StoredReport, Error> {
@@ -423,11 +436,18 @@ pub(crate) fn envelope_sources<T: TableAccess>(
             let Some(table) = source.table.as_ref() else {
                 continue;
             };
-            tables.push(table_observation_projected(
+            // An input read by partition is admitted a partition at a time.
+            let partitions = table
+                .partitions()
+                .iter()
+                .map(|part| part.row_count())
+                .collect::<Vec<_>>();
+            tables.push(table_observation(
                 table,
                 id,
                 "source",
                 &source.read.source.name,
+                &partitions,
             )?);
         }
     }

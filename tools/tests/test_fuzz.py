@@ -90,6 +90,8 @@ class FuzzTargets(unittest.TestCase):
             (["rust/crates/yamaa-adapters/src/odm_xml/archive.rs"], ["odm_xml"]),
             (["rust/crates/yamaa-core/src/odm_items.rs"], ["odm_xml"]),
             (["rust/vendor/saphyr-parser/src/lib.rs"], ["specification"]),
+            # The specification target admits the schema files the adapters embed.
+            (["rust/crates/yamaa-adapters/schema/schema_spec.yaml"], ["specification"]),
             (["rust/fuzz/fuzz_targets/csv.rs"], ["csv"]),
             (["rust/fuzz/regressions/xport/zero-variables.hex"], ["xport"]),
             (["rust/fuzz/src/lib.rs"], everything),

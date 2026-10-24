@@ -9,8 +9,9 @@
 //!
 //! A project's sections lower here (`lower`), from
 //! [`crate::front_end::v1::project`]. A section writes `standards`, a list
-//! whose first entry is the default (D16), and `transport: dataset_json` or
-//! `xpt` (P-PRJ-1); a guide status may be `Provisional` (P-STD-1).
+//! whose first entry is the default (D16), and `transport: dataset_json`,
+//! `dataset_ndjson` or `xpt` (P-PRJ-1, #3821); a guide status may be
+//! `Provisional` (P-STD-1).
 
 use super::project::Metas;
 use crate::ast::{
@@ -659,6 +660,7 @@ impl<'d> Parser<'d, '_, '_> {
                 path.field(FieldName::Transport),
                 &[
                     ("dataset_json", Transport::DatasetJson),
+                    ("dataset_ndjson", Transport::DatasetNdjson),
                     ("xpt", Transport::Xpt),
                 ],
                 None,

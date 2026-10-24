@@ -88,11 +88,11 @@ status: approved
 measured_at: 1758ad145
 design: docs/design/interface-1.0.md
 summary:
-  entries: 654
-  changes: 85
+  entries: 657
+  changes: 88
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 39
+    new, decided: 42
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7178,6 +7178,20 @@ entries:
     Additive.
   field_kind: value
   convert: {action: none}
+- id: new.project.transport=dataset_ndjson
+  file_type: project
+  path: <section>.transport
+  today: null
+  kind: new
+  proposed: dataset_ndjson
+  decision: decided (D275)
+  ref: P-PRJ-1
+  reason: 'An addition to the approved table, agreed by the owner on #3821: Dataset-JSON 1.1 in its newline-delimited
+    representation, written as <dataset>.ndjson beside define.xml, its first line the single-object form''s object
+    without rows and each later line one row (JSON-1, JSON-4, JSON-13). P-PRJ-1 spelled dataset_json so that this
+    representation could be named beside it. No 0.5 file declares it, so the converter wrote none.'
+  field_kind: value
+  convert: {action: none}
 - id: new.spec.submission.role=closed
   file_type: spec
   path: columns[].submission.role
@@ -7455,6 +7469,20 @@ entries:
     1.0.0 (D263, D264), spelled under D241. The number of Unicode scalar values in a text source, as int,
     the count a declared length bounds (TEXT-14). No 0.5 file declares it, so the converter wrote none.'
   convert: {action: none}
+- id: new.spec.expressions.str_decimal
+  file_type: spec
+  path: columns[].derivation.str_decimal
+  today: null
+  kind: new
+  proposed: 'str_decimal: {source: VARIABLE, decimals: INT, width: INT, missing: VALUE}'
+  decision: decided (D264)
+  reason: 'An addition to the approved table under D27: the owner put the batch 14 language additions in
+    1.0.0 (D263, D264), spelled under D241. A number written as text with exactly `decimals` digits after
+    the point, rounded by the one rounding as CSV display precision is, then left-padded with spaces to at
+    least `width` and never truncated, as SAS put(x, w.d) writes a value that fits; a source that is not a
+    number fails as incompatible_input_type, and decimals below zero or a width below one as
+    invalid_field_type (TEXT-15, FORMULA-16, CSV-9). No 0.5 file declares it, so the converter wrote none.'
+  convert: {action: none}
 - id: new.spec.aggregate_class.order_by
   file_type: spec
   path: columns[].derivation.aggregate.order_by
@@ -7509,6 +7537,21 @@ entries:
     orders; and the optional `invalid` handler. It returns the collected date text that the form reading
     the whole source denotes, which impute then reads (TIME-22). No 0.5 file declares it, so the converter
     wrote none.'
+  convert: {action: none}
+- id: new.spec.aggregate_class.quantile
+  file_type: spec
+  path: columns[].derivation.aggregate.quantile
+  today: null
+  kind: new
+  proposed: 'aggregate: {quantile: 0.9, expr: "QUANTILE(x)"}'
+  decision: decided (D264)
+  reason: 'An addition to the approved table under D27 (D264): the owner decided on 2026-10-24 that the
+    statistical reducers ship in 1.0.0, a quantile following R''s default, type 7 of Hyndman and Fan (#3779).
+    Optional, with no default (I5): the probability, from 0 through 1, at which QUANTILE reads its quantile;
+    required beside QUANTILE and refused beside any other expression as unpaired_fields, and a value outside
+    0 through 1 fails as invalid_field_type (FORMULA-18). No 0.5 file declares it, so the converter wrote
+    none.'
+  field_kind: value
   convert: {action: none}
 conditions:
 - today: schema_version_mismatch

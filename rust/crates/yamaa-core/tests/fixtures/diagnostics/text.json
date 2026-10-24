@@ -1,5 +1,5 @@
 {
-  "about": "The refusals of the text verbs str_pad, str_substr, str_length, str_case, str_template and str_extract (TEXT-1 to TEXT-10, TEXT-13, COLUMN-10, NAME-3), each reached by the verb's own declaration or step. The specification `spec`, which preparation reads for the declarations it refuses, reads SRC and writes one key column ID.",
+  "about": "The refusals of the text verbs str_pad, str_substr, str_length, str_decimal, str_case, str_template and str_extract (TEXT-1 to TEXT-10, TEXT-13, TEXT-15, COLUMN-10, NAME-3), each reached by the verb's own declaration or step. The specification `spec`, which preparation reads for the declarations it refuses, reads SRC and writes one key column ID.",
   "documents": {
     "spec": {
       "yamaa": "1.0",
@@ -41,6 +41,42 @@
       "operation": "str_length",
       "input": {"source": "SRC.V", "path": "columns.V.derivation.str_length", "value": 1.5},
       "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.V.derivation.str_length.source"], "context": {"source": "SRC.V", "expected": "str", "actual": "float"}}]
+    },
+    {
+      "case": "str_decimal_refuses_decimals_below_zero",
+      "operation": "str_decimal",
+      "input": {"source": "SRC.V", "path": "columns.V.derivation.str_decimal", "decimals": "-1"},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-15", "spec_paths": ["columns.V.derivation.str_decimal.decimals"], "context": {"expected": "a non-negative integer", "actual": -1}}]
+    },
+    {
+      "case": "str_decimal_refuses_a_width_below_one",
+      "operation": "str_decimal",
+      "input": {"source": "SRC.V", "path": "columns.V.derivation.str_decimal", "decimals": "2", "width": "0"},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-15", "spec_paths": ["columns.V.derivation.str_decimal.width"], "context": {"expected": "a positive integer", "actual": 0}}]
+    },
+    {
+      "case": "str_decimal_refuses_both_counts_in_field_order",
+      "operation": "str_decimal",
+      "input": {"source": "SRC.V", "path": "columns.V.derivation.str_decimal", "decimals": "-2", "width": "-8"},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-15", "spec_paths": ["columns.V.derivation.str_decimal.decimals"], "context": {"expected": "a non-negative integer", "actual": -2}}, {"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-15", "spec_paths": ["columns.V.derivation.str_decimal.width"], "context": {"expected": "a positive integer", "actual": -8}}]
+    },
+    {
+      "case": "str_decimal_refuses_a_text_source",
+      "operation": "str_decimal_apply",
+      "input": {"source": "SRC.V", "path": "columns.V.derivation.str_decimal", "decimals": "2", "value": "3.14"},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-15", "spec_paths": ["columns.V.derivation.str_decimal.source"], "context": {"source": "SRC.V", "expected": "numeric", "actual": "str"}}]
+    },
+    {
+      "case": "str_decimal_refuses_a_date_source",
+      "operation": "str_decimal_apply",
+      "input": {"source": "SRC.V", "path": "columns.V.derivation.str_decimal", "decimals": "2", "width": "8", "value": {"date": "2024-03-10"}},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-15", "spec_paths": ["columns.V.derivation.str_decimal.source"], "context": {"source": "SRC.V", "expected": "numeric", "actual": "date"}}]
+    },
+    {
+      "case": "str_decimal_refuses_a_boolean_source",
+      "operation": "str_decimal_apply",
+      "input": {"source": "SRC.V", "path": "columns.V.derivation.str_decimal", "decimals": "0", "value": true},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-15", "spec_paths": ["columns.V.derivation.str_decimal.source"], "context": {"source": "SRC.V", "expected": "numeric", "actual": "bool"}}]
     },
     {
       "case": "str_case_refuses_a_source_that_is_not_text",

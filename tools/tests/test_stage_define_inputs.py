@@ -48,6 +48,10 @@ class DefineStage(unittest.TestCase):
             manifest = json.loads((benchmarks / "manifest.json").read_bytes())
             cases = {case["name"]: case for case in manifest["cases"]}
             self.assertEqual(cases["sdtm-dm-xpt"]["expected"], ["define.xml", "dm.xpt"])
+            self.assertEqual(
+                cases["schema-transport-dataset-ndjson"]["expected"],
+                ["define.xml", "dm.ndjson"],
+            )
             self.assertEqual(cases["adam-adsl-xpt"]["standard"], "adam")
             self.assertEqual(cases["adam-adsl-xpt"]["project"], "project.yaml")
             self.assertEqual(
@@ -66,6 +70,13 @@ class DefineStage(unittest.TestCase):
                 )
                 for document in expected.glob("*.json"):
                     validator.validate(json.loads(document.read_bytes()))
+                # A newline-delimited golden is its first line with the row
+                # lines appended as `rows` (JSON-4).
+                for document in expected.glob("*.ndjson"):
+                    first, *rows = document.read_text(encoding="utf-8").splitlines()
+                    dataset = json.loads(first)
+                    dataset["rows"] = [json.loads(row) for row in rows]
+                    validator.validate(dataset)
 
 
 if __name__ == "__main__":

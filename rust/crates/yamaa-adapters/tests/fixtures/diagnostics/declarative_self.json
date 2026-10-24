@@ -1,0 +1,357 @@
+{
+  "about": "A named intermediate over SELF reads the completed rows of earlier row templates, in construction order (LOOKUP-7). In the self document P keeps each K's donor with the largest SEQ: the grouped row reads row a's 5 (V = 15), both third-template rows read the grouped row's completed 15, never the 115 of the first unfinished third-template row, and each column reads all five rows; F keeps row a (5). With the first template empty, the grouped row's read is absent (0, so V = 10) and F has no donor. In the windows document P holds each subject's latest first-template day (a: 8, b: 12), W the window holding it (late for both), and W2 the window holding that window's last day (a: 10, b: 20), late again. A first template's read of SELF fails as phase_boundary before any input is read, wherever it stands: a derivation, a case result or predicate, a first_available source, an aggregate, which keeps P.* whole, a mapping, a cut, the row filter, or another intermediate's between value, the finding naming the read and then each between value in the order followed. A grouped first template's filter reads no qualified name (ROW-6). A column derived only in column derivation is no SELF donor field (LOOKUP-11), no input may be named SELF (LOOKUP-3), and SELF needs row templates. A column aggregate over a keyed donor reads it by key beside a base that builds no row: D's values of ID 1 sum to 11. No benchmark pins these: negative-self-window-first-template and negative-self-filter-first-template state the first issue of a first-template read through one between value and in a filter, and adam-advs-windows reads the completed rows in a later template's filter. Moved from execution_declarative_self.rs, whose tests compared each issue's phase, condition, rule, spec paths and context, the saved artifact, and the handler ledger, which is the report's handler rows at SPEC_PATH, NAME and COUNT.",
+  "documents": {
+    "self": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\ninput:\n  SRC: src.csv\n  OTHER: other.csv\nkeys: [ID, SECTION]\noutput: {path: result.csv, columns: [ID, SECTION, K, SEQ, V, FINAL, FIRST]}\nintermediates:\n  - id: P\n    dataset: SELF\n    key: {K: K}\n    order_by: [SELF.SEQ]\n    keep: last\n    absent: 0\n  - id: F\n    dataset: SELF\n    key: [K]\n    filter: \"SECTION = 'first'\"\n    order_by: [SEQ]\n    keep: last\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: K, type: str, derivation: SRC.K}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: V, type: int, derivation: SRC.V}\n  - {name: FINAL, type: int, derivation: P.V}\n  - {name: FIRST, type: int, derivation: F.V}\nrows:\n  - id: collected\n    dataset: SRC\n    derivations:\n      SECTION: \"'first'\"\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.K]\n    derivations:\n      ID: \"'g'\"\n      SECTION: \"'second'\"\n      SEQ: 4\n      V: \"P.V + 10\"\n  - id: added\n    dataset: OTHER\n    derivations:\n      ID: OTHER.ID\n      SECTION: \"'third'\"\n      K: OTHER.K\n      SEQ: 9\n      V: \"P.V + 100\"\n",
+    "windows": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\ninput:\n  SRC: {path: src.csv, types: {DAY: int}}\n  WIN: {path: win.csv, types: {LO: int, HI: int}}\nkeys: [ID, SECTION, DAY]\noutput: {path: result.csv, columns: [ID, SECTION, DAY, WINDOW]}\nintermediates:\n  - id: P\n    dataset: SELF\n    key: [ID]\n    order_by: [SELF.DAY]\n    keep: last\n  - id: W\n    dataset: WIN\n    key: [ID]\n    between: {value: P.DAY, lower: LO, upper: HI}\n  - id: W2\n    dataset: WIN\n    key: [ID]\n    between: {value: W.HI, lower: LO, upper: HI}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SECTION, type: str}\n  - {name: DAY, type: int, derivation: SRC.DAY}\n  - {name: WINDOW, type: str}\nrows:\n  - id: first\n    dataset: SRC\n    derivations: {SECTION: \"'first'\", WINDOW: \"'none'\"}\n  - id: second\n    dataset: SRC\n    derivations: {SECTION: \"'second'\", WINDOW: W2.NAME}\n",
+    "donor_aggregate": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {ID: int}}\n  ALT: {path: alt.csv, types: {ID: int}}\n  D: {path: donor.csv, key: [ID], types: {ID: int, V: int}}\noutput: {path: result.csv, columns: [ID, TOTAL]}\nrows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID}\ncolumns:\n  - {name: ID, type: int}\n  - {name: TOTAL, type: int, derivation: {aggregate: 'SUM(D.V)'}}\n"
+  },
+  "cases": [
+    {
+      "case": "completed_templates_are_borrowed_and_republished_in_construction_order",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "self"}, "src.csv": "ID,K,SEQ,V\na,x,2,5\nb,x,1,9\n", "other.csv": "ID,K\nc,x\nd,x\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["rows.grouped.derivations.V.multiple_matches", "multiple_matches", 1],
+          ["rows.grouped.derivations.V.absent", "absent", 0],
+          ["rows.added.derivations.V.multiple_matches", "multiple_matches", 2],
+          ["rows.added.derivations.V.absent", "absent", 0],
+          ["columns.FINAL.derivation.source.multiple_matches", "multiple_matches", 5],
+          ["columns.FINAL.derivation.source.absent", "absent", 0],
+          ["columns.FIRST.derivation.source.multiple_matches", "multiple_matches", 5],
+          ["columns.FIRST.derivation.source.absent", "absent", 0]
+        ]
+      },
+      "saved": {"result.csv": "ID,SECTION,K,SEQ,V,FINAL,FIRST\na,first,x,2,5,115,5\nb,first,x,1,9,115,5\ng,second,x,4,15,115,5\nc,third,x,9,115,115,5\nd,third,x,9,115,115,5\n"}
+    },
+    {
+      "case": "first_template_read_preserves_full_phase_context_before_study_access",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"base": "self", "edits": [{"from": "SECTION: \"'first'\"", "to": "SECTION: P.K"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-7", "spec_paths": ["rows.collected.derivations.SECTION.source"], "context": {"identifier": "P.K", "available_phase": "completed_prior_row_template", "required_phase": "row_construction"}}
+      ]
+    },
+    {
+      "case": "column_only_donor_is_unavailable_to_later_templates",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "self", "edits": [{"from": "V: \"P.V + 10\"", "to": "V: \"P.FINAL + 10\""}]},
+          "src.csv": "ID,K,SEQ,V\na,x,2,5\n",
+          "other.csv": "ID,K\nc,x\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-11", "spec_paths": ["rows.grouped.derivations.V"], "context": {"identifier": "P.FINAL"}}
+      ]
+    },
+    {
+      "case": "empty_completed_template_uses_literal_absence_in_later_templates",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "self", "edits": [{"from": "id: collected\n    dataset: SRC", "to": "id: collected\n    dataset: SRC\n    filter: \"SRC.ID = 'absent'\""}]},
+          "src.csv": "ID,K,SEQ,V\na,x,2,5\nb,x,1,9\n",
+          "other.csv": "ID,K\nc,x\nd,x\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["rows.grouped.derivations.V.multiple_matches", "multiple_matches", 0],
+          ["rows.grouped.derivations.V.absent", "absent", 1],
+          ["rows.added.derivations.V.multiple_matches", "multiple_matches", 0],
+          ["rows.added.derivations.V.absent", "absent", 0],
+          ["columns.FINAL.derivation.source.multiple_matches", "multiple_matches", 3],
+          ["columns.FINAL.derivation.source.absent", "absent", 0],
+          ["columns.FIRST.derivation.source.multiple_matches", "multiple_matches", 0],
+          ["columns.FIRST.derivation.source.absent", "absent", 3]
+        ]
+      },
+      "saved": {"result.csv": "ID,SECTION,K,SEQ,V,FINAL,FIRST\ng,second,x,4,10,110,\nc,third,x,9,110,110,\nd,third,x,9,110,110,\n"}
+    },
+    {
+      "case": "an_input_named_self_is_refused_before_study_access",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"base": "self", "edits": [{"from": "  OTHER: other.csv", "to": "  OTHER: other.csv\n  SELF: self.csv"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "duplicate_identifier", "rule": "LOOKUP-3", "spec_paths": ["intermediates.P.dataset", "input.SELF"], "context": {"identifier": "SELF"}},
+        {"phase": "validation", "condition": "duplicate_identifier", "rule": "LOOKUP-3", "spec_paths": ["intermediates.F.dataset", "input.SELF"], "context": {"identifier": "SELF"}}
+      ]
+    },
+    {
+      "case": "self_intermediates_without_row_templates_are_refused_before_study_access",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "self",
+            "edits": [
+              {
+                "from": "rows:\n  - id: collected\n    dataset: SRC\n    derivations:\n      SECTION: \"'first'\"\n  - id: grouped\n    dataset: SRC\n    group_by: [SRC.K]\n    derivations:\n      ID: \"'g'\"\n      SECTION: \"'second'\"\n      SEQ: 4\n      V: \"P.V + 10\"\n  - id: added\n    dataset: OTHER\n    derivations:\n      ID: OTHER.ID\n      SECTION: \"'third'\"\n      K: OTHER.K\n      SEQ: 9\n      V: \"P.V + 100\"\n",
+                "to": ""
+              },
+              {"from": "domain: TEST", "to": "domain: TEST\nbase: SRC"},
+              {"from": "  - {name: SECTION, type: str}", "to": "  - {name: SECTION, type: str, derivation: \"'first'\"}"}
+            ]
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-7", "spec_paths": ["intermediates.P.dataset"], "context": {"identifier": "SELF", "intermediate": "P"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-7", "spec_paths": ["intermediates.F.dataset"], "context": {"identifier": "SELF", "intermediate": "F"}}
+      ]
+    },
+    {
+      "case": "hidden_first_template_alternative_preserves_its_authored_phase_path",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"base": "self", "edits": [{"from": "SECTION: \"'first'\"", "to": "SECTION: {case: [{when: \"SRC.ID = 'absent'\", then: P.K}, {otherwise: \"'first'\"}]}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-7", "spec_paths": ["rows.collected.derivations.SECTION.case[0].then.source"], "context": {"identifier": "P.K", "available_phase": "completed_prior_row_template", "required_phase": "row_construction"}}
+      ]
+    },
+    {
+      "case": "hidden_first_template_first_available_source_preserves_its_authored_phase_path",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"base": "self", "edits": [{"from": "SECTION: \"'first'\"", "to": "SECTION: {first_available: {sources: [P.K], missing: first}}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-7", "spec_paths": ["rows.collected.derivations.SECTION.first_available.sources[0]"], "context": {"identifier": "P.K", "available_phase": "completed_prior_row_template", "required_phase": "row_construction"}}
+      ]
+    },
+    {
+      "case": "a_first_template_aggregate_keeps_the_self_field_it_reads",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"base": "self", "edits": [{"from": "SECTION: \"'first'\"", "to": "SECTION: {aggregate: 'SUM(P.V)'}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-7", "spec_paths": ["rows.collected.derivations.SECTION.aggregate"], "context": {"identifier": "P.V", "available_phase": "completed_prior_row_template", "required_phase": "row_construction"}}
+      ]
+    },
+    {
+      "case": "a_first_template_aggregate_keeps_the_self_record_star",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"base": "self", "edits": [{"from": "SECTION: \"'first'\"", "to": "SECTION: {aggregate: 'COUNT(P.*)'}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-7", "spec_paths": ["rows.collected.derivations.SECTION.aggregate"], "context": {"identifier": "P.*", "available_phase": "completed_prior_row_template", "required_phase": "row_construction"}}
+      ]
+    },
+    {
+      "case": "a_first_template_aggregate_in_a_case_result_keeps_the_self_record_star",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"base": "self", "edits": [{"from": "SECTION: \"'first'\"", "to": "SECTION: {case: [{when: 'TRUE', then: {aggregate: 'COUNT(P.*)'}}]}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-7", "spec_paths": ["rows.collected.derivations.SECTION.case[0].then.aggregate"], "context": {"identifier": "P.*", "available_phase": "completed_prior_row_template", "required_phase": "row_construction"}}
+      ]
+    },
+    {
+      "case": "donor_qualified_global_aggregate_does_not_require_the_primary_row_driver",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "donor_aggregate"}, "src.csv": "ID\n99\n", "alt.csv": "ID\n1\n2\n", "donor.csv": "ID,V\n1,4\n1,7\n2,3\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {"handler": [["SPEC_PATH", "NAME", "COUNT"]]},
+      "saved": {"result.csv": "ID,TOTAL\n1,11\n2,3\n"}
+    },
+    {
+      "case": "a_later_template_s_mapping_reads_a_completed_self_donor_type",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "self", "edits": [{"from": "V: \"P.V + 10\"", "to": "V: {mapping: {source: P.K, dict: {x: 15}}}"}]},
+          "src.csv": "ID,K,SEQ,V\na,x,2,5\nb,x,1,9\n",
+          "other.csv": "ID,K\nc,x\nd,x\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,SECTION,K,SEQ,V,FINAL,FIRST\na,first,x,2,5,115,5\nb,first,x,1,9,115,5\ng,second,x,4,15,115,5\nc,third,x,9,115,115,5\nd,third,x,9,115,115,5\n"}
+    },
+    {
+      "case": "a_later_template_s_cut_reads_a_completed_self_donor_type",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "self", "edits": [{"from": "V: \"P.V + 10\"", "to": "V: {cut: {source: P.V, breaks: [10], labels: ['15', '25']}}"}]},
+          "src.csv": "ID,K,SEQ,V\na,x,2,5\nb,x,1,9\n",
+          "other.csv": "ID,K\nc,x\nd,x\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,SECTION,K,SEQ,V,FINAL,FIRST\na,first,x,2,5,115,5\nb,first,x,1,9,115,5\ng,second,x,4,15,115,5\nc,third,x,9,115,115,5\nd,third,x,9,115,115,5\n"}
+    },
+    {
+      "case": "a_first_template_mapping_of_a_self_field_fails_before_study_access",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"base": "self", "edits": [{"from": "SECTION: \"'first'\"", "to": "SECTION: {mapping: {source: P.K, dict: {x: first}}}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-7", "spec_paths": ["rows.collected.derivations.SECTION.mapping"], "context": {"identifier": "P.K", "available_phase": "completed_prior_row_template", "required_phase": "row_construction"}}
+      ]
+    },
+    {
+      "case": "a_first_template_cut_of_a_self_field_fails_before_study_access",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"base": "self", "edits": [{"from": "SECTION: \"'first'\"", "to": "SECTION: {cut: {source: P.V, breaks: [10], labels: [first, later]}}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-7", "spec_paths": ["rows.collected.derivations.SECTION.cut"], "context": {"identifier": "P.V", "available_phase": "completed_prior_row_template", "required_phase": "row_construction"}}
+      ]
+    },
+    {
+      "case": "a_first_template_read_through_a_between_value_fails_before_study_access",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"base": "windows", "edits": [{"from": "WINDOW: \"'none'\"", "to": "WINDOW: W.NAME"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-7", "spec_paths": ["rows.first.derivations.WINDOW.source", "intermediates.W.between.value"], "context": {"identifier": "P.DAY", "available_phase": "completed_prior_row_template", "required_phase": "row_construction"}}
+      ]
+    },
+    {
+      "case": "a_first_template_read_through_two_between_values_names_each_in_order",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"base": "windows", "edits": [{"from": "WINDOW: \"'none'\"", "to": "WINDOW: W2.NAME"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-7", "spec_paths": ["rows.first.derivations.WINDOW.source", "intermediates.W2.between.value", "intermediates.W.between.value"], "context": {"identifier": "P.DAY", "available_phase": "completed_prior_row_template", "required_phase": "row_construction"}}
+      ]
+    },
+    {
+      "case": "a_first_template_case_predicate_read_through_a_between_value_fails_before_study_access",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"base": "windows", "edits": [{"from": "WINDOW: \"'none'\"", "to": "WINDOW: {case: [{when: \"W.NAME = 'late'\", then: \"'late'\"}, {otherwise: \"'none'\"}]}"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-7", "spec_paths": ["rows.first.derivations.WINDOW.case[0].when", "intermediates.W.between.value"], "context": {"identifier": "P.DAY", "available_phase": "completed_prior_row_template", "required_phase": "row_construction"}}
+      ]
+    },
+    {
+      "case": "a_first_template_filter_read_of_self_fails_before_study_access",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"base": "windows", "edits": [{"from": "  - id: first\n    dataset: SRC\n", "to": "  - id: first\n    dataset: SRC\n    filter: \"P.DAY IS NULL\"\n"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-7", "spec_paths": ["rows.first.filter"], "context": {"identifier": "P.DAY", "available_phase": "completed_prior_row_template", "required_phase": "row_construction"}}
+      ]
+    },
+    {
+      "case": "a_first_template_filter_read_through_a_between_value_fails_before_study_access",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"base": "windows", "edits": [{"from": "  - id: first\n    dataset: SRC\n", "to": "  - id: first\n    dataset: SRC\n    filter: \"W.NAME IS NULL\"\n"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-7", "spec_paths": ["rows.first.filter", "intermediates.W.between.value"], "context": {"identifier": "P.DAY", "available_phase": "completed_prior_row_template", "required_phase": "row_construction"}}
+      ]
+    },
+    {
+      "case": "a_first_template_filter_read_through_two_between_values_names_each_in_order",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"base": "windows", "edits": [{"from": "  - id: first\n    dataset: SRC\n", "to": "  - id: first\n    dataset: SRC\n    filter: \"W2.NAME IS NULL AND DAY > 0\"\n"}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "LOOKUP-7", "spec_paths": ["rows.first.filter", "intermediates.W2.between.value", "intermediates.W.between.value"], "context": {"identifier": "P.DAY", "available_phase": "completed_prior_row_template", "required_phase": "row_construction"}}
+      ]
+    },
+    {
+      "case": "a_grouped_first_template_filter_reads_no_qualified_name",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "windows",
+            "edits": [
+              {"from": "  - id: first\n    dataset: SRC\n", "to": "  - id: first\n    dataset: SRC\n    filter: \"P.DAY IS NULL\"\n"},
+              {"from": "    filter: \"P.DAY IS NULL\"\n", "to": "    group_by: [SRC.ID, SRC.DAY]\n    filter: \"P.DAY IS NULL\"\n"}
+            ]
+          },
+          "src.csv": "ID,DAY\na,3\n",
+          "win.csv": "ID,LO,HI,NAME\na,1,5,early\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "phase_boundary", "rule": "ROW-6", "spec_paths": ["rows.first.filter"], "context": {"identifier": "P.DAY", "row": "first", "available_phase": "row_construction", "required_phase": "grouped_row_filter"}}
+      ]
+    },
+    {
+      "case": "later_templates_read_completed_rows_through_between_values",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "windows"},
+          "src.csv": "ID,DAY\na,3\na,8\nb,12\n",
+          "win.csv": "ID,LO,HI,NAME\na,1,5,early\na,6,10,late\na,11,20,after\nb,1,10,early\nb,11,20,late\nb,21,30,after\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,SECTION,DAY,WINDOW\na,first,3,none\na,first,8,none\nb,first,12,none\na,second,3,late\na,second,8,late\nb,second,12,late\n"}
+    }
+  ]
+}

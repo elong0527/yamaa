@@ -29,7 +29,7 @@ use super::document::{Document, Style, Value};
 /// by the class or operation that declares them, so YAML null restates them.
 /// A handler whose omission fails, such as `unmapped` or `unconvertible`,
 /// declares an answer when it is null.
-const HANDLERS: [(&str, &str); 12] = [
+const HANDLERS: [(&str, &str); 13] = [
     ("source_binding_class", "absent"),
     ("intermediate_class", "absent"),
     ("first_available", "missing"),
@@ -42,6 +42,7 @@ const HANDLERS: [(&str, &str); 12] = [
     ("str_case", "missing"),
     ("str_substr", "missing"),
     ("str_length", "missing"),
+    ("str_decimal", "missing"),
 ];
 
 /// The language version and file type a 1.x document declares, when the

@@ -1,0 +1,37 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  SOURCE: {path: input/adsl.csv, types: {WEIGHTBL: float}}
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, WEIGHTBL, WGTP90]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: SOURCE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: SOURCE.USUBJID
+
+  - name: WEIGHTBL
+    type: float
+    label: Baseline Weight (kg)
+    derivation: SOURCE.WEIGHTBL
+
+  # A quantile with no stated proportion: the run is rejected before any
+  # data is read.
+  - name: WGTP90
+    type: float
+    label: Baseline Weight 90th Percentile (kg)
+    derivation:
+      aggregate:
+        group_by: [STUDYID]
+        expr: "QUANTILE(WEIGHTBL)"

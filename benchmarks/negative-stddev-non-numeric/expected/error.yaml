@@ -1,0 +1,11 @@
+phase: validation
+condition: incompatible_input_type
+spec_paths:
+  - columns.AVALSD.derivation.aggregate.expr
+rule: FORMULA-23
+context:
+  expr: STDDEV(AVALC)
+  reducer: STDDEV
+  source: AVALC
+  expected: numeric
+  actual: str

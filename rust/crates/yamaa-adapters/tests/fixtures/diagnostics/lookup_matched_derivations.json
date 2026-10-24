@@ -1,0 +1,115 @@
+{
+  "about": "Intermediate derivations that read the current record augment only the donor records whose stored keys match a row's match values (LOOKUP-15). The intermediate NEAREST keeps each subject's LAB record with the smallest shifted day, DAY + SRC.REF. Subject 9's day in lab is the largest integer, so adding any positive reference day to it overflows. A record no row matches is never augmented, so its derivation cannot fail: subject 1 picks SEQ 1 (2 + 5 = 7 before 6 + 5 = 11), subject 2 has no record, and no row matches subject 9's. A matched record that fails still stops the run. A key or between bound on a derived field, or a window among the derivations, reads every record's derived values, so every record is augmented and subject 9's overflows. No benchmark's run fails while evaluating a lookup's derivation, so none pins which records it augments. Moved from execution_lookup_matched_derivations.rs, whose tests compared the saved artifact, or each issue's phase, condition and spec paths and that the run saved nothing.",
+  "documents": {
+    "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput:\n  SRC: {path: src.csv, types: {ID: int, REF: int}}\n  LAB: {path: lab.csv, types: {ID: int, SEQ: int, DAY: int}}\noutput: {path: out.csv, columns: [ID, NEAR]}\nintermediates:\n  - id: NEAREST\n    dataset: LAB\n    key: [ID]\n    derivations:\n      SHIFTED: \"DAY + SRC.REF\"\n    order_by: [LAB.SHIFTED]\n    keep: first\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: NEAR, type: int, derivation: NEAREST.SEQ}\n",
+    "lab": "ID,SEQ,DAY\n1,1,2\n1,2,6\n9,1,9223372036854775807\n"
+  },
+  "cases": [
+    {
+      "case": "a_record_no_row_matches_is_never_augmented",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "spec"}, "src.csv": "ID,REF\n1,5\n2,7\n", "lab.csv": {"base": "lab"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [["ID", "NEAR"], [1, 1], [2, null]],
+      "report": {
+        "run": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "output", null, null, null, null, null, "succeeded", null, 2, null, null, "{}"]
+        ],
+        "check": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"]
+        ]
+      },
+      "saved": {"out.csv": "ID,NEAR\n1,1\n2,\n"}
+    },
+    {
+      "case": "a_matched_record_that_fails_still_stops_the_run",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "spec"}, "src.csv": "ID,REF\n1,5\n2,7\n9,1\n", "lab.csv": {"base": "lab"}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths"],
+      "issues": [{"phase": "derivation", "condition": "integer_overflow", "spec_paths": ["intermediates.NEAREST.derivations.SHIFTED"]}],
+      "report": {
+        "run": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "output", null, null, null, null, null, "failed", "integer_overflow", null, null, null, "{}"]
+        ]
+      },
+      "saved": {}
+    },
+    {
+      "case": "a_derived_key_augments_every_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "    key: [ID]\n    derivations:\n      SHIFTED: \"DAY + SRC.REF\"\n",
+                "to": "    key: {KEYN: ID}\n    derivations:\n      KEYN: \"ID + 0\"\n      SHIFTED: \"DAY + SRC.REF\"\n"
+              }
+            ]
+          },
+          "src.csv": "ID,REF\n1,5\n2,7\n",
+          "lab.csv": {"base": "lab"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths"],
+      "issues": [{"phase": "derivation", "condition": "integer_overflow", "spec_paths": ["intermediates.NEAREST.derivations.SHIFTED"]}],
+      "saved": {}
+    },
+    {
+      "case": "a_derived_bound_augments_every_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "    key: [ID]\n    derivations:\n      SHIFTED: \"DAY + SRC.REF\"\n",
+                "to": "    key: [ID]\n    between: {value: SRC.REF, lower: LOW}\n    derivations:\n      LOW: \"SEQ - 10\"\n      SHIFTED: \"DAY + SRC.REF\"\n"
+              }
+            ]
+          },
+          "src.csv": "ID,REF\n1,5\n2,7\n",
+          "lab.csv": {"base": "lab"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths"],
+      "issues": [{"phase": "derivation", "condition": "integer_overflow", "spec_paths": ["intermediates.NEAREST.derivations.SHIFTED"]}],
+      "saved": {}
+    },
+    {
+      "case": "a_window_among_the_derivations_augments_every_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "    key: [ID]\n    derivations:\n      SHIFTED: \"DAY + SRC.REF\"\n",
+                "to": "    key: [ID]\n    derivations:\n      SHIFTED: \"DAY + SRC.REF\"\n      ORDINAL: {row_number: {window: {group_by: [LAB.ID], order_by: [LAB.DAY]}}}\n"
+              }
+            ]
+          },
+          "src.csv": "ID,REF\n1,5\n2,7\n",
+          "lab.csv": {"base": "lab"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths"],
+      "issues": [{"phase": "derivation", "condition": "integer_overflow", "spec_paths": ["intermediates.NEAREST.derivations.SHIFTED"]}],
+      "saved": {}
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+
+input:
+  DM: input/dm.csv
+  PP:
+    path: input/pp.csv
+    types:
+      PPSEQ: int
+      PPSTRESN: float
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, MRGM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  # The geometric mean takes the logarithm of each ratio. A ratio of zero has
+  # none, so the run fails while values are computed.
+  - name: MRGM
+    type: float
+    label: Geometric Mean Metabolite Ratio Cmax
+    derivation:
+      aggregate:
+        key: [STUDYID, USUBJID]
+        filter: "PP.PPTESTCD = 'MRCMAX'"
+        expr: "GEOMEAN(PP.PPSTRESN)"

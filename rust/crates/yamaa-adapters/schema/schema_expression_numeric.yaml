@@ -1,0 +1,27 @@
+version: "1.0"
+
+expressions:
+    round_half_away_from_zero: # See FORMULA-16.
+        - source:
+            type: variable
+            required: true
+            description: Numeric variable to round (FORMULA-16).
+        - digits:
+            type: int
+            required: true
+            description: Integer decimal places; negative rounds left of the decimal point (FORMULA-16).
+    str_decimal: # See TEXT-15.
+        - source:
+            type: variable
+            required: true
+            description: Numeric variable written as text (TEXT-15).
+        - decimals:
+            type: int
+            required: true
+            description: Digits written after the decimal point, zero or more, to which the value is rounded (TEXT-15).
+        - width:
+            type: int
+            description: Minimum length of the text, reached with leading spaces; longer text is never truncated (TEXT-15).
+        - missing:
+            type: substitute_value
+            description: Value returned when the source is missing; without it, a missing source gives missing (TEXT-15).

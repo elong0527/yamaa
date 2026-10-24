@@ -336,6 +336,11 @@ pub enum ScalarOp {
     },
     /// `text_position::StringLength`.
     StrLength,
+    /// `text_decimal::StringDecimal`, decimals and width as written.
+    StrDecimal {
+        decimals: String,
+        width: Option<String>,
+    },
     /// `text_extract::StringExtract`, group as written.
     StrExtract {
         pattern: String,
@@ -499,9 +504,12 @@ pub struct Aggregate {
     /// Whether `STR_JOIN` and `COUNT(x)` take each value once; `None` when
     /// omitted (FORMULA-18).
     pub distinct: Option<bool>,
+    /// The probability at which `QUANTILE` reads its quantile, as written;
+    /// `None` when omitted or null (FORMULA-18).
+    pub quantile: Option<super::Constant>,
     pub expr: ExprId,
     /// Of the bindings and the reducer fields, the ones written:
-    /// `derivations`, `order_by`, `separator` and `distinct`.
+    /// `derivations`, `order_by`, `separator`, `distinct` and `quantile`.
     pub written: super::Written,
 }
 

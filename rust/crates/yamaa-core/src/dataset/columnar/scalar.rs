@@ -528,6 +528,40 @@ pub(super) fn pad<E>(
         .map_err(|_| Box::new(ExecutionError::Allocation))
 }
 
+/// Fixed-decimal text: a missing source is counted under `missing`, and
+/// text that cannot be held fails the run as padding's does.
+pub(super) fn str_decimal<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    expr: ExprId,
+    rows: &[usize],
+) -> Result<Values, Fail<E>> {
+    use crate::text_decimal::{Error, Step};
+    let plan = run.plan;
+    let Op::StrDecimal(operation) = &plan.expr(expr).op else {
+        unreachable!("a decimal-text node holds its operation")
+    };
+    let source = run.eval(cx, value_operand(run, expr, 0), rows, false)?;
+    let mut values = Values::missing(0);
+    for (index, &row) in rows.iter().enumerate() {
+        match operation.apply(source.get(index)) {
+            Ok(Step::Value(value)) => values.push_value(value),
+            Ok(Step::Recovered) => {
+                run.fire_node(expr, HandlerKind::Missing, || {
+                    format!("{}.missing", operation.path())
+                })?;
+                values.push_value(operation.missing_substitute());
+            }
+            // A source of another type fails, a validation finding without keys.
+            Err(Error::Diagnostic(diagnostic)) => {
+                return Err(run.retained_diagnostic(cx, diagnostic, false, row))
+            }
+            Err(Error::Allocation) => return Err(Box::new(ExecutionError::Allocation)),
+        }
+    }
+    Ok(values)
+}
+
 /// Imputation reads its bounds and fallback only for the rows whose source
 /// needs them, and counts default substitutions and crossed bounds like
 /// declared handlers.

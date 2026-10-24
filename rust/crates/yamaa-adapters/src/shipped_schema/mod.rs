@@ -3,6 +3,12 @@
 //! (`yaml/schema_*.yaml`), which a document's header selects (SCHEMA-2), and
 //! that type's JSON Schema ([`json_schema`]).
 //!
+//! It embeds the files themselves: the crate's `schema/` directory holds a
+//! byte-identical copy of each, under its path in `yaml/`, which
+//! `tools/packaging/generate_shipped_schema.py` writes and
+//! `make check-repository` compares, and the generated `data.rs` names each
+//! copy with `include_str!`.
+//!
 //! Each closure is fixed when the package is built, so the process admits it
 //! once, on first use, and every later check, compilation and run shares that
 //! immutable admitted closure.

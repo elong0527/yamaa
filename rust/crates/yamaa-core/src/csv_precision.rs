@@ -14,7 +14,9 @@ pub struct Limit;
 /// Every finite binary64 has at most 1,074 exact fractional decimal places;
 /// larger declarations append zeros, bounding integer intermediates
 /// independently of the declared width. Charge width before constructing powers
-/// and charge the complete spelling before allocating the final text.
+/// and charge the complete spelling before allocating the final text, which is
+/// reserved fallibly: a spelling within `maximum` that the platform cannot
+/// allocate is the same refusal as one beyond it.
 pub fn fixed_point(value: FiniteFloat, digits: usize, maximum: usize) -> Result<String, Limit> {
     let minimum = if digits == 0 {
         1
@@ -35,7 +37,8 @@ pub fn fixed_point(value: FiniteFloat, digits: usize, maximum: usize) -> Result<
         .and_then(|n| n.checked_add(if digits == 0 { 0 } else { digits + 1 }))
         .filter(|&n| n <= maximum)
         .ok_or(Limit)?;
-    let mut result = String::with_capacity(length);
+    let mut result = String::new();
+    result.try_reserve_exact(length).map_err(|_| Limit)?;
     if negative {
         result.push('-');
     }

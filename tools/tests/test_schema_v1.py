@@ -246,6 +246,11 @@ EXPECTED = {
     "new.project.standards.status=Provisional": [
         Values("implementation_guide_class", "status", ("Provisional",))
     ],
+    # #3821: a section's transport writes Dataset-JSON 1.1 in its
+    # newline-delimited representation (JSON-1, JSON-4).
+    "new.project.transport=dataset_ndjson": [
+        Values("submission_section_class", "transport", ("dataset_ndjson",))
+    ],
     # P-VOC-1: roles and a terminology standard's name close to the lists the
     # CDISC vocabulary file holds.
     "new.spec.submission.role=closed": [
@@ -355,6 +360,15 @@ EXPECTED = {
         Field("expressions.str_length", "source", "variable", True, kind="name"),
         Field("expressions.str_length", "missing", "substitute_value", kind="value"),
     ],
+    # D264: a number written as fixed-decimal text, as SAS put(x, w.d)
+    # writes a value that fits (TEXT-15).
+    "new.spec.expressions.str_decimal": [
+        Keyword("expressions", "str_decimal", "[]"),
+        Field("expressions.str_decimal", "source", "variable", True, kind="name"),
+        Field("expressions.str_decimal", "decimals", "int", True, kind="value"),
+        Field("expressions.str_decimal", "width", "int", kind="value"),
+        Field("expressions.str_decimal", "missing", "substitute_value", kind="value"),
+    ],
     # #3774: the fields STR_JOIN and COUNT(x) read besides their argument
     # (FORMULA-18).
     "new.spec.aggregate_class.order_by": [
@@ -384,6 +398,10 @@ EXPECTED = {
             ),
         ),
         Field("expressions.date_text", "invalid", "substitute_value", kind="value"),
+    ],
+    # #3779: the probability QUANTILE reads (FORMULA-18).
+    "new.spec.aggregate_class.quantile": [
+        Field("aggregate_class", "quantile", "float")
     ],
     # A lint suppression comment and a profile chosen by the path's
     # extension: neither is a schema field.

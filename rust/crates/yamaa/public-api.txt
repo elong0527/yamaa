@@ -296,6 +296,8 @@ yamaa::engine::EngineOptions::with_partitions: pub fn with_partitions(mut self, 
 yamaa::engine::EngineOptions::with_resolver: pub fn with_resolver(mut self, resolver: Arc<dyn ResourceResolver>) -> Self
 yamaa::engine::Partitions: impl Partitions
 yamaa::engine::Partitions: pub struct Partitions [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::engine::Partitions::by_keys: pub fn by_keys(keys: NonZeroUsize, rows: NonZeroUsize) -> Self
+yamaa::engine::Partitions::leading_keys: pub leading_keys: Option<NonZeroUsize>
 yamaa::engine::Partitions::new: pub fn new(rows: NonZeroUsize) -> Self
 yamaa::engine::Partitions::rows: pub rows: NonZeroUsize
 yamaa::engine::Partitions::whole_table_fallback: pub whole_table_fallback: bool

@@ -762,7 +762,27 @@ partitioned execution and whole-table execution, and identifies the seams where
 partition boundaries sit. It changes no code behavior. The partitioned executor
 built on it (#3697, `ResolvedPlan::execute_partitioned` and the facade's
 `EngineOptions::with_partitions`), with the end states of a cancelled or failed
-run and save, is described in `docs/partition-execution.md`.
+run and save, is described in `docs/partition-execution.md`. It has two
+strategies:
+
+- `Partitions::new(rows)` divides the driver input into consecutive partitions
+  of `rows` records. It refuses a run with a step this inventory marks
+  `global`, one that reads a window, an aggregate, a named or joined relation,
+  `SELF` rows or a project function, as `engine_rejected` with
+  `code: partition_global` at that step's spec path.
+- `Partitions::by_keys(keys, rows)` (#3763) divides it into key-bounded
+  partitions, which never split a group of the specification's leading `keys`
+  declared keys and hold as many whole groups as fit in `rows` records. A
+  window or an aggregate whose grouping includes every one of those keys,
+  each copied unchanged from a driver field, and whose rows all come from
+  templates that read the driver input, reads only rows of its own
+  partition, so it does not refuse; every other `global` step refuses as it
+  does under consecutive partitions. An input whose records are not grouped
+  by those keys runs as one partition, and a specification that declares no
+  key runs over consecutive partitions.
+
+Under either strategy, `Partitions::with_whole_table_fallback` runs a step
+that would refuse over the whole input instead.
 
 ### Terminology: key groups vs. data partitions
 

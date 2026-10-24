@@ -199,6 +199,12 @@ fn side(
     let Some(item) = cx.result.get(index).and_then(Option::as_ref) else {
         return Ok(None);
     };
+    // A rejected augmentation keeps only its declared schema. Its own
+    // findings explain the failure; its derived fields have no bound type
+    // for a pair relation to check (LOOKUP-16, LOOKUP-27).
+    if item.pending_schema.is_some() {
+        return Ok(None);
+    }
     // Neither the side's filter nor its derivations read a current row: its
     // records are its own (ROW-2).
     let mut prohibited = Vec::new();

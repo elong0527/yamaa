@@ -1,15 +1,23 @@
-//! The readers of the operations the diagnostic cases name (#3691). Each
-//! reads a case's `input` as the arguments of one adapters entry point,
-//! refusing a member it does not take, calls it and returns every issue it
-//! reports, in order, or none when it accepts the input. A reader asserts
-//! nothing about what it returns: the replay compares that with the case's
-//! authored rows. A reader may refuse an input whose setup fails, such as a
-//! producer named under `built` that does not build.
+//! The readers of the operations the cases name (#3691, #3798). Each reads a
+//! case's `input` as the arguments of one adapters entry point, refusing a
+//! member it does not take, calls it and returns every issue it reports, in
+//! order, or none when it accepts the input, with the output table and run
+//! report it built and the files it saved. A reader asserts nothing about
+//! what it returns: the replay compares that with the case's authored rows.
+//! A reader may refuse an input whose setup fails, such as a producer named
+//! under `built` that does not build.
 //!
 //! Each module owns its readers and the fixture files its cases are in.
-use crate::support::diagnostic::replay::{field, items, object, text};
+use crate::support::diagnostic::{
+    form::{self, Files, Outcome},
+    replay::{field, items, object, text},
+};
 use crate::support::Scratch;
-use yamaa_core::{diagnostic::Diagnostic, json::Value, project_function::Language};
+use yamaa_adapters::public_table::{PublicColumn, PublicTable};
+use yamaa_core::{
+    diagnostic::Diagnostic, json::Value, project_function::Language, table::ValueRef,
+    temporal::Precision, value::FiniteFloat,
+};
 
 /// A fixture file of `tests/fixtures/diagnostics/`, read at compile time, so
 /// renaming or deleting it fails the build rather than dropping its cases.
@@ -35,6 +43,8 @@ mod project_scope;
 pub struct Reported {
     pub issues: Vec<Diagnostic>,
     pub study: Option<Scratch>,
+    /// The tables the operation built and the files it saved.
+    pub outcome: Outcome,
 }
 
 type Reader = fn(&str, &Value) -> Option<Reported>;
@@ -76,6 +86,55 @@ fn study(input: &Value) -> Scratch {
 /// slashes.
 fn path(study: &Scratch, name: &str) -> String {
     study.join(name).to_str().unwrap().replace('\\', "/")
+}
+
+/// Every file of `study` and its bytes, by its path there with forward
+/// slashes.
+fn contents(study: &Scratch) -> Files {
+    fn walk(root: &std::path::Path, directory: &std::path::Path, files: &mut Files) {
+        for entry in std::fs::read_dir(directory).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                walk(root, &path, files);
+            } else {
+                let name = path.strip_prefix(root).unwrap().to_str().unwrap();
+                files.insert(name.replace('\\', "/"), std::fs::read(&path).unwrap());
+            }
+        }
+    }
+    let mut files = Files::new();
+    walk(study, study, &mut files);
+    files
+}
+
+/// The rows of a public table as a case writes them.
+fn rows(table: &PublicTable) -> Vec<Value> {
+    form::rows(table.names(), table.rows(), |row, column| {
+        cell(table.column(column), row)
+    })
+}
+
+/// The value at `row` of `column`, a date read from its days and a datetime
+/// from its seconds.
+fn cell(column: &PublicColumn, row: usize) -> ValueRef<'_> {
+    use yamaa_adapters::epoch::{date_from_days, datetime_from_seconds};
+    let missing = ValueRef::Missing;
+    match column {
+        PublicColumn::Str(values) => values.get(row).map_or(missing, ValueRef::Str),
+        PublicColumn::Int(values) => values.get(row).map_or(missing, ValueRef::Int),
+        PublicColumn::Float(values) => values.get(row).map_or(missing, |value| {
+            ValueRef::Float(FiniteFloat::new(value).expect("a finite float"))
+        }),
+        PublicColumn::Date(values) => values.get(row).map_or(missing, |days| {
+            ValueRef::Date(date_from_days(days.into(), Precision::Day).expect("a date"))
+        }),
+        PublicColumn::DateTime(values) => values.get(row).map_or(missing, |seconds| {
+            ValueRef::DateTime(
+                datetime_from_seconds(seconds, Precision::Second).expect("a datetime"),
+            )
+        }),
+        PublicColumn::List(_) => panic!("an output or report column holds no list"),
+    }
 }
 
 /// The host language the input's `host` names, `python` unless written.

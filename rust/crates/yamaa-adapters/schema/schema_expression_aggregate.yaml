@@ -1,0 +1,55 @@
+version: "1.0"
+
+# See FORMULA-17.
+
+expressions:
+# See FORMULA-17.
+    aggregate:
+        type: [aggregate_expression, aggregate_class]
+
+aggregate_class:
+    - fields_from: match_key_range_fields
+    - fields_from: match_filter_fields
+    - group_by:
+        type: "list[variable]"
+        description: Grouping keys of an ordinary right-side or output-row reduction; omit when the enclosing grouped row owns the keys (LOOKUP-19).
+    - derivations:
+        type: "dict[identifier, derive_binding_class]"
+        required: false
+        description: Per-record intermediate variables, by the name the reducer expression reads, evaluated in order before reduction (LOOKUP-22).
+    - order_by:
+        type: "list[order_by_term]"
+        required: false
+        description: Terms ordering the records whose values STR_JOIN joins, over the relation's fields and the derivations' variables, ties keeping stored order; required beside STR_JOIN and refused beside any other expression (FORMULA-18, LOOKUP-10).
+    - separator:
+        type: str
+        required: false
+        description: Text STR_JOIN writes between two joined values, the empty string included; required beside STR_JOIN and refused beside any other expression (FORMULA-18).
+    - distinct:
+        type: bool
+        required: false
+        description: When true, STR_JOIN writes each text once and COUNT(x) counts each value once; omitted, every value counts. Admitted only beside a bare STR_JOIN(x) or COUNT(x) (FORMULA-18).
+    - quantile:
+        type: float
+        required: false
+        description: Probability from 0 through 1 at which QUANTILE reads its quantile, R's default type 7; required beside QUANTILE and refused beside any other expression (FORMULA-18).
+    - expr:
+        type: aggregate_expression
+        required: true
+        description: Closed reducer expression over the records of one relation (FORMULA-17).
+
+derive_binding_class:
+    - type:
+        type: column_type
+        required: true
+        description: Declared type the per-record value converts to (LOOKUP-22).
+    - derivation:
+        type: derivation
+        required: true
+        description: Per-record derivation over the relation's fields and earlier variables (LOOKUP-22).
+
+aggregate_expression:
+    type: str
+    min_length: 1
+    kind: expression
+    description: Expression in the closed expression grammar that admits the reducers (FORMULA-27).

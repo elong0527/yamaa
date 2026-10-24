@@ -21,6 +21,13 @@ pub(super) enum Error {
 /// keeps day and a datetime second precision, and text keeps the empty
 /// string apart from a missing value.
 pub(super) fn convert(decoded: Decoded) -> Result<ColumnTable, Error> {
+    let rows = admit(&decoded)?;
+    build(decoded, rows)
+}
+
+/// Admit the decoded table's geometry within the fixed limits and each text
+/// column's offsets, before any value converts: its records.
+pub(super) fn admit(decoded: &Decoded) -> Result<usize, Error> {
     let columns = decoded.schema.columns().len();
     let mut rows = 0usize;
     for batch in &decoded.batches {
@@ -43,6 +50,11 @@ pub(super) fn convert(decoded: Decoded) -> Result<ColumnTable, Error> {
             }
         }
     }
+    Ok(rows)
+}
+
+/// Convert an admitted decoded table of `rows` records.
+pub(super) fn build(decoded: Decoded, rows: usize) -> Result<ColumnTable, Error> {
     let mut values = decoded
         .schema
         .columns()

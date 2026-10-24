@@ -13,9 +13,9 @@ context. It then runs every
 case through the installed engine, the development package `make setup`
 builds, as a specification that reads the case's table and derives one
 column from its text, an aggregate case with the reducer fields it gives
-(`order_by`, `separator`, `distinct`), and compares each value exactly, or the
-issue's phase, condition and rule. Nothing here decides an outcome: every
-expectation stays in the document.
+(`order_by`, `separator`, `distinct`, `quantile`), and compares each value
+exactly, or the issue's phase, condition and rule. Nothing here decides an
+outcome: every expectation stays in the document.
 """
 
 import argparse
@@ -53,6 +53,7 @@ CASE_KEYS = {
     "order_by",
     "separator",
     "distinct",
+    "quantile",
     "type",
     "values",
     "phase",
@@ -61,7 +62,7 @@ CASE_KEYS = {
 }
 # The fields of aggregate.expr's aggregate that a reducer reads besides its
 # argument (FORMULA-18), which an aggregate case may give.
-REDUCER_FIELDS = ("order_by", "separator", "distinct")
+REDUCER_FIELDS = ("order_by", "separator", "distinct", "quantile")
 ORDER_TERM_KEYS = {"variable", "direction", "nulls"}
 ISSUE_KEYS = ("phase", "condition", "rule")
 CONTEXTS = ("predicate", "derivation", "aggregate")
@@ -357,8 +358,9 @@ def table_errors(case, label):
 
 def field_errors(case, label):
     """Errors in the reducer fields an aggregate case gives: order terms over
-    the case's columns as R.<column>, a text separator and a Boolean
-    distinct (VALUE-22, FORMULA-18)."""
+    the case's columns as R.<column>, a text separator, a Boolean distinct
+    and a numeric quantile, which may lie outside 0 through 1 for a case that
+    shows its refusal (VALUE-22, FORMULA-18)."""
     given = [key for key in REDUCER_FIELDS if key in case]
     if not given:
         return []
@@ -384,6 +386,9 @@ def field_errors(case, label):
         errors.append(f"{label}: separator must be text")
     if "distinct" in case and not isinstance(case["distinct"], bool):
         errors.append(f"{label}: distinct must be true or false")
+    quantile = case.get("quantile", 0.5)
+    if type(quantile) not in (int, float) or not math.isfinite(quantile):
+        errors.append(f"{label}: quantile must be a number")
     return errors
 
 

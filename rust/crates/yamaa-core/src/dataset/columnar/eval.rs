@@ -49,6 +49,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             ExprKind::StrPad => super::scalar::str_pad(self, cx, expr, rows),
             ExprKind::StrSubstr => super::scalar::str_substr(self, cx, expr, rows),
             ExprKind::StrLength => super::scalar::str_length(self, cx, expr, rows),
+            ExprKind::StrDecimal => super::scalar::str_decimal(self, cx, expr, rows),
             ExprKind::Imputation => super::scalar::imputation(self, cx, expr, rows),
             ExprKind::Temporal => super::scalar::temporal(self, cx, expr, rows),
             ExprKind::Literal => match &node.op {

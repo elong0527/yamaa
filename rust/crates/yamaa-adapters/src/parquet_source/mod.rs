@@ -198,15 +198,53 @@ pub fn signature(content: &[u8]) -> Result<Vec<ColumnSignature>, Error> {
     Ok(reader::signature(content)?)
 }
 
+/// Decode held bytes by partition (#3792), with `odm` as [`parse_odm`] does:
+/// the row groups in partitions of at most `rows` records, a row group of
+/// more records a partition of its own, each partition's table in order.
+/// Every finding [`parse`] reports is reported in the same order, a value's
+/// row being its row in the whole file, except that each partition, not the
+/// whole file, is admitted within the row and cell limits.
+#[cfg(feature = "parquet")]
+pub fn parse_partitions(
+    content: &[u8],
+    odm: bool,
+    rows: std::num::NonZeroUsize,
+) -> Result<Vec<ColumnTable>, Error> {
+    let decoded = reader::read_partitions(content, odm, Some(rows))?;
+    // Every partition is admitted before any value converts, as the whole
+    // read admits its one table first.
+    let rows = decoded
+        .iter()
+        .map(|decoded| table::admit(decoded).map_err(table_error))
+        .collect::<Result<Vec<_>, _>>()?;
+    decoded
+        .into_iter()
+        .zip(rows)
+        .map(|(decoded, rows)| table::build(decoded, rows).map_err(table_error))
+        .collect()
+}
+
+/// The table schema held bytes decode to, with `odm` as [`parse_odm`] does,
+/// read from the footer alone (#3792); `None` when the footer does not read.
+#[cfg(feature = "parquet")]
+pub fn schema(content: &[u8], odm: bool) -> Option<yamaa_core::table::TableSchema> {
+    reader::table_schema(content, odm).ok()
+}
+
 #[cfg(feature = "parquet")]
 fn convert(decoded: reader::Decoded) -> Result<ColumnTable, Error> {
-    table::convert(decoded).map_err(|error| match error {
+    table::convert(decoded).map_err(table_error)
+}
+
+#[cfg(feature = "parquet")]
+fn table_error(error: table::Error) -> Error {
+    match error {
         table::Error::Invalid => Error::Malformed,
         table::Error::Representation => Error::Representation {
             representation: UTF8_OFFSETS,
         },
         table::Error::Table(error) => Error::Table(error),
-    })
+    }
 }
 
 #[cfg(all(test, feature = "parquet"))]
@@ -318,4 +356,16 @@ pub fn parse_odm(_: &[u8]) -> Result<ColumnTable, Error> {
 #[cfg(not(feature = "parquet"))]
 pub fn signature(_: &[u8]) -> Result<Vec<ColumnSignature>, Error> {
     Err(Error::ReaderUnavailable)
+}
+#[cfg(not(feature = "parquet"))]
+pub fn parse_partitions(
+    _: &[u8],
+    _: bool,
+    _: std::num::NonZeroUsize,
+) -> Result<Vec<ColumnTable>, Error> {
+    Err(Error::ReaderUnavailable)
+}
+#[cfg(not(feature = "parquet"))]
+pub fn schema(_: &[u8], _: bool) -> Option<yamaa_core::table::TableSchema> {
+    None
 }

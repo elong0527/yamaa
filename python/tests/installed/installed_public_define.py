@@ -129,6 +129,22 @@ class PublicDefine(unittest.TestCase):
         ).validate(data)
         return data
 
+    def validate_ndjson(self, content):
+        # JSON-4, JSON-13: the first line, with the row lines appended as its
+        # `rows`, is the single-object form, valid against the same schema.
+        text = content.decode("utf-8")
+        self.assertTrue(text.endswith("\n"))
+        self.assertNotIn("\r", text)
+        lines = text[:-1].split("\n")
+        data = json.loads(lines[0])
+        self.assertNotIn("rows", data)
+        data["rows"] = [json.loads(line) for line in lines[1:]]
+        self.assertEqual(data["records"], len(data["rows"]))
+        Draft202012Validator(
+            json.loads((SCHEMAS / "dataset.schema.json").read_bytes())
+        ).validate(data)
+        return data
+
     def test_lb_independent_completion_value_links_schema_json_and_held_save(self):
         directory = self.fixture("sdtm-lb-metadata", published=True)
         result = self.call(directory)
@@ -984,6 +1000,10 @@ class PublicDefine(unittest.TestCase):
                     )
                     if name == "define.xml":
                         self.validate_xml(content)
+                    elif name.endswith(".ndjson"):
+                        self.validate_ndjson(content)
+                    elif name.endswith(".json"):
+                        self.validate_json(content)
 
 
 if __name__ == "__main__":

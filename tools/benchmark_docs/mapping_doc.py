@@ -1143,6 +1143,32 @@ def describe_str_length(node, ctx=None, depth=0):
     )
 
 
+def describe_str_decimal(node, ctx=None, depth=0):
+    decimals = node.get("decimals")
+    if decimals == 0:
+        places = "no decimals"
+    else:
+        places = (
+            "exactly " + str(decimals) + (" decimal" if decimals == 1 else " decimals")
+        )
+    text = (
+        "Write "
+        + describe_variable(node.get("source"), ctx, depth)
+        + " as text with "
+        + places
+        + ", rounded half away from zero"
+    )
+    if node.get("width") is not None:
+        text += (
+            ", padded on the left with spaces to at least "
+            + str(node["width"])
+            + " characters"
+        )
+    return sentence(
+        text + handler_phrase(node, "missing", "a missing source", restated=True)
+    )
+
+
 def describe_str_extract(node, ctx=None, depth=0):
     group = node.get("group", 0)
     part = "the whole match" if group in (0, None) else "capture group " + str(group)
@@ -1294,6 +1320,7 @@ DERIVATION_DESCRIBERS = {
     "str_pad": describe_str_pad,
     "str_substr": describe_str_substr,
     "str_length": describe_str_length,
+    "str_decimal": describe_str_decimal,
     "str_extract": describe_str_extract,
     "str_replace": describe_str_replace,
     "str_template": describe_str_template,

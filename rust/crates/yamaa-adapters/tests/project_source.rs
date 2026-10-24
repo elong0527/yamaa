@@ -272,7 +272,7 @@ mod project {
                 unreachable!()
             };
             let retained = text.as_ptr();
-            let owned = table.into_table();
+            let owned = table.into_table().expect("an input read whole");
             let ValueRef::Str(text) = owned.cell(0, 1).unwrap() else {
                 unreachable!()
             };

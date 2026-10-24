@@ -4,6 +4,9 @@
 //! semantic field/codelist admission (`submission_transport::admit`); this
 //! module builds the typed document from that model and owns its byte
 //! projection: quoted strings, streamed escaping and the output-byte boundary.
+//! One writer produces both representations of the standard (JSON-4): the
+//! single-object form and the newline-delimited form differ only in their
+//! framing ([`Layout`]), never in a member, a spelling or a row.
 use std::io::{self, Write};
 use yamaa_core::{
     application_issue::{Fault, Step},
@@ -52,6 +55,16 @@ pub struct DatasetJsonDocument {
     pub name: String,
     pub label: String,
     pub columns: Vec<DatasetJsonColumn>,
+}
+
+/// The representation a section's `transport` selects (JSON-4, JSON-13).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Layout {
+    /// `dataset_json`: one object, one member per line, `rows` last.
+    Object,
+    /// `dataset_ndjson`: the object without `rows` on the first line, then
+    /// one row per line.
+    Lines,
 }
 
 /// JSON-10: the closed mapping from a resolved submission data type.
@@ -139,6 +152,7 @@ fn object(fields: Vec<(&str, String)>) -> String {
             .join(", ")
     )
 }
+/// A member array, one entry per line indented four spaces (JSON-13).
 fn list(values: &[String]) -> String {
     if values.is_empty() {
         return "[]".into();
@@ -151,6 +165,11 @@ fn list(values: &[String]) -> String {
             .collect::<Vec<_>>()
             .join(",\n")
     )
+}
+/// A member array on one line, its entries separated by a comma and one
+/// space, as the newline-delimited form's first line writes `columns`.
+fn inline_list(values: &[String]) -> String {
+    format!("[{}]", values.join(", "))
 }
 
 /// One saved file, checked before every physical buffer extension. JSON strings
@@ -207,14 +226,41 @@ impl Writer<'_> {
             .with("value", value)),
         }
     }
+    /// One row as JSON-11 and JSON-13 fix it: `[`, its cells separated by a
+    /// comma and one space, `]`; the same bytes in either layout.
+    fn row<T: TableAccess>(
+        &mut self,
+        document: &DatasetJsonDocument,
+        table: &T,
+        row: usize,
+    ) -> Result<(), Finding> {
+        self.text("[")?;
+        for column in 0..document.columns.len() {
+            if column > 0 {
+                self.text(", ")?;
+            }
+            // A cell the held table cannot give has no value to name.
+            self.cell(table.cell(row, column).map_err(|_| {
+                Finding::cause(
+                    ConditionCode::SubmissionJsonInvalid,
+                    &document.path,
+                    "held table access",
+                )
+                .with("value", yamaa_core::json::Value::Null)
+            })?)?;
+        }
+        self.text("]")
+    }
 }
 
-/// Encode an admitted typed document over its held table. Callers run the
-/// core admission (`yamaa_core::submission_transport::admit`) over the same table
-/// first; this writer repeats no semantic validation.
+/// Encode an admitted typed document over its held table in the selected
+/// representation. Callers run the core admission
+/// (`yamaa_core::submission_transport::admit`) over the same table first; this
+/// writer repeats no semantic validation.
 pub fn render<T: TableAccess>(
     document: &DatasetJsonDocument,
     table: &T,
+    layout: Layout,
 ) -> Result<Vec<u8>, Finding> {
     let mut fields = vec![
         ("datasetJSONCreationDateTime", string(&document.created)),
@@ -262,46 +308,53 @@ pub fn render<T: TableAccess>(
         }
         columns.push(object(values));
     }
-    fields.push(("columns", list(&columns)));
     let mut writer = Writer {
         output: Vec::new(),
         path: &document.path,
     };
-    writer.text("{\n")?;
-    for (key, value) in fields {
-        writer.text("  ")?;
-        writer.string(key)?;
-        writer.text(": ")?;
-        writer.text(&value)?;
-        writer.text(",\n")?;
-    }
-    writer.text("  \"rows\": [")?;
-    if table.row_count() > 0 {
-        writer.text("\n")?;
-        for row in 0..table.row_count() {
-            if row > 0 {
+    match layout {
+        Layout::Object => {
+            fields.push(("columns", list(&columns)));
+            writer.text("{\n")?;
+            for (key, value) in fields {
+                writer.text("  ")?;
+                writer.string(key)?;
+                writer.text(": ")?;
+                writer.text(&value)?;
                 writer.text(",\n")?;
             }
-            writer.text("    [")?;
-            for column in 0..document.columns.len() {
-                if column > 0 {
+            writer.text("  \"rows\": [")?;
+            if table.row_count() > 0 {
+                writer.text("\n")?;
+                for row in 0..table.row_count() {
+                    if row > 0 {
+                        writer.text(",\n")?;
+                    }
+                    writer.text("    ")?;
+                    writer.row(document, table, row)?;
+                }
+                writer.text("\n  ")?;
+            }
+            writer.text("]\n}\n")?;
+        }
+        Layout::Lines => {
+            fields.push(("columns", inline_list(&columns)));
+            writer.text("{")?;
+            for (index, (key, value)) in fields.into_iter().enumerate() {
+                if index > 0 {
                     writer.text(", ")?;
                 }
-                // A cell the held table cannot give has no value to name.
-                writer.cell(table.cell(row, column).map_err(|_| {
-                    Finding::cause(
-                        ConditionCode::SubmissionJsonInvalid,
-                        &document.path,
-                        "held table access",
-                    )
-                    .with("value", yamaa_core::json::Value::Null)
-                })?)?;
+                writer.string(key)?;
+                writer.text(": ")?;
+                writer.text(&value)?;
             }
-            writer.text("]")?;
+            writer.text("}\n")?;
+            for row in 0..table.row_count() {
+                writer.row(document, table, row)?;
+                writer.text("\n")?;
+            }
         }
-        writer.text("\n  ")?;
     }
-    writer.text("]\n}\n")?;
     Ok(writer.output)
 }
 

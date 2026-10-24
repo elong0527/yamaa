@@ -165,7 +165,6 @@ impl<'a> Reads<'a> {
             .is_some_and(|(owner, _)| self.lookup(owner).is_some())
     }
 
-    /// The lookup `owner` names, whatever rows it drives.
     /// The lookup `owner` names; a pair relation is read as an input is
     /// (LOOKUP-27).
     fn named(&self, owner: &str) -> Option<usize> {

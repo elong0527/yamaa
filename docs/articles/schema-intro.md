@@ -135,7 +135,7 @@ in one schema module per family:
 | Core selection | `schema_expression_core.yaml` | `source`, `first_available`, `greatest`, `least`, `case`, `flag` |
 | Vocabulary | `schema_expression_mapping.yaml` | `mapping`, `cut` |
 | Strings | `schema_expression_str.yaml` | `str_pad`, `str_substr`, `str_length`, `str_extract`, `str_replace`, `str_template`, `str_case` |
-| Rounding | `schema_expression_numeric.yaml` | `round_half_away_from_zero` |
+| Rounding | `schema_expression_numeric.yaml` | `round_half_away_from_zero`, `str_decimal` |
 | Aggregation | `schema_expression_aggregate.yaml` | `aggregate` |
 | Dates | `schema_expression_date.yaml` | `diff`, `impute`, `precision`, `imputation_flag`, `to_date`, `date_text`, `study_day`, `to_epoch_day`, `dtc`, `time_of_day`, `shift`, `duration_value`, `duration_text` |
 | Windows | `schema_expression_window.yaml` | `row_number`, `rank`, `row_value`, `locf`, `baseline_flag` |
@@ -294,7 +294,8 @@ in its short form is listed under the field it fills.
 | `str_template` | `template` | | | `missing` | |
 | `str_case` | | `source` | | `to`, `delimiters`, `missing` | |
 | `round_half_away_from_zero` | | `source` | | `digits` | |
-| `aggregate` | `key`, `filter`, `expr` | `group_by`, `order_by` | | `separator`, `distinct` | `between`, `derivations` |
+| `str_decimal` | | `source` | | `decimals`, `width`, `missing` | |
+| `aggregate` | `key`, `filter`, `expr` | `group_by`, `order_by` | | `separator`, `distinct`, `quantile` | `between`, `derivations` |
 | An `aggregate` derivation | `derivation` | | | `type` | |
 | `diff` | | `start`, `end` | | `type`, `unit`, `closed` | |
 | `impute` | | `source`, `not_before`, `not_after`, `fallback` | | `type`, `month`, `day`, `time`, `invalid` | |

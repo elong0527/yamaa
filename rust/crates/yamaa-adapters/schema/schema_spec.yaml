@@ -1,0 +1,381 @@
+version: "1.0"
+
+# See SPEC-1.
+
+includes:
+    - schema_shared.yaml
+    - schema_derivation.yaml
+    - schema_verification.yaml
+    - schema_metadata.yaml
+
+root_class:
+    - yamaa:
+        type: language_version
+        required: true
+        description: Oldest language version this specification needs, always quoted (SCHEMA-2).
+    - type:
+        type: str
+        required: true
+        values: [spec]
+        description: File type of a specification, which every layer of a chain declares (SCHEMA-2).
+    - model:
+        type: str
+        required: false
+        values: [SDTM, SEND, ADaM]
+        description: CDISC model of the output dataset, required when the specification declares submission metadata or a project section lists it (SUB-3).
+    - parent:
+        type: path
+        required: false
+        description: Local specification layer this one inherits from, resolved before validation and execution (LAYER-2).
+    - include:
+        type: "list[project_path]"
+        required: false
+        description: Local specification fragments composed after the parent chain and before this layer's own fields, in list order, each relative to this layer (LAYER-3).
+    - clear:
+        type: "list[spec_path]"
+        required: false
+        description: Inherited values this layer removes before its own fields compose, each named by its spec path (LAYER-9).
+    - domain:
+        type: identifier
+        required: true
+        description: Name of the output dataset this specification derives (SPEC-1).
+    - keys:
+        type: "list[identifier]"
+        required: true
+        description: Output columns identifying a row (OUTPUT-2).
+    - input:
+        type: "dict[identifier, dataset_source]"
+        required: true
+        description: Source datasets this specification reads, each under the name it is read through (NAME-1).
+    - base:
+        type: identifier
+        required: false
+        description: Input dataset whose records build output rows when `rows` is absent; row construction states when it is required.
+    - filter:
+        type: predicate
+        required: false
+        description: Predicate selecting base input records for row construction when `rows` is absent, as the filter-only row template lifted to the root; it cannot be declared with `rows`.
+    - output:
+        type: output_class
+        required: true
+        description: Artifact presentation, independent of the dependency-ordered declarations (OUTPUT-1).
+    - windows:
+        type: "dict[identifier, window_spec]"
+        required: false
+        description: See WINDOW-1.
+    - intermediates:
+        type: "list[intermediate_class]"
+        required: false
+        description: Named dataset lookups that several columns read through `<lookup-id>.<column>`.
+    - columns:
+        type: "list[column_entry]"
+        required: true
+        description: Columns in the dependency order the execution lifecycle requires; `output.columns` controls artifact order.
+    - rows:
+        type: "list[row_class]"
+        required: false
+        description: Row templates constructing output rows from input records or groups; it cannot be declared with `filter`.
+    - verifications:
+        type: "list[dataset_verification]"
+        required: false
+        description: Assertions over the completed dataset, written as a list even when there is one (CHECK-1).
+    - submission:
+        type: submission_dataset_class
+        required: false
+        description: Governed dataset metadata a submission document is generated from.
+    - metadata:
+        type: "dict[str, str]"
+        required: false
+        description: Free-form annotations carried with the specification; submission metadata reserves the key names it governs.
+
+output_class:
+    - path:
+        type: path
+        required: true
+        description: File this specification produces, whose extension selects the serialization profile (OUTPUT-5).
+    - relative_to:
+        type: path_base
+        default: declaring
+        description: Base for the primary artifact and the run report file (FILE-2).
+    - decimals:
+        type: int
+        required: false
+        description: Fixed display digits for every float column of a csv artifact; the CSV profile defines the rounding and rejects it for parquet.
+    - columns:
+        type: "list[identifier]"
+        required: true
+        description: Declared columns selected for the artifact, in artifact order (OUTPUT-1).
+    - report:
+        type: path
+        required: false
+        description: File the run report is written to, its extension selecting its profile; required when any verification is a warning (CHECK-22).
+    - order_by:
+        type: "list[order_by_term]"
+        required: false
+        description: Terms ordering artifact rows after every verification; omission keeps construction order (OUTPUT-11).
+
+intermediate_class:
+    - id:
+        type: intermediate_id
+        required: true
+        description: Name through which the looked-up record is read (LOOKUP-3).
+    - dataset:
+        type: identifier
+        required: true
+        description: Declared input dataset or pair relation, SELF for completed derived rows (LOOKUP-7), or the left side of a pair relation (LOOKUP-27).
+    - inner_join:
+        type: identifier
+        required: false
+        description: Right side of a pair relation, one record per matching pair of `dataset` and this relation on `key`; it cannot be declared with between, order_by, keep, nearest, absent or require_match (LOOKUP-27).
+    - key:
+        type: match_key
+        required: false
+        description: Match key of the lookup, required unless the intermediate drives a row template, which declares none (LOOKUP-3, ROW-2); a pair relation's key pairs its two sides (LOOKUP-27).
+    - fields_from: match_range_fields
+    - fields_from: match_filter_fields
+    - fields_from: match_selection_fields
+    - nearest:
+        type: nearest_class
+        required: false
+        description: Selects the candidate whose date or datetime lies nearest a current-row value; it cannot be declared with order_by or keep (LOOKUP-26).
+    - columns:
+        type: "list[identifier]"
+        required: false
+        description: Stored and derived columns the lookup may read; defaults to every available column (LOOKUP-11).
+    - absent:
+        type: substitute_value
+        required: false
+        description: Value returned when the lookup yields nothing; without it, yielding nothing gives missing (LOOKUP-24).
+    - require_match:
+        type: bool
+        required: false
+        description: When true, yielding nothing fails instead of being answered; it cannot be declared with absent (LOOKUP-24).
+    - derivations:
+        type: "dict[identifier, intermediate_derivation]"
+        required: false
+        description: Per-record derivations over donor fields, the current input record and records other named intermediates select for it (LOOKUP-15); a pair relation requires them, as the fields it exposes (LOOKUP-27).
+    - verifications:
+        type: "list[intermediate_verification]"
+        required: false
+        description: Uniqueness checks over the filtered donor records (LOOKUP-17).
+
+record_between_class:
+    - value:
+        type: variable
+        required: true
+        description: Value read from the current row (LOOKUP-9).
+    - lower:
+        type: identifier
+        required: false
+        description: Donor-record field whose value is an inclusive lower bound; omit for no lower bound (LOOKUP-9).
+    - upper:
+        type: identifier
+        required: false
+        description: Donor-record field whose value is an inclusive upper bound; omit for no upper bound (LOOKUP-9).
+
+nearest_class:
+    - source:
+        type: identifier
+        required: true
+        description: Donor-record date or datetime field, stored or derived, whose distance to `to` chooses the candidate (LOOKUP-26).
+    - to:
+        type: match_value
+        required: true
+        description: Current-row value of the source's type that the distance is measured to, read as a key match value is, such as a DATE or DATETIME literal (LOOKUP-26).
+    - unit:
+        type: str
+        required: true
+        values: [day, week, month, year, second, minute, hour]
+        description: Unit the distance is counted in, as diff counts it, a calendar unit for a date source or an elapsed unit for a datetime source (TIME-4).
+
+# See SCHEMA-5.
+match_key_range_fields:
+    - key: {type: match_key}
+    - fields_from: match_range_fields
+
+match_range_fields:
+    - between: {type: record_between_class}
+
+match_filter_fields:
+    - filter: {type: predicate}
+
+match_selection_fields:
+    - order_by: {type: "list[order_by_term]"}
+    - keep: {type: keep_policy}
+
+column_entry:
+    type: [column_class, column_copy_class]
+    description: A declared column, or an entry copying same-named columns from a linked input (SUB-20).
+
+column_class:
+    - name:
+        type: identifier
+        required: true
+        description: Column name this specification declares.
+    - type:
+        type: column_type
+        required: true
+        description: Declared data type this column must carry in the completed dataset.
+    - label:
+        type: str
+        required: false
+        description: Descriptive text carried with the column for a reader of the dataset.
+    # See SPEC-6.
+    - derivation:
+        type: derivation
+        required: false
+        description: How the column's value is produced (SPEC-4).
+    - verifications:
+        type: "list[column_verification]"
+        required: false
+        description: Assertions over this column's completed values, written as a list even when there is one (CHECK-1).
+    - submission:
+        type: submission_column_class
+        required: false
+        description: Governed column metadata a submission document is generated from.
+    - metadata:
+        type: "dict[str, str]"
+        required: false
+        description: Free-form annotations carried with the column; submission metadata reserves the key names it governs.
+
+column_copy_class:
+    - copy:
+        type: copy_class
+        required: true
+        description: Columns this specification copies under their own names from an input linked to its producing specification (SUB-20).
+
+copy_class:
+    - dataset:
+        type: identifier
+        required: true
+        description: Declared input dataset, linked to its producing specification through `schema`, whose columns are copied (INPUT-10).
+    - columns:
+        type: "list[identifier]"
+        required: true
+        description: Producer columns copied, each taking the producer's type, label and submission content metadata (SUB-20).
+    - submission:
+        type: copy_submission_class
+        required: false
+        description: Core designation, mandatory flag and role of the copied columns in this specification's standard (SUB-10).
+
+copy_submission_class:
+    - fields_from: submission_role_fields
+
+row_class:
+    - id:
+        type: row_id
+        required: true
+        description: Identifier of this row template, unique within rows (ROW-1).
+    - dataset:
+        type: identifier
+        required: false
+        description: Input dataset or eligible named intermediate whose records build this row template's output rows, required when more than one input dataset is declared (ROW-1).
+    - group_by:
+        type: "list[variable]"
+        required: false
+        description: Grouping keys over driver records, producing one candidate row per group (ROW-4).
+    - filter:
+        type: predicate
+        required: false
+        description: Predicate gating each driver record's candidate row for an ungrouped row template, or completed candidate groups for a grouped row template (ROW-3, ROW-4).
+    # See SPEC-6.
+    - derivations:
+        type: "dict[identifier, derivation]"
+        required: false
+        description: Columns this row template derives, whose coverage across row templates follows SPEC-5.
+
+variable:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$'
+    kind: name
+    description: Qualified source variable or unqualified constructed output column (NAME-3).
+
+match_key:
+    type: [match_key_columns, "dict[identifier, match_value]"]
+    kind: expression
+    description: See LOOKUP-5.
+
+match_key_columns:
+    type: "list[identifier]"
+    description: Lookup columns, each paired with the same-named current-row value, written as a list even when there is one (LOOKUP-5).
+
+match_value:
+    type: expression
+    description: See LOOKUP-6.
+
+dataset_source:
+    type: [project_path, dataset_class]
+    kind: structure
+    description: Path to the dataset, or a path with its producing specification, field types, join key or generated ordinal (INPUT-5).
+
+dataset_class:
+    - path:
+        type: project_path
+        required: true
+        description: Source data path, relative to its relative_to base or absolute at its local location, with no missing-file fallback; its extension selects the source profile (INPUT-1).
+    - relative_to:
+        type: path_base
+        default: declaring
+        description: Base for the input dataset's path and schema (FILE-2).
+    - types:
+        type: "dict[identifier, column_type]"
+        required: false
+        description: Type each named field carries; every other field of a typeless source is str (INPUT-5).
+    - encoding:
+        type: str
+        required: false
+        values: [utf-8, windows-1252, iso-8859-1, ascii]
+        description: Declared text encoding of a SAS or Transport input, absent on every other input (SAS-2).
+    - byte_order_mark:
+        type: bool
+        required: false
+        description: When true, the csv source begins with one UTF-8 byte-order mark, which is skipped; absent on an input that another profile reads (CSV-10).
+    - schema:
+        type: project_path
+        required: false
+        description: Producing specification whose output contract supplies the source fields and types (INPUT-10).
+    - empty_string:
+        type: str
+        required: false
+        default: missing
+        values: [missing, present]
+        description: See INPUT-9.
+    - ordinal:
+        type: identifier
+        required: false
+        description: Name of the generated source record ordinal (INPUT-3).
+    - key:
+        type: "list[identifier]"
+        required: false
+        description: Columns an implicit join, or a qualified aggregate without its own key, matches this input on, each paired with the current row's same-named value (LOOKUP-1).
+    - require_match:
+        type: bool
+        required: false
+        description: When true, every read through an implicit join to this input must find a record, unless the read declares absent (LOOKUP-24).
+
+intermediate_id:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+    kind: identifier
+    description: Identifier of a lookup, unique among dataset identifiers, other lookups and the output domain (LOOKUP-3).
+
+row_id:
+    type: str
+    min_length: 1
+    kind: identifier
+    description: Identifier of a row template, unique within rows (SPEC-2).
+
+regex:
+    type: str
+    min_length: 1
+    description: Regular expression applied to a string value under text operations.
+
+predicate:
+    type: str
+    min_length: 1
+    kind: expression
+
+spec_path:
+    type: str
+    min_length: 1
+    description: Dotted path of a value in the resolved specification, naming a keyed member by its identity and quoting any other segment that is not a name (LAYER-9).

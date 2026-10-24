@@ -1,9 +1,11 @@
 # Dataset-JSON
 
 This file is a profile: it is optional, and it applies only to a build whose
-selected submission section of a project file sets `transport: dataset_json`.
-Such a build writes one deterministic Dataset-JSON 1.1 file per composed
-specification, carrying the published dataset and the submission metadata the
+selected submission section of a project file sets `transport: dataset_json`
+or `transport: dataset_ndjson`. Such a build writes one deterministic
+Dataset-JSON 1.1 file per composed specification, in the single-object or the
+newline-delimited representation the value selects ([JSON-4](#json-4)),
+carrying the published dataset and the submission metadata the
 [Define-XML](define-xml.md) document is generated from. A domain build never
 writes Dataset-JSON. [JSON-1](#json-1), [JSON-2](#json-2),
 [JSON-3](#json-3), [JSON-5](#json-5) and [JSON-14](#json-14) also govern the
@@ -17,18 +19,20 @@ files [SAS Transport](xpt.md) writes.
 
 The selected project submission section's optional `transport` requests one
 transport file for each specification in its ordered `specs`: `dataset_json`
-a Dataset-JSON file under this profile, and `xpt` a SAS Transport version 5
-file under [SAS Transport](xpt.md). Each file is in the directory of the section's
-`define` target, named the lower-case dataset name with the extension `.json`
-or `.xpt`. Omission produces only the Define-XML document. The extension
-mapping of [OUTPUT-5](../output.md#output-5) stays closed at `.csv` and
-`.parquet`.
+a Dataset-JSON file in its single-object form and `dataset_ndjson` one in its
+newline-delimited form, both under this profile, and `xpt` a SAS Transport
+version 5 file under [SAS Transport](xpt.md). Each file is in the directory
+of the section's `define` target, named the lower-case dataset name with the
+extension `.json`, `.ndjson` or `.xpt`. Omission produces only the Define-XML
+document. The extension mapping of [OUTPUT-5](../output.md#output-5) stays
+closed at `.csv` and `.parquet`.
 
-Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `adam-adsl-xpt`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_project_lists_function_files_and_holds_each_host_lock`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `python/tests/installed/installed_public_define.py::test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes`.
+Evidence: `sdtm-dm-metadata`, `schema-transport-dataset-ndjson`, `sdtm-dm-xpt`, `adam-adsl-xpt`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_project_lists_function_files_and_holds_each_host_lock`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `python/tests/installed/installed_public_define.py::test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes`.
 
 One section requests one transport. The file's place depends on the document
 and the dataset name alone, not on where the artifact is published: a `DM`
-dataset beside `out/define.xml` is written to `out/dm.json` or `out/dm.xpt`.
+dataset beside `out/define.xml` is written to `out/dm.json`, `out/dm.ndjson`
+or `out/dm.xpt`.
 A section that requests a transport names its document `define.xml`
 ([DEFINE-2](define-xml.md#define-2)), so `metaDataRef` is `define.xml`
 ([JSON-8](#json-8)). A Dataset-JSON file carries `studyOID`,
@@ -80,22 +84,28 @@ dataset and the artifact.
 
 <a id="json-4"></a>
 
-### JSON-4. The file is Dataset-JSON 1.1 in its single-object form and valid against that standard's schema
+### JSON-4. The file is Dataset-JSON 1.1 in the representation `transport` selects and valid against that standard's schema
 
 The generated file conforms to Dataset-JSON 1.1, and `datasetJSONVersion` is
-exactly `1.1.0`. The newline-delimited form the standard also defines is not
-this profile. A generated file that is not valid against the Dataset-JSON 1.1
-schema fails, reporting the violation, and the generation publishes nothing.
+exactly `1.1.0`. `transport: dataset_json` selects the standard's
+single-object representation and `transport: dataset_ndjson` its
+newline-delimited one; the two carry the same members, rows and spellings
+([JSON-7](#json-7), [JSON-13](#json-13)), and one section writes one of them.
+A generated file that is not valid against the Dataset-JSON 1.1 schema fails,
+reporting the violation, and the generation publishes nothing.
 
 Fails: `value_not_permitted`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_published_boolean_in_a_text_column_is_not_permitted`, `python/tests/installed/installed_public_define.py::test_dm_goldens_public_issues_and_held_save`.
+Evidence: `sdtm-dm-metadata`, `schema-transport-dataset-ndjson`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_published_boolean_in_a_text_column_is_not_permitted`, `python/tests/installed/installed_public_define.py::test_dm_goldens_public_issues_and_held_save`.
 
 A later release of the standard is a new profile under a new name rather than a
-redefinition of this one. The newline-delimited form carries the same
-information in a second spelling, and this profile fixes one. A schema-invalid
-file fails with `value_not_permitted`, and the generation publishes nothing,
-exactly as [DEFINE-25](define-xml.md#define-25) requires of an invalid
-document.
+redefinition of this one. The standard defines its newline-delimited form as
+the same dataset written one JSON text per line, for a receiver that reads a
+large dataset a row at a time; the first line is the metadata object and each
+later line one row. Both forms are this profile, so the representation is a
+choice of the section and never a conversion outside the generation's
+determinism. A schema-invalid file fails with `value_not_permitted`, and the
+generation publishes nothing, exactly as
+[DEFINE-25](define-xml.md#define-25) requires of an invalid document.
 
 ## Content
 
@@ -168,15 +178,17 @@ composed specification and fails the document that lacks them.
 
 <a id="json-7"></a>
 
-### JSON-7. The file is one JSON object carrying the standard's members in a fixed order, omitting absent ones
+### JSON-7. The file carries the standard's members in a fixed order, omitting absent ones: one object, or a first line and one row per line
 
-The file is one JSON object carrying the members the table below lists, in that
-order, which is the order the standard presents them. A member whose source is
-absent is omitted and is never written as `null`: within this file `null` is
-the missing value of a row. A file always has rows ([JSON-3](#json-3)), and
-`dbLastModifiedDateTime` is never written.
+Under `dataset_json` the file is one JSON object carrying the members the
+table below lists, in that order, the order the standard presents them. Under
+`dataset_ndjson` the first line is that object without `rows`, and each later
+line is one entry of `rows`, in order ([JSON-13](#json-13)). A member whose
+source is absent is omitted and is never written as `null`: within this file
+`null` is the missing value of a row. A file always has rows
+([JSON-3](#json-3)), and `dbLastModifiedDateTime` is never written.
 
-Evidence: `sdtm-dm-metadata`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
+Evidence: `sdtm-dm-metadata`, `schema-transport-dataset-ndjson`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
 
 | Member | Source |
 |---|---|
@@ -318,30 +330,31 @@ artifact's empty field arrives as missing under
 
 <a id="json-12"></a>
 
-### JSON-12. When Dataset-JSON is requested, each dataset's leaf names its JSON file
+### JSON-12. When Dataset-JSON is requested, each dataset's leaf names its Dataset-JSON file
 
-When the selected section sets `transport: dataset_json`, each dataset's `def:leaf`
-names that dataset's JSON file beside the document: its `xlink:href` and
-`def:title` use the JSON file name rather than the published CSV or Parquet
+When the selected section sets `transport: dataset_json` or
+`transport: dataset_ndjson`, each dataset's `def:leaf` names that dataset's
+`.json` or `.ndjson` file beside the document: its `xlink:href` and
+`def:title` use that file name rather than the published CSV or Parquet
 path. When no transport is requested, the leaf names the specification's
 published `output.path` ([DEFINE-16](define-xml.md#define-16)).
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::entry_relative_inherited_output_supplies_json_capture_and_publication_targets`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
+Evidence: `sdtm-dm-metadata`, `schema-transport-dataset-ndjson`, `rust/crates/yamaa-adapters/tests/file_resources.rs::entry_relative_inherited_output_supplies_json_capture_and_publication_targets`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
 
 <a id="json-13"></a>
 
-### JSON-13. The file's bytes are fixed: UTF-8, one member per line, one spelling per string and number
+### JSON-13. The file's bytes are fixed: UTF-8, one layout per representation, one spelling per string and number
 
 The file is encoded UTF-8 and carries no byte-order mark. `U+000A` terminates
 every line, including the last, and `U+000D` is never written outside a string
-escape. The layout, the string escapes and the number spellings are fixed
-exactly as the lists below state, leaving exactly one spelling of every part of
-a file. A generation's data files are byte-identical for the same inputs, and a
-golden file is compared byte for byte.
+escape. The layout of each representation, the string escapes and the number
+spellings are fixed exactly as the lists below state, leaving exactly one
+spelling of every part of a file. A generation's data files are byte-identical
+for the same inputs, and a golden file is compared byte for byte.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::dm_both_goldens_without_input_execution_and_save_uses_held_bytes`, `rust/crates/yamaa-adapters/src/submission_json.rs::streamed_cells_preserve_exact_json_and_full_width_scalar_spelling`.
+Evidence: `sdtm-dm-metadata`, `schema-transport-dataset-ndjson`, `rust/crates/yamaa-adapters/tests/file_resources.rs::dm_both_goldens_without_input_execution_and_save_uses_held_bytes`, `rust/crates/yamaa-adapters/src/submission_json.rs::streamed_cells_preserve_exact_json_and_full_width_scalar_spelling`, `rust/crates/yamaa-adapters/tests/submission_transport.rs::the_newline_delimited_form_carries_the_single_object_forms_value`.
 
-The layout is fixed exactly:
+The layout of the single-object form is fixed exactly:
 
 - the first line is `{` and the last line is `}`, both unindented;
 - each member of the file's object is one line indented two spaces, written as
@@ -360,6 +373,26 @@ The layout is fixed exactly:
   such a member from the next follows its closing bracket; and
 - no other whitespace is written: no trailing space, no blank line, and nothing
   between two tokens the rules above do not place there.
+
+The layout of the newline-delimited form is fixed exactly:
+
+- the first line is the object of [JSON-7](#json-7) without `rows`, written on
+  one line. It opens with `{`, writes its members separated by a comma and one
+  space, each as its name in quotes, a colon, one space, and its value, and
+  closes with `}`;
+- within that line, `sourceSystem` and each entry of `columns` is one object
+  written as the single-object form writes it, and `columns` is one array
+  written on that line, opening `[`, its entries separated by a comma and one
+  space, then `]`;
+- each later line is one entry of `rows`, written exactly as the single-object
+  form writes it, unindented, with no comma between lines, so the file has
+  `records` plus one lines; and
+- no other whitespace is written.
+
+The two forms therefore differ only in their framing: the first line of the
+newline-delimited form, with the later lines appended as its `rows`, is the
+single-object form's value, token for token. The standard admits a `U+000D`
+before each line's `U+000A`; this profile never writes one.
 
 Within a string, `U+0022` is written `\"`, `U+005C` is written `\\`, and
 `U+0008`, `U+000C`, `U+000A`, `U+000D`, and `U+0009` are written `\b`, `\f`,

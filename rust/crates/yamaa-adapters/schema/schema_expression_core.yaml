@@ -1,0 +1,114 @@
+version: "1.0"
+
+expressions:
+    source: # See EXPR-4.
+        type: source_binding_class
+        description: Copies a named source or derived variable read with the range, filter, selection or absence answer of its lookup (EXPR-4).
+    first_available: # See EXPR-9.
+        - sources:
+            type: "list[filtered_source]"
+            required: true
+            description: Variables to test in order (EXPR-9).
+        - missing:
+            type: substitute_value
+            description: Value returned when every source is missing; missing when absent (EXPR-9).
+    greatest: # See EXPR-10.
+        - sources:
+            type: "list[variable]"
+            required: true
+            description: Mutually comparable variables to inspect (EXPR-10).
+    least: # See EXPR-10.
+        - sources:
+            type: "list[variable]"
+            required: true
+            description: Mutually comparable variables to inspect (EXPR-10).
+    case: # See EXPR-7.
+        type: "list[case_item_class]"
+        description: Ordered when/then items with an optional trailing otherwise (EXPR-7).
+    flag: # See EXPR-8.
+        type: [predicate, flag_class]
+        description: A one-predicate flag derivation; a bare predicate string is the condition with the default values (EXPR-8).
+
+source_binding_class:
+    - variable:
+        type: variable
+        required: true
+        description: Variable to copy (LOOKUP-1).
+    - fields_from: match_range_fields
+    - fields_from: match_filter_fields
+    - fields_from: match_selection_fields
+    - absent:
+        type: substitute_value
+        description: Value used when its implicit join or lookup finds no record; without it, finding no record gives missing (LOOKUP-24).
+    - require_match:
+        type: bool
+        description: When true, an implicit join that finds no record fails instead of being answered; it cannot be declared with absent (LOOKUP-24).
+
+flag_class:
+    - condition:
+        type: predicate
+        required: true
+        description: Predicate selecting the true value (EXPR-8).
+    - true_value:
+        type: substitute_value
+        default: "Y"
+        description: Value returned when the condition is true (EXPR-8).
+    - false_value:
+        type: substitute_value
+        description: Value returned when the condition is false; missing when absent (EXPR-8).
+    - missing:
+        type: substitute_value
+        description: Value returned when the condition is unknown; missing when absent, and required when false_value is declared (EXPR-8).
+
+filtered_source:
+    type: [variable, source_binding_class]
+    kind: name
+    description: A variable, or the source_binding_class form carrying it with its range, filter, selection or absent value (LOOKUP-1).
+
+keep_policy:
+    type: str
+    values: [first, last]
+    description: See LOOKUP-10.
+
+order_by_term:
+    type: [variable, order_term_class]
+    kind: name
+    description: Order term; a bare variable sorts ascending with missing values first, as the lowest value (VALUE-22).
+
+order_term_class:
+    - variable:
+        type: variable
+        required: true
+        description: Variable used as an ordering term (VALUE-22).
+    - direction:
+        type: str
+        default: asc
+        values: [asc, desc]
+        description: Sort direction for non-missing values (VALUE-22).
+    - nulls:
+        type: str
+        values: [first, last]
+        description: Absolute placement of missing values, never flipped by direction; when omitted, missing sorts lowest (VALUE-22).
+
+case_item_class:
+    type: [case_branch_class, case_otherwise_class]
+    description: A when/then branch, or the trailing otherwise item (EXPR-7).
+
+case_branch_class:
+    - when:
+        type: predicate
+        required: true
+        description: Condition that selects this branch when true (EXPR-7).
+    - then:
+        type: case_result
+        required: true
+        description: Result returned when the condition is true (EXPR-7).
+
+case_otherwise_class:
+    - otherwise:
+        type: case_result
+        required: true
+        description: Result used when no branch condition is true (EXPR-7).
+
+case_result:
+    type: expression
