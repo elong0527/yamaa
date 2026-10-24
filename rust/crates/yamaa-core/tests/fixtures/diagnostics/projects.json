@@ -1,0 +1,159 @@
+{
+  "about": "The refusals of a specification's project function calls (FUNC-1, FUNC-4, FUNC-5, COLUMN-4, LOOKUP-22), prepared in a project whose function files each define an integer identity, and a project's own scope findings: its names, sections, producers, cycles, saves and stale artifacts (PROJECT-5 to PROJECT-15). `called` derives VALUE with a call of the project function id.",
+  "documents": {
+    "called": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "input": {"SRC": {"path": "input.csv"}},
+      "keys": ["ID"],
+      "columns": [
+        {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+        {"name": "VALUE", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": 7}}}}}
+      ],
+      "output": {"path": "output.csv", "columns": ["ID", "VALUE"]}
+    }
+  },
+  "cases": [
+    {
+      "case": "a_call_of_a_function_the_project_does_not_define_is_unknown",
+      "operation": "prepare_in",
+      "input": {
+        "base": "called",
+        "edits": [{"set": ["columns", "1", "derivation", "value", "function", "name"], "to": "unknown"}],
+        "project": {"language": "python", "functions": {}}
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_project_function", "rule": "FUNC-4", "spec_paths": ["columns.VALUE.derivation.function.name"], "context": {"function": "unknown"}}]
+    },
+    {
+      "case": "a_call_argument_of_another_type_than_its_parameter_is_refused",
+      "operation": "prepare_in",
+      "input": {
+        "base": "called",
+        "edits": [{"set": ["columns", "1", "derivation", "value", "function", "args", "x"], "to": 7.0}],
+        "project": {"language": "python", "functions": {"id": {"python": "project.id"}}}
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_function_argument", "rule": "FUNC-5", "spec_paths": ["columns.VALUE.derivation.function.args.x"], "context": {"function": "id", "argument": "x", "cause": "type_mismatch", "expected_type": "int", "actual_type": "float"}}]
+    },
+    {
+      "case": "a_function_without_a_callable_for_the_host_language_fails_each_call_before_data_is_read",
+      "operation": "prepare_in",
+      "input": {
+        "base": "called",
+        "project": {"language": "python", "functions": {"id": {"r": "project::id"}}}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "function_implementation_missing", "rule": "FUNC-1", "spec_paths": ["columns.VALUE.derivation.function.name"], "context": {"function": "id", "language": "python"}}]
+    },
+    {
+      "case": "a_row_template_call_cannot_read_a_column_only_the_column_phase_completes",
+      "operation": "prepare_in",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "int", "derivation": {"value": {"aggregate": {"expr": "SUM(SRC.ID)"}}}},
+            {"name": "B", "type": "int", "derivation": {"value": 0}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A", "B"]},
+          "rows": [{"id": "record", "derivations": {"ID": {"value": "SRC.ID"}, "B": {"value": {"function": {"name": "id", "args": {"x": "A"}}}}}}]
+        },
+        "project": {"language": "python", "functions": {"id": {"python": "project.id"}}}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "phase_boundary", "rule": "COLUMN-4", "spec_paths": ["rows.record.derivations.B.function.args.x"], "context": {"function": "id", "argument": "x", "identifier": "A", "row": "record", "available_phase": "column_derivation", "required_phase": "row_construction"}}]
+    },
+    {
+      "case": "a_donor_function_argument_reads_only_intermediates_that_select_one_record",
+      "operation": "prepare_in",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "base": "SRC",
+          "input": {"SRC": {"path": "src.csv"}, "DONOR": {"path": "donor.csv"}, "OBS": {"path": "obs.csv"}},
+          "keys": ["ID"],
+          "intermediates": [
+            {"id": "SUBJ", "dataset": "DONOR", "key": ["ID"], "filter": "DONOR.N > 0"},
+            {
+              "id": "FIRST",
+              "dataset": "OBS",
+              "key": ["ID"],
+              "derivations": {"NV": {"value": {"function": {"name": "id", "args": {"x": "SUBJ.N"}}}}},
+              "order_by": [{"variable": "OBS.K"}],
+              "keep": "first"
+            }
+          ],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "NV", "type": "int", "derivation": {"value": "FIRST.NV"}}
+          ],
+          "output": {"path": "out.csv", "columns": ["ID", "NV"]}
+        },
+        "project": {"language": "python", "functions": {"id": {"python": "project.id"}}}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["intermediates.FIRST.derivations.NV.function.args.x"], "context": {"function": "id", "argument": "x", "intermediate": "SUBJ", "reason": "a donor function argument reads only named intermediates that declare a selection (keep or nearest)"}}]
+    },
+    {
+      "case": "a_name_two_listings_share_is_refused_at_both",
+      "operation": "project_scope",
+      "input": {"finding": "duplicate_name", "name": "DM", "listings": [["sdtm.specs[0]", "/study/sdtm/dm.yaml"], ["adam.specs[1]", "/study/adam/dm.yaml"]]},
+      "issues": [{"phase": "validation", "condition": "duplicate_specification_name", "rule": "PROJECT-5", "spec_paths": ["sdtm.specs[0]", "adam.specs[1]"], "context": {"name": "DM", "specifications": ["/study/sdtm/dm.yaml", "/study/adam/dm.yaml"]}}]
+    },
+    {
+      "case": "an_unknown_specification_name_lists_the_available_names_sorted",
+      "operation": "project_scope",
+      "input": {"finding": "unknown_name", "name": "ADXX", "available": ["DM", "ADSL", "AE"]},
+      "issues": [{"phase": "validation", "condition": "unknown_specification_name", "rule": "PROJECT-6", "spec_paths": [], "context": {"name": "ADXX", "available": ["ADSL", "AE", "DM"]}}]
+    },
+    {
+      "case": "a_section_the_project_does_not_declare_lists_the_declared_sections_sorted",
+      "operation": "project_scope",
+      "input": {"finding": "unknown_section", "section": "send", "declared": ["sdtm", "adam"]},
+      "issues": [{"phase": "validation", "condition": "unknown_section", "rule": "PROJECT-14", "spec_paths": [], "context": {"section": "send", "sections": ["adam", "sdtm"]}}]
+    },
+    {
+      "case": "an_input_that_reads_a_run_scope_artifact_without_a_link_names_its_producer",
+      "operation": "project_scope",
+      "input": {"finding": "unlinked_producer", "dataset": "DM", "path": "../sdtm/dm.csv", "producer": "/study/sdtm/dm.yaml"},
+      "issues": [{"phase": "validation", "condition": "unlinked_producer", "rule": "PROJECT-10", "spec_paths": ["input.DM.path"], "context": {"dataset": "DM", "path": "../sdtm/dm.csv", "producer": "/study/sdtm/dm.yaml"}}]
+    },
+    {
+      "case": "a_consumer_of_a_producer_that_did_not_complete_names_the_producer",
+      "operation": "project_scope",
+      "input": {"finding": "producer_not_completed", "dataset": "DM", "producer": "/study/sdtm/dm.yaml"},
+      "issues": [{"phase": "validation", "condition": "producer_not_completed", "rule": "PROJECT-11", "spec_paths": ["input.DM.schema"], "context": {"dataset": "DM", "producer": "/study/sdtm/dm.yaml"}}]
+    },
+    {
+      "case": "a_run_scope_cycle_names_each_specification_on_it",
+      "operation": "project_scope",
+      "input": {"finding": "workflow_cycle", "dataset": "B", "cycle": ["/a.yaml", "/b.yaml", "/a.yaml"]},
+      "issues": [{"phase": "validation", "condition": "producer_workflow_cycle", "rule": "PROJECT-8", "spec_paths": ["input.B.schema"], "context": {"cycle": ["/a.yaml", "/b.yaml", "/a.yaml"]}}]
+    },
+    {
+      "case": "saving_a_run_that_built_nothing_is_refused_naming_the_run",
+      "operation": "project_scope",
+      "input": {"finding": "run_nothing_to_save"},
+      "issues": [{"phase": "output", "condition": "nothing_to_save", "rule": "PROJECT-12", "spec_paths": [], "context": {"operation": "run"}}]
+    },
+    {
+      "case": "saving_a_submission_that_built_nothing_is_refused_naming_the_submission",
+      "operation": "project_scope",
+      "input": {"finding": "submission_nothing_to_save"},
+      "issues": [{"phase": "output", "condition": "nothing_to_save", "rule": "PROJECT-13", "spec_paths": [], "context": {"operation": "submission"}}]
+    },
+    {
+      "case": "a_report_that_records_another_artifact_than_the_section_composes_is_stale",
+      "operation": "staleness",
+      "input": {"path": "sdtm.specs[0].output.report", "dataset": "DM", "report": "dm-report.csv", "recorded": {"artifact": "dm.csv", "rows": 2}, "output": "out/dm.csv"},
+      "issues": [{"phase": "validation", "condition": "stale_artifact", "rule": "PROJECT-15", "spec_paths": ["sdtm.specs[0].output.report"], "context": {"dataset": "DM", "report": "dm-report.csv", "reason": "artifact_path", "recorded": "dm.csv", "actual": "out/dm.csv"}}]
+    }
+  ]
+}

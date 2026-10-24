@@ -199,7 +199,7 @@ exception is explicit SAS numeric narrowing under
 is present, even when an entry agrees with the producer.
 
 Fails: `unknown_field`, `redundant_field_type`.
-Evidence: `negative-types-unknown-field`, `negative-redefined-date`, `rust/crates/yamaa-core/tests/support/diagnostic/producer.rs`, `rust/crates/yamaa/tests/odm_input.rs::an_xml_input_declares_no_types`.
+Evidence: `negative-types-unknown-field`, `negative-redefined-date`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/producers.json::a_linked_input_types_no_field_its_producer_already_types`, `rust/crates/yamaa/tests/odm_input.rs::an_xml_input_declares_no_types`.
 
 An unknown field fails with `unknown_field`, and a field whose type the source
 already supplies fails with `redundant_field_type`. The producing
@@ -294,7 +294,7 @@ artifact like any other input, so the caller builds and saves the producer
 first. A link cannot name the consuming specification.
 
 Fails: `invalid_producer_contract`.
-Evidence: `adam-results-ae-incidence`, `sdtm-dm-race-ethnicity`, `adam-adae-exposure-adjusted-incidence`, `schema-linked-csv-types`, `rust/crates/yamaa/tests/copy_entry.rs::a_copy_reads_a_producer_that_copies_in_turn_and_refuses_a_cycle`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::callers_build_and_save_the_producer_before_its_consumer_reads_the_artifact`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::the_producing_specification_is_read_but_never_compiled_or_executed`, `rust/crates/yamaa-core/tests/support/diagnostic/producer.rs`.
+Evidence: `adam-results-ae-incidence`, `sdtm-dm-race-ethnicity`, `adam-adae-exposure-adjusted-incidence`, `schema-linked-csv-types`, `rust/crates/yamaa/tests/copy_entry.rs::a_copy_reads_a_producer_that_copies_in_turn_and_refuses_a_cycle`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::callers_build_and_save_the_producer_before_its_consumer_reads_the_artifact`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::the_producing_specification_is_read_but_never_compiled_or_executed`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/producers.json::a_producer_whose_stored_field_has_no_label_is_no_valid_contract`.
 
 ```yaml
 input:
@@ -346,7 +346,7 @@ producer's declared type. Missing, extra, reordered, duplicate or undeclared
 fields fail.
 
 Fails: `producer_contract_mismatch`.
-Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-core/tests/support/diagnostic/producer.rs`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_stored_header_must_equal_the_producer_output_columns_in_order`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_stored_header_in_another_order_mismatches_the_producer_contract`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_stored_header_without_a_contract_column_mismatches_the_producer_contract`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_stored_header_with_an_extra_column_mismatches_the_producer_contract`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_stored_parquet_schema_must_equal_the_producer_output_types`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_stored_parquet_column_of_another_type_mismatches_the_producer_contract`.
+Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/producers.json::a_stored_header_out_of_its_producer_s_output_order_mismatches_the_contract`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_stored_header_must_equal_the_producer_output_columns_in_order`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_stored_header_in_another_order_mismatches_the_producer_contract`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_stored_header_without_a_contract_column_mismatches_the_producer_contract`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_stored_header_with_an_extra_column_mismatches_the_producer_contract`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_stored_parquet_schema_must_equal_the_producer_output_types`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_stored_parquet_column_of_another_type_mismatches_the_producer_contract`.
 
 A stored artifact whose field names, order or self-describing types do not
 exactly match the producer's output contract fails with

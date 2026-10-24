@@ -10,17 +10,6 @@ pub mod replay;
 // front end (A1), preflight and binding (A2), the other declarations (B1)
 // and the other findings (B2).
 
-pub mod copy_entry;
-pub mod declarative_flags;
-pub mod intermediate_ranges;
-pub mod intermediate_scopes;
-pub mod language;
-pub mod producer;
-pub mod project_functions;
-pub mod project_scope;
-pub mod record_operations;
-pub mod schema;
-
 use std::{cell::RefCell, collections::BTreeSet};
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},

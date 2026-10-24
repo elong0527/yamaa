@@ -2122,6 +2122,39 @@ mod project {
             }
         }
 
+        /// A project's function files are language-neutral and read by every
+        /// engine, so one that claims no host language compiles a call of a
+        /// function with no callable for any host and misses no implementation
+        /// (FUNC-1); a run of the call is refused instead (D110).
+        #[test]
+        fn an_engine_without_a_host_language_compiles_a_call_and_misses_no_implementation() {
+            use crate::support::project_call_compiler::definition;
+            use yamaa_core::{
+                project_environment::{Draft, Environment},
+                project_function::Language,
+            };
+            let spec = specification(vec![(
+                "VALUE",
+                "int",
+                call("id", vec![("x", Tree::Scalar(N::Integer("7".into())))]),
+            )]);
+            let neutral = Environment::admit(
+                None,
+                Draft {
+                    language: None,
+                    lock: None,
+                    functions: Some(vec![definition("id").file(&[(Language::R, "project::id")])]),
+                    codelists: vec![],
+                },
+            )
+            .unwrap()
+            .into_execution();
+            let compiled =
+                prepare_in(&spec, &neutral).expect("a call compiles without a host language");
+            assert_eq!(compiled.called_functions(), [0]);
+            assert_eq!(neutral.functions()[0].call(), "");
+        }
+
         #[test]
         fn compiler_selects_environment_slots_and_lowers_output_argument_dependencies() {
             let spec = specification(vec![

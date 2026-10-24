@@ -1,0 +1,220 @@
+{
+  "about": "The refusals of a specification's record operations and flags: an intermediate a row template reads as its dataset (ROW-2), an aggregate's derive step (LOOKUP-22) and a row template's read of another input (FORMULA-9), each found by its condition among the issues the declarations report, and a flag's declaration and condition (EXPR-8, FORMULA-5, FORMULA-9). `driven` has the row template `first` read the intermediate CAP of SRC, `aggregate` derives VALUE with an aggregate whose derive step a case writes (`aggregate_lookup` beside the lookup CAP), `template` has the row template `first` derive VALUE, and `flagged` derives the text column F with a flag.",
+  "documents": {
+    "driven": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "keys": ["ID"],
+      "input": {"SRC": {"path": "source.csv"}, "SECOND": {"path": "second.csv"}},
+      "intermediates": [{"id": "CAP", "dataset": "SRC"}],
+      "columns": [{"name": "ID", "type": "int"}],
+      "rows": [{"id": "first", "dataset": "CAP", "derivations": {"ID": {"value": "CAP.ID"}}}],
+      "output": {"path": "result.csv", "columns": ["ID"]}
+    },
+    "aggregate": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "base": "SRC",
+      "keys": ["ID"],
+      "input": {"SRC": {"path": "source.csv"}, "SECOND": {"path": "second.csv"}},
+      "output": {"path": "result.csv", "columns": ["ID", "VALUE"]},
+      "columns": [
+        {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+        {"name": "VALUE", "type": "int", "derivation": {"value": {"aggregate": {"derivations": {}, "expr": "SUM(V)"}}}}
+      ]
+    },
+    "aggregate_lookup": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "base": "SRC",
+      "keys": ["ID"],
+      "input": {"SRC": {"path": "source.csv"}, "SECOND": {"path": "second.csv"}},
+      "output": {"path": "result.csv", "columns": ["ID", "VALUE"]},
+      "intermediates": [{"id": "CAP", "dataset": "SRC", "key": ["ID"], "require_match": true}],
+      "columns": [
+        {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+        {"name": "VALUE", "type": "int", "derivation": {"value": {"aggregate": {"derivations": {}, "expr": "SUM(V)"}}}}
+      ]
+    },
+    "template": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "base": "SRC",
+      "keys": ["ID"],
+      "input": {"SRC": {"path": "source.csv"}, "SECOND": {"path": "second.csv"}},
+      "output": {"path": "result.csv", "columns": ["ID", "VALUE"]},
+      "rows": [{"id": "first", "dataset": "SRC", "derivations": {"ID": {"value": "SRC.ID"}, "VALUE": {"value": "SECOND.V + 1"}}}],
+      "columns": [
+        {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+        {"name": "VALUE", "type": "int"}
+      ]
+    },
+    "flagged": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "input": {"SRC": {"path": "input.csv"}},
+      "keys": ["ID"],
+      "columns": [
+        {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+        {"name": "F", "type": "str", "derivation": {"value": {"flag": {"condition": "ABSENT = 1", "false_value": "N"}}}}
+      ],
+      "output": {"path": "output.csv", "columns": ["ID", "F"]}
+    }
+  },
+  "cases": [
+    {
+      "case": "a_row_template_driver_reads_an_input_not_the_specification_itself",
+      "operation": "prepare_or_bind",
+      "input": {
+        "base": "driven",
+        "edits": [{"set": ["intermediates", "0", "dataset"], "to": "SELF"}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]], "SECOND": [["ID", "int"], ["V", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.intermediate", "context.fields"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "ROW-2", "spec_paths": ["rows.first.dataset"], "context": {"intermediate": "CAP", "fields": ["dataset"]}}]
+    },
+    {
+      "case": "a_row_template_driver_declares_no_key",
+      "operation": "prepare_or_bind",
+      "input": {
+        "base": "driven",
+        "edits": [{"set": ["intermediates", "0", "key"], "to": ["ID"]}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]], "SECOND": [["ID", "int"], ["V", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.intermediate", "context.fields"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "ROW-2", "spec_paths": ["rows.first.dataset"], "context": {"intermediate": "CAP", "fields": ["key"]}}]
+    },
+    {
+      "case": "a_row_template_driver_declares_no_absence_answer",
+      "operation": "prepare_or_bind",
+      "input": {
+        "base": "driven",
+        "edits": [{"set": ["intermediates", "0", "absent"], "to": 0}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]], "SECOND": [["ID", "int"], ["V", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.intermediate", "context.fields"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "ROW-2", "spec_paths": ["rows.first.dataset"], "context": {"intermediate": "CAP", "fields": ["absent"]}}]
+    },
+    {
+      "case": "a_row_template_driver_filters_on_its_own_input_alone",
+      "operation": "prepare_or_bind",
+      "input": {
+        "base": "driven",
+        "edits": [{"set": ["intermediates", "0", "filter"], "to": "SRC.V = SECOND.V"}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]], "SECOND": [["ID", "int"], ["V", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.intermediate", "context.fields"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "ROW-2", "spec_paths": ["rows.first.dataset"], "context": {"intermediate": "CAP", "fields": ["filter"]}}]
+    },
+    {
+      "case": "an_aggregate_derive_step_binds_at_least_one_variable",
+      "operation": "prepare_or_bind",
+      "input": {
+        "base": "aggregate",
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]], "SECOND": [["ID", "int"], ["V", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule", "context.reason"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "context": {"reason": "a derive step is a non-empty binding list"}}]
+    },
+    {
+      "case": "an_aggregate_derive_step_names_exactly_one_relation",
+      "operation": "prepare_or_bind",
+      "input": {
+        "base": "aggregate",
+        "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations"], "to": {"V": {"type": "int", "derivation": {"value": 1}}}}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]], "SECOND": [["ID", "int"], ["V", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule", "context.reason"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "context": {"reason": "a derive step names exactly one relation"}}]
+    },
+    {
+      "case": "an_aggregate_derive_binding_reads_only_variables_it_binds",
+      "operation": "prepare_or_bind",
+      "input": {
+        "base": "aggregate",
+        "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations"], "to": {"V": {"type": "int", "derivation": {"value": "W + 1"}}}}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]], "SECOND": [["ID", "int"], ["V", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule", "context.variable", "context.binding"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_derive_variable", "rule": "LOOKUP-22", "context": {"variable": "W", "binding": "V"}}]
+    },
+    {
+      "case": "an_aggregate_derive_step_reads_only_intermediates_that_select_one_record",
+      "operation": "prepare_or_bind",
+      "input": {
+        "base": "aggregate_lookup",
+        "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations"], "to": {"V": {"type": "int", "derivation": {"value": "SRC.V"}}, "C": {"type": "int", "derivation": {"value": "CAP.V"}}}}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]], "SECOND": [["ID", "int"], ["V", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule", "context.reason", "context.intermediate"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "context": {"reason": "a derive step reads only named intermediates that declare a selection (keep or nearest)", "intermediate": "CAP"}}]
+    },
+    {
+      "case": "a_row_template_cannot_read_an_input_other_than_its_dataset",
+      "operation": "prepare_or_bind",
+      "input": {
+        "base": "template",
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]], "SECOND": [["ID", "int"], ["V", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.identifier"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "FORMULA-9", "spec_paths": ["rows.first.derivations.VALUE"], "context": {"identifier": "SECOND.V"}}]
+    },
+    {
+      "case": "a_grouped_row_template_cannot_read_an_input_other_than_its_dataset",
+      "operation": "prepare_or_bind",
+      "input": {
+        "base": "template",
+        "edits": [{"set": ["rows", "0", "group_by"], "to": ["SRC.ID"]}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]], "SECOND": [["ID", "int"], ["V", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.identifier"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "FORMULA-9", "spec_paths": ["rows.first.derivations.VALUE"], "context": {"identifier": "SECOND.V"}}]
+    },
+    {
+      "case": "a_flag_reports_its_declaration_before_its_condition_s_unknown_field",
+      "operation": "bind",
+      "input": {
+        "base": "flagged",
+        "sources": {"SRC": [["ID", "int"], ["EXTRA", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [
+        {"phase": "validation", "condition": "missing_value_required", "rule": "EXPR-8"},
+        {"phase": "validation", "condition": "unknown_field", "rule": "FORMULA-9"}
+      ]
+    },
+    {
+      "case": "a_flag_condition_qualifies_the_names_it_reads",
+      "operation": "bind",
+      "input": {
+        "base": "flagged",
+        "edits": [{"set": ["columns", "1", "derivation", "value", "flag"], "to": {"condition": "EXTRA = 1"}}],
+        "sources": {"SRC": [["ID", "int"], ["EXTRA", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "unresolvable_name", "rule": "FORMULA-9"}]
+    },
+    {
+      "case": "a_flag_condition_reading_a_number_as_text_is_the_flag_s_input_type_refusal",
+      "operation": "flag_condition",
+      "input": {"expression": "str_contains(SRC.EXTRA,'a')", "path": "flag.condition", "value": 1},
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5"}]
+    }
+  ]
+}

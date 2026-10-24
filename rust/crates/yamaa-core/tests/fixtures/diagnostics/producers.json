@@ -1,0 +1,155 @@
+{
+  "about": "The refusals of an input linked to its producing specification (INPUT-6, INPUT-10, INPUT-11) and of a copy entry (SPEC-9), each reached by the detector that makes it: preparation with the producer a link names, a stored header read against the producer's contract, a layer's own validation, the copy entries of a chain's layers, and a producer read back into a specification being resolved. `consumer`, held at /consumer.yaml, reads the input SRC that its `schema` link /producer.yaml produces.",
+  "documents": {
+    "consumer": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "base": "SRC",
+      "input": {"SRC": {"path": "produced.csv", "schema": "nested/producer.yaml"}},
+      "keys": ["ID"],
+      "columns": [{"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}, "label": "ID"}],
+      "output": {"path": "produced.csv", "columns": ["ID"]}
+    }
+  },
+  "cases": [
+    {
+      "case": "a_linked_input_types_no_field_its_producer_already_types",
+      "operation": "prepare_linked",
+      "input": {
+        "base": "consumer",
+        "edits": [{"set": ["input", "SRC", "types"], "to": {}}],
+        "identity": "/consumer.yaml",
+        "links": {
+          "SRC": {
+            "identity": "/producer.yaml",
+            "document": {
+              "yamaa": "1.0",
+              "type": "spec",
+              "domain": "TEST",
+              "base": "RAW",
+              "input": {"RAW": {"path": "raw.csv"}},
+              "keys": ["ID"],
+              "columns": [
+                {"name": "VALUE", "type": "float", "derivation": {"value": "RAW.ID"}, "label": "Reported value"},
+                {"name": "ID", "type": "int", "derivation": {"value": "RAW.ID"}, "label": "Identifier"},
+                {"name": "INTERNAL", "type": "str", "derivation": {"value": "RAW.ID"}}
+              ],
+              "output": {"path": "produced.csv", "columns": ["ID", "VALUE"]}
+            }
+          }
+        }
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "redundant_field_type", "rule": "INPUT-6", "spec_paths": ["input.SRC.types"]}]
+    },
+    {
+      "case": "a_producer_whose_stored_field_has_no_label_is_no_valid_contract",
+      "operation": "prepare_linked",
+      "input": {
+        "base": "consumer",
+        "identity": "/consumer.yaml",
+        "links": {
+          "SRC": {
+            "identity": "/producer.yaml",
+            "document": {
+              "yamaa": "1.0",
+              "type": "spec",
+              "domain": "TEST",
+              "base": "RAW",
+              "input": {"RAW": {"path": "raw.csv"}},
+              "keys": ["ID"],
+              "columns": [{"name": "ID", "type": "int", "derivation": {"value": "RAW.ID"}}],
+              "output": {"path": "produced.csv", "columns": ["ID"]}
+            }
+          }
+        }
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "invalid_producer_contract", "rule": "INPUT-10", "spec_paths": ["input.SRC.schema.columns.ID.label"]}]
+    },
+    {
+      "case": "a_stored_header_out_of_its_producer_s_output_order_mismatches_the_contract",
+      "operation": "producer_header",
+      "input": {
+        "producer": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "base": "RAW",
+          "input": {"RAW": {"path": "raw.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "VALUE", "type": "float", "derivation": {"value": "RAW.ID"}, "label": "Reported value"},
+            {"name": "ID", "type": "int", "derivation": {"value": "RAW.ID"}, "label": "Identifier"},
+            {"name": "INTERNAL", "type": "str", "derivation": {"value": "RAW.ID"}}
+          ],
+          "output": {"path": "produced.csv", "columns": ["ID", "VALUE"]}
+        },
+        "dataset": "SRC",
+        "header": ["VALUE", "ID"]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "producer_contract_mismatch", "rule": "INPUT-11", "spec_paths": ["input.SRC.schema", "input.SRC.path"]}]
+    },
+    {
+      "case": "a_name_a_copy_entry_lists_that_another_column_of_its_layer_declares_is_repeated",
+      "operation": "schema_layer",
+      "input": {
+        "schema": {"schema.yaml": {"version": "1.0", "root_class": [{"columns": {"type": "list[column_class]"}}], "column_class": [{"name": {"type": "str"}}]}},
+        "document": {"columns": [{"name": "AGE"}, {"copy": {"dataset": "ADSL", "columns": ["SEX", "AGE"]}}]}
+      },
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "duplicate_identifier", "rule": "SPEC-9", "spec_paths": ["columns[1].copy.columns[1]"], "context": {"identifier": "AGE"}}]
+    },
+    {
+      "case": "a_copy_entry_dataset_that_names_no_input_is_unknown",
+      "operation": "copy_datasets",
+      "input": {"layers": [{"input": {"RAW": {"path": "raw.csv"}}, "columns": [{"copy": {"dataset": "SRC", "columns": ["ID", "BMI"]}}]}]},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "SPEC-9", "spec_paths": ["columns[0].copy.dataset"], "context": {"identifier": "SRC"}}]
+    },
+    {
+      "case": "a_copy_entry_dataset_whose_input_has_no_schema_link_refuses_the_copy",
+      "operation": "copy_datasets",
+      "input": {"layers": [{"input": {"SRC": {"path": "produced.csv"}}, "columns": [{"copy": {"dataset": "SRC", "columns": ["ID", "BMI"]}}]}]},
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "SPEC-9", "spec_paths": ["columns[0].copy.dataset"], "context": {"dataset": "SRC", "construct": "copy"}}]
+    },
+    {
+      "case": "a_copy_entry_dataset_whose_input_links_its_producer_is_admitted",
+      "operation": "copy_datasets",
+      "input": {"layers": [{"input": {"SRC": {"path": "produced.csv", "schema": "producer.yaml"}}, "columns": [{"copy": {"dataset": "SRC", "columns": ["ID", "BMI"]}}]}]},
+      "issues": []
+    },
+    {
+      "case": "a_copied_name_that_is_not_an_output_column_of_the_producer_is_unknown",
+      "operation": "copy_columns",
+      "input": {
+        "layers": [{"input": {"SRC": {"path": "produced.csv", "schema": "producer.yaml"}}, "columns": [{"copy": {"dataset": "SRC", "columns": ["ID", "BMI"]}}]}],
+        "producers": {
+          "SRC": {
+            "yamaa": "1.0",
+            "type": "spec",
+            "domain": "TEST",
+            "base": "RAW",
+            "input": {"RAW": {"path": "raw.csv"}},
+            "keys": ["ID"],
+            "columns": [
+              {"name": "VALUE", "type": "float", "derivation": {"value": "RAW.ID"}, "label": "Reported value"},
+              {"name": "ID", "type": "int", "derivation": {"value": "RAW.ID"}, "label": "Identifier"},
+              {"name": "INTERNAL", "type": "str", "derivation": {"value": "RAW.ID"}}
+            ],
+            "output": {"path": "produced.csv", "columns": ["ID", "VALUE"]}
+          }
+        }
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "SPEC-9", "spec_paths": ["columns[0].copy.columns[1]"], "context": {"identifier": "SRC.BMI"}}]
+    },
+    {
+      "case": "a_producer_whose_copies_lead_back_to_a_specification_being_resolved_is_a_cycle",
+      "operation": "copy_cycle",
+      "input": {"dataset": "SRC", "cycle": ["/adae.yaml", "/adsl.yaml", "/adae.yaml"]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.dataset"],
+      "issues": [{"phase": "validation", "condition": "producer_workflow_cycle", "rule": "SPEC-9", "spec_paths": ["input.SRC.schema"], "context": {"dataset": "SRC"}}]
+    }
+  ]
+}

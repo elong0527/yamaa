@@ -225,20 +225,6 @@ mod diagnostics {
             // The tables still written in Rust, one group for each part of
             // #3691 that moves them, so the parts never edit the same lines.
 
-            // The other declarations (B1).
-            reached.extend(intermediate_scopes::reached());
-            reached.extend(intermediate_ranges::reached());
-            reached.extend(intermediate_ranges::match_phase_reached());
-            reached.extend(record_operations::reached());
-            reached.extend(project_functions::reached());
-            reached.extend(project_functions::donor_keep_reached());
-            reached.extend(project_scope::reached());
-            reached.extend(producer::reached());
-            reached.extend(copy_entry::reached());
-            reached.extend(declarative_flags::reached());
-            reached.extend(schema::reached());
-            reached.extend(language::reached());
-
             // The project environment (C).
             reached.extend(project_environment::reached());
             reached.extend(project_environment::extended_alias_reached());

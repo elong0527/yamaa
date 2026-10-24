@@ -758,6 +758,94 @@ mod relations {
             ]);
             Tree::map(fields).document()
         }
+        /// An intermediate drives rows whenever each field it exposes has one
+        /// result type (ROW-2, EXPR-14): a formula over integers is an
+        /// integer, padding is text.
+        #[test]
+        fn a_driving_intermediate_exposes_each_derived_field_as_its_one_result_type() {
+            let src = schema(&[("ID", T::Int)]);
+            let donor = schema(&[("ID", T::Int), ("X", T::Int)]);
+            let source = |reference: &str| Tree::map(vec![("value", Tree::text(reference))]);
+            for (name, value, kind) in [
+                ("NEXT", Tree::text("X + 1"), T::Int),
+                (
+                    "PADDED",
+                    Tree::map(vec![(
+                        "str_pad",
+                        Tree::map(vec![
+                            ("source", Tree::text("X")),
+                            ("width", Tree::integer(3)),
+                        ]),
+                    )]),
+                    T::Str,
+                ),
+            ] {
+                let mut fields = header();
+                fields.extend([
+                    ("domain", Tree::text("OUT")),
+                    ("base", Tree::text("SRC")),
+                    ("keys", Tree::List(vec![Tree::text("ID")])),
+                    (
+                        "input",
+                        Tree::map(vec![
+                            ("SRC", Tree::map(vec![("path", Tree::text("src.csv"))])),
+                            ("D", Tree::map(vec![("path", Tree::text("d.csv"))])),
+                        ]),
+                    ),
+                    (
+                        "intermediates",
+                        Tree::List(vec![Tree::map(vec![
+                            ("id", Tree::text("P")),
+                            ("dataset", Tree::text("D")),
+                            (
+                                "derivations",
+                                Tree::map(vec![(name, Tree::map(vec![("value", value)]))]),
+                            ),
+                            (
+                                "columns",
+                                Tree::List(vec![Tree::text("ID"), Tree::text(name)]),
+                            ),
+                        ])]),
+                    ),
+                    (
+                        "output",
+                        Tree::map(vec![
+                            ("path", Tree::text("out.csv")),
+                            ("columns", Tree::List(vec![Tree::text("ID")])),
+                        ]),
+                    ),
+                    (
+                        "columns",
+                        Tree::List(vec![Tree::map(vec![
+                            ("name", Tree::text("ID")),
+                            ("type", Tree::text("int")),
+                            ("derivation", source("SRC.ID")),
+                        ])]),
+                    ),
+                    (
+                        "rows",
+                        Tree::List(vec![Tree::map(vec![
+                            ("id", Tree::text("selected")),
+                            ("dataset", Tree::text("P")),
+                            ("derivations", Tree::map(vec![("ID", source("P.ID"))])),
+                        ])]),
+                    ),
+                ]);
+                let plan = prepare(&Tree::map(fields).document())
+                    .unwrap()
+                    .bind_sources(&[&src, &donor])
+                    .unwrap_or_else(|error| panic!("{name}: {error:?}"));
+                let item = resolved::intermediates(&plan)[0];
+                assert_eq!(
+                    item.derivations
+                        .as_ref()
+                        .unwrap()
+                        .column_kind(donor.columns().len()),
+                    Some(kind),
+                    "{name}"
+                );
+            }
+        }
         #[test]
         fn common_authored_input_needs_no_base_and_can_follow_secondary_input_in_written_order() {
             let src = schema(&[("ID", T::Str), ("K", T::Str)]);
