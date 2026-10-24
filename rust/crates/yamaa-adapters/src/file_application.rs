@@ -1515,7 +1515,7 @@ mod tests {
             .iter()
             .map(|issue| {
                 (
-                    issue.definition().condition,
+                    issue.code,
                     issue.spec_paths.clone(),
                     crate::json_wire::encode_object(&issue.context),
                 )
@@ -1530,7 +1530,11 @@ mod tests {
             (saved.ok(), issues, entries),
             (
                 Some(false),
-                vec![("engine_rejected", vec!["output.path".to_owned()], context)],
+                vec![(
+                    ConditionCode::ApplicationRejected,
+                    vec!["output.path".to_owned()],
+                    context,
+                )],
                 vec!["input.csv".to_owned(), "spec.yaml".to_owned()],
             ),
             "the save stopped before the output's third partition"
