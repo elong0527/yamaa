@@ -1,0 +1,44 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADLB
+keys: [STUDYID, USUBJID, PARAMCD]
+input:
+  LB: {path: input/lb.csv, types: {LBSTRESN: float}}
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, PARAMCD, AVAL, AVALFNC]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: LB.LBTESTCD
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: LB.LBSTRESN
+
+  # Meant as the upper outlier fence, 1.5 interquartile ranges above the
+  # third quartile; a quantile is a proportion from 0 through 1, so the run
+  # is rejected before any data is read.
+  - name: AVALFNC
+    type: float
+    label: Upper Outlier Fence of Analysis Value
+    derivation:
+      aggregate:
+        group_by: [PARAMCD]
+        quantile: 1.5
+        expr: "QUANTILE(AVAL)"

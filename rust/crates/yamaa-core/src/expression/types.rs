@@ -7,7 +7,6 @@ use super::evaluate::Step;
 use super::syntax::{NodeKind, TemporalKind};
 use super::{Context, Function, Reducer};
 use crate::numeric::BinaryOperator;
-use crate::reduction::NumericReducer;
 use crate::result_type::ResultType;
 use crate::value::{comparable_types, ValueType};
 
@@ -27,9 +26,10 @@ pub enum TypeFinding {
     ExpectedText { actual: ValueType, route: Vec<Step> },
     /// A non-text `str_contains` source.
     ContainsExpectedText { actual: ValueType, route: Vec<Step> },
-    /// `SUM` or `MEAN` over a bare name that is not numeric.
+    /// A reducer that requires a number, such as `SUM`, `MEAN` or `MEDIAN`,
+    /// over a bare name that is not numeric.
     ReductionInput {
-        reducer: NumericReducer,
+        reducer: Reducer,
         source: String,
         actual: ValueType,
     },
@@ -153,10 +153,18 @@ impl CompiledExpression {
                 };
                 match reducer {
                     Reducer::Count => ResultType::INT,
-                    Reducer::Mean => ResultType::FLOAT,
                     Reducer::Sum => number(reduced),
                     Reducer::Min | Reducer::Max | Reducer::Only => reduced,
                     Reducer::StrJoin => ResultType::STR,
+                    // `MEAN` and the statistical reducers are real-valued.
+                    Reducer::Mean
+                    | Reducer::Median
+                    | Reducer::Q1
+                    | Reducer::Q3
+                    | Reducer::Quantile
+                    | Reducer::StdDev
+                    | Reducer::Variance
+                    | Reducer::GeoMean => ResultType::FLOAT,
                 }
             }
             _ => ResultType::UNKNOWN,
@@ -198,9 +206,7 @@ impl CompiledExpression {
                                 else {
                                     break 'operand;
                                 };
-                                let reducer = match reduction.reducer {
-                                    Reducer::Sum => NumericReducer::Sum,
-                                    Reducer::Mean => NumericReducer::Mean,
+                                match reduction.reducer {
                                     // These keep the type they reduce, which the
                                     // arithmetic that reads them needs numeric.
                                     Reducer::Min | Reducer::Max | Reducer::Only => {
@@ -217,12 +223,14 @@ impl CompiledExpression {
                                     // Both accept any type; a join's text is
                                     // checked below.
                                     Reducer::Count | Reducer::StrJoin => break 'operand,
-                                };
-                                findings.push(TypeFinding::ReductionInput {
-                                    reducer,
-                                    source: name.clone(),
-                                    actual,
-                                });
+                                    // `SUM`, `MEAN` and the statistical
+                                    // reducers require a number.
+                                    reducer => findings.push(TypeFinding::ReductionInput {
+                                        reducer,
+                                        source: name.clone(),
+                                        actual,
+                                    }),
+                                }
                             }
                             ReductionOperand::Records(_) => {}
                         }
