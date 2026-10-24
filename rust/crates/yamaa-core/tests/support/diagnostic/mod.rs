@@ -1,5 +1,7 @@
 //! The diagnostic contracts: the replay of the expected issues written as
-//! data under `tests/fixtures/diagnostics/` (#3691) and its readers.
+//! data under `tests/fixtures/diagnostics/` (#3691), its readers, and the
+//! case form it shares with the adapters' replay (#3798).
+pub mod form;
 pub mod json;
 pub mod operations;
 pub mod replay;

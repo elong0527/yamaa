@@ -12,7 +12,10 @@
 //! what the step running `name` reports when every producer it reads has
 //! failed. Each takes `files` and `directories` as the file route does.
 use super::{path, study, File, Reported};
-use crate::support::diagnostic::replay::{closed, field, text};
+use crate::support::diagnostic::{
+    form::Outcome,
+    replay::{closed, field, text},
+};
 use yamaa_adapters::project_scope::Project;
 use yamaa_core::{json::Value, project_environment::Submission, project_function::Language};
 
@@ -73,5 +76,6 @@ pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
     Some(Reported {
         issues,
         study: Some(study),
+        outcome: Outcome::default(),
     })
 }

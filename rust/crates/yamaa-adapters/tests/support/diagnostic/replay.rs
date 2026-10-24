@@ -24,13 +24,21 @@
 //!
 //! An input's files are written to a fresh study directory: a file is its
 //! text, or a document of the fixture's `documents` taken by name (`base`)
-//! with `edits`, each replacing text that occurs exactly once. A row's text
-//! that starts with `{study}/` names a file of that directory as the engine
-//! spells its path.
+//! with `edits`, each replacing text that occurs exactly once. An issue row's
+//! text that starts with `{study}/` names a file of that directory as the
+//! engine spells its path.
+//!
+//! A positive case also states the output table's rows, the run report's
+//! rows or the files its operation's save wrote, as [`super::form`] reads
+//! them for both crates' replays, and each is compared with what the
+//! operation reports.
 //!
 //! Every row was authored: in the test it moved from, or from the rule card,
 //! registry entry or sibling record its pull request names. No run wrote one.
-use super::operations::{self, Reported};
+use super::{
+    form::{self, Stated},
+    operations::{self, Reported},
+};
 use std::{collections::BTreeSet, path::Path};
 use yamaa_core::json::{Map, Value};
 
@@ -59,6 +67,8 @@ pub struct Case {
     /// Whether the rows are some of the issues, found by their cause.
     pub among: bool,
     pub issues: Vec<Value>,
+    /// The tables and files the case states beside its issues.
+    pub stated: Stated,
 }
 
 /// Every case of every fixture file, by file name and then as written. A
@@ -87,19 +97,17 @@ pub fn cases() -> Vec<Case> {
         let fixture = yamaa_adapters::json_wire::decode(file.text)
             .unwrap_or_else(|error| panic!("{name}: {error}"));
         unique_members(file.text, name);
-        closed(&fixture, &["about", "documents", "cases"]);
+        closed(&fixture, &form::FIXTURE);
         let documents = fixture.get("documents");
         for case in items(field(&fixture, "cases")) {
-            closed(
-                case,
-                &["case", "operation", "input", "compares", "among", "issues"],
-            );
             let case_name = text(field(case, "case"));
             assert!(
                 names.insert(case_name.to_owned()),
                 "{name}: the case {case_name} is named twice"
             );
             let label = format!("{name}::{case_name}");
+            let _case = Naming(format!("while reading {label}"));
+            closed(case, &form::CASE);
             let operations = match field(case, "operation") {
                 Value::Array(items) => items.iter().map(|item| text(item).to_owned()).collect(),
                 operation => vec![text(operation).to_owned()],
@@ -124,6 +132,7 @@ pub fn cases() -> Vec<Case> {
             }
             cases.push(Case {
                 input: resolved(documents, field(case, "input"), &label),
+                stated: Stated::read(case, &label),
                 label,
                 operations,
                 compares,
@@ -136,7 +145,9 @@ pub fn cases() -> Vec<Case> {
 }
 
 /// Replay every case: the issues each of its operations reports must equal
-/// its rows, or, for a case found `among` them, include each of its rows.
+/// its rows, or, for a case found `among` them, include each of its rows,
+/// and the tables and files the operation reports must be the ones the case
+/// states.
 pub fn replay() {
     for case in cases() {
         for operation in &case.operations {
@@ -145,7 +156,11 @@ pub fn replay() {
                 _ => format!("{} ({operation})", case.label),
             };
             let _replaying = Naming(format!("while replaying {label}"));
-            let Reported { issues, study } = operations::run(operation, &case.input);
+            let Reported {
+                issues,
+                study,
+                outcome,
+            } = operations::run(operation, &case.input);
             let actual = crate::support::rows(&issues);
             let rendered = actual
                 .iter()
@@ -179,6 +194,7 @@ pub fn replay() {
                     "{label}: the issues are\n{rendered}"
                 );
             }
+            case.stated.compare(&outcome, operation, &label);
         }
     }
 }
