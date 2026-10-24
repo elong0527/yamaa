@@ -440,12 +440,9 @@ impl<'d> Lower<'d> {
 
     /// `flag`: a bare predicate, or `{condition, true_value, false_value, missing}`.
     fn flag(&mut self, p: usize, site: Meta) -> Option<ExprId> {
-        let condition = if self.text(p).is_some() {
-            p
-        } else {
-            self.field(p, "condition")
-                .filter(|&n| self.text(n).is_some())?
-        };
+        let condition = self
+            .payload_field(Verb::Flag, p, "condition")
+            .filter(|&n| self.text(n).is_some())?;
         let id = self.reserve(site);
         let at = self.meta(site, Segment::Field("condition"), Some(condition));
         let condition = self.predicate(condition, at);
@@ -705,13 +702,10 @@ impl<'d> Lower<'d> {
     }
 
     fn aggregate(&mut self, p: usize, site: Meta) -> Option<ExprId> {
-        let (text, shorthand) = match self.node(p) {
-            N::Text(_) => (p, true),
-            _ => (
-                self.field(p, "expr").filter(|&n| self.text(n).is_some())?,
-                self.entries(p).len() == 1,
-            ),
-        };
+        let text = self
+            .payload_field(Verb::Aggregate, p, "expr")
+            .filter(|&n| self.text(n).is_some())?;
+        let shorthand = text == p || self.entries(p).len() == 1;
         let id = self.reserve(site);
         let key = self.field(p, "key").map(|node| {
             let meta = self.meta(site, Segment::Field("key"), Some(node));
@@ -829,13 +823,10 @@ impl<'d> Lower<'d> {
 
     /// `odm`: an item, written alone or with its selectors and filter.
     fn odm(&mut self, p: usize, site: Meta) -> Option<ExprId> {
-        let (item, shorthand) = match self.node(p) {
-            N::Text(_) => (p, true),
-            _ => (
-                self.field(p, "item").filter(|&n| self.text(n).is_some())?,
-                self.entries(p).len() == 1,
-            ),
-        };
+        let item = self
+            .payload_field(Verb::Odm, p, "item")
+            .filter(|&n| self.text(n).is_some())?;
+        let shorthand = item == p || self.entries(p).len() == 1;
         let id = self.reserve(site);
         let item_meta = if shorthand {
             site
