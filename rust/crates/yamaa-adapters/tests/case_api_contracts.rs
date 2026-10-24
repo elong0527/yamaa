@@ -12,6 +12,10 @@ use yamaa_core::{
     diagnostic::Diagnostic, domain_entry::Request, json::Value, project_function::Language,
 };
 
+fn resource_contracts() -> Value {
+    yamaa_adapters::json_wire::decode(include_str!("fixtures/resource_api_contracts.json")).unwrap()
+}
+
 struct Calls {
     study: crate::support::Scratch,
     checked: Vec<Diagnostic>,
@@ -385,4 +389,147 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
     );
     assert_eq!((domains, preparation, either, checks), (178, 1, 4, 53));
     assert_eq!((accepted_saves, refused_saves, no_save), (113, 30, 93));
+}
+
+/// Seam: the composition's save return, held artifact set and capture counter
+/// are independent of the replay's issue rows and saved-file delta.
+#[test]
+fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
+    let authored = resource_contracts();
+    let contracts = replay::object(replay::field(&authored, "define"));
+    let mut seen = BTreeSet::new();
+    let (mut accepted, mut refused, mut artifact_contracts) = (0, 0, 0);
+    for case in replay::cases() {
+        let Some(expected) = contracts.get(&case.label) else {
+            continue;
+        };
+        assert!(seen.insert(case.label.clone()));
+        replay::closed(expected, &["save", "empty_artifacts", "absent"]);
+        let study = operations::study(&case.input);
+        let staged = operations::state(&study);
+        let project = study.identity(replay::text(replay::field(&case.input, "project")));
+        let section = operations::section(replay::field(&case.input, "section"));
+        let host =
+            crate::support::host(case.input.get("host").map(replay::text).unwrap_or("python"));
+        let mut define = yamaa_adapters::file_define::Define::prepare(
+            &project,
+            section,
+            Some(replay::text(replay::field(&case.input, "created"))),
+            "0.3.0",
+            Some(host),
+            None,
+        );
+        assert_eq!(
+            operations::state(&study),
+            staged,
+            "{}: preparation publishes no files or directories",
+            case.label
+        );
+        if let Some(empty) = expected.get("empty_artifacts") {
+            artifact_contracts += 1;
+            assert_eq!(
+                &Value::Bool(define.artifacts().len() == 0),
+                empty,
+                "{}: the authored held-artifact contract",
+                case.label
+            );
+        }
+        let reads = define.capture_reads();
+        let result = define.save();
+        match replay::field(expected, "save") {
+            Value::Bool(true) => {
+                accepted += 1;
+                assert!(
+                    matches!(result, Ok(true)),
+                    "{}: expected Ok(true), got {result:?}",
+                    case.label
+                );
+                saved_bytes(&study, case.stated.saved.as_ref().unwrap(), &case.label);
+            }
+            Value::Bool(false) => {
+                refused += 1;
+                assert!(
+                    result.is_err(),
+                    "{}: refused composition must fail its save, got {result:?}",
+                    case.label
+                );
+                assert_eq!(
+                    operations::state(&study),
+                    staged,
+                    "{}: refused save preserves every staged path",
+                    case.label
+                );
+            }
+            other => panic!("{}: unknown save contract {other:?}", case.label),
+        }
+        assert_eq!(
+            define.capture_reads(),
+            reads,
+            "{}: save reads no source again",
+            case.label
+        );
+        for path in replay::items(replay::field(expected, "absent")) {
+            let path = replay::text(path);
+            assert!(
+                !study.join(path).exists(),
+                "{}: {path} remains absent, including empty directories",
+                case.label
+            );
+        }
+    }
+    assert_eq!(
+        seen,
+        contracts.keys().cloned().collect(),
+        "every define API case remains present"
+    );
+    assert_eq!((accepted, refused, artifact_contracts), (3, 23, 3));
+}
+
+/// Seam: a refused written path has no accepted output and cannot publish,
+/// independently of the diagnostic projection or the save's byte delta.
+#[test]
+fn migrated_written_paths_keep_output_and_publication_contracts() {
+    let authored = resource_contracts();
+    let contracts = replay::items(replay::field(&authored, "written_paths"))
+        .iter()
+        .map(|name| replay::text(name).to_owned())
+        .collect::<BTreeSet<_>>();
+    let mut seen = BTreeSet::new();
+    for case in replay::cases() {
+        if !contracts.contains(&case.label) {
+            continue;
+        }
+        assert!(seen.insert(case.label.clone()));
+        let Calls { study, built, .. } = calls(&case.input, Language::Python, &case.label);
+        let staged = operations::state(&study);
+        if let Ok(mut domain) = built {
+            assert!(
+                domain.output().is_none(),
+                "{}: refused path has no accepted output",
+                case.label
+            );
+            let saved = domain.save();
+            assert!(
+                matches!(saved, Err(file_application::FailedBuild)),
+                "{}: refused domain save: {saved:?}",
+                case.label
+            );
+        }
+        assert_eq!(
+            operations::state(&study),
+            staged,
+            "{}: refusal publishes no path",
+            case.label
+        );
+        assert!(
+            !study.join("entry/output.csv").exists(),
+            "{}: refused build leaves output absent",
+            case.label
+        );
+    }
+    assert_eq!(
+        seen, contracts,
+        "every written-path API case remains present"
+    );
+    assert_eq!(seen.len(), 9);
 }
