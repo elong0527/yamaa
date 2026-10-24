@@ -159,36 +159,9 @@ mod project {
                 ],
                 "a reserved metadata key",
             );
-            let issues =
-                study.check(&VALID.edit("length: 3", "length: -99999999999999999999999999999"));
-            assert_eq!(issues[0].condition(), "submission_length_invalid");
-            assert_eq!(issues[0].rule(), Some("SUB-7"));
-            assert_eq!(
-                yamaa_adapters::json_wire::encode_object(&issues[0].context),
-                "{\"column\":\"VALUE\",\"length\":-99999999999999999999999999999}"
-            );
-            // A bare source admits Derived, which still needs its method.
-            let issues = study.check(&VALID.edit(
-                "{type: Assigned, source: Sponsor}",
-                "{type: Derived, source: Sponsor}",
-            ));
-            assert_eq!(
-                issues
-                    .iter()
-                    .map(|issue| issue.condition())
-                    .collect::<Vec<_>>(),
-                ["method_missing"]
-            );
-            let raw = VALID.edit(
-                "submission: {length: 3",
-                "verifications: [{max_length: {max: 4}}]\n    submission: {length: 3",
-            );
-            let issues = study.check(&raw);
-            assert_eq!(issues[0].condition(), "declared_length_conflict");
-            assert_eq!(
-                yamaa_adapters::json_wire::encode_object(&issues[0].context),
-                "{\"column\":\"VALUE\",\"length\":3,\"max_length\":4}"
-            );
+            // A length beyond any integer, a Derived origin from a bare
+            // source without its method, and a length above the column's
+            // max_length are `submission.json`'s.
             assert!(!study.0.join("output.csv").exists());
         }
         /// One closed CDISC vocabulary, in the order of the data file that
@@ -221,7 +194,8 @@ mod project {
                 .collect()
         }
         /// SUB-9: every role the data file lists is admitted where the
-        /// specification is read, and any other fails there.
+        /// specification is read, and any other fails there, as
+        /// `submission.json`'s three refused roles do.
         #[test]
         fn a_role_outside_the_nine_fails_where_the_specification_is_read() {
             let study = Study::new();
@@ -232,29 +206,11 @@ mod project {
             for role in &roles {
                 assert!(study.check(&with_role(role)).is_empty(), "{role}");
             }
-            for role in ["Qualifier", "record qualifier", "Analysis Value"] {
-                let issues = study.check(&with_role(role));
-                assert_eq!(issues.len(), 1, "{role}: {issues:?}");
-                assert_eq!(
-                    (issues[0].phase(), issues[0].condition(), issues[0].rule()),
-                    ("validation", "value_not_permitted", Some("SCHEMA-12"))
-                );
-                assert_eq!(issues[0].spec_paths, ["columns.VALUE.submission.role"]);
-                let context = yamaa_core::json::Value::Object(issues[0].context.clone());
-                assert_eq!(context["value"], role);
-                let permitted = context["permitted"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .map(|value| value.as_str().unwrap())
-                    .collect::<Vec<_>>();
-                assert_eq!(roles, permitted);
-            }
             assert!(!study.0.join("output.csv").exists());
         }
         /// CT-2: a terminology standard's name is one of the standard names
         /// the data file lists, refused where the project is read, before any
-        /// document is generated.
+        /// document is generated, as `submission.json`'s CDISC CT is.
         #[test]
         fn a_terminology_standard_name_outside_the_vocabulary_fails_where_the_project_is_read() {
             let study = Study::new();
@@ -285,22 +241,6 @@ mod project {
             for name in &names {
                 assert!(check(name).is_empty(), "{name}");
             }
-            let issues = check("CDISC CT");
-            assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(
-                (issues[0].phase(), issues[0].condition(), issues[0].rule()),
-                ("validation", "value_not_permitted", Some("SCHEMA-12"))
-            );
-            assert_eq!(issues[0].spec_paths, ["codelists[0].standard.name"]);
-            let context = yamaa_core::json::Value::Object(issues[0].context.clone());
-            assert_eq!(context["value"], "CDISC CT");
-            let permitted = context["permitted"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|value| value.as_str().unwrap())
-                .collect::<Vec<_>>();
-            assert_eq!(names, permitted);
             assert!(!study.0.join("output.csv").exists());
         }
         #[test]
@@ -319,14 +259,7 @@ mod project {
                 identity(path),
             )
             .unwrap();
-            let issues = run.issues();
-            assert_eq!(issues.len(), 1);
-            assert_eq!(issues[0].condition(), "length_failed");
-            assert_eq!(issues[0].rule(), Some("CHECK-8"));
-            assert_eq!(
-                yamaa_adapters::json_wire::encode_object(&issues[0].context),
-                "{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":2}],\"max\":3}"
-            );
+            // The one length failure is `submission.json`'s; it refuses the save.
             assert!(run.save().is_err());
             assert!(!study.0.join("output.csv").exists());
         }
@@ -353,25 +286,14 @@ mod project {
             }
             const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, report: checks.csv, columns: [ID, LBTESTCD, LBDTC, LBORRES]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBTESTCD, type: str}\n  - {name: LBDTC, type: str, derivation: SRC.DTC, submission: {data_type: DTC_TYPE, origins: [{type: Collected, source: Investigator}]}}\n  - {name: LBORRES, type: str, derivation: SRC.RES, submission: {length: 20, origins: [{type: Collected, source: Investigator}], value_level: [{id: ONSET, where: {LBTESTCD: [ONSET]}, data_type: date}]}}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: \"'GLUC'\"}\n  - id: onset\n    derivations: {LBTESTCD: \"'ONSET'\"}\n";
             let study = Study::new();
-            // The column's type checks every row: a space is not ISO 8601.
-            let run = domain(
+            // The column's type checks every row: a space is not ISO 8601, so
+            // the run fails as `submission.json` records it.
+            let mut run = domain(
                 &study,
                 &SPEC.edit("DTC_TYPE", "partialDatetime"),
                 "ID,DTC,RES\n1,2025-03-04T08:30,2025-03-04\n2,2025-03-04 08:30,2025-03-05\n",
             );
-            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
-            let issue = &run.issues()[0];
-            assert_eq!(
-                (issue.phase(), issue.condition(), issue.rule()),
-                ("verification", "data_type_failed", Some("SUB-26"))
-            );
-            assert_eq!(issue.spec_paths, ["columns.LBDTC.submission.data_type"]);
-            assert_eq!(
-                yamaa_core::json::Value::Object(issue.context.clone()),
-                yamaa_adapters::json!({"column": "LBDTC", "data_type": "partialDatetime", "failure_count": 2, "keys": [{"ID": 2, "LBTESTCD": "GLUC"}, {"ID": 2, "LBTESTCD": "ONSET"}]})
-            );
             // The run report names the check `data_type` (CHECK-24).
-            let mut run = run;
             assert!(run.save().is_err());
             let checks = fs::read_to_string(study.0.join("checks.csv")).unwrap();
             assert!(
@@ -381,26 +303,9 @@ mod project {
                 "{checks}"
             );
             fs::remove_file(study.0.join("checks.csv")).unwrap();
-            // An entry's type checks only the rows its where clause selects:
-            // the glucose result is text, while the onset result must be a
-            // date.
-            let run = domain(
-                &study,
-                &SPEC.edit("DTC_TYPE", "partialDatetime"),
-                "ID,DTC,RES\n1,2025-03-04T08:30,5.1\n2,2025-03,2025-03\n",
-            );
-            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
-            let issue = &run.issues()[0];
-            assert_eq!(issue.condition(), "data_type_failed");
-            assert_eq!(
-                issue.spec_paths,
-                ["columns.LBORRES.submission.value_level.ONSET.data_type"]
-            );
-            assert_eq!(
-                yamaa_core::json::Value::Object(issue.context.clone()),
-                yamaa_adapters::json!({"column": "LBORRES", "data_type": "date", "failure_count": 2, "keys": [{"ID": 1, "LBTESTCD": "ONSET"}, {"ID": 2, "LBTESTCD": "ONSET"}]})
-            );
-            // Every value of its form, and a missing one, passes and saves.
+            // An entry's type checks only the rows its where clause selects
+            // (`submission.json`). Every value of its form, and a missing
+            // one, passes and saves.
             let mut run = domain(
                 &study,
                 &SPEC.edit("DTC_TYPE", "incompleteDatetime"),
@@ -420,23 +325,8 @@ mod project {
                 assert!(checks.contains(row), "{row}\n{checks}");
             }
             // An entry selects its rows by comparing text, so its where
-            // column must be a declared `str` column (SUB-12).
-            let issues = study.check(
-                &SPEC
-                    .edit("DTC_TYPE", "partialDatetime")
-                    .edit("{name: LBTESTCD, type: str}", "{name: LBTESTCD, type: int}")
-                    .edit("\"'GLUC'\"", "\"'1'\"")
-                    .edit("\"'ONSET'\"", "\"'2'\""),
-            );
-            assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(
-                (issues[0].condition(), issues[0].rule()),
-                ("value_level_where_invalid", Some("SUB-12"))
-            );
-            assert_eq!(
-                issues[0].spec_paths,
-                ["columns.LBORRES.submission.value_level.ONSET.where.LBTESTCD"]
-            );
+            // column must be a declared `str` column (SUB-12): the refusal
+            // of an `int` one is `submission.json`'s.
         }
 
         /// A value-level check reads its completed where column. When that
@@ -447,20 +337,9 @@ mod project {
         #[test]
         fn value_level_checks_wait_for_a_where_column_the_column_phase_completes() {
             const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [ID, SEQ]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, SEQ, LBORRES, LBTESTCD]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: LBORRES, type: str, derivation: SRC.RES, submission: {length: 20, origins: [{type: Collected, source: Investigator}], value_level: [{id: ONSET, where: {LBTESTCD: [ONSET]}, ENTRY}]}}\n  - {name: LBTESTCD, type: str, derivation: SRC.CODE}\nrows:\n  - id: onset\n    filter: \"SRC.CODE = 'ONSET'\"\n    derivations: {LBTESTCD: \"'ONSET'\"}\n  - id: other\n    filter: \"SRC.CODE <> 'ONSET'\"\n";
-            for (entry, field, failing, context) in [
-                (
-                    "mandatory: true",
-                    "mandatory",
-                    "ID,SEQ,CODE,RES\n1,1,ONSET,\n1,2,GLUC,\n",
-                    yamaa_adapters::json!({"column": "LBORRES", "failure_count": 1, "keys": [{"ID": 1, "SEQ": 1}]}),
-                ),
-                (
-                    "data_type: date",
-                    "data_type",
-                    "ID,SEQ,CODE,RES\n1,1,ONSET,2025-03\n1,2,GLUC,2025-03\n",
-                    yamaa_adapters::json!({"column": "LBORRES", "data_type": "date", "failure_count": 1, "keys": [{"ID": 1, "SEQ": 1}]}),
-                ),
-            ] {
+            // The check selects the onset row by its completed test code, and
+            // fails on it as `submission.json` records for each entry.
+            for entry in ["mandatory: true", "data_type: date"] {
                 let study = Study::new();
                 let spec = SPEC.edit("ENTRY", entry);
                 let issues = study.check(&spec);
@@ -477,21 +356,6 @@ mod project {
                 assert_eq!(
                     fs::read_to_string(study.0.join("output.csv")).unwrap(),
                     "ID,SEQ,LBORRES,LBTESTCD\n1,1,2025-03-04,ONSET\n1,2,,GLUC\n"
-                );
-                // The check selects the onset row by its completed test code.
-                let run = domain(&study, &spec, failing);
-                assert_eq!(run.issues().len(), 1, "{entry}: {:?}", run.issues());
-                let issue = &run.issues()[0];
-                assert_eq!(
-                    issue.spec_paths,
-                    [format!(
-                        "columns.LBORRES.submission.value_level.ONSET.{field}"
-                    )]
-                );
-                assert_eq!(
-                    yamaa_core::json::Value::Object(issue.context.clone()),
-                    context,
-                    "{entry}"
                 );
             }
         }
@@ -728,7 +592,8 @@ mod project {
                 );
             }
             // Without dataset metadata, `core` and ADaM's `mandatory` are not
-            // yet required, while a declared value is still judged.
+            // yet required, while a declared value is still judged
+            // (`submission.json`).
             let partial = ADAM.edit(
                 "submission: {label: Subject Level, class: SUBJECT LEVEL ANALYSIS DATASET, structure: One record per subject, repeating: false}\n",
                 "",
@@ -736,12 +601,6 @@ mod project {
             assert!(study
                 .check(&partial.edit("{core: Perm, mandatory: false, length: 3", "{length: 3"))
                 .is_empty());
-            let issues = study.check(&partial.edit(
-                "{core: Perm, mandatory: false, length: 3",
-                "{core: Exp, length: 3",
-            ));
-            assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(issues[0].spec_paths, ["columns.VALUE.submission.core"]);
             assert!(!study.0.join("output.csv").exists());
         }
 
@@ -756,28 +615,9 @@ mod project {
             let path = study.0.join("spec.yaml");
             let path = path.to_str().unwrap();
             let project = study.0.join("project.yaml");
+            // Each list fails on its own rows (`submission.json`), which
+            // refuses the save.
             let mut run = project_domain(path, project.to_str().unwrap());
-            assert_eq!(run.issues().len(), 2, "{:?}", run.issues());
-            for issue in run.issues() {
-                assert_eq!(
-                    (issue.phase(), issue.condition(), issue.rule()),
-                    ("verification", "allowed_values_failed", Some("CT-7"))
-                );
-                assert_eq!(issue.spec_paths, ["columns.RESULT.submission.codelist"]);
-            }
-            let contexts = run
-                .issues()
-                .iter()
-                .map(|issue| yamaa_core::json::Value::Object(issue.context.clone()))
-                .collect::<Vec<_>>();
-            assert_eq!(
-                contexts[0],
-                yamaa_adapters::json!({"column":"RESULT", "codelist":"DEFAULT", "failure_count":1, "keys":[{"ID":1,"LBTESTCD":"CREAT"}], "values":["G"]})
-            );
-            assert_eq!(
-                contexts[1],
-                yamaa_adapters::json!({"column":"RESULT", "codelist":"GLUCOSE", "failure_count":1, "keys":[{"ID":2,"LBTESTCD":"GLUC"}], "values":["D"]})
-            );
             assert!(run.save().is_err());
             assert!(!study.0.join("output.csv").exists());
         }
@@ -798,25 +638,6 @@ mod project {
             let path = path.to_str().unwrap();
             let environment = study.0.join("project.yaml");
             let mut run = project_domain(path, environment.to_str().unwrap());
-            assert_eq!(run.issues().len(), 2, "{:?}", run.issues());
-            assert_eq!(
-                (
-                    run.issues()[0].phase(),
-                    run.issues()[0].condition(),
-                    run.issues()[0].rule()
-                ),
-                ("verification", "allowed_values_failed", Some("CT-7"))
-            );
-            assert_eq!(
-                run.issues()
-                    .iter()
-                    .map(|issue| yamaa_core::json::Value::Object(issue.context.clone()))
-                    .collect::<Vec<_>>(),
-                [
-                    yamaa_adapters::json!({"column":"RESULT", "codelist":"DEFAULT", "failure_count":1, "keys":[{"ID":2,"LBTESTCD":"CREAT"}], "values":["X"]}),
-                    yamaa_adapters::json!({"column":"RESULT", "codelist":"EXT", "failure_count":1, "keys":[{"ID":1,"LBTESTCD":"GLUC"}], "values":["D"]}),
-                ]
-            );
             assert!(run.save().is_err());
             // An external dictionary is not enforced, and it still replaces the
             // column's list on its own rows.
@@ -839,12 +660,11 @@ mod project {
                 "ID,RESULT,LBTESTCD\n1,D,GLUC\n2,,GLUC\n1,D,CREAT\n2,,CREAT\n"
             );
         }
+        /// The refusal at the entry's path is `submission.json`'s, for an
+        /// unknown codelist and for one of another type.
         #[test]
         fn per_value_codelist_unknown_and_type_failures_retain_the_authored_row_path() {
-            for (codelist, expected) in [
-                ("UNKNOWN", "unknown_codelist"),
-                ("INT", "codelist_type_mismatch"),
-            ] {
+            for codelist in ["UNKNOWN", "INT"] {
                 let study = Study::new();
                 fs::write(
                     study.0.join("spec.yaml"),
@@ -856,17 +676,10 @@ mod project {
                 let path = path.to_str().unwrap();
                 let project = study.0.join("project.yaml");
                 let host = yamaa_core::project_function::Language::Python;
-                let Err(error) =
+                assert!(
                     yamaa_adapters::file_workflow::select(path, project.to_str().unwrap(), host)
-                else {
-                    panic!("invalid value codelist was admitted");
-                };
-                let issues = yamaa_adapters::project_application::selection_failure(&error);
-                assert_eq!(issues.len(), 1, "{issues:?}");
-                assert_eq!(issues[0].condition(), expected);
-                assert_eq!(
-                    issues[0].spec_paths,
-                    ["columns.RESULT.submission.value_level.GLUC.codelist"]
+                        .is_err(),
+                    "invalid value codelist was admitted"
                 );
                 assert!(!study.0.join("input.csv").exists());
             }
@@ -929,25 +742,8 @@ mod project {
                 }
                 assert!(!study.0.join("input.csv").exists());
             }
-            let study = Study::new();
-            let issues = study.check(&SPEC.edit("<binding>", OWN).edit("<code>", "GLUCOSE"));
-            assert_eq!(
-                issues
-                    .iter()
-                    .map(|issue| (
-                        issue.condition(),
-                        issue.rule(),
-                        issue.spec_paths.clone(),
-                        yamaa_core::json::Value::Object(issue.context.clone())
-                    ))
-                    .collect::<Vec<_>>(),
-                [(
-                    "project_binding_missing",
-                    Some("CT-13"),
-                    vec!["columns.LBTESTCD.submission.codelist".to_owned()],
-                    yamaa_adapters::json!({"binding": "codelist", "codelist": "TESTCD", "column": "LBTESTCD"})
-                )]
-            );
+            // A check without a project refuses the binding as
+            // `submission.json` records.
         }
         /// A float codelist's items compare with the column's values exactly
         /// (VALUE-19): 9007199254740992.0 equals no item, although it is the
@@ -1089,35 +885,18 @@ mod project {
         /// admits only a missing value (CT-11). A 1.x specification binds its
         /// inventory vocabulary only with a project file (CT-13).
         const NO_DATASETS_PROJECT: &str = "yamaa: \"1.0\"\ntype: project\n";
+        /// A present value fails the empty inventory (`submission.json`); a
+        /// missing one is admitted.
         #[test]
         fn absent_study_inventory_checks_nonmissing_values_and_keeps_missing_values_admitted() {
-            for input in ["ID,VALUE\n1,DM\n2,\n", "ID,VALUE\n1,\n"] {
-                let study = Study::new();
-                fs::write(study.0.join("spec.yaml"), inventory_spec()).unwrap();
-                fs::write(study.0.join("project.yaml"), NO_DATASETS_PROJECT).unwrap();
-                fs::write(study.0.join("input.csv"), input).unwrap();
-                let path = study.0.join("spec.yaml");
-                let project = study.0.join("project.yaml");
-                let run = project_domain(path.to_str().unwrap(), project.to_str().unwrap());
-                if input.contains("DM") {
-                    assert_eq!(run.issues().len(), 1);
-                    assert_eq!(
-                        (
-                            run.issues()[0].phase(),
-                            run.issues()[0].condition(),
-                            run.issues()[0].rule()
-                        ),
-                        ("verification", "allowed_values_failed", Some("CT-11"))
-                    );
-                    assert_eq!(
-                        run.issues()[0].spec_paths,
-                        ["columns.VALUE.submission.inventory_vocabulary"]
-                    );
-                    assert_eq!(yamaa_adapters::json_wire::encode_object(&run.issues()[0].context),"{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":1}],\"values\":[\"DM\"]}");
-                } else {
-                    assert!(run.issues().is_empty(), "{:?}", run.issues());
-                }
-            }
+            let study = Study::new();
+            fs::write(study.0.join("spec.yaml"), inventory_spec()).unwrap();
+            fs::write(study.0.join("project.yaml"), NO_DATASETS_PROJECT).unwrap();
+            fs::write(study.0.join("input.csv"), "ID,VALUE\n1,\n").unwrap();
+            let path = study.0.join("spec.yaml");
+            let project = study.0.join("project.yaml");
+            let run = project_domain(path.to_str().unwrap(), project.to_str().unwrap());
+            assert!(run.issues().is_empty(), "{:?}", run.issues());
         }
         #[test]
         fn inventory_uses_inherited_declared_dataset_names_and_retained_original_metadata_in_both_hosts(
@@ -1168,37 +947,20 @@ mod project {
                     .ends_with("catalog/renamed.yaml"));
                 assert!(!study.0.join("catalog/never-read.csv").exists());
                 assert!(!study.0.join("input.csv").exists());
+                // The build reads the inventory's renamed dataset as
+                // `submission.json` records, and writes no define.
                 fs::write(study.0.join("input.csv"), "ID,VALUE\n1,DM\n2,renamed\n3,\n").unwrap();
                 let mut run_scope = project.run_scope(None);
                 let attempt = project.build(&mut run_scope, &mut NoFunctions, Scope::default());
-                let result = yamaa_adapters::specification_report::build_result(
+                yamaa_adapters::specification_report::build_result(
                     project.run(),
                     &attempt,
                     identity(path),
                     &[],
                 )
                 .unwrap();
-                let run = file_application::Domain::new(result, &project, &run_scope);
-                assert_eq!(run.issues().len(), 1);
-                assert_eq!(run.issues()[0].rule(), Some("CT-11"));
-                assert_eq!(yamaa_adapters::json_wire::encode_object(&run.issues()[0].context),"{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":2}],\"values\":[\"renamed\"]}");
                 assert!(!study.0.join("define.xml").exists());
             }
-        }
-        #[test]
-        fn value_inventory_override_inherits_base_metadata_and_selects_only_its_test_code() {
-            let study = Study::new();
-            let raw = ROW_CT
-                .edit("codelist: DEFAULT", "inventory_vocabulary: true")
-                .edit("codelist: GLUCOSE", "inventory_vocabulary: false");
-            fs::write(study.0.join("spec.yaml"), raw).unwrap();
-            fs::write(study.0.join("project.yaml"), NO_DATASETS_PROJECT).unwrap();
-            fs::write(study.0.join("input.csv"), "ID,VALUE\n1,DM\n2,\n").unwrap();
-            let path = study.0.join("spec.yaml");
-            let project = study.0.join("project.yaml");
-            let run = project_domain(path.to_str().unwrap(), project.to_str().unwrap());
-            assert_eq!(run.issues().len(), 1);
-            assert_eq!(yamaa_adapters::json_wire::encode_object(&run.issues()[0].context),"{\"column\":\"RESULT\",\"failure_count\":1,\"keys\":[{\"ID\":1,\"LBTESTCD\":\"CREAT\"}],\"values\":[\"DM\"]}");
         }
 
         #[test]
@@ -1249,23 +1011,13 @@ mod project {
                 .edit("codelist: DEFAULT", "length: 3")
                 .edit("codelist: GLUCOSE", &format!("length: {length}"))
         }
+        /// Each bound's one length failure is `submission.json`'s; it refuses
+        /// the save.
         #[test]
         fn per_value_lengths_replace_inherited_bounds_only_for_their_completed_test_code() {
-            for (bound, input, expected_path, expected_key, maximum) in [
-                (
-                    "5",
-                    "ID,VALUE\n1,abcde\n2,é字😀\n",
-                    "columns.RESULT.verifications.max_length",
-                    "CREAT",
-                    3,
-                ),
-                (
-                    "2",
-                    "ID,VALUE\n1,abc\n2,é字\n3,\n",
-                    "columns.RESULT.submission.value_level.GLUC.length",
-                    "GLUC",
-                    2,
-                ),
+            for (bound, input) in [
+                ("5", "ID,VALUE\n1,abcde\n2,é字😀\n"),
+                ("2", "ID,VALUE\n1,abc\n2,é字\n3,\n"),
             ] {
                 let study = Study::new();
                 fs::write(study.0.join("spec.yaml"), value_length_spec(bound)).unwrap();
@@ -1281,18 +1033,7 @@ mod project {
                     identity(path),
                 )
                 .unwrap();
-                assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
-                let issue = &run.issues()[0];
-                assert_eq!(
-                    (issue.phase(), issue.condition(), issue.rule()),
-                    ("verification", "length_failed", Some("CHECK-8"))
-                );
-                assert_eq!(issue.spec_paths, [expected_path]);
-                assert_eq!(
-                    yamaa_core::json::Value::Object(issue.context.clone()),
-                    yamaa_adapters::json!({"column":"RESULT","failure_count":1,"keys":[{"ID":1,"LBTESTCD":expected_key}],"max":maximum})
-                );
-                assert!(run.save().is_err());
+                assert!(run.save().is_err(), "{bound}");
             }
         }
         #[test]
@@ -1373,41 +1114,12 @@ mod project {
             ));
             assert!(!study.0.join("input.csv").exists());
         }
+        /// An invalid bound or data type is refused before data, as
+        /// `submission.json`'s four cases record; so is an entry length above
+        /// the column's max_length.
         #[test]
         fn effective_value_metadata_rejects_invalid_bounds_types_and_explicit_length_conflicts_before_data(
         ) {
-            for (declaration, condition, path) in [
-                (
-                    "length: -999999999999999999999999999999",
-                    "submission_length_invalid",
-                    "columns.RESULT.submission.value_level.GLUC.length",
-                ),
-                (
-                    "length: 0",
-                    "submission_length_invalid",
-                    "columns.RESULT.submission.value_level.GLUC.length",
-                ),
-                (
-                    "data_type: float",
-                    "submission_data_type_not_admitted",
-                    "columns.RESULT.submission.value_level.GLUC",
-                ),
-                (
-                    "significant_digits: -999999999999999999999999999999",
-                    "submission_length_invalid",
-                    "columns.RESULT.submission.value_level.GLUC.significant_digits",
-                ),
-            ] {
-                let study = Study::new();
-                let raw = ROW_CT
-                    .edit("codelist: DEFAULT", "length: 3")
-                    .edit("codelist: GLUCOSE", declaration);
-                let issues = study.check(&raw);
-                assert_eq!(issues.len(), 1, "{declaration}: {issues:?}");
-                assert_eq!(issues[0].condition(), condition);
-                assert_eq!(issues[0].spec_paths, [path]);
-                assert!(!study.0.join("input.csv").exists());
-            }
             let study = Study::new();
             let raw = value_length_spec("4").edit(
                 "derivation: SRC.VALUE, submission",
@@ -1472,39 +1184,25 @@ mod project {
         #[test]
         fn mandatory_columns_are_checked_without_a_study_document() {
             let missing = "ID,VALUE\n1,abc\n2,\n";
-            for (raw, path) in [
-                (
+            // A mandatory column, and a required column of a findings
+            // dataset, refuse the missing value as `submission.json` records,
+            // and the save.
+            for raw in [
+                VALID.edit(
+                    "submission: {length: 3",
+                    "submission: {mandatory: true, length: 3",
+                ),
+                format!(
+                    "{}{FINDINGS}",
                     VALID.edit(
                         "submission: {length: 3",
-                        "submission: {mandatory: true, length: 3",
-                    ),
-                    "columns.VALUE.submission.mandatory",
-                ),
-                (
-                    format!(
-                        "{}{FINDINGS}",
-                        VALID.edit(
-                            "submission: {length: 3",
-                            "submission: {core: Req, length: 3"
-                        )
-                    ),
-                    "columns.VALUE.submission.core",
+                        "submission: {core: Req, length: 3"
+                    )
                 ),
             ] {
                 let study = Study::new();
                 let mut run = domain(&study, &raw, missing);
-                assert_eq!(run.issues().len(), 1, "{path}: {:?}", run.issues());
-                let issue = &run.issues()[0];
-                assert_eq!(
-                    (issue.phase(), issue.condition(), issue.rule()),
-                    ("verification", "not_missing_failed", Some("SUB-11"))
-                );
-                assert_eq!(issue.spec_paths, [path]);
-                assert_eq!(
-                    yamaa_adapters::json_wire::encode_object(&issue.context),
-                    "{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":2}]}"
-                );
-                assert!(run.save().is_err());
+                assert!(run.save().is_err(), "{raw}");
                 assert!(!study.0.join("output.csv").exists());
             }
             // `core` derives nothing without a declared class, nor for an
@@ -1533,43 +1231,25 @@ mod project {
                 assert!(run.save().unwrap());
             }
         }
+        /// The missing value fails on the rows of the declaring entry, or of
+        /// the column outside a relaxing entry, as `submission.json` records;
+        /// present values pass.
         #[test]
         fn value_level_mandatory_applies_only_to_the_rows_of_its_test_code() {
             let missing = "ID,VALUE\n1,abc\n2,\n";
-            for (base, value, path, code) in [
-                (
-                    "length: 3",
-                    "mandatory: true",
-                    "columns.RESULT.submission.value_level.GLUC.mandatory",
-                    "GLUC",
-                ),
-                (
-                    "mandatory: true, length: 3",
-                    "mandatory: false",
-                    "columns.RESULT.submission.mandatory",
-                    "CREAT",
-                ),
+            for (base, value) in [
+                ("length: 3", "mandatory: true"),
+                ("mandatory: true, length: 3", "mandatory: false"),
             ] {
                 let raw = ROW_CT
                     .edit("codelist: DEFAULT", base)
                     .edit("codelist: GLUCOSE", value);
                 let study = Study::new();
                 let mut run = domain(&study, &raw, missing);
-                assert_eq!(run.issues().len(), 1, "{path}: {:?}", run.issues());
-                let issue = &run.issues()[0];
-                assert_eq!(
-                    (issue.condition(), issue.rule()),
-                    ("not_missing_failed", Some("SUB-11"))
-                );
-                assert_eq!(issue.spec_paths, [path]);
-                assert_eq!(
-                    yamaa_core::json::Value::Object(issue.context.clone()),
-                    yamaa_adapters::json!({"column":"RESULT","failure_count":1,"keys":[{"ID":2,"LBTESTCD":code}]})
-                );
-                assert!(run.save().is_err());
+                assert!(run.save().is_err(), "{value}");
                 let study = Study::new();
                 let mut run = domain(&study, &raw, "ID,VALUE\n1,abc\n2,xyz\n");
-                assert!(run.issues().is_empty(), "{path}: {:?}", run.issues());
+                assert!(run.issues().is_empty(), "{value}: {:?}", run.issues());
                 assert!(run.save().unwrap());
             }
         }
@@ -1580,22 +1260,9 @@ mod project {
         fn a_row_two_entries_select_fails_with_its_keys_and_both_entries() {
             let study = Study::new();
             assert!(study.check(SELECTED).is_empty());
+            // The failure naming both entries is `submission.json`'s; it
+            // refuses the save.
             let mut run = domain(&study, SELECTED, "ID,SPEC,VALUE\n1,SERUM,5\n2,URINE,7\n");
-            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
-            let issue = &run.issues()[0];
-            assert_eq!(
-                (issue.phase(), issue.condition(), issue.rule()),
-                (
-                    "verification",
-                    "value_level_multiple_matches",
-                    Some("SUB-13")
-                )
-            );
-            assert_eq!(issue.spec_paths, ["columns.RESULT.submission.value_level"]);
-            assert_eq!(
-                yamaa_core::json::Value::Object(issue.context.clone()),
-                yamaa_adapters::json!({"column": "RESULT", "entries": [["GLUC", "URINE"]], "failure_count": 1, "keys": [{"ID": 2, "LBTESTCD": "GLUC"}]})
-            );
             assert!(run.save().is_err());
             assert!(!study.0.join("output.csv").exists());
         }
@@ -1642,71 +1309,11 @@ mod project {
             ] {
                 assert_eq!(report.matches(row).count(), 1, "{report}");
             }
-            // The glucose entry's `mandatory` decides the glucose rows alone.
+            // The glucose entry's `mandatory` decides the glucose rows alone
+            // (`submission.json`); its failure refuses the save.
             let study = Study::new();
             let mut run = domain(&study, SELECTED, "ID,SPEC,VALUE\n1,SERUM,\n");
-            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
-            let issue = &run.issues()[0];
-            assert_eq!(issue.condition(), "not_missing_failed");
-            assert_eq!(
-                issue.spec_paths,
-                ["columns.RESULT.submission.value_level.GLUC.mandatory"]
-            );
-            assert_eq!(
-                yamaa_core::json::Value::Object(issue.context.clone()),
-                yamaa_adapters::json!({"column": "RESULT", "failure_count": 1, "keys": [{"ID": 1, "LBTESTCD": "GLUC"}]})
-            );
             assert!(run.save().is_err());
-        }
-        #[test]
-        fn where_clauses_name_declared_str_output_columns_and_cannot_overlap() {
-            let study = Study::new();
-            for (from, to, condition, path) in [
-                (
-                    "where: {LBSPEC: [URINE]}",
-                    "where: {LBORNAM: [URINE]}",
-                    "value_level_where_invalid",
-                    vec!["columns.RESULT.submission.value_level.URINE.where.LBORNAM"],
-                ),
-                (
-                    "where: {LBSPEC: [URINE]}",
-                    "where: {ID: [URINE]}",
-                    "value_level_where_invalid",
-                    vec!["columns.RESULT.submission.value_level.URINE.where.ID"],
-                ),
-                (
-                    "where: {LBSPEC: [URINE]}",
-                    "where: {LBSPEC: []}",
-                    "value_level_where_invalid",
-                    vec!["columns.RESULT.submission.value_level.URINE.where.LBSPEC"],
-                ),
-                (
-                    "{id: URINE, where: {LBSPEC: [URINE]}",
-                    "{id: GLUC, where: {LBSPEC: [URINE]}",
-                    "duplicate_identifier",
-                    vec!["columns.RESULT.submission.value_level.GLUC.id"],
-                ),
-                (
-                    "where: {LBTESTCD: [ALB], LBSPEC: [SERUM]}",
-                    "where: {LBTESTCD: [GLUC], LBSPEC: [SERUM]}",
-                    "value_level_overlap",
-                    vec![
-                        "columns.RESULT.submission.value_level.GLUC.where",
-                        "columns.RESULT.submission.value_level.ALB.where",
-                    ],
-                ),
-            ] {
-                let raw = SELECTED.replace(from, to);
-                assert_ne!(raw, SELECTED);
-                let issues = study.check(&raw);
-                assert_eq!(issues.len(), 1, "{to}: {issues:?}");
-                assert_eq!(
-                    (issues[0].phase(), issues[0].condition()),
-                    ("validation", condition)
-                );
-                assert_eq!(issues[0].spec_paths, path);
-            }
-            assert!(!study.0.join("input.csv").exists());
         }
         #[test]
         fn restated_facts_and_relaxed_keys_fail_validation_before_data() {
@@ -1777,6 +1384,9 @@ mod project {
             let wider = format!("{VALID}verifications: [{{unique: [ID, VALUE]}}]\n");
             assert!(study.check(&wider).is_empty());
         }
+        /// The entry inherits the column's full metadata, so a date data
+        /// type or significant digits refute its inherited length
+        /// (`submission.json`).
         #[test]
         fn effective_value_fields_inherit_full_metadata_and_refute_inapplicable_lengths_and_digits()
         {
@@ -1791,35 +1401,6 @@ mod project {
             let study = Study::new();
             let baseline = study.check(&base);
             assert!(baseline.is_empty(), "{baseline:?}");
-            for (entry, field) in [
-                ("data_type: date", "data_type"),
-                ("significant_digits: 2", "field"),
-            ] {
-                let raw = base.edit(
-                    "where: {LBTESTCD: [GLUC]}, length: 3}",
-                    &format!("where: {{LBTESTCD: [GLUC]}}, {entry}}}"),
-                );
-                let issues = study.check(&raw);
-                assert_eq!(issues.len(), 1, "{entry}: {issues:?}");
-                assert_eq!(
-                    (issues[0].condition(), issues[0].rule()),
-                    ("submission_length_not_applicable", Some("SUB-7"))
-                );
-                assert_eq!(
-                    issues[0].spec_paths,
-                    ["columns.RESULT.submission.value_level.GLUC"]
-                );
-                let context = issues[0].context.clone();
-                assert_eq!(context["column"], "RESULT");
-                assert_eq!(
-                    context[field],
-                    if field == "field" {
-                        "significant_digits"
-                    } else {
-                        "date"
-                    }
-                );
-            }
             assert!(!study.0.join("input.csv").exists());
         }
 
@@ -1919,59 +1500,12 @@ columns:
             let end = at + raw[at..].find('}').unwrap();
             format!("{}origins: [{{type: {origin}{}", &raw[..at], &raw[end..])
         }
+        /// Arithmetic, a case reading an output column, a recode and a literal
+        /// each refute the origin `submission.json` gives them. Reading a
+        /// declared input dataset instead makes AGEGR1 a recode.
         #[test]
         fn computed_values_and_case_reads_of_derived_columns_refute_collected() {
             let study = Study::new();
-            for (column, declared, admitted) in [
-                // Arithmetic computes the value.
-                (
-                    "BMI",
-                    "Collected, source: Vendor",
-                    &["Assigned", "Derived", "Not Available", "Other"][..],
-                ),
-                // A case whose condition reads an output column classifies a
-                // derived value rather than recoding a collected one.
-                (
-                    "AGEGR1",
-                    "Collected, source: Investigator",
-                    &["Assigned", "Derived", "Not Available", "Other"],
-                ),
-                // A recode refutes Protocol and a literal refutes Derived.
-                (
-                    "ARMCD",
-                    "Protocol, source: Sponsor",
-                    &["Assigned", "Collected", "Derived", "Not Available", "Other"],
-                ),
-                (
-                    "HEIGHTU",
-                    "Derived, source: Sponsor",
-                    &[
-                        "Assigned",
-                        "Collected",
-                        "Not Available",
-                        "Other",
-                        "Protocol",
-                    ],
-                ),
-            ] {
-                let raw = replace_origin(ORIGINS, column, declared);
-                let issues = study.check(&raw);
-                let refuted: Vec<_> = issues
-                    .iter()
-                    .filter(|issue| issue.condition() == "origin_contradicts_derivation")
-                    .collect();
-                assert_eq!(refuted.len(), 1, "{column}: {issues:?}");
-                assert_eq!(refuted[0].rule(), Some("SUB-19"));
-                assert_eq!(
-                    refuted[0].spec_paths,
-                    [format!("columns.{column}.submission")]
-                );
-                let context = refuted[0].context.clone();
-                assert_eq!(context["column"], column);
-                assert_eq!(context["origin_type"], declared.split(',').next().unwrap());
-                assert_eq!(context["admitted"], yamaa_adapters::json!(admitted));
-            }
-            // Reading a declared input dataset instead makes AGEGR1 a recode.
             let raw = replace_origin(
                 &ORIGINS.edit("when: \"AGE >= 65\"", "when: \"SRC.AGE >= 65\""),
                 "AGEGR1",
@@ -2027,40 +1561,9 @@ rows:
                 "aggregate: \"ONLY(ODM.Value)\"",
             );
             assert!(study.check(&shorthand).is_empty());
-            for (from, to, column) in [
-                // Any other reduction computes the value it returns.
-                ("ONLY(ODM.Value)", "MAX(ODM.Value)", "LBORRES"),
-                // A lookup that derives fields is not a plain copy.
-                (
-                    "key: {TESTCD: LBTESTCD}\n",
-                    "key: {TESTCD: LBTESTCD}\n    derivations:\n      LOWTEXT: {str_case: {source: LOW, to: upper}}\n",
-                    "LBORNRLO",
-                ),
-            ] {
-                let issues = study.check(&READS.replacen(from, to, 1));
-                let refuted: Vec<_> = issues
-                    .iter()
-                    .filter(|issue| issue.condition() == "origin_contradicts_derivation")
-                    .collect();
-                assert_eq!(refuted.len(), 1, "{column}: {issues:?}");
-                assert_eq!(
-                    refuted[0].spec_paths,
-                    [format!("columns.{column}.submission")]
-                );
-                assert_eq!(refuted[0].context["origin_type"], "Collected");
-                assert_eq!(
-                    refuted[0].context["admitted"],
-                    yamaa_adapters::json!(["Assigned", "Derived", "Not Available", "Other"])
-                );
-            }
-            // A plain lookup is a bare read, but it is no predecessor's dataset.
-            let issues = study.check(&READS.edit(
-                "{origins: [{type: Collected, source: Vendor}]}",
-                "{origins: [{type: Predecessor, description: RANGE.LOW}]}",
-            ));
-            assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(issues[0].condition(), "origin_contradicts_derivation");
-            assert_eq!(issues[0].context["reason"], "predecessor_source");
+            // Any other reduction computes the value it returns, a lookup that
+            // derives fields is not a plain copy, and a plain lookup is no
+            // predecessor's dataset: `submission.json` records each refusal.
             assert!(!study.0.join("input.csv").exists());
         }
 
@@ -2090,62 +1593,12 @@ columns:
             let study = Study::new();
             let issues = study.check(PREDECESSORS);
             assert!(issues.is_empty(), "{issues:?}");
-            for (from, to, column, reason, predecessor) in [
-                (
-                    "derivation: DM.AGE",
-                    "derivation: DM.USUBJID",
-                    "AGE",
-                    "predecessor_source",
-                    "DM.AGE",
-                ),
-                (
-                    "derivation: {source: {variable: SUPPDM.QVAL, filter: \"SUPPDM.QNAM = 'RACEOTH'\"}}",
-                    "derivation: SUPPDM.QVAL",
-                    "RACEOTH",
-                    "predecessor_filter",
-                    "SUPPDM.QVAL",
-                ),
-            ] {
-                let issues = study.check(&PREDECESSORS.replace(from, to));
-                assert_eq!(issues.len(), 1, "{column}: {issues:?}");
-                assert_eq!(
-                    (
-                        issues[0].condition(),
-                        issues[0].rule()
-                    ),
-                    ("origin_contradicts_derivation", Some("SUB-19"))
-                );
-                assert_eq!(issues[0].spec_paths, [format!("columns.{column}.submission")]);
-                let context = issues[0].context.clone();
-                assert_eq!(context["column"], column);
-                assert_eq!(context["origin_type"], "Predecessor");
-                assert_eq!(context["predecessor"], predecessor);
-                assert_eq!(context["reason"], reason);
-            }
-            // A description that names no `<dataset>.<column>` is not the form.
-            let issues = study.check(&PREDECESSORS.edit(
-                "description: DM.AGE}",
-                "description: Copied from demographics}",
-            ));
-            assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(
-                (issues[0].condition(), issues[0].rule()),
-                ("origin_description_missing", Some("SUB-16"))
-            );
-            assert_eq!(
-                issues[0].spec_paths,
-                ["columns.AGE.submission.origins[0].description"]
-            );
-            assert_eq!(issues[0].context["reason"], "predecessor_form");
-            // A computed column cannot claim to be a copy.
-            let issues = study.check(&PREDECESSORS.edit(
-                "derivation: DM.AGE",
-                "derivation: {str_template: \"{DM.AGE} years\"}",
-            ));
-            assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(issues[0].condition(), "origin_contradicts_derivation");
-            // A value-level Predecessor is checked against the derivations
-            // that can produce the rows its where clause selects.
+            // A column reading another column or dropping its description's
+            // filter, a description that names no `<dataset>.<column>`, and a
+            // computed column claiming to be a copy are refused as
+            // `submission.json` records. A value-level Predecessor is checked
+            // against the derivations that can produce the rows its where
+            // clause selects.
             let values = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, LBTESTCD, LBORRES]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBTESTCD, type: str}\n  - {name: LBORRES, type: str, submission: {origins: [{type: Assigned, source: Sponsor}], value_level: [{id: GLUC, where: {LBTESTCD: [GLUC]}, origins: [{type: Predecessor, description: SRC.GLUC}]}]}}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: \"'GLUC'\", LBORRES: SRC.GLUC}\n  - id: creatinine\n    derivations: {LBTESTCD: \"'CREAT'\", LBORRES: SRC.CREAT}\n";
             assert!(study.check(values).is_empty());
             let issues =
@@ -2192,20 +1645,9 @@ columns:
             .unwrap();
             let path = study.0.join("spec.yaml");
             let environment = study.0.join("environment.yaml");
-            let run = project_domain(path.to_str().unwrap(), environment.to_str().unwrap());
-            assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
-            assert_eq!(
-                (
-                    run.issues()[0].phase(),
-                    run.issues()[0].condition(),
-                    run.issues()[0].rule()
-                ),
-                ("verification", "allowed_values_failed", Some("CT-11"))
-            );
-            assert_eq!(
-                yamaa_adapters::json_wire::encode_object(&run.issues()[0].context),
-                "{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":3}],\"values\":[\"XX\"]}"
-            );
+            // The one value outside the inventory is `submission.json`'s; the
+            // build reads no other section's input and writes no define.
+            project_domain(path.to_str().unwrap(), environment.to_str().unwrap());
             assert!(!study.0.join("sdtm/never-read.csv").exists());
             assert!(!study.0.join("define.xml").exists());
         }

@@ -1,0 +1,660 @@
+{
+  "about": "The submission metadata a specification declares (SUB, CT): metadata admission, roles and standard names from the CDISC vocabulary, lengths and data types, value-level entries and their where columns, codelists, the study inventory, mandatory columns, and origins a derivation refutes. Moved from project_domain_submission.rs, whose tests compared the fields each case's compares names; a case found among its issues was the first of them, or the one its test found by its condition. The permitted roles and standard names are yaml/vocabulary/cdisc.yaml's values, in its order.",
+  "documents": {
+    "valid": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: str\n    derivation: SRC.VALUE\n    submission: {length: 3, origins: [{type: Assigned, source: Sponsor}]}\n",
+    "data_types": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, report: checks.csv, columns: [ID, LBTESTCD, LBDTC, LBORRES]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBTESTCD, type: str}\n  - {name: LBDTC, type: str, derivation: SRC.DTC, submission: {data_type: DTC_TYPE, origins: [{type: Collected, source: Investigator}]}}\n  - {name: LBORRES, type: str, derivation: SRC.RES, submission: {length: 20, origins: [{type: Collected, source: Investigator}], value_level: [{id: ONSET, where: {LBTESTCD: [ONSET]}, data_type: date}]}}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: \"'GLUC'\"}\n  - id: onset\n    derivations: {LBTESTCD: \"'ONSET'\"}\n",
+    "value_level_wait": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [ID, SEQ]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, SEQ, LBORRES, LBTESTCD]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: LBORRES, type: str, derivation: SRC.RES, submission: {length: 20, origins: [{type: Collected, source: Investigator}], value_level: [{id: ONSET, where: {LBTESTCD: [ONSET]}, ENTRY}]}}\n  - {name: LBTESTCD, type: str, derivation: SRC.CODE}\nrows:\n  - id: onset\n    filter: \"SRC.CODE = 'ONSET'\"\n    derivations: {LBTESTCD: \"'ONSET'\"}\n  - id: other\n    filter: \"SRC.CODE <> 'ONSET'\"\n",
+    "adam": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADSL\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, CODE, VALUE, DAY]}\nsubmission: {label: Subject Level, class: SUBJECT LEVEL ANALYSIS DATASET, structure: One record per subject, repeating: false}\ncolumns:\n  - name: ID\n    type: int\n    label: Identifier\n    derivation: SRC.ID\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Assigned}]}\n  - name: CODE\n    type: str\n    label: Code\n    derivation: SRC.CODE\n    submission: {core: Perm, mandatory: false, length: 4, origins: [{type: Assigned}]}\n  - name: VALUE\n    type: str\n    label: Value\n    derivation: SRC.VALUE\n    submission: {core: Perm, mandatory: false, length: 3, origins: [{type: Assigned}], value_level: [{id: A, where: {CODE: [A]}, core: Req}]}\n  - name: DAY\n    type: date\n    label: Day\n    derivation: SRC.DAY\n    submission: {core: Perm, mandatory: false, origins: [{type: Assigned}]}\n",
+    "row_ct": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, RESULT, LBTESTCD]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: RESULT, type: str, derivation: SRC.VALUE, submission: {origins: [{type: Assigned, source: Sponsor}], codelist: DEFAULT, value_level: [{id: GLUC, where: {LBTESTCD: [GLUC]}, codelist: GLUCOSE}]}}\n  - {name: LBTESTCD, type: str}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: \"'GLUC'\"}\n  - id: creatinine\n    derivations: {LBTESTCD: \"'CREAT'\"}\n",
+    "ct_project": "yamaa: \"1.0\"\ntype: project\ncodelists:\n  - codelists:\n      - {id: DEFAULT, name: Default values, items: [{value: D}]}\n      - {id: GLUCOSE, name: Glucose values, items: [{value: G}]}\n      - {id: EXT, name: Extended values, extensible: true, items: [{value: X}]}\n      - {id: DICT, name: Dictionary, external: {dictionary: MedDRA, version: '27.1'}}\n",
+    "where_codes": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, LBCAT, LBTESTCD, RESULT]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBCAT, type: str, derivation: SRC.CAT}\n  - {name: LBTESTCD, type: str, derivation: SRC.CODE, submission: {origins: [{type: Assigned, source: Sponsor}]<binding>}}\n  - {name: RESULT, type: str, derivation: SRC.VALUE, submission: {origins: [{type: Assigned, source: Sponsor}], value_level: [{id: GLUC, where: {LBTESTCD: [GLUC, <code>]}, length: 4}]}}\n",
+    "selected": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, LBTESTCD, LBSPEC, RESULT], report: report.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBTESTCD, type: str}\n  - {name: LBSPEC, type: str, derivation: SRC.SPEC}\n  - name: RESULT\n    type: str\n    derivation: SRC.VALUE\n    submission:\n      origins: [{type: Assigned, source: Sponsor}]\n      value_level:\n        - {id: GLUC, where: {LBTESTCD: [GLUC]}, mandatory: true}\n        - {id: URINE, where: {LBSPEC: [URINE]}, length: 2}\n        - {id: ALB, where: {LBTESTCD: [ALB], LBSPEC: [SERUM]}}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: \"'GLUC'\"}\n  - id: creatinine\n    derivations: {LBTESTCD: \"'CREAT'\"}\n",
+    "origins": "yamaa: \"1.0\"\ntype: spec\nmodel: SEND\ndomain: DM\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, AGE: int, EGFR: float, WEIGHT: float, HEIGHT: float}}}\noutput: {path: output.csv, columns: [ID, SEX, RACE, BRTHDTC, RFICDT, HEIGHTU, EGFR, DTHDTC, AGE, BMI, AGEGR1, ARMCD]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: SEX\n    type: str\n    derivation: {mapping: {source: SRC.SEX, dict: {Male: M, Female: F}}}\n    submission: {origins: [{type: Collected, source: Investigator}]}\n  - name: RACE\n    type: str\n    derivation:\n      case:\n        - {when: \"SRC.RACE = 'white'\", then: \"'WHITE'\"}\n        - {otherwise: {str_case: {source: SRC.RACE, to: upper}}}\n    submission: {origins: [{type: Collected, source: Investigator}]}\n  - name: BRTHDTC\n    type: str\n    derivation: {str_template: \"{SRC.BRTHYR}-{SRC.BRTHMO}-{SRC.BRTHDY}\"}\n    submission: {origins: [{type: Collected, source: Subject}]}\n  - name: RFICDT\n    type: date\n    derivation: {to_date: {source: SRC.RFICDTC}}\n    submission: {origins: [{type: Collected, source: Investigator}]}\n  - name: HEIGHTU\n    type: str\n    derivation: \"'cm'\"\n    submission: {origins: [{type: Collected, source: Investigator}]}\n  - name: EGFR\n    type: float\n    derivation: SRC.EGFR\n    submission:\n      origins: [{type: Derived, source: Vendor}]\n      method: Estimated by the central laboratory from serum creatinine.\n  - name: DTHDTC\n    type: str\n    derivation: null\n    submission: {origins: [{type: Not Available, description: Death date was not collected.}]}\n  - {name: AGE, type: int, derivation: SRC.AGE}\n  - {name: WEIGHT, type: float, derivation: SRC.WEIGHT}\n  - {name: HEIGHT, type: float, derivation: SRC.HEIGHT}\n  - name: BMI\n    type: float\n    derivation: \"WEIGHT / (HEIGHT * HEIGHT)\"\n    submission:\n      origins: [{type: Derived, source: Sponsor}]\n      method: Weight in kilograms divided by the square of height in metres.\n  - name: AGEGR1\n    type: str\n    derivation:\n      case:\n        - {when: \"AGE >= 65\", then: \"'>=65'\"}\n        - {otherwise: \"'<65'\"}\n    submission:\n      origins: [{type: Derived, source: Sponsor}]\n      method: Age grouped at 65 years.\n  - name: ARMCD\n    type: str\n    derivation: {mapping: {source: SRC.ARM, dict: {Placebo: PBO, Active: ACT}}}\n    submission: {origins: [{type: Assigned, source: Sponsor}]}\n",
+    "reads": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [USUBJID, LBTESTCD]\ninput: {ODM: input.csv, RANGES: ranges.csv}\nintermediates:\n  - id: RANGE\n    dataset: RANGES\n    key: {TESTCD: LBTESTCD}\noutput: {path: output.csv, columns: [USUBJID, LBTESTCD, LBORRES, LBORNRLO]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: ODM.SubjectKey}\n  - {name: LBTESTCD, type: str}\n  - name: LBORRES\n    type: str\n    submission: {origins: [{type: Collected, source: Investigator}]}\n  - name: LBORNRLO\n    type: str\n    derivation: RANGE.LOW\n    submission: {origins: [{type: Collected, source: Vendor}]}\nrows:\n  - id: glucose\n    dataset: ODM\n    group_by: [ODM.SubjectKey]\n    derivations:\n      LBTESTCD: \"'GLUC'\"\n      LBORRES:\n        aggregate:\n          filter: \"ODM.ItemOID = 'IT.LB.GLUC'\"\n          expr: \"ONLY(ODM.Value)\"\n",
+    "predecessors": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADSL\nkeys: [USUBJID]\ninput: {DM: dm.csv, SUPPDM: {path: suppdm.csv, key: [USUBJID]}}\nbase: DM\noutput: {path: adsl.csv, columns: [USUBJID, AGE, RACEOTH]}\ncolumns:\n  - {name: USUBJID, type: str, label: Unique Subject Identifier, derivation: DM.USUBJID}\n  - name: AGE\n    type: str\n    label: Age\n    derivation: DM.AGE\n    submission: {origins: [{type: Predecessor, description: DM.AGE}]}\n  - name: RACEOTH\n    type: str\n    label: Race, Other\n    derivation: {source: {variable: SUPPDM.QVAL, filter: \"SUPPDM.QNAM = 'RACEOTH'\"}}\n    submission: {origins: [{type: Predecessor, description: \"SUPPDM.QVAL where QNAM = 'RACEOTH'\"}]}\n",
+    "no_datasets_project": "yamaa: \"1.0\"\ntype: project\n",
+    "inventory_project": "yamaa: \"1.0\"\ntype: project\nstudy: {id: STUDY, name: Study, description: Study dataset inventory, protocol_name: Protocol}\nsdtm:\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  specs: [catalog/renamed.yaml]\n  define: define.xml\n",
+    "specs_only_project": "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [catalog/renamed.yaml]\n"
+  },
+  "cases": [
+    {
+      "case": "a_submission_length_beyond_any_integer_is_invalid",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "valid", "edits": [{"from": "length: 3", "to": "length: -99999999999999999999999999999"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "context"],
+      "among": true,
+      "issues": [{"condition": "submission_length_invalid", "rule": "SUB-7", "context": {"column": "VALUE", "length": -99999999999999999999999999999}}]
+    },
+    {
+      "case": "a_derived_origin_from_a_bare_source_still_needs_its_method",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "valid", "edits": [{"from": "{type: Assigned, source: Sponsor}", "to": "{type: Derived, source: Sponsor}"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition"],
+      "issues": [{"condition": "method_missing"}]
+    },
+    {
+      "case": "a_submission_length_above_the_columns_max_length_conflicts_with_it",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "valid", "edits": [{"from": "submission: {length: 3", "to": "verifications: [{max_length: {max: 4}}]\n    submission: {length: 3"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition", "context"],
+      "among": true,
+      "issues": [{"condition": "declared_length_conflict", "context": {"column": "VALUE", "length": 3, "max_length": 4}}]
+    },
+    {
+      "case": "a_role_named_qualifier_alone_is_not_one_of_the_nine",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "valid", "edits": [{"from": "submission: {", "to": "submission: {role: Qualifier, "}]}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.value", "context.permitted"],
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "SCHEMA-12", "spec_paths": ["columns.VALUE.submission.role"], "context": {"value": "Qualifier", "permitted": ["Identifier", "Topic", "Timing", "Grouping Qualifier", "Result Qualifier", "Synonym Qualifier", "Record Qualifier", "Variable Qualifier", "Rule"]}}]
+    },
+    {
+      "case": "a_role_written_in_lower_case_is_not_one_of_the_nine",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "valid", "edits": [{"from": "submission: {", "to": "submission: {role: record qualifier, "}]}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.value", "context.permitted"],
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "SCHEMA-12", "spec_paths": ["columns.VALUE.submission.role"], "context": {"value": "record qualifier", "permitted": ["Identifier", "Topic", "Timing", "Grouping Qualifier", "Result Qualifier", "Synonym Qualifier", "Record Qualifier", "Variable Qualifier", "Rule"]}}]
+    },
+    {
+      "case": "an_analysis_role_is_not_one_of_the_nine",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "valid", "edits": [{"from": "submission: {", "to": "submission: {role: Analysis Value, "}]}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.value", "context.permitted"],
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "SCHEMA-12", "spec_paths": ["columns.VALUE.submission.role"], "context": {"value": "Analysis Value", "permitted": ["Identifier", "Topic", "Timing", "Grouping Qualifier", "Result Qualifier", "Synonym Qualifier", "Record Qualifier", "Variable Qualifier", "Rule"]}}]
+    },
+    {
+      "case": "a_terminology_standard_name_outside_the_vocabulary_is_not_permitted",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "valid"},
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\ncodelists:\n  - standard: {name: CDISC CT, publishing_set: SDTM, version: '2026-03-27'}\n    codelists:\n      - {id: SEX, name: Sex, items: [{value: F}, {value: M}]}\nsdtm:\n  specs: [spec.yaml]\n"
+        },
+        "specification": "spec.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.value", "context.permitted"],
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "SCHEMA-12", "spec_paths": ["codelists[0].standard.name"], "context": {"value": "CDISC CT", "permitted": ["ADaMIG", "ADaMIG-MD", "BIMO", "CDISC/NCI", "SDTMIG", "SDTMIG-AP", "SDTMIG-MD", "SENDIG", "SENDIG-AR", "SENDIG-DART", "SENDIG-GENETOX"]}}]
+    },
+    {
+      "case": "a_declared_length_counts_unicode_scalar_values",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "valid"}, "input.csv": "ID,VALUE\n1,é字😀\n2,abcd\n"}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "context"],
+      "issues": [{"condition": "length_failed", "rule": "CHECK-8", "context": {"column": "VALUE", "failure_count": 1, "keys": [{"ID": 2}], "max": 3}}]
+    },
+    {
+      "case": "a_partial_datetime_data_type_refuses_a_space_before_the_time",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "data_types", "edits": [{"from": "DTC_TYPE", "to": "partialDatetime"}]},
+          "input.csv": "ID,DTC,RES\n1,2025-03-04T08:30,2025-03-04\n2,2025-03-04 08:30,2025-03-05\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "verification", "condition": "data_type_failed", "rule": "SUB-26", "spec_paths": ["columns.LBDTC.submission.data_type"], "context": {"column": "LBDTC", "data_type": "partialDatetime", "failure_count": 2, "keys": [{"ID": 2, "LBTESTCD": "GLUC"}, {"ID": 2, "LBTESTCD": "ONSET"}]}}]
+    },
+    {
+      "case": "a_value_level_date_data_type_checks_only_the_rows_its_where_selects",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "data_types", "edits": [{"from": "DTC_TYPE", "to": "partialDatetime"}]},
+          "input.csv": "ID,DTC,RES\n1,2025-03-04T08:30,5.1\n2,2025-03,2025-03\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context"],
+      "issues": [{"condition": "data_type_failed", "spec_paths": ["columns.LBORRES.submission.value_level.ONSET.data_type"], "context": {"column": "LBORRES", "data_type": "date", "failure_count": 2, "keys": [{"ID": 1, "LBTESTCD": "ONSET"}, {"ID": 2, "LBTESTCD": "ONSET"}]}}]
+    },
+    {
+      "case": "a_value_level_where_column_must_be_a_declared_text_column",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "data_types", "edits": [{"from": "DTC_TYPE", "to": "partialDatetime"}, {"from": "{name: LBTESTCD, type: str}", "to": "{name: LBTESTCD, type: int}"}, {"from": "\"'GLUC'\"", "to": "\"'1'\""}, {"from": "\"'ONSET'\"", "to": "\"'2'\""}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [{"condition": "value_level_where_invalid", "rule": "SUB-12", "spec_paths": ["columns.LBORRES.submission.value_level.ONSET.where.LBTESTCD"]}]
+    },
+    {
+      "case": "a_value_level_mandatory_waits_for_the_where_column_its_row_completes",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "value_level_wait", "edits": [{"from": "ENTRY", "to": "mandatory: true"}]}, "input.csv": "ID,SEQ,CODE,RES\n1,1,ONSET,\n1,2,GLUC,\n"}, "specification": "spec.yaml"},
+      "compares": ["spec_paths", "context"],
+      "issues": [{"spec_paths": ["columns.LBORRES.submission.value_level.ONSET.mandatory"], "context": {"column": "LBORRES", "failure_count": 1, "keys": [{"ID": 1, "SEQ": 1}]}}]
+    },
+    {
+      "case": "a_value_level_data_type_waits_for_the_where_column_its_row_completes",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "value_level_wait", "edits": [{"from": "ENTRY", "to": "data_type: date"}]},
+          "input.csv": "ID,SEQ,CODE,RES\n1,1,ONSET,2025-03\n1,2,GLUC,2025-03\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["spec_paths", "context"],
+      "issues": [{"spec_paths": ["columns.LBORRES.submission.value_level.ONSET.data_type"], "context": {"column": "LBORRES", "data_type": "date", "failure_count": 1, "keys": [{"ID": 1, "SEQ": 1}]}}]
+    },
+    {
+      "case": "a_core_designation_the_model_does_not_publish_fails_without_dataset_metadata",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "adam", "edits": [{"from": "submission: {label: Subject Level, class: SUBJECT LEVEL ANALYSIS DATASET, structure: One record per subject, repeating: false}\n", "to": ""}, {"from": "{core: Perm, mandatory: false, length: 3", "to": "{core: Exp, length: 3"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["columns.VALUE.submission.core"]}]
+    },
+    {
+      "case": "per_value_codelists_check_the_rows_their_where_column_completes",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "row_ct"}, "project.yaml": {"base": "ct_project"}, "input.csv": "ID,VALUE\n1,G\n2,D\n3,\n"}, "specification": "spec.yaml", "project": "project.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "verification", "condition": "allowed_values_failed", "rule": "CT-7", "spec_paths": ["columns.RESULT.submission.codelist"], "context": {"column": "RESULT", "codelist": "DEFAULT", "failure_count": 1, "keys": [{"ID": 1, "LBTESTCD": "CREAT"}], "values": ["G"]}},
+        {"phase": "verification", "condition": "allowed_values_failed", "rule": "CT-7", "spec_paths": ["columns.RESULT.submission.codelist"], "context": {"column": "RESULT", "codelist": "GLUCOSE", "failure_count": 1, "keys": [{"ID": 2, "LBTESTCD": "GLUC"}], "values": ["D"]}}
+      ]
+    },
+    {
+      "case": "a_per_value_extensible_list_checks_its_own_rows_alone",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "row_ct", "edits": [{"from": "codelist: GLUCOSE", "to": "codelist: EXT"}]},
+          "project.yaml": {"base": "ct_project"},
+          "input.csv": "ID,VALUE\n1,D\n2,X\n"
+        },
+        "specification": "spec.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["context"],
+      "issues": [
+        {"context": {"column": "RESULT", "codelist": "DEFAULT", "failure_count": 1, "keys": [{"ID": 2, "LBTESTCD": "CREAT"}], "values": ["X"]}},
+        {"context": {"column": "RESULT", "codelist": "EXT", "failure_count": 1, "keys": [{"ID": 1, "LBTESTCD": "GLUC"}], "values": ["D"]}}
+      ]
+    },
+    {
+      "case": "a_value_outside_the_default_list_beside_an_extensible_entry_fails_its_allowed_values",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "row_ct", "edits": [{"from": "codelist: GLUCOSE", "to": "codelist: EXT"}]},
+          "project.yaml": {"base": "ct_project"},
+          "input.csv": "ID,VALUE\n1,D\n2,X\n"
+        },
+        "specification": "spec.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "context"],
+      "among": true,
+      "issues": [{"phase": "verification", "condition": "allowed_values_failed", "rule": "CT-7", "context": {"column": "RESULT", "codelist": "DEFAULT", "failure_count": 1, "keys": [{"ID": 2, "LBTESTCD": "CREAT"}], "values": ["X"]}}]
+    },
+    {
+      "case": "an_unknown_per_value_codelist_fails_at_its_row_path",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "row_ct", "edits": [{"from": "codelist: GLUCOSE", "to": "codelist: UNKNOWN"}]},
+          "project.yaml": {"base": "ct_project", "edits": [{"from": "version: '27.1'}}\n", "to": "version: '27.1'}}\n      - {id: INT, name: Numeric values, data_type: integer, items: [{value: 1}]}\n"}]}
+        },
+        "specification": "spec.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "unknown_codelist", "spec_paths": ["columns.RESULT.submission.value_level.GLUC.codelist"]}]
+    },
+    {
+      "case": "a_per_value_codelist_of_another_type_fails_at_its_row_path",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "row_ct", "edits": [{"from": "codelist: GLUCOSE", "to": "codelist: INT"}]},
+          "project.yaml": {"base": "ct_project", "edits": [{"from": "version: '27.1'}}\n", "to": "version: '27.1'}}\n      - {id: INT, name: Numeric values, data_type: integer, items: [{value: 1}]}\n"}]}
+        },
+        "specification": "spec.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "codelist_type_mismatch", "spec_paths": ["columns.RESULT.submission.value_level.GLUC.codelist"]}]
+    },
+    {
+      "case": "a_where_columns_codelist_without_a_project_refuses_its_binding",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "where_codes", "edits": [{"from": "<binding>", "to": ", codelist: TESTCD"}, {"from": "<code>", "to": "GLUCOSE"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "project_binding_missing", "rule": "CT-13", "spec_paths": ["columns.LBTESTCD.submission.codelist"], "context": {"binding": "codelist", "codelist": "TESTCD", "column": "LBTESTCD"}}]
+    },
+    {
+      "case": "an_inventory_of_a_project_without_datasets_admits_only_missing_values",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "valid", "edits": [{"from": "length: 3", "to": "inventory_vocabulary: true, length: 10"}]},
+          "project.yaml": {"base": "no_datasets_project"},
+          "input.csv": "ID,VALUE\n1,DM\n2,\n"
+        },
+        "specification": "spec.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "verification", "condition": "allowed_values_failed", "rule": "CT-11", "spec_paths": ["columns.VALUE.submission.inventory_vocabulary"], "context": {"column": "VALUE", "failure_count": 1, "keys": [{"ID": 1}], "values": ["DM"]}}]
+    },
+    {
+      "case": "the_inventory_names_an_inherited_dataset_for_python",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "valid", "edits": [{"from": "length: 3", "to": "inventory_vocabulary: true, length: 10"}]},
+          "project.yaml": {"base": "inventory_project"},
+          "catalog/renamed.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n",
+          "catalog/parent.yaml": {"base": "valid", "edits": [{"from": "domain: TEST", "to": "domain: DM"}, {"from": "input.csv", "to": "never-read.csv"}]},
+          "input.csv": "ID,VALUE\n1,DM\n2,renamed\n3,\n"
+        },
+        "specification": "spec.yaml",
+        "project": "project.yaml",
+        "host": "python"
+      },
+      "compares": ["rule", "context"],
+      "issues": [{"rule": "CT-11", "context": {"column": "VALUE", "failure_count": 1, "keys": [{"ID": 2}], "values": ["renamed"]}}]
+    },
+    {
+      "case": "the_inventory_names_an_inherited_dataset_for_r",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "valid", "edits": [{"from": "length: 3", "to": "inventory_vocabulary: true, length: 10"}]},
+          "project.yaml": {"base": "inventory_project"},
+          "catalog/renamed.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n",
+          "catalog/parent.yaml": {"base": "valid", "edits": [{"from": "domain: TEST", "to": "domain: DM"}, {"from": "input.csv", "to": "never-read.csv"}]},
+          "input.csv": "ID,VALUE\n1,DM\n2,renamed\n3,\n"
+        },
+        "specification": "spec.yaml",
+        "project": "project.yaml",
+        "host": "r"
+      },
+      "compares": ["rule", "context"],
+      "issues": [{"rule": "CT-11", "context": {"column": "VALUE", "failure_count": 1, "keys": [{"ID": 2}], "values": ["renamed"]}}]
+    },
+    {
+      "case": "the_inventory_of_a_specs_only_section_names_an_inherited_dataset_for_python",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "valid", "edits": [{"from": "length: 3", "to": "inventory_vocabulary: true, length: 10"}]},
+          "project.yaml": {"base": "specs_only_project"},
+          "catalog/renamed.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n",
+          "catalog/parent.yaml": {"base": "valid", "edits": [{"from": "domain: TEST", "to": "domain: DM"}, {"from": "input.csv", "to": "never-read.csv"}]},
+          "input.csv": "ID,VALUE\n1,DM\n2,renamed\n3,\n"
+        },
+        "specification": "spec.yaml",
+        "project": "project.yaml",
+        "host": "python"
+      },
+      "compares": ["rule", "context"],
+      "issues": [{"rule": "CT-11", "context": {"column": "VALUE", "failure_count": 1, "keys": [{"ID": 2}], "values": ["renamed"]}}]
+    },
+    {
+      "case": "the_inventory_of_a_specs_only_section_names_an_inherited_dataset_for_r",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "valid", "edits": [{"from": "length: 3", "to": "inventory_vocabulary: true, length: 10"}]},
+          "project.yaml": {"base": "specs_only_project"},
+          "catalog/renamed.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n",
+          "catalog/parent.yaml": {"base": "valid", "edits": [{"from": "domain: TEST", "to": "domain: DM"}, {"from": "input.csv", "to": "never-read.csv"}]},
+          "input.csv": "ID,VALUE\n1,DM\n2,renamed\n3,\n"
+        },
+        "specification": "spec.yaml",
+        "project": "project.yaml",
+        "host": "r"
+      },
+      "compares": ["rule", "context"],
+      "issues": [{"rule": "CT-11", "context": {"column": "VALUE", "failure_count": 1, "keys": [{"ID": 2}], "values": ["renamed"]}}]
+    },
+    {
+      "case": "a_value_inventory_override_selects_only_its_test_codes_rows",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "row_ct", "edits": [{"from": "codelist: DEFAULT", "to": "inventory_vocabulary: true"}, {"from": "codelist: GLUCOSE", "to": "inventory_vocabulary: false"}]},
+          "project.yaml": {"base": "no_datasets_project"},
+          "input.csv": "ID,VALUE\n1,DM\n2,\n"
+        },
+        "specification": "spec.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["context"],
+      "issues": [{"context": {"column": "RESULT", "failure_count": 1, "keys": [{"ID": 1, "LBTESTCD": "CREAT"}], "values": ["DM"]}}]
+    },
+    {
+      "case": "a_wider_per_value_length_leaves_the_other_rows_to_the_columns_bound",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "row_ct", "edits": [{"from": "codelist: DEFAULT", "to": "length: 3"}, {"from": "codelist: GLUCOSE", "to": "length: 5"}]},
+          "input.csv": "ID,VALUE\n1,abcde\n2,é字😀\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "verification", "condition": "length_failed", "rule": "CHECK-8", "spec_paths": ["columns.RESULT.verifications.max_length"], "context": {"column": "RESULT", "failure_count": 1, "keys": [{"ID": 1, "LBTESTCD": "CREAT"}], "max": 3}}]
+    },
+    {
+      "case": "a_narrower_per_value_length_checks_its_test_codes_rows",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "row_ct", "edits": [{"from": "codelist: DEFAULT", "to": "length: 3"}, {"from": "codelist: GLUCOSE", "to": "length: 2"}]},
+          "input.csv": "ID,VALUE\n1,abc\n2,é字\n3,\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "verification", "condition": "length_failed", "rule": "CHECK-8", "spec_paths": ["columns.RESULT.submission.value_level.GLUC.length"], "context": {"column": "RESULT", "failure_count": 1, "keys": [{"ID": 1, "LBTESTCD": "GLUC"}], "max": 2}}]
+    },
+    {
+      "case": "a_per_value_length_below_any_integer_is_invalid",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "row_ct", "edits": [{"from": "codelist: DEFAULT", "to": "length: 3"}, {"from": "codelist: GLUCOSE", "to": "length: -999999999999999999999999999999"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "submission_length_invalid", "spec_paths": ["columns.RESULT.submission.value_level.GLUC.length"]}]
+    },
+    {
+      "case": "a_per_value_length_of_zero_is_invalid",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "row_ct", "edits": [{"from": "codelist: DEFAULT", "to": "length: 3"}, {"from": "codelist: GLUCOSE", "to": "length: 0"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "submission_length_invalid", "spec_paths": ["columns.RESULT.submission.value_level.GLUC.length"]}]
+    },
+    {
+      "case": "a_per_value_float_data_type_is_not_admitted_for_text",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "row_ct", "edits": [{"from": "codelist: DEFAULT", "to": "length: 3"}, {"from": "codelist: GLUCOSE", "to": "data_type: float"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "submission_data_type_not_admitted", "spec_paths": ["columns.RESULT.submission.value_level.GLUC"]}]
+    },
+    {
+      "case": "per_value_significant_digits_below_any_integer_are_invalid",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "row_ct", "edits": [{"from": "codelist: DEFAULT", "to": "length: 3"}, {"from": "codelist: GLUCOSE", "to": "significant_digits: -999999999999999999999999999999"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "submission_length_invalid", "spec_paths": ["columns.RESULT.submission.value_level.GLUC.significant_digits"]}]
+    },
+    {
+      "case": "a_mandatory_column_refuses_a_missing_value_without_a_study_document",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "valid", "edits": [{"from": "submission: {length: 3", "to": "submission: {mandatory: true, length: 3"}]},
+          "input.csv": "ID,VALUE\n1,abc\n2,\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "verification", "condition": "not_missing_failed", "rule": "SUB-11", "spec_paths": ["columns.VALUE.submission.mandatory"], "context": {"column": "VALUE", "failure_count": 1, "keys": [{"ID": 2}]}}]
+    },
+    {
+      "case": "a_required_column_of_a_findings_dataset_refuses_a_missing_value",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "valid", "edits": [{"from": "submission: {length: 3", "to": "submission: {core: Req, length: 3"}, {"from": "origins: [{type: Assigned, source: Sponsor}]}\n", "to": "origins: [{type: Assigned, source: Sponsor}]}\nsubmission: {label: Results, class: FINDINGS, structure: One record per test, repeating: true}\n"}]},
+          "input.csv": "ID,VALUE\n1,abc\n2,\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "verification", "condition": "not_missing_failed", "rule": "SUB-11", "spec_paths": ["columns.VALUE.submission.core"], "context": {"column": "VALUE", "failure_count": 1, "keys": [{"ID": 2}]}}]
+    },
+    {
+      "case": "a_value_level_mandatory_refuses_a_missing_value_on_its_test_codes_rows",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "row_ct", "edits": [{"from": "codelist: DEFAULT", "to": "length: 3"}, {"from": "codelist: GLUCOSE", "to": "mandatory: true"}]},
+          "input.csv": "ID,VALUE\n1,abc\n2,\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "not_missing_failed", "rule": "SUB-11", "spec_paths": ["columns.RESULT.submission.value_level.GLUC.mandatory"], "context": {"column": "RESULT", "failure_count": 1, "keys": [{"ID": 2, "LBTESTCD": "GLUC"}]}}]
+    },
+    {
+      "case": "a_column_mandatory_an_entry_relaxes_refuses_a_missing_value_on_the_other_rows",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "row_ct", "edits": [{"from": "codelist: DEFAULT", "to": "mandatory: true, length: 3"}, {"from": "codelist: GLUCOSE", "to": "mandatory: false"}]},
+          "input.csv": "ID,VALUE\n1,abc\n2,\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "not_missing_failed", "rule": "SUB-11", "spec_paths": ["columns.RESULT.submission.mandatory"], "context": {"column": "RESULT", "failure_count": 1, "keys": [{"ID": 2, "LBTESTCD": "CREAT"}]}}]
+    },
+    {
+      "case": "a_row_two_value_level_entries_select_fails_with_both_entries",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "selected"}, "input.csv": "ID,SPEC,VALUE\n1,SERUM,5\n2,URINE,7\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "verification", "condition": "value_level_multiple_matches", "rule": "SUB-13", "spec_paths": ["columns.RESULT.submission.value_level"], "context": {"column": "RESULT", "entries": [["GLUC", "URINE"]], "failure_count": 1, "keys": [{"ID": 2, "LBTESTCD": "GLUC"}]}}]
+    },
+    {
+      "case": "a_value_level_mandatory_decides_the_rows_of_its_test_code_alone",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "selected"}, "input.csv": "ID,SPEC,VALUE\n1,SERUM,\n"}, "specification": "spec.yaml"},
+      "compares": ["condition", "spec_paths", "context"],
+      "issues": [{"condition": "not_missing_failed", "spec_paths": ["columns.RESULT.submission.value_level.GLUC.mandatory"], "context": {"column": "RESULT", "failure_count": 1, "keys": [{"ID": 1, "LBTESTCD": "GLUC"}]}}]
+    },
+    {
+      "case": "a_where_column_is_a_declared_column",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "selected", "edits": [{"from": "where: {LBSPEC: [URINE]}", "to": "where: {LBORNAM: [URINE]}"}]}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "value_level_where_invalid", "spec_paths": ["columns.RESULT.submission.value_level.URINE.where.LBORNAM"]}]
+    },
+    {
+      "case": "a_where_column_is_a_text_column",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "selected", "edits": [{"from": "where: {LBSPEC: [URINE]}", "to": "where: {ID: [URINE]}"}]}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "value_level_where_invalid", "spec_paths": ["columns.RESULT.submission.value_level.URINE.where.ID"]}]
+    },
+    {
+      "case": "a_where_clause_lists_a_value",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "selected", "edits": [{"from": "where: {LBSPEC: [URINE]}", "to": "where: {LBSPEC: []}"}]}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "value_level_where_invalid", "spec_paths": ["columns.RESULT.submission.value_level.URINE.where.LBSPEC"]}]
+    },
+    {
+      "case": "value_level_entry_identifiers_are_unique",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "selected", "edits": [{"from": "{id: URINE, where: {LBSPEC: [URINE]}", "to": "{id: GLUC, where: {LBSPEC: [URINE]}"}]}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "duplicate_identifier", "spec_paths": ["columns.RESULT.submission.value_level.GLUC.id"]}]
+    },
+    {
+      "case": "value_level_entries_do_not_select_the_same_rows",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "selected", "edits": [{"from": "where: {LBTESTCD: [ALB], LBSPEC: [SERUM]}", "to": "where: {LBTESTCD: [GLUC], LBSPEC: [SERUM]}"}]}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "value_level_overlap", "spec_paths": ["columns.RESULT.submission.value_level.GLUC.where", "columns.RESULT.submission.value_level.ALB.where"]}]
+    },
+    {
+      "case": "a_per_value_date_data_type_refutes_the_inherited_length",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "row_ct", "edits": [{"from": "origins: [{type: Assigned, source: Sponsor}], codelist: DEFAULT", "to": "core: Perm, origins: [{type: Assigned, source: Sponsor}], length: 3"}, {"from": "codelist: GLUCOSE", "to": "data_type: date"}, {"from": "{LBTESTCD: \"'CREAT'\"}\n", "to": "{LBTESTCD: \"'CREAT'\"}\n\nsubmission: {label: Laboratory Results, class: FINDINGS, structure: One record per test, repeating: true}\n"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context.column", "context.data_type"],
+      "issues": [{"condition": "submission_length_not_applicable", "rule": "SUB-7", "spec_paths": ["columns.RESULT.submission.value_level.GLUC"], "context": {"column": "RESULT", "data_type": "date"}}]
+    },
+    {
+      "case": "per_value_significant_digits_are_inapplicable_to_text",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "row_ct", "edits": [{"from": "origins: [{type: Assigned, source: Sponsor}], codelist: DEFAULT", "to": "core: Perm, origins: [{type: Assigned, source: Sponsor}], length: 3"}, {"from": "codelist: GLUCOSE", "to": "significant_digits: 2"}, {"from": "{LBTESTCD: \"'CREAT'\"}\n", "to": "{LBTESTCD: \"'CREAT'\"}\n\nsubmission: {label: Laboratory Results, class: FINDINGS, structure: One record per test, repeating: true}\n"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context.column", "context.field"],
+      "issues": [{"condition": "submission_length_not_applicable", "rule": "SUB-7", "spec_paths": ["columns.RESULT.submission.value_level.GLUC"], "context": {"column": "RESULT", "field": "significant_digits"}}]
+    },
+    {
+      "case": "arithmetic_refutes_a_collected_origin",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "origins", "edits": [{"from": "derivation: \"WEIGHT / (HEIGHT * HEIGHT)\"\n    submission:\n      origins: [{type: Derived, source: Sponsor}]", "to": "derivation: \"WEIGHT / (HEIGHT * HEIGHT)\"\n    submission:\n      origins: [{type: Collected, source: Vendor}]"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context.column", "context.origin_type", "context.admitted"],
+      "among": true,
+      "issues": [{"condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.BMI.submission"], "context": {"column": "BMI", "origin_type": "Collected", "admitted": ["Assigned", "Derived", "Not Available", "Other"]}}]
+    },
+    {
+      "case": "a_case_reading_an_output_column_refutes_a_collected_origin",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "origins", "edits": [{"from": "        - {otherwise: \"'<65'\"}\n    submission:\n      origins: [{type: Derived, source: Sponsor}]", "to": "        - {otherwise: \"'<65'\"}\n    submission:\n      origins: [{type: Collected, source: Investigator}]"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context.column", "context.origin_type", "context.admitted"],
+      "among": true,
+      "issues": [{"condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.AGEGR1.submission"], "context": {"column": "AGEGR1", "origin_type": "Collected", "admitted": ["Assigned", "Derived", "Not Available", "Other"]}}]
+    },
+    {
+      "case": "a_recode_refutes_a_protocol_origin",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "origins", "edits": [{"from": "dict: {Placebo: PBO, Active: ACT}}}\n    submission: {origins: [{type: Assigned, source: Sponsor}]}", "to": "dict: {Placebo: PBO, Active: ACT}}}\n    submission: {origins: [{type: Protocol, source: Sponsor}]}"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context.column", "context.origin_type", "context.admitted"],
+      "among": true,
+      "issues": [{"condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.ARMCD.submission"], "context": {"column": "ARMCD", "origin_type": "Protocol", "admitted": ["Assigned", "Collected", "Derived", "Not Available", "Other"]}}]
+    },
+    {
+      "case": "a_literal_refutes_a_derived_origin",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "origins", "edits": [{"from": "derivation: \"'cm'\"\n    submission: {origins: [{type: Collected, source: Investigator}]}", "to": "derivation: \"'cm'\"\n    submission: {origins: [{type: Derived, source: Sponsor}]}"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context.column", "context.origin_type", "context.admitted"],
+      "among": true,
+      "issues": [{"condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.HEIGHTU.submission"], "context": {"column": "HEIGHTU", "origin_type": "Derived", "admitted": ["Assigned", "Collected", "Not Available", "Other", "Protocol"]}}]
+    },
+    {
+      "case": "a_reduction_other_than_only_refutes_a_collected_origin",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "reads", "edits": [{"from": "ONLY(ODM.Value)", "to": "MAX(ODM.Value)"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition", "spec_paths", "context.origin_type", "context.admitted"],
+      "among": true,
+      "issues": [{"condition": "origin_contradicts_derivation", "spec_paths": ["columns.LBORRES.submission"], "context": {"origin_type": "Collected", "admitted": ["Assigned", "Derived", "Not Available", "Other"]}}]
+    },
+    {
+      "case": "a_lookup_that_derives_fields_refutes_a_collected_origin",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "reads", "edits": [{"from": "key: {TESTCD: LBTESTCD}\n", "to": "key: {TESTCD: LBTESTCD}\n    derivations:\n      LOWTEXT: {str_case: {source: LOW, to: upper}}\n"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context.origin_type", "context.admitted"],
+      "among": true,
+      "issues": [{"condition": "origin_contradicts_derivation", "spec_paths": ["columns.LBORNRLO.submission"], "context": {"origin_type": "Collected", "admitted": ["Assigned", "Derived", "Not Available", "Other"]}}]
+    },
+    {
+      "case": "a_plain_lookup_is_no_predecessors_dataset",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "reads", "edits": [{"from": "{origins: [{type: Collected, source: Vendor}]}", "to": "{origins: [{type: Predecessor, description: RANGE.LOW}]}"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "context.reason"],
+      "issues": [{"condition": "origin_contradicts_derivation", "context": {"reason": "predecessor_source"}}]
+    },
+    {
+      "case": "a_predecessor_column_reading_another_column_is_refuted",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "predecessors", "edits": [{"from": "derivation: DM.AGE", "to": "derivation: DM.USUBJID"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context.column", "context.origin_type", "context.predecessor", "context.reason"],
+      "issues": [{"condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.AGE.submission"], "context": {"column": "AGE", "origin_type": "Predecessor", "predecessor": "DM.AGE", "reason": "predecessor_source"}}]
+    },
+    {
+      "case": "a_predecessor_column_without_its_descriptions_filter_is_refuted",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "predecessors", "edits": [{"from": "derivation: {source: {variable: SUPPDM.QVAL, filter: \"SUPPDM.QNAM = 'RACEOTH'\"}}", "to": "derivation: SUPPDM.QVAL"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context.column", "context.origin_type", "context.predecessor", "context.reason"],
+      "issues": [{"condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.RACEOTH.submission"], "context": {"column": "RACEOTH", "origin_type": "Predecessor", "predecessor": "SUPPDM.QVAL", "reason": "predecessor_filter"}}]
+    },
+    {
+      "case": "a_predecessor_description_naming_no_column_is_not_the_form",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "predecessors", "edits": [{"from": "description: DM.AGE}", "to": "description: Copied from demographics}"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"condition": "origin_description_missing", "rule": "SUB-16", "spec_paths": ["columns.AGE.submission.origins[0].description"], "context": {"reason": "predecessor_form"}}]
+    },
+    {
+      "case": "a_computed_predecessor_column_is_refuted",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "predecessors", "edits": [{"from": "derivation: DM.AGE", "to": "derivation: {str_template: \"{DM.AGE} years\"}"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition"],
+      "issues": [{"condition": "origin_contradicts_derivation"}]
+    },
+    {
+      "case": "the_inventory_names_the_datasets_of_every_submission_section",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "valid", "edits": [{"from": "length: 3", "to": "inventory_vocabulary: true, length: 10"}, {"from": "domain: TEST", "to": "domain: ADAE"}, {"from": "model: SDTM", "to": "model: ADaM"}, {"from": "{type: Assigned, source: Sponsor}", "to": "{type: Assigned}"}]},
+          "sdtm/ae.yaml": {"base": "valid", "edits": [{"from": "domain: TEST", "to": "domain: AE"}, {"from": "input.csv", "to": "never-read.csv"}]},
+          "environment.yaml": "yamaa: \"1.0\"\ntype: project\nstudy: {id: STUDY, name: Study, description: Study dataset inventory, protocol_name: Protocol}\nsdtm:\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  specs: [sdtm/ae.yaml]\n  define: sdtm/define.xml\nadam:\n  standards: [{name: ADaMIG, version: '1.3', status: Final}]\n  specs: [spec.yaml]\n  define: define.xml\n",
+          "input.csv": "ID,VALUE\n1,AE\n2,ADAE\n3,XX\n4,\n"
+        },
+        "specification": "spec.yaml",
+        "project": "environment.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "context"],
+      "issues": [{"phase": "verification", "condition": "allowed_values_failed", "rule": "CT-11", "context": {"column": "VALUE", "failure_count": 1, "keys": [{"ID": 3}], "values": ["XX"]}}]
+    }
+  ]
+}

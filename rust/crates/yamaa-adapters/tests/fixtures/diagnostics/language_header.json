@@ -1,0 +1,31 @@
+{
+  "about": "A public check reads the language header (SCHEMA-2, SCHEMA-4, LAYER-2): a 1.0 entry's missing parent, an unquoted version and a file without a header. Moved from declaration_language_header.rs, whose tests compared the fields each case's compares names.",
+  "cases": [
+    {
+      "case": "a_missing_parent_fails_where_the_entry_names_it",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\nparent: missing.yaml\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context.source"],
+      "issues": [{"condition": "parent_not_found", "spec_paths": ["parent"], "context": {"source": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "an_unquoted_language_version_is_a_float_and_no_version",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": "yamaa: 1.0\ntype: spec\n"}, "specification": "spec.yaml"},
+      "compares": ["condition", "spec_paths", "context"],
+      "issues": [{"condition": "invalid_field_type", "spec_paths": ["yamaa"], "context": {"expected": "language_version", "actual": "float"}}]
+    },
+    {
+      "case": "a_file_declaring_neither_header_has_no_language_version",
+      "operation": "check",
+      "input": {"files": {"input.csv": "ID\n1\n", "spec.yaml": "domain: TEST\n"}, "specification": "spec.yaml"},
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "missing_required_field", "spec_paths": ["yamaa"]}]
+    }
+  ]
+}

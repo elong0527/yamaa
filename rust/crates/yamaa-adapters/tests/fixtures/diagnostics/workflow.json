@@ -1,0 +1,289 @@
+{
+  "about": "The file workflow's refusals before a run (FILE-7, SCHEMA-3, INPUT-6, INPUT-10, FUNC-2, FUNC-4): a project file or entry that cannot be read, a project's dependencies that cannot be, links that restate or contradict their producer, and an unknown function. Moved from file_workflow.rs, whose tests compared the fields each case's compares names; a case found among its issues was the one its test found by its cause, or the first of them. A refusal its test read through the workflow's own selection is replayed through check_resources, which names files as that selection does.",
+  "documents": {
+    "project": "yamaa: \"1.0\"\ntype: project\n"
+  },
+  "cases": [
+    {
+      "case": "a_missing_project_file_is_refused_before_a_missing_entry",
+      "operation": "check",
+      "input": {"files": {"project.yaml": {"base": "project"}}, "specification": "root.yaml", "project": "missing-project.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "resource_path_missing", "rule": "FILE-7", "spec_paths": [], "context": {"path": "{study}/missing-project.yaml"}}]
+    },
+    {
+      "case": "a_missing_project_file_is_refused_before_an_unreadable_entry_is_read",
+      "operation": "check",
+      "input": {"files": {"project.yaml": {"base": "project"}, "root.yaml": "[invalid entry that must not be read"}, "specification": "root.yaml", "project": "missing-project.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "resource_path_missing", "rule": "FILE-7", "spec_paths": [], "context": {"path": "{study}/missing-project.yaml"}}]
+    },
+    {
+      "case": "an_entry_that_is_not_yaml_fails_at_its_root",
+      "operation": "check",
+      "input": {"files": {"project.yaml": {"base": "project"}, "root.yaml": "["}, "specification": "root.yaml", "project": "project.yaml"},
+      "compares": ["phase", "condition", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "invalid_yaml", "spec_paths": ["$"]}]
+    },
+    {
+      "case": "a_project_file_that_is_not_yaml_names_its_path_at_its_root",
+      "operation": "check",
+      "input": {"files": {"project.yaml": "[", "root.yaml": "["}, "specification": "root.yaml", "project": "project.yaml"},
+      "compares": ["condition", "context.path", "context.environment_path"],
+      "issues": [{"condition": "invalid_yaml", "context": {"path": "{study}/project.yaml", "environment_path": "$"}}]
+    },
+    {
+      "case": "a_lock_and_two_listed_files_that_cannot_be_read_report_one_issue_each",
+      "operation": "check",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: '1.0'\ntype: project\nfunctions: [absent-function.yaml]\nenvironments: {python: {lock: missing.lock}}\ncodelists: [absent-codelists.yaml]\n",
+          "missing.lock": "invalid packaging lock",
+          "absent-function.yaml": "[",
+          "absent-codelists.yaml": "["
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "compares": [],
+      "issues": [
+        {},
+        {},
+        {}
+      ]
+    },
+    {
+      "case": "a_lock_that_is_no_packaging_lock_names_its_cause",
+      "operation": "check",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: '1.0'\ntype: project\nfunctions: [absent-function.yaml]\nenvironments: {python: {lock: missing.lock}}\ncodelists: [absent-codelists.yaml]\n",
+          "missing.lock": "invalid packaging lock",
+          "absent-function.yaml": "[",
+          "absent-codelists.yaml": "["
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["context.cause"],
+      "among": true,
+      "issues": [{"context": {"cause": "invalid_packaging_lock"}}]
+    },
+    {
+      "case": "listed_files_that_are_not_yaml_name_their_written_paths",
+      "operation": "check",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: '1.0'\ntype: project\nfunctions: [absent-function.yaml]\nenvironments: {python: {lock: missing.lock}}\ncodelists: [absent-codelists.yaml]\n",
+          "missing.lock": "invalid packaging lock",
+          "absent-function.yaml": "[",
+          "absent-codelists.yaml": "["
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "context.path"],
+      "among": true,
+      "issues": [
+        {"condition": "invalid_yaml", "context": {"path": "absent-function.yaml"}},
+        {"condition": "invalid_yaml", "context": {"path": "absent-codelists.yaml"}}
+      ]
+    },
+    {
+      "case": "a_project_path_naming_a_directory_is_no_regular_file",
+      "operation": "check",
+      "input": {"files": {"project.yaml": {"base": "project"}}, "directories": ["directory.yaml"], "specification": "absent-spec.yaml", "project": "directory.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "resource_path_not_regular_file", "rule": "FILE-7", "spec_paths": [], "context": {"path": "{study}/directory.yaml"}}]
+    },
+    {
+      "case": "a_linked_input_may_not_restate_a_field_type_its_producer_gives",
+      "operation": "check_resources",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "leaf.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: RAW\ninput: {RAW: never-read.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: RAW.VALUE\noutput: {path: leaf.csv, columns: [ID, VALUE]}\n",
+          "root.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: P\ninput: {P: {path: leaf.csv, schema: leaf.yaml, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: P.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: P.VALUE\noutput: {path: root.csv, columns: [ID, VALUE]}\n"
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "redundant_field_type", "rule": "INPUT-6", "spec_paths": ["input.P.types.ID"], "context": {"dataset": "P", "field": "ID", "type": "int"}}]
+    },
+    {
+      "case": "an_inherited_input_may_not_restate_a_field_type_its_producer_gives",
+      "operation": "check_resources",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "parent.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput:\n  DM: {path: input/dm.csv, types: {RANDDT: date}}\noutput:\n  path: adsl.csv\n  columns: [USUBJID, RANDDT]\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n  - name: RANDDT\n    type: date\n    label: Date of Randomization\n    derivation: DM.RANDDT\n",
+          "producer/dm.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: DM\nkeys: [USUBJID]\ninput:\n  RAW: {path: ../raw/dm_raw.csv, types: {RANDDT: date}}\noutput:\n  path: ../input/dm.csv\n  columns: [USUBJID, RANDDT]\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: RAW.USUBJID\n  - name: RANDDT\n    type: date\n    label: Date of Randomization\n    derivation: RAW.RANDDT\n",
+          "root.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\ninput:\n  DM: {schema: producer/dm.yaml}\n"
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "redundant_field_type", "rule": "INPUT-6", "spec_paths": ["input.DM.types.RANDDT"], "context": {"dataset": "DM", "field": "RANDDT", "type": "date"}}]
+    },
+    {
+      "case": "a_link_naming_the_consuming_specification_is_an_invalid_producer_contract",
+      "operation": "check_resources",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "root.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: R\ninput: {R: {path: root.csv, schema: './root.yaml'}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: R.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: R.VALUE\noutput: {path: root.csv, columns: [ID, VALUE]}\n"
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "invalid_producer_contract", "rule": "INPUT-10", "spec_paths": ["input.R.schema"], "context": {"dataset": "R", "reason": "self_reference"}}]
+    },
+    {
+      "case": "a_project_file_that_is_not_yaml_names_the_path_its_caller_wrote",
+      "operation": "check_resources",
+      "input": {
+        "files": {
+          "root.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: RAW\ninput: {RAW: never-read.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: RAW.VALUE\noutput: {path: root.csv, columns: [ID, VALUE]}\n",
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\ncodelists: [\n"
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "context.path"],
+      "issues": [{"condition": "invalid_yaml", "context": {"path": "project.yaml"}}]
+    },
+    {
+      "case": "an_renv_lock_under_the_python_key_is_a_lock_of_another_kind",
+      "operation": "check_resources",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: '1.0'\ntype: project\nenvironments: {python: {lock: renv.lock}}\n",
+          "renv.lock": "{\"R\":{\"Version\":\"4.6.1\"},\"Packages\":{}}",
+          "root.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: RAW\ninput: {RAW: never-read.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: RAW.VALUE\noutput: {path: root.csv, columns: [ID, VALUE]}\n"
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["environments.python.lock"], "context": {"reason": "lock_kind_mismatch", "language": "python", "actual_lock_kind": "renv", "source": "{study}/project.yaml", "entry": "{study}/project.yaml", "environment_path": "environments.python.lock"}}]
+    },
+    {
+      "case": "a_parents_schema_finding_names_the_parent_as_its_source",
+      "operation": "check_resources",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "renv.lock": "{\"R\":{\"Version\":\"4.6.1\"},\"Packages\":{}}",
+          "parent/base.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: RAW\ninput: {RAW: never-read.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - name: VALUE\n    type: invalid\n    label: Reported value\n    derivation: RAW.VALUE\noutput: {path: root.csv, columns: [ID, VALUE]}\n",
+          "root.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent/base.yaml\ndomain: CHILD\n"
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["context.source"],
+      "among": true,
+      "issues": [{"context": {"source": "{study}/parent/base.yaml"}}]
+    },
+    {
+      "case": "a_missing_linked_producer_is_a_missing_file_at_its_schema",
+      "operation": "check",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "root.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: P\ninput: {P: {path: absent.csv, schema: missing.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: P.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: P.VALUE\noutput: {path: root.csv, columns: [ID, VALUE]}\n"
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context"],
+      "issues": [{"condition": "resource_path_missing", "spec_paths": ["input.P.schema"], "context": {"path": "missing.yaml"}}]
+    },
+    {
+      "case": "a_producer_column_without_a_label_is_an_invalid_producer_contract",
+      "operation": "check_resources",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "root.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: P\ninput: {P: {path: leaf.csv, schema: leaf.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: P.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: P.VALUE\noutput: {path: root.csv, columns: [ID, VALUE]}\n",
+          "leaf.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: RAW\ninput: {RAW: never-read.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - name: VALUE\n    type: str\n    derivation: RAW.VALUE\noutput: {path: leaf.csv, columns: [ID, VALUE]}\n"
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"condition": "invalid_producer_contract", "rule": "INPUT-10", "spec_paths": ["input.P.schema.columns.VALUE.label"]}]
+    },
+    {
+      "case": "a_function_file_that_is_not_yaml_names_its_listing_and_the_project",
+      "operation": "check_resources",
+      "input": {
+        "files": {
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nfunctions: [python/broken.yaml]\nenvironments: {python: {lock: python/uv.lock}}\n",
+          "python/uv.lock": "version = 1\npackage = []\n",
+          "python/broken.yaml": "function: [\n",
+          "root.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: P\ninput: {P: {path: leaf.csv, schema: leaf.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: P.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: P.VALUE\noutput: {path: root.csv, columns: [ID, VALUE]}\n",
+          "leaf.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: RAW\ninput: {RAW: never-read.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - name: VALUE\n    type: str\n    derivation: RAW.VALUE\noutput: {path: leaf.csv, columns: [ID, VALUE]}\n"
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "context.entry", "context.path", "context.environment_path"],
+      "issues": [{"condition": "invalid_yaml", "context": {"entry": "{study}/project.yaml", "path": "python/broken.yaml", "environment_path": "functions[0]"}}]
+    },
+    {
+      "case": "a_schema_link_written_as_a_number_is_an_invalid_field_type",
+      "operation": "check_resources",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "root.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: RAW\ninput: {RAW: {path: never-read.csv, schema: 7}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: RAW.VALUE\noutput: {path: never-written.csv, columns: [ID, VALUE]}\n"
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [{"condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["input.RAW.schema"]}]
+    },
+    {
+      "case": "a_call_of_a_function_the_project_does_not_list_is_unknown",
+      "operation": "check_resources",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "root.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: RAW\ninput: {RAW: never-read.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: {function: {name: missing, args: {x: 1}}}\noutput: {path: root.csv, columns: [ID, VALUE]}\n"
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "unknown_project_function", "rule": "FUNC-4", "spec_paths": ["columns.VALUE.derivation.function.name"], "context": {"function": "missing"}}]
+    },
+    {
+      "case": "a_schema_link_written_as_a_number_fails_its_shipped_schema",
+      "operation": "check_resources",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "root.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: RAW\ninput: {RAW: {path: never-read.csv, schema: 7}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: RAW.VALUE\noutput: {path: root.csv, columns: [ID, VALUE]}\n"
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["rule"],
+      "among": true,
+      "issues": [{"rule": "SCHEMA-12"}]
+    },
+    {
+      "case": "an_entry_that_is_not_yaml_is_refused_where_it_is_captured",
+      "operation": "check_resources",
+      "input": {"files": {"project.yaml": {"base": "project"}, "root.yaml": "["}, "specification": "root.yaml", "project": "project.yaml"},
+      "compares": ["condition"],
+      "among": true,
+      "issues": [{"condition": "invalid_yaml"}]
+    }
+  ]
+}

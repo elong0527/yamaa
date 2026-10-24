@@ -118,7 +118,7 @@ one file listed twice included, fail with `duplicate_specification_name` at
 the project path of each listing, such as `sdtm.specs[0]`.
 
 Fails: `duplicate_specification_name`.
-Evidence: `rust/crates/yamaa/tests/project_operations.rs::names_select_listed_specifications_and_refuse_unknown_or_shared_names`, `rust/crates/yamaa-adapters/tests/project_scope.rs::listings_follow_section_run_order_and_names_are_their_domains`, `rust/crates/yamaa-core/tests/support/diagnostic/project_scope.rs`.
+Evidence: `rust/crates/yamaa/tests/project_operations.rs::names_select_listed_specifications_and_refuse_unknown_or_shared_names`, `rust/crates/yamaa-adapters/tests/project_scope.rs::listings_follow_section_run_order_and_names_are_their_domains`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/project_scope.json::one_file_listed_twice_shares_its_name_with_itself`, `rust/crates/yamaa-core/tests/support/diagnostic/project_scope.rs`.
 
 Every project operation reports that finding; a project run or submission then
 builds nothing, and selecting a specification by name fails.
@@ -209,7 +209,7 @@ the producer's `output.path` location reads the held serialized artifact
 instead of that file. Independent specifications keep run-scope order.
 
 Fails: `producer_workflow_cycle`.
-Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_section_run_builds_only_its_scope_and_a_full_run_hands_producers_over_in_memory`, `rust/crates/yamaa-adapters/tests/project_scope.rs::plans_order_their_scope_producer_first`, `rust/crates/yamaa-adapters/tests/project_scope.rs::unlinked_inputs_cycles_and_collisions_are_project_findings`.
+Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_section_run_builds_only_its_scope_and_a_full_run_hands_producers_over_in_memory`, `rust/crates/yamaa-adapters/tests/project_scope.rs::plans_order_their_scope_producer_first`, `rust/crates/yamaa-adapters/tests/project_scope.rs::unlinked_inputs_cycles_and_collisions_are_project_findings`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/project_scope.json::a_link_cycle_refuses_the_first_specification_in_it`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/project_scope.json::a_link_cycle_refuses_the_second_specification_in_it`.
 
 The selected section must be one the project declares
 ([PROJECT-14](#project-14)). The project run is the caller that orders these
@@ -238,7 +238,7 @@ contract under [INPUT-11](../inputs.md#input-11). An absent file fails as a
 missing input at `input.<dataset>.path`.
 
 Fails: `resource_path_missing`, `producer_contract_mismatch`, `artifact_path_collision`.
-Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_producer_outside_the_scope_is_read_from_its_saved_artifact_and_checked`, `rust/crates/yamaa/tests/project_operations.rs::a_specification_may_not_write_the_saved_artifact_it_reads`, `rust/crates/yamaa-adapters/tests/project_scope.rs::saved_links_read_held_or_saved_artifacts_under_the_producer_contract`.
+Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_producer_outside_the_scope_is_read_from_its_saved_artifact_and_checked`, `rust/crates/yamaa/tests/project_operations.rs::a_specification_may_not_write_the_saved_artifact_it_reads`, `rust/crates/yamaa-adapters/tests/project_scope.rs::saved_links_read_held_or_saved_artifacts_under_the_producer_contract`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/project_scope.json::a_linked_artifact_neither_held_nor_saved_is_a_missing_file`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/project_scope.json::a_saved_artifact_with_another_header_mismatches_the_producer_contract`.
 
 The consumer may not write the files it reads: its `output.path` and
 `output.report` locations may not name the producer's, as
@@ -255,7 +255,7 @@ earlier run saved, not the one this run builds. An input that names no
 run-scope artifact is an ordinary source.
 
 Fails: `unlinked_producer`.
-Evidence: `rust/crates/yamaa/tests/project_operations.rs::an_input_that_reads_a_run_scope_artifact_without_a_link_fails_alone`, `rust/crates/yamaa-adapters/tests/project_scope.rs::unlinked_inputs_cycles_and_collisions_are_project_findings`, `rust/crates/yamaa-core/tests/support/diagnostic/project_scope.rs`.
+Evidence: `rust/crates/yamaa/tests/project_operations.rs::an_input_that_reads_a_run_scope_artifact_without_a_link_fails_alone`, `rust/crates/yamaa-adapters/tests/project_scope.rs::unlinked_inputs_cycles_and_collisions_are_project_findings`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/project_scope.json::a_run_scope_artifact_read_without_a_link_is_an_unlinked_producer`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/project_scope.json::a_project_check_reports_an_unlinked_input_with_every_listing`, `rust/crates/yamaa-core/tests/support/diagnostic/project_scope.rs`.
 
 The finding fails only the consumer that declares the input, at its
 `input.<dataset>.path`; the other specifications of the run scope still build.
@@ -271,7 +271,7 @@ builds no output and no run report. Every specification that ran keeps its own
 output, findings and run report.
 
 Fails: `producer_not_completed`.
-Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_failed_specification_stops_only_its_consumers_and_saves_reports_alone`, `rust/crates/yamaa-adapters/tests/project_scope.rs::blocked_consumers_name_each_failed_producer`, `rust/crates/yamaa-core/tests/support/diagnostic/project_scope.rs`.
+Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_failed_specification_stops_only_its_consumers_and_saves_reports_alone`, `rust/crates/yamaa-adapters/tests/project_scope.rs::blocked_consumers_name_each_failed_producer`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/project_scope.json::a_consumer_is_blocked_by_the_producer_that_failed`, `rust/crates/yamaa-core/tests/support/diagnostic/project_scope.rs`.
 
 The finding is reported at the consumer's `input.<dataset>.schema` for each
 link to a producer that did not complete.
