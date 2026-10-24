@@ -398,7 +398,7 @@ fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
     let authored = resource_contracts();
     let contracts = replay::object(replay::field(&authored, "define"));
     let mut seen = BTreeSet::new();
-    let (mut accepted, mut refused, mut empty_sets) = (0, 0, 0);
+    let (mut accepted, mut refused, mut artifact_contracts) = (0, 0, 0);
     for case in replay::cases() {
         let Some(expected) = contracts.get(&case.label) else {
             continue;
@@ -425,12 +425,12 @@ fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
             "{}: preparation publishes no files or directories",
             case.label
         );
-        if replay::field(expected, "empty_artifacts") == &Value::Bool(true) {
-            empty_sets += 1;
+        if let Some(empty) = expected.get("empty_artifacts") {
+            artifact_contracts += 1;
             assert_eq!(
-                define.artifacts().len(),
-                0,
-                "{}: early refusal holds no artifacts",
+                &Value::Bool(define.artifacts().is_empty()),
+                empty,
+                "{}: the authored held-artifact contract",
                 case.label
             );
         }
@@ -482,7 +482,7 @@ fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
         contracts.keys().cloned().collect(),
         "every define API case remains present"
     );
-    assert_eq!((accepted, refused, empty_sets), (3, 23, 3));
+    assert_eq!((accepted, refused, artifact_contracts), (3, 23, 3));
 }
 
 /// Seam: a refused written path has no accepted output and cannot publish,

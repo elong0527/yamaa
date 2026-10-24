@@ -2,14 +2,12 @@
   "define": {
     "shared_define.json::entry_relative_inherited_output_supplies_json_capture_and_publication_targets": {
       "save": true,
-      "empty_artifacts": false,
       "absent": [
         "parents/artifacts"
       ]
     },
     "shared_define.json::an_lb_value_entry_inheriting_the_original_investigator_source_is_refused_with_zero_writes": {
       "save": false,
-      "empty_artifacts": false,
       "absent": []
     },
     "shared_define.json::define_reports_the_missing_study_guide_and_target_before_reading_specifications": {
@@ -29,27 +27,22 @@
     },
     "shared_define.json::an_sdtm_document_refuses_a_datetime_output_column": {
       "save": false,
-      "empty_artifacts": false,
       "absent": []
     },
     "shared_define.json::a_semantic_failure_writes_nothing": {
       "save": false,
-      "empty_artifacts": false,
       "absent": []
     },
     "shared_define.json::a_missing_published_dataset_is_refused": {
       "save": false,
-      "empty_artifacts": false,
       "absent": []
     },
     "shared_define.json::a_creation_date_without_its_time_is_refused": {
       "save": false,
-      "empty_artifacts": false,
       "absent": []
     },
     "shared_define.json::inherited_original_output_supplies_both_json_capture_and_publication_target": {
       "save": true,
-      "empty_artifacts": false,
       "absent": [
         "children/artifacts/dm.json",
         "dm.json"
@@ -57,86 +50,70 @@
     },
     "shared_define.json::a_transport_file_is_published_beside_the_document_wherever_its_dataset_is": {
       "save": true,
-      "empty_artifacts": false,
       "absent": [
         "artifacts/dm.json"
       ]
     },
     "shared_define.json::an_artifact_outside_the_documents_directory_is_refused_without_a_transport": {
       "save": false,
-      "empty_artifacts": false,
       "absent": [
         "package"
       ]
     },
     "shared_define.json::a_published_dataset_with_reordered_columns_fails_its_producer_contract": {
       "save": false,
-      "empty_artifacts": false,
       "absent": []
     },
     "shared_define.json::a_published_dataset_missing_a_declared_column_fails_its_producer_contract": {
       "save": false,
-      "empty_artifacts": false,
       "absent": []
     },
     "shared_define.json::an_allowed_values_check_beside_its_codelist_is_redundant": {
       "save": false,
-      "empty_artifacts": false,
       "absent": []
     },
     "shared_define.json::an_assembled_identifier_refutes_a_protocol_origin": {
       "save": false,
-      "empty_artifacts": false,
       "absent": []
     },
     "shared_define.json::a_label_in_the_metadata_mapping_is_a_reserved_key": {
       "save": false,
-      "empty_artifacts": false,
       "absent": []
     },
     "shared_define.json::a_collected_origin_without_its_form_is_refused_under_submission": {
       "save": false,
-      "empty_artifacts": false,
       "absent": []
     },
     "shared_define.json::a_collected_origin_citing_its_form_without_a_page_is_refused_under_submission": {
       "save": false,
-      "empty_artifacts": false,
       "absent": []
     },
     "shared_define.json::a_not_available_origin_is_not_admitted_under_sdtm": {
       "save": false,
-      "empty_artifacts": false,
       "absent": []
     },
     "shared_define.json::a_not_available_origin_with_a_source_is_not_admitted_under_sdtm": {
       "save": false,
-      "empty_artifacts": false,
       "absent": []
     },
     "shared_define.json::an_assigned_origin_from_the_investigator_is_not_admitted_under_send": {
       "save": false,
-      "empty_artifacts": false,
       "absent": []
     },
     "shared_define.json::a_not_available_origin_with_a_source_is_not_admitted_under_send": {
       "save": false,
-      "empty_artifacts": false,
       "absent": []
     },
     "shared_define.json::a_predecessor_column_keeps_its_predecessors_label": {
       "save": false,
-      "empty_artifacts": false,
       "absent": []
     },
     "shared_define.json::a_published_name_outside_the_study_inventory_fails_its_recheck": {
       "save": false,
-      "empty_artifacts": false,
       "absent": []
     },
     "shared_define.json::without_the_sdtm_section_a_predecessor_names_no_dataset_of_the_study": {
       "save": false,
-      "empty_artifacts": false,
       "absent": []
     }
   },
