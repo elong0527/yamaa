@@ -424,6 +424,85 @@ mod scalar {
         }
 
         #[test]
+        fn duration_text_writes_one_canonical_text_for_each_amount() {
+            // TIME-21: days, then hours, minutes and seconds, each zero
+            // component left out and a fraction only on the seconds. An int
+            // scales exactly; a float scales once as binary64 and splits the
+            // shortest digits of its seconds (VALUE-8).
+            let tiny = format!("PT0.{}5S", "0".repeat(323));
+            for (amount, unit, expected) in [
+                (Value::Int(120), U::Minute, "PT2H"),
+                (Value::Int(90), U::Minute, "PT1H30M"),
+                (Value::Int(45), U::Minute, "PT45M"),
+                (Value::Int(0), U::Minute, "PT0S"),
+                (Value::Int(-90), U::Minute, "-PT1H30M"),
+                (Value::Int(26), U::Hour, "P1DT2H"),
+                (Value::Int(14), U::Day, "P14D"),
+                (Value::Int(86400), U::Second, "P1D"),
+                (Value::Int(3601), U::Second, "PT1H1S"),
+                (Value::Int(90061), U::Second, "P1DT1H1M1S"),
+                (Value::Int(93780), U::Second, "P1DT2H3M"),
+                (Value::Int(i64::MAX), U::Day, "P9223372036854775807D"),
+                (Value::Int(i64::MIN), U::Day, "-P9223372036854775808D"),
+                (
+                    Value::Int(i64::MIN),
+                    U::Second,
+                    "-P106751991167300DT15H30M8S",
+                ),
+                (Value::float(-0.25), U::Hour, "-PT15M"),
+                (Value::float(1.75), U::Hour, "PT1H45M"),
+                (Value::float(1.5), U::Minute, "PT1M30S"),
+                (Value::float(90.5), U::Second, "PT1M30.5S"),
+                (Value::float(0.5), U::Second, "PT0.5S"),
+                (Value::float(0.1), U::Second, "PT0.1S"),
+                // 0.1 minute is 6.0000000000000003 seconds exactly, within
+                // half a unit in the last place of 6.
+                (Value::float(0.1), U::Minute, "PT6S"),
+                // One third of an hour as a float is 1199.99999999999993
+                // seconds exactly, within half a unit in the last place of
+                // 1200.
+                (Value::float(1.0 / 3.0), U::Hour, "PT20M"),
+                (Value::float(-0.0), U::Second, "PT0S"),
+                (Value::float(0.0), U::Day, "PT0S"),
+                (Value::float(1e20), U::Second, "P1157407407407407DT9H46M40S"),
+                (Value::float(5e-324), U::Second, tiny.as_str()),
+            ] {
+                assert_eq!(
+                    result(K::DurationText { unit }, std::slice::from_ref(&amount)),
+                    text(expected),
+                    "{amount:?} {unit:?}"
+                );
+            }
+        }
+
+        #[test]
+        fn duration_text_read_back_returns_every_whole_second_amount() {
+            // TIME-21: an amount that is a whole number of seconds, at most
+            // 2^53 of them, reads back in its own unit as itself.
+            for (amount, unit) in [
+                (Value::Int(120), U::Minute),
+                (Value::Int(-90), U::Minute),
+                (Value::Int(0), U::Second),
+                (Value::Int(1 << 53), U::Second),
+                (Value::Int(-(1 << 53)), U::Second),
+                (Value::Int(104249991374), U::Day),
+                (Value::Int(26), U::Hour),
+                (Value::float(1.5), U::Minute),
+                (Value::float(-0.25), U::Hour),
+                (Value::float(2.5), U::Day),
+                (Value::float(9007199254740992.0), U::Second),
+            ] {
+                let written = result(K::DurationText { unit }, std::slice::from_ref(&amount));
+                let read = result(K::DurationValue { unit }, &[written]);
+                let expected = match &amount {
+                    Value::Int(whole) => Value::float(*whole as f64),
+                    other => other.clone(),
+                };
+                assert_eq!(read, expected, "{amount:?} {unit:?}");
+            }
+        }
+
+        #[test]
         fn invalid_duration_text_recovers_only_when_declared() {
             // A duration whose float is not finite is outside the numeric range.
             let infinite = format!("PT1{}S", "0".repeat(309));
@@ -531,6 +610,7 @@ mod scalar {
                 K::DateTimeDifference { unit: U::Hour },
                 K::DateTimeShift { unit: U::Second },
                 K::DurationValue { unit: U::Second },
+                K::DurationText { unit: U::Minute },
             ] {
                 assert_eq!(
                     result(kind, &vec![Value::Missing; kind.fields().len()]),
@@ -571,7 +651,7 @@ mod scalar {
                 "text_case_reference.json",
             );
             let rows = reference.field("proper").items();
-            assert_eq!(rows.len(), 16, "the authored proper-case rows");
+            assert_eq!(rows.len(), 23, "the authored proper-case rows");
             for row in rows {
                 let row = row.closed(&["source", "delimiters", "expected"]);
                 let source = row.field("source").text();

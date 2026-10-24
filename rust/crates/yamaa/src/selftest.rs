@@ -352,7 +352,7 @@ fn check(case: &Case, info: &Info) -> Result<(), String> {
             Some(project) => request.project(project),
             None => request,
         };
-        let mut run = request.run().map_err(|error| error.to_string())?;
+        let mut run = request.run().map_err(|failure| failure.message)?;
         let diagnostics = run.diagnostics();
         if negative_entries {
             if run.output().is_some() {
@@ -381,7 +381,7 @@ fn check(case: &Case, info: &Info) -> Result<(), String> {
             .section(define.section)
             .cancel_with(&token)
             .submission(&SubmissionOptions::new(crate::VERSION).with_created(define.created))
-            .map_err(|error| error.to_string())?;
+            .map_err(|failure| failure.message)?;
         let diagnostics = submission.diagnostics();
         match expected_issue {
             Some(expected) => expect_issue(expected, diagnostics.first())?,
@@ -559,8 +559,8 @@ fn issue_matches(want: &BTreeMap<String, ContextValue>, got: &Diagnostic) -> boo
         None | Some(ContextValue::Null) => &empty,
         Some(context) => context,
     };
-    same(field("phase"), &text(&got.phase))
-        && same(field("condition"), &text(&got.code))
+    same(field("phase"), &text(got.phase.as_str()))
+        && same(field("condition"), &text(got.code.as_str()))
         && same(field("spec_paths"), &paths)
         && want
             .get("rule")

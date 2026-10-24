@@ -652,6 +652,7 @@ class DerivationShapeTests(unittest.TestCase):
             "to_date",
             "dtc",
             "time_of_day",
+            "duration_text",
         )
         raw = []
         for benchmark in sorted(BENCHMARKS.iterdir()):
@@ -940,6 +941,15 @@ class DerivationShapeTests(unittest.TestCase):
         self.assertEqual(
             mapping_doc.describe_derivation({"time_of_day": {"source": "ASTDTM"}}),
             "Seconds since midnight for the time of day of ASTDTM.",
+        )
+
+    def test_duration_text_names_the_unit_its_number_counts(self):
+        self.assertEqual(
+            mapping_doc.describe_derivation(
+                {"duration_text": {"source": "EXDURMIN", "unit": "minute"}}
+            ),
+            "Write EXDURMIN, a number of minutes, as ISO 8601 duration text with "
+            "days as the largest unit.",
         )
 
     def test_cut_names_the_closed_side_of_each_interval(self):

@@ -76,8 +76,8 @@ fn unknown_source_column_arrives_as_a_typed_record() {
         assert_eq!(diagnostics.len(), 1);
         let diagnostic = &diagnostics[0];
         assert_eq!(diagnostic.severity, Severity::Error);
-        assert_eq!(diagnostic.phase, "validation");
-        assert_eq!(diagnostic.code, "unknown_field");
+        assert_eq!(diagnostic.phase.as_str(), "validation");
+        assert_eq!(diagnostic.code.as_str(), "unknown_field");
         assert_eq!(diagnostic.rule.as_deref(), Some("NAME-3"));
         // Ordered spec-path segments, not a joined string.
         assert_eq!(diagnostic.spec_path, ["columns.VALUE.derivation.source"]);
@@ -118,8 +118,8 @@ fn evaluation_failures_carry_recorded_geometry() {
     if cfg!(feature = "yaml") {
         assert_eq!(diagnostics.len(), 1);
         let diagnostic = &diagnostics[0];
-        assert_eq!(diagnostic.phase, "derivation");
-        assert_eq!(diagnostic.code, "division_by_zero");
+        assert_eq!(diagnostic.phase.as_str(), "derivation");
+        assert_eq!(diagnostic.code.as_str(), "division_by_zero");
         assert_eq!(diagnostic.rule.as_deref(), Some("FORMULA-15"));
         assert_eq!(diagnostic.message, "VALUE / ZERO divides by zero");
         assert_eq!(diagnostic.spec_path, ["columns.RATIO.derivation"]);
@@ -154,8 +154,8 @@ fn integer_tokens_beyond_sixty_four_bits_stay_exact_numbers() {
     assert!(!diagnostics.is_empty());
     if cfg!(feature = "yaml") {
         let diagnostic = &diagnostics[0];
-        assert_eq!(diagnostic.phase, "validation");
-        assert_eq!(diagnostic.code, "integer_overflow");
+        assert_eq!(diagnostic.phase.as_str(), "validation");
+        assert_eq!(diagnostic.code.as_str(), "integer_overflow");
         assert_eq!(
             diagnostic.message,
             "340282366920938463463374607431768211456 is outside the int range \
@@ -206,7 +206,7 @@ fn check_takes_the_host_language_from_the_options_not_the_runtime_name() {
             .diagnostics();
         for (route, diagnostics) in [("check", &checked), ("run", &ran)] {
             let reported = diagnostics.iter().any(|diagnostic| {
-                diagnostic.code == "function_file_invalid"
+                diagnostic.code.as_str() == "function_file_invalid"
                     && diagnostic.spec_path == ["environments.r.lock"]
             });
             assert_eq!(

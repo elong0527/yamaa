@@ -143,10 +143,14 @@ Evidence: `schema-sentence-case`, `schema-text-functions`, `adam-adae-proper-cas
 `proper` writes text as SAS `PROPCASE` does. Its delimiters are the scalars
 that `delimiters` lists, a non-empty string of ASCII scalars, each listed once;
 without it they are the blank `U+0020`, `/`, `-`, `(`, `.` and the tab
-`U+0009`, and a declared list replaces all six. A scalar directly follows a
-delimiter when the scalar before it in the source is one of them, compared as
-the same scalar. So `INVESTIGATOR'S DECISION` gives `Investigator's Decision`,
-`2ND DEGREE BURN` gives `2nd Degree Burn` and `PAIN,BACK` gives `Pain,back`,
+`U+0009`, and a declared list replaces all six. `proper` first applies the
+downward substitution to every ASCII letter, then identifies delimiter
+positions in that lowered text before applying the upward substitution.
+Delimiters are compared as written: with `delimiters: "c"`, both `MCDONALD`
+and `mcdonald` give `McDonald`; with `"X"`, `AXBXC` gives `Axbxc`, and with
+`"x"` it gives `AxBxC`. So `INVESTIGATOR'S DECISION` gives
+`Investigator's Decision`, `2ND DEGREE BURN` gives `2nd Degree Burn` and
+`PAIN,BACK` gives `Pain,back`,
 where `title` gives `Investigator'S Decision`, `2Nd Degree Burn` and
 `Pain,Back`; a list that names the comma gives `Pain,Back` too.
 
@@ -161,8 +165,9 @@ Every substitution preserves scalar count. None has a one-to-many mapping, a
 context rule, language tailoring or a Unicode-version dependency, and word
 detection is ASCII-only: a run for `title` is `[A-Za-z]+`, and a word for
 `proper` starts only at the first scalar or after one of its delimiters, with
-no locale and no Unicode word-break rule. Non-ASCII scalars, including non-ASCII letters such
-as `U+00DF` and `U+0130`, pass through unchanged. A missing source returns
+no locale and no Unicode word-break rule. Non-ASCII scalars, including
+non-ASCII letters such as `U+00DF` and `U+0130`, pass through unchanged. A
+missing source returns
 `missing`, or missing when it is omitted, counted under `missing`
 ([COLUMN-10](columns.md#column-10)).
 

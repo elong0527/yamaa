@@ -21,10 +21,54 @@
 
 use std::collections::BTreeMap;
 
-use crate::diagnostic::{ContextValue, Severity};
+use crate::diagnostic::{ContextValue, Phase, Severity};
 use crate::table::Table;
 
 mod registry;
+
+/// A condition of the registry, as an issue's `condition` column names it:
+/// one `yaml/conditions.yaml` holds, among its registered conditions or the
+/// conditions a release retired. [`ConditionCode::parse`] refuses any other
+/// name, so a code always names a condition the catalogue lists. A
+/// [`Diagnostic`](crate::Diagnostic) names a registered one; only a retired
+/// row of the catalogue names a retired one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ConditionCode {
+    name: &'static str,
+}
+
+impl ConditionCode {
+    /// The condition named `name`, or none for a name the registry holds
+    /// neither among its registered conditions nor among those a release
+    /// retired.
+    pub fn parse(name: &str) -> Option<Self> {
+        // Both tables are sorted by condition.
+        let registered = registry::REGISTERED
+            .binary_search_by(|(condition, ..)| (*condition).cmp(name))
+            .map(|found| registry::REGISTERED[found].0);
+        let retired = || {
+            registry::RETIRED
+                .binary_search_by(|(condition, _)| (*condition).cmp(name))
+                .map(|found| registry::RETIRED[found].0)
+        };
+        registered
+            .or_else(|_| retired())
+            .ok()
+            .map(|name| Self { name })
+    }
+
+    /// The condition's name, as the issues table's `condition` column and
+    /// the catalogue write it.
+    pub fn as_str(self) -> &'static str {
+        self.name
+    }
+}
+
+impl std::fmt::Display for ConditionCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name)
+    }
+}
 
 /// The condition catalogue's columns, in order.
 pub const CONDITION_COLUMNS: [&str; 7] = [
@@ -42,13 +86,13 @@ pub const CONDITION_COLUMNS: [&str; 7] = [
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Condition {
     /// The condition, as an issue's `condition` column names it.
-    pub condition: &'static str,
+    pub condition: ConditionCode,
     /// The severity of the condition's issues: error for every condition of
     /// 1.0 (D28), a retired one included.
     pub severity: Severity,
     /// The phases that may report the condition, as `yaml/conditions.yaml`
     /// lists them; none for a retired condition.
-    pub phases: Vec<&'static str>,
+    pub phases: Vec<Phase>,
     /// The rules the condition's issues cite: the card IDs the registry's
     /// causes of the condition name, in card order (by prefix, then number).
     /// None for a condition whose issues cite no rule, such as
@@ -74,9 +118,9 @@ impl Condition {
         let optional = |value: Option<&str>| value.map_or(ContextValue::Null, text);
         ContextValue::Map(
             [
-                ("condition", text(self.condition)),
+                ("condition", text(self.condition.as_str())),
                 ("severity", text(self.severity.as_str())),
-                ("phases", texts(&self.phases)),
+                ("phases", texts(&self.phase_names())),
                 ("rules", texts(&self.rules)),
                 ("message", optional(self.message)),
                 ("renamed_from", optional(self.renamed_from)),
@@ -93,15 +137,20 @@ impl Condition {
     /// with `, ` and a missing cell empty.
     pub fn text(&self) -> String {
         [
-            self.condition.to_owned(),
+            self.condition.as_str().to_owned(),
             self.severity.as_str().to_owned(),
-            self.phases.join(", "),
+            self.phase_names().join(", "),
             self.rules.join(", "),
             self.message.unwrap_or_default().to_owned(),
             self.renamed_from.unwrap_or_default().to_owned(),
             self.retired_in.unwrap_or_default().to_owned(),
         ]
         .join("\t")
+    }
+
+    /// The phases as written, in the catalogue's order.
+    fn phase_names(&self) -> Vec<&'static str> {
+        self.phases.iter().copied().map(Phase::as_str).collect()
     }
 }
 
@@ -140,16 +189,16 @@ impl Conditions {
         let text = |cell: fn(&Condition) -> Option<&str>| {
             PublicColumn::Str(self.entries.iter().map(cell).collect())
         };
-        let texts = |cell: fn(&Condition) -> &[&str]| {
+        let texts = |cell: fn(&Condition) -> Vec<&str>| {
             PublicColumn::List(Box::new(List::text(
-                self.entries.iter().map(|entry| Some(cell(entry).to_vec())),
+                self.entries.iter().map(|entry| Some(cell(entry))),
             )))
         };
         let columns: [PublicColumn; CONDITION_COLUMNS.len()] = [
-            text(|entry| Some(entry.condition)),
+            text(|entry| Some(entry.condition.as_str())),
             text(|entry| Some(entry.severity.as_str())),
-            texts(|entry| &entry.phases),
-            texts(|entry| &entry.rules),
+            texts(Condition::phase_names),
+            texts(|entry| entry.rules.clone()),
             text(|entry| entry.message),
             text(|entry| entry.renamed_from),
             text(|entry| entry.retired_in),
@@ -176,10 +225,10 @@ impl Conditions {
 ///     .iter()
 ///     .find(|entry| entry.renamed_from == Some("schema_version_mismatch"))
 ///     .unwrap();
-/// assert_eq!(renamed.condition, "unsupported_language_version");
+/// assert_eq!(renamed.condition.as_str(), "unsupported_language_version");
 /// let retired = entries
 ///     .iter()
-///     .find(|entry| entry.condition == "month_required")
+///     .find(|entry| entry.condition.as_str() == "month_required")
 ///     .unwrap();
 /// assert_eq!((retired.retired_in, retired.message), (Some("1.0.0"), None));
 /// assert_eq!(catalogue.table().rows(), entries.len());
@@ -207,9 +256,14 @@ pub fn conditions() -> Conditions {
                 .unwrap_or((Severity::Error, Vec::new()));
             rules.sort_by_key(|rule| card_order(rule));
             Condition {
-                condition,
+                condition: ConditionCode { name: condition },
                 severity,
-                phases: phases.to_vec(),
+                phases: phases
+                    .iter()
+                    .map(|phase| {
+                        Phase::parse(phase).expect("the registry names one of the twelve phases")
+                    })
+                    .collect(),
                 rules,
                 message: yamaa_core::diagnostic::template(condition),
                 renamed_from,
@@ -220,7 +274,7 @@ pub fn conditions() -> Conditions {
             registry::RETIRED
                 .iter()
                 .map(|&(condition, release)| Condition {
-                    condition,
+                    condition: ConditionCode { name: condition },
                     severity: Severity::Error,
                     phases: Vec::new(),
                     rules: Vec::new(),
@@ -239,4 +293,36 @@ pub fn conditions() -> Conditions {
 fn card_order(rule: &str) -> (&str, u32) {
     let (prefix, number) = rule.rsplit_once('-').unwrap_or((rule, ""));
     (prefix, number.parse().unwrap_or(0))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// [`ConditionCode::parse`] searches each registry table by name, so
+    /// each is sorted by condition, no name is in both, and every name
+    /// parses as itself.
+    #[test]
+    fn the_registry_tables_are_sorted_disjoint_and_parse() {
+        let registered = registry::REGISTERED.iter().map(|(name, ..)| *name);
+        let retired = registry::RETIRED.iter().map(|(name, _)| *name);
+        for (table, names) in [
+            ("registered", registered.collect::<Vec<_>>()),
+            ("retired", retired.collect::<Vec<_>>()),
+        ] {
+            assert!(names.windows(2).all(|pair| pair[0] < pair[1]), "{table}");
+            for name in names {
+                assert_eq!(
+                    ConditionCode::parse(name).map(ConditionCode::as_str),
+                    Some(name),
+                    "{table}"
+                );
+            }
+        }
+        assert!(registry::RETIRED
+            .iter()
+            .all(|(name, _)| registry::REGISTERED
+                .binary_search_by(|(registered, ..)| (*registered).cmp(name))
+                .is_err()));
+    }
 }

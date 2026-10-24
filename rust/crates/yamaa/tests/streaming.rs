@@ -17,8 +17,8 @@ use std::sync::{
 use arrow_array::ffi_stream::ArrowArrayStreamReader;
 use arrow_array::{Array, Int64Array, RecordBatchReader, StringArray};
 use yamaa::{
-    CancellationToken, Engine, EngineOptions, Error, HostLanguage, MemoryResolver, Partitions,
-    RecordBatch, StreamProgress, Streamed,
+    CancellationToken, Engine, EngineOptions, Failure, FailureKind, HostLanguage, MemoryResolver,
+    Partitions, RecordBatch, StreamProgress, Streamed,
 };
 
 use crate::support::NoFunctions;
@@ -228,7 +228,13 @@ fn a_consumer_that_stops_pulling_stops_production() {
     drop(reader);
     assert_eq!(polls.load(Ordering::SeqCst), 0, "nothing after the release");
     assert_eq!(streamed.progress(), StreamProgress::Cancelled);
-    assert!(matches!(streamed.run(), Err(Error::Cancelled)));
+    assert!(matches!(
+        streamed.run(),
+        Err(Failure {
+            kind: FailureKind::Cancelled,
+            ..
+        })
+    ));
 }
 
 /// A run nobody started to read runs whole when its result is asked for,
@@ -266,8 +272,11 @@ fn a_started_stream_belongs_to_its_reader_until_it_ends() {
     assert!(
         matches!(
             second.next(),
-            Some(Err(Error::Stream {
-                code: "stream_taken"
+            Some(Err(Failure {
+                kind: FailureKind::Stream {
+                    code: "stream_taken"
+                },
+                ..
             }))
         ),
         "a second reader"
@@ -276,8 +285,11 @@ fn a_started_stream_belongs_to_its_reader_until_it_ends() {
     assert!(
         matches!(
             streamed.run(),
-            Err(Error::Stream {
-                code: "stream_open"
+            Err(Failure {
+                kind: FailureKind::Stream {
+                    code: "stream_open"
+                },
+                ..
             })
         ),
         "the result while the stream is open"
@@ -311,8 +323,11 @@ fn a_run_that_can_call_its_host_is_built_only_on_its_own_thread() {
             assert!(
                 matches!(
                     reader.next(),
-                    Some(Err(Error::Stream {
-                        code: "host_thread"
+                    Some(Err(Failure {
+                        kind: FailureKind::Stream {
+                            code: "host_thread"
+                        },
+                        ..
                     }))
                 ),
                 "a pull on another thread"
@@ -320,8 +335,11 @@ fn a_run_that_can_call_its_host_is_built_only_on_its_own_thread() {
             assert!(
                 matches!(
                     streamed.run(),
-                    Err(Error::Stream {
-                        code: "host_thread"
+                    Err(Failure {
+                        kind: FailureKind::Stream {
+                            code: "host_thread"
+                        },
+                        ..
                     })
                 ),
                 "the result on another thread"
@@ -442,7 +460,13 @@ fn a_panic_while_a_c_stream_pulls_ends_the_stream() {
             StreamProgress::Cancelled,
         )
     );
-    assert!(matches!(streamed.run(), Err(Error::Cancelled)));
+    assert!(matches!(
+        streamed.run(),
+        Err(Failure {
+            kind: FailureKind::Cancelled,
+            ..
+        })
+    ));
 }
 
 /// Where a run stands is read without its lock: polled from inside the
@@ -455,7 +479,13 @@ fn progress_is_read_without_waiting_for_a_pull() {
     let (watched, record) = (Arc::clone(&cell), Arc::clone(&seen));
     let token = CancellationToken::with_probe(move || {
         if let Some(streamed) = watched.get().and_then(Weak::upgrade) {
-            let busy = matches!(streamed.run(), Err(Error::Stream { code: "busy" }));
+            let busy = matches!(
+                streamed.run(),
+                Err(Failure {
+                    kind: FailureKind::Stream { code: "busy" },
+                    ..
+                })
+            );
             record.lock().unwrap().push((streamed.progress(), busy));
         }
         false

@@ -1506,7 +1506,7 @@ columns:
             )
             .unwrap();
             let rows = reference["proper"].as_array().unwrap();
-            assert_eq!(rows.len(), 16, "the authored proper-case rows");
+            assert_eq!(rows.len(), 23, "the authored proper-case rows");
             let list = |row: &yamaa_core::json::Value| {
                 row.get("delimiters")
                     .map(|list| list.as_str().unwrap().to_owned())

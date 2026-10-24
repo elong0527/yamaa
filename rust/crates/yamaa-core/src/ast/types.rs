@@ -260,6 +260,7 @@ mod tests {
                 ),
                 value("SHIFTED", temporal("shift", "datetime", "hour")),
                 value("DURATION", temporal("duration_value", "datetime", "hour")),
+                value("WRITTEN", temporal("duration_text", "datetime", "minute")),
                 value(
                     "DTC",
                     op("dtc", fields(vec![("year", Tree::text("SRC.A"))]))
@@ -300,6 +301,7 @@ mod tests {
                 ResultType::INT,
                 ResultType::DATETIME,
                 ResultType::FLOAT,
+                ResultType::STR,
                 ResultType::STR,
                 ResultType::DATE,
                 ResultType::DATE,

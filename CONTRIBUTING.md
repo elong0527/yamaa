@@ -196,6 +196,80 @@ regenerate them and commit the results:
 uv run --project python --no-sync python -m tools.packaging.generate_component_inventory --write
 ```
 
+### Design principles in practice
+
+`AGENTS.md`'s design principles say what; this is where each one lands in
+the repository.
+
+**The data form that owns a behaviour.** Before writing Rust, find the
+form below. A behaviour the form can express is written there, and its
+Rust consumer reads it.
+
+| Behaviour | Data form | Generated or checked by |
+| --- | --- | --- |
+| A file type's fields, types and defaults; an expression function's arguments | `yaml/schema_*.yaml` | `tools.packaging.generate_json_schema`, `tools.packaging.generate_shipped_schema` |
+| The expression grammar, its closed function and reducer lists, its parse cases | `yaml/grammar/*.yaml` | `tools.validation.check_expression_conformance` and the core replay of its cases |
+| A condition, its phases and its message | `yaml/conditions.yaml` | `tools.packaging.generate_message_templates`, `tools.validation.check_diagnostics` |
+| A CDISC closed list | `yaml/vocabulary/cdisc.yaml` | `tools.packaging.generate_cdisc_vocabulary` and the vocabulary checks |
+| What an expression evaluates to | `yaml/conformance/expressions.yaml`, `yaml/conformance/regex.yaml` | `tools.validation.check_expression_conformance` |
+| What a specification produces or refuses | a benchmark under `benchmarks/` | the corpus walk, public conformance, `support::benchmarks::reproduce` |
+| What both hosts return for one case | a `rust/tests/host-fixtures/` family | the readers beside `cases.json`, in both installed suites |
+| What one crate's operation reports | the crate's `tests/fixtures/` | its readers under `tests/support/` |
+| A host function, its arguments and its result members | `rust/interface/bindings.yaml` | `tools.packaging.generate_bindings` |
+
+A behaviour none of these can express extends the form once, with its
+generator or check, in the same pull request; it is not written by hand
+in the form's consumers. Rust holds semantics and execution: what a
+function computes, how a table is built, how bytes are read and written.
+
+**One implementation per judgement.** Two code paths that must agree are
+a divergence waiting to happen, and the tests that prove their agreement
+are its cost. Where one judgement serves two situations (a check before
+data is read and a run with it; a declared type and a captured one), it
+is one function over an abstraction with two sources, and the findings
+and their order are defined once. Where two copies of one thing must
+exist (a list in Rust and in a YAML file; a schema and its shipped bytes),
+one is the source and the other is generated from it and checked current
+in `make check-repository`, as the vocabulary (#3701) and the message
+templates are.
+
+**A fixture before a test function.** A test that writes files or
+documents, makes one call and compares rows or bytes is a case in one of
+the three homes above: a benchmark when the case is a whole specification
+with its expected output, a `host-fixtures` family when both hosts prove
+it, the crate's `tests/fixtures/` otherwise. The case form carries the
+complete expected record (`assert_issues`'s shape for issues; the rows,
+or the authored file, for output). A case the form cannot state yet
+extends the form, in the reader every case shares, rather than becoming
+a test function. A test function remains for what no reader reaches: a
+private function's seam, a port's scripted interaction, a panic's
+containment, a program the test spawns because it is the subject. Its
+first comment names the seam, and the reviewer reports a test function
+that a fixture home could have held.
+
+**Keep data as data.** Bytes the engine ships verbatim stay in their own
+format and are included at build time, so a review sees a YAML change as
+a YAML diff. A generated Rust file holds code or a table, never a
+transcription of another file's text.
+
+**Size has a ceiling.** The ceilings are 3,000 lines for a source or test
+file, 250 lines for a function, and seven parameters, Clippy's default.
+Measure before a push:
+
+```sh
+find rust/crates -name '*.rs' | xargs wc -l | awk '$1 > 3000' | sort -rn
+grep -rc 'allow(clippy::too_many_arguments' rust/crates/*/src | grep -v ':0$'
+```
+
+A file past the ceiling splits by feature, as `tests/<area>.rs` files
+split by family (#2413). A function past it becomes named steps, each a
+function, or takes a struct carrying what its parameters threaded; a
+function that is one state machine says so in a comment. An `allow` for
+`too_many_arguments` or `too_many_lines` names the issue that removes it.
+A generated file is exempt from the file ceiling and says so in its first
+lines. The per-crate line counts of a change that moves code or tests go
+on its issue, never in a committed file.
+
 ## Develop and verify
 
 Run `make help` at the repository root for prerequisites, configuration variables

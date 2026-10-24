@@ -865,6 +865,17 @@ def describe_time_of_day(node, ctx=None, depth=0):
     )
 
 
+def describe_duration_text(node, ctx=None, depth=0):
+    """A number of elapsed units written as ISO 8601 duration text."""
+    return sentence(
+        "Write "
+        + describe_variable(node.get("source"), ctx, depth)
+        + ", a number of "
+        + str(node.get("unit", ""))
+        + "s, as ISO 8601 duration text with days as the largest unit"
+    )
+
+
 def invalid_text_phrase(node, ctx=None):
     """What text that is not a date yields; with no handler it is fatal."""
     if "invalid" in node:
@@ -1200,6 +1211,7 @@ DERIVATION_DESCRIBERS = {
     "to_epoch_day": describe_to_epoch_day,
     "dtc": describe_dtc,
     "time_of_day": describe_time_of_day,
+    "duration_text": describe_duration_text,
     "study_day": describe_study_day,
     "str_case": describe_str_case,
     "str_pad": describe_str_pad,

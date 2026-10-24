@@ -32,7 +32,9 @@ use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 
 use crate::support::scratch::Scratch;
-use yamaa::{CancellationToken, Engine, EngineOptions, Error, HostLanguage, Partitions};
+use yamaa::{
+    CancellationToken, Engine, EngineOptions, Failure, FailureKind, HostLanguage, Partitions,
+};
 
 /// Benchmarks that must divide, read from their specifications: each
 /// derives only from its input's own records (source reads, mappings, date
@@ -124,8 +126,8 @@ fn outcome(mut run: yamaa::Run) -> Outcome {
     if run.output().is_none() {
         return Outcome::Issue(run.diagnostics().first().map(|issue| {
             (
-                issue.phase.clone(),
-                issue.code.clone(),
+                issue.phase.as_str().to_owned(),
+                issue.code.as_str().to_owned(),
                 issue.spec_path.clone(),
                 issue.rule.clone(),
             )
@@ -248,7 +250,11 @@ fn stream_problems(run: &yamaa::Run, streamed: yamaa::Streamed) -> Vec<String> {
             }
         }
         None => match streamed.reader().next() {
-            Some(Err(Error::Rejected(report))) if report.diagnostics == run.diagnostics() => {}
+            Some(Err(Failure {
+                kind: FailureKind::Rejected,
+                diagnostics,
+                ..
+            })) if diagnostics == run.diagnostics() => {}
             other => problems.push(format!("stream did not end with the issues: {other:?}")),
         },
     }
@@ -280,7 +286,7 @@ fn partitioned_and_streamed_runs_reproduce_every_single_specification_benchmark(
             .run()
             .unwrap();
         let refused = run.diagnostics().first().is_some_and(|issue| {
-            issue.code == "engine_rejected"
+            issue.code.as_str() == "engine_rejected"
                 && issue
                     .context
                     .to_json()

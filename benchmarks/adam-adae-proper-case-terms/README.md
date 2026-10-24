@@ -2,8 +2,8 @@
 
 **Goal:** write each reported adverse event term in proper case, as the
 SAS `PROPCASE` function writes it: once with its standard word separators
-(`AETERMPC`) and once with a comma and an open bracket also starting a
-word (`AETERMPB`).
+(`AETERMPC`) and once with a list that replaces the tab with a comma and
+an open bracket (`AETERMPB`).
 
 **Input:** collected adverse event (AE) records carrying the reported
 term (`AETERM`), recorded in capitals.

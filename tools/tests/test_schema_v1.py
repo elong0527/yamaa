@@ -322,6 +322,20 @@ EXPECTED = {
     "new.spec.str_case.delimiters": [
         Field("expressions.str_case", "delimiters", "str")
     ],
+    # D264: duration_text writes a number in a declared unit as ISO 8601
+    # duration text, the inverse of duration_value (TIME-21).
+    "new.spec.expressions.duration_text": [
+        Keyword("expressions", "duration_text", "[]"),
+        Field("expressions.duration_text", "source", "variable", True, kind="name"),
+        Field(
+            "expressions.duration_text",
+            "unit",
+            "str",
+            True,
+            kind="value",
+            values=("second", "minute", "hour", "day"),
+        ),
+    ],
     # A lint suppression comment and a profile chosen by the path's
     # extension: neither is a schema field.
     "new.any.suppression_comment": [],
@@ -646,10 +660,16 @@ class RenameTableTests(unittest.TestCase):
 
     def test_no_field_keyword_or_value_the_table_does_not_list(self):
         fields, values = self.accounted()
+        # A kept or reshaped 0.5 keyword, or one a new entry's reading names.
         keywords = {
             location(entry)
             for entry in rename_table()["entries"]
             if is_keyword(entry) and entry["kind"] in {"keep", "reshape"}
+        } | {
+            (check.registry, check.keyword)
+            for checks in EXPECTED.values()
+            for check in checks
+            if isinstance(check, Keyword)
         }
         failures = []
         for file_type, (entry, root) in generator.FILE_TYPES.items():

@@ -173,8 +173,8 @@ fn diagnostic(code: C, path: &str, fields: &[(&str, Value)]) -> Diagnostic {
 pub fn transform(input: &str, mode: Case) -> String {
     let mut output = String::with_capacity(input.len());
     let mut in_word = false;
-    // The scalar before this one in the source; `proper` raises the scalar
-    // after a delimiter it holds.
+    // The preceding scalar after downward substitution: `proper` identifies
+    // delimiter positions in the lowered text before raising any scalar.
     let mut previous = None;
     for (index, character) in input.chars().enumerate() {
         let substituted = match mode {
@@ -201,7 +201,7 @@ pub fn transform(input: &str, mode: Case) -> String {
                 Some(_) => character.to_ascii_lowercase(),
             },
         };
-        previous = Some(character);
+        previous = Some(character.to_ascii_lowercase());
         output.push(substituted);
     }
     output

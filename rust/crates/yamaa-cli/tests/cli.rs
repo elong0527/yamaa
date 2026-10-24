@@ -1311,10 +1311,9 @@ fn a_refused_call_prints_its_error_text_and_exits_1() {
             "{command}"
         );
     }
-    let Err(error) = engine.project(&project).section("sdtn").run() else {
+    let Err(section) = engine.project(&project).section("sdtn").run() else {
         panic!("an unknown section refuses the run");
     };
-    let section = yamaa::Failure::from_error(yamaa::Action::Select("sdtn"), &error);
     assert!(section.message.starts_with("cannot select sdtn: "));
     let others = lines(section.diagnostics.get(1..).unwrap_or_default());
     let issues = json(&section.diagnostics);
@@ -1795,10 +1794,7 @@ fn a_refused_read_or_save_prints_its_error_text_and_exits_1() {
     let absent = study.path("absent.xml");
     let out = study.path("items.csv");
     // The read's refusal, as the hosts' `read_odm()` raises it.
-    let refusal = |read: &str, options: &OdmOptions| {
-        let error = engine.read_odm(read, options).unwrap_err();
-        yamaa::Failure::from_error(yamaa::Action::Read(read), &error)
-    };
+    let refusal = |read: &str, options: &OdmOptions| engine.read_odm(read, options).unwrap_err();
     struct ExpectedIssue<'a> {
         condition: &'a str,
         phase: &'a str,

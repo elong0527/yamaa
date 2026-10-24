@@ -4,8 +4,8 @@
 //! hosts do not call it, since each of their calls names the type it reads.
 //! [`crate::schema()`] takes a type, as written, and gives its JSON Schema.
 
-use crate::api::Failure;
 use crate::engine::Engine;
+use crate::error::Failure;
 use crate::text::Action;
 
 /// The file types as written, one for each [`FileType`] in declaration order:
@@ -122,7 +122,7 @@ impl Engine {
         )
         .map(FileType::from_core)
         .map_err(|(issues, locator)| {
-            Failure::new(
+            Failure::rejected(
                 Action::Read(path),
                 &crate::diagnostic::Report::located(&issues, &locator),
             )

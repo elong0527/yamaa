@@ -204,6 +204,9 @@ pub(super) fn tree_kind(
         ScalarOp::DurationValue { unit } => TemporalKind::DurationValue {
             unit: elapsed_unit(unit_name(*unit)).ok_or(Refusal::Internal)?,
         },
+        ScalarOp::DurationText { unit } => TemporalKind::DurationText {
+            unit: elapsed_unit(unit_name(*unit)).ok_or(Refusal::Internal)?,
+        },
         ScalarOp::TimeOfDay => TemporalKind::TimeOfDay,
         ScalarOp::Dtc => {
             // Every part before the finest declared one must be declared too.
