@@ -1,0 +1,232 @@
+{
+  "about": "Text, temporal and numeric operations read a named intermediate's field like any operand (NAME-3, LOOKUP-2): each of eight operations reads the DOSE intermediate's field for each PP record, in a column and in a row template, checks clean and saves its values; a row template's operation reads the intermediate by the key the template completes; and an operation over a field the intermediate lacks is refused at the operation's source. Moved from execution_retired_odm_context.rs, its row_intermediate_operands module. column_read and row_read are the specifications the test built for its first operation, str_extract; a case of another operation edits the declared type and the expression. A test that checked the specification and then saved is a check case and a save case over the same files, and a test that compared some fields of the issues names them in compares. Every value is its test's.",
+  "documents": {
+    "column_read": "yamaa: \"1.0\"\ntype: spec\ndomain: ADPP\nkeys: [USUBJID]\ninput:\n  PP: {path: pp.csv, types: {DATE: date}}\n  EX: {path: ex.csv, types: {DATE: date, N: float}}\nintermediates:\n  - id: DOSE\n    dataset: EX\n    key: [USUBJID]\ncolumns:\n  - {name: USUBJID, type: str, derivation: PP.USUBJID}\n  - {name: X, type: str, derivation: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}\nrows:\n  - id: pp_records\n    dataset: PP\noutput: {path: output.csv, columns: [USUBJID, X]}\n",
+    "row_read": "yamaa: \"1.0\"\ntype: spec\ndomain: ADPP\nkeys: [USUBJID]\ninput:\n  PP: {path: pp.csv, types: {DATE: date}}\n  EX: {path: ex.csv, types: {DATE: date, N: float}}\nintermediates:\n  - id: DOSE\n    dataset: EX\n    key: [USUBJID]\ncolumns:\n  - {name: USUBJID, type: str, derivation: PP.USUBJID}\n  - {name: X, type: str}\nrows:\n  - id: pp_records\n    dataset: PP\n    derivations: {X: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}\noutput: {path: output.csv, columns: [USUBJID, X]}\n",
+    "pp": "USUBJID,PPTESTCD,DATE\nS1,AUCLST,2030-01-03\nS2,CMAX,2030-02-04\n",
+    "ex": "USUBJID,EXSPID,EXROUTE,DATE,DTM,N\nS1,PER1-D1,ORAL,2030-01-01,2030-01-01T08:00:00,1.25\nS2,PER2-D1,INTRAVENOUS,2030-02-01,2030-02-01T09:00:00,-2.25\n"
+  },
+  "cases": [
+    {
+      "case": "str_extract_of_a_named_intermediate_field_in_a_column_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "column_read"}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "str_extract_reads_a_named_intermediate_field_in_a_column",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "column_read"}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"output.csv": "USUBJID,X\nS1,1\nS2,2\n"}
+    },
+    {
+      "case": "str_extract_of_a_named_intermediate_field_in_a_row_template_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "row_read"}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "str_extract_reads_a_named_intermediate_field_in_a_row_template",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "row_read"}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"output.csv": "USUBJID,X\nS1,1\nS2,2\n"}
+    },
+    {
+      "case": "str_template_of_a_named_intermediate_field_in_a_column_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "column_read", "edits": [{"from": "X, type: str, derivation: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "X, type: str, derivation: {str_template: '{PP.PPTESTCD}/{DOSE.EXROUTE}'}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "str_template_reads_a_named_intermediate_field_in_a_column",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "column_read", "edits": [{"from": "X, type: str, derivation: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "X, type: str, derivation: {str_template: '{PP.PPTESTCD}/{DOSE.EXROUTE}'}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"output.csv": "USUBJID,X\nS1,AUCLST/ORAL\nS2,CMAX/INTRAVENOUS\n"}
+    },
+    {
+      "case": "str_template_of_a_named_intermediate_field_in_a_row_template_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "row_read", "edits": [{"from": "derivations: {X: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "derivations: {X: {str_template: '{PP.PPTESTCD}/{DOSE.EXROUTE}'}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "str_template_reads_a_named_intermediate_field_in_a_row_template",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "row_read", "edits": [{"from": "derivations: {X: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "derivations: {X: {str_template: '{PP.PPTESTCD}/{DOSE.EXROUTE}'}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"output.csv": "USUBJID,X\nS1,AUCLST/ORAL\nS2,CMAX/INTRAVENOUS\n"}
+    },
+    {
+      "case": "str_case_of_a_named_intermediate_field_in_a_column_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "column_read", "edits": [{"from": "X, type: str, derivation: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "X, type: str, derivation: {str_case: {source: DOSE.EXROUTE, to: lower}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "str_case_reads_a_named_intermediate_field_in_a_column",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "column_read", "edits": [{"from": "X, type: str, derivation: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "X, type: str, derivation: {str_case: {source: DOSE.EXROUTE, to: lower}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"output.csv": "USUBJID,X\nS1,oral\nS2,intravenous\n"}
+    },
+    {
+      "case": "str_case_of_a_named_intermediate_field_in_a_row_template_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "row_read", "edits": [{"from": "derivations: {X: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "derivations: {X: {str_case: {source: DOSE.EXROUTE, to: lower}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "str_case_reads_a_named_intermediate_field_in_a_row_template",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "row_read", "edits": [{"from": "derivations: {X: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "derivations: {X: {str_case: {source: DOSE.EXROUTE, to: lower}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"output.csv": "USUBJID,X\nS1,oral\nS2,intravenous\n"}
+    },
+    {
+      "case": "str_pad_of_a_named_intermediate_field_in_a_column_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "column_read", "edits": [{"from": "X, type: str, derivation: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "X, type: str, derivation: {str_pad: {source: DOSE.EXSPID, width: 9}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "str_pad_reads_a_named_intermediate_field_in_a_column",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "column_read", "edits": [{"from": "X, type: str, derivation: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "X, type: str, derivation: {str_pad: {source: DOSE.EXSPID, width: 9}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"output.csv": "USUBJID,X\nS1,  PER1-D1\nS2,  PER2-D1\n"}
+    },
+    {
+      "case": "str_pad_of_a_named_intermediate_field_in_a_row_template_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "row_read", "edits": [{"from": "derivations: {X: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "derivations: {X: {str_pad: {source: DOSE.EXSPID, width: 9}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "str_pad_reads_a_named_intermediate_field_in_a_row_template",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "row_read", "edits": [{"from": "derivations: {X: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "derivations: {X: {str_pad: {source: DOSE.EXSPID, width: 9}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"output.csv": "USUBJID,X\nS1,  PER1-D1\nS2,  PER2-D1\n"}
+    },
+    {
+      "case": "to_date_of_a_named_intermediate_field_in_a_column_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "column_read", "edits": [{"from": "X, type: str, derivation: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "X, type: date, derivation: {to_date: {source: DOSE.DTM}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "to_date_reads_a_named_intermediate_field_in_a_column",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "column_read", "edits": [{"from": "X, type: str, derivation: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "X, type: date, derivation: {to_date: {source: DOSE.DTM}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"output.csv": "USUBJID,X\nS1,2030-01-01\nS2,2030-02-01\n"}
+    },
+    {
+      "case": "to_date_of_a_named_intermediate_field_in_a_row_template_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "row_read", "edits": [{"from": "{name: X, type: str}", "to": "{name: X, type: date}"}, {"from": "derivations: {X: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "derivations: {X: {to_date: {source: DOSE.DTM}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "to_date_reads_a_named_intermediate_field_in_a_row_template",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "row_read", "edits": [{"from": "{name: X, type: str}", "to": "{name: X, type: date}"}, {"from": "derivations: {X: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "derivations: {X: {to_date: {source: DOSE.DTM}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"output.csv": "USUBJID,X\nS1,2030-01-01\nS2,2030-02-01\n"}
+    },
+    {
+      "case": "impute_of_a_named_intermediate_field_in_a_column_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "column_read", "edits": [{"from": "X, type: str, derivation: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "X, type: datetime, derivation: {impute: {type: datetime, source: DOSE.DTM, time: first}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "impute_reads_a_named_intermediate_field_in_a_column",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "column_read", "edits": [{"from": "X, type: str, derivation: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "X, type: datetime, derivation: {impute: {type: datetime, source: DOSE.DTM, time: first}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"output.csv": "USUBJID,X\nS1,2030-01-01T08:00:00\nS2,2030-02-01T09:00:00\n"}
+    },
+    {
+      "case": "impute_of_a_named_intermediate_field_in_a_row_template_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "row_read", "edits": [{"from": "{name: X, type: str}", "to": "{name: X, type: datetime}"}, {"from": "derivations: {X: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "derivations: {X: {impute: {type: datetime, source: DOSE.DTM, time: first}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "impute_reads_a_named_intermediate_field_in_a_row_template",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "row_read", "edits": [{"from": "{name: X, type: str}", "to": "{name: X, type: datetime}"}, {"from": "derivations: {X: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "derivations: {X: {impute: {type: datetime, source: DOSE.DTM, time: first}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"output.csv": "USUBJID,X\nS1,2030-01-01T08:00:00\nS2,2030-02-01T09:00:00\n"}
+    },
+    {
+      "case": "round_half_away_from_zero_of_a_named_intermediate_field_in_a_column_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "column_read", "edits": [{"from": "X, type: str, derivation: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "X, type: float, derivation: {round_half_away_from_zero: {source: DOSE.N, digits: 1}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "round_half_away_from_zero_reads_a_named_intermediate_field_in_a_column",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "column_read", "edits": [{"from": "X, type: str, derivation: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "X, type: float, derivation: {round_half_away_from_zero: {source: DOSE.N, digits: 1}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"output.csv": "USUBJID,X\nS1,1.3\nS2,-2.3\n"}
+    },
+    {
+      "case": "round_half_away_from_zero_of_a_named_intermediate_field_in_a_row_template_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "row_read", "edits": [{"from": "{name: X, type: str}", "to": "{name: X, type: float}"}, {"from": "derivations: {X: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "derivations: {X: {round_half_away_from_zero: {source: DOSE.N, digits: 1}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "round_half_away_from_zero_reads_a_named_intermediate_field_in_a_row_template",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "row_read", "edits": [{"from": "{name: X, type: str}", "to": "{name: X, type: float}"}, {"from": "derivations: {X: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "derivations: {X: {round_half_away_from_zero: {source: DOSE.N, digits: 1}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"output.csv": "USUBJID,X\nS1,1.3\nS2,-2.3\n"}
+    },
+    {
+      "case": "diff_of_a_named_intermediate_field_in_a_column_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "column_read", "edits": [{"from": "X, type: str, derivation: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "X, type: int, derivation: {diff: {type: date, start: DOSE.DATE, end: PP.DATE, unit: day}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "diff_reads_a_named_intermediate_field_in_a_column",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "column_read", "edits": [{"from": "X, type: str, derivation: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "X, type: int, derivation: {diff: {type: date, start: DOSE.DATE, end: PP.DATE, unit: day}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"output.csv": "USUBJID,X\nS1,2\nS2,3\n"}
+    },
+    {
+      "case": "diff_of_a_named_intermediate_field_in_a_row_template_checks_clean",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "row_read", "edits": [{"from": "{name: X, type: str}", "to": "{name: X, type: int}"}, {"from": "derivations: {X: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "derivations: {X: {diff: {type: date, start: DOSE.DATE, end: PP.DATE, unit: day}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "diff_reads_a_named_intermediate_field_in_a_row_template",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "row_read", "edits": [{"from": "{name: X, type: str}", "to": "{name: X, type: int}"}, {"from": "derivations: {X: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "derivations: {X: {diff: {type: date, start: DOSE.DATE, end: PP.DATE, unit: day}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"output.csv": "USUBJID,X\nS1,2\nS2,3\n"}
+    },
+    {
+      "case": "a_row_template_s_text_operation_reads_a_named_intermediate_by_its_completed_key",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "row_read", "edits": [{"from": "derivations: {X: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "derivations: {X: {str_case: {source: DOSE.EXROUTE, to: lower}}}"}, {"from": "derivations: {X:", "to": "derivations: {USUBJID: PP.USUBJID, X:"}, {"from": "  - {name: USUBJID, type: str, derivation: PP.USUBJID}", "to": "  - {name: USUBJID, type: str}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_text_operation_refuses_a_field_the_named_intermediate_lacks",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "column_read", "edits": [{"from": "X, type: str, derivation: {str_extract: {source: DOSE.EXSPID, pattern: '^PER([0-9]+)', group: 1}}}", "to": "X, type: str, derivation: {str_extract: {source: DOSE.MISSING, pattern: '(.)'}}}"}]}, "pp.csv": {"base": "pp"}, "ex.csv": {"base": "ex"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "unknown_field", "spec_paths": ["columns.X.derivation.str_extract.source"]}]
+    }
+  ]
+}

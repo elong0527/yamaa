@@ -1,0 +1,157 @@
+{
+  "about": "Source reads over a row's collected records and over ODM inputs (LOOKUP-8, COLUMN-2, NAME-9 to NAME-11). A filtered source, a mapping's source and a first_available's sources read their own row's collected records; a selected record without a value never takes an unselected record's value; a conflict counts the values its filter keeps; a filter cannot read another relation; equal dates are one value and distinct ones are counted; an ODM input reports its first record without a subject key and how many lack one; and a column odm read takes the ODM scope of the row template that built its row, also when an ODM input other than the base drives that template. Moved from execution_retired_odm_context.rs, its retired_odm_context module. A test that saved is a save case with the bytes it compared, a test that read the run's issues compared them whole, and the handler counts one test compared whole are the report's handler rows at SPEC_PATH, NAME and COUNT. Every value is its test's.",
+  "documents": {
+    "odm_value": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [SubjectKey]\ninput: {ODM: odm.csv}\noutput: {path: out.csv, columns: [SubjectKey, VALUE]}\ncolumns:\n  - {name: SubjectKey, type: str, derivation: ODM.SubjectKey}\n  - {name: VALUE, type: str, derivation: ODM.Value}\n",
+    "odm_target": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [GroupID]\ninput: {ODM: odm.csv}\noutput: {path: out.csv, columns: [GroupID, VALUE]}\ncolumns:\n  - {name: GroupID, type: str, derivation: ODM.GroupID}\n  - {name: VALUE, type: str, derivation: {source: {variable: ODM.Value, filter: \"ODM.RecordKind = 'TARGET'\"}}}\n",
+    "odm_date": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [SubjectKey]\ninput: {ODM: {path: odm.csv, types: {VISITDT: date}}}\noutput: {path: out.csv, columns: [SubjectKey, VALUE]}\ncolumns:\n  - {name: SubjectKey, type: str, derivation: ODM.SubjectKey}\n  - {name: VALUE, type: date, derivation: ODM.VISITDT}\n",
+    "odm_driver": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, SEQ]\nbase: BASE\ninput: {BASE: base.csv, SRC: odm.csv}\noutput: {path: out.csv, columns: [ID, SEQ, VAL]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: SEQ, type: int, derivation: {row_number: {window: {order_by: [ID]}}}}\n  - {name: VAL, type: str, derivation: {odm: SRC.IT.TEST.OID}}\nrows:\n  - id: occurrence\n    dataset: SRC\n    filter: \"SRC.ItemOID = 'IT.ANCHOR'\"\n    derivations: {ID: \"'one'\"}\n",
+    "items": "StudyOID,SubjectKey,ItemOID,Value\nS1,001,IT.DM.SEX,Male\nS1,001,IT.DM.AGE,34\nS1,001,IT.DM.ARM,Placebo\n",
+    "visit_dates": "StudyOID,SubjectKey,VISITDT,ItemOID,Value\nS1,001,2025-01-02,IT.A,a\nS1,001,2025-01-02,IT.B,b\n",
+    "occurrences": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS,M,P,E,,F,,G,,IT.ANCHOR,anchor\nS,M,P,E,,F,,G,,IT.TEST.OID,Y\n"
+  },
+  "cases": [
+    {
+      "case": "a_filtered_source_reads_its_own_collected_record",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "odm_value", "edits": [{"from": "derivation: ODM.Value}", "to": "derivation: {source: {variable: ODM.Value, filter: \"ODM.ItemOID = 'IT.DM.AGE'\"}}}"}]}, "odm.csv": {"base": "items"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "SubjectKey,VALUE\n001,34\n"}
+    },
+    {
+      "case": "a_mapping_reads_its_filtered_source_s_collected_record",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "odm_value", "edits": [{"from": "derivation: ODM.Value}", "to": "derivation: {mapping: {source: {variable: ODM.Value, filter: \"ODM.ItemOID = 'IT.DM.SEX'\"}, dict: {Male: M, Female: F}, missing: U}}}"}]}, "odm.csv": {"base": "items"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "SubjectKey,VALUE\n001,M\n"}
+    },
+    {
+      "case": "a_first_available_reads_its_filtered_source_s_collected_record",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "odm_value", "edits": [{"from": "derivation: ODM.Value}", "to": "derivation: {first_available: {sources: [{variable: ODM.Value, filter: \"ODM.ItemOID = 'IT.DM.ARM'\"}], missing: Unassigned}}}"}]}, "odm.csv": {"base": "items"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "SubjectKey,VALUE\n001,Placebo\n"}
+    },
+    {
+      "case": "a_first_available_whose_filtered_source_selects_no_record_gives_its_missing_value",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "odm_value", "edits": [{"from": "derivation: ODM.Value}", "to": "derivation: {first_available: {sources: [{variable: ODM.Value, filter: \"ODM.ItemOID = 'IT.DM.RACE'\"}], missing: Unassigned}}}"}]}, "odm.csv": {"base": "items"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "SubjectKey,VALUE\n001,Unassigned\n"}
+    },
+    {
+      "case": "a_filtered_source_that_selects_no_collected_record_counts_no_absent_answer",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "odm_value", "edits": [{"from": "derivation: ODM.Value}", "to": "derivation: {source: {variable: ODM.Value, filter: \"ODM.ItemOID = 'IT.DM.RACE'\", absent: fallback}}}"}]}, "odm.csv": {"base": "items"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "report": {"handler": [["SPEC_PATH", "NAME", "COUNT"], ["columns.VALUE.derivation.source.absent", "absent", 0]]},
+      "saved": {"out.csv": "SubjectKey,VALUE\n001,\n"}
+    },
+    {
+      "case": "an_unfiltered_conflict_counts_every_collected_value",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "odm_value"}, "odm.csv": {"base": "items"}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "derivation", "condition": "multiple_values_per_key", "rule": "COLUMN-2", "spec_paths": ["columns.VALUE.derivation.source"], "context": {"identifier": "ODM.Value", "value_count": 3, "keys": [{"SubjectKey": "001"}]}}],
+      "saved": {}
+    },
+    {
+      "case": "a_filtered_conflict_counts_the_values_its_filter_keeps",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "odm_value", "edits": [{"from": "derivation: ODM.Value}", "to": "derivation: {source: {variable: ODM.Value, filter: \"ODM.ItemOID = 'IT.DM.SEX'\"}}}"}]},
+          "odm.csv": "StudyOID,SubjectKey,ItemOID,Value\nS1,001,IT.DM.SEX,Male\nS1,001,IT.DM.SEX,Female\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [{"phase": "derivation", "condition": "multiple_values_per_key", "rule": "COLUMN-2", "spec_paths": ["columns.VALUE.derivation.source"], "context": {"identifier": "ODM.Value", "value_count": 2, "keys": [{"SubjectKey": "001"}]}}],
+      "saved": {}
+    },
+    {
+      "case": "a_valueless_selected_record_after_an_unselected_one_stays_missing",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "odm_target"}, "odm.csv": "GroupID,RecordKind,Value\nG1,UNRELATED,unrelated\nG1,TARGET,\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "GroupID,VALUE\nG1,\n"}
+    },
+    {
+      "case": "two_valueless_selected_records_stay_missing",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "odm_target"}, "odm.csv": "GroupID,RecordKind,Value\nG1,UNRELATED,unrelated\nG1,TARGET,\nG1,TARGET,\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "GroupID,VALUE\nG1,\n"}
+    },
+    {
+      "case": "a_selected_value_beside_a_valueless_selected_record_is_read",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "odm_target"}, "odm.csv": "GroupID,RecordKind,Value\nG1,UNRELATED,unrelated\nG1,TARGET,\nG1,TARGET,target\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "GroupID,VALUE\nG1,target\n"}
+    },
+    {
+      "case": "a_valueless_selected_record_between_other_and_unrelated_records_stays_missing",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "odm_target"}, "odm.csv": "GroupID,RecordKind,Value\nG1,OTHER,other\nG1,TARGET,\nG1,UNRELATED,x\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "GroupID,VALUE\nG1,\n"}
+    },
+    {
+      "case": "a_valueless_selected_record_between_unrelated_and_other_records_stays_missing",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "odm_target"}, "odm.csv": "GroupID,RecordKind,Value\nG1,UNRELATED,x\nG1,TARGET,\nG1,OTHER,other\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "GroupID,VALUE\nG1,\n"}
+    },
+    {
+      "case": "a_valueless_selected_record_before_unselected_ones_stays_missing",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "odm_target"}, "odm.csv": "GroupID,RecordKind,Value\nG1,TARGET,\nG1,UNRELATED,x\nG1,OTHER,other\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "GroupID,VALUE\nG1,\n"}
+    },
+    {
+      "case": "original_source_filter_cannot_read_another_relation",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "odm_value", "edits": [{"from": "derivation: ODM.Value}", "to": "derivation: {source: {variable: ODM.Value, filter: \"OTHER.ItemOID = 'IT.DM.AGE'\"}}}"}]}, "odm.csv": {"base": "items"}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-8", "spec_paths": ["columns.VALUE.derivation.source.filter"], "context": {"identifier": "OTHER.ItemOID", "dataset": "ODM"}}]
+    },
+    {
+      "case": "repeated_dates_of_a_key_are_one_value",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "odm_date"}, "odm.csv": {"base": "visit_dates"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "SubjectKey,VALUE\n001,2025-01-02\n"}
+    },
+    {
+      "case": "distinct_dates_of_a_key_keep_the_exact_count",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "odm_date"}, "odm.csv": {"base": "visit_dates", "edits": [{"from": "2025-01-02,IT.B", "to": "2025-01-03,IT.B"}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "derivation", "condition": "multiple_values_per_key", "rule": "COLUMN-2", "spec_paths": ["columns.VALUE.derivation.source"], "context": {"identifier": "ODM.VISITDT", "value_count": 2, "keys": [{"SubjectKey": "001"}]}}]
+    },
+    {
+      "case": "original_missing_identifier_reports_first_csv_record_and_complete_failure_count",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "odm_value", "edits": [{"from": "derivation: ODM.Value}", "to": "derivation: {odm: ODM.IT.DM.AGE}}"}]},
+          "odm.csv": "StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,FormOID,FormRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\nS1,M1,001,SCREENING,1,FO.DM,1,IG.DM,1,IT.DM.AGE,34\nS1,M1,,SCREENING,1,FO.DM,1,IG.DM,1,IT.DM.AGE,34\nS1,M1,,SCREENING,1,FO.DM,1,IG.DM,1,IT.DM.AGE,34\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [{"phase": "ingest", "condition": "odm_schema_value_missing", "rule": "NAME-9", "spec_paths": ["input.ODM.path"], "context": {"dataset": "ODM", "field": "SubjectKey", "record": 3, "records": 2}}]
+    },
+    {
+      "case": "a_column_odm_read_takes_the_scope_of_an_odm_driver_other_than_the_base",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "odm_driver"}, "odm.csv": {"base": "occurrences"}, "base.csv": "ordinary\nunused\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,SEQ,VAL\none,1,Y\n"}
+    },
+    {
+      "case": "a_column_odm_read_in_a_case_after_the_row_window_takes_the_same_scope",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "odm_driver", "edits": [{"from": "derivation: {odm: SRC.IT.TEST.OID}}", "to": "derivation: {case: [{when: 'SEQ > 0', then: {odm: SRC.IT.TEST.OID}}]}}"}]}, "odm.csv": {"base": "occurrences"}, "base.csv": "ordinary\nunused\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,SEQ,VAL\none,1,Y\n"}
+    }
+  ]
+}
