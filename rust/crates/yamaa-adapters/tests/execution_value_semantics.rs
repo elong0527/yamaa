@@ -110,7 +110,9 @@ fn ordered(term: &str) -> String {
 /// under `asc` and last under `desc` when `nulls` is omitted (VALUE-22). Rows
 /// equal on the term keep their construction order (VALUE-23), whatever
 /// collected precision or zero sign tells the equal values apart, and every
-/// row keeps its cells as constructed.
+/// row keeps its cells as constructed. Benchmarks such as `schema-ordering`
+/// sort some types; none sorts every type in both directions under each
+/// `nulls` placement, or ties that a zero's sign tells apart.
 #[test]
 fn output_order_sorts_every_type_places_missing_by_nulls_and_keeps_ties_in_construction_order() {
     for column in ["S", "I", "F", "D", "T"] {
@@ -147,6 +149,8 @@ fn output_order_sorts_every_type_places_missing_by_nulls_and_keeps_ties_in_const
 
 /// A `unique` check counts a missing value as a value, so two rows whose X is
 /// missing repeat one combination, and both rows offend (CHECK-10).
+/// `negative-unique-duplicate` repeats a present value; no benchmark repeats
+/// a missing one.
 #[test]
 fn unique_counts_missing_values_as_one_repeated_combination() {
     let fixture = Fixture::new(
@@ -206,7 +210,9 @@ fn literal(literal: &str, grouped: bool, row_phase: bool) -> String {
 /// A conversion failure reports the keys its row has completed, a key whose
 /// value is missing among them, and none while the row lacks one: the row
 /// phase converts its values before the column phase derives ID (VALUE-3,
-/// COLUMN-8).
+/// COLUMN-8). Every benchmark's run-time conversion failure (VALUE-3), such
+/// as `negative-number-below-limit`'s, reports a row that has every key; none
+/// fails before its row derives a key, or with a key value missing.
 #[test]
 fn a_conversion_failure_reports_only_the_keys_its_row_has_completed() {
     for (grouped, row_phase, keys) in [
@@ -239,7 +245,8 @@ fn a_conversion_failure_reports_only_the_keys_its_row_has_completed() {
 /// specification is read, so a text literal in a float column is no finding
 /// of `check` (VALUE-24). Over no records the artifact has its header alone,
 /// and over one record the literal fails conversion (VALUE-3), whether the
-/// row template or the column derives it, over records or over groups.
+/// row template or the column derives it, over records or over groups. No
+/// benchmark writes a literal its column's type cannot hold.
 #[test]
 fn a_literal_converts_only_in_the_rows_that_hold_it() {
     for grouped in [false, true] {
@@ -295,7 +302,9 @@ fn collected(columns: &str) -> String {
 /// records that built it, by exact equality (COLUMN-2, VALUE-19): 2^53 and
 /// 2^53 + 1 are two values and fail, while `-0` and `0` are one value, which
 /// keeps the representation its first record carries. Missing values give
-/// missing.
+/// missing. `negative-keys-conflict` collects two distinct ages; no benchmark
+/// collects values that only exact equality tells apart, or zeros of both
+/// signs.
 #[test]
 fn a_key_reads_one_value_by_exact_equality_and_keeps_its_first_representation() {
     assert_eq!(
@@ -317,7 +326,8 @@ fn a_key_reads_one_value_by_exact_equality_and_keeps_its_first_representation() 
 /// Equal extremes keep the first present operand in authored order, its type
 /// included (EXPR-10, VALUE-19), so a zero result takes its sign from that
 /// operand: the int 0 converts to `0` and the float -0.0 stays `-0`, for
-/// `greatest` and `least` alike. A missing operand is skipped.
+/// `greatest` and `least` alike. A missing operand is skipped. No benchmark
+/// gives `greatest` or `least` a negative zero.
 #[test]
 fn equal_extremes_take_a_zeros_sign_from_the_first_present_operand() {
     let extreme = |name: &str, operation: &str, sources: &str| {
@@ -345,6 +355,9 @@ fn equal_extremes_take_a_zeros_sign_from_the_first_present_operand() {
 /// (FORMULA-19). Stored 1e16, 1, -1e16, the 1 is lost to rounding before
 /// -1e16 cancels the sum; stored 1e16, -1e16, 1, the sum cancels first and
 /// keeps the 1. The record of ID 2 enters neither reduction.
+/// `adam-adlb-ordered-sum` sums grouped records in stored order; no benchmark
+/// sums a donor's matched records in an order that changes the sum, or
+/// divides such a sum by its count.
 #[test]
 fn sum_adds_matched_donor_records_in_stored_order_and_mean_divides_that_sum() {
     let specification = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\n\

@@ -129,6 +129,8 @@ mod execution {
         }
 
         /// Replay results, fatal contexts, paths, traces and handler counts from independent truth.
+        /// A unit seam: a derivation evaluated through a scripted resolver,
+        /// whose resolution order and handler counter no benchmark shows.
         #[test]
         fn shared_numeric_lifecycle_vectors() {
             for row in include_str!("fixtures/numeric_lifecycle.tsv")
@@ -247,6 +249,8 @@ mod execution {
         }
 
         /// Count replacements exactly once on every evaluation; retain declaration order and zeros.
+        /// A unit seam: no benchmark shows the handler counter across a failed
+        /// evaluation.
         #[test]
         fn accounting_retains_zero_declarations_and_prior_firings_on_failure() {
             let good = derivation("A", ColumnType::Int, Some(Value::Int(7)));
@@ -298,6 +302,7 @@ mod execution {
         }
 
         /// A caller-owned failure has no Clone requirement and cannot be caught by conversion handling.
+        /// A port interaction: no benchmark's resolver fails.
         #[test]
         fn opaque_resolver_failure_bypasses_handler_and_keeps_exact_provenance() {
             #[derive(Debug)]
@@ -337,6 +342,9 @@ mod execution {
         }
 
         /// A caller publishes only the completed replacement to a dependent numeric plan.
+        /// `schema-lifecycle` reads converted values without a handler; no
+        /// benchmark declares an `unconvertible` replacement that itself
+        /// converts.
         #[test]
         fn dependent_reads_converted_handler_value() {
             let first = derivation("RAW", ColumnType::Int, Some(Value::Str("7".into())));
@@ -525,6 +533,9 @@ mod execution {
             tree.document()
         }
 
+        /// A port interaction: the order of the resolver's and the decoder's
+        /// requests, and an opaque failure that moves once, which no benchmark
+        /// observes.
         #[test]
         fn all_inputs_inspect_then_capture_decode_in_authored_order_and_move_opaque_failure_once() {
             use std::sync::Arc;
