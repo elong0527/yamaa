@@ -515,7 +515,7 @@ positive zero. The `round_half_away_from_zero` verb, CSV display precision
 rounding exists.
 
 Fails: `incompatible_input_type`.
-Evidence: `schema-round-half-away-from-zero-ties`, `negative-round-half-away-from-zero-non-numeric-source`, `rust/crates/yamaa-adapters/tests/scalar_declarative_rounding.rs`.
+Evidence: `schema-round-half-away-from-zero-ties`, `negative-round-half-away-from-zero-non-numeric-source`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/rounding.json::malformed_digits_precede_unknown_source_and_missing_study_data`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/rounding.json::a_driver_qualified_rounding_source_keeps_the_independent_rows`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/rounding.json::a_rounding_source_read_through_a_named_intermediate_keeps_the_independent_rows`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/rounding.json::rounding_nested_in_a_case_result_keeps_the_independent_rows`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/rounding.json::rounding_in_a_row_template_keeps_the_independent_rows`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/rounding.json::unselected_case_uses_static_known_type_validation_before_study_capture`.
 
 `2^-26` is `sqrt(2^-52)`. At two places, `2.675` (stored as
 `2.674999999999999822...`, inside the window) rounds to `2.68`, and
