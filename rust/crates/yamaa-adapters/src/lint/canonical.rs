@@ -17,6 +17,7 @@
 //! proves such a rewrite: the rewritten file must read as exactly the
 //! original's values with that one change.
 
+use yamaa_core::expression_table::Verb;
 use yamaa_core::language::{FileType, LanguageVersion, LANGUAGE_VERSION};
 use yamaa_core::schema::{
     Document as Values, DocumentNode as N, SchemaAliasKind, SchemaStructure, SiteRole, WrittenSite,
@@ -32,17 +33,17 @@ use super::document::{Document, Style, Value};
 const HANDLERS: [(&str, &str); 13] = [
     ("source_binding_class", "absent"),
     ("intermediate_class", "absent"),
-    ("first_available", "missing"),
+    (Verb::FirstAvailable.name(), "missing"),
     ("flag_class", "false_value"),
     ("flag_class", "missing"),
-    ("mapping", "missing"),
-    ("cut", "missing"),
-    ("str_extract", "missing"),
-    ("str_replace", "missing"),
-    ("str_case", "missing"),
-    ("str_substr", "missing"),
-    ("str_length", "missing"),
-    ("str_decimal", "missing"),
+    (Verb::Mapping.name(), "missing"),
+    (Verb::Cut.name(), "missing"),
+    (Verb::StrExtract.name(), "missing"),
+    (Verb::StrReplace.name(), "missing"),
+    (Verb::StrCase.name(), "missing"),
+    (Verb::StrSubstr.name(), "missing"),
+    (Verb::StrLength.name(), "missing"),
+    (Verb::StrDecimal.name(), "missing"),
 ];
 
 /// The language version and file type a 1.x document declares, when the

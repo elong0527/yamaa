@@ -211,12 +211,10 @@ impl Scanner<'_> {
                         .map(|operand| operand.expr)
                 };
                 let (date, tie_break, order) = match &window.function {
-                    WindowFunction::BaselineFlag {
-                        window_order_by, ..
-                    } => (
+                    WindowFunction::BaselineFlag { .. } => (
                         window.order_by.first(),
                         window.order_by.get(1..).unwrap_or_default(),
-                        window_order_by.as_slice(),
+                        window.window_order_by.as_slice(),
                     ),
                     _ => (None, &[][..], window.order_by.as_slice()),
                 };

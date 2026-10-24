@@ -165,6 +165,7 @@ pub fn replay() {
             } = operations::run(operation, &case.input);
             compare_issues(&case, &issues, study.as_ref(), &label);
             case.stated.compare(&outcome, operation, &label);
+            let actual = crate::support::rows(&issues);
             let complete = match &study {
                 Some(study) => actual
                     .iter()

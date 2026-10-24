@@ -11,9 +11,10 @@
 //!
 //! So preparation, result typing, binding and `check()` each have one arm
 //! for every scalar verb, and [`crate::specification`] names none of them.
-//! A new verb changes only the schemas, the lowering ([`crate::front_end`]
-//! and [`ScalarOp`]) and the executor: this module, its operation type and
-//! the operation's evaluation.
+//! A verb's schema module generates its variant of [`ScalarOp`] and how the
+//! lowering reads it ([`crate::expression_table`]); a new verb then changes
+//! only the executor: this module's arms, its operation type and the
+//! operation's evaluation.
 //!
 //! Several answers keep how preparation has always checked one verb or
 //! another, so that no result and no diagnostic changes; each says which
@@ -68,7 +69,7 @@ impl ScalarOp {
             ast::TemporalType::DateTime => ResultType::DATETIME,
         };
         match self {
-            Self::Round { .. } | Self::DurationValue { .. } => ResultType::FLOAT,
+            Self::RoundHalfAwayFromZero { .. } | Self::DurationValue { .. } => ResultType::FLOAT,
             Self::Diff {
                 kind: ast::TemporalType::DateTime,
                 unit,
@@ -151,7 +152,7 @@ impl ScalarOp {
     /// `str_pad`, `mapping` and `cut` have none.
     pub(crate) fn preflight(&self) -> Option<Preflight> {
         Some(match self {
-            Self::Round { .. } => Preflight::Rounding,
+            Self::RoundHalfAwayFromZero { .. } => Preflight::Rounding,
             Self::Diff { .. }
             | Self::StudyDay
             | Self::ToEpochDay
@@ -491,7 +492,7 @@ impl Operation {
             return Err(Refusal::Internal);
         };
         match op {
-            ScalarOp::Round { .. } => rounding::from_tree(spec, e),
+            ScalarOp::RoundHalfAwayFromZero { .. } => rounding::from_tree(spec, e),
             ScalarOp::Diff { .. }
             | ScalarOp::StudyDay
             | ScalarOp::ToEpochDay

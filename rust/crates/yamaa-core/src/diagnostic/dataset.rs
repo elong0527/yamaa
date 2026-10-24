@@ -1,5 +1,6 @@
 //! Classified dataset failures, borrowed without replaying table or host effects.
 use super::{ConditionCode as C, Context, Diagnostic, ProjectionError};
+use crate::expression_table::Verb;
 use crate::json::Value as JsonValue;
 use crate::{
     expression::Reducer,
@@ -138,7 +139,7 @@ impl DatasetFinding<'_> {
                 };
                 [
                     ("column".into(), text(column)),
-                    ("operation".into(), text("baseline_flag")),
+                    ("operation".into(), text(Verb::BaselineFlag.name())),
                     ("date".into(), JsonValue::String(date)),
                     ("match_count".into(), count(number)),
                 ]

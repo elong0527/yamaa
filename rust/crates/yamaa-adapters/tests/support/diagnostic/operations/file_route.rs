@@ -38,9 +38,11 @@ pub(super) const FILES: &[File] = &[
     fixture!("declarative_case_predicates.json"),
     fixture!("declarative_self.json"),
     fixture!("inheritance.json"),
+    fixture!("integer_literals.json"),
     fixture!("language_header.json"),
     fixture!("lookup_matched_derivations.json"),
     fixture!("lookup_model.json"),
+    fixture!("missing_order.json"),
     fixture!("producer_links.json"),
     fixture!("project_run.json"),
     fixture!("rounding.json"),
@@ -50,6 +52,8 @@ pub(super) const FILES: &[File] = &[
     fixture!("text_case.json"),
     fixture!("text_extract.json"),
     fixture!("text_pad.json"),
+    fixture!("verification.json"),
+    fixture!("windows.json"),
     fixture!("workflow.json"),
 ];
 
