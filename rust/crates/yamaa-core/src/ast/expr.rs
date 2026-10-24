@@ -316,6 +316,10 @@ pub enum ScalarOp {
     },
     /// `dataset::Imputation`.
     ToDate,
+    /// `dataset::Imputation`: `date_text`, its forms as written, in order.
+    DateText {
+        forms: Vec<crate::date_forms::DateForm>,
+    },
     /// `text_case::StringCase`, with the `delimiters` list as written.
     StrCase {
         to: TextCase,

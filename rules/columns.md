@@ -274,6 +274,7 @@ the handler is omitted.
 | derivation | `first_available.missing` | Every source is missing ([EXPR-9](expressions.md#expr-9)) | Missing |
 | impute | `impute.invalid`, `precision.invalid` | Text that is not collected date text, an ISO 8601 interval or duration included ([TIME-13](temporal.md#time-13)) | Fails |
 | impute | `dtc.invalid` | A date part that is not its field's digits or lies outside its range ([TIME-19](temporal.md#time-19)) | Fails |
+| impute | `date_text.invalid` | Text in none of the declared date forms ([TIME-22](temporal.md#time-22)) | Fails |
 | impute | `duration_value.invalid` | Invalid fixed-length duration text ([TIME-17](temporal.md#time-17)) | Fails |
 | convert | `unconvertible` | Failed output conversion | Fails |
 

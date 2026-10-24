@@ -18,6 +18,7 @@ pub mod csv_precision;
 pub mod csv_source;
 pub mod dataset;
 pub mod dataset_checks;
+pub mod date_forms;
 mod decimal_rounding;
 pub mod decoder;
 pub mod define_diagnostics;

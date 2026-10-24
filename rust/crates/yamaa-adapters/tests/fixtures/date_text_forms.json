@@ -1,0 +1,63 @@
+{
+  "about": "Dates read from their declared forms (TIME-22) and completed by impute with type date and day first (TIME-8). Each reading gives, for each list of forms, the collected date text date_text returns and the date impute completes from it; a missing value is null. Each refusal gives the one issue a run reports for its text, read as the record with ID 1. Every value is authored by hand from TIME-22 and TIME-8 and the comparison table the SAS 9.4 documentation of the ANYDTDTE informat gives with DATESTYLE=MDY; no SAS session was used, and the dates are invented.",
+  "forms": {
+    "mdy_slash": ["iso", "ddmonyyyy", "mdy_slash", "yyyymmdd", "monyyyy"],
+    "dmy_slash": ["iso", "ddmonyyyy", "dmy_slash", "yyyymmdd", "monyyyy"]
+  },
+  "readings": [
+    {
+      "case": "collected date text passes through",
+      "text": "2001-03-04",
+      "mdy_slash": {"date_text": "2001-03-04", "impute": "2001-03-04"},
+      "dmy_slash": {"date_text": "2001-03-04", "impute": "2001-03-04"}
+    },
+    {
+      "case": "a day, a month abbreviation and a year",
+      "text": "04MAR2001",
+      "mdy_slash": {"date_text": "2001-03-04", "impute": "2001-03-04"},
+      "dmy_slash": {"date_text": "2001-03-04", "impute": "2001-03-04"}
+    },
+    {
+      "case": "a slashed date reads in the declared order",
+      "text": "03/04/2001",
+      "mdy_slash": {"date_text": "2001-03-04", "impute": "2001-03-04"},
+      "dmy_slash": {"date_text": "2001-04-03", "impute": "2001-04-03"}
+    },
+    {
+      "case": "eight digits",
+      "text": "20010304",
+      "mdy_slash": {"date_text": "2001-03-04", "impute": "2001-03-04"},
+      "dmy_slash": {"date_text": "2001-03-04", "impute": "2001-03-04"}
+    },
+    {
+      "case": "a month alone, completed to its first day",
+      "text": "MAR2001",
+      "mdy_slash": {"date_text": "2001-03", "impute": "2001-03-01"},
+      "dmy_slash": {"date_text": "2001-03", "impute": "2001-03-01"}
+    },
+    {
+      "case": "a lower-case month abbreviation",
+      "text": "04mar2001",
+      "mdy_slash": {"date_text": "2001-03-04", "impute": "2001-03-04"},
+      "dmy_slash": {"date_text": "2001-03-04", "impute": "2001-03-04"}
+    },
+    {
+      "case": "a missing date",
+      "text": null,
+      "mdy_slash": {"date_text": null, "impute": null},
+      "dmy_slash": {"date_text": null, "impute": null}
+    }
+  ],
+  "refusals": [
+    {
+      "case": "a day outside its month",
+      "text": "29FEB2001",
+      "issue": {"phase": "impute", "condition": "invalid_date_text", "rule": "TIME-22", "spec_paths": ["columns.DTC.derivation.date_text"], "context": {"operation": "date_text", "source": "RAW.TEXT", "value": "29FEB2001", "keys": [{"ID": 1}]}}
+    },
+    {
+      "case": "text in no declared form",
+      "text": "4 March 2001",
+      "issue": {"phase": "impute", "condition": "invalid_date_text", "rule": "TIME-22", "spec_paths": ["columns.DTC.derivation.date_text"], "context": {"operation": "date_text", "source": "RAW.TEXT", "value": "4 March 2001", "keys": [{"ID": 1}]}}
+    }
+  ]
+}

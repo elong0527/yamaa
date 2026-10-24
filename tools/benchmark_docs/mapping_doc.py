@@ -828,6 +828,42 @@ def describe_to_date(node, ctx=None, depth=0):
     )
 
 
+# The spellings each date form reads, as the sheet names them (TIME-22).
+DATE_FORM_SPELLINGS = {
+    "iso": "ISO 8601 date text",
+    "ddmonyyyy": "day-month-year text such as 04MAR2001",
+    "mdy_slash": "month-first slashed dates such as 03/04/2001 for March 4",
+    "dmy_slash": "day-first slashed dates such as 03/04/2001 for April 3",
+    "yyyymmdd": "eight digits such as 20010304",
+    "monyyyy": "month-year text such as MAR2001 for a month alone",
+}
+
+
+def describe_date_text(node, ctx=None, depth=0):
+    """Text in one of the declared spellings read as ISO 8601 date text."""
+    forms = node.get("forms")
+    spellings = [
+        DATE_FORM_SPELLINGS.get(str(form), str(form))
+        for form in (forms if isinstance(forms, list) else [])
+    ]
+    if len(spellings) > 1:
+        listed = ", ".join(spellings[:-1]) + " or " + spellings[-1]
+    else:
+        listed = spellings[0] if spellings else "no declared spelling"
+    text = (
+        "Read "
+        + describe_variable(node.get("source"), ctx, depth)
+        + " as ISO 8601 date text from "
+        + listed
+        + "; blank when it is blank"
+    )
+    if declared(node, "invalid"):
+        text += handler_phrase(node, "invalid", "any other spelling")
+    else:
+        text += "; any other spelling is an error"
+    return sentence(text)
+
+
 def describe_to_epoch_day(node, ctx=None, depth=0):
     return sentence(
         "Days since 1970-01-01 for " + describe_variable(node.get("source"), ctx, depth)
@@ -1248,6 +1284,7 @@ DERIVATION_DESCRIBERS = {
     "precision": describe_precision,
     "imputation_flag": describe_imputation_flag,
     "to_date": describe_to_date,
+    "date_text": describe_date_text,
     "to_epoch_day": describe_to_epoch_day,
     "dtc": describe_dtc,
     "time_of_day": describe_time_of_day,

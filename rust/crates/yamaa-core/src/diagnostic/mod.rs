@@ -226,6 +226,11 @@ conditions! {
     ToDateInput => ("validation", "incompatible_input_type", Some("TIME-2")),
     ToDateInvalid => ("validation", "invalid_date_text", Some("TIME-2")),
     ToDateIntervalText => ("impute", "interval_or_duration_text", Some("TIME-2")),
+    // `date_text`'s source type, its declared forms and the text it reads
+    // (TIME-22).
+    DateFormsInput => ("validation", "incompatible_input_type", Some("TIME-22")),
+    DateFormsList => ("validation", "invalid_field_type", Some("TIME-22")),
+    DateFormsInvalid => ("impute", "invalid_date_text", Some("TIME-22")),
     TemplateInvalid => ("validation", "invalid_string_template", Some("TEXT-3")),
     TemplateMissing => ("mapping", "missing_input", Some("COLUMN-10")),
     ExtractGroup => ("validation", "regex_group_out_of_range", Some("TEXT-10")),

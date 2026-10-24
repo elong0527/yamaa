@@ -1,0 +1,12 @@
+phase: impute
+condition: invalid_date_text
+spec_paths:
+  - columns.ASTDTC.derivation.date_text
+rule: TIME-22
+context:
+  source: CM.CMSTDAT
+  value: "4 March 2001"
+  keys:
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-301
+      CMSEQ: 2

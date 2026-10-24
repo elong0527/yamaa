@@ -56,9 +56,10 @@ impl ScalarOp {
     /// datetimes in seconds is a whole count and in a longer unit a
     /// fraction; a shift and `impute` keep their declared type; a duration
     /// is a fraction in every unit; `to_date` is a date; assembled date
-    /// parts, duration text, the other text verbs, precisions, imputation
-    /// flags and cuts are text; a mapping returns the types its dictionary
-    /// values take; `greatest` and `least` take every type their `operands` take.
+    /// parts, dates read from their declared forms, duration text, the other
+    /// text verbs, precisions, imputation flags and cuts are text; a mapping
+    /// returns the types its dictionary values take; `greatest` and `least`
+    /// take every type their `operands` take.
     pub(crate) fn result_type(&self, operands: &mut dyn Iterator<Item = ResultType>) -> ResultType {
         let temporal = |kind: &ast::TemporalType| match kind {
             ast::TemporalType::Date => ResultType::DATE,
@@ -80,6 +81,7 @@ impl ScalarOp {
             Self::ToDate => ResultType::DATE,
             Self::Dtc
             | Self::DurationText { .. }
+            | Self::DateText { .. }
             | Self::Precision { .. }
             | Self::ImputationFlag { .. }
             | Self::StrCase { .. }
@@ -158,7 +160,8 @@ impl ScalarOp {
             Self::Impute { .. }
             | Self::Precision { .. }
             | Self::ImputationFlag { .. }
-            | Self::ToDate => Preflight::Imputation,
+            | Self::ToDate
+            | Self::DateText { .. } => Preflight::Imputation,
             Self::StrCase { .. } => Preflight::Case,
             Self::Greatest | Self::Least => Preflight::Extremes,
             Self::StrExtract { .. } | Self::StrReplace { .. } => Preflight::Extraction,
@@ -199,7 +202,8 @@ impl ScalarOp {
             | Self::StrReplace { .. }
             | Self::StrExtract { .. }
             | Self::ToDate
-            | Self::DurationText { .. } => Recode::Source,
+            | Self::DurationText { .. }
+            | Self::DateText { .. } => Recode::Source,
             Self::Dtc => Recode::Parts,
             Self::StrTemplate { template }
                 if StringTemplate::new(template.clone(), "origin".into(), None)
@@ -489,7 +493,8 @@ impl Operation {
             ScalarOp::Impute { .. }
             | ScalarOp::Precision { .. }
             | ScalarOp::ImputationFlag { .. }
-            | ScalarOp::ToDate => imputation::from_tree(spec, e),
+            | ScalarOp::ToDate
+            | ScalarOp::DateText { .. } => imputation::from_tree(spec, e),
             ScalarOp::StrCase { .. } => str_case::from_tree(spec, e),
             ScalarOp::StrPad { .. } => str_pad::from_tree(spec, e),
             ScalarOp::StrSubstr { .. } | ScalarOp::StrLength => str_position::from_tree(spec, e),

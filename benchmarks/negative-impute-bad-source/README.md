@@ -36,4 +36,6 @@ derivation:
 
 The `invalid` outcome applies to text that is not a calendar date or date
 beginning; it is distinct from text that was never collected, which gives
-no analysis date without any declaration.
+no analysis date without any declaration. Onset text in a declared non-ISO
+spelling, such as `15JUN2023`, is read with `date_text` before `impute`
+completes it.

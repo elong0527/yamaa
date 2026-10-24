@@ -1,0 +1,47 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADCM
+keys: [STUDYID, USUBJID, CMSEQ]
+input:
+  CM: input/cm.csv
+
+output:
+  path: adcm.csv
+  columns: [STUDYID, USUBJID, CMSEQ, ASTDTC, ASTDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: CM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: CM.USUBJID
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number
+    derivation: CM.CMSEQ
+
+  # The sites write the start as an ISO 8601 date or as 04MAR2001. No outcome
+  # is declared for a start in any other spelling (4 March 2001), so it stops
+  # the run.
+  - name: ASTDTC
+    type: str
+    label: Analysis Start Date Text
+    derivation:
+      date_text:
+        source: CM.CMSTDAT
+        forms: [iso, ddmonyyyy]
+
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation:
+      impute:
+        type: date
+        source: ASTDTC
+        day: first
