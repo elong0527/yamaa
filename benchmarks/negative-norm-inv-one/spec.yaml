@@ -1,0 +1,49 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADVS
+keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
+input:
+  RAW:
+    path: input/pctl.csv
+    types: {PCTL: float}
+
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, PARAMCD, AVISIT, AVAL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: RAW.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: "'BMIZ'"
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+    derivation: RAW.AVISIT
+
+  # The reported percentile, from 0 to 100.
+  - name: PCTL
+    type: float
+    label: BMI-for-Age Percentile
+    derivation: RAW.PCTL
+
+  # The z-score is the standard normal quantile of the percentile as a
+  # probability. A percentile of 100 is a probability of 1, whose quantile
+  # is infinite, so the run fails while values are computed; a missing
+  # percentile gives a missing result instead.
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: "NORM_INV(PCTL / 100)"

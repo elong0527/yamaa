@@ -70,8 +70,9 @@ impl ArithmeticErrorKind {
             Self::IntegerOverflow { .. } => ConditionCode::IntegerOverflow,
             Self::DivisionByZero => ConditionCode::DivisionByZero,
             Self::SqrtOfNegative => ConditionCode::SqrtOfNegative,
-            Self::LnOfNonpositive => ConditionCode::LnOfNonpositive,
+            Self::LnOfNonpositive { .. } => ConditionCode::LnOfNonpositive,
             Self::InvalidPower { .. } => ConditionCode::InvalidPower,
+            Self::InvalidProbability { .. } => ConditionCode::InvalidProbability,
         }
     }
 }

@@ -26,3 +26,10 @@ measurement code, sex, and age in days.
 
 **Note:** a collected result exactly at the reference median (`M`)
 has a z-score of 0 and so a percentile of exactly 50.
+
+## Specification variants
+
+- `spec_function.yaml` takes the standard normal probability from the
+  project's `normal_cdf` function, implemented once in each host.
+- `spec_norm_cdf.yaml` takes it from the formula grammar's `NORM_CDF` and
+  needs no project; it writes the same bytes.

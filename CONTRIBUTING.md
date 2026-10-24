@@ -489,7 +489,9 @@ made to both, and `make check-repository` fails while they differ
   behaviour it proves (`case`, unique across the files, which a rule card
   cites as `<file>::<case>`), the operations that reach it (`operation`),
   their `input`, and the complete issue rows they report (`issues`, in the
-  shape `assert_issues` compares). Core's input holds a specification as
+  shape `assert_issues` compares). Several operations must each report the
+  same complete rows, compared with each other whatever `compares` and
+  `among` leave out. Core's input holds a specification as
   a JSON object, or a document of the file's `documents` with edits that
   set or remove a member. The adapters' input holds the `files` its
   operation writes to a fresh study directory, each its text or a
@@ -517,11 +519,13 @@ made to both, and `make check-repository` fails while they differ
   cell is `null` when the value is missing, its text, its integer, `true`
   or `false`, a float in the shortest spelling that reads back as the same
   double, as a diagnostic context spells one (`2.5`, `10.0`, `1e16`), or a
-  date or datetime as its ISO text. `saved` maps each file the save
-  created or changed, by its path in the study directory, to its text or
-  to `{"file": path}`, an authored expected file named by its path from the
-  repository root, such as a benchmark's `expected/` file; `{}` states
-  that the save wrote nothing. A case states a table only when its
+  date or datetime as its ISO text. `saved` states what the operation did
+  to the study directory the case staged, whether it was refused or not:
+  it maps each file created or changed, by its path in the study
+  directory, to its text or to `{"file": path}`, an authored expected file
+  named by its path from the repository root, such as a benchmark's
+  `expected/` file, and each file removed to `null`; `{}` states that
+  nothing was created, changed or removed. A case states a table only when its
   operation reports one, and `saved` exactly when its operation saves: the
   adapters' `build` reports the tables a built result holds, and `save`
   builds as `build` does, then saves; core's operations report issues

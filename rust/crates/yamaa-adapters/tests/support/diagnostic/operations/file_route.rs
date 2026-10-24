@@ -15,14 +15,16 @@
 //! or of its refusal, with the output table and the run report a result
 //! holds; each specification its `built` names is built and saved first, in
 //! order. `save` builds as `build` does, then saves the result, and returns
-//! its issues afterwards, with the files the save created or changed; a
+//! its issues afterwards. Refused or not, it also returns each file of the
+//! study directory the request created, changed or removed, read against the
+//! directory as the case staged it, once its `built` specifications saved; a
 //! refused request saves nothing. Each takes `files` (each relative path and
 //! its text), `directories` (empty ones), the `specification` and the
 //! optional `project` a request names, and the `host` it runs for, `python`
 //! unless written.
 use super::{contents, host, path, rows, study, File, Reported};
 use crate::support::diagnostic::{
-    form::{Files, Outcome},
+    form::{self, Outcome},
     replay::{closed, field, items, text},
 };
 use yamaa_core::{domain_entry::Request, json::Value};
@@ -31,11 +33,15 @@ pub(super) const FILES: &[File] = &[
     fixture!("check_keyless_donor.json"),
     fixture!("check_row_phase_boundaries.json"),
     fixture!("check_unknown_reads.json"),
+    fixture!("completed_intermediates.json"),
     fixture!("declarative_case_predicates.json"),
     fixture!("declarative_self.json"),
     fixture!("inheritance.json"),
+    fixture!("integer_literals.json"),
     fixture!("language_header.json"),
     fixture!("lookup_matched_derivations.json"),
+    fixture!("lookup_model.json"),
+    fixture!("missing_order.json"),
     fixture!("producer_links.json"),
     fixture!("project_run.json"),
     fixture!("rounding.json"),
@@ -45,6 +51,8 @@ pub(super) const FILES: &[File] = &[
     fixture!("text_case.json"),
     fixture!("text_extract.json"),
     fixture!("text_pad.json"),
+    fixture!("verification.json"),
+    fixture!("windows.json"),
     fixture!("workflow.json"),
 ];
 
@@ -112,7 +120,10 @@ pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
                 assert!(domain.save().unwrap(), "{built} saves");
             }
             let saves = operation == "save";
-            match crate::support::study::domain(
+            // The directory as the case staged it, which what the request
+            // did is read against, whether it is refused or not.
+            let staged = saves.then(|| contents(&study));
+            let (issues, outcome) = match crate::support::study::domain(
                 host,
                 Request {
                     specification: &specification,
@@ -121,33 +132,23 @@ pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
                 identity,
             ) {
                 Ok(mut domain) => {
-                    // What the save returns follows from its issues and the
-                    // files it wrote, which the case states.
-                    let saved = saves.then(|| {
-                        let before = contents(&study);
+                    if saves {
+                        // What the save returns follows from its issues and
+                        // what it did to the study directory, which the case
+                        // states.
                         let _ = domain.save();
-                        let mut saved = contents(&study);
-                        saved.retain(|name, bytes| before.get(name) != Some(bytes));
-                        saved
-                    });
+                    }
                     let outcome = Outcome {
                         output: domain.output().map(rows),
                         report: Some(rows(domain.run_report())),
-                        saved,
+                        saved: None,
                     };
                     (domain.issues(), outcome)
                 }
-                Err(issues) => {
-                    let saved = saves.then(Files::new);
-                    (
-                        issues,
-                        Outcome {
-                            saved,
-                            ..Outcome::default()
-                        },
-                    )
-                }
-            }
+                Err(issues) => (issues, Outcome::default()),
+            };
+            let saved = staged.map(|staged| form::saved(&staged, &contents(&study)));
+            (issues, Outcome { saved, ..outcome })
         }
     };
     Some(Reported {
