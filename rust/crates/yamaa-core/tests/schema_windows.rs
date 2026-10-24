@@ -1,10 +1,14 @@
-//! Schema contracts: schema windows, specification compiler and specification
-//! model.
+//! Schema contracts: the seams of window expansion and of the specification
+//! compiler that the diagnostic replay cannot reach, each named in its test's
+//! first comment. The expanded document, the resolved plan and the compiler's
+//! fixed limits stay here; the findings these families report, and the
+//! documents they admit, are the cases of
+//! `tests/fixtures/diagnostics/compiler.json` (#3798).
 mod schema {
     mod schema_windows {
         use yamaa_core::schema::{
-            Document, DocumentNode as N, ExpandedWindows, NormalizationError, SchemaContext,
-            SchemaModule, SchemaStructure, WindowReference,
+            Document, DocumentNode as N, ExpandedWindows, SchemaModule, SchemaStructure,
+            WindowReference,
         };
 
         use crate::support::document::Tree as V;
@@ -108,6 +112,9 @@ mod schema {
                 .fold(columns[index], |node, name| d.field(node, name).unwrap())
         }
 
+        /// A seam the replay cannot reach: the expanded document, the origin
+        /// of each of its nodes and the references the expansion records
+        /// (WINDOW-2).
         #[test]
         fn expands_independent_copies_keeps_order_scope_and_definition_origins() {
             let input = document(input(vec![
@@ -151,14 +158,17 @@ mod schema {
             }
         }
 
+        /// A seam the replay cannot reach: the document a non-strict
+        /// expansion returns, which keeps root `windows` and an unknown
+        /// reference as written for pruning to drop (WINDOW-2). What strict
+        /// expansion reports of the surviving uses is `compiler.json`'s.
         #[test]
-        fn non_strict_expansion_precedes_pruning_and_strict_failure_names_surviving_use() {
+        fn non_strict_expansion_keeps_unknown_references_for_pruning() {
             let input = document(input(vec![
                 column("DEAD", V::text("UNKNOWN")),
                 column("LIVE", V::text("VISITS")),
             ]));
-            let schema = schema();
-            let expanded = schema.expand_named_windows(&input, false).unwrap();
+            let expanded = schema().expand_named_windows(&input, false).unwrap();
             assert!(expanded
                 .document
                 .field(expanded.document.root(), "windows")
@@ -168,70 +178,13 @@ mod schema {
                 N::Text("UNKNOWN".into())
             );
             assert_eq!(expanded.references.len(), 1);
-            let NormalizationError::Invalid(findings) =
-                schema.expand_named_windows(&input, true).unwrap_err()
-            else {
-                panic!()
-            };
-            assert_eq!(findings.len(), 1);
-            assert_eq!(findings[0].definition().condition, "unknown_window");
-            assert_eq!(findings[0].definition().rule, Some("WINDOW-1"));
-            assert_eq!(
-                findings[0].path,
-                "columns.DEAD.derivation.row_number.window"
-            );
-            assert_eq!(
-                findings[0].context,
-                vec![("window", SchemaContext::Text("UNKNOWN".into()))]
-            );
-            // Independently authored post-pruning input: unknown references are absent.
-            let alive = document(input_value_live());
-            assert!(schema.expand_named_windows(&alive, true).is_ok());
         }
         fn input_value_live() -> V {
             input(vec![column("LIVE", V::text("VISITS"))])
         }
 
-        #[test]
-        fn unused_malformed_definition_precedes_reference_errors() {
-            let input = document(V::map(vec![
-                ("windows", V::map(vec![("UNUSED", V::text("VISITS"))])),
-                ("columns", V::List(vec![column("A", V::text("UNKNOWN"))])),
-            ]));
-            for strict in [false, true] {
-                let NormalizationError::Invalid(findings) =
-                    schema().expand_named_windows(&input, strict).unwrap_err()
-                else {
-                    panic!()
-                };
-                assert_eq!(findings[0].path, "windows.UNUSED");
-                assert_eq!(findings[0].definition().condition, "invalid_field_type");
-            }
-        }
-
-        #[test]
-        fn strict_unknown_diagnostics_keep_column_declaration_order() {
-            let input = document(V::map(vec![(
-                "columns",
-                V::List(vec![
-                    column("Z", V::text("SECOND")),
-                    column("A", V::text("FIRST")),
-                ]),
-            )]));
-            let NormalizationError::Invalid(findings) =
-                schema().expand_named_windows(&input, true).unwrap_err()
-            else {
-                panic!()
-            };
-            assert_eq!(
-                findings.iter().map(|f| f.path.as_str()).collect::<Vec<_>>(),
-                vec![
-                    "columns.Z.derivation.row_number.window",
-                    "columns.A.derivation.row_number.window"
-                ]
-            );
-        }
-
+        /// A seam the replay cannot reach: two expansions of one input,
+        /// compared whole with each other.
         #[test]
         fn repeated_window_expansion_preserves_complete_independent_results() {
             let schema = schema();
@@ -243,7 +196,10 @@ mod schema {
     }
     mod specification_compiler {
         //! Compile 1.0 documents, lowered by the 1.0 front end, using only the
-        //! core crate and immutable schemas.
+        //! core crate and immutable schemas. What the compiler prepares and
+        //! binds is a resolved plan, a prepared source and fixed limits that
+        //! no reader returns, so those seams stay here; what it refuses is
+        //! `compiler.json`'s.
         use crate::support::id_source_schema as source;
         use crate::support::resolved;
         use crate::support::specification::{header, prepare};
@@ -253,7 +209,7 @@ mod schema {
                 ResolvedPlan,
             },
             schema::{Document, DocumentNode as N},
-            specification::{BindError, BindFinding, PreflightFinding, PrepareError},
+            specification::PrepareError,
             value::{ColumnType, Value},
         };
 
@@ -349,134 +305,6 @@ mod schema {
             Tree::map(fields)
         }
 
-        #[test]
-        fn aggregate_derive_windows_fail_preflight_at_the_nested_operation_path() {
-            use yamaa_core::json::Value as JsonValue;
-            use yamaa_core::{diagnostic::ConditionCode, specification::PreflightFinding};
-
-            for operation in ["row_number", "rank", "row_value", "locf", "baseline_flag"] {
-                for variable in ["SRC.ID", "ID"] {
-                    let mut fields = vec![(
-                        "window",
-                        Tree::map(vec![("order_by", Tree::List(vec![Tree::text(variable)]))]),
-                    )];
-                    match operation {
-                        "row_value" => {
-                            fields.push(("source", Tree::text(variable)));
-                            fields.push(("offset", Tree::Scalar(N::Integer("-1".into()))));
-                        }
-                        "locf" => fields.push(("source", Tree::text(variable))),
-                        "baseline_flag" => {
-                            fields.push(("date", Tree::text(variable)));
-                            fields.push(("reference", Tree::text(variable)));
-                            fields.push(("source", Tree::text(variable)));
-                        }
-                        _ => {}
-                    }
-                    let window = Tree::map(vec![(operation, Tree::map(fields))]);
-                    let literal = Tree::Scalar(N::Integer("0".into()));
-                    for (derivation, suffix) in [
-                        (window.clone(), format!(".{operation}")),
-                        (
-                            Tree::map(vec![(
-                                "case",
-                                Tree::List(vec![
-                                    Tree::map(vec![
-                                        ("when", Tree::text("SRC.ID >= 0")),
-                                        ("then", window.clone()),
-                                    ]),
-                                    Tree::map(vec![("otherwise", literal.clone())]),
-                                ]),
-                            )]),
-                            format!(".case[0].then.{operation}"),
-                        ),
-                        (
-                            Tree::map(vec![(
-                                "case",
-                                Tree::List(vec![
-                                    Tree::map(vec![
-                                        ("when", Tree::text("SRC.ID >= 0")),
-                                        ("then", literal.clone()),
-                                    ]),
-                                    Tree::map(vec![("otherwise", window.clone())]),
-                                ]),
-                            )]),
-                            format!(".case[1].otherwise.{operation}"),
-                        ),
-                    ] {
-                        let document = operation_document(
-                            "aggregate",
-                            Tree::map(vec![
-                                (
-                                    "derivations",
-                                    Tree::map(vec![(
-                                        "V",
-                                        Tree::map(vec![
-                                            ("type", Tree::text("int")),
-                                            ("derivation", Tree::map(vec![("value", derivation)])),
-                                        ]),
-                                    )]),
-                                ),
-                                ("expr", Tree::text("SUM(V)")),
-                            ]),
-                            "input.csv",
-                        );
-                        let outcome = prepare(&document);
-                        let Err(PrepareError::Invalid(findings)) = outcome else {
-                            panic!("unexpected aggregate derive window outcome: {operation} {variable}: {outcome:?}");
-                        };
-                        let [PreflightFinding::Scalar(diagnostic)] = findings.as_slice() else {
-                            panic!("unexpected window findings: {findings:?}");
-                        };
-                        assert_eq!(diagnostic.code, ConditionCode::AggregateDeriveDeclaration);
-                        assert_eq!(diagnostic.definition().phase, "validation");
-                        assert_eq!(diagnostic.definition().condition, "invalid_derive_step");
-                        assert_eq!(diagnostic.definition().rule, Some("LOOKUP-22"));
-                        assert_eq!(
-                            diagnostic.spec_paths,
-                            [format!(
-                                "columns.VALUE.derivation.aggregate.derivations.V.derivation{suffix}"
-                            )]
-                        );
-                        assert_eq!(
-                            diagnostic.context["reason"],
-                            JsonValue::String(
-                                "a derive binding cannot use a window operation".into()
-                            )
-                        );
-                    }
-                }
-            }
-        }
-
-        #[test]
-        fn aggregate_derive_window_names_in_literals_remain_literals() {
-            let binding = |name, kind, value| {
-                (
-                    name,
-                    Tree::map(vec![
-                        ("type", Tree::text(kind)),
-                        ("derivation", Tree::map(vec![("value", value)])),
-                    ]),
-                )
-            };
-            let document = operation_document(
-                "aggregate",
-                Tree::map(vec![
-                    (
-                        "derivations",
-                        Tree::map(vec![
-                            binding("V", "int", Tree::text("SRC.ID")),
-                            binding("TAG", "str", Tree::text("'row_value'")),
-                        ]),
-                    ),
-                    ("expr", Tree::text("SUM(V)")),
-                ]),
-                "input.csv",
-            );
-            prepare(&document).unwrap();
-        }
-
         fn case_document(when: &str, expression: &str) -> Document {
             operation_document(
                 "case",
@@ -491,30 +319,8 @@ mod schema {
             )
         }
 
-        #[test]
-        fn case_grammar_findings_retain_their_original_nested_paths() {
-            let prepared = prepare(&case_document("ID >", "1")).unwrap();
-            let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
-                panic!("a predicate expression finding")
-            };
-            let diagnostics = findings[0].diagnostics(prepared.source()).unwrap();
-            assert_eq!(
-                diagnostics[0].spec_paths,
-                ["columns.VALUE.derivation.case[0].when"]
-            );
-            assert!(matches!(findings[0], BindFinding::Predicate(_)));
-            let prepared = prepare(&case_document("ID > 0", "ID +")).unwrap();
-            let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
-                panic!("an expression finding")
-            };
-            let diagnostics = findings[0].diagnostics(prepared.source()).unwrap();
-            assert_eq!(
-                diagnostics[0].spec_paths,
-                ["columns.VALUE.derivation.case[0].then"]
-            );
-            assert!(matches!(findings[0], BindFinding::Numeric { .. }));
-        }
-
+        /// A seam the replay cannot reach: the resolved plan's case
+        /// predicate, the reads it collects, its spec path and its binding.
         #[test]
         fn non_key_case_predicate_owns_key_grain_collection_without_study_authority() {
             let prepared = prepare(&case_document("SRC.ID > 0", "1")).unwrap();
@@ -538,6 +344,9 @@ mod schema {
             );
         }
 
+        /// A seam the replay cannot reach: the prepared source and
+        /// projection, and the resolved plan's source, keys and compiled
+        /// expression.
         #[test]
         fn compiler_owns_bound_plan_without_an_engine_or_source_port() {
             let prepared = prepare(&document("ID + 1 / 0", "input.csv")).unwrap();
@@ -560,33 +369,10 @@ mod schema {
             assert_eq!(&*binding.path, "columns.VALUE.derivation");
         }
 
+        /// A seam the replay cannot reach: the prepared source's profile and
+        /// missing-text policy, and the resolved output's width.
         #[test]
-        fn compiler_retains_admission_binding_and_resource_boundaries() {
-            let prepared = prepare(&document("ID +", "input.csv")).unwrap();
-            let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
-                panic!("binding diagnostic")
-            };
-            assert!(
-                matches!(&findings[..], [BindFinding::Numeric { path, expression, .. }] if path == "columns.VALUE.derivation" && expression == "ID +")
-            );
-            let Err(PrepareError::Invalid(findings)) = prepare(&document("ID + 1", "input.bad"))
-            else {
-                panic!("unknown source profile admission")
-            };
-            assert_eq!(findings.len(), 1);
-            let diagnostic = findings[0].diagnostic();
-            assert_eq!(
-                diagnostic.code,
-                yamaa_core::diagnostic::ConditionCode::SourceUnknownProfile
-            );
-            assert_eq!(diagnostic.spec_paths, ["input.SRC.path"]);
-            assert_eq!(
-                diagnostic.context,
-                [("dataset", "SRC"), ("path", "input.bad")]
-                    .into_iter()
-                    .map(|(key, value)| (key.into(), yamaa_core::json::Value::String(value.into())))
-                    .collect()
-            );
+        fn compiler_retains_admission_and_resource_boundaries() {
             let prepared = prepare(&document("ID + 1", "input.PARQUET")).unwrap();
             assert_eq!(
                 prepared.source().profile,
@@ -602,26 +388,6 @@ mod schema {
                     .len(),
                 2
             );
-        }
-
-        #[test]
-        fn parquet_type_declarations_keep_all_semantic_findings() {
-            let mut tree = value_tree(Tree::text("ID + 1"), "source.parquet", None, None);
-            tree.set(
-                &["input", "SRC", "types"],
-                Tree::map(vec![
-                    ("ID", Tree::text("int")),
-                    ("VALUE", Tree::text("float")),
-                ]),
-            );
-            let Err(PrepareError::Invalid(findings)) = prepare(&tree.document()) else {
-                panic!("all redundant parquet type declarations remain semantic findings");
-            };
-            assert_eq!(findings.len(), 2);
-            assert!(findings.iter().all(|f| matches!(
-                f,
-                yamaa_core::specification::PreflightFinding::RedundantSourceType { .. }
-            )));
         }
 
         fn window_document(filter: &str) -> Document {
@@ -654,6 +420,9 @@ mod schema {
             operation_document(operation, Tree::map(options), "input.csv")
         }
 
+        /// A seam the replay cannot reach: the resolved plan's window, its
+        /// kind, partition, order term and filter, and a qualified filter's
+        /// source reads.
         #[test]
         fn window_compiler_binds_output_dependencies_without_engine_or_records() {
             use yamaa_core::dataset::WindowKind;
@@ -692,6 +461,8 @@ mod schema {
             );
         }
 
+        /// A seam the replay cannot reach: the resolved plan's rank kind and
+        /// its order term's direction and missing placement.
         #[test]
         fn directly_admitted_windows_preserve_defaults_and_explicit_options() {
             use yamaa_core::dataset::WindowKind;
@@ -727,6 +498,8 @@ mod schema {
             value_document(literal(node), "input.csv", None, None)
         }
 
+        /// A seam the replay cannot reach: the resolved plan's literal
+        /// operation, output column type and keys.
         #[test]
         fn scalar_column_leaves_use_the_common_compiled_literal_expression() {
             use yamaa_core::value::Value;
@@ -754,48 +527,10 @@ mod schema {
                 assert_eq!(resolved::output(&plan).columns()[1].kind, ColumnType::Int);
                 assert_eq!(resolved::keys(&plan), [0]);
             }
-            // A Boolean converts to no column type (VALUE-3), so its int column
-            // is refused before any record is read (VALUE-24).
-            let prepared = prepare(&literal_document(N::Boolean(true))).unwrap();
-            let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
-                panic!("a Boolean literal cannot fill an int column")
-            };
-            let diagnostics = findings
-                .iter()
-                .flat_map(|finding| finding.diagnostics(prepared.source()).unwrap())
-                .collect::<Vec<_>>();
-            assert_eq!(diagnostics, prepared.check_declaration_diagnostics());
-            assert_eq!(
-                diagnostics
-                    .iter()
-                    .map(|diagnostic| (
-                        diagnostic.definition().condition,
-                        diagnostic.spec_paths.as_slice()
-                    ))
-                    .collect::<Vec<_>>(),
-                [(
-                    "conversion_failed",
-                    ["columns.VALUE".to_string()].as_slice()
-                )]
-            );
         }
 
-        #[test]
-        fn out_of_range_literal_integers_fail_validation_before_binding() {
-            let Err(PrepareError::Invalid(findings)) =
-                prepare(&literal_document(N::Integer("9223372036854775808".into())))
-            else {
-                panic!("wide integer must not narrow")
-            };
-            assert_eq!(
-                findings,
-                [PreflightFinding::IntegerLiteralOverflow {
-                    path: "columns.VALUE.derivation".into(),
-                    value: "9223372036854775808".into(),
-                }]
-            );
-        }
-
+        /// A seam the replay cannot reach: the resolved plan's conversion
+        /// handlers, each at its assignment.
         #[test]
         fn column_recovery_compiles_present_null_and_text_handlers_without_dependencies() {
             use yamaa_core::value::Value;
@@ -835,26 +570,6 @@ mod schema {
             assert!(resolved::conversion_handlers(&prepared.bind(&source()).unwrap()).is_empty());
         }
 
-        #[test]
-        fn wide_recovery_literal_fails_validation_before_source_binding() {
-            let document = value_document(
-                Tree::Scalar(N::Boolean(true)),
-                "input.csv",
-                Some(N::Integer("9223372036854775808".into())),
-                None,
-            );
-            let Err(PrepareError::Invalid(findings)) = prepare(&document) else {
-                panic!("wide handler must not narrow")
-            };
-            assert_eq!(
-                findings,
-                [PreflightFinding::IntegerLiteralOverflow {
-                    path: "columns.VALUE.derivation.unconvertible".into(),
-                    value: "9223372036854775808".into(),
-                }]
-            );
-        }
-
         fn recovery_rows(value: N, count: usize) -> Tree {
             let mut rows = vec![Tree::map(vec![
                 ("id", Tree::text("override")),
@@ -875,6 +590,9 @@ mod schema {
             Tree::List(rows)
         }
 
+        /// A seam the replay cannot reach: the resolved plan's conversion
+        /// handlers in row order, and the row assignments and column
+        /// bindings of the templates that share the column default.
         #[test]
         fn row_recovery_binds_only_effective_handlers_in_row_order_and_shares_defaults() {
             use yamaa_core::value::Value;
@@ -913,161 +631,8 @@ mod schema {
             }
         }
 
-        #[test]
-        fn null_rows_prepare_without_internal_error() {
-            // #2428: `rows: null` is the natural YAML spelling of "no row
-            // derivations" and the rest of preparation treats a Null node as
-            // absent. Imputation declaration findings ran unconditionally and
-            // passed the Null node to `sequence()`, aborting preparation with
-            // `PrepareError::Internal` even for specifications with no imputation.
-            // The same unfiltered pattern in the other unconditional declaration
-            // passes (match values, scalar, str_case, str_extract, str_pad and
-            // str_template) aborted preparation immediately afterwards, so those
-            // passes skip a Null `rows` node too.
-            let document = value_document(
-                Tree::text("ID + 1"),
-                "input.csv",
-                None,
-                Some(Tree::Scalar(N::Null)),
-            );
-            prepare(&document).unwrap();
-        }
-
-        #[test]
-        fn wide_row_recovery_fails_validation_at_its_authored_path_before_binding() {
-            let document = value_document(
-                Tree::Scalar(N::Boolean(true)),
-                "input.csv",
-                None,
-                Some(recovery_rows(N::Integer("9223372036854775808".into()), 1)),
-            );
-            let Err(PrepareError::Invalid(findings)) = prepare(&document) else {
-                panic!("wide row handler must not narrow")
-            };
-            assert_eq!(
-                findings,
-                [PreflightFinding::IntegerLiteralOverflow {
-                    path: "rows.override.derivations.VALUE.unconvertible".into(),
-                    value: "9223372036854775808".into(),
-                }]
-            );
-        }
-
-        #[test]
-        fn row_filter_carrier_findings_remain_normative_including_dead_branches() {
-            // Each literal is its number token, the sign written on it included.
-            for (filter, position, literal) in [
-                (
-                    "FALSE AND ID = 9223372036854775808",
-                    15,
-                    "9223372036854775808",
-                ),
-                (
-                    "TRUE OR ID = -9223372036854775809",
-                    13,
-                    "-9223372036854775809",
-                ),
-            ] {
-                let rows = Tree::List(vec![Tree::map(vec![
-                    ("id", Tree::text("first")),
-                    ("filter", Tree::text(filter)),
-                    (
-                        "derivations",
-                        Tree::map(vec![
-                            ("ID", Tree::map(vec![("value", Tree::text("SRC.ID"))])),
-                            (
-                                "VALUE",
-                                Tree::map(vec![("value", Tree::Scalar(N::Integer("2".into())))]),
-                            ),
-                        ]),
-                    ),
-                ])]);
-                let document = value_document(
-                    Tree::Scalar(N::Integer("2".into())),
-                    "input.csv",
-                    None,
-                    Some(rows),
-                );
-                let prepared = prepare(&document).unwrap();
-                let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
-                    panic!("predicate overflow must remain a deferred normative finding");
-                };
-                let [BindFinding::Lookup(finding)] = findings.as_slice() else {
-                    panic!("unexpected carrier findings: {findings:?}");
-                };
-                let diagnostic = finding.diagnostic();
-                assert_eq!(
-                    diagnostic.code,
-                    yamaa_core::diagnostic::ConditionCode::LiteralIntegerOverflow
-                );
-                assert_eq!(diagnostic.spec_paths, ["rows.first.filter"]);
-                assert_eq!(diagnostic.definition().phase, "validation");
-                assert_eq!(diagnostic.definition().rule, Some("VALUE-5"));
-                assert_eq!(
-                    diagnostic.context,
-                    literal_overflow(filter, position, literal),
-                    "{filter}"
-                );
-            }
-        }
-
-        #[test]
-        fn row_filters_retain_both_deferred_grammar_findings() {
-            let rows = Tree::List(
-                ["first", "second"]
-                    .into_iter()
-                    .map(|id| {
-                        Tree::map(vec![
-                            ("id", Tree::text(id)),
-                            ("filter", Tree::text("ID >")),
-                            (
-                                "derivations",
-                                Tree::map(vec![
-                                    ("ID", Tree::map(vec![("value", Tree::text("SRC.ID"))])),
-                                    (
-                                        "VALUE",
-                                        Tree::map(vec![(
-                                            "value",
-                                            Tree::Scalar(N::Integer("2".into())),
-                                        )]),
-                                    ),
-                                ]),
-                            ),
-                        ])
-                    })
-                    .collect(),
-            );
-            let document = value_document(
-                Tree::Scalar(N::Integer("2".into())),
-                "input.csv",
-                None,
-                Some(rows),
-            );
-            let prepared = prepare(&document).unwrap();
-            let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
-                panic!("both authored row filters must retain their grammar failures");
-            };
-            assert_eq!(findings.len(), 2);
-            for (finding, path) in findings
-                .iter()
-                .zip(["rows.first.filter", "rows.second.filter"])
-            {
-                let BindFinding::Lookup(finding) = finding else {
-                    panic!("row predicate finding")
-                };
-                let diagnostic = finding.diagnostic();
-                assert_eq!(
-                    diagnostic.code,
-                    yamaa_core::diagnostic::ConditionCode::ExpressionInvalid
-                );
-                assert_eq!(diagnostic.spec_paths, [path]);
-                assert_eq!(
-                    diagnostic.context["predicate"],
-                    yamaa_core::json::Value::from("ID >")
-                );
-            }
-        }
-
+        /// A seam the replay cannot reach: the resolved plan's row
+        /// assignments, template filter and column bindings.
         #[test]
         fn record_and_group_filters_promote_their_complete_row_local_default() {
             for grouped in [false, true] {
@@ -1098,106 +663,8 @@ mod schema {
             }
         }
 
-        #[test]
-        fn source_filters_bind_valid_text_and_retain_carrier_findings() {
-            let document = operation_document(
-                "source",
-                Tree::map(vec![
-                    ("variable", Tree::text("SRC.ID")),
-                    ("filter", Tree::text("SRC.ID = 1")),
-                ]),
-                "input.csv",
-            );
-            prepare(&document).unwrap().bind(&source()).unwrap();
-            let document = operation_document(
-                "source",
-                Tree::map(vec![
-                    ("variable", Tree::text("SRC.ID")),
-                    ("filter", Tree::text("SRC.ID = 9223372036854775808")),
-                ]),
-                "input.csv",
-            );
-            let prepared = prepare(&document).unwrap();
-            let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
-                panic!("source predicate overflow must remain a deferred normative finding");
-            };
-            let [BindFinding::Source(finding)] = findings.as_slice() else {
-                panic!("unexpected source carrier findings: {findings:?}");
-            };
-            let diagnostic = finding.diagnostic();
-            assert_eq!(
-                diagnostic.code,
-                yamaa_core::diagnostic::ConditionCode::LiteralIntegerOverflow
-            );
-            assert_eq!(diagnostic.definition().phase, "validation");
-            assert_eq!(diagnostic.definition().rule, Some("VALUE-5"));
-            assert_eq!(
-                diagnostic.spec_paths,
-                ["columns.VALUE.derivation.source.filter"]
-            );
-            assert_eq!(
-                diagnostic.context,
-                literal_overflow("SRC.ID = 9223372036854775808", 9, "9223372036854775808")
-            );
-        }
-
-        /// A predicate literal outside int's range (VALUE-5): the predicate's
-        /// text, as its expression and its predicate, the literal's character
-        /// position, the literal as written and as a number, and the range.
-        fn literal_overflow(
-            predicate: &str,
-            position: usize,
-            literal: &str,
-        ) -> yamaa_core::diagnostic::Context {
-            use yamaa_core::json::Value as V;
-            [
-                ("expr".into(), V::String(predicate.into())),
-                ("predicate".into(), V::String(predicate.into())),
-                ("position".into(), V::from(position)),
-                ("value".into(), V::String(literal.into())),
-                (
-                    "actual".into(),
-                    V::Number(literal.parse().expect("integer")),
-                ),
-                ("minimum".into(), V::from(i64::MIN)),
-                ("maximum".into(), V::from(i64::MAX)),
-            ]
-            .into()
-        }
-
-        #[test]
-        fn selection_filters_retain_their_decorated_operand_path() {
-            let payload = Tree::map(vec![(
-                "sources",
-                Tree::List(vec![Tree::map(vec![
-                    ("variable", Tree::text("SRC.ID")),
-                    ("filter", Tree::text("SRC.ID =")),
-                ])]),
-            )]);
-            let document = operation_document("first_available", payload, "input.csv");
-            let prepared = prepare(&document).unwrap();
-            let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
-                panic!("deferred selection grammar")
-            };
-            assert_eq!(findings.len(), 1);
-            let BindFinding::Source(finding) = &findings[0] else {
-                panic!("source grammar")
-            };
-            let diagnostic = finding.diagnostic();
-            assert_eq!(
-                diagnostic.code,
-                yamaa_core::diagnostic::ConditionCode::ExpressionInvalid
-            );
-            assert_eq!(
-                diagnostic.spec_paths,
-                ["columns.VALUE.derivation.first_available.sources[0].filter"]
-            );
-            assert_eq!(
-                diagnostic.context["predicate"],
-                yamaa_core::json::Value::from("SRC.ID =")
-            );
-        }
-
+        /// A seam the replay cannot reach: the resolved plan's source
+        /// binding, its path, absence answer and selection.
         #[test]
         fn nested_source_options_keep_authored_handlers_and_selection_after_binding() {
             for fields in [
@@ -1244,6 +711,8 @@ mod schema {
             }
         }
 
+        /// A seam the replay cannot reach: the resolved plan's selection,
+        /// its source paths and the operands it collects or binds.
         #[test]
         fn first_available_retains_collection_and_decorated_operand_paths() {
             let document = operation_document(
@@ -1284,6 +753,8 @@ mod schema {
         Op::SourceBinding { path, .. } if **path == *assignment.path));
         }
 
+        /// A seam the replay cannot reach: the resolved plan's verification
+        /// checks, a predicate declaration and a deferred grammar finding.
         #[test]
         fn assertion_keeps_both_predicates_and_the_deferred_grammar_finding() {
             let when = "ID = 1";
@@ -1339,141 +810,6 @@ mod schema {
                 matches!(verifications[1], yamaa_core::dataset::Check::InvalidDiagnostic(d)
         if d.code == yamaa_core::diagnostic::ConditionCode::ExpressionInvalid)
             );
-        }
-
-        fn verification_document(kind: &str, check: Tree, column: bool) -> Document {
-            let mut value = vec![
-                ("name", Tree::text("VALUE")),
-                ("type", Tree::text(kind)),
-                (
-                    "derivation",
-                    Tree::map(vec![("value", Tree::Scalar(N::Integer("1".into())))]),
-                ),
-            ];
-            if column {
-                value.push(("verifications", Tree::List(vec![check.clone()])));
-            }
-            let mut tree = vec![
-                ("yamaa", Tree::text("1.0")),
-                ("type", Tree::text("spec")),
-                ("domain", Tree::text("TEST")),
-                (
-                    "input",
-                    Tree::map(vec![(
-                        "SRC",
-                        Tree::map(vec![("path", Tree::text("input.csv"))]),
-                    )]),
-                ),
-                ("keys", Tree::List(vec![Tree::text("ID")])),
-                (
-                    "columns",
-                    Tree::List(vec![
-                        Tree::map(vec![
-                            ("name", Tree::text("ID")),
-                            ("type", Tree::text("int")),
-                            (
-                                "derivation",
-                                Tree::map(vec![("value", Tree::text("SRC.ID"))]),
-                            ),
-                        ]),
-                        Tree::map(value),
-                    ]),
-                ),
-                (
-                    "output",
-                    Tree::map(vec![
-                        ("path", Tree::text("result.csv")),
-                        (
-                            "columns",
-                            Tree::List(vec![Tree::text("ID"), Tree::text("VALUE")]),
-                        ),
-                    ]),
-                ),
-            ];
-            if !column {
-                tree.push(("verifications", Tree::List(vec![check])));
-            }
-            Tree::map(tree).document()
-        }
-        #[test]
-        fn malformed_assert_carriers_and_numeric_bounds_are_typed_declaration_findings() {
-            use yamaa_core::diagnostic::ConditionCode as C;
-            use yamaa_core::json::Value as V;
-
-            let checks = [
-                (
-                    "int",
-                    false,
-                    Tree::map(vec![(
-                        "assert",
-                        Tree::map(vec![
-                            ("when", Tree::Scalar(N::Boolean(true))),
-                            ("require", Tree::text("VALUE > 0")),
-                        ]),
-                    )]),
-                    C::VerificationDeclarationRequired,
-                    "verifications[0].assert.when",
-                    "a predicate must be text",
-                ),
-                (
-                    "int",
-                    true,
-                    Tree::map(vec![(
-                        "range",
-                        Tree::map(vec![
-                            ("min", Tree::Scalar(N::Boolean(false))),
-                            ("max", Tree::Scalar(N::Integer("7".into()))),
-                        ]),
-                    )]),
-                    C::VerificationDeclarationRequired,
-                    "columns.VALUE.verifications[0].range",
-                    "a range bound is numeric",
-                ),
-                (
-                    "str",
-                    true,
-                    Tree::map(vec![(
-                        "range",
-                        Tree::map(vec![("min", Tree::Scalar(N::Boolean(false)))]),
-                    )]),
-                    C::VerificationColumnType,
-                    "columns.VALUE.verifications[0].range",
-                    "a str column does not admit this verification",
-                ),
-                (
-                    "int",
-                    true,
-                    Tree::map(vec![(
-                        "allowed_values",
-                        Tree::map(vec![(
-                            "values",
-                            Tree::List(vec![
-                                Tree::Scalar(N::Null),
-                                Tree::Scalar(N::Boolean(false)),
-                            ]),
-                        )]),
-                    )]),
-                    C::VerificationColumnType,
-                    "columns.VALUE.verifications[0].allowed_values",
-                    "listed value None is not a int value",
-                ),
-            ];
-            for (kind, column, check, code, path, reason) in checks {
-                let prepared = prepare(&verification_document(kind, check, column)).unwrap();
-                let findings = prepared.verification_declaration_diagnostics();
-                assert_eq!(findings.len(), 1);
-                assert_eq!(findings[0].code, code);
-                assert_eq!(findings[0].spec_paths, [path]);
-                assert_eq!(findings[0].definition().phase, "validation");
-                assert_eq!(
-                    findings[0].context,
-                    [("reason".into(), V::String(reason.into()))].into()
-                );
-                assert!(
-                    prepared.bind(&source()).is_ok(),
-                    "declarations retain their runtime checkpoint"
-                );
-            }
         }
 
         fn wide_document(columns: usize, typed_fields: usize) -> Document {
@@ -1539,6 +875,9 @@ mod schema {
             Tree::map(fields).document()
         }
 
+        /// A seam the replay cannot reach: the compiler's fixed limits, a
+        /// `PrepareError::Limit` that no reader returns, over documents
+        /// generated 1,024 and 1,025 wide.
         #[test]
         fn fixed_column_ceilings_admit_1024_and_refuse_1025() {
             prepare(&wide_document(1_024, 0)).unwrap();
@@ -1566,77 +905,6 @@ mod schema {
             assert_eq!(resource.limit, 1024);
             assert_eq!(resource.actual, Some(1025));
             assert_eq!(resource.spec_paths, ["input.SRC.types"]);
-        }
-
-        #[test]
-        fn qualified_aggregate_group_by_must_be_an_output_key_req_0470() {
-            use yamaa_core::{
-                diagnostic::ConditionCode,
-                table::{Column, TableSchema},
-            };
-
-            // Donor SRC has ID (the output/join key), PARAM (a second grouping
-            // column) and V. Two donor groups share the key ID=1 but differ in
-            // PARAM, so a group_by on SRC.PARAM that is not an output key would
-            // silently merge those groups in the Matched executor, which matches
-            // on keys only.
-            let donor = TableSchema::new(vec![
-                Column {
-                    name: "ID".into(),
-                    kind: ColumnType::Int,
-                },
-                Column {
-                    name: "PARAM".into(),
-                    kind: ColumnType::Int,
-                },
-                Column {
-                    name: "V".into(),
-                    kind: ColumnType::Int,
-                },
-            ])
-            .unwrap();
-            // The aggregate declares no `key`, so it matches on the key its
-            // input declares, the output key ID (D63).
-            let document_for = |group: &str| {
-                let mut tree = value_tree(
-                    Tree::map(vec![(
-                        "aggregate",
-                        Tree::map(vec![
-                            ("expr", Tree::text("SUM(SRC.V)")),
-                            ("group_by", Tree::List(vec![Tree::text(group)])),
-                        ]),
-                    )]),
-                    "input.csv",
-                    None,
-                    None,
-                );
-                tree.set(&["input", "SRC", "key"], Tree::List(vec![Tree::text("ID")]));
-                tree.document()
-            };
-            // Non-compliant: PARAM is not an output key (spec keys are [ID]).
-            let prepared = prepare(&document_for("SRC.PARAM")).unwrap();
-            let Err(BindError::Invalid(findings)) = prepared.bind(&donor) else {
-                panic!("qualified aggregate grouping by a non-output-key column must be refused");
-            };
-            let diagnostics = findings[0].diagnostics(prepared.source()).unwrap();
-            let diagnostic = diagnostics
-                .iter()
-                .find(|d| d.definition().rule == Some("LOOKUP-19"))
-                .unwrap_or_else(|| panic!("expected a LOOKUP-19 diagnostic, got {diagnostics:?}"));
-            assert_eq!(diagnostic.code, ConditionCode::AggregateGroupNotOutputKey);
-            assert_eq!(diagnostic.definition().phase, "validation");
-            assert_eq!(
-                diagnostic.definition().condition,
-                "invalid_aggregate_context"
-            );
-            assert_eq!(
-                diagnostic.spec_paths,
-                ["columns.VALUE.derivation.aggregate.group_by"]
-            );
-            // Positive control: grouping by the output key itself is compliant and
-            // the same aggregate still binds (and so can execute).
-            let prepared = prepare(&document_for("SRC.ID")).unwrap();
-            prepared.bind(&donor).unwrap();
         }
     }
 }
