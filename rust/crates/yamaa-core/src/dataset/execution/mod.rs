@@ -48,6 +48,12 @@ pub enum ExecutionEvent {
 /// combines only the state the partition inventory marks combinable. A
 /// step that needs the whole table refuses the run at admission, unless
 /// `whole_table_fallback` runs it over the whole input instead.
+///
+/// A run whose plan has no such step and whose one input is CSV or Parquet
+/// reads that input by partition (#3792), each partition decoded and
+/// admitted on its own: a CSV input in partitions of `rows` records, a
+/// Parquet input in runs of whole row groups of at most `rows` records, a
+/// larger row group being a partition of its own.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Partitioning {
     pub rows: std::num::NonZeroUsize,

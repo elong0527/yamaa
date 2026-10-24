@@ -396,49 +396,10 @@ pub(crate) fn decode_source(
             let parsed = csv_source::parse_declared(bytes, source.byte_order_mark)
                 .map_err(|error| Error::Source(TextTableError::Csv(error)))?;
             if odm {
-                let fields = parsed
-                    .names
-                    .iter()
-                    .map(|name| yamaa_core::odm_source::StoredField {
-                        name,
-                        kind: Some(yamaa_core::value::ColumnType::Str),
-                    })
-                    .collect::<Vec<_>>();
-                let binding =
-                    yamaa_core::odm_source::bind_fields(&fields).map_err(Error::OdmFields)?;
-                let projected = csv_source::CsvSource {
-                    names: yamaa_core::odm_source::FIELDS
-                        .iter()
-                        .map(|name| (*name).into())
-                        .collect(),
-                    records: parsed
-                        .records
-                        .into_iter()
-                        .map(|mut row| {
-                            binding
-                                .stored()
-                                .iter()
-                                .map(|&column| row[column].take())
-                                .collect()
-                        })
-                        .collect(),
-                };
-                crate::typed_csv::convert(
-                    projected,
-                    yamaa_core::typed_csv::PreparedTypes::new(&[])
-                        .expect("fixed text declarations"),
-                )
-                .map_err(typed_source_error)?
+                let binding = odm_header(&parsed.names)?;
+                odm_records(parsed, &binding)?
             } else {
-                if let Some(contract) = contract {
-                    let header = parsed.names.iter().map(String::as_str).collect::<Vec<_>>();
-                    if let Some(diagnostic) = contract
-                        .validate_header(&source.name, &header)
-                        .map_err(Error::ProducerContract)?
-                    {
-                        return Err(Error::ProducerMetadata(diagnostic));
-                    }
-                }
+                producer_header(source, contract, &parsed.names)?;
                 crate::typed_csv::convert(parsed, types).map_err(typed_source_error)?
             }
         }
@@ -447,6 +408,176 @@ pub(crate) fn decode_source(
         stored_contract(source, contract, &table)?;
     }
     crate::source_ordinal::append(source, table)
+}
+
+/// The ODM fields a CSV header stores (NAME-8), all read as text.
+fn odm_header(names: &[String]) -> Result<yamaa_core::odm_source::FieldBinding, Error> {
+    let fields = names
+        .iter()
+        .map(|name| yamaa_core::odm_source::StoredField {
+            name,
+            kind: Some(yamaa_core::value::ColumnType::Str),
+        })
+        .collect::<Vec<_>>();
+    yamaa_core::odm_source::bind_fields(&fields).map_err(Error::OdmFields)
+}
+
+/// CSV records as the fixed ODM table: the eleven fields `binding` locates,
+/// in their canonical order, as text.
+fn odm_records(
+    parsed: csv_source::CsvSource,
+    binding: &yamaa_core::odm_source::FieldBinding,
+) -> Result<ColumnTable, Error> {
+    let projected = csv_source::CsvSource {
+        names: yamaa_core::odm_source::FIELDS
+            .iter()
+            .map(|name| (*name).into())
+            .collect(),
+        records: parsed
+            .records
+            .into_iter()
+            .map(|mut row| {
+                binding
+                    .stored()
+                    .iter()
+                    .map(|&column| row[column].take())
+                    .collect()
+            })
+            .collect(),
+    };
+    crate::typed_csv::convert(
+        projected,
+        yamaa_core::typed_csv::PreparedTypes::new(&[]).expect("fixed text declarations"),
+    )
+    .map_err(typed_source_error)
+}
+
+/// A linked CSV artifact's raw header against its producer's output contract
+/// (INPUT-11), before any typed cell conversion.
+fn producer_header(
+    source: &SourceDeclaration,
+    contract: Option<&yamaa_core::producer_contract::Contract>,
+    names: &[String],
+) -> Result<(), Error> {
+    let Some(contract) = contract else {
+        return Ok(());
+    };
+    let header = names.iter().map(String::as_str).collect::<Vec<_>>();
+    match contract
+        .validate_header(&source.name, &header)
+        .map_err(Error::ProducerContract)?
+    {
+        Some(diagnostic) => Err(Error::ProducerMetadata(diagnostic)),
+        None => Ok(()),
+    }
+}
+
+/// Decode `source`'s held bytes by partition (#3792): a CSV source in
+/// partitions of `rows` records, the last holding the rest, and a Parquet
+/// source in runs of whole row groups of at most `rows` records, a larger
+/// row group being a partition of its own. Only those two profiles are read
+/// by partition.
+///
+/// Every finding [`decode_source`] reports is reported in the same order, at
+/// the same record, row and field, and with the same context: the CSV scan
+/// reads every record before any converts, and each later check runs over
+/// every partition before the next one starts. Only the row and cell limits
+/// differ, with the text-offset bound of each column: each partition, not
+/// the whole table, is admitted within them. A partition's generated ordinal
+/// is its records' positions in the whole source.
+pub(crate) fn decode_partitions(
+    source: &SourceDeclaration,
+    bytes: &[u8],
+    interpretation: yamaa_core::specification::SourceInterpretation,
+    contract: Option<&yamaa_core::producer_contract::Contract>,
+    rows: std::num::NonZeroUsize,
+) -> Result<Vec<ColumnTable>, Error> {
+    use yamaa_core::specification::SourceProfile;
+    use yamaa_core::table::TableAccess;
+    let odm = interpretation == yamaa_core::specification::SourceInterpretation::Odm;
+    let tables = match source.profile {
+        SourceProfile::Parquet => {
+            let tables =
+                crate::parquet_source::parse_partitions(bytes, odm, rows).map_err(parquet_error)?;
+            tables
+                .into_iter()
+                .map(|table| empty_string_convention(source, table))
+                .collect::<Result<Vec<_>, _>>()?
+        }
+        SourceProfile::Csv => {
+            let types = yamaa_core::typed_csv::PreparedTypes::new(&source.types)
+                .map_err(|error| typed_source_error(crate::typed_csv::Error::Typing(error)))?;
+            let partitions = csv_source::scan(bytes, source.byte_order_mark, rows)
+                .map_err(|error| Error::Source(TextTableError::Csv(error)))?;
+            let records = |index| {
+                partitions
+                    .records(index)
+                    .map_err(|error| Error::Source(TextTableError::Csv(error)))
+            };
+            if odm {
+                let binding = odm_header(partitions.names())?;
+                (0..partitions.len())
+                    .map(|index| odm_records(records(index)?, &binding))
+                    .collect::<Result<Vec<_>, _>>()?
+            } else {
+                producer_header(source, contract, partitions.names())?;
+                (0..partitions.len())
+                    .map(|index| {
+                        crate::typed_csv::convert(records(index)?, types)
+                            .map_err(typed_source_error)
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+            }
+        }
+        SourceProfile::Xport | SourceProfile::Sas7bdat | SourceProfile::OdmXml => {
+            unreachable!("only CSV and Parquet sources are read by partition")
+        }
+    };
+    if let (Some(contract), Some(first)) = (contract, tables.first()) {
+        stored_contract(source, contract, first)?;
+    }
+    let mut start = 0usize;
+    tables
+        .into_iter()
+        .map(|table| {
+            let records = table.row_count();
+            let table = crate::source_ordinal::append_at(source, table, start)?;
+            start += records;
+            Ok(table)
+        })
+        .collect()
+}
+
+/// The schema `source`'s held bytes decode to, read from a CSV source's
+/// header or a Parquet source's footer alone (#3792): the fields
+/// [`decode_source`] gives the table when it finds nothing, the generated
+/// ordinal included. `None` for any other profile, or a header or footer
+/// that does not read, whose source is read whole.
+pub(crate) fn source_schema(
+    source: &SourceDeclaration,
+    bytes: &[u8],
+    interpretation: yamaa_core::specification::SourceInterpretation,
+) -> Option<yamaa_core::table::TableSchema> {
+    use yamaa_core::specification::SourceProfile;
+    use yamaa_core::table::TableAccess;
+    match source.profile {
+        // The header alone decodes as the whole source does, to no records.
+        SourceProfile::Csv => {
+            let header = &bytes[..csv_source::header_end(bytes)];
+            let table = decode_source(source, header, interpretation, None).ok()?;
+            Some(table.schema().clone())
+        }
+        SourceProfile::Parquet => {
+            let odm = interpretation == yamaa_core::specification::SourceInterpretation::Odm;
+            let schema = crate::parquet_source::schema(bytes, odm)?;
+            match yamaa_core::source_ordinal::prepare(source, &schema, 0) {
+                Ok(Some(ordinal)) => Some(ordinal.schema().clone()),
+                Ok(None) => Some(schema),
+                Err(_) => None,
+            }
+        }
+        SourceProfile::Xport | SourceProfile::Sas7bdat | SourceProfile::OdmXml => None,
+    }
 }
 
 pub(crate) fn typed_source_error(error: crate::typed_csv::Error) -> Error {
@@ -495,12 +626,16 @@ fn decode_parquet(
     } else {
         parquet_source::parse(bytes)
     }
-    .map_err(|error| match error {
-        parquet_source::Error::OdmFields(fields) => Error::OdmFields(fields),
-        error => Error::ParquetSource(error),
-    })?;
+    .map_err(parquet_error)?;
     // All strings were admitted by the bounded codec.
     empty_string_convention(source, table)
+}
+
+fn parquet_error(error: crate::parquet_source::Error) -> Error {
+    match error {
+        crate::parquet_source::Error::OdmFields(fields) => Error::OdmFields(fields),
+        error => Error::ParquetSource(error),
+    }
 }
 
 /// Apply the dataset's empty-string convention after the profile decodes, so
