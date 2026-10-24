@@ -101,7 +101,7 @@
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications_text.R",
-        "rust/crates/yamaa-adapters/tests/scalar_declarative_rounding.rs",
+        "rust/crates/yamaa-adapters/tests/scalar_declarative_text_template.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
@@ -112,7 +112,6 @@
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications_text.R",
-        "rust/crates/yamaa-adapters/tests/scalar_declarative_rounding.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
@@ -175,7 +174,6 @@
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications_text.R",
-        "rust/crates/yamaa-adapters/tests/scalar_declarative_rounding.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
       ]
@@ -186,7 +184,7 @@
       "level": "component",
       "consumers": [
         "R/yamaa/tests/original_specifications_text.R",
-        "rust/crates/yamaa-adapters/tests/scalar_declarative_rounding.rs",
+        "rust/crates/yamaa-adapters/tests/scalar_declarative_text_case.rs",
         "rust/crates/yamaa-core/tests/scalar_sqrt.rs",
         "python/tests/installed/installed_original_specifications.py",
         "tools/staging/stage_specification_inputs.py"
