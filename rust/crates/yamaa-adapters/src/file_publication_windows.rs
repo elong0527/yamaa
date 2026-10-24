@@ -221,8 +221,9 @@ impl Publisher {
         self.commit(staged)
     }
     /// Write `content` completely into a private temporary file beside the
-    /// target, flushed and synced, without making it visible. The target's
-    /// directory stays locked in `locks` until the save ends (OUTPUT-8).
+    /// target, flushed and synced, without making it visible:
+    /// [`Self::open`], one [`Writing::append`] and [`Writing::finish`]. The
+    /// saved-file bound is checked before anything is staged.
     pub fn stage(
         &self,
         locks: &mut Locks,
@@ -233,25 +234,28 @@ impl Publisher {
             return Err(Error::PathMismatch);
         }
         yamaa_core::limits::Limits::output_bytes(content.len()).map_err(Error::Limit)?;
+        let mut writing = self.open(locks, declared)?;
+        match writing.append(content) {
+            Ok(()) => writing.finish(),
+            Err(error) => Err(writing.fail(error)),
+        }
+    }
+    /// Open the staged file of `declared`: an empty private temporary file
+    /// beside the target, which [`Writing::append`] fills piece by piece,
+    /// such as one partition of an output after another (D264), and
+    /// [`Writing::finish`] stages, without making it visible. The target's
+    /// directory stays locked in `locks` until the save ends (OUTPUT-8).
+    pub fn open(&self, locks: &mut Locks, declared: &str) -> Result<Writing, Error> {
+        if declared != self.declared {
+            return Err(Error::PathMismatch);
+        }
         locks.hold(&self.parent)?;
         self.check_target()?;
-        let mut temporary = self.temporary()?;
-        let written = (|| {
-            let file = temporary.candidate.as_mut().ok_or(Error::Changed)?;
-            file.write_all(content)?;
-            file.flush()?;
-            file.sync_all()?;
-            let held = windows_file::status(file)?;
-            let observed = temporary.directory.inspect("candidate.part")?;
-            if held.kind != Kind::RegularFile || held.identity != observed.identity {
-                return Err(Error::Changed);
-            }
-            Ok(())
-        })();
-        match written {
-            Ok(()) => Ok(Staged(temporary)),
-            Err(error) => Err(temporary.failure(error)),
-        }
+        let temporary = self.temporary()?;
+        Ok(Writing {
+            temporary,
+            written: 0,
+        })
     }
     /// Replace the target with the staged file in one step.
     pub fn commit(&self, staged: Staged) -> Result<(), Error> {
@@ -360,6 +364,50 @@ impl Staged {
         temporary
             .cleanup()
             .map_err(|cleanup| (temporary.parent_path.join(&temporary.name), cleanup))
+    }
+}
+/// A staged file being written: the temporary file [`Publisher::open`]
+/// made, which nothing at the target shows, written through the handle that
+/// created it. Dropping it before [`Writing::finish`] removes it through that
+/// handle, as a failed or cancelled save does.
+pub struct Writing {
+    temporary: Pending,
+    written: usize,
+}
+impl Writing {
+    /// Append `bytes`, checking the saved-file bound before the file grows.
+    pub fn append(&mut self, bytes: &[u8]) -> Result<(), Error> {
+        yamaa_core::limits::Limits::output_extension(self.written, bytes.len())
+            .map_err(Error::Limit)?;
+        let file = self.temporary.candidate.as_mut().ok_or(Error::Changed)?;
+        file.write_all(bytes)?;
+        self.written += bytes.len();
+        Ok(())
+    }
+    /// Flush and sync the complete file and keep it for a later commit; a
+    /// file that cannot be staged is removed.
+    pub fn finish(self) -> Result<Staged, Error> {
+        let Self { mut temporary, .. } = self;
+        let written = (|| {
+            let file = temporary.candidate.as_mut().ok_or(Error::Changed)?;
+            file.flush()?;
+            file.sync_all()?;
+            let held = windows_file::status(file)?;
+            let observed = temporary.directory.inspect("candidate.part")?;
+            if held.kind != Kind::RegularFile || held.identity != observed.identity {
+                return Err(Error::Changed);
+            }
+            Ok(())
+        })();
+        match written {
+            Ok(()) => Ok(Staged(temporary)),
+            Err(error) => Err(temporary.failure(error)),
+        }
+    }
+    /// Stop writing for `error`: remove the file, keeping with the error
+    /// what a removal that fails leaves behind.
+    pub fn fail(mut self, error: Error) -> Error {
+        self.temporary.failure(error)
     }
 }
 /// The directory locks one save holds: one exclusive lock on each physical
