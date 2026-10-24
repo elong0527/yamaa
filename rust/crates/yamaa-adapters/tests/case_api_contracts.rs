@@ -267,7 +267,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
     let contracts = replay::object(replay::field(&routes, "cases"));
     assert_eq!(
         contracts.len(),
-        288,
+        306,
         "every original API contract is authored"
     );
     let mut seen = BTreeSet::new();
@@ -364,15 +364,18 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
                         );
                         saved_bytes(&study, expected, &case.label);
                     } else {
-                        assert_eq!(
-                            case.label,
-                            "row_scopes.json::when_binds_groups_without_changing_the_fraction_denominator",
-                            "an authored positive save states its bytes"
+                        // A test that saved only to read its report back
+                        // states the report's rows, and its case builds.
+                        assert!(
+                            case.stated.report.is_some(),
+                            "{}: an authored positive save states its bytes",
+                            case.label
                         );
                         assert_eq!(
                             case.operations,
                             ["build"],
-                            "the return-value-only case builds without saving in the replay"
+                            "{}: the return-value-only case builds without saving in the replay",
+                            case.label
                         );
                     }
                 } else {
@@ -381,12 +384,19 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
                         "{}: expected FailedBuild, got {result:?}",
                         case.label
                     );
-                    assert_eq!(
-                        operations::state(&study),
-                        before,
-                        "{}: a refused save preserves every staged path",
-                        case.label
-                    );
+                    // A failed run publishes only its declared report
+                    // (OUTPUT-10): the bytes its case states as saved, whose
+                    // whole delta the replay compares. Without one, every
+                    // staged path stays.
+                    match case.stated.saved.as_ref().filter(|saved| !saved.is_empty()) {
+                        Some(report) => saved_bytes(&study, report, &case.label),
+                        None => assert_eq!(
+                            operations::state(&study),
+                            before,
+                            "{}: a refused save preserves every staged path",
+                            case.label
+                        ),
+                    }
                 }
             }
         }
@@ -396,8 +406,8 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         contracts.keys().cloned().collect::<BTreeSet<_>>(),
         "every authored API case still exists"
     );
-    assert_eq!((domains, preparation, either, checks), (178, 1, 4, 105));
-    assert_eq!((accepted_saves, refused_saves, no_save), (113, 30, 145));
+    assert_eq!((domains, preparation, either, checks), (195, 2, 4, 105));
+    assert_eq!((accepted_saves, refused_saves, no_save), (127, 33, 146));
 }
 
 /// Seam: the composition's save return, held artifact set and capture counter
