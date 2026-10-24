@@ -562,6 +562,17 @@
       "issues": [{"condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.ARMCD.submission"], "context": {"column": "ARMCD", "origin_type": "Protocol", "admitted": ["Assigned", "Collected", "Derived", "Not Available", "Other"]}}]
     },
     {
+      "case": "duration_text_is_a_recode_that_refutes_a_protocol_origin",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: EX\nkeys: [USUBJID, EXSEQ]\ninput: {SRC: {path: input.csv, types: {EXSEQ: int, EXDURMIN: int}}}\noutput: {path: output.csv, columns: [USUBJID, EXSEQ, EXDUR]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: SRC.USUBJID}\n  - {name: EXSEQ, type: int, derivation: SRC.EXSEQ}\n  - name: EXDUR\n    type: str\n    derivation: {duration_text: {source: SRC.EXDURMIN, unit: minute}}\n    submission: {origins: [{type: Protocol, source: Sponsor}]}\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.EXDUR.submission"], "context": {"column": "EXDUR", "origin_type": "Protocol", "admitted": ["Assigned", "Collected", "Derived", "Not Available", "Other"]}}]
+    },
+    {
       "case": "a_literal_refutes_a_derived_origin",
       "operation": "check",
       "input": {

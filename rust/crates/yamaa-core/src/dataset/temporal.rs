@@ -39,6 +39,11 @@ pub enum TemporalKind {
     DurationValue {
         unit: ElapsedUnit,
     },
+    /// `duration_text`: a number of `unit`s as canonical ISO 8601 duration
+    /// text, the inverse of `DurationValue`.
+    DurationText {
+        unit: ElapsedUnit,
+    },
     /// `dtc`: collected date text from the year and the `depth - 1` finer
     /// parts declared after it, in [`DATE_PARTS`] order.
     DateText {
@@ -296,7 +301,10 @@ impl TemporalKind {
             Self::StudyDay => &["date", "reference"],
             Self::DateShift => &["source", "days"],
             Self::DateTimeShift { .. } => &["source", "amount"],
-            Self::EpochDay | Self::DurationValue { .. } | Self::TimeOfDay => &["source"],
+            Self::EpochDay
+            | Self::DurationValue { .. }
+            | Self::DurationText { .. }
+            | Self::TimeOfDay => &["source"],
             Self::DateText { depth } => &DATE_PARTS[..usize::from(depth)],
         }
     }

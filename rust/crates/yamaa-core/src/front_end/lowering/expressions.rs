@@ -524,6 +524,12 @@ impl Lower<'_> {
                 },
                 SOURCE,
             ),
+            "duration_text" => (
+                ScalarOp::DurationText {
+                    unit: unit("unit")?,
+                },
+                SOURCE,
+            ),
             "dtc" => (
                 ScalarOp::Dtc,
                 &[

@@ -53,10 +53,10 @@ impl ScalarOp {
     /// days and times of day are counts; a difference of datetimes in
     /// seconds is a whole count and in a longer unit a fraction; a shift and
     /// `impute` keep their declared type; a duration is a fraction in every
-    /// unit; `to_date` is a date; assembled date parts, text verbs,
-    /// precisions, imputation flags and cuts are text; a mapping returns the
-    /// types its dictionary values take; `greatest` and `least` take every
-    /// type their `operands` take.
+    /// unit; `to_date` is a date; assembled date parts, duration text, text
+    /// verbs, precisions, imputation flags and cuts are text; a mapping
+    /// returns the types its dictionary values take; `greatest` and `least`
+    /// take every type their `operands` take.
     pub(crate) fn result_type(&self, operands: &mut dyn Iterator<Item = ResultType>) -> ResultType {
         let temporal = |kind: &ast::TemporalType| match kind {
             ast::TemporalType::Date => ResultType::DATE,
@@ -75,6 +75,7 @@ impl ScalarOp {
             Self::Shift { kind, .. } | Self::Impute { kind, .. } => temporal(kind),
             Self::ToDate => ResultType::DATE,
             Self::Dtc
+            | Self::DurationText { .. }
             | Self::Precision { .. }
             | Self::ImputationFlag { .. }
             | Self::StrCase { .. }
@@ -146,6 +147,7 @@ impl ScalarOp {
             | Self::ToEpochDay
             | Self::Shift { .. }
             | Self::DurationValue { .. }
+            | Self::DurationText { .. }
             | Self::Dtc
             | Self::TimeOfDay => Preflight::Temporal,
             Self::Impute { .. }
@@ -187,7 +189,8 @@ impl ScalarOp {
             | Self::StrPad { .. }
             | Self::StrReplace { .. }
             | Self::StrExtract { .. }
-            | Self::ToDate => Recode::Source,
+            | Self::ToDate
+            | Self::DurationText { .. } => Recode::Source,
             Self::Dtc => Recode::Parts,
             Self::StrTemplate { template }
                 if StringTemplate::new(template.clone(), "origin".into(), None)
@@ -463,6 +466,7 @@ impl Operation {
             | ScalarOp::ToEpochDay
             | ScalarOp::Shift { .. }
             | ScalarOp::DurationValue { .. }
+            | ScalarOp::DurationText { .. }
             | ScalarOp::Dtc
             | ScalarOp::TimeOfDay => temporal::from_tree(spec, e),
             ScalarOp::Impute { .. }

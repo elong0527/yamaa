@@ -1,5 +1,5 @@
 {
-  "about": "The refusals of the date and time operations: civil arithmetic, dtc and time_of_day (TIME-4, TIME-14, TIME-17, TIME-19, TIME-20), whose cases compare the fields their table compared, and date completion: impute's policy (TIME-10), the text impute, precision and to_date read (TIME-2, TIME-10, TIME-13) and their operands' types (TIME-1, TIME-2, TIME-7, TIME-8, TIME-18).",
+  "about": "The refusals of the date and time operations: civil arithmetic, duration text, dtc and time_of_day (TIME-4, TIME-14, TIME-17, TIME-19, TIME-20, TIME-21), whose cases compare the fields their table compared, and date completion: impute's policy (TIME-10), the text impute, precision and to_date read (TIME-2, TIME-10, TIME-13) and their operands' types (TIME-1, TIME-2, TIME-7, TIME-8, TIME-18).",
   "cases": [
     {
       "case": "date_shift_refuses_a_source_that_is_not_a_date",
@@ -49,6 +49,18 @@
       "input": {"kind": {"duration_value": "hour"}, "path": "columns.RESULT.derivation", "values": ["P1M"]},
       "compares": ["phase", "condition", "rule", "source_span", "operand_route"],
       "issues": [{"phase": "impute", "condition": "invalid_duration_text", "rule": "TIME-17"}]
+    },
+    {
+      "case": "duration_text_refuses_a_source_that_is_not_numeric",
+      "operation": "temporal",
+      "input": {"kind": {"duration_text": "minute"}, "path": "columns.EXDUR.derivation.duration_text", "values": ["90"]},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-21", "spec_paths": ["columns.EXDUR.derivation.duration_text.source"], "context": {"source": "source", "expected": "numeric", "actual": "str"}}]
+    },
+    {
+      "case": "duration_text_fails_when_its_seconds_leave_the_float_range",
+      "operation": "temporal",
+      "input": {"kind": {"duration_text": "day"}, "path": "columns.EXDUR.derivation.duration_text", "values": [1e304]},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "TIME-21", "spec_paths": ["columns.EXDUR.derivation.duration_text"], "context": {"to": "str"}}]
     },
     {
       "case": "dtc_refuses_a_float_part",
