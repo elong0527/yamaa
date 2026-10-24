@@ -231,7 +231,7 @@ pub(crate) fn nearest_reference_type(
 
 /// What a pair relation's `inner_join` admits none of beside it (LOOKUP-27):
 /// each field written that selects, ranges or answers absence, and a side
-/// that names `SELF`, then `inner_join`, in specification order. `construct`
+/// that names `SELF`, then `inner_join`, in LOOKUP-27's listed order. `construct`
 /// is the first of them, a field's name or `SELF`, which its message names.
 pub(crate) fn pair_construct(
     paths: Vec<String>,

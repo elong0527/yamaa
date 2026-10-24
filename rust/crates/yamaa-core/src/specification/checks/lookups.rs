@@ -106,7 +106,7 @@ fn rename_only(spec: &Spec, item: &ast::Intermediate) -> bool {
 }
 
 /// The fields a pair relation writes beside `inner_join` that it admits none
-/// of (LOOKUP-27), in specification order: each counts once written,
+/// of (LOOKUP-27), in its listed order: each counts once written,
 /// whatever its value, and an absence answer even when written null.
 fn pair_prohibited(spec: &Spec, item: &ast::Intermediate) -> Vec<&'static str> {
     let answer = item
@@ -169,14 +169,14 @@ fn pair_findings(spec: &Spec, item: &ast::Intermediate, path: &str) -> Vec<Prefl
         )));
     }
     let mut refused = Vec::new();
-    if item.dataset.name == "SELF" {
-        refused.push(("SELF", render(spec, item.dataset.meta)));
-    }
     refused.extend(
         pair_prohibited(spec, item)
             .into_iter()
             .map(|field| (field, format!("{path}.{field}"))),
     );
+    if item.dataset.name == "SELF" {
+        refused.push(("SELF", render(spec, item.dataset.meta)));
+    }
     let inner_join = render(spec, right.meta);
     if right.name == "SELF" {
         refused.push(("SELF", inner_join.clone()));
