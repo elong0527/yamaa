@@ -340,9 +340,9 @@ impl PreparedDocument {
             .map(|source| source.identity.as_str())
     }
     /// The finding at the field that wrote `written` in the file `declaring`
-    /// names, when this document holds that occurrence: its `parent`, an
-    /// `include` entry, or a dictionary path. Resolved identities never
-    /// replace the authored field or path.
+    /// names, when this document holds that occurrence: its `parent` or an
+    /// `include` entry, naming `declaring` as `source`, or a dictionary path.
+    /// Resolved identities never replace the authored field or path.
     pub(crate) fn resource_diagnostic(
         &self,
         declaring: &str,
@@ -361,7 +361,9 @@ impl PreparedDocument {
             }
             if let Some(parent) = raw.field(raw.root(), "parent") {
                 if matches!(&raw.nodes()[parent], N::Text(path) if path == written) {
-                    return Some(failure.field_diagnostic("parent", written));
+                    return Some(yamaa_core::inheritance::parent_diagnostic(
+                        failure, declaring, written,
+                    ));
                 }
             }
             if let Some(N::Sequence(entries)) = raw

@@ -765,10 +765,13 @@ mod dispatch_policy_tests {
     struct ChangeAfterSuccess {
         path: PathBuf,
     }
+    /// A content change at `field`, naming the path as `written` and, at a
+    /// `parent`, the layer that writes it as `source`.
     fn assert_content_change(
         diagnostic: &yamaa_core::diagnostic::Diagnostic,
         field: &str,
         written: &str,
+        source: Option<&str>,
     ) {
         assert_eq!(diagnostic.definition().phase, "ingest");
         assert_eq!(
@@ -776,14 +779,18 @@ mod dispatch_policy_tests {
             yamaa_core::diagnostic::ConditionCode::ResourceContentChanged
         );
         assert_eq!(diagnostic.spec_paths, [field]);
-        assert_eq!(
-            diagnostic.context,
-            [(
-                "path".into(),
-                yamaa_core::json::Value::String(written.into())
-            )]
-            .into()
+        let mut context = yamaa_core::diagnostic::Context::new();
+        context.insert(
+            "path".into(),
+            yamaa_core::json::Value::String(written.into()),
         );
+        if let Some(source) = source {
+            context.insert(
+                "source".into(),
+                yamaa_core::json::Value::String(source.into()),
+            );
+        }
+        assert_eq!(diagnostic.context, context);
     }
     #[test]
     fn changed_entry_rejects_replacement_before_decoding_and_keeps_original_error() {
@@ -798,7 +805,7 @@ mod dispatch_policy_tests {
             panic!("changed entry retains its original native error");
         };
         assert_eq!(error, ResourceError::Changed);
-        assert_content_change(&diagnostic, "specification", "entry/root.yaml");
+        assert_content_change(&diagnostic, "specification", "entry/root.yaml", None);
         assert_eq!(original.as_ref(), ROOT.as_bytes());
         assert_eq!(resources.capture_reads(), 1);
         assert_eq!(resources.resolve("root.yaml").unwrap(), original_base);
@@ -823,7 +830,8 @@ mod dispatch_policy_tests {
         if matches!(*error, crate::document::SpecificationError::Traversal(
             yamaa_core::inheritance::Error::Host(crate::specification_source::SourceFailure::Host(ResourceError::Changed))
         ))));
-        assert_content_change(&diagnostic, "parent", "../parent/base.yaml");
+        // The entry writes the `parent`.
+        assert_content_change(&diagnostic, "parent", "../parent/base.yaml", Some(&entry));
         assert_eq!(original.as_ref(), PARENT.as_bytes());
         assert_eq!(resources.capture_reads(), 2);
         assert_eq!(resources.resolve("root.yaml").unwrap(), original_base);
@@ -931,6 +939,7 @@ mod dispatch_policy_tests {
     fn changed_parent_after_semantic_success_is_original_resource_failure() {
         let study = Study::new(ROOT);
         let mut resources = study.resources();
+        let entry = resources.resolve("entry/root.yaml").unwrap();
         let result = ChangeAfterSuccess {
             path: study.0.join("parent/base.yaml"),
         }
@@ -939,20 +948,8 @@ mod dispatch_policy_tests {
             panic!("original changed parent with authored diagnostic");
         };
         assert_eq!(error, ResourceError::Changed);
-        assert_eq!(diagnostic.definition().phase, "ingest");
-        assert_eq!(
-            diagnostic.code,
-            yamaa_core::diagnostic::ConditionCode::ResourceContentChanged
-        );
-        assert_eq!(diagnostic.spec_paths, ["parent"]);
-        assert_eq!(
-            diagnostic.context,
-            [(
-                "path".into(),
-                yamaa_core::json::Value::String("../parent/base.yaml".into())
-            )]
-            .into()
-        );
+        // The entry writes the `parent`.
+        assert_content_change(&diagnostic, "parent", "../parent/base.yaml", Some(&entry));
         assert_eq!(resources.capture_reads(), 2);
     }
 }

@@ -286,13 +286,16 @@ any data is read and reports under the `validation` phase, except
 target it walks to, under `output`.
 
 Fails: `resource_path_uri_scheme`, `resource_path_not_normalized`, `resource_path_symlink`, `resource_path_missing`, `resource_path_not_regular_file`, `resource_path_content_changed`.
-Evidence: `negative-path-symlink`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::written_form_checks_keep_normative_order_and_allow_root_dot_and_parent_paths`, `rust/crates/yamaa-core/tests/diagnostics.rs::every_registered_cause_is_reached_with_its_normative_mapping`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_file_or_lock_that_cannot_be_read_fails_as_any_file_a_run_reads`, `rust/crates/yamaa/tests/save_targets.rs::the_report_file_is_refused_at_its_own_field_and_a_later_save_retries`, `rust/crates/yamaa/tests/save_targets.rs::a_submission_save_refuses_its_files_at_the_section_define`, `rust/crates/yamaa/tests/save_targets.rs::a_table_saved_to_a_path_its_caller_names_is_refused_at_no_field`, `rust/crates/yamaa/tests/caller_paths.rs::a_listed_specification_the_walk_cannot_reach_fails_at_its_listing_as_written`, `rust/crates/yamaa/tests/caller_paths.rs::a_submission_refuses_a_listed_specification_the_walk_cannot_reach_at_its_listing`.
+Evidence: `negative-path-symlink`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::written_form_checks_keep_normative_order_and_allow_root_dot_and_parent_paths`, `rust/crates/yamaa-core/tests/diagnostics.rs::every_registered_cause_is_reached_with_its_normative_mapping`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_file_or_lock_that_cannot_be_read_fails_as_any_file_a_run_reads`, `rust/crates/yamaa/tests/save_targets.rs::the_report_file_is_refused_at_its_own_field_and_a_later_save_retries`, `rust/crates/yamaa/tests/save_targets.rs::a_submission_save_refuses_its_files_at_the_section_define`, `rust/crates/yamaa/tests/save_targets.rs::a_table_saved_to_a_path_its_caller_names_is_refused_at_no_field`, `rust/crates/yamaa/tests/caller_paths.rs::a_listed_specification_the_walk_cannot_reach_fails_at_its_listing_as_written`, `rust/crates/yamaa/tests/caller_paths.rs::a_submission_refuses_a_listed_specification_the_walk_cannot_reach_at_its_listing`, `rust/tests/host-fixtures/cases.json::a_parent_path_that_is_not_normalized_at_the_ancestor_that_writes_it`.
 
 An absolute written path supplied by the specification may be repeated.
 Resolved paths retained as provenance are not substituted for the authored
-path in these diagnostics. A path the caller passes, the entry, the project
-file or a given parent, has no declaring field: its failure names the path
-as the caller gave it, at no field ([FILE-1](#file-1)).
+path in these diagnostics. A failure at a layer's `parent` or `include[i]`
+also names, as `source`, the layer that writes that field, which may be a
+layer above the entry ([LAYER-2](../inheritance.md#layer-2)). A path the
+caller passes, the entry, the project file or a given parent, has no declaring
+field: its failure names the path as the caller gave it, at no field
+([FILE-1](#file-1)).
 
 A save walks to each file it publishes as it publishes the file
 ([OUTPUT-8](../output.md#output-8)). A directory on the way that does not
