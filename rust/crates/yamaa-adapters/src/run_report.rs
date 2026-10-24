@@ -314,10 +314,13 @@ fn handlers(report: &Value) -> Result<Vec<core::Handler>, Error> {
 }
 
 /// Missing values, output rows and, for `str` columns, the longest value of
-/// each output column in `output.columns` order.
+/// each output column in `output.columns` order, combined over the output's
+/// partitions (D264): the counts add up and the longest value is the longest
+/// in any partition, so the facts, and the report, are the whole output's.
 fn columns(run: &PreparedRun, execution: &Execution) -> Result<Vec<core::Column>, Error> {
     let dataset = &execution.dataset;
     let rows = dataset.rows();
+    let partitions = execution.output_partitions();
     run.compiled()
         .projection()
         .iter()
@@ -328,27 +331,30 @@ fn columns(run: &PreparedRun, execution: &Execution) -> Result<Vec<core::Column>
                 .iter()
                 .position(|column| &column.name == name)
                 .ok_or(Error::InvalidObservation)?;
-            let values = rows.iter().map(|row| &row[index]);
-            let missing = values
-                .clone()
-                .filter(|value| matches!(value, Scalar::Missing))
-                .count();
-            let max_length =
-                (dataset.schema().columns()[index].kind == ColumnType::Str).then(|| {
-                    values
+            let text = dataset.schema().columns()[index].kind == ColumnType::Str;
+            let mut column = core::Column {
+                name: name.clone(),
+                missing: 0,
+                rows: 0,
+                max_length: text.then_some(0),
+            };
+            for partition in &partitions {
+                let values = rows[partition.clone()].iter().map(|row| &row[index]);
+                column.missing += values
+                    .clone()
+                    .filter(|value| matches!(value, Scalar::Missing))
+                    .count();
+                column.rows += partition.len();
+                if let Some(longest) = &mut column.max_length {
+                    *longest = values
                         .filter_map(|value| match value {
                             Scalar::Str(text) => Some(text.chars().count()),
                             _ => None,
                         })
-                        .max()
-                        .unwrap_or(0)
-                });
-            Ok(core::Column {
-                name: name.clone(),
-                missing,
-                rows: rows.len(),
-                max_length,
-            })
+                        .fold(*longest, usize::max);
+                }
+            }
+            Ok(column)
         })
         .collect()
 }
@@ -480,7 +486,7 @@ fn rendered(path: &str, report: &core::Report) -> Result<HeldFile, Error> {
     } else {
         (
             "",
-            crate::parquet_artifact::records(report, &projection).map_err(parquet_error)?,
+            crate::parquet_artifact::records(report, &projection, None).map_err(parquet_error)?,
         )
     };
     let observation = json!({"name":name,"profile":profile,"columns":report.schema().columns().iter().map(|c|&c.name).collect::<Vec<_>>(),"types":report.schema().columns().iter().map(|c|crate::specification_diagnostics::type_name(c.kind)).collect::<Vec<_>>(),"row_count":report.row_count(),"records":rows,"byte_length":bytes.len(),"content":content});

@@ -207,8 +207,8 @@ Rust consumer reads it.
 
 | Behaviour | Data form | Generated or checked by |
 | --- | --- | --- |
-| A file type's fields, types and defaults; an expression function's arguments | `yaml/schema_*.yaml` | `tools.packaging.generate_json_schema`, `tools.packaging.generate_shipped_schema` |
-| The expression grammar, its closed function and reducer lists, its parse cases | `yaml/grammar/*.yaml` | `tools.validation.check_expression_conformance` and the core replay of its cases |
+| A file type's fields, types and defaults; an expression function's arguments | `yaml/schema_*.yaml` | `tools.packaging.generate_json_schema`, `tools.packaging.generate_shipped_schema`, `tools.packaging.generate_expression_table` |
+| The expression grammar, its closed function and reducer lists, its parse cases | `yaml/grammar/*.yaml` | `tools.packaging.generate_expression_table`, `tools.validation.check_expression_conformance` and the core replay of its cases |
 | A condition, its phases and its message | `yaml/conditions.yaml` | `tools.packaging.generate_message_templates`, `tools.validation.check_diagnostics` |
 | A CDISC closed list | `yaml/vocabulary/cdisc.yaml` | `tools.packaging.generate_cdisc_vocabulary` and the vocabulary checks |
 | What an expression evaluates to | `yaml/conformance/expressions.yaml`, `yaml/conformance/regex.yaml` | `tools.validation.check_expression_conformance` |
@@ -230,8 +230,8 @@ is one function over an abstraction with two sources, and the findings
 and their order are defined once. Where two copies of one thing must
 exist (a list in Rust and in a YAML file; a schema and its shipped bytes),
 one is the source and the other is generated from it and checked current
-in `make check-repository`, as the vocabulary (#3701) and the message
-templates are.
+in `make check-repository`, as the vocabulary (#3701), the message
+templates and the expression table (#3800) are.
 
 **A fixture before a test function.** A test that writes files or
 documents, makes one call and compares rows or bytes is a case in one of

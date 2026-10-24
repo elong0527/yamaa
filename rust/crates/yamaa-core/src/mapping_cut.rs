@@ -1,4 +1,5 @@
 //! Closed dictionary and interval selection, preserving raw literal results.
+use crate::expression_table::Verb;
 use crate::json::Value as V;
 use crate::{
     diagnostic::{ConditionCode as C, Diagnostic},
@@ -236,7 +237,10 @@ impl Cut {
                 diagnostic(
                     C::CutDeclaration,
                     path,
-                    [("operation", text("cut")), ("expected", text(expected))],
+                    [
+                        ("operation", text(Verb::Cut.name())),
+                        ("expected", text(expected)),
+                    ],
                 )
             })
             .collect()

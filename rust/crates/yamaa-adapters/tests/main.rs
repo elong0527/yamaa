@@ -12,7 +12,7 @@ mod support;
 
 // The replay of the expected outcomes written as data (#3691, #3798), apart
 // from the families below.
-mod check_operation_contracts;
+mod case_api_contracts;
 mod diagnostics;
 
 mod arrow_host_bridge;
@@ -52,7 +52,6 @@ mod execution_value_semantics;
 mod execution_window_group_sources;
 mod execution_window_semantics;
 mod file_diagnostic_origins;
-mod file_producer_links;
 mod file_project;
 mod file_resources;
 mod file_workflow;

@@ -12,19 +12,14 @@
 
 use super::{column_type, keyword, Lower};
 use crate::ast::{
-    Aggregate, Arm, Between, Binding, Closed, DayRule, Derivation, Dictionary, Direction, ExprId,
-    ExprKind, FlagPart, Formula, Handlers, JoinKey, Keep, Literal, Meta, Name, Named, Nearest,
-    Nulls, OdmRead, Operand, OrderTerm, RankMethod, Role, ScalarOp, Segment, Slot, SourceRead,
-    TemporalType, Text, TextCase, TimeRule, TimeUnit, Window, WindowFunction,
+    Aggregate, Arm, Between, Binding, Constant, Derivation, Dictionary, Direction, ExprId,
+    ExprKind, Formula, Handlers, JoinKey, Keep, Literal, Meta, Name, Named, Nearest, Nulls,
+    OdmRead, Operand, OrderTerm, Role, ScalarOp, Segment, Slot, SourceRead, Text, TimeUnit, Window,
+    WindowFunction,
 };
-use crate::date_forms::DateForm;
 use crate::expression::{compile, CompiledExpression, Context, NodeKind, TemporalKind};
+use crate::expression_table::{Form, OperandForm, Verb, Written};
 use crate::schema::DocumentNode as N;
-
-/// One scalar verb's operand fields, in its operand order.
-type Fields = &'static [(&'static str, Slot, bool)];
-
-const SOURCE: Fields = &[("source", Slot::Source, true)];
 
 /// The kind of expression field a 1.0 reference is written in, which
 /// decides its path.
@@ -39,7 +34,7 @@ pub(super) enum Placement {
     Value,
 }
 
-impl Lower<'_> {
+impl<'d> Lower<'d> {
     /// Lower the expression written at `at`: text in the closed grammar, a
     /// YAML scalar or an operation mapping.
     pub(super) fn expression(&mut self, value: usize, at: Meta) -> ExprId {
@@ -69,39 +64,50 @@ impl Lower<'_> {
         }
     }
 
+    /// The operation `op` names, by the form its declaration gives it.
     fn operation(&mut self, op: &str, p: usize, site: Meta) -> Option<ExprId> {
-        Some(match op {
-            "source" => self.source(p, site)?,
-            "first_available" => {
-                let sources = self.field(p, "sources")?;
-                let id = self.reserve(site);
-                let list = self.meta(site, Segment::Field("sources"), Some(sources));
-                let mut lowered = Vec::new();
-                for (index, &source) in self.items(sources).iter().enumerate() {
-                    let meta = self.meta(list, Segment::Index(index as u32), Some(source));
-                    lowered.push(self.source(source, meta).unwrap_or_else(|| {
-                        self.push(ExprKind::Unsupported("source".into()), meta)
-                    }));
-                }
-                let missing = self.constant(site, p, "missing");
-                self.fill(
-                    id,
-                    ExprKind::FirstAvailable {
-                        sources: lowered,
-                        missing,
-                    },
-                )
-            }
-            "case" => self.case(p, site)?,
-            "flag" => self.flag(p, site)?,
-            "aggregate" => self.aggregate(p, site)?,
-            "odm" => self.odm(p, site)?,
-            "function" => self.call(p, site)?,
-            "row_number" | "rank" | "row_value" | "locf" | "baseline_flag" => {
-                self.window(op, p, site)?
-            }
-            _ => self.scalar(op, p, site)?,
-        })
+        let verb = Verb::from_name(op)?;
+        match verb.form() {
+            Form::Scalar => self.scalar(verb, p, site),
+            Form::Window => self.window(verb, p, site),
+            Form::Structure => self.structure(verb, p, site),
+        }
+    }
+
+    /// A verb whose node is a structure of its own.
+    fn structure(&mut self, verb: Verb, p: usize, site: Meta) -> Option<ExprId> {
+        match verb {
+            Verb::Source => self.source(p, site),
+            Verb::FirstAvailable => self.first_available(p, site),
+            Verb::Case => self.case(p, site),
+            Verb::Flag => self.flag(p, site),
+            Verb::Aggregate => self.aggregate(p, site),
+            Verb::Odm => self.odm(p, site),
+            Verb::Function => self.call(p, site),
+            _ => None,
+        }
+    }
+
+    /// `first_available`: each source binding in order, then `missing`.
+    fn first_available(&mut self, p: usize, site: Meta) -> Option<ExprId> {
+        let sources = self.field(p, "sources")?;
+        let id = self.reserve(site);
+        let list = self.meta(site, Segment::Field("sources"), Some(sources));
+        let mut lowered = Vec::new();
+        for (index, &source) in self.items(sources).iter().enumerate() {
+            let meta = self.meta(list, Segment::Index(index as u32), Some(source));
+            lowered.push(self.source(source, meta).unwrap_or_else(|| {
+                self.push(ExprKind::Unsupported(Verb::Source.name().into()), meta)
+            }));
+        }
+        let missing = self.constant(site, p, "missing");
+        Some(self.fill(
+            id,
+            ExprKind::FirstAvailable {
+                sources: lowered,
+                missing,
+            },
+        ))
     }
 
     /// A name read at `meta`.
@@ -315,7 +321,7 @@ impl Lower<'_> {
             source,
             to,
             to_field,
-            unit: self.text_of(node, "unit").and_then(time_unit),
+            unit: self.text_of(node, "unit").and_then(TimeUnit::from_name),
             meta,
         }
     }
@@ -418,7 +424,7 @@ impl Lower<'_> {
                             let at = self.meta(meta, Segment::Field("then"), Some(then));
                             self.expression(then, at)
                         }
-                        None => self.push(ExprKind::Unsupported("case".into()), meta),
+                        None => self.push(ExprKind::Unsupported(Verb::Case.name().into()), meta),
                     };
                     (condition, result)
                 }
@@ -445,8 +451,9 @@ impl Lower<'_> {
         let condition = self.predicate(condition, at);
         let true_value = self.constant(site, p, "true_value").unwrap_or_else(|| {
             let meta = self.meta(site, Segment::Field("true_value"), None);
-            crate::ast::Constant {
-                value: Literal::Text("Y".into()),
+            let value = Verb::Flag.default_of("true_value");
+            Constant {
+                value: value.map_or(Literal::Missing, Literal::from),
                 meta,
             }
         });
@@ -463,256 +470,94 @@ impl Lower<'_> {
         ))
     }
 
-    fn scalar(&mut self, op: &str, p: usize, site: Meta) -> Option<ExprId> {
-        let text = |name| self.text_of(p, name);
-        let integer = |name| match self.field(p, name).map(|n| self.node(n)) {
-            Some(N::Integer(text)) => Some(text.clone()),
-            _ => None,
-        };
-        let temporal = || match text("type")? {
-            "date" => Some(TemporalType::Date),
-            "datetime" => Some(TemporalType::DateTime),
-            _ => None,
-        };
-        let unit = |name| text(name).and_then(time_unit);
-        let (kind, fields): (ScalarOp, Fields) = match op {
-            "round_half_away_from_zero" => (
-                ScalarOp::Round {
-                    digits: integer("digits")?,
-                },
-                SOURCE,
-            ),
-            "diff" => (
-                ScalarOp::Diff {
-                    kind: temporal()?,
-                    unit: unit("unit")?,
-                    // Endpoint inclusion defaults to the end only (P-ORD-2).
-                    closed: match text("closed") {
-                        None | Some("right") => Closed::Right,
-                        Some("both") => Closed::Both,
-                        Some("neither") => Closed::Neither,
-                        Some(_) => return None,
-                    },
-                },
-                &[("start", Slot::Start, true), ("end", Slot::End, true)],
-            ),
-            // `study_day` counts the date `source` names (P-OP-1).
-            "study_day" => (
-                ScalarOp::StudyDay,
-                &[
-                    ("source", Slot::Source, true),
-                    ("reference", Slot::Reference, true),
-                ],
-            ),
-            "to_epoch_day" => (ScalarOp::ToEpochDay, SOURCE),
-            "shift" => (
-                ScalarOp::Shift {
-                    kind: temporal()?,
-                    unit: match self.field(p, "unit") {
-                        Some(_) => Some(unit("unit")?),
-                        None => None,
-                    },
-                },
-                &[
-                    ("source", Slot::Source, true),
-                    ("days", Slot::Amount, false),
-                    ("amount", Slot::Amount, false),
-                ],
-            ),
-            "duration_value" => (
-                ScalarOp::DurationValue {
-                    unit: unit("unit")?,
-                },
-                SOURCE,
-            ),
-            "duration_text" => (
-                ScalarOp::DurationText {
-                    unit: unit("unit")?,
-                },
-                SOURCE,
-            ),
-            "dtc" => (
-                ScalarOp::Dtc,
-                &[
-                    ("year", Slot::Year, true),
-                    ("month", Slot::Month, false),
-                    ("day", Slot::Day, false),
-                    ("hour", Slot::Hour, false),
-                    ("minute", Slot::Minute, false),
-                    ("second", Slot::Second, false),
-                ],
-            ),
-            "time_of_day" => (ScalarOp::TimeOfDay, SOURCE),
-            "impute" => (
-                ScalarOp::Impute {
-                    kind: temporal()?,
-                    month: match self.field(p, "month") {
-                        Some(_) => Some(integer("month")?),
-                        None => None,
-                    },
-                    day: match self.field(p, "day").map(|n| self.node(n)) {
-                        None => None,
-                        Some(N::Integer(day)) => Some(DayRule::Day(day.clone())),
-                        Some(N::Text(rule)) if rule == "first" => Some(DayRule::First),
-                        Some(N::Text(rule)) if rule == "last" => Some(DayRule::Last),
-                        Some(_) => return None,
-                    },
-                    time: match text("time") {
-                        None => None,
-                        Some("first") => Some(TimeRule::First),
-                        Some("last") => Some(TimeRule::Last),
-                        Some(_) => return None,
-                    },
-                },
-                &[
-                    ("source", Slot::Source, true),
-                    ("not_before", Slot::NotBefore, false),
-                    ("not_after", Slot::NotAfter, false),
-                    ("fallback", Slot::Fallback, false),
-                ],
-            ),
-            "precision" => (ScalarOp::Precision { kind: temporal()? }, SOURCE),
-            "imputation_flag" => (
-                ScalarOp::ImputationFlag {
-                    part: match text("part")? {
-                        "date" => FlagPart::Date,
-                        "time" => FlagPart::Time,
-                        _ => return None,
-                    },
-                    seconds_collected: self.boolean(p, "seconds_collected", true),
-                },
-                SOURCE,
-            ),
-            "to_date" => (ScalarOp::ToDate, SOURCE),
-            // The forms as written, a repeated form or both slash orders
-            // included, for the front end's refusal (TIME-22).
-            "date_text" => (
-                ScalarOp::DateText {
-                    forms: self
-                        .items(self.field(p, "forms")?)
-                        .iter()
-                        .map(|&item| self.text(item).and_then(DateForm::of))
-                        .collect::<Option<_>>()?,
-                },
-                SOURCE,
-            ),
-            "str_case" => (
-                ScalarOp::StrCase {
-                    to: match text("to")? {
-                        "upper" => TextCase::Upper,
-                        "lower" => TextCase::Lower,
-                        "sentence" => TextCase::Sentence,
-                        "title" => TextCase::Title,
-                        "proper" => TextCase::Proper,
-                        _ => return None,
-                    },
-                    // Which modes take a list is the executor's to decide
-                    // (TEXT-5).
-                    delimiters: match self.field(p, "delimiters") {
-                        Some(_) => Some(text("delimiters")?.into()),
-                        None => None,
-                    },
-                },
-                SOURCE,
-            ),
-            "str_pad" => (
-                ScalarOp::StrPad {
-                    width: integer("width")?,
-                },
-                SOURCE,
-            ),
-            "str_substr" => (
-                ScalarOp::StrSubstr {
-                    start: integer("start")?,
-                    length: match self.field(p, "length") {
-                        Some(_) => Some(integer("length")?),
-                        None => None,
-                    },
-                },
-                SOURCE,
-            ),
-            "str_length" => (ScalarOp::StrLength, SOURCE),
-            "str_decimal" => (
-                ScalarOp::StrDecimal {
-                    decimals: integer("decimals")?,
-                    width: match self.field(p, "width") {
-                        Some(_) => Some(integer("width")?),
-                        None => None,
-                    },
-                },
-                SOURCE,
-            ),
-            "str_extract" => (
-                ScalarOp::StrExtract {
-                    pattern: text("pattern")?.into(),
-                    group: match self.field(p, "group") {
-                        Some(_) => integer("group")?,
-                        None => "0".into(),
-                    },
-                },
-                SOURCE,
-            ),
-            "str_replace" => (
-                ScalarOp::StrReplace {
-                    pattern: text("pattern")?.into(),
-                    replacement: text("replacement")?.into(),
-                },
-                SOURCE,
-            ),
-            "str_template" => return self.string_template(p, site),
-            "greatest" | "least" => {
-                let sources = self.field(p, "sources")?;
-                let id = self.reserve(site);
-                let list = self.meta(site, Segment::Field("sources"), Some(sources));
-                let operands = self
-                    .references(sources, list)
-                    .into_iter()
-                    .map(|expr| Operand {
-                        slot: Slot::Source,
-                        expr,
-                    })
-                    .collect();
-                let op = if op == "greatest" {
-                    ScalarOp::Greatest
-                } else {
-                    ScalarOp::Least
-                };
-                return Some(self.fill(
-                    id,
-                    ExprKind::Scalar {
-                        op,
-                        operands,
-                        handlers: Handlers::default(),
-                    },
-                ));
-            }
-            "mapping" | "cut" => return self.mapping_cut(op, p, site),
-            _ => return None,
-        };
+    /// A scalar verb: its parameters as its declaration types them, then
+    /// each operand field it writes, in declared order, then its handlers.
+    fn scalar(&mut self, verb: Verb, p: usize, site: Meta) -> Option<ExprId> {
+        let op = ScalarOp::read(verb, &mut self.payload(verb, p, site))?;
+        let fields = verb.operands();
         if fields
             .iter()
-            .any(|&(name, _, required)| required && self.field(p, name).is_none())
+            .any(|field| field.required && self.payload_field(verb, p, field.field).is_none())
         {
             return None;
         }
         let id = self.reserve(site);
         let mut operands = Vec::new();
-        for &(name, slot, _) in fields {
-            if let Some(node) = self.field(p, name) {
-                let meta = self.meta(site, Segment::Field(name), Some(node));
-                let expr = self.operand(node, meta);
-                operands.push(Operand { slot, expr });
+        for field in fields {
+            let Some(node) = self.payload_field(verb, p, field.field) else {
+                continue;
+            };
+            let (name, slot) = (field.field, field.slot);
+            match field.form {
+                OperandForm::Name => {
+                    let meta = self.meta(site, Segment::Field(name), Some(node));
+                    let expr = self.operand(node, meta);
+                    operands.push(Operand { slot, expr });
+                }
+                OperandForm::Names => {
+                    let list = self.meta(site, Segment::Field(name), Some(node));
+                    for expr in self.references(node, list) {
+                        operands.push(Operand { slot, expr });
+                    }
+                }
+                OperandForm::Binding => {
+                    let meta = self.meta(site, Segment::Field(name), Some(node));
+                    let expr = match self.source(node, meta) {
+                        Some(expr) => expr,
+                        None => self.push(ExprKind::Unsupported(Verb::Source.name().into()), meta),
+                    };
+                    operands.push(Operand { slot, expr });
+                }
+                // A template written bare, or alone in its long form, which
+                // is the expanded shorthand (SCHEMA-15), reads its
+                // placeholders at the verb.
+                OperandForm::Placeholders => {
+                    let meta = if node == p || self.entries(p).len() == 1 {
+                        site
+                    } else {
+                        self.meta(site, Segment::Field(name), Some(node))
+                    };
+                    let template = self.text(node).unwrap_or_default();
+                    let parsed = crate::text_template::StringTemplate::new(
+                        template.into(),
+                        self.render(site),
+                        None,
+                    );
+                    for name in parsed.iter().flat_map(|parsed| parsed.identifiers()) {
+                        let expr = self.push(ExprKind::Ref(Name(name.clone())), meta);
+                        operands.push(Operand { slot, expr });
+                    }
+                }
             }
         }
-        let handlers = self.handlers(p, site);
+        let handlers = Handlers::read(verb, &mut self.payload(verb, p, site));
         Some(self.fill(
             id,
             ExprKind::Scalar {
-                op: kind,
+                op,
                 operands,
                 handlers,
             },
         ))
+    }
+
+    /// The payload `p` of `verb`, as its generated readers read it.
+    fn payload<'a>(&'a mut self, verb: Verb, p: usize, site: Meta) -> Payload<'a, 'd> {
+        Payload {
+            lower: self,
+            verb,
+            payload: p,
+            site,
+        }
+    }
+
+    /// The node of the field `name` in `verb`'s payload `p`, written and not
+    /// null; a bare payload is the field it fills (SCHEMA-10).
+    fn payload_field(&self, verb: Verb, p: usize, name: &str) -> Option<usize> {
+        match self.node(p) {
+            N::Mapping(_) => self.field(p, name),
+            _ => (verb.shorthand() == Some(name)).then_some(p),
+        }
     }
 
     /// An operand: a name, or a written number (`shift.days`, `shift.amount`).
@@ -723,117 +568,10 @@ impl Lower<'_> {
         }
     }
 
-    fn handlers(&mut self, p: usize, site: Meta) -> Handlers {
-        Handlers {
-            missing: self.constant(site, p, "missing"),
-            invalid: self.constant(site, p, "invalid"),
-            no_match: self.constant(site, p, "no_match"),
-            unmapped: self.constant(site, p, "unmapped"),
-        }
-    }
-
-    /// `str_template`: the template text, written alone or with `missing`;
-    /// its placeholders are the operands.
-    fn string_template(&mut self, p: usize, site: Meta) -> Option<ExprId> {
-        let (node, shorthand) = match self.node(p) {
-            N::Text(_) => (p, true),
-            _ => (
-                self.field(p, "template")
-                    .filter(|&n| self.text(n).is_some())?,
-                self.entries(p).len() == 1,
-            ),
-        };
-        let template = self.text(node)?;
-        let id = self.reserve(site);
-        let meta = if shorthand {
-            site
-        } else {
-            self.meta(site, Segment::Field("template"), Some(node))
-        };
-        let parsed =
-            crate::text_template::StringTemplate::new(template.into(), self.render(site), None);
-        let mut operands = Vec::new();
-        for name in parsed.iter().flat_map(|parsed| parsed.identifiers()) {
-            let expr = self.push(ExprKind::Ref(Name(name.clone())), meta);
-            operands.push(Operand {
-                slot: Slot::Source,
-                expr,
-            });
-        }
-        let handlers = self.handlers(p, site);
-        Some(self.fill(
-            id,
-            ExprKind::Scalar {
-                op: ScalarOp::StrTemplate {
-                    template: template.into(),
-                },
-                operands,
-                handlers,
-            },
-        ))
-    }
-
-    fn mapping_cut(&mut self, op: &str, p: usize, site: Meta) -> Option<ExprId> {
-        let source = self.field(p, "source")?;
-        let cut = if op == "cut" {
-            let mut breaks = Vec::new();
-            for &item in self.items(self.field(p, "breaks")?) {
-                breaks.push(match self.node(item) {
-                    N::Float(value) => *value,
-                    N::Integer(text) => text.parse().ok()?,
-                    _ => return None,
-                });
-            }
-            let mut labels = Vec::new();
-            for &item in self.items(self.field(p, "labels")?) {
-                labels.push(self.text(item)?.to_string());
-            }
-            Some((breaks, labels))
-        } else {
-            let dictionary = self.field(p, "dict")?;
-            if !matches!(self.node(dictionary), N::Mapping(_) | N::Text(_)) {
-                return None;
-            }
-            None
-        };
-        let id = self.reserve(site);
-        let source_meta = self.meta(site, Segment::Field("source"), Some(source));
-        let expr = match self.source(source, source_meta) {
-            Some(expr) => expr,
-            None => self.push(ExprKind::Unsupported("source".into()), source_meta),
-        };
-        let op = match cut {
-            Some((breaks, labels)) => ScalarOp::Cut {
-                breaks,
-                labels,
-                // Intervals are left-closed unless `closed: right` (P-ORD-2).
-                closed: match self.text_of(p, "closed") {
-                    Some("right") => Closed::Right,
-                    _ => Closed::Left,
-                },
-            },
-            None => ScalarOp::Mapping {
-                dict: self.dictionary(p, site),
-                case_sensitive: self.boolean(p, "case_sensitive", true),
-            },
-        };
-        let handlers = self.handlers(p, site);
-        Some(self.fill(
-            id,
-            ExprKind::Scalar {
-                op,
-                operands: vec![Operand {
-                    slot: Slot::Source,
-                    expr,
-                }],
-                handlers,
-            },
-        ))
-    }
-
-    fn dictionary(&mut self, p: usize, site: Meta) -> Dictionary {
-        let node = self.field(p, "dict").expect("a checked dictionary");
-        let meta = self.meta(site, Segment::Field("dict"), Some(node));
+    /// A mapping dictionary written at `node`, the field `name`: inline, or
+    /// the path of a file holding it.
+    fn dictionary(&mut self, node: usize, name: &'static str, site: Meta) -> Dictionary {
+        let meta = self.meta(site, Segment::Field(name), Some(node));
         if let Some(path) = self.text(node) {
             return Dictionary::File(Text {
                 text: path.into(),
@@ -849,7 +587,7 @@ impl Lower<'_> {
                     text: key.into(),
                     meta,
                 },
-                crate::ast::Constant {
+                Constant {
                     value: self.literal(value),
                     meta,
                 },
@@ -858,59 +596,31 @@ impl Lower<'_> {
         Dictionary::Inline(entries)
     }
 
-    fn window(&mut self, op: &str, p: usize, site: Meta) -> Option<ExprId> {
-        let text = |name| self.text_of(p, name);
-        let required = |name| self.field(p, name).filter(|&n| self.text(n).is_some());
-        let (mut function, fields): (WindowFunction, Vec<(&'static str, Slot, usize)>) = match op {
-            "row_number" => (WindowFunction::RowNumber, Vec::new()),
-            "rank" => (
-                WindowFunction::Rank {
-                    method: match text("method") {
-                        None | Some("competition") => RankMethod::Competition,
-                        Some("dense") => RankMethod::Dense,
-                        Some(_) => return None,
-                    },
-                },
-                Vec::new(),
-            ),
-            "row_value" => {
-                let N::Integer(offset) = self.node(self.field(p, "offset")?) else {
-                    return None;
-                };
-                (
-                    WindowFunction::RowValue {
-                        offset: offset.clone(),
-                    },
-                    vec![("source", Slot::Source, required("source")?)],
-                )
+    /// A window verb: its parameters as its declaration types them, its
+    /// operands, and its partitions, order and filter.
+    fn window(&mut self, verb: Verb, p: usize, site: Meta) -> Option<ExprId> {
+        let function = WindowFunction::read(verb, &mut self.payload(verb, p, site))?;
+        // Each operand field written as a name, the analysis value `source`
+        // first and then the others in declared order; a baseline's `date`
+        // heads its order rather than being an operand (P-OP-2, P-OP-3).
+        let mut fields = Vec::new();
+        for field in verb.operands() {
+            match self
+                .field(p, field.field)
+                .filter(|&n| self.text(n).is_some())
+            {
+                Some(node) => fields.push((field.field, field.slot, node)),
+                None if field.required => return None,
+                None => {}
             }
-            "locf" => (
-                WindowFunction::Locf {
-                    include_current: self.boolean(p, "include_current", true),
-                },
-                vec![("source", Slot::Source, required("source")?)],
-            ),
-            // The analysis value is `source` and the date it is compared with
-            // `reference` (P-OP-2, P-OP-3).
-            "baseline_flag" => (
-                WindowFunction::BaselineFlag {
-                    inclusive: self.boolean(p, "inclusive", true),
-                    window_order_by: Vec::new(),
-                },
-                vec![
-                    ("source", Slot::Source, required("source")?),
-                    ("reference", Slot::Reference, required("reference")?),
-                    ("date", Slot::Source, required("date")?),
-                ],
-            ),
-            _ => return None,
-        };
+        }
+        fields.sort_by_key(|&(_, slot, _)| slot != Slot::Source);
         let id = self.reserve(site);
         let mut operands = Vec::new();
         let mut date = None;
         for (name, slot, node) in fields {
             let meta = self.meta(site, Segment::Field(name), Some(node));
-            if name == "date" {
+            if slot == Slot::Date {
                 date = Some((node, meta));
             } else {
                 let expr = self.reference(node, meta);
@@ -975,15 +685,10 @@ impl Lower<'_> {
                 filter = Some(self.predicate(text, meta));
             }
         }
-        if let (
-            WindowFunction::BaselineFlag {
-                window_order_by, ..
-            },
-            Some((node, meta)),
-        ) = (&mut function, window)
-        {
+        let mut window_order_by = Vec::new();
+        if let (WindowFunction::BaselineFlag { .. }, Some((node, meta))) = (&function, window) {
             if !matches!(declared, Some((_, true))) {
-                *window_order_by = self.order_by(node, "order_by", meta);
+                window_order_by = self.order_by(node, "order_by", meta);
             }
         }
         Some(self.fill(
@@ -994,6 +699,7 @@ impl Lower<'_> {
                 group_by,
                 order_by,
                 filter,
+                window_order_by,
             }),
         ))
     }
@@ -1203,6 +909,85 @@ impl Lower<'_> {
     }
 }
 
+/// A verb's payload as the generated readers read it ([`Written`]): each
+/// field written and not null, or the bare payload as the field it fills.
+struct Payload<'a, 'd> {
+    lower: &'a mut Lower<'d>,
+    verb: Verb,
+    payload: usize,
+    site: Meta,
+}
+
+impl Payload<'_, '_> {
+    fn node(&self, field: &str) -> Option<usize> {
+        self.lower.payload_field(self.verb, self.payload, field)
+    }
+}
+
+impl Written for Payload<'_, '_> {
+    fn int(&mut self, field: &'static str) -> Option<Option<String>> {
+        let Some(node) = self.node(field) else {
+            return Some(None);
+        };
+        match self.lower.node(node) {
+            N::Integer(text) => Some(Some(text.clone())),
+            _ => None,
+        }
+    }
+    fn text(&mut self, field: &'static str) -> Option<Option<String>> {
+        let Some(node) = self.node(field) else {
+            return Some(None);
+        };
+        self.lower.text(node).map(|text| Some(text.into()))
+    }
+    fn boolean(&mut self, field: &'static str) -> Option<Option<bool>> {
+        let Some(node) = self.node(field) else {
+            return Some(None);
+        };
+        match self.lower.node(node) {
+            N::Boolean(value) => Some(Some(*value)),
+            _ => None,
+        }
+    }
+    fn numbers(&mut self, field: &'static str) -> Option<Option<Vec<f64>>> {
+        let Some(node) = self.node(field) else {
+            return Some(None);
+        };
+        let mut numbers = Vec::new();
+        for &item in self.lower.items(node) {
+            numbers.push(match self.lower.node(item) {
+                N::Float(value) => *value,
+                N::Integer(text) => text.parse().ok()?,
+                _ => return None,
+            });
+        }
+        Some(Some(numbers))
+    }
+    fn texts(&mut self, field: &'static str) -> Option<Option<Vec<String>>> {
+        let Some(node) = self.node(field) else {
+            return Some(None);
+        };
+        let lower = &*self.lower;
+        let texts = lower
+            .items(node)
+            .iter()
+            .map(|&item| lower.text(item).map(String::from));
+        texts.collect::<Option<Vec<_>>>().map(Some)
+    }
+    fn dictionary(&mut self, field: &'static str) -> Option<Option<Dictionary>> {
+        let Some(node) = self.node(field) else {
+            return Some(None);
+        };
+        if !matches!(self.lower.node(node), N::Mapping(_) | N::Text(_)) {
+            return None;
+        }
+        Some(Some(self.lower.dictionary(node, field, self.site)))
+    }
+    fn constant(&mut self, field: &'static str) -> Option<Constant> {
+        self.lower.constant(self.site, self.payload, field)
+    }
+}
+
 /// Each distinct name a compiled text reads, in first written order: as an
 /// operand where it occurs outside every reduction, as a reducer where it
 /// occurs inside one, and each `D.*` relation `COUNT` reads as a reducer.
@@ -1238,18 +1023,4 @@ fn formula_names(compiled: &CompiledExpression) -> Vec<(Role, String)> {
         names.push((Role::Reducer, format!("{relation}.*")));
     }
     names
-}
-
-/// A unit as `diff` and `nearest` write it (TIME-4, LOOKUP-26).
-fn time_unit(text: &str) -> Option<TimeUnit> {
-    Some(match text {
-        "day" => TimeUnit::Day,
-        "week" => TimeUnit::Week,
-        "month" => TimeUnit::Month,
-        "year" => TimeUnit::Year,
-        "second" => TimeUnit::Second,
-        "minute" => TimeUnit::Minute,
-        "hour" => TimeUnit::Hour,
-        _ => return None,
-    })
 }

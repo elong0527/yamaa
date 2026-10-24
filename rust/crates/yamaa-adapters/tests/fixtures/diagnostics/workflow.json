@@ -1,7 +1,14 @@
 {
-  "about": "The file workflow's refusals before a run (FILE-7, SCHEMA-3, INPUT-6, INPUT-10, FUNC-2, FUNC-4): a project file or entry that cannot be read, a project's dependencies that cannot be, links that restate or contradict their producer, and an unknown function. Moved from file_workflow.rs, whose tests compared the fields each case's compares names; a case found among its issues was the one its test found by its cause, or the first of them. A refusal its test read through the workflow's own selection is replayed through check_resources, which names files as that selection does.",
+  "about": "The file workflow's refusals before a run and its checks of linked specifications (FILE-7, SCHEMA-3, SCHEMA-12, SPEC-8, INPUT-1, INPUT-6, INPUT-10, TEXT-6, FUNC-2, FUNC-4): a project file or entry that cannot be read, a project's dependencies that cannot be, a project file nested past the YAML depth limit (64, the limit the release documentation's table states), an input path that is no regular file or selects no source profile, links that restate or contradict their producer, an unknown function, and producers read for their output contract alone, whose own findings, failures and links are never the consumer's. Moved from file_workflow.rs, whose tests compared the whole rows, the output rows and saved bytes, or the fields each case's compares names; a case found among its issues was the one its test found by its cause, or the first of them. A refusal or check its test read through the workflow's own selection is replayed through check_resources, which names files as that selection does. The tests that stay prove what a selection keeps: what it read, its typed owner, and its findings after the study is gone.",
   "documents": {
-    "project": "yamaa: \"1.0\"\ntype: project\n"
+    "project": "yamaa: \"1.0\"\ntype: project\n",
+    "leaf": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: RAW\ninput: {RAW: never-read.csv}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: RAW.VALUE\noutput: {path: leaf.csv, columns: [ID, VALUE]}\n",
+    "linked": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: P\ninput: {P: {path: leaf.csv, schema: leaf.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: P.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: P.VALUE\noutput: {path: root.csv, columns: [ID, VALUE]}\n",
+    "adsl_parent": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput:\n  DM: {path: input/dm.csv, types: {RANDDT: date}}\noutput:\n  path: adsl.csv\n  columns: [USUBJID, RANDDT]\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n  - name: RANDDT\n    type: date\n    label: Date of Randomization\n    derivation: DM.RANDDT\n",
+    "dm_producer": "yamaa: \"1.0\"\ntype: spec\ndomain: DM\nkeys: [USUBJID]\ninput:\n  RAW: {path: ../raw/dm_raw.csv, types: {RANDDT: date}}\noutput:\n  path: ../input/dm.csv\n  columns: [USUBJID, RANDDT]\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: RAW.USUBJID\n  - name: RANDDT\n    type: date\n    label: Date of Randomization\n    derivation: RAW.RANDDT\n",
+    "adsl_child": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\ninput:\n  DM: {schema: producer/dm.yaml}\n",
+    "profile_parent": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input/unknown}\noutput: {path: output.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n",
+    "profile_entry": "yamaa: \"1.0\"\ntype: spec\nparent: ../parent/base.yaml\n"
   },
   "cases": [
     {
@@ -19,6 +26,12 @@
       "issues": [{"condition": "resource_path_missing", "rule": "FILE-7", "spec_paths": [], "context": {"path": "{study}/missing-project.yaml"}}]
     },
     {
+      "case": "a_yaml_entry_byte_outside_ascii_names_the_entry_and_its_position",
+      "operation": "check",
+      "input": {"files": {"project.yaml": {"base": "project"}, "root.yaml": "\u00e9\n"}, "specification": "root.yaml", "project": "project.yaml"},
+      "issues": [{"phase": "validation", "condition": "non_ascii_source", "rule": "SPEC-8", "spec_paths": ["$"], "context": {"line": 1, "column": 1, "path": "{study}/root.yaml"}}]
+    },
+    {
       "case": "an_entry_that_is_not_yaml_fails_at_its_root",
       "operation": "check",
       "input": {"files": {"project.yaml": {"base": "project"}, "root.yaml": "["}, "specification": "root.yaml", "project": "project.yaml"},
@@ -31,6 +44,20 @@
       "input": {"files": {"project.yaml": "[", "root.yaml": "["}, "specification": "root.yaml", "project": "project.yaml"},
       "compares": ["condition", "context.path", "context.environment_path"],
       "issues": [{"condition": "invalid_yaml", "context": {"path": "{study}/project.yaml", "environment_path": "$"}}]
+    },
+    {
+      "case": "each_file_a_project_names_that_does_not_exist_fails_at_the_field_naming_it",
+      "operation": "check",
+      "input": {
+        "files": {"project.yaml": "yamaa: '1.0'\ntype: project\nfunctions: [absent-function.yaml]\nenvironments: {python: {lock: missing.lock}}\ncodelists: [absent-codelists.yaml]\n"},
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "issues": [
+        {"phase": "validation", "condition": "resource_path_missing", "rule": "FILE-7", "spec_paths": ["environments.python.lock"], "context": {"path": "missing.lock"}},
+        {"phase": "validation", "condition": "resource_path_missing", "rule": "FILE-7", "spec_paths": ["functions[0]"], "context": {"path": "absent-function.yaml"}},
+        {"phase": "validation", "condition": "resource_path_missing", "rule": "FILE-7", "spec_paths": ["codelists[0]"], "context": {"path": "absent-codelists.yaml"}}
+      ]
     },
     {
       "case": "a_lock_and_two_listed_files_that_cannot_be_read_report_one_issue_each",
@@ -97,6 +124,35 @@
       "issues": [{"condition": "resource_path_not_regular_file", "rule": "FILE-7", "spec_paths": [], "context": {"path": "{study}/directory.yaml"}}]
     },
     {
+      "case": "a_project_file_nested_past_the_yaml_depth_limit_is_refused_by_the_engine",
+      "operation": "check",
+      "input": {"files": {"project.yaml": "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]"}, "specification": "root.yaml", "project": "project.yaml"},
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["$"], "context": {"step": "environment", "code": "resource_limit", "resource": "yaml_depth", "limit": 64, "actual": 65}}]
+    },
+    {
+      "case": "a_project_file_that_is_not_yaml_is_refused_at_its_root_naming_its_path",
+      "operation": "check",
+      "input": {"files": {"project.yaml": "yamaa: \"1.0\"\ntype: project\ncodelists: [\n"}, "specification": "root.yaml", "project": "project.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.path", "context.entry", "context.environment_path", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "invalid_yaml", "rule": "SCHEMA-3", "spec_paths": ["$"], "context": {"path": "{study}/project.yaml", "entry": "{study}/project.yaml", "environment_path": "$"}}]
+    },
+    {
+      "case": "a_linked_diamond_reports_only_its_entrys_own_finding",
+      "operation": "check_resources",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "leaf.yaml": {"base": "leaf", "edits": [{"from": "    derivation: RAW.VALUE\n", "to": "    derivation: RAW.VALUE\n    verifications: [{matches: {pattern: \"\\u00e9(\"}}]\n"}]},
+          "left.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: P\ninput: {P: {path: leaf.csv, schema: './leaf.yaml'}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: P.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: P.VALUE\n    verifications: [{matches: {pattern: \"\\u00e9(\"}}]\noutput: {path: left.csv, columns: [ID, VALUE]}\n",
+          "right.yaml": {"base": "linked", "edits": [{"from": "path: root.csv", "to": "path: right.csv"}]},
+          "root.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: L\ninput: {L: {path: left.csv, schema: left.yaml}, R: {path: right.csv, schema: right.yaml, key: [ID]}, Q: {path: right.csv, schema: './right.yaml', key: [ID]}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: L.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: {first_available: {sources: [L.VALUE, R.VALUE, Q.VALUE]}}\n    verifications: [{matches: {pattern: \"\\u00e9(\"}}]\noutput: {path: root.csv, columns: [ID, VALUE]}\n"
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_regex", "rule": "TEXT-6", "spec_paths": ["columns.VALUE.verifications[0].matches.pattern"], "context": {"pattern": "\u00e9("}}]
+    },
+    {
       "case": "a_linked_input_may_not_restate_a_field_type_its_producer_gives",
       "operation": "check_resources",
       "input": {
@@ -112,20 +168,91 @@
       "issues": [{"condition": "redundant_field_type", "rule": "INPUT-6", "spec_paths": ["input.P.types.ID"], "context": {"dataset": "P", "field": "ID", "type": "int"}}]
     },
     {
-      "case": "an_inherited_input_may_not_restate_a_field_type_its_producer_gives",
+      "case": "a_linked_artifact_path_may_differ_from_the_producer_output_path",
       "operation": "check_resources",
       "input": {
         "files": {
           "project.yaml": {"base": "project"},
-          "parent.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput:\n  DM: {path: input/dm.csv, types: {RANDDT: date}}\noutput:\n  path: adsl.csv\n  columns: [USUBJID, RANDDT]\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n  - name: RANDDT\n    type: date\n    label: Date of Randomization\n    derivation: DM.RANDDT\n",
-          "producer/dm.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: DM\nkeys: [USUBJID]\ninput:\n  RAW: {path: ../raw/dm_raw.csv, types: {RANDDT: date}}\noutput:\n  path: ../input/dm.csv\n  columns: [USUBJID, RANDDT]\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: RAW.USUBJID\n  - name: RANDDT\n    type: date\n    label: Date of Randomization\n    derivation: RAW.RANDDT\n",
-          "root.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\ninput:\n  DM: {schema: producer/dm.yaml}\n"
+          "leaf.yaml": {"base": "leaf"},
+          "root.yaml": {"base": "linked", "edits": [{"from": "path: leaf.csv", "to": "path: copy/stored.csv"}]}
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "an_inherited_input_may_not_restate_a_field_type_its_producer_gives",
+      "operation": ["check_resources", "check"],
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "parent.yaml": {"base": "adsl_parent"},
+          "producer/dm.yaml": {"base": "dm_producer"},
+          "root.yaml": {"base": "adsl_child"}
         },
         "specification": "root.yaml",
         "project": "project.yaml"
       },
       "compares": ["condition", "rule", "spec_paths", "context"],
       "issues": [{"condition": "redundant_field_type", "rule": "INPUT-6", "spec_paths": ["input.DM.types.RANDDT"], "context": {"dataset": "DM", "field": "RANDDT", "type": "date"}}]
+    },
+    {
+      "case": "a_check_and_a_build_without_a_project_refuse_the_restated_inherited_type",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "parent.yaml": {"base": "adsl_parent"},
+          "producer/dm.yaml": {"base": "dm_producer"},
+          "root.yaml": {"base": "adsl_child"}
+        },
+        "specification": "root.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "redundant_field_type", "rule": "INPUT-6", "spec_paths": ["input.DM.types.RANDDT"], "context": {"dataset": "DM", "field": "RANDDT", "type": "date"}}]
+    },
+    {
+      "case": "a_producer_that_does_not_compile_is_no_failure_of_its_consumer",
+      "operation": "check_resources",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "root.yaml": {"base": "linked"},
+          "leaf.yaml": {"base": "leaf", "edits": [{"from": "RAW.VALUE", "to": "{function: {name: missing, args: {x: 1}}}"}]}
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_producer_linking_back_to_its_consumer_is_no_failure_of_the_consumer",
+      "operation": "check_resources",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "root.yaml": {"base": "linked"},
+          "leaf.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: R\ninput: {R: {path: root.csv, schema: './root.yaml'}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: R.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: R.VALUE\noutput: {path: leaf.csv, columns: [ID, VALUE]}\n"
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_producer_linking_back_by_the_consumers_bare_name_is_no_failure_of_the_consumer",
+      "operation": "check_resources",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "root.yaml": {"base": "linked"},
+          "leaf.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: P\ninput: {P: {path: root.csv, schema: root.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: P.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: P.VALUE\noutput: {path: leaf.csv, columns: [ID, VALUE]}\n"
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "issues": []
     },
     {
       "case": "a_link_naming_the_consuming_specification_is_an_invalid_producer_contract",
@@ -188,6 +315,22 @@
       "issues": [{"context": {"source": "{study}/parent/base.yaml"}}]
     },
     {
+      "case": "an_inherited_links_producer_with_an_invalid_pattern_is_never_compiled",
+      "operation": "check_resources",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "producer/base.yaml": {"base": "leaf", "edits": [{"from": "    derivation: RAW.VALUE\n", "to": "    derivation: RAW.VALUE\n    verifications: [{matches: {pattern: \"\\u00e9(\"}}]\n"}, {"from": "path: leaf.csv", "to": "path: ../leaf.csv"}]},
+          "leaf.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: producer/base.yaml\ndomain: LEAF\n",
+          "parents/base.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: P\ninput: {P: {path: ../leaf.csv, schema: ../leaf.yaml}, Q: {path: ../leaf.csv, schema: '../leaf.yaml'}}\nintermediates: [{id: Q_REFERENCE, dataset: Q, key: [ID], require_match: true}]\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: P.ID}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: P.VALUE\n  - {name: OTHER, type: str, label: Other, derivation: Q_REFERENCE.VALUE}\noutput: {path: ../root.csv, columns: [ID, VALUE, OTHER]}\n",
+          "root.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parents/base.yaml\ndomain: ROOT\n"
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "issues": []
+    },
+    {
       "case": "a_missing_linked_producer_is_a_missing_file_at_its_schema",
       "operation": "check",
       "input": {
@@ -216,6 +359,24 @@
       "compares": ["condition", "rule", "spec_paths"],
       "among": true,
       "issues": [{"condition": "invalid_producer_contract", "rule": "INPUT-10", "spec_paths": ["input.P.schema.columns.VALUE.label"]}]
+    },
+    {
+      "case": "each_unlabelled_producer_column_is_an_invalid_producer_contract",
+      "operation": "check_resources",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "root.yaml": {"base": "linked"},
+          "leaf.yaml": {"base": "leaf", "edits": [{"from": "label: Identifier, ", "to": ""}, {"from": "    label: Reported value\n", "to": ""}]}
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [
+        {"condition": "invalid_producer_contract", "spec_paths": ["input.P.schema.columns.ID.label"]},
+        {"condition": "invalid_producer_contract", "spec_paths": ["input.P.schema.columns.VALUE.label"]}
+      ]
     },
     {
       "case": "a_function_file_that_is_not_yaml_names_its_listing_and_the_project",
@@ -247,6 +408,22 @@
       },
       "compares": ["condition", "rule", "spec_paths"],
       "issues": [{"condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["input.RAW.schema"]}]
+    },
+    {
+      "case": "an_ordinary_specification_builds_and_saves_its_input_rows",
+      "operation": "save",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "project"},
+          "root.yaml": {"base": "leaf", "edits": [{"from": "path: leaf.csv", "to": "path: root.csv"}]},
+          "never-read.csv": "ID,VALUE\n1,alpha\n2,beta\n"
+        },
+        "specification": "root.yaml",
+        "project": "project.yaml"
+      },
+      "issues": [],
+      "output": [["ID", "VALUE"], [1, "alpha"], [2, "beta"]],
+      "saved": {"root.csv": "ID,VALUE\n1,alpha\n2,beta\n"}
     },
     {
       "case": "a_call_of_a_function_the_project_does_not_list_is_unknown",
@@ -284,6 +461,71 @@
       "compares": ["condition"],
       "among": true,
       "issues": [{"condition": "invalid_yaml"}]
+    },
+    {
+      "case": "a_check_without_a_project_reads_no_project_file_beside_its_entry",
+      "operation": "check",
+      "input": {
+        "files": {
+          "project.yaml": "[",
+          "environment.yaml": "[",
+          "leaf.yaml": {"base": "leaf"},
+          "root.yaml": {"base": "linked"}
+        },
+        "specification": "root.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "an_inherited_input_naming_a_directory_is_no_regular_file",
+      "operation": "check",
+      "input": {
+        "files": {
+          "project.yaml": "[",
+          "environment.yaml": "[",
+          "parent/base.yaml": {"base": "profile_parent"},
+          "entry/root.yaml": {"base": "profile_entry"}
+        },
+        "directories": ["parent/input/unknown"],
+        "specification": "entry/root.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths", "context.path", "context.dataset"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "resource_path_not_regular_file", "spec_paths": ["input.SRC.path"], "context": {"path": "input/unknown", "dataset": "SRC"}}]
+    },
+    {
+      "case": "an_inherited_input_file_without_an_extension_selects_no_profile",
+      "operation": "check",
+      "input": {
+        "files": {
+          "project.yaml": "[",
+          "environment.yaml": "[",
+          "parent/base.yaml": {"base": "profile_parent"},
+          "entry/root.yaml": {"base": "profile_entry"},
+          "parent/input/unknown": "ID\n1\n"
+        },
+        "specification": "entry/root.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "source_profile_unknown", "spec_paths": ["input.SRC.path"]}]
+    },
+    {
+      "case": "an_absent_inherited_input_without_an_extension_selects_no_profile",
+      "operation": "check",
+      "input": {
+        "files": {
+          "project.yaml": "[",
+          "environment.yaml": "[",
+          "parent/base.yaml": {"base": "profile_parent"},
+          "entry/root.yaml": {"base": "profile_entry"}
+        },
+        "directories": ["parent/input"],
+        "specification": "entry/root.yaml"
+      },
+      "compares": ["phase", "condition", "spec_paths"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "source_profile_unknown", "spec_paths": ["input.SRC.path"]}]
     }
   ]
 }

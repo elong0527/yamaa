@@ -298,7 +298,6 @@ pub fn execute_into<R: Resolver, D: Decoder>(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn execute_inner_into<R: Resolver, D: Decoder>(
     prepared: &PreparedSpecification,
     resolver: &mut R,

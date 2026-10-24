@@ -23,9 +23,7 @@ from tools.validation.source_size import CRATES, is_generated, line_count, rust_
 
 CEILING = 3000
 # Each hand-written file over the ceiling, and the open issue that splits it.
-ALLOWLIST = {
-    Path("rust/crates/yamaa-core/src/specification/checks/declared.rs"): 3799,
-}
+ALLOWLIST = {}
 HINT = (
     "Split a file over the ceiling by feature, as tests/<area>.rs files split "
     "by family (#2413); until then, an ALLOWLIST entry in "

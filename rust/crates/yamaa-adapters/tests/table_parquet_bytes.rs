@@ -11,6 +11,11 @@
 //! that PARQUET-1 maps, a missing value in each, and 1,030 rows in two row
 //! groups, and one with no rows.
 //!
+//! A run divided into partitions writes its output one partition at a time
+//! (D264); the writer holds rows until a row group is full, so every
+//! partition size, one that does not divide the row-group size included,
+//! saves the same bytes.
+//!
 //! `fixtures/parquet_bytes/` holds the bytes that the 1.0 writer saved from
 //! them as base64 text, since binary files live only under `benchmarks/`.
 //! They are a regression control, not independently authored truth: a 1.x
@@ -26,7 +31,7 @@ use parquet::file::{reader::FileReader, serialized_reader::SerializedFileReader}
 use std::convert::Infallible;
 use yamaa_adapters::{
     epoch::{date_from_days, datetime_from_seconds},
-    parquet_artifact::render,
+    parquet_artifact::{render, render_partitions},
 };
 use yamaa_core::{
     table::{CellError, TableAccess, TableSchema, ValueRef},
@@ -229,6 +234,30 @@ fn every_saved_byte_is_the_1_0_writers() {
          fix that names its rule replaces a fixture, with the saved bytes above.",
         differences.join("\n")
     );
+}
+
+/// D160 on #3030 and D264: the fixed tables saved a partition at a time, in
+/// partitions of each of these sizes, the last holding the rest, which
+/// include sizes that divide 1,024, the writer's row-group size, sizes that
+/// do not, and sizes beyond the table.
+#[test]
+fn every_partition_size_saves_the_1_0_writers_bytes() {
+    let mut differences = Vec::new();
+    for (name, fixture, table, _) in cases() {
+        for size in [1, 3, 7, 1_000, 1_023, 1_024, 1_025, 1_030, 2_048] {
+            let rows = table.row_count();
+            let partitions = (0..rows.max(1))
+                .step_by(size)
+                .map(|start| start..rows.min(start + size))
+                .collect::<Vec<_>>();
+            let (saved, _) = render_partitions(&table, &PROJECTION, &partitions).unwrap();
+            differences.extend(
+                difference(name, fixture, &saved)
+                    .map(|difference| format!("partitions of {size}: {difference}")),
+            );
+        }
+    }
+    assert!(differences.is_empty(), "{}", differences.join("\n"));
 }
 
 /// D160 on #3030. The row groups show that the fixed table spans two.

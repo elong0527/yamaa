@@ -137,7 +137,7 @@ fn impute(input: &Json) -> Vec<Diagnostic> {
                 let forms = forms
                     .items()
                     .iter()
-                    .map(|form| DateForm::of(form.text()).expect("a date form"))
+                    .map(|form| DateForm::from_name(form.text()).expect("a date form"))
                     .collect::<Vec<_>>();
                 ImputationKind::DateText(DateForms::new(&forms).expect("an admitted list"))
             }

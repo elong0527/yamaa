@@ -398,15 +398,18 @@ impl Domain {
         let files = targets
             .iter()
             .zip(&items)
-            .map(|(target, (written, bytes, _))| crate::publication::File {
-                target,
-                written,
-                bytes,
-            })
+            .map(
+                |(target, (written, bytes, partitions, _))| crate::publication::File {
+                    target,
+                    written,
+                    bytes,
+                    partitions,
+                },
+            )
             .collect();
         let written = items
             .iter()
-            .map(|(written, _, _)| (*written).to_owned())
+            .map(|(written, _, _, _)| (*written).to_owned())
             .collect();
         Ok(Some((
             files,
@@ -485,6 +488,16 @@ impl Domain {
                 attempt.failure = Some(error);
                 issues
             }
+            // A save cancelled between two partitions of the file (D264); a
+            // facade save fails as cancelled instead and records nothing.
+            Cause::Cancelled => {
+                attempt.entered = file + 1;
+                let error =
+                    crate::file_publication::Error::Host(crate::host_resources::Failure::Cancelled);
+                let issues = at(publication_failure(&error), attempt);
+                attempt.failure = Some(error);
+                issues
+            }
             Cause::Unwind(payload) => {
                 attempt.entered = file + 1;
                 let issues = at(rejected(Step::Output, Fault::PublicationUnwind), attempt);
@@ -498,7 +511,7 @@ impl Domain {
     /// only its report file and still reports a failed save. Build itself
     /// never writes.
     pub fn save(&mut self) -> Result<bool, FailedBuild> {
-        self.save_with(false, |_| Ok(()))
+        self.save_with(false, |_, _| Ok(()), |_| Ok(()))
     }
     /// Publish the declared report file alone, as a failed build saves, even
     /// when the build succeeded. `Err` means there is no report file to write.
@@ -507,24 +520,29 @@ impl Domain {
             return Err(FailedBuild);
         }
         let failed = !self.result.accepted();
-        match self.save_with(true, |_| Ok(())) {
+        match self.save_with(true, |_, _| Ok(()), |_| Ok(())) {
             // A failed build reports its failure after the report was written.
             Err(FailedBuild) if failed => Ok(self.publication_issues.is_empty()),
             outcome => outcome,
         }
     }
     /// [`Self::save`], or [`Self::save_report`] with `report_only`, calling
-    /// `before` with each file's position before it is committed.
+    /// `between` before each partition of a file after its first, with the
+    /// file's and the partition's positions ([`crate::publication::stage_with`]),
+    /// and `before` with each file's position before it is committed.
     pub(crate) fn save_with(
         &mut self,
         report_only: bool,
+        between: impl FnMut(usize, usize) -> Result<(), crate::publication::Interruption>,
         before: impl FnMut(usize) -> Result<(), crate::file_publication::Error>,
     ) -> Result<bool, FailedBuild> {
         let failed = !self.result.accepted();
         let fail = || if failed { Err(FailedBuild) } else { Ok(false) };
         let (staged, admitted) = match self.plan(report_only) {
             Ok(None) => return fail(),
-            Ok(Some((files, admitted))) => (crate::publication::stage(&files), admitted),
+            Ok(Some((files, admitted))) => {
+                (crate::publication::stage_with(&files, between), admitted)
+            }
             Err(issues) => {
                 self.refuse(issues);
                 return fail();
@@ -668,10 +686,13 @@ fn result<E>(
 }
 
 /// Move the accepted dataset out of `attempt`, for a deferred build whose
-/// output is read as a stream (#3697); none when the attempt accepted no
-/// dataset. The attempt then holds no execution result, so read whatever
-/// else it holds, such as its host failures, first.
-pub fn take_dataset<C, E>(attempt: &mut Attempt<C, E>) -> Option<yamaa_core::dataset::Dataset> {
+/// output is read as a stream (#3697), with the most rows one partition of
+/// it holds when the run admitted it a partition at a time (D264); none when
+/// the attempt accepted no dataset. The attempt then holds no execution
+/// result, so read whatever else it holds, such as its host failures, first.
+pub fn take_dataset<C, E>(
+    attempt: &mut Attempt<C, E>,
+) -> Option<(yamaa_core::dataset::Dataset, Option<std::num::NonZeroUsize>)> {
     let result = std::mem::replace(
         &mut attempt.dataset.result,
         Err(yamaa_core::specification_run::PortError::Incomplete),
@@ -680,7 +701,7 @@ pub fn take_dataset<C, E>(attempt: &mut Attempt<C, E>) -> Option<yamaa_core::dat
         Ok(yamaa_core::dataset::ExecutionAttempt {
             result: Ok(execution),
             ..
-        }) => Some(execution.dataset),
+        }) => Some((execution.dataset, execution.partition_rows)),
         other => {
             attempt.dataset.result = other;
             None
@@ -1083,9 +1104,13 @@ mod tests {
         let marker = Arc::new(());
         measurements.save_entered();
         assert!(!result
-            .save_with(false, |_| Err(crate::file_publication::Error::Io(
-                std::io::Error::other(Marker(Arc::clone(&marker)))
-            )))
+            .save_with(
+                false,
+                |_, _| Ok(()),
+                |_| Err(crate::file_publication::Error::Io(std::io::Error::other(
+                    Marker(Arc::clone(&marker))
+                )))
+            )
             .unwrap());
         measurements.save_completed("refused");
         let Some(crate::file_publication::Error::Io(error)) = &result.publication_attempt.failure
@@ -1138,21 +1163,25 @@ mod tests {
                     .publication_items()
                     .into_iter()
                     .take(fail_at)
-                    .map(|(_, _, value)| value.clone())
+                    .map(|(_, _, _, value)| value.clone())
                     .collect(),
             );
             let marker = Arc::new(());
             let mut entered = 0;
             assert!(!result
-                .save_with(false, |index| {
-                    entered += 1;
-                    if index == fail_at {
-                        return Err(crate::file_publication::Error::Io(std::io::Error::other(
-                            Marker(Arc::clone(&marker)),
-                        )));
+                .save_with(
+                    false,
+                    |_, _| Ok(()),
+                    |index| {
+                        entered += 1;
+                        if index == fail_at {
+                            return Err(crate::file_publication::Error::Io(std::io::Error::other(
+                                Marker(Arc::clone(&marker)),
+                            )));
+                        }
+                        Ok(())
                     }
-                    Ok(())
-                })
+                )
                 .unwrap());
             assert_eq!(entered, fail_at + 1);
             assert_eq!(result.publication_attempt.entered, fail_at + 1);
@@ -1209,11 +1238,15 @@ mod tests {
         let original = result.observations();
         let marker = Arc::new(());
         assert!(result
-            .save_with(false, |_| {
-                Err(crate::file_publication::Error::Io(std::io::Error::other(
-                    Marker(Arc::clone(&marker)),
-                )))
-            })
+            .save_with(
+                false,
+                |_, _| Ok(()),
+                |_| {
+                    Err(crate::file_publication::Error::Io(std::io::Error::other(
+                        Marker(Arc::clone(&marker)),
+                    )))
+                }
+            )
             .is_err());
         assert_eq!(result.publication_attempt.entered, 1);
         assert_eq!(result.publication_attempt.completed, 0);
@@ -1238,7 +1271,7 @@ mod tests {
                 .result
                 .publication_items()
                 .into_iter()
-                .map(|(_, _, value)| value.clone())
+                .map(|(_, _, _, value)| value.clone())
                 .collect(),
         );
         assert_eq!(result.observations(), expected);
@@ -1256,7 +1289,11 @@ mod tests {
         fs::create_dir(study.0.join("foreign")).unwrap();
         std::os::unix::fs::symlink("foreign", study.0.join("nested")).unwrap();
         assert!(!result
-            .save_with(false, |_| panic!("linked parent entered publisher"))
+            .save_with(
+                false,
+                |_, _| Ok(()),
+                |_| panic!("linked parent entered publisher")
+            )
             .unwrap());
         assert_eq!(result.publication_attempt.entered, 0);
         assert_eq!(result.publication_attempt.completed, 0);
@@ -1294,13 +1331,17 @@ mod tests {
         let marker = Arc::new(());
         let mut entered = 0;
         assert!(!result
-            .save_with(false, |_| {
-                entered += 1;
-                if entered == 2 {
-                    std::panic::panic_any(Arc::clone(&marker));
+            .save_with(
+                false,
+                |_, _| Ok(()),
+                |_| {
+                    entered += 1;
+                    if entered == 2 {
+                        std::panic::panic_any(Arc::clone(&marker));
+                    }
+                    Ok(())
                 }
-                Ok(())
-            })
+            )
             .unwrap());
         assert!(Arc::ptr_eq(
             result
@@ -1414,5 +1455,95 @@ mod tests {
                 assert!(!study.0.join("checks.csv").exists());
             }
         }
+    }
+
+    /// A save that stops between two partitions of a run's output (D264), a
+    /// seam no facade input reaches: an I/O failure there, as a full disk
+    /// would give, publishes nothing. The output's partial staged file and
+    /// the staged report are removed, so the directory holds only what it
+    /// held, and the save's one issue is the publication failure at the
+    /// output, in the output step, after entering both files and completing
+    /// neither. Its three records are three one-record partitions, so the
+    /// failure comes before the third. The same result then saves whole.
+    #[test]
+    fn a_failure_between_two_partitions_of_the_output_publishes_nothing() {
+        let root = std::env::temp_dir().join(format!(
+            "yamaa-partitioned-save-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let study = Study(crate::canonical_path::canonicalize(root).unwrap());
+        fs::write(study.0.join("input.csv"), "ID,NAME\n1,a\n2,b\n3,c\n").unwrap();
+        fs::write(
+            study.0.join("spec.yaml"),
+            "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID, NAME], report: report.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: NAME, type: str, derivation: SRC.NAME}\n",
+        )
+        .unwrap();
+        let entry = study.0.join("spec.yaml").to_str().unwrap().to_owned();
+        let partitions = yamaa_core::dataset::Partitioning {
+            rows: std::num::NonZeroUsize::MIN,
+            leading_keys: None,
+            whole_table_fallback: false,
+        };
+        let mut result = domain_observed(
+            Request {
+                specification: &entry,
+                environment: None,
+            },
+            Identity::new("test", "test", "partitioned", &entry),
+            Scope::default().partitioned(Some(partitions)),
+        )
+        .unwrap();
+        let saved = result.save_with(
+            false,
+            |file, partition| match (file, partition) {
+                (1, 2) => Err(crate::publication::Interruption::Failed(
+                    crate::file_publication::Error::Io(std::io::Error::other("disk full")),
+                )),
+                _ => Ok(()),
+            },
+            |_| Ok(()),
+        );
+        let mut entries = fs::read_dir(&study.0)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .collect::<Vec<_>>();
+        entries.sort();
+        let issues = result
+            .issues()
+            .iter()
+            .map(|issue| {
+                (
+                    issue.code,
+                    issue.spec_paths.clone(),
+                    crate::json_wire::encode_object(&issue.context),
+                )
+            })
+            .collect::<Vec<_>>();
+        // The publication failure an I/O error is, by the registry's code.
+        let context = format!(
+            r#"{{"code":"{}","completed":0,"entered":2,"path":"out.csv","step":"output"}}"#,
+            Fault::PublicationFailed.as_str()
+        );
+        assert_eq!(
+            (saved.ok(), issues, entries),
+            (
+                Some(false),
+                vec![(
+                    ConditionCode::ApplicationRejected,
+                    vec!["output.path".to_owned()],
+                    context,
+                )],
+                vec!["input.csv".to_owned(), "spec.yaml".to_owned()],
+            ),
+            "the save stopped before the output's third partition"
+        );
+        assert!(result.save().unwrap(), "the later save");
+        assert_eq!(
+            fs::read_to_string(study.0.join("out.csv")).unwrap(),
+            "ID,NAME\n1,a\n2,b\n3,c\n",
+            "the output saved whole"
+        );
     }
 }

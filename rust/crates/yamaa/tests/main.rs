@@ -25,6 +25,7 @@ mod memory;
 mod memory_route;
 mod odm_input;
 mod partitioned_corpus;
+mod partitioned_publication;
 mod partitioned_reading;
 mod plan;
 mod plan_reuse;

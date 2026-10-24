@@ -5,21 +5,29 @@ use crate::{
     dataset::{CurrentField, CurrentRead, Intermediate, RelationPredicate},
 };
 
-#[allow(clippy::too_many_arguments)]
+/// Bind a lookup's filter over the relation it reads: a field of the
+/// relation, or a field of another input's current record; with the
+/// predicate's operand types when `static_filter_types`.
 pub(super) fn bind(
     plan: &crate::expression::CompiledExpression,
-    donor_name: &str,
-    donor: &TableSchema,
-    donor_kind: &impl Fn(usize) -> Option<ColumnType>,
+    relation: &intermediates::Donor<'_>,
     self_rows: bool,
-    admits: &impl Fn(usize) -> bool,
-    intermediate: &str,
-    sources: &[SourceDeclaration],
-    schemas: &[&TableSchema],
-    driver: usize,
+    inputs: binder::Inputs<'_>,
     static_filter_types: bool,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<RelationPredicate>, BindError> {
+    let intermediates::Donor {
+        lookup: intermediate,
+        dataset: donor_name,
+        schema: donor,
+        kind: donor_kind,
+        admits,
+    } = *relation;
+    let binder::Inputs {
+        sources,
+        schemas,
+        driver,
+    } = inputs;
     let before = findings.len();
     let mut bindings = Vec::new();
     let mut current = Vec::new();

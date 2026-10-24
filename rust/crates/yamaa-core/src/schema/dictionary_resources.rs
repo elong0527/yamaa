@@ -4,6 +4,7 @@ use super::{
     NormalizationError, NormalizationResource, SchemaAliasKind, SchemaField, SchemaShape,
     SchemaStructure, TypeExpression, TypeNode, ValidationError,
 };
+use crate::expression_table::Verb;
 use std::collections::BTreeMap;
 
 /// An admitted expression dictionary path and its exact normalized occurrence.
@@ -228,7 +229,9 @@ impl Run<'_> {
                                             .find(|entry| entry.name == *name)
                                         {
                                             let path = self.join(logical, name)?;
-                                            if registry.name == "expressions" && name == "mapping" {
+                                            if registry.name == "expressions"
+                                                && Verb::from_name(name) == Some(Verb::Mapping)
+                                            {
                                                 self.dictionary(payload, &path)?;
                                             }
                                             match &entry.shape {
