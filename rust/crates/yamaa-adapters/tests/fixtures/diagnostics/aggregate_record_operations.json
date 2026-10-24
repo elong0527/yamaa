@@ -371,6 +371,271 @@
       "compares": ["condition", "rule"],
       "among": true,
       "issues": [{"condition": "invalid_derive_step", "rule": "LOOKUP-22"}]
+    },
+    {
+      "case": "a_count_keyed_on_a_later_column_reduces_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless"}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,2\n"}
+    },
+    {
+      "case": "a_count_keyed_on_a_literal_reduces_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        key: {N: K}\n", "to": "        key: {N: 1}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,2\n"}
+    },
+    {
+      "case": "a_count_keyed_on_an_expression_of_a_later_column_reduces_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        key: {N: K}\n", "to": "        key: {N: {greatest: {sources: [K, K]}}}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,2\n"}
+    },
+    {
+      "case": "a_sum_keyed_on_a_later_column_reduces_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'SUM(OTHER.N)'\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,2\n"}
+    },
+    {
+      "case": "a_sum_keyed_on_a_literal_reduces_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'SUM(OTHER.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: 1}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,2\n"}
+    },
+    {
+      "case": "a_sum_keyed_on_an_expression_of_a_later_column_reduces_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'SUM(OTHER.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: {greatest: {sources: [K, K]}}}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,2\n"}
+    },
+    {
+      "case": "two_counts_keyed_on_a_later_column_reduce_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + COUNT(OTHER.*)'\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,4\n"}
+    },
+    {
+      "case": "two_counts_keyed_on_a_literal_reduce_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + COUNT(OTHER.*)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: 1}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,4\n"}
+    },
+    {
+      "case": "two_counts_keyed_on_an_expression_of_a_later_column_reduce_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + COUNT(OTHER.*)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: {greatest: {sources: [K, K]}}}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,4\n"}
+    },
+    {
+      "case": "a_count_and_a_sum_keyed_on_a_later_column_reduce_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + SUM(OTHER.N)'\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,4\n"}
+    },
+    {
+      "case": "a_count_and_a_sum_keyed_on_a_literal_reduce_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + SUM(OTHER.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: 1}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,4\n"}
+    },
+    {
+      "case": "a_count_and_a_sum_keyed_on_an_expression_of_a_later_column_reduce_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + SUM(OTHER.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: {greatest: {sources: [K, K]}}}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,4\n"}
+    },
+    {
+      "case": "a_count_without_a_key_matches_on_the_key_its_input_declares",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "fieldless",
+            "edits": [
+              {"from": "OTHER: {path: other.csv, types: {N: int}}", "to": "OTHER: {path: other.csv, key: [N], types: {N: int}}"},
+              {"from": "keys: [K]", "to": "keys: [N]"},
+              {"from": "columns: [K, V]", "to": "columns: [N, V]"},
+              {"from": "      aggregate:\n        expr: 'COUNT(OTHER.*)'\n        key: {N: K}\n", "to": "      aggregate: 'COUNT(OTHER.*)'\n"},
+              {"from": "name: K", "to": "name: N"}
+            ]
+          },
+          "src.csv": "N\n1\n",
+          "other.csv": "N\n1\n1\n2\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "N,V\n1,2\n"}
+    },
+    {
+      "case": "a_count_keyed_on_a_boolean_literal_is_refused_at_its_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        key: {N: K}\n", "to": "        key: {N: true}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "bool", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_count_keyed_on_a_text_literal_is_refused_at_its_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        key: {N: K}\n", "to": "        key: {N: \"'x'\"}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "str", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_sum_keyed_on_a_boolean_literal_is_refused_at_its_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'SUM(OTHER.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: true}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "bool", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_sum_keyed_on_a_text_literal_is_refused_at_its_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'SUM(OTHER.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: \"'x'\"}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "str", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "two_counts_keyed_on_a_boolean_literal_are_refused_at_their_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + COUNT(OTHER.*)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: true}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "bool", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "two_counts_keyed_on_a_text_literal_are_refused_at_their_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + COUNT(OTHER.*)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: \"'x'\"}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "str", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_count_and_a_sum_keyed_on_a_boolean_literal_are_refused_at_their_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + SUM(OTHER.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: true}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "bool", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_count_and_a_sum_keyed_on_a_text_literal_are_refused_at_their_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + SUM(OTHER.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: \"'x'\"}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "str", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_filtered_count_keyed_on_a_boolean_literal_is_refused_at_its_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        key: {N: K}\n", "to": "        key: {N: true}\n        filter: OTHER.N > 0\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "bool", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_filtered_sum_keyed_on_a_boolean_literal_is_refused_at_its_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'SUM(OTHER.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: true}\n        filter: OTHER.N > 0\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "bool", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_filtered_count_and_sum_keyed_on_a_boolean_literal_are_refused_at_their_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + SUM(OTHER.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: true}\n        filter: OTHER.N > 0\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "bool", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_count_keyed_on_a_column_its_relation_lacks_is_refused_at_its_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        key: {N: K}\n", "to": "        key: {ABSENT: K}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"identifier": "OTHER.ABSENT"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_count_keyed_on_a_name_that_reads_nothing_is_refused_at_its_pair",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        key: {N: K}\n", "to": "        key: {N: ABSENT}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.V.derivation.aggregate.key.N"], "context": {"identifier": "ABSENT"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_count_of_an_undeclared_relation_is_refused_at_its_expression",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(ABSENT.*)'\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.V.derivation.aggregate.expr"], "context": {"identifier": "ABSENT.*"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_filtered_sum_of_an_undeclared_relation_is_refused_at_its_expression",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'SUM(ABSENT.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: K}\n        filter: ABSENT.OTHER > 0\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.V.derivation.aggregate.expr"], "context": {"identifier": "ABSENT.N"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_filtered_count_of_an_undeclared_relation_is_refused_at_its_expression",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(ABSENT.*)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: K}\n        filter: ABSENT.OTHER > 0\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.V.derivation.aggregate.expr"], "context": {"identifier": "ABSENT.*"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_count_whose_filter_is_its_only_donor_reference_is_refused_at_a_boolean_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        key: {N: K}\n", "to": "        key: {N: true}\n        derivations:\n          H: {type: int, derivation: 1}\n        filter: OTHER.N > 0\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "bool", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_count_whose_filter_is_its_only_donor_reference_reduces_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        key: {N: K}\n", "to": "        key: {N: K}\n        derivations:\n          H: {type: int, derivation: 1}\n        filter: OTHER.N > 0\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,2\n"}
+    },
+    {
+      "case": "a_sum_of_a_literal_binding_whose_filter_is_its_only_donor_reference_is_refused_at_a_boolean_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'SUM(H)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: true}\n        derivations:\n          H: {type: int, derivation: 1}\n        filter: OTHER.N > 0\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "bool", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_sum_of_a_literal_binding_whose_filter_is_its_only_donor_reference_reduces_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'SUM(H)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: K}\n        derivations:\n          H: {type: int, derivation: 1}\n        filter: OTHER.N > 0\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,2\n"}
     }
   ]
 }
