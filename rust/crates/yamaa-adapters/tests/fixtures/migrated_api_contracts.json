@@ -1,5 +1,5 @@
 {
-  "about": "API route and save contracts from execution_completed_intermediates.rs and intermediate_result_kinds.rs at a71a3f4b6. Check-only calls stay check-only. Every build requires a domain except the first-template preparation refusal. Save booleans retain the original Ok(true) or failed-save assertions. Inputs, expected diagnostics and saved bytes remain in completed_intermediates.json. No engine output supplied these facts.",
+  "about": "API route and save contracts from execution_completed_intermediates.rs and intermediate_result_kinds.rs at a71a3f4b6, and from the saved helper of check_variable_forms.rs, which required a domain without issues and Ok(true). Check-only calls stay check-only. Every build requires a domain except the first-template preparation refusal. Save booleans retain the original Ok(true) or failed-save assertions. Inputs, expected diagnostics and saved bytes remain in completed_intermediates.json and check_variable_forms.json. No engine output supplied these facts.",
   "cases": {
     "completed_intermediates.json::unused_unique_checks_are_eager_and_retain_all_failed_declarations": {"route": "domain", "save": false},
     "completed_intermediates.json::unused_donor_derivation_failure_is_not_hidden_by_an_unread_lookup": {"route": "domain", "save": false},
@@ -132,6 +132,12 @@
     "completed_intermediates.json::a_raw_key_pair_before_a_literal_pair_checks_clean": {"route": "check", "save": null},
     "completed_intermediates.json::an_incompatible_raw_key_pair_before_a_literal_pair_fails": {"route": "domain", "save": null},
     "completed_intermediates.json::a_raw_key_pair_before_a_literal_pair_keeps_no_match_for_missing_values": {"route": "domain", "save": true},
-    "completed_intermediates.json::a_raw_key_pair_before_a_literal_pair_keeps_no_match_for_unequal_values": {"route": "domain", "save": true}
+    "completed_intermediates.json::a_raw_key_pair_before_a_literal_pair_keeps_no_match_for_unequal_values": {"route": "domain", "save": true},
+    "check_variable_forms.json::an_output_column_as_range_value_keeps_its_meaning": {"route": "domain", "save": true},
+    "check_variable_forms.json::a_driver_qualified_range_value_keeps_its_meaning": {"route": "domain", "save": true},
+    "check_variable_forms.json::a_lookup_qualified_range_value_keeps_its_meaning": {"route": "domain", "save": true},
+    "check_variable_forms.json::a_donor_read_s_bare_range_value_is_the_donor_record_s_field": {"route": "domain", "save": true},
+    "check_variable_forms.json::a_donor_read_s_range_value_qualified_by_the_donor_dataset_is_its_field": {"route": "domain", "save": true},
+    "check_variable_forms.json::a_donor_read_s_lookup_qualified_range_value_reads_that_lookup_for_the_donor_record": {"route": "domain", "save": true}
   }
 }

@@ -78,7 +78,7 @@ no record, and a record missing a key or a stated bound does not match.
 `between` names a current-row value and at least one bound field.
 
 Fails: `incompatible_input_type`, `incomparable_range_types`, `invalid_field_type`, `prohibited_construct`, `unknown_field`.
-Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-lookup-range-bare-field`, `negative-source-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`, `rust/tests/host-fixtures/cases.json`.
+Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-lookup-range-bare-field`, `negative-source-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_variable_forms.json`, `rust/tests/host-fixtures/cases.json`.
 
 The key pairs are those of [LOOKUP-5](#lookup-5). Every pair is compared on
 every record offered, so a record value whose type cannot compare with its
@@ -523,7 +523,7 @@ input's declared `key`. A lookup names at least one pair, every column must
 exist, and every match value must read a known current-row value.
 
 Fails: `invalid_field_type`, `no_applicable_keys`, `unknown_field`, `invalid_aggregate_context`.
-Evidence: `negative-lookup-mismatched`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-lookup-key-lookup-qualified`, `negative-aggregate-key-other-template`, `negative-aggregate-key-bare-field`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_aggregate_key_reads.rs`, `rust/crates/yamaa-core/src/specification/declared_keys.rs`, `rust/crates/yamaa-core/src/key_relation.rs::a_declared_key_pairs_every_column_it_names`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`.
+Evidence: `negative-lookup-mismatched`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-lookup-key-lookup-qualified`, `negative-aggregate-key-other-template`, `negative-aggregate-key-bare-field`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_aggregate_key_reads.rs`, `rust/crates/yamaa-core/src/specification/declared_keys.rs`, `rust/crates/yamaa-core/src/key_relation.rs::a_declared_key_pairs_every_column_it_names`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_variable_forms.json`.
 
 ```yaml
 intermediates:
@@ -927,7 +927,7 @@ stored and derived column is available. A column the lookup's dataset does not
 have, or one outside a declared `columns` list, fails.
 
 Fails: `unknown_field`.
-Evidence: `adam-adae-death`, `negative-lookup-key-lookup-qualified`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`.
+Evidence: `adam-adae-death`, `negative-lookup-key-lookup-qualified`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_variable_forms.json`.
 
 Naming in `columns` a column the dataset does not have fails as
 `unknown_field`, and so does a lookup-qualified read of a missing or
@@ -1221,7 +1221,7 @@ absence policy apply as for any other read ([LOOKUP-25](#lookup-25)), once per
 donor record.
 
 Fails: `unknown_field`, `phase_boundary`, `dependency_cycle`.
-Evidence: `adam-adlb-end-of-treatment`, `adam-adsl-crossover-sequence`, `schema-lookup-donor-range`, `negative-lookup-donor-range-driver`, `rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs`, `rust/crates/yamaa-adapters/tests/check_variable_forms.rs`, `rust/crates/yamaa-adapters/tests/project_run.rs::intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field`.
+Evidence: `adam-adlb-end-of-treatment`, `adam-adsl-crossover-sequence`, `schema-lookup-donor-range`, `negative-lookup-donor-range-driver`, `rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_variable_forms.json`, `rust/crates/yamaa-adapters/tests/project_run.rs::intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field`.
 
 Either form of a donor-record name names a stored field or a derivation
 declared before the reading one, and a name the donor record cannot supply
