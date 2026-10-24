@@ -1,6 +1,6 @@
 //! The inheritance refusals of a layered specification (LAYER-2, LAYER-3,
-//! LAYER-4, LAYER-10) and its composed columns' unknown references
-//! (COLUMN-5).
+//! LAYER-4, LAYER-10) and its composed columns' unknown references and
+//! dependency cycles (COLUMN-5, COLUMN-6).
 use super::text;
 use crate::support::diagnostic::json::Json;
 use yamaa_core::{
@@ -104,8 +104,10 @@ fn inheritance_finding(input: &Json) -> Diagnostic {
 
 /// The findings of a composed specification's column dependencies, in the
 /// resolver's order, `{issues}`: each issue is `{"unknown": {column,
-/// dependency}}`.
+/// dependency}}` or `{"cycle": {cycle, paths}}`, the cycle's columns
+/// closing the loop and the paths of their derivations.
 fn inherited_dependencies(input: &Json) -> Vec<Diagnostic> {
+    let texts = |json: &Json| json.items().iter().map(|item| item.text().into()).collect();
     let issues = input
         .closed(&["issues"])
         .field("issues")
@@ -117,6 +119,13 @@ fn inherited_dependencies(input: &Json) -> Vec<Diagnostic> {
                 Issue::Unknown {
                     column: text(facts, "column").into(),
                     dependency: text(facts, "dependency").into(),
+                }
+            }
+            [(kind, facts)] if kind == "cycle" => {
+                let facts = facts.closed(&["cycle", "paths"]);
+                Issue::Cycle {
+                    cycle: texts(facts.field("cycle")),
+                    paths: texts(facts.field("paths")),
                 }
             }
             other => panic!("no dependency issue {other:?}"),
