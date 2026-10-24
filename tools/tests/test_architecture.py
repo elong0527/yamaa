@@ -18,8 +18,8 @@ MEMBERS = {
     "yamaa": ("yamaa-adapters", "yamaa-core"),
     "yamaa-boundary": (),
     "yamaa-engine": ("yamaa", "yamaa-boundary"),
-    "yamaa-python": ("yamaa-boundary", "yamaa-engine"),
-    "yamaa-r": ("yamaa-boundary", "yamaa-engine"),
+    "yamaa-python": ("yamaa", "yamaa-boundary"),
+    "yamaa-r": ("yamaa", "yamaa-boundary"),
     "yamaa-cli": ("yamaa",),
 }
 CORE = "rust/crates/yamaa-core"
@@ -113,21 +113,15 @@ class ArchitectureTests(unittest.TestCase):
                 '\n[target."cfg(unix)".dependencies]\n'
                 'yamaa-core = { path = "../yamaa-core" }\n',
                 "[target.cfg(unix).dependencies] yamaa-python depends on "
-                "yamaa-core, but a host binding depends on the boundary and the "
-                "engine alone",
-            ),
-            (
-                "yamaa-python",
-                '\n[dev-dependencies]\nyamaa = { path = "../yamaa" }\n',
-                "[dev-dependencies] yamaa-python depends on yamaa, but a host "
-                "binding depends on the boundary and the engine alone",
+                "yamaa-core, but a host binding depends on the facade and the "
+                "boundary alone",
             ),
             (
                 "yamaa-r",
                 "\n[dev_dependencies]\n"
                 'engine = { package = "yamaa-adapters", path = "../yamaa-adapters" }\n',
                 "[dev_dependencies] yamaa-r depends on yamaa-adapters, but a host "
-                "binding depends on the boundary and the engine alone",
+                "binding depends on the facade and the boundary alone",
             ),
             (
                 "yamaa-cli",
@@ -160,21 +154,17 @@ class ArchitectureTests(unittest.TestCase):
             'engine = { package = "yamaa-core", path = "crates/yamaa-core" }\n'
             'yamaa-adapters = { path = "crates/yamaa-adapters" }\n'
             'facade = { package = "yamaa", path = "crates/yamaa" }\n'
-            'linked = { package = "yamaa-engine", path = "crates/yamaa-engine" }\n'
             'thiserror = "2"\n',
         )
         path = "rust/crates/yamaa-python/Cargo.toml"
         original = (self.root / path).read_text(encoding="utf-8")
         refusal = (
             "{table} yamaa-python depends on {package}, but a host binding depends "
-            "on the boundary and the engine alone (#3030 section 2.10)"
+            "on the facade and the boundary alone (#3030 section 2.10)"
         )
         cases = {
             "engine = { workspace = true }\n": refusal.format(
                 table="[dependencies]", package="yamaa-core"
-            ),
-            "facade = { workspace = true }\n": refusal.format(
-                table="[dependencies]", package="yamaa"
             ),
             "\n[build-dependencies]\nengine = { workspace = true }\n": refusal.format(
                 table="[build-dependencies]", package="yamaa-core"
@@ -192,10 +182,9 @@ class ArchitectureTests(unittest.TestCase):
                 self.append(path, table)
                 self.assertEqual(self.errors(), [f"{path}: {message}"])
                 self.write(path, original)
-        # The engine under an inherited rename, and a crate outside the
+        # The facade under an inherited rename, and a crate outside the
         # workspace, are allowed.
-        self.write(path, manifest("yamaa-python", ("yamaa-boundary",)))
-        self.append(path, "linked = { workspace = true }\nthiserror.workspace = true\n")
+        self.append(path, "facade = { workspace = true }\nthiserror.workspace = true\n")
         self.assertEqual(self.errors(), [])
         self.write(path, original)
         self.append(path, "ghost = { workspace = true }\n")
