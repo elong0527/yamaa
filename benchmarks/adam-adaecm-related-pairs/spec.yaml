@@ -1,0 +1,87 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADAECM
+keys: [STUDYID, USUBJID, AESEQ, CMSEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int}, key: [USUBJID, AESEQ]}
+  CM: {path: input/cm.csv, types: {CMSEQ: int}, key: [USUBJID, CMSEQ]}
+  RELREC: input/relrec.csv
+
+output:
+  path: adaecm.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, CMSEQ, CMTRT, RELID]
+
+intermediates:
+  # The adverse event members of each relationship, one record each.
+  - id: AEMEM
+    dataset: RELREC
+    filter: "RELREC.RDOMAIN = 'AE' AND RELREC.IDVAR = 'AESEQ'"
+    derivations:
+      SEQ: {type: int, derivation: IDVARVAL}
+
+  # The medication members of each relationship.
+  - id: CMMEM
+    dataset: RELREC
+    filter: "RELREC.RDOMAIN = 'CM' AND RELREC.IDVAR = 'CMSEQ'"
+    derivations:
+      SEQ: {type: int, derivation: IDVARVAL}
+
+  # Every adverse event member paired with every medication member of the
+  # same subject's same relationship: a relationship of two events and two
+  # medications gives four pairs, and a medication in two relationships
+  # pairs in each.
+  - id: PAIRS
+    dataset: AEMEM
+    inner_join: CMMEM
+    key: [USUBJID, RELID]
+    derivations:
+      STUDYID: AEMEM.STUDYID
+      USUBJID: AEMEM.USUBJID
+      RELID: AEMEM.RELID
+      AESEQ: AEMEM.SEQ
+      CMSEQ: CMMEM.SEQ
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number of the Adverse Event
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number of the Medication
+
+  - name: RELID
+    type: str
+    label: Relationship Identifier
+
+  # The event's and the medication's terms, read from their collected records
+  # by subject and sequence number.
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE.AETERM
+
+  - name: CMTRT
+    type: str
+    label: Reported Name of Drug, Med, or Therapy
+    derivation: CM.CMTRT
+
+rows:
+  # One row for each related event and medication.
+  - id: pairs
+    dataset: PAIRS
+    derivations:
+      STUDYID: PAIRS.STUDYID
+      USUBJID: PAIRS.USUBJID
+      AESEQ: PAIRS.AESEQ
+      CMSEQ: PAIRS.CMSEQ
+      RELID: PAIRS.RELID
