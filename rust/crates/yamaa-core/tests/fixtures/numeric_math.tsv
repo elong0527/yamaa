@@ -9,6 +9,18 @@ ln-zero	LN(A)	A=int:0	error:ln_of_nonpositive:FORMULA-15	A	-
 ln-negative-zero	LN(A)	A=float:-0.0	error:ln_of_nonpositive:FORMULA-15	A	-
 ln-negative	LN(A)	A=int:-1	error:ln_of_nonpositive:FORMULA-15	A	-
 ln-missing	LN(A)	A=missing	missing	A	-
+log10-int	LOG10(A)	A=int:100	float:4000000000000000	A	-
+log10-zero	LOG10(A)	A=int:0	error:ln_of_nonpositive:FORMULA-15	A	-
+log10-missing	LOG10(A)	A=missing	missing	A	-
+norm-cdf-int	NORM_CDF(A)	A=int:0	float:3fe0000000000000	A	-
+norm-cdf-missing	NORM_CDF(A)	A=missing	missing	A	-
+norm-inv-one	NORM_INV(A)	A=int:1	error:invalid_probability:FORMULA-15	A	-
+norm-inv-zero	NORM_INV(A)	A=int:0	error:invalid_probability:FORMULA-15	A	-
+norm-inv-missing	NORM_INV(A)	A=missing	missing	A	-
+norm-inv-inverts-norm-cdf	NORM_INV(NORM_CDF(A))	A=int:1	float:3ff0000000000000	A	-
+norm-inv-of-a-rounded-one	NORM_INV(NORM_CDF(A))	A=int:9	error:invalid_probability:FORMULA-15	A	-
+norm-cdf-bool	NORM_CDF(A)	A=bool:true	error:incompatible_input_type:FORMULA-12:A:bool	A	unary
+norm-inv-operand-error	NORM_INV(1 / 0)	-	error:division_by_zero:FORMULA-15	-	unary
 power-int	POWER(A, B)	A=int:2;B=int:3	float:4020000000000000	A,B	-
 power-negative-odd	POWER(A, B)	A=int:-2;B=int:3	float:c020000000000000	A,B	-
 power-negative-even	POWER(A, B)	A=int:-2;B=int:2	float:4010000000000000	A,B	-

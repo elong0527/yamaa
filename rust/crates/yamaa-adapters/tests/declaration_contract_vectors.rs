@@ -39,6 +39,9 @@ mod declaration {
                 Power,
                 Exp,
                 Ln,
+                Log10,
+                NormCdf,
+                NormInv,
                 Mod,
                 NullIf,
                 StrContains

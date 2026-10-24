@@ -142,13 +142,16 @@ pub enum Function {
     Power,
     Exp,
     Ln,
+    Log10,
+    NormCdf,
+    NormInv,
     Mod,
     NullIf,
     StrContains,
 }
 
 impl Function {
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 14] = [
         Self::Abs,
         Self::Ceil,
         Self::Floor,
@@ -157,6 +160,9 @@ impl Function {
         Self::Power,
         Self::Exp,
         Self::Ln,
+        Self::Log10,
+        Self::NormCdf,
+        Self::NormInv,
         Self::Mod,
         Self::NullIf,
         Self::StrContains,
@@ -172,6 +178,9 @@ impl Function {
             Self::Power => "POWER",
             Self::Exp => "EXP",
             Self::Ln => "LN",
+            Self::Log10 => "LOG10",
+            Self::NormCdf => "NORM_CDF",
+            Self::NormInv => "NORM_INV",
             Self::Mod => "MOD",
             Self::NullIf => "NULLIF",
             Self::StrContains => "STR_CONTAINS",

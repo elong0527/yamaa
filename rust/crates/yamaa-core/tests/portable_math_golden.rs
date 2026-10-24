@@ -5,7 +5,8 @@ use yamaa_core::expression::{compile, Condition, Context, ErrorKind, Resolver as
 use yamaa_core::numeric::{ArithmeticErrorKind, Number};
 use yamaa_core::value::{Selection, Value};
 
-// Exact PortableLibmV1 inputs and results, including binary64 range boundaries,
+// Exact PortableLibmV1 inputs and results, the named NORM_CDF formula and
+// NORM_INV algorithm among them, including binary64 range boundaries,
 // signed zero, missingness, domain failures and full-range integer promotion.
 const CASES: &str = include_str!("fixtures/portable_math.tsv");
 
@@ -39,7 +40,7 @@ impl NumericResolver for Inputs {
 #[test]
 fn portable_math_matches_exact_bits_and_domain_failures() {
     let rows: Vec<_> = CASES.trim().lines().collect();
-    assert_eq!(rows.len(), 58);
+    assert_eq!(rows.len(), 100);
     for row in rows {
         let fields: Vec<_> = row.split_whitespace().collect();
         let [name, function, left, right, expected] = fields.as_slice() else {
@@ -48,6 +49,9 @@ fn portable_math_matches_exact_bits_and_domain_failures() {
         let expression = match *function {
             "EXP" => "EXP(A)",
             "LN" => "LN(A)",
+            "LOG10" => "LOG10(A)",
+            "NORM_CDF" => "NORM_CDF(A)",
+            "NORM_INV" => "NORM_INV(A)",
             "POWER" => "POWER(A, B)",
             _ => panic!("unexpected function {function}"),
         };
@@ -59,9 +63,12 @@ fn portable_math_matches_exact_bits_and_domain_failures() {
         let result = plan.evaluate_number(&mut resolver);
         match (*expected, result) {
             ("missing", Ok(Number::Missing)) => {}
-            ("ln_of_nonpositive" | "invalid_power", Err(error)) => {
+            ("ln_of_nonpositive" | "invalid_probability" | "invalid_power", Err(error)) => {
                 let kind = match *expected {
-                    "ln_of_nonpositive" => ArithmeticErrorKind::LnOfNonpositive,
+                    "ln_of_nonpositive" => ArithmeticErrorKind::LnOfNonpositive { function },
+                    "invalid_probability" => ArithmeticErrorKind::InvalidProbability {
+                        value_bits: u64::from_str_radix(left, 16).unwrap(),
+                    },
                     _ => ArithmeticErrorKind::InvalidPower {
                         base_bits: u64::from_str_radix(left, 16).unwrap(),
                         exponent_bits: u64::from_str_radix(right, 16).unwrap(),

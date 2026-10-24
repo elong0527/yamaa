@@ -1,0 +1,47 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADIS
+keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
+input:
+  IS:
+    path: input/is.csv
+    types: {ISSTRESN: int, ISLLOQ: int}
+
+output:
+  path: adis.csv
+  columns: [STUDYID, USUBJID, PARAMCD, AVISIT, AVAL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: IS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: IS.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: "'NABLOG10'"
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+    derivation: IS.VISIT
+
+  # The collected titer, a reciprocal dilution.
+  - name: TITER
+    type: int
+    label: Neutralizing Antibody Titer
+    derivation: IS.ISSTRESN
+
+  # LOG10 of a zero titer fails the run while values are computed; a
+  # missing titer gives a missing result instead.
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: "LOG10(TITER)"
