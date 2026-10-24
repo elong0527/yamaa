@@ -68,12 +68,13 @@ fn calls(input: &Value, host: Language, label: &str) -> Calls {
 
 #[test]
 fn migrated_check_families_keep_first_issues_subsequences_and_both_hosts() {
-    const FAMILIES: [&str; 3] = [
+    const FAMILIES: [&str; 4] = [
         "check_keyless_donor.json",
         "check_unknown_reads.json",
         "check_row_phase_boundaries.json",
+        "check_row_scopes.json",
     ];
-    let mut counts = [0; 3];
+    let mut counts = [0; 4];
     let (mut subsequences, mut first_issues, mut executions) = (0, 0, 0);
     for mut case in replay::cases() {
         let family = case.label.split_once("::").unwrap().0;
@@ -158,10 +159,10 @@ fn migrated_check_families_keep_first_issues_subsequences_and_both_hosts() {
     }
     assert_eq!(
         counts,
-        [178, 474, 36],
+        [178, 474, 36, 87],
         "every migrated case retains its API contract"
     );
-    assert_eq!((subsequences, first_issues, executions), (24, 179, 381));
+    assert_eq!((subsequences, first_issues, executions), (24, 262, 464));
 }
 
 #[test]
@@ -253,7 +254,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
     let contracts = replay::object(replay::field(&routes, "cases"));
     assert_eq!(
         contracts.len(),
-        132,
+        138,
         "every original API contract is authored"
     );
     let mut seen = BTreeSet::new();
@@ -368,6 +369,6 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         contracts.keys().cloned().collect::<BTreeSet<_>>(),
         "every authored API case still exists"
     );
-    assert_eq!((domains, preparation, checks), (96, 1, 35));
-    assert_eq!((accepted_saves, refused_saves, no_save), (54, 19, 59));
+    assert_eq!((domains, preparation, checks), (102, 1, 35));
+    assert_eq!((accepted_saves, refused_saves, no_save), (60, 19, 59));
 }
