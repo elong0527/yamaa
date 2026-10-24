@@ -1,0 +1,834 @@
+{
+  "about": "Per-record aggregates: an aggregate's filter, range and derivations reduce only the records each row matches (LOOKUP-9, LOOKUP-22), a reduction that reads no field still owns its relation and its key (LOOKUP-5, D196), and the findings of its bindings, range and names. Moved from execution_aggregate_record_operations.rs. The document spec is the test's specification() with no reduction written, and each case's edit writes its reduction after the line that opens the aggregate, as the test's format! did; rows is the test's rows(\"A.CUT\", from_a), fieldless its original_fieldless_count(\"COUNT(OTHER.*)\", \"{N: K}\", \"\"), derive its ORIGINAL_DERIVE_SPEC, whose placeholders each case edits as the test did, and qs, qs_with_text and ds the inputs the tests wrote; a variant's edits replace what its parameters changed. In ordered_converted_bindings_reduce_only_matched_filtered_inclusive_records, subject a keeps B's records with USE = 'Y' and N at most its CUT of 3: N = 2 and N = 3, whose V of 1.5 and 2 double to 3 and 4, so TOTAL is 7; b's one record converts nothing, so its V is the recovered 0; c has no CUT and d's CUT of 1 is below every N, so neither reduces a record and TOTAL is missing. A range with neither bound narrows nothing (LOOKUP-9); 0.4.0 refused it as invalid_aggregate_context. A qualified between.value reads the record that built the row, so it names the driver of every row the aggregate is derived for, and another input has no record there and is refused (#2904): rows built from A and from C share the aggregate's column, so neither input supplies a record for every row. In a_binding_reads_a_kept_lookup_keyed_on_the_drivers_own_record, CAP keeps the current subject's own A record, so each VALUE is the lesser of B.N and that CUT: 1 and 2 for a, 3 for b. A fieldless reduction keeps its relation: its key producer K is written after the consuming column, SRC's one row has K = 1, and only OTHER's two records with N = 1 match, so a COUNT and a SUM of N each reduce to 2 and two reductions add to 4; without a key of its own the aggregate matches on the key OTHER declares (LOOKUP-5). A written key reports a pair whose types cannot compare at key, a key column the relation lacks at key, and a match value that reads nothing at its pair (D196); a filter that is the aggregate's only donor reference still reads the relation. A binding that reads a later binding is refused (P-BIND-1). A case whose test compared the issue rows of support::study::issue_row compares their five fields; one whose test read some fields of the first issue, or of the one issue of a condition, compares those fields in a complete list, since its input carries that one defect; and one whose test found its issue by cause among the others is among them. A refused case saves, stating that it wrote nothing, where its test asserted that the output file was not written, and only builds where its test did not; the build routes and save results its tests asserted are execution_aggregate_record_operations.rs::aggregate_record_cases_keep_their_build_routes_and_save_results.",
+  "documents": {
+    "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  A: {path: a.csv, types: {CUT: int}}\n  B: {path: b.csv, key: [ID], types: {N: int}}\nbase: A\noutput: {path: result.csv, columns: [ID, CUT, TOTAL]}\ncolumns:\n  - {name: ID, type: str, derivation: A.ID}\n  - {name: CUT, type: int, derivation: A.CUT}\n  - name: TOTAL\n    type: float\n    derivation:\n      aggregate:\n",
+    "rows": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, ORIGIN]\ninput:\n  A: {path: a.csv, types: {CUT: int}}\n  B: {path: b.csv, key: [ID], types: {N: int}}\n  C: {path: c.csv, types: {LIMIT: int}}\noutput: {path: result.csv, columns: [ID, ORIGIN, TOTAL]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: ORIGIN, type: str}\n  - name: TOTAL\n    type: float\n    derivation:\n      aggregate:\n        between: {value: A.CUT, lower: N}\n        expr: SUM(B.N)\nrows:\n  - id: a\n    dataset: A\n    derivations: {ID: A.ID, ORIGIN: \"'A'\"}\n",
+    "fieldless": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  OTHER: {path: other.csv, types: {N: int}}\nbase: SRC\nkeys: [K]\noutput: {path: out.csv, columns: [K, V]}\ncolumns:\n  - name: V\n    type: int\n    derivation:\n      aggregate:\n        expr: 'COUNT(OTHER.*)'\n        key: {N: K}\n  - {name: K, type: int, derivation: SRC.N}\n",
+    "derive": "yamaa: \"1.0\"\ntype: spec\ndomain: ADQS\nkeys: [STUDYID, USUBJID]\ninput:\n  QS: input/qs.csv\noutput:\n  path: adqs.csv\n  columns: [STUDYID, USUBJID, AVAL]\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: QS.STUDYID\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: QS.USUBJID\n  - name: AVAL\n    type: float\n    label: Analysis Value\n    derivation:\n      aggregate:\n        filter: \"QS.QSCAT = 'SCALE'\"\n        key: [STUDYID, USUBJID]\n        derivations:\nDERIVE_BINDINGS\n        expr: \"REDUCTION_EXPRESSION\"\nrows:\n  - id: subscale\n    filter: \"QS.QSCAT = 'SCALE' AND QS.QSTESTCD = 'PF01'\"\n",
+    "qs": "STUDYID,USUBJID,QSTESTCD,QSCAT,QSORRES\nS1,001,PF01,SCALE,1\nS1,001,PF02,SCALE,2\nS1,001,PF03,SCALE,3\n",
+    "qs_with_text": "STUDYID,USUBJID,QSTESTCD,QSCAT,QSORRES\nS1,001,PF01,SCALE,1\nS1,001,PF02,SCALE,N/A\nS1,001,PF03,SCALE,3\n",
+    "ds": "STUDYID,USUBJID,DSNUM\nS1,001,9\nS1,001,2\nS2,002,10\n"
+  },
+  "cases": [
+    {
+      "case": "ordered_converted_bindings_reduce_only_matched_filtered_inclusive_records",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "      aggregate:\n",
+                "to": "      aggregate:\n        filter: B.USE = 'Y'\n        between: {value: CUT, lower: N}\n        derivations:\n          VALUE:\n            type: float\n            derivation: {value: B.V, unconvertible: 0}\n          TWICE:\n            type: float\n            derivation: 'VALUE * 2'\n        expr: SUM(TWICE)\n"
+              }
+            ]
+          },
+          "a.csv": "ID,CUT\na,3\nb,2\nc,\nd,1\n",
+          "b.csv": "ID,N,V,USE\na,2,1.5,Y\na,3,2,Y\na,4,invalid,Y\na,1,invalid,N\nb,2,bad,Y\nc,1,99,Y\nd,2,99,Y\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,CUT,TOTAL\na,3,7\nb,2,0\nc,,\nd,1,\n"}
+    },
+    {
+      "case": "an_aggregate_binding_that_extracts_digits_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "      aggregate:\n",
+                "to": "      aggregate:\n        derivations:\n          V: {type: int, derivation: {str_extract: {source: B.V, pattern: '([0-9]+)$', group: 1}}}\n        expr: MAX(V)\n"
+              }
+            ]
+          },
+          "a.csv": "ID,CUT\na,3\nb,2\n",
+          "b.csv": "ID,N,V,USE\na,1,PERIOD 1,Y\na,2,PERIOD 2,Y\nb,1,PERIOD 1,Y\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "an_aggregate_binding_that_extracts_digits_reduces_them",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "      aggregate:\n",
+                "to": "      aggregate:\n        derivations:\n          V: {type: int, derivation: {str_extract: {source: B.V, pattern: '([0-9]+)$', group: 1}}}\n        expr: MAX(V)\n"
+              }
+            ]
+          },
+          "a.csv": "ID,CUT\na,3\nb,2\n",
+          "b.csv": "ID,N,V,USE\na,1,PERIOD 1,Y\na,2,PERIOD 2,Y\nb,1,PERIOD 1,Y\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,CUT,TOTAL\na,3,2\nb,2,1\n"}
+    },
+    {
+      "case": "an_aggregate_binding_that_extracts_digits_in_a_case_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "      aggregate:\n",
+                "to": "      aggregate:\n        derivations:\n          V: {type: int, derivation: {case: [{when: \"B.USE = 'Y'\", then: {str_extract: {source: B.V, pattern: '([0-9]+)$', group: 1}}}, {otherwise: 0}]}}\n        expr: MAX(V)\n"
+              }
+            ]
+          },
+          "a.csv": "ID,CUT\na,3\nb,2\n",
+          "b.csv": "ID,N,V,USE\na,1,PERIOD 1,Y\na,2,PERIOD 2,Y\nb,1,PERIOD 1,Y\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "an_aggregate_binding_that_extracts_digits_in_a_case_reduces_them",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "      aggregate:\n",
+                "to": "      aggregate:\n        derivations:\n          V: {type: int, derivation: {case: [{when: \"B.USE = 'Y'\", then: {str_extract: {source: B.V, pattern: '([0-9]+)$', group: 1}}}, {otherwise: 0}]}}\n        expr: MAX(V)\n"
+              }
+            ]
+          },
+          "a.csv": "ID,CUT\na,3\nb,2\n",
+          "b.csv": "ID,N,V,USE\na,1,PERIOD 1,Y\na,2,PERIOD 2,Y\nb,1,PERIOD 1,Y\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,CUT,TOTAL\na,3,2\nb,2,1\n"}
+    },
+    {
+      "case": "an_aggregate_binding_that_templates_text_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "      aggregate:\n",
+                "to": "      aggregate:\n        derivations:\n          V: {type: str, derivation: {str_template: '{B.V}!'}}\n        expr: COUNT(V)\n"
+              }
+            ]
+          },
+          "a.csv": "ID,CUT\na,3\nb,2\n",
+          "b.csv": "ID,N,V,USE\na,1,PERIOD 1,Y\na,2,PERIOD 2,Y\nb,1,PERIOD 1,Y\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "an_aggregate_binding_that_templates_text_counts_it",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {
+                "from": "      aggregate:\n",
+                "to": "      aggregate:\n        derivations:\n          V: {type: str, derivation: {str_template: '{B.V}!'}}\n        expr: COUNT(V)\n"
+              }
+            ]
+          },
+          "a.csv": "ID,CUT\na,3\nb,2\n",
+          "b.csv": "ID,N,V,USE\na,1,PERIOD 1,Y\na,2,PERIOD 2,Y\nb,1,PERIOD 1,Y\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,CUT,TOTAL\na,3,2\nb,2,1\n"}
+    },
+    {
+      "case": "an_aggregate_with_empty_derivations_is_an_invalid_derive_step",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "spec", "edits": [{"from": "      aggregate:\n", "to": "      aggregate:\n        derivations: {}\n        expr: SUM(V)\n"}]},
+          "a.csv": "ID,CUT\na,2\n",
+          "b.csv": "ID,N,USE\na,2,Y\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule"],
+      "among": true,
+      "issues": [{"condition": "invalid_derive_step", "rule": "LOOKUP-22"}],
+      "saved": {}
+    },
+    {
+      "case": "an_aggregate_binding_of_an_unbound_name_is_refused",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "spec", "edits": [{"from": "      aggregate:\n", "to": "      aggregate:\n        derivations:\n          V: {type: float, derivation: W}\n        expr: SUM(V)\n"}]},
+          "a.csv": "ID,CUT\na,2\n",
+          "b.csv": "ID,N,USE\na,2,Y\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule"],
+      "among": true,
+      "issues": [{"condition": "unknown_derive_variable", "rule": "LOOKUP-22"}],
+      "saved": {}
+    },
+    {
+      "case": "an_aggregate_binding_that_reads_no_record_is_an_invalid_derive_step",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "spec", "edits": [{"from": "      aggregate:\n", "to": "      aggregate:\n        derivations:\n          V: {type: float, derivation: 1}\n        expr: SUM(V)\n"}]},
+          "a.csv": "ID,CUT\na,2\n",
+          "b.csv": "ID,N,USE\na,2,Y\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule"],
+      "among": true,
+      "issues": [{"condition": "invalid_derive_step", "rule": "LOOKUP-22"}],
+      "saved": {}
+    },
+    {
+      "case": "an_aggregate_range_over_incomparable_types_is_refused",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "spec", "edits": [{"from": "      aggregate:\n", "to": "      aggregate:\n        between: {value: CUT, lower: USE}\n        expr: SUM(B.N)\n"}]},
+          "a.csv": "ID,CUT\na,2\n",
+          "b.csv": "ID,N,USE\na,2,Y\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule"],
+      "among": true,
+      "issues": [{"condition": "incomparable_range_types", "rule": "LOOKUP-9"}],
+      "saved": {}
+    },
+    {
+      "case": "an_aggregate_range_bound_its_relation_lacks_is_refused",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "spec", "edits": [{"from": "      aggregate:\n", "to": "      aggregate:\n        between: {value: CUT, lower: ABSENT}\n        expr: SUM(B.N)\n"}]},
+          "a.csv": "ID,CUT\na,2\n",
+          "b.csv": "ID,N,USE\na,2,Y\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule"],
+      "among": true,
+      "issues": [{"condition": "unknown_field", "rule": "LOOKUP-9"}],
+      "saved": {}
+    },
+    {
+      "case": "an_aggregate_range_with_neither_bound_is_refused",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "spec", "edits": [{"from": "      aggregate:\n", "to": "      aggregate:\n        between: {value: CUT}\n        expr: SUM(B.N)\n"}]},
+          "a.csv": "ID,CUT\na,2\n",
+          "b.csv": "ID,N,USE\na,2,Y\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule"],
+      "among": true,
+      "issues": [{"condition": "invalid_field_type", "rule": "LOOKUP-9"}],
+      "saved": {}
+    },
+    {
+      "case": "a_between_value_read_from_another_input_is_refused",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {"from": "      aggregate:\n", "to": "      aggregate:\n        between: {value: C.LIMIT, lower: N}\n        expr: SUM(B.N)\n"},
+              {"from": "  B: {path: b.csv, key: [ID], types: {N: int}}\n", "to": "  B: {path: b.csv, key: [ID], types: {N: int}}\n  C: {path: c.csv, types: {LIMIT: int}}\n"}
+            ]
+          },
+          "a.csv": "ID,CUT\na,1\nb,2\n",
+          "b.csv": "ID,N\na,1\na,2\na,3\nb,1\nb,2\nb,3\n",
+          "c.csv": "ID,LIMIT\nb,3\na,2\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["columns.TOTAL.derivation.aggregate.between.value"], "context": {"identifier": "C.LIMIT"}}]
+    },
+    {
+      "case": "a_between_value_read_from_the_template_driver_builds",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "rows"},
+          "a.csv": "ID,CUT\na,1\nb,2\n",
+          "b.csv": "ID,N\na,1\na,2\na,3\nb,1\nb,2\nb,3\n",
+          "c.csv": "ID,LIMIT\nb,3\na,2\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,ORIGIN,TOTAL\na,A,1\nb,A,3\n"}
+    },
+    {
+      "case": "a_between_value_of_the_first_of_two_template_drivers_is_refused",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "rows",
+            "edits": [
+              {"from": "    derivations: {ID: A.ID, ORIGIN: \"'A'\"}\n", "to": "    derivations: {ID: A.ID, ORIGIN: \"'A'\"}\n  - id: c\n    dataset: C\n    derivations: {ID: C.ID, ORIGIN: \"'C'\"}\n"}
+            ]
+          },
+          "a.csv": "ID,CUT\na,1\nb,2\n",
+          "b.csv": "ID,N\na,1\na,2\na,3\nb,1\nb,2\nb,3\n",
+          "c.csv": "ID,LIMIT\nb,3\na,2\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["columns.TOTAL.derivation.aggregate.between.value"], "context": {"identifier": "A.CUT"}}]
+    },
+    {
+      "case": "a_between_value_of_the_second_of_two_template_drivers_is_refused",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "rows",
+            "edits": [
+              {"from": "        between: {value: A.CUT, lower: N}\n", "to": "        between: {value: C.LIMIT, lower: N}\n"},
+              {"from": "    derivations: {ID: A.ID, ORIGIN: \"'A'\"}\n", "to": "    derivations: {ID: A.ID, ORIGIN: \"'A'\"}\n  - id: c\n    dataset: C\n    derivations: {ID: C.ID, ORIGIN: \"'C'\"}\n"}
+            ]
+          },
+          "a.csv": "ID,CUT\na,1\nb,2\n",
+          "b.csv": "ID,N\na,1\na,2\na,3\nb,1\nb,2\nb,3\n",
+          "c.csv": "ID,LIMIT\nb,3\na,2\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-9", "spec_paths": ["columns.TOTAL.derivation.aggregate.between.value"], "context": {"identifier": "C.LIMIT"}}]
+    },
+    {
+      "case": "a_binding_reads_a_kept_lookup_keyed_on_the_drivers_own_record",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {"from": "      aggregate:\n", "to": "      aggregate:\n        derivations:\n          N: {type: int, derivation: B.N}\n          C: {type: int, derivation: CAP.CUT}\n          VALUE: {type: int, derivation: {least: {sources: [N, C]}}}\n        expr: SUM(VALUE)\n"},
+              {"from": "base: A\n", "to": "base: A\nintermediates:\n  - {id: CAP, dataset: A, key: {ID: A.ID}, order_by: [A.CUT], keep: first}\n"}
+            ]
+          },
+          "a.csv": "ID,CUT\na,2\nb,3\n",
+          "b.csv": "ID,N\nb,10\na,1\na,4\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,CUT,TOTAL\na,2,3\nb,3,3\n"}
+    },
+    {
+      "case": "a_binding_that_reads_a_lookup_without_keep_is_refused",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "spec",
+            "edits": [
+              {"from": "      aggregate:\n", "to": "      aggregate:\n        derivations:\n          N: {type: int, derivation: B.N}\n          C: {type: int, derivation: CAP.CUT}\n          VALUE: {type: int, derivation: {least: {sources: [N, C]}}}\n        expr: SUM(VALUE)\n"},
+              {"from": "base: A\n", "to": "base: A\nintermediates:\n  - {id: CAP, dataset: A, key: {ID: A.ID}, order_by: [A.CUT], keep: first}\n"},
+              {"from": ", order_by: [A.CUT], keep: first", "to": ""}
+            ]
+          },
+          "a.csv": "ID,CUT\na,2\nb,3\n",
+          "b.csv": "ID,N\nb,10\na,1\na,4\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule"],
+      "among": true,
+      "issues": [{"condition": "invalid_derive_step", "rule": "LOOKUP-22"}]
+    },
+    {
+      "case": "a_count_keyed_on_a_later_column_reduces_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless"}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,2\n"}
+    },
+    {
+      "case": "a_count_keyed_on_a_literal_reduces_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        key: {N: K}\n", "to": "        key: {N: 1}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,2\n"}
+    },
+    {
+      "case": "a_count_keyed_on_an_expression_of_a_later_column_reduces_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        key: {N: K}\n", "to": "        key: {N: {greatest: {sources: [K, K]}}}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,2\n"}
+    },
+    {
+      "case": "a_sum_keyed_on_a_later_column_reduces_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'SUM(OTHER.N)'\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,2\n"}
+    },
+    {
+      "case": "a_sum_keyed_on_a_literal_reduces_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'SUM(OTHER.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: 1}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,2\n"}
+    },
+    {
+      "case": "a_sum_keyed_on_an_expression_of_a_later_column_reduces_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'SUM(OTHER.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: {greatest: {sources: [K, K]}}}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,2\n"}
+    },
+    {
+      "case": "two_counts_keyed_on_a_later_column_reduce_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + COUNT(OTHER.*)'\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,4\n"}
+    },
+    {
+      "case": "two_counts_keyed_on_a_literal_reduce_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + COUNT(OTHER.*)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: 1}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,4\n"}
+    },
+    {
+      "case": "two_counts_keyed_on_an_expression_of_a_later_column_reduce_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + COUNT(OTHER.*)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: {greatest: {sources: [K, K]}}}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,4\n"}
+    },
+    {
+      "case": "a_count_and_a_sum_keyed_on_a_later_column_reduce_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + SUM(OTHER.N)'\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,4\n"}
+    },
+    {
+      "case": "a_count_and_a_sum_keyed_on_a_literal_reduce_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + SUM(OTHER.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: 1}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,4\n"}
+    },
+    {
+      "case": "a_count_and_a_sum_keyed_on_an_expression_of_a_later_column_reduce_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + SUM(OTHER.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: {greatest: {sources: [K, K]}}}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,4\n"}
+    },
+    {
+      "case": "a_count_without_a_key_matches_on_the_key_its_input_declares",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "fieldless",
+            "edits": [
+              {"from": "OTHER: {path: other.csv, types: {N: int}}", "to": "OTHER: {path: other.csv, key: [N], types: {N: int}}"},
+              {"from": "keys: [K]", "to": "keys: [N]"},
+              {"from": "columns: [K, V]", "to": "columns: [N, V]"},
+              {"from": "      aggregate:\n        expr: 'COUNT(OTHER.*)'\n        key: {N: K}\n", "to": "      aggregate: 'COUNT(OTHER.*)'\n"},
+              {"from": "name: K", "to": "name: N"}
+            ]
+          },
+          "src.csv": "N\n1\n",
+          "other.csv": "N\n1\n1\n2\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "N,V\n1,2\n"}
+    },
+    {
+      "case": "a_count_keyed_on_a_boolean_literal_is_refused_at_its_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        key: {N: K}\n", "to": "        key: {N: true}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "bool", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_count_keyed_on_a_text_literal_is_refused_at_its_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        key: {N: K}\n", "to": "        key: {N: \"'x'\"}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "str", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_sum_keyed_on_a_boolean_literal_is_refused_at_its_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'SUM(OTHER.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: true}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "bool", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_sum_keyed_on_a_text_literal_is_refused_at_its_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'SUM(OTHER.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: \"'x'\"}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "str", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "two_counts_keyed_on_a_boolean_literal_are_refused_at_their_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + COUNT(OTHER.*)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: true}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "bool", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "two_counts_keyed_on_a_text_literal_are_refused_at_their_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + COUNT(OTHER.*)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: \"'x'\"}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "str", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_count_and_a_sum_keyed_on_a_boolean_literal_are_refused_at_their_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + SUM(OTHER.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: true}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "bool", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_count_and_a_sum_keyed_on_a_text_literal_are_refused_at_their_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + SUM(OTHER.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: \"'x'\"}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "str", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_filtered_count_keyed_on_a_boolean_literal_is_refused_at_its_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        key: {N: K}\n", "to": "        key: {N: true}\n        filter: OTHER.N > 0\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "bool", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_filtered_sum_keyed_on_a_boolean_literal_is_refused_at_its_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'SUM(OTHER.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: true}\n        filter: OTHER.N > 0\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "bool", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_filtered_count_and_sum_keyed_on_a_boolean_literal_are_refused_at_their_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(OTHER.*) + SUM(OTHER.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: true}\n        filter: OTHER.N > 0\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "bool", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_count_keyed_on_a_column_its_relation_lacks_is_refused_at_its_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        key: {N: K}\n", "to": "        key: {ABSENT: K}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"identifier": "OTHER.ABSENT"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_count_keyed_on_a_name_that_reads_nothing_is_refused_at_its_pair",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        key: {N: K}\n", "to": "        key: {N: ABSENT}\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.V.derivation.aggregate.key.N"], "context": {"identifier": "ABSENT"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_count_of_an_undeclared_relation_is_refused_at_its_expression",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(ABSENT.*)'\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.V.derivation.aggregate.expr"], "context": {"identifier": "ABSENT.*"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_filtered_sum_of_an_undeclared_relation_is_refused_at_its_expression",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'SUM(ABSENT.N)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: K}\n        filter: ABSENT.OTHER > 0\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.V.derivation.aggregate.expr"], "context": {"identifier": "ABSENT.N"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_filtered_count_of_an_undeclared_relation_is_refused_at_its_expression",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'COUNT(ABSENT.*)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: K}\n        filter: ABSENT.OTHER > 0\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.V.derivation.aggregate.expr"], "context": {"identifier": "ABSENT.*"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_count_whose_filter_is_its_only_donor_reference_is_refused_at_a_boolean_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        key: {N: K}\n", "to": "        key: {N: true}\n        derivations:\n          H: {type: int, derivation: 1}\n        filter: OTHER.N > 0\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "bool", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_count_whose_filter_is_its_only_donor_reference_reduces_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        key: {N: K}\n", "to": "        key: {N: K}\n        derivations:\n          H: {type: int, derivation: 1}\n        filter: OTHER.N > 0\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,2\n"}
+    },
+    {
+      "case": "a_sum_of_a_literal_binding_whose_filter_is_its_only_donor_reference_is_refused_at_a_boolean_key",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'SUM(H)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: true}\n        derivations:\n          H: {type: int, derivation: 1}\n        filter: OTHER.N > 0\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["columns.V.derivation.aggregate.key"], "context": {"source": "key[N]", "expected": "bool", "actual": "int"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_sum_of_a_literal_binding_whose_filter_is_its_only_donor_reference_reduces_the_matching_donors",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "fieldless", "edits": [{"from": "        expr: 'COUNT(OTHER.*)'\n", "to": "        expr: 'SUM(H)'\n"}, {"from": "        key: {N: K}\n", "to": "        key: {N: K}\n        derivations:\n          H: {type: int, derivation: 1}\n        filter: OTHER.N > 0\n"}]}, "src.csv": "N\n1\n", "other.csv": "N\n1\n1\n2\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "K,V\n1,2\n"}
+    },
+    {
+      "case": "original_aggregate_bindings_reject_forward_references",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "derive",
+            "edits": [
+              {"from": "DERIVE_BINDINGS", "to": "          DOUBLED:\n            type: float\n            derivation: QSNUM\n          QSNUM:\n            type: float\n            derivation: QS.QSORRES"},
+              {"from": "REDUCTION_EXPRESSION", "to": "SUM(DOUBLED)"}
+            ]
+          },
+          "input/qs.csv": {"base": "qs"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "context.variable"],
+      "issues": [{"condition": "unknown_derive_variable", "context": {"variable": "QSNUM"}}]
+    },
+    {
+      "case": "an_aggregate_binding_reads_an_earlier_binding_converted_from_text",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "derive",
+            "edits": [
+              {"from": "DERIVE_BINDINGS", "to": "          QSNUM:\n            type: float\n            derivation: QS.QSORRES\n          DOUBLED:\n            type: float\n            derivation: 'QSNUM * 2'"},
+              {"from": "REDUCTION_EXPRESSION", "to": "SUM(DOUBLED)"}
+            ]
+          },
+          "input/qs.csv": {"base": "qs"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [["STUDYID", "USUBJID", "AVAL"], ["S1", "001", 12.0]]
+    },
+    {
+      "case": "an_aggregate_binding_recovers_an_unconvertible_value",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "derive",
+            "edits": [
+              {"from": "DERIVE_BINDINGS", "to": "          QSNUM:\n            type: float\n            derivation:\n              value: QS.QSORRES\n              unconvertible: 0"},
+              {"from": "REDUCTION_EXPRESSION", "to": "SUM(QSNUM)"}
+            ]
+          },
+          "input/qs.csv": {"base": "qs_with_text"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [["STUDYID", "USUBJID", "AVAL"], ["S1", "001", 4.0]]
+    },
+    {
+      "case": "an_aggregate_binding_without_a_recovery_fails_on_an_unconvertible_value",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "derive",
+            "edits": [
+              {"from": "DERIVE_BINDINGS", "to": "          QSNUM:\n            type: float\n            derivation: QS.QSORRES"},
+              {"from": "REDUCTION_EXPRESSION", "to": "SUM(QSNUM)"}
+            ]
+          },
+          "input/qs.csv": {"base": "qs_with_text"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition"],
+      "issues": [{"condition": "conversion_failed"}]
+    },
+    {
+      "case": "aggregate_bindings_that_read_two_relations_are_an_invalid_derive_step",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "derive",
+            "edits": [
+              {"from": "DERIVE_BINDINGS", "to": "          A:\n            type: float\n            derivation: QS.QSORRES\n          B:\n            type: float\n            derivation: EX.EXSEQ"},
+              {"from": "REDUCTION_EXPRESSION", "to": "SUM(A)"}
+            ]
+          },
+          "input/qs.csv": {"base": "qs"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition"],
+      "among": true,
+      "issues": [{"condition": "invalid_derive_step"}]
+    },
+    {
+      "case": "aggregate_bindings_name_the_relations_they_read_beside_a_kept_lookup",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "derive",
+            "edits": [
+              {"from": "DERIVE_BINDINGS", "to": "          A:\n            type: float\n            derivation: QS.QSORRES\n          B:\n            type: float\n            derivation: XX.YY\n          CAPNUM:\n            type: float\n            derivation: CAP.DSNUM"},
+              {"from": "REDUCTION_EXPRESSION", "to": "SUM(A)"},
+              {"from": "  QS: input/qs.csv", "to": "  QS: input/qs.csv\n  DS: input/ds.csv"},
+              {"from": "output:\n", "to": "intermediates:\n  - id: CAP\n    dataset: DS\n    key: [STUDYID, USUBJID]\n    order_by: [DS.DSNUM]\n    keep: first\noutput:\n"},
+              {"from": "  - id: subscale\n", "to": "  - id: subscale\n    dataset: QS\n"}
+            ]
+          },
+          "input/qs.csv": {"base": "qs"},
+          "input/ds.csv": {"base": "ds"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "context.relations"],
+      "among": true,
+      "issues": [{"condition": "invalid_derive_step", "rule": "LOOKUP-22", "context": {"relations": ["QS", "XX"]}}]
+    },
+    {
+      "case": "an_aggregate_binding_of_a_field_its_relation_lacks_keeps_the_identifier",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "derive",
+            "edits": [
+              {"from": "DERIVE_BINDINGS", "to": "          A:\n            type: float\n            derivation: QS.NOSUCHFIELD"},
+              {"from": "REDUCTION_EXPRESSION", "to": "SUM(A)"},
+              {"from": "  QS: input/qs.csv", "to": "  QS: input/qs.csv\n  DS: input/ds.csv"},
+              {"from": "output:\n", "to": "intermediates:\n  - id: CAP\n    dataset: DS\n    key: [STUDYID, USUBJID]\n    order_by: [DS.DSNUM]\n    keep: first\noutput:\n"},
+              {"from": "  - id: subscale\n", "to": "  - id: subscale\n    dataset: QS\n"}
+            ]
+          },
+          "input/qs.csv": {"base": "qs"},
+          "input/ds.csv": {"base": "ds"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "context.identifier"],
+      "issues": [{"condition": "unknown_field", "rule": "NAME-3", "context": {"identifier": "QS.NOSUCHFIELD"}}]
+    },
+    {
+      "case": "an_aggregate_binding_of_a_column_its_lookup_lacks_keeps_the_identifier",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "derive",
+            "edits": [
+              {"from": "DERIVE_BINDINGS", "to": "          A:\n            type: float\n            derivation: CAP.NOSUCH"},
+              {"from": "REDUCTION_EXPRESSION", "to": "SUM(A)"},
+              {"from": "  QS: input/qs.csv", "to": "  QS: input/qs.csv\n  DS: input/ds.csv"},
+              {"from": "output:\n", "to": "intermediates:\n  - id: CAP\n    dataset: DS\n    key: [STUDYID, USUBJID]\n    order_by: [DS.DSNUM]\n    keep: first\noutput:\n"},
+              {"from": "  - id: subscale\n", "to": "  - id: subscale\n    dataset: QS\n"}
+            ]
+          },
+          "input/qs.csv": {"base": "qs"},
+          "input/ds.csv": {"base": "ds"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "context.identifier"],
+      "issues": [{"condition": "unknown_field", "rule": "LOOKUP-11", "context": {"identifier": "CAP.NOSUCH"}}]
+    },
+    {
+      "case": "an_aggregate_binding_of_a_lookup_without_keep_names_the_intermediate",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "derive",
+            "edits": [
+              {"from": "DERIVE_BINDINGS", "to": "          QSNUM:\n            type: float\n            derivation: QS.QSORRES\n          CAPNUM:\n            type: float\n            derivation: CAP.DSNUM\n          CAPPED:\n            type: float\n            derivation: {least: {sources: [QSNUM, CAPNUM]}}"},
+              {"from": "REDUCTION_EXPRESSION", "to": "SUM(CAPPED)"},
+              {"from": "  QS: input/qs.csv", "to": "  QS: input/qs.csv\n  DS: input/ds.csv"},
+              {"from": "output:\n", "to": "intermediates:\n  - id: CAP\n    dataset: DS\n    key: [STUDYID, USUBJID]\noutput:\n"},
+              {"from": "  - id: subscale\n", "to": "  - id: subscale\n    dataset: QS\n"}
+            ]
+          },
+          "input/qs.csv": {"base": "qs"},
+          "input/ds.csv": {"base": "ds"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "context.intermediate"],
+      "issues": [{"condition": "invalid_derive_step", "rule": "LOOKUP-22", "context": {"intermediate": "CAP"}}]
+    }
+  ]
+}
