@@ -102,7 +102,7 @@ column is never missing under [OUTPUT-3](output.md#output-3), so a
 `not_missing` on a key column restates the keys and fails validation.
 
 Fails: `not_missing_failed`, `redundant_declaration`.
-Evidence: `negative-not-missing-age`, `schema-not-missing-share`, `negative-not-missing-share`, `negative-not-missing-when`, `rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.json`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_not_missing_check_restating_a_mandatory_column_is_redundant`.
+Evidence: `negative-not-missing-age`, `schema-not-missing-share`, `negative-not-missing-share`, `negative-not-missing-when`, `rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.json`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_not_missing_check_on_a_key_is_redundant`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_not_missing_check_restating_a_mandatory_column_is_redundant`.
 
 `when` is a [Formulas](formulas.md) predicate over one constructed output row
 that selects rows as the `when` of `assert` does ([CHECK-12](#check-12)), not
@@ -213,7 +213,7 @@ restates [OUTPUT-3](output.md#output-3), which already requires those values
 to be present and unique, and fails validation.
 
 Fails: `unique_failed`, `redundant_declaration`.
-Evidence: `negative-unique-duplicate`, `negative-unique-repeats-keys`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`.
+Evidence: `negative-unique-duplicate`, `negative-unique-repeats-keys`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_unique_check_over_the_keys_is_redundant`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_unique_check_over_more_than_the_keys_is_its_own_claim`.
 
 Write an unnamed check as `unique: [SITEID, SUBJID]`. The mapping form
 `unique: {columns: [SITEID, SUBJID], id: site-subject}` also admits an
