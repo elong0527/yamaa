@@ -56,6 +56,19 @@ impl Json {
             .unwrap_or_else(|| panic!("no {key:?} member in {self:?}"))
     }
 
+    /// This object, whose members must all be among `members`, so a
+    /// misspelt or unknown member fails rather than being ignored.
+    #[track_caller]
+    pub fn closed(&self, members: &[&str]) -> &Json {
+        for (name, _) in self.members() {
+            assert!(
+                members.contains(&name.as_str()),
+                "unknown member {name:?}; the members are {members:?}"
+            );
+        }
+        self
+    }
+
     #[track_caller]
     pub fn text(&self) -> &str {
         match self {

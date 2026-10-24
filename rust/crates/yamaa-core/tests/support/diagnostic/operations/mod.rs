@@ -1,8 +1,11 @@
 //! The readers of the operations the diagnostic cases name (#3691). Each
-//! reads a case's `input` as the arguments of one core entry point, calls it
-//! and returns every issue it reports, in order, or none when it accepts the
-//! input. A reader asserts nothing about what it returns: the replay compares
-//! that with the case's authored rows.
+//! reads a case's `input` as the arguments of one core entry point, refusing
+//! a member it does not take, calls it and returns every issue it reports, in
+//! order, or none when it accepts the input. A reader asserts nothing about
+//! what it returns: the replay compares that with the case's authored rows.
+//!
+//! Each part of the move owns one module: its readers and the fixture files
+//! its cases are in, so two parts never edit the same lines here.
 use super::json::Json;
 use yamaa_core::{
     diagnostic::Diagnostic,
@@ -10,36 +13,64 @@ use yamaa_core::{
     value::{ColumnType, Value, ValueType},
 };
 
+/// A fixture file of `tests/fixtures/diagnostics/`, read at compile time, so
+/// renaming or deleting it fails the build rather than dropping its cases.
+pub struct File {
+    pub name: &'static str,
+    pub text: &'static str,
+}
+
+macro_rules! fixture {
+    ($name:literal) => {
+        crate::support::diagnostic::operations::File {
+            name: $name,
+            text: include_str!(concat!("../../../fixtures/diagnostics/", $name)),
+        }
+    };
+}
+
+mod document;
 mod sources;
 mod temporal;
 mod text;
 mod values;
 
+// The parts that follow (#3691): A1 submission and the front end, A2
+// preflight and binding, B1 the other declaration tables, B2 the other
+// findings, C the registry walk's own records and the project environment's.
+mod binding;
+mod declarations;
+mod findings;
+mod registry;
+mod submission;
+
+type Reader = fn(&str, &Json) -> Option<Vec<Diagnostic>>;
+
+/// Each module's readers, by the operations it names, and its files.
+const MODULES: [(Reader, &[File]); 10] = [
+    (document::run, document::FILES),
+    (sources::run, sources::FILES),
+    (temporal::run, temporal::FILES),
+    (text::run, text::FILES),
+    (values::run, values::FILES),
+    (submission::run, submission::FILES),
+    (binding::run, binding::FILES),
+    (declarations::run, declarations::FILES),
+    (findings::run, findings::FILES),
+    (registry::run, registry::FILES),
+];
+
 /// The issues `operation` reports for `input`.
 pub fn run(operation: &str, input: &Json) -> Vec<Diagnostic> {
-    match operation {
-        "csv_profile" => sources::csv_profile(input),
-        "csv_types" => sources::csv_types(input),
-        "cut" => values::cut(input),
-        "dataset_finding" => values::dataset_finding(input),
-        "impute" => temporal::impute(input),
-        "impute_policy" => temporal::impute_policy(input),
-        "mapping" => values::mapping(input),
-        "parquet_columns" => sources::parquet_columns(input),
-        "parquet_value" => sources::parquet_value(input),
-        "predicate" => values::predicate(input),
-        "sas_source" => sources::sas_source(input),
-        "str_case" => text::str_case(input),
-        "str_extract" => text::str_extract(input),
-        "str_extract_apply" => text::str_extract_apply(input),
-        "str_extract_unknown" => text::str_extract_unknown(input),
-        "str_extract_unmatched" => text::str_extract_unmatched(input),
-        "str_pad" => text::str_pad(input),
-        "str_template" => text::str_template(input),
-        "str_template_missing" => text::str_template_missing(input),
-        "yaml_source" => sources::yaml_source(input),
-        other => panic!("no reader for the operation {other:?}"),
-    }
+    MODULES
+        .iter()
+        .find_map(|(run, _)| run(operation, input))
+        .unwrap_or_else(|| panic!("no reader for the operation {operation:?}"))
+}
+
+/// Every fixture file the modules read.
+pub fn files() -> impl Iterator<Item = &'static File> {
+    MODULES.iter().flat_map(|(_, files)| files.iter())
 }
 
 /// The text member `key` of `input`.
@@ -50,8 +81,9 @@ fn text<'a>(input: &'a Json, key: &str) -> &'a str {
 
 /// A value as a case writes it: `null` is missing, a string is `str`, an
 /// integer token is `int` and a token with a fraction or exponent `float`, a
-/// Boolean is `bool`, and `{"date": "YYYY-MM-DD"}` is that date, collected
-/// to the day or to the `precision` written beside it.
+/// Boolean is `bool`, `{"date": "YYYY-MM-DD"}` is that date, collected to the
+/// day or to the `precision` written beside it, and `{"datetime": ...}` is
+/// the datetime its text spells.
 #[track_caller]
 fn value(json: &Json) -> Value {
     match json {
@@ -62,8 +94,13 @@ fn value(json: &Json) -> Value {
             Value::float(token.parse().expect("a finite float"))
         }
         Json::Number(_) => Value::Int(json.integer()),
+        Json::Object(_) if json.get("datetime").is_some() => Value::DateTime(
+            text(json.closed(&["datetime"]), "datetime")
+                .parse()
+                .expect("a datetime"),
+        ),
         Json::Object(_) => {
-            let text = json.field("date").text();
+            let text = text(json.closed(&["date", "precision"]), "date");
             let Some(precision) = json.get("precision") else {
                 return Value::Date(text.parse().expect("a date"));
             };

@@ -397,12 +397,15 @@ made to both, and `make check-repository` fails while they differ
   (`tests/portable_math_golden.rs` in core).
 - Core's expected diagnostics are data (#3691): each case of
   `tests/fixtures/diagnostics/*.json` names the behaviour it proves, the
-  core operation that reaches it, that operation's input and the complete
-  issue rows it reports, in the shape `assert_issues` compares.
+  core operations that reach it, their input (a specification is a JSON
+  object, or a document of the file's `documents` with edits) and the
+  complete issue rows they report, in the shape `assert_issues` compares.
   `support::diagnostic::replay` replays every case once, inside
   `diagnostics.rs`'s registry walk, and renders each issue's message. A case
-  of an existing operation is data alone; a new operation gets its reader in
-  `support::diagnostic::operations`.
+  of an existing operation is data alone; a new operation's reader, and a
+  new fixture file, are declared in their module under
+  `support::diagnostic::operations`. A case whose source compared only part
+  of each record names the fields it compares in `compares`.
 - A variant of a document comes from an exact-once edit,
   `document.edit(from, to)` through the adapters' `support::Edit`, never
   from `str::replace`, which does nothing when its pattern is missing.

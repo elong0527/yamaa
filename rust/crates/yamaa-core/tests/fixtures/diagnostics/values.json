@@ -1,5 +1,5 @@
 {
-  "about": "Value-level refusals: mapping and cut (EXPR-11 to EXPR-13, COLUMN-10), the findings a run reports for a key, lookup, baseline or reduction (COLUMN-2, LOOKUP-10, LOOKUP-24, WINDOW-9, FORMULA-23), and predicate evaluation over bound values (FORMULA-5 to FORMULA-9), whose operand route names the failing operand. Moved from the Rust tables support/diagnostic/{mapping_cut,dataset,predicate_evaluation}.rs (#3691).",
+  "about": "Value-level refusals: mapping and cut (EXPR-11 to EXPR-13, COLUMN-10), the findings a run reports for a key, lookup, baseline or reduction (COLUMN-2, LOOKUP-10, LOOKUP-24, WINDOW-9, FORMULA-23), and predicate evaluation over bound values (FORMULA-5 to FORMULA-9), whose operand route names the failing operand.",
   "cases": [
     {
       "case": "a_mapping_refuses_a_source_that_is_not_text",

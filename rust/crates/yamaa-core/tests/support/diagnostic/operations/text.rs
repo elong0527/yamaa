@@ -1,5 +1,5 @@
 //! The text verbs' entry points (TEXT-1 to TEXT-10).
-use super::{text, value};
+use super::{text, value, File};
 use crate::support::diagnostic::json::Json;
 use yamaa_core::{
     diagnostic::Diagnostic,
@@ -10,8 +10,25 @@ use yamaa_core::{
     text_template::StringTemplate,
 };
 
+pub(super) const FILES: &[File] = &[fixture!("text.json")];
+
+pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
+    Some(match operation {
+        "str_case" => str_case(input),
+        "str_extract" => str_extract(input),
+        "str_extract_apply" => str_extract_apply(input),
+        "str_extract_unknown" => str_extract_unknown(input),
+        "str_extract_unmatched" => str_extract_unmatched(input),
+        "str_pad" => str_pad(input),
+        "str_template" => str_template(input),
+        "str_template_missing" => str_template_missing(input),
+        _ => return None,
+    })
+}
+
 /// `str_pad`'s declaration, `{source, path, width}`: its refusal at `path`.
-pub(super) fn str_pad(input: &Json) -> Vec<Diagnostic> {
+fn str_pad(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&["source", "path", "width"]);
     let path = text(input, "path");
     match StringPad::new(text(input, "source"), path, text(input, "width")) {
         Ok(_) => Vec::new(),
@@ -20,7 +37,8 @@ pub(super) fn str_pad(input: &Json) -> Vec<Diagnostic> {
 }
 
 /// `str_case` in `case` applied to `value`, `{source, path, case, value}`.
-pub(super) fn str_case(input: &Json) -> Vec<Diagnostic> {
+fn str_case(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&["source", "path", "case", "value"]);
     let case = match text(input, "case") {
         "upper" => Case::Upper,
         "lower" => Case::Lower,
@@ -43,8 +61,8 @@ pub(super) fn str_case(input: &Json) -> Vec<Diagnostic> {
 }
 
 /// `str_template`'s declaration, `{template, path}`.
-pub(super) fn str_template(input: &Json) -> Vec<Diagnostic> {
-    template(input)
+fn str_template(input: &Json) -> Vec<Diagnostic> {
+    template(input.closed(&["template", "path"]))
         .declaration_diagnostic()
         .cloned()
         .into_iter()
@@ -53,7 +71,8 @@ pub(super) fn str_template(input: &Json) -> Vec<Diagnostic> {
 
 /// The failure of `str_template` when its `part`-th placeholder reads a
 /// missing value, `{template, path, part}`.
-pub(super) fn str_template_missing(input: &Json) -> Vec<Diagnostic> {
+fn str_template_missing(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&["template", "path", "part"]);
     template(input)
         .missing_diagnostic(input.field("part").integer())
         .into_iter()
@@ -69,9 +88,12 @@ fn template(input: &Json) -> StringTemplate {
     .expect("an admitted declaration")
 }
 
+/// The members every `str_extract` operation reads.
+const EXTRACT: [&str; 4] = ["source", "path", "pattern", "group"];
+
 /// `str_extract`'s declaration, `{source, path, pattern, group}`.
-pub(super) fn str_extract(input: &Json) -> Vec<Diagnostic> {
-    extract(input)
+fn str_extract(input: &Json) -> Vec<Diagnostic> {
+    extract(input.closed(&EXTRACT))
         .declaration_diagnostic()
         .cloned()
         .into_iter()
@@ -79,7 +101,8 @@ pub(super) fn str_extract(input: &Json) -> Vec<Diagnostic> {
 }
 
 /// `str_extract` applied to `value`.
-pub(super) fn str_extract_apply(input: &Json) -> Vec<Diagnostic> {
+fn str_extract_apply(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&[EXTRACT.as_slice(), &["value"]].concat());
     let value = value(input.field("value"));
     match extract(input).apply(ValueRef::from(&value)) {
         Ok(_) => Vec::new(),
@@ -88,7 +111,8 @@ pub(super) fn str_extract_apply(input: &Json) -> Vec<Diagnostic> {
 }
 
 /// The failure of `str_extract` when its pattern matches nowhere in `value`.
-pub(super) fn str_extract_unmatched(input: &Json) -> Vec<Diagnostic> {
+fn str_extract_unmatched(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&[EXTRACT.as_slice(), &["value"]].concat());
     extract(input)
         .failure_diagnostic(Step::NoMatch(text(input, "value")))
         .into_iter()
@@ -96,8 +120,8 @@ pub(super) fn str_extract_unmatched(input: &Json) -> Vec<Diagnostic> {
 }
 
 /// The failure of `str_extract` when its source names no field.
-pub(super) fn str_extract_unknown(input: &Json) -> Vec<Diagnostic> {
-    vec![extract(input).unknown_diagnostic()]
+fn str_extract_unknown(input: &Json) -> Vec<Diagnostic> {
+    vec![extract(input.closed(&EXTRACT)).unknown_diagnostic()]
 }
 
 fn extract(input: &Json) -> StringExtract {

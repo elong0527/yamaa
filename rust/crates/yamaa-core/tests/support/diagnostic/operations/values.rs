@@ -1,7 +1,7 @@
 //! The value-level entry points: mapping and cut (EXPR-11 to EXPR-13), the
 //! dataset findings of a run, and predicate evaluation (FORMULA-5 to
 //! FORMULA-9).
-use super::{text, value, value_type};
+use super::{text, value, value_type, File};
 use crate::support::diagnostic::json::Json;
 use std::{collections::BTreeMap, convert::Infallible};
 use yamaa_core::{
@@ -13,10 +13,23 @@ use yamaa_core::{
     value::{Selection, Value},
 };
 
+pub(super) const FILES: &[File] = &[fixture!("values.json")];
+
+pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
+    Some(match operation {
+        "cut" => cut(input),
+        "dataset_finding" => dataset_finding(input),
+        "mapping" => mapping(input),
+        "predicate" => predicate(input),
+        _ => return None,
+    })
+}
+
 /// `mapping`'s declaration, `{source, path, entries, case_sensitive}`, with
 /// `entries` as `[key, value]` pairs, then the selection of `select` when the
 /// case writes one.
-pub(super) fn mapping(input: &Json) -> Vec<Diagnostic> {
+fn mapping(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&["source", "path", "entries", "case_sensitive", "select"]);
     let declared = Mapping::new(
         text(input, "source").into(),
         text(input, "path").into(),
@@ -40,7 +53,8 @@ pub(super) fn mapping(input: &Json) -> Vec<Diagnostic> {
 
 /// `cut`'s declaration, `{source, path, breaks, labels, right}`, then the
 /// selection of `select` when the case writes one.
-pub(super) fn cut(input: &Json) -> Vec<Diagnostic> {
+fn cut(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&["source", "path", "breaks", "labels", "right", "select"]);
     let declared = Cut::new(
         text(input, "source").into(),
         text(input, "path").into(),
@@ -92,28 +106,38 @@ fn selected<T>(
 /// `baseline_ambiguity` with `column`, `date` and `count`, and
 /// `reduction_input_type` with `expression`, `reducer`, `source` and
 /// `actual`.
-pub(super) fn dataset_finding(input: &Json) -> Vec<Diagnostic> {
+fn dataset_finding(input: &Json) -> Vec<Diagnostic> {
     let path = text(input, "path");
     let count = || input.field("count").integer();
     let date;
     let finding = match text(input, "finding") {
-        "multiple_values" => DatasetFinding::MultipleValues {
-            path,
-            identifier: text(input, "identifier"),
-            count: count(),
-        },
-        "unmatched_key" => DatasetFinding::UnmatchedKey {
-            path,
-            dataset: text(input, "dataset"),
-            intermediate: text(input, "intermediate"),
-        },
-        "multiple_matches" => DatasetFinding::MultipleMatches {
-            path,
-            dataset: text(input, "dataset"),
-            intermediate: text(input, "intermediate"),
-            count: count(),
-        },
+        "multiple_values" => {
+            input.closed(&["finding", "path", "identifier", "count"]);
+            DatasetFinding::MultipleValues {
+                path,
+                identifier: text(input, "identifier"),
+                count: count(),
+            }
+        }
+        "unmatched_key" => {
+            input.closed(&["finding", "path", "dataset", "intermediate"]);
+            DatasetFinding::UnmatchedKey {
+                path,
+                dataset: text(input, "dataset"),
+                intermediate: text(input, "intermediate"),
+            }
+        }
+        "multiple_matches" => {
+            input.closed(&["finding", "path", "dataset", "intermediate", "count"]);
+            DatasetFinding::MultipleMatches {
+                path,
+                dataset: text(input, "dataset"),
+                intermediate: text(input, "intermediate"),
+                count: count(),
+            }
+        }
         "baseline_ambiguity" => {
+            input.closed(&["finding", "path", "column", "date", "count"]);
             date = value(input.field("date"));
             DatasetFinding::BaselineAmbiguity {
                 path,
@@ -122,17 +146,27 @@ pub(super) fn dataset_finding(input: &Json) -> Vec<Diagnostic> {
                 count: count(),
             }
         }
-        "reduction_input_type" => DatasetFinding::ReductionInputType {
-            path,
-            expression: text(input, "expression"),
-            reducer: match text(input, "reducer") {
-                "SUM" => NumericReducer::Sum,
-                "MEAN" => NumericReducer::Mean,
-                other => panic!("no numeric reducer {other:?}"),
-            },
-            source: text(input, "source"),
-            actual: value_type(input.field("actual")),
-        },
+        "reduction_input_type" => {
+            input.closed(&[
+                "finding",
+                "path",
+                "expression",
+                "reducer",
+                "source",
+                "actual",
+            ]);
+            DatasetFinding::ReductionInputType {
+                path,
+                expression: text(input, "expression"),
+                reducer: match text(input, "reducer") {
+                    "SUM" => NumericReducer::Sum,
+                    "MEAN" => NumericReducer::Mean,
+                    other => panic!("no numeric reducer {other:?}"),
+                },
+                source: text(input, "source"),
+                actual: value_type(input.field("actual")),
+            }
+        }
         other => panic!("no dataset finding {other:?}"),
     };
     vec![finding.diagnostic().expect("a complete context")]
@@ -140,7 +174,7 @@ pub(super) fn dataset_finding(input: &Json) -> Vec<Diagnostic> {
 
 /// The evaluation of a predicate, `{expression, path, bindings}`, where each
 /// name `bindings` gives reads its value and every other name is absent.
-pub(super) fn predicate(input: &Json) -> Vec<Diagnostic> {
+fn predicate(input: &Json) -> Vec<Diagnostic> {
     struct Bindings(BTreeMap<String, Value>);
     impl Resolver for Bindings {
         type Error = Infallible;
@@ -152,6 +186,7 @@ pub(super) fn predicate(input: &Json) -> Vec<Diagnostic> {
                 .map_or(Selection::Absent, Selection::Present))
         }
     }
+    let input = input.closed(&["expression", "path", "bindings"]);
     let mut bindings = Bindings(
         input
             .field("bindings")

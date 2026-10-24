@@ -1,5 +1,5 @@
 {
-  "about": "The refusals of the text verbs str_pad, str_case, str_template and str_extract (TEXT-1 to TEXT-10, COLUMN-10, NAME-3), each reached by the verb's own declaration or step. Moved from the Rust tables support/diagnostic/text_*.rs (#3691); the wide-group record completes the table's partial one from its sibling record.",
+  "about": "The refusals of the text verbs str_pad, str_case, str_template and str_extract (TEXT-1 to TEXT-10, COLUMN-10, NAME-3), each reached by the verb's own declaration or step.",
   "cases": [
     {
       "case": "str_pad_refuses_a_width_that_is_not_a_positive_integer",

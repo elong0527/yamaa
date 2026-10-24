@@ -1,5 +1,5 @@
 {
-  "about": "The source readers' refusals as core classifies them: the SAS reader's (SAS-7), the CSV profile's and typing's (CSV-10, CSV-16, INPUT-6, INPUT-7), Parquet's (PARQUET-5 to PARQUET-9) and the YAML source's (SPEC-8, SCHEMA-3, VALUE-11). The adapters' suites pin which bytes give which refusal. Moved from the Rust tables support/diagnostic/{sas,csv,parquet,yaml_source}.rs (#3691); the declared byte-order-mark record completes the table's partial one from its undeclared sibling, and the invalid-YAML and invalid-text contexts take the keys the adapters' yaml_transport.json and the host fixtures' compact-yaml family write for the same refusals.",
+  "about": "The source readers' refusals as core classifies them: the SAS reader's (SAS-7), the CSV profile's and typing's (CSV-10, CSV-16, INPUT-6, INPUT-7), Parquet's (PARQUET-5 to PARQUET-9) and the YAML source's (SPEC-8, SCHEMA-3, VALUE-11). The adapters' suites pin which bytes give which refusal.",
   "cases": [
     {
       "case": "a_sas_transport_file_that_breaks_its_framing_is_invalid",

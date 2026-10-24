@@ -103,7 +103,7 @@ refused, as its literal answers each failure, and a result that is always
 missing converts to every type.
 
 Fails: `conversion_failed`.
-Evidence: `negative-study-day-date-column`, `rust/crates/yamaa-core/tests/support/diagnostic/result_types.rs`, `rust/crates/yamaa-adapters/tests/fixtures/column_literals.json`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::row_boolean_is_refused_at_validation_and_refuses_every_save`.
+Evidence: `negative-study-day-date-column`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/result_types.json::a_row_number_is_refused_for_a_datetime_column`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/result_types.json::an_integer_literal_is_refused_for_a_date_column`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/result_types.json::a_boolean_literal_is_refused_for_a_text_column`, `rust/crates/yamaa-adapters/tests/fixtures/column_literals.json`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::row_boolean_is_refused_at_validation_and_refuses_every_save`.
 
 The failure names the column whose lifecycle cannot complete, as a
 conversion failure does, or the typed intermediate derivation or aggregate

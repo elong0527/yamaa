@@ -1,33 +1,39 @@
 //! The diagnostic contracts: the replay of the expected issues written as
 //! data under `tests/fixtures/diagnostics/` (#3691), its readers, and the
 //! independently authored Rust tables not yet moved there.
-pub mod aggregate;
+pub mod json;
+pub mod operations;
+pub mod replay;
+
+// The tables still written in Rust, one group for each part of #3691 that
+// moves them, so the parts never edit the same lines: submission and the
+// front end (A1), preflight and binding (A2), the other declarations (B1)
+// and the other findings (B2).
+pub mod front_end;
+pub mod submission;
+
 pub mod binding;
+pub mod preflight;
+
 pub mod copy_entry;
 pub mod declarative_flags;
-pub mod front_end;
-pub mod grammar;
-pub mod inheritance;
 pub mod intermediate_ranges;
 pub mod intermediate_scopes;
-pub mod json;
 pub mod language;
-pub mod odm;
-pub mod odm_read;
-pub mod operations;
-pub mod preflight;
 pub mod producer;
-pub mod project_activation;
-pub mod project_codelist_binding;
 pub mod project_functions;
-pub mod project_lock;
 pub mod project_scope;
 pub mod record_operations;
-pub mod replay;
-pub mod result_types;
 pub mod schema;
-pub mod submission;
-pub mod temporal_arithmetic;
+
+pub mod aggregate;
+pub mod grammar;
+pub mod inheritance;
+pub mod odm;
+pub mod odm_read;
+pub mod project_activation;
+pub mod project_codelist_binding;
+pub mod project_lock;
 pub mod verification;
 
 use std::{cell::RefCell, collections::BTreeSet};
