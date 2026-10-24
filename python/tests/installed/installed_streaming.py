@@ -83,7 +83,7 @@ class Streaming(unittest.TestCase):
         root = self.root / "study"
         root.mkdir()
         (root / "spec.yaml").write_text(TRUTH["specification_yaml"], encoding="utf-8")
-        (root / "input.csv").write_text(TRUTH["input_csv"], encoding="utf-8")
+        (root / "input.csv").write_bytes(TRUTH["input_csv"].encode("utf-8"))
         return root
 
     def large(self):
@@ -95,7 +95,10 @@ class Streaming(unittest.TestCase):
         records = "".join(
             f"{record},{prefix}{record}\n" for record in range(1, LARGE["records"] + 1)
         )
-        (root / "input.csv").write_text("ID,NAME\n" + records, encoding="utf-8")
+        # Bytes, not text mode, which on Windows ends each record in U+000D
+        # U+000A: a test compares this input with the saved CSV, whose records
+        # end in U+000A (CSV-1).
+        (root / "input.csv").write_bytes(("ID,NAME\n" + records).encode("utf-8"))
         return root
 
     def test_a_streamed_output_holds_the_expected_rows_and_saves_the_expected_file(
@@ -195,16 +198,15 @@ class Streaming(unittest.TestCase):
         del reader
         gc.collect()
         saved = [Path(path).name for path in run.save()]
+        written = (root / "output.csv").read_bytes()
         # The specification copies both columns in input order, so its CSV
-        # writes the input's text again (CSV-2, CSV-3, VALUE-8).
+        # writes the input's text again (CSV-2, CSV-3, VALUE-8). The two
+        # megabyte files are compared as one Boolean, as the large output's
+        # IDs are: a failure that held them both would make unittest diff
+        # them, which CPython before 3.14 does in cubic time.
         self.assertEqual(
-            (rows, run.status, saved, (root / "output.csv").read_bytes()),
-            (
-                LARGE["batches"],
-                "succeeded",
-                ["output.csv"],
-                (root / "input.csv").read_bytes(),
-            ),
+            (rows, run.status, saved, written == (root / "input.csv").read_bytes()),
+            (LARGE["batches"], "succeeded", ["output.csv"], True),
         )
 
     def test_an_interrupt_before_the_first_pull_or_between_batches_cancels_the_run(
