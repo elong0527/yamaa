@@ -70,13 +70,18 @@ mod execution {
                 case.label
             );
         }
-        /// Seams the replay cannot express: an absent output table and the
-        /// save's return value. The family's authored build/save refusals
-        /// expose no output and return FailedBuild when they produce a domain.
+        /// Seams the replay cannot express: the Rust build route, an absent
+        /// output table, and the save's return value. The authored routes
+        /// retain the original tests' unwrap/refusal/either call shapes.
         #[test]
         fn refused_case_predicate_domains_have_no_output_and_fail_saves() {
             use crate::support::diagnostic::{operations, replay};
 
+            let expectations: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(
+                include_str!("fixtures/declarative_case_predicates_api_routes.json"),
+            )
+            .unwrap();
+            let routes = expectations["routes"].as_object().unwrap();
             let cases = replay::cases()
                 .into_iter()
                 .filter(|case| {
@@ -89,18 +94,60 @@ mod execution {
                 })
                 .collect::<Vec<_>>();
             assert!(!cases.is_empty(), "the family has authored refusals");
+            assert_eq!(
+                cases.len(),
+                routes.len(),
+                "every refusal has an authored API route"
+            );
             for case in cases {
+                let name = case
+                    .label
+                    .strip_prefix("declarative_case_predicates.json::")
+                    .unwrap();
+                let expected = routes
+                    .get(name)
+                    .unwrap_or_else(|| panic!("{} needs an authored API route", case.label));
+                let route = expected["build"].as_str().unwrap();
+                assert!(matches!(route, "domain" | "preparation" | "either"));
                 let fixture = Fixture(operations::study(&case.input));
                 let body = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
-                if let Ok(mut result) = fixture.run(&body) {
-                    let has_output = result.output().is_some();
-                    let save_failed = matches!(result.save(), Err(file_application::FailedBuild));
-                    assert_eq!(
-                        (has_output, save_failed),
-                        (false, true),
-                        "{}: a refused domain has no output and fails its save",
+                let target = fixture.0.join(expected["primary"].as_str().unwrap());
+                let snapshot = || match fs::read(&target) {
+                    Ok(bytes) => Some(bytes),
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+                    Err(error) => panic!("{}: cannot inspect primary: {error}", case.label),
+                };
+                let before = snapshot();
+                let built = fixture.run(&body);
+                assert_eq!(snapshot(), before, "{}: build does not publish", case.label);
+                match built {
+                    Ok(mut result) => {
+                        assert_ne!(
+                            route, "preparation",
+                            "{}: expected preparation refusal",
+                            case.label
+                        );
+                        let has_output = result.output().is_some();
+                        let save_failed =
+                            matches!(result.save(), Err(file_application::FailedBuild));
+                        assert_eq!(
+                            (has_output, save_failed),
+                            (false, true),
+                            "{}: a refused domain has no output and fails its save",
+                            case.label
+                        );
+                        assert_eq!(
+                            snapshot(),
+                            before,
+                            "{}: refusal preserves the primary",
+                            case.label
+                        );
+                    }
+                    Err(issues) => assert_ne!(
+                        route, "domain",
+                        "{}: expected a domain, got preparation refusal {issues:?}",
                         case.label
-                    );
+                    ),
                 }
             }
         }

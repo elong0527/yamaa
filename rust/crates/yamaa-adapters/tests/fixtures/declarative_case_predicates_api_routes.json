@@ -1,0 +1,32 @@
+{
+  "about": "Rust API routes and primary targets transcribed from the original execution_declarative_case_predicates.rs tests at 3ef81d798, before #3836 and #3837. domain preserves unwrap, preparation preserves an explicit Err, and either preserves the correlated-predicate refusal helper's two allowed routes. No candidate output was captured. The diagnostic replay owns the existing inputs and issue expectations.",
+  "routes": {
+    "case_predicate_multiplicity_retains_its_complete_report_and_blocks_publication": {"build": "domain", "primary": "result.csv"},
+    "an_incomplete_verification_predicate_refuses_a_column_case": {"build": "domain", "primary": "result.csv"},
+    "an_incomplete_verification_predicate_refuses_a_record_row": {"build": "domain", "primary": "result.csv"},
+    "an_incomplete_verification_predicate_refuses_a_grouped_row": {"build": "domain", "primary": "result.csv"},
+    "a_non_text_verification_predicate_is_refused_beside_a_column_case": {"build": "preparation", "primary": "result.csv"},
+    "a_non_text_verification_predicate_is_refused_beside_a_record_row": {"build": "preparation", "primary": "result.csv"},
+    "a_non_text_verification_predicate_is_refused_beside_a_grouped_row": {"build": "preparation", "primary": "result.csv"},
+    "false_when_still_resolves_require_lookup_and_refuses_a_required_match": {"build": "domain", "primary": "result.csv"},
+    "empty_output_validates_lookup_operand_types_without_selecting_a_donor": {"build": "domain", "primary": "result.csv"},
+    "a_warning_assertion_refuses_a_missing_lookup_field_at_its_when": {"build": "domain", "primary": "result.csv"},
+    "a_warning_assertion_refuses_a_missing_lookup_field_at_its_require": {"build": "domain", "primary": "result.csv"},
+    "known_unrelated_input_fields_are_refused_with_complete_selection_geometry": {"build": "either", "primary": "result.csv"},
+    "a_bare_stored_field_in_a_correlated_filter_suggests_its_qualifier": {"build": "either", "primary": "result.csv"},
+    "resolved_source_keys_still_refuse_the_original_bad_donor_filter": {"build": "domain", "primary": "out.csv"},
+    "ordinary_source_keys_keep_static_filter_types_before_key_cardinality": {"build": "domain", "primary": "out.csv"},
+    "a_deferred_filter_type_is_refused_over_an_empty_donor": {"build": "domain", "primary": "out.csv"},
+    "a_deferred_filter_type_is_refused_over_an_empty_driver": {"build": "domain", "primary": "out.csv"},
+    "a_deferred_filter_type_is_refused_over_a_missing_operand": {"build": "domain", "primary": "out.csv"},
+    "a_deferred_filter_type_is_refused_in_an_unread_branch": {"build": "domain", "primary": "out.csv"},
+    "a_deferred_filter_type_is_refused_beside_a_false_conjunct": {"build": "domain", "primary": "out.csv"},
+    "a_hidden_read_has_the_complete_original_reference_finding_and_no_output": {"build": "domain", "primary": "result.csv"},
+    "csv_present_empty_is_rejected_before_study_bytes_are_requested": {"build": "preparation", "primary": "result.csv"},
+    "a_root_filter_forbids_a_constructed_column": {"build": "domain", "primary": "result.csv"},
+    "a_root_filter_forbids_conflicting_row_templates_before_reading_input": {"build": "preparation", "primary": "result.csv"},
+    "an_ordinal_on_the_fixed_odm_schema_is_refused_before_capture": {"build": "preparation", "primary": "result.csv"},
+    "a_nested_column_odm_derivation_still_rejects_an_ordinal_before_capture": {"build": "preparation", "primary": "result.csv"},
+    "a_row_odm_derivation_still_rejects_an_ordinal_before_capture": {"build": "preparation", "primary": "result.csv"}
+  }
+}
