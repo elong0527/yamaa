@@ -18,7 +18,9 @@
 # implement; the stability contract freezes its manifest from 1.0.0.
 format: yamaa.host-interface
 format_version: 2
-boundary: rust_generated_host_glue
+# How the generated glue of each binding reaches the engine: through the
+# engine's C ABI and yamaa-boundary's client (README.md, "The boundary").
+boundary: engine_c_abi
 contract: README.md
 
 # Roles are imports, not declarations of a second schema. The generator

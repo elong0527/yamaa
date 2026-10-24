@@ -10,8 +10,11 @@ import argparse
 import os
 import shutil
 import subprocess
+import tempfile
+from pathlib import Path
 
 from tools.ci.toolchain import channel, declaration, install_command
+from tools.commands import loaded
 from tools.paths import ROOT
 
 
@@ -40,29 +43,25 @@ def main(argv=None):
             install_command(declaration(), notices=True), cwd=ROOT, check=True
         )
     environment = os.environ | {"RUSTUP_TOOLCHAIN": channel()}
-    subprocess.run(
-        [
-            uv,
-            "sync",
-            "--project",
-            "python",
-            "--extra",
-            "test",
-            "--group",
-            "benchmark",
-            "--group",
-            "tooling",
-            "--locked",
-            "--no-editable",
-            "--config-setting",
-            "build-args=--profile=dev",
-            # The docs workflow leaves the package out of its sync the same way.
-            *(("--no-install-package", "yamaa") if arguments.without_package else ()),
-        ],
-        cwd=ROOT,
-        env=environment,
-        check=True,
-    )
+    sync = [
+        uv,
+        "sync",
+        "--project",
+        "python",
+        "--extra",
+        "test",
+        "--group",
+        "benchmark",
+        "--group",
+        "tooling",
+        "--locked",
+        "--no-editable",
+        "--config-setting",
+        "build-args=--profile=dev",
+        # The docs workflow leaves the package out of its sync the same way.
+        *(("--no-install-package", "yamaa") if arguments.without_package else ()),
+    ]
+    subprocess.run(sync, cwd=ROOT, env=environment, check=True)
     interpreter = subprocess.check_output(
         [
             uv,
@@ -91,6 +90,59 @@ def main(argv=None):
         cwd=ROOT,
         check=True,
     )
+    if not arguments.without_package:
+        engine_mode(uv, interpreter, environment, sync)
+
+
+def engine_mode(uv, interpreter, environment, sync):
+    """Install the package in the link mode YAMAA_ENGINE selects. The locked
+    environment holds the linked build; the loaded mode replaces it with a
+    build that links no engine, and places the engine library beside its
+    module (tools/commands/loaded.py). A linked setup after a loaded one,
+    whose engine library is still beside the module, syncs the linked build
+    in again and takes that library away."""
+    library = loaded.package_directory(interpreter) / loaded.LIBRARY
+    if not loaded.loaded():
+        if library.exists() or library.is_symlink():
+            subprocess.run(
+                [*sync, "--reinstall-package", "yamaa"],
+                cwd=ROOT,
+                env=environment,
+                check=True,
+            )
+            library.unlink()
+        return
+    with tempfile.TemporaryDirectory(prefix="yamaa-loaded-wheel-") as directory:
+        subprocess.run(
+            [
+                uv,
+                "build",
+                "python",
+                "--wheel",
+                "--out-dir",
+                directory,
+                "--config-setting",
+                f"build-args=--profile=dev {loaded.WHEEL_ARGUMENTS}",
+            ],
+            cwd=ROOT,
+            env=environment,
+            check=True,
+        )
+        subprocess.run(
+            [
+                uv,
+                "pip",
+                "install",
+                "--python",
+                interpreter,
+                "--no-deps",
+                "--reinstall",
+                *map(str, Path(directory).glob("*.whl")),
+            ],
+            cwd=ROOT,
+            check=True,
+        )
+    loaded.install_beside(interpreter, loaded.build_engine())
 
 
 if __name__ == "__main__":

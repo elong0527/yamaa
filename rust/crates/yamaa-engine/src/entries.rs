@@ -1209,18 +1209,24 @@ unsafe impl Send for Facts {}
 // SAFETY: as above.
 unsafe impl Sync for Facts {}
 
-fn facts() -> &'static Facts {
-    static FACTS: OnceLock<Facts> = OnceLock::new();
-    FACTS.get_or_init(|| {
+impl Facts {
+    /// The facts of this engine, without the identifiers `withheld`.
+    fn of(withheld: &[&str]) -> Facts {
         let info = yamaa::info(yamaa::Host::Cli, None);
-        let facts = EngineFacts::new(&info.features, yamaa::VERSION, &info.language_versions);
+        let facts = EngineFacts::new(&info.features, yamaa::VERSION, &info.language_versions)
+            .withholding(withheld);
         let views = |texts: &[String]| texts.iter().map(|text| Str::of(text)).collect();
         Facts {
             supported: views(facts.supported()),
             language_versions: views(facts.language_versions()),
             facts,
         }
-    })
+    }
+}
+
+fn facts() -> &'static Facts {
+    static FACTS: OnceLock<Facts> = OnceLock::new();
+    FACTS.get_or_init(|| Facts::of(&[]))
 }
 
 /// A request as the boundary's check order reads it. A request too short to
@@ -1328,9 +1334,10 @@ unsafe fn write_outcome(
 /// the function table on acceptance, or null on refusal. The outcome points
 /// only at static data, and an engine answering another boundary version's
 /// request reads only its header and writes only the outcome's fixed part.
-/// The loadable build of stage 4 exports this entry as
-/// `yamaa_engine_negotiate`, the one symbol that stays fixed across boundary
-/// versions; in the linked build a binding calls it as a Rust function.
+/// The loadable build, with the `dynamic-engine` feature, exports this
+/// entry as `yamaa_engine_negotiate`, the one symbol that stays fixed across
+/// boundary versions; in the linked build a binding calls it as a Rust
+/// function.
 ///
 /// # Safety
 ///
@@ -1343,6 +1350,62 @@ unsafe fn write_outcome(
 pub unsafe extern "C" fn negotiate(
     request: *const abi::Request,
     outcome: *mut abi::Outcome,
+) -> *const abi::Engine {
+    // SAFETY: the caller's contract.
+    unsafe { answer(request, outcome, facts) }
+}
+
+/// [`negotiate`] as an engine without the identifiers `withheld` answers it:
+/// the loading tests' fixture engines (`examples/`), each of which withholds
+/// a capability or a format, and returns the table on acceptance. A process
+/// answers with what its first call withholds.
+///
+/// # Safety
+///
+/// As [`negotiate`].
+#[doc(hidden)]
+pub unsafe fn negotiate_withholding(
+    request: *const abi::Request,
+    outcome: *mut abi::Outcome,
+    withheld: &'static [&'static str],
+) -> *const abi::Engine {
+    static WITHHOLDING: OnceLock<Facts> = OnceLock::new();
+    // SAFETY: the caller's contract.
+    unsafe {
+        answer(request, outcome, || {
+            WITHHOLDING.get_or_init(|| Facts::of(withheld))
+        })
+    }
+}
+
+/// The loadable engine's negotiation entry, [`negotiate`] under the one
+/// symbol a loader looks up, which every boundary version keeps: exported
+/// by the library built from this crate with the `dynamic-engine` feature,
+/// for the test-only loaded mode.
+///
+/// # Safety
+///
+/// As [`negotiate`].
+#[cfg(feature = "dynamic-engine")]
+#[no_mangle]
+pub unsafe extern "C" fn yamaa_engine_negotiate(
+    request: *const abi::Request,
+    outcome: *mut abi::Outcome,
+) -> *const abi::Engine {
+    // SAFETY: the caller's contract.
+    unsafe { negotiate(request, outcome) }
+}
+
+/// Answer `request` with the facts `facts` gives, in the check order, and
+/// return the table on acceptance; a panic is a refusal.
+///
+/// # Safety
+///
+/// As [`negotiate`].
+unsafe fn answer(
+    request: *const abi::Request,
+    outcome: *mut abi::Outcome,
+    facts: impl FnOnce() -> &'static Facts,
 ) -> *const abi::Engine {
     let accepted = catch_unwind(AssertUnwindSafe(|| {
         let facts = facts();

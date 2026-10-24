@@ -1,9 +1,12 @@
-"""Select the work of the four PR lanes from the exact head's changed paths.
+"""Select the work of the PR lanes from the exact head's changed paths.
 
 Only known independent areas narrow the checks. An unrecognized path runs
-every lane, so adding a build input cannot accidentally bypass qualification.
-Each job runs this cheap selection before installing its tools; no fifth
-planning job or extra required status is needed.
+every one of the four required lanes, so adding a build input cannot
+accidentally bypass qualification. The fifth lane, the test-only loaded mode
+(rust/interface/README.md), runs on a pull request only when an input of
+that mode changes, and on main's schedule and dispatch, and is not required.
+Each job runs this cheap selection before installing its tools; no planning
+job or extra required status is needed.
 """
 
 import argparse
@@ -21,6 +24,7 @@ FLAGS = (
     "equivalence_python",
     "equivalence_r",
     "workflow_lint",
+    "loaded",
 )
 DOCUMENTS = {"README.md", "CONTRIBUTING.md", "AGENTS.md"}
 DOCUMENT_SUFFIXES = {".md", ".qmd", ".css", ".svg", ".png", ".jpg", ".jpeg", ".gif"}
@@ -40,6 +44,28 @@ SHARED_WORKFLOW = {
     "python/pyproject.toml",
     "python/uv.lock",
 }
+# The inputs of the loaded mode's lane: the boundary, the engine's C ABI and
+# both bindings, the R package's build files, the shared truth and suites
+# that test the handshake, and the tooling that builds and checks both hosts
+# in that mode.
+LOADED_INPUTS = (
+    "rust/crates/yamaa-boundary/",
+    "rust/crates/yamaa-engine/",
+    "rust/crates/yamaa-python/",
+    "rust/crates/yamaa-r/",
+    "rust/interface/",
+    "rust/Cargo.lock",
+    "rust/tests/host-fixtures/cases.json",
+    "R/yamaa/src/",
+    "python/tests/installed/installed_interface.py",
+    "R/yamaa/tests/interface.R",
+    "tools/commands/loaded.py",
+    "tools/commands/setup.py",
+    "tools/commands/host_checks.py",
+    "tools/commands/python_tests.py",
+    "tools/commands/r_tests.py",
+    "tools/commands/equivalence.py",
+)
 ENGINE_CHECKS = {
     "rust": True,
     "minimum": True,
@@ -65,6 +91,12 @@ def select(paths):
         if documentation(path):
             continue
         result["repository"] = "full"
+        if (
+            path.startswith(LOADED_INPUTS)
+            or path in SHARED_WORKFLOW
+            or path.startswith(".github/actions/")
+        ):
+            result["loaded"] = True
         if path in SHARED_WORKFLOW or path.startswith(".github/actions/"):
             result.update(ENGINE_CHECKS)
         elif path.startswith(".github/"):
@@ -82,7 +114,7 @@ def select(paths):
     # Empty diffs cannot justify skipping checks (for example after a force
     # push that leaves no changes against the base).
     if not paths:
-        result.update(ENGINE_CHECKS, repository="full")
+        result.update(ENGINE_CHECKS, repository="full", loaded=True)
     return result
 
 
@@ -117,6 +149,9 @@ def decision(event, base="", head="", root=ROOT):
     result = dict.fromkeys(FLAGS, True) | {"repository": "full"}
     gates = event == "workflow_dispatch"
     result.update(equivalence_python=gates, equivalence_r=gates)
+    # Main's schedule checks the loaded mode too, which a release push, the
+    # one push event, leaves out.
+    result["loaded"] = event in ("schedule", "workflow_dispatch")
     return result
 
 

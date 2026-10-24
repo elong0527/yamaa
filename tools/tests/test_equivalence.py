@@ -70,6 +70,38 @@ class GateRun:
 
 
 class EquivalenceGateTests(unittest.TestCase):
+    def setUp(self):
+        # The gate builds the linked hosts unless YAMAA_ENGINE says loaded.
+        environment = mock.patch.dict(
+            equivalence.os.environ, {"YAMAA_ENGINE": "linked"}
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
+
+    def test_the_loaded_mode_installs_a_wheel_that_links_no_engine(self):
+        # The wheel is built without its linked engine, and the engine
+        # library goes beside its module in the new environment.
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            mock.patch.dict(equivalence.os.environ, {"YAMAA_ENGINE": "loaded"}),
+            mock.patch.object(equivalence.subprocess, "run") as run,
+            mock.patch.object(
+                equivalence.loaded, "build_engine", return_value=Path("engine")
+            ),
+            mock.patch.object(equivalence.loaded, "install_beside") as beside,
+        ):
+            python = equivalence.install_python(Path(directory), "uv")
+        build = run.call_args_list[0].args[0]
+        self.assertEqual(
+            (build[:3], build[-1], beside.call_args.args),
+            (
+                ("uv", "build", "python"),
+                "build-args=--profile=dev --no-default-features "
+                "--features extension-module,dynamic-engine",
+                (python, Path("engine")),
+            ),
+        )
+
     def test_every_check_runs_on_the_fresh_installs(self):
         """Both hosts' conformance, the Python suites and R CMD check all run."""
         gate = GateRun()

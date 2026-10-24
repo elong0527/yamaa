@@ -392,6 +392,13 @@ def required_jobs(coverage):
                 "Share a directory over SMB",
                 "Report installed Python public benchmark conformance on the share",
             )
+    # The test-only loaded mode: both hosts built with their dynamic-engine
+    # feature, whose suites run with the engine loaded at runtime and with
+    # each fixture engine of the loading tests. Its checks continue on error
+    # until their first green run on main promotes them to blocking (#3702):
+    # the job must finish, and no step of it must pass.
+    for platform in coverage["loaded"]["os"]:
+        jobs[f"native-loaded ({platform})"] = ()
     return jobs
 
 

@@ -6,9 +6,12 @@
 //! A host gets the table from [`negotiate`], which answers a request in the
 //! check order of [`yamaa_boundary`] and returns the table only on
 //! acceptance. In the shipped packages the binding links this crate and
-//! calls [`negotiate`] as a plain Rust function; a test configuration will
-//! load the same crate as a library and look the entry up by name, so both
-//! modes run the same table.
+//! calls [`negotiate`] as a plain Rust function. In the test-only loaded
+//! mode, this crate built as a library with the `dynamic-engine` feature
+//! exports it as `yamaa_engine_negotiate`, which the binding's loader looks
+//! up beside its own module, so both modes run the same table. The loading
+//! tests' fixture engines, in `examples/`, answer as engines of another
+//! build would.
 //!
 //! Every entry builds the facade's engine for the call, from the call's host
 //! and its callbacks, and runs inside `catch_unwind`: a panic is a boundary
@@ -32,3 +35,7 @@ mod handles;
 mod host;
 
 pub use entries::negotiate;
+#[doc(hidden)]
+pub use entries::negotiate_withholding;
+#[cfg(feature = "dynamic-engine")]
+pub use entries::yamaa_engine_negotiate;

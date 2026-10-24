@@ -1354,7 +1354,9 @@ dependencies = [
 name = "yamaa-boundary"
 version = "1.0.0-rc.1"
 dependencies = [
+ "libc",
  "serde_json",
+ "windows-sys",
 ]
 
 [[package]]

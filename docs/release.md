@@ -206,6 +206,23 @@ by default resolves a link itself and serves its target in its place: FILE-8
 and [Inputs, outputs and paths](articles/api.md#inputs-outputs-and-paths)
 state that limit.
 
+On Windows x64 and macOS arm64 the native run also checks both hosts in the
+test-only loaded mode (#3702): its `native-loaded` jobs. Each builds the wheel
+and the R source package from the checkout with their bindings'
+`dynamic-engine` feature, which links no engine, and the engine library beside
+each module with that host's toolchain: MSVC beside the wheel's module, and
+Rtools' GNU target beside the R package's on Windows. It then runs the
+installed Python suites and the R package check with `YAMAA_ENGINE=loaded`
+(`tools/commands/loaded_checks.py`), where both interface suites also load
+each fixture engine, and keeps their logs as the job's artifact. In that mode
+the R package check accepts one more note, on the engine library, which
+registers no R routines since the loader, not R, loads it. Both checks
+continue on error until their first green run on main promotes them to
+blocking: until then a release requires each job to finish, not its checks to
+pass. CI's `loaded` lane runs the complete host checks in that mode on Linux,
+for a change to an input of the mode and on main's schedule. No release asset
+comes from these jobs.
+
 The native run also runs CRAN's incoming checks on the R source archive that a
 release publishes, the bytes of its `native-r-ubuntu-24.04` artifact: its
 `native-cran` jobs. Each runs `R CMD check --as-cran` through
@@ -1249,8 +1266,9 @@ owns decoding behavior.
   and the native qualification lane. Both hosts run the version and feature
   handshake of `yamaa-boundary` before any other native call (#3679), and
   reach the engine they link only through its client, over the engine's
-  internal C ABI (D225 on #3030, #3702); an engine that loads separately
-  from the host packages, for tests only, is later work (#3702).
+  internal C ABI (D225 on #3030, #3702). An engine loaded at runtime from
+  beside the binding's module is a test-only mode, which a repository check
+  refuses in every shipped build (#3702).
 - The `yamaa` facade crate is the only supported Rust surface; every other
   crate is internal and may change in any release, as the
   [stability contract](#stability-contract) says.

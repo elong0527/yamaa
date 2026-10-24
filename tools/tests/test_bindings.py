@@ -296,6 +296,12 @@ class BindingsTests(unittest.TestCase):
     def test_format_2_is_a_closed_grammar(self):
         cases = [
             ("format_version: 2", "format_version: 1", "format_version"),
+            # The glue reaches the engine through its C ABI alone (#3702).
+            (
+                "boundary: engine_c_abi",
+                "boundary: rust_generated_host_glue",
+                "unexpected boundary",
+            ),
             ("\ncli:\n", "\nstatus: draft\ncli:\n", "unknown top-level keys"),
             ("\ncontract: README.md\n", "\n", "missing top-level keys"),
             ("\ncli:\n", "\ncli:\n  1: x\n", "keys must be text"),

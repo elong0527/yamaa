@@ -7,6 +7,11 @@
 mod support;
 
 mod abi_lifetime;
+// The engine's own `dynamic-engine` feature exports its entry from every
+// library that links it, the fixture engines too, which then export none of
+// their own (examples/), so the loading tests run without it.
+#[cfg(not(feature = "dynamic-engine"))]
+mod abi_loading;
 mod abi_negotiation;
 mod client;
 mod client_streaming;

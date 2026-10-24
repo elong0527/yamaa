@@ -58,7 +58,7 @@ lexical-parse-integer	1.0.6	MIT	crates.io	transitive dependency of lexical-core:
 lexical-util	1.0.7	MIT	crates.io	transitive dependency of lexical-core: shared parsing and formatting utilities
 lexical-write-float	1.0.6	MIT	crates.io	transitive dependency of lexical-core: float formatting
 lexical-write-integer	1.0.6	MIT	crates.io	transitive dependency of lexical-core: integer formatting
-libc	0.2.191	MIT	crates.io	POSIX Ctrl+C handling in the command line; transitive dependency of rustix, getrandom and errno, and of pyo3 in the Python binding: C library bindings
+libc	0.2.191	MIT	crates.io	POSIX Ctrl+C handling in the command line, and the engine loader of the test-only loaded mode (yamaa-boundary); transitive dependency of rustix, getrandom and errno, and of pyo3 in the Python binding: C library bindings
 libm	0.2.16	MIT	crates.io	portable mathematics, pinned exactly so that results agree on every platform (yamaa-core); num-traits uses it too, through a feature that half enables
 libzstd	1.5.7	BSD-3-Clause	bundled in zstd-sys 2.1.2+zstd.1.5.7	the Zstandard C library that zstd-sys compiles and links: the zstd codec of Parquet pages (the parquet feature)
 linux-raw-sys	0.12.1	MIT	crates.io	transitive dependency of rustix on Linux: raw Linux system call bindings
@@ -137,7 +137,7 @@ windows-interface	0.59.3	MIT	crates.io	not compiled: a procedural macro of windo
 windows-link	0.2.1	MIT	crates.io	transitive dependency of windows-sys and chrono on Windows: links the Windows system libraries
 windows-result	0.4.1	MIT	crates.io	not compiled: transitive dependency of windows-core
 windows-strings	0.5.1	MIT	crates.io	not compiled: transitive dependency of windows-core
-windows-sys	0.61.2	MIT	crates.io	handle-relative file IO and atomic publication on Windows (yamaa-adapters), and console Ctrl+C handling in the command line
+windows-sys	0.61.2	MIT	crates.io	handle-relative file IO and atomic publication on Windows (yamaa-adapters), console Ctrl+C handling in the command line, and the engine loader of the test-only loaded mode (yamaa-boundary)
 winnow	1.0.4	MIT	crates.io	transitive dependency of toml and toml_parser: parser combinators
 wit-bindgen	0.46.0	MIT	crates.io	not compiled: transitive dependency of wasip2 (WASI preview 2 only)
 yamaa	1.0.0-rc.1	MIT	rust/crates/yamaa	the Rust facade over yamaa-core and yamaa-adapters, which the engine's C ABI and the command line depend on

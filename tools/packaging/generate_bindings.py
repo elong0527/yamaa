@@ -254,7 +254,7 @@ def _load_definition():
         raise ValueError(
             f"unsupported interface format_version: {definition['format_version']!r}"
         )
-    if definition["boundary"] != "rust_generated_host_glue":
+    if definition["boundary"] != "engine_c_abi":
         raise ValueError(f"unexpected boundary: {definition['boundary']!r}")
     if definition["contract"] != "README.md":
         raise ValueError(f"unexpected contract document: {definition['contract']!r}")

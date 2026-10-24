@@ -3,12 +3,14 @@
 The generated `yamaa/__init__.py` negotiates right after importing
 `yamaa._native`, before any other native call, and every other native
 function refuses until a negotiation is accepted. The generated request,
-each crafted request's outcome, the message template of each reason and the
-gate's refusal are the shared truth's `interface` family, which R reads too;
-each outcome was written by hand from the handshake's check order.
+each crafted request's outcome, the message template of each reason, the
+gate's refusal and each fixture engine's outcome in the loaded mode are the
+shared truth's `interface` family, which R reads too; each outcome was
+written by hand from the handshake's check order.
 """
 
 import json
+import os
 import pickle
 import shutil
 import subprocess
@@ -59,6 +61,11 @@ def case(name):
 
 
 NEXT_VERSION_CASE = "a request for the next version is a mismatch"
+# The fixture engines of the test-only loaded mode, which its tooling builds
+# and names in YAMAA_FIXTURE_ENGINES (tools/commands/loaded.py), and the file
+# name a module built with its dynamic-engine feature loads the engine from.
+FIXTURE_ENGINES = os.environ.get("YAMAA_FIXTURE_ENGINES")
+LIBRARY = "yamaa_engine.dll" if os.name == "nt" else "libyamaa_engine.so"
 
 
 def message(outcome):
@@ -186,6 +193,17 @@ phases["after a refusal"] = {name: outcome(name) for name in calls}
 native._interface_handshake(requests["accepted"])
 phases["after an acceptance"] = {name: outcome(name) for name in calls}
 print(json.dumps(phases))
+"""
+
+# Load the native module alone from argv[1], with no package, and print
+# its answer to the request argv[2].
+NATIVE_HANDSHAKE = """
+import importlib.machinery, importlib.util, json, sys
+path, request = sys.argv[1], json.loads(sys.argv[2])
+loader = importlib.machinery.ExtensionFileLoader("yamaa._native", path)
+native = importlib.util.module_from_spec(importlib.util.spec_from_loader("yamaa._native", loader))
+loader.exec_module(native)
+print(json.dumps(native._interface_handshake(request)))
 """
 
 # Each native function but the handshake, with arguments of its types.
@@ -366,6 +384,33 @@ class Interface(unittest.TestCase):
                 {},
             ),
         )
+
+    @unittest.skipUnless(
+        FIXTURE_ENGINES,
+        "the fixture engines exist in the loaded mode alone, whose tooling names "
+        "them in YAMAA_FIXTURE_ENGINES",
+    )
+    def test_each_fixture_engine_gets_its_authored_outcome(self):
+        # A copy of the native module loads the fixture engine placed beside
+        # it under the engine's name, in a fresh interpreter for each.
+        native = Path(_native.__file__)
+        for fixture in TRUTH["fixtures"]:
+            with self.subTest(fixture=fixture["fixture"]):
+                directory = self.root / fixture["library"]
+                directory.mkdir()
+                shutil.copy2(native, directory / native.name)
+                engine = Path(FIXTURE_ENGINES) / fixture["library"]
+                if os.name == "nt":
+                    shutil.copy2(engine, directory / LIBRARY)
+                else:
+                    (directory / LIBRARY).symlink_to(engine)
+                outcome = isolated(
+                    NATIVE_HANDSHAKE,
+                    str(directory / native.name),
+                    json.dumps(yamaa._INTERFACE_REQUEST),
+                    cwd=self.root,
+                )
+                self.assertEqual(outcome, resolved(fixture["outcome"]))
 
     def test_a_direct_handshake_call_leaves_the_negotiation_unchanged(self):
         refusal = _native._interface_handshake(case(NEXT_VERSION_CASE)["request"])
