@@ -64,8 +64,8 @@ fn a_failed_run_keeps_its_plan_and_the_next_run_reads_its_input_afresh() {
     assert_eq!(plan_of(&failed), "compiled");
     assert!(failed.output().is_none());
     let first = &failed.diagnostics()[0];
-    assert_eq!(first.phase, "validation");
-    assert_eq!(first.code, "resource_path_missing");
+    assert_eq!(first.phase.as_str(), "validation");
+    assert_eq!(first.code.as_str(), "resource_path_missing");
     assert_eq!(first.rule.as_deref(), Some("FILE-7"));
     assert_eq!(first.spec_path, ["input.SRC.path"]);
     assert!(failed.save(&CancellationToken::new()).is_err());

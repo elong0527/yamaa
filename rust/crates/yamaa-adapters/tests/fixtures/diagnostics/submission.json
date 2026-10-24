@@ -536,6 +536,19 @@
       "issues": [{"condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.BMI.submission"], "context": {"column": "BMI", "origin_type": "Collected", "admitted": ["Assigned", "Derived", "Not Available", "Other"]}}]
     },
     {
+      "case": "a_text_length_refutes_a_collected_origin",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "origins", "edits": [{"from": "derivation: {mapping: {source: SRC.SEX, dict: {Male: M, Female: F}}}", "to": "derivation: {str_length: {source: SRC.SEX}}"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context.column", "context.origin_type", "context.admitted"],
+      "among": true,
+      "issues": [{"condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.SEX.submission"], "context": {"column": "SEX", "origin_type": "Collected", "admitted": ["Assigned", "Derived", "Not Available", "Other"]}}]
+    },
+    {
       "case": "a_case_reading_an_output_column_refutes_a_collected_origin",
       "operation": "check",
       "input": {
@@ -560,6 +573,17 @@
       "compares": ["condition", "rule", "spec_paths", "context.column", "context.origin_type", "context.admitted"],
       "among": true,
       "issues": [{"condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.ARMCD.submission"], "context": {"column": "ARMCD", "origin_type": "Protocol", "admitted": ["Assigned", "Collected", "Derived", "Not Available", "Other"]}}]
+    },
+    {
+      "case": "duration_text_is_a_recode_that_refutes_a_protocol_origin",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: EX\nkeys: [USUBJID, EXSEQ]\ninput: {SRC: {path: input.csv, types: {EXSEQ: int, EXDURMIN: int}}}\noutput: {path: output.csv, columns: [USUBJID, EXSEQ, EXDUR]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: SRC.USUBJID}\n  - {name: EXSEQ, type: int, derivation: SRC.EXSEQ}\n  - name: EXDUR\n    type: str\n    derivation: {duration_text: {source: SRC.EXDURMIN, unit: minute}}\n    submission: {origins: [{type: Protocol, source: Sponsor}]}\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "origin_contradicts_derivation", "rule": "SUB-19", "spec_paths": ["columns.EXDUR.submission"], "context": {"column": "EXDUR", "origin_type": "Protocol", "admitted": ["Assigned", "Collected", "Derived", "Not Available", "Other"]}}]
     },
     {
       "case": "a_literal_refutes_a_derived_origin",

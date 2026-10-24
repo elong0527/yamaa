@@ -845,6 +845,20 @@ impl<'p> Builder<'p> {
                 node.op = Op::StrPad(operation.clone());
                 values.push((source, Value, Always));
             }
+            E::StrSubstr { source, operation } => {
+                node.kind = ExprKind::StrSubstr;
+                node.op = Op::StrSubstr(operation.clone());
+                let site = format!("{}.missing", operation.path());
+                self.site(&mut node, true, site, H::Missing);
+                values.push((source, Value, Always));
+            }
+            E::StrLength { source, operation } => {
+                node.kind = ExprKind::StrLength;
+                node.op = Op::StrLength(operation.clone());
+                let site = format!("{}.missing", operation.path());
+                self.site(&mut node, true, site, H::Missing);
+                values.push((source, Value, Always));
+            }
             E::SourceBinding {
                 source,
                 absent,
@@ -1898,6 +1912,8 @@ fn deferred_odm(expression: &Expression) -> Option<&[OdmTemplateScope]> {
         | E::StrReplace { source, .. }
         | E::StrCase { source, .. }
         | E::StrPad { source, .. }
+        | E::StrSubstr { source, .. }
+        | E::StrLength { source, .. }
         | E::Round { source, .. } => deferred_odm(&source.expression),
         E::Extreme { operands, .. }
         | E::StrTemplate { operands, .. }

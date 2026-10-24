@@ -32,17 +32,21 @@
 //!   handed out the last batch ends production: no further batch is built or
 //!   kept, and the run is cancelled, with no result and no issue, so nothing
 //!   of it can be published. The reader's pull, and [`Streamed::run`], fail
-//!   with [`Error::Cancelled`]. A reader released after the last batch, before
-//!   its end-of-stream pull, leaves the run its result.
+//!   with a [`FailureKind::Cancelled`] failure. A reader released after the
+//!   last batch, before its end-of-stream pull, leaves the run its result.
 //! - **Fail.** A run that fails ends the stream with its issues: the pull
-//!   fails with [`Error::Rejected`], and the run, which [`Streamed::run`]
-//!   then gives, holds those issues and no output; its save writes only its
-//!   report file (OUTPUT-10). An accepted output's batch that cannot be
-//!   built ends the stream with that error, and the run then has no result,
-//!   so nothing of it is published.
+//!   fails with a [`FailureKind::Rejected`] failure, and the run, which
+//!   [`Streamed::run`] then gives, holds those issues and no output; its save
+//!   writes only its report file (OUTPUT-10). An accepted output's batch that
+//!   cannot be built ends the stream with that error, and the run then has
+//!   no result, so nothing of it is published.
 //!
 //! A panic while a C stream pulls ends that stream with an error instead of
 //! unwinding into its C caller.
+//!
+//! Every refusal of a streamed run is a [`Failure`] of reading it: its
+//! message begins `cannot read <subject>`, with [`Streamed::subject`] as the
+//! subject, as D39's error text of every other read does.
 //!
 //! A run whose output nobody has started to read runs whole when its result
 //! is asked for: [`Streamed::run`] builds it as
@@ -69,10 +73,10 @@ use arrow_array::{RecordBatch, RecordBatchReader};
 use arrow_schema::{ArrowError, Schema, SchemaRef};
 use yamaa_adapters::application_measurements::Measurements;
 
-use crate::api::{Failure, Run, Status};
+use crate::api::{Run, Status};
 use crate::cancel::CancellationToken;
 use crate::engine::Engine;
-use crate::error::{Error, TableError};
+use crate::error::{Failure, FailureKind, TableError};
 use crate::internal::{EngineShared, PublicBatches};
 use crate::plan::Plan;
 use crate::table::Table;
@@ -172,8 +176,9 @@ enum State {
         streamed: bool,
     },
     /// An accepted output's batch could not be built: the stream ended with
-    /// this error, and the run has no result, so nothing of it is published.
-    Failed(Error),
+    /// this failure, and the run has no result, so nothing of it is
+    /// published.
+    Failed(Failure),
     Cancelled,
 }
 
@@ -249,11 +254,22 @@ impl Drop for Held<'_> {
 }
 
 impl Shared {
+    /// The refusal of reading the run for a failure of `kind`.
+    fn refusal(&self, kind: FailureKind) -> Failure {
+        Failure::of(Action::Read(&self.subject), kind)
+    }
+
+    /// The refusal of reading the run that the failed `run`'s issues
+    /// explain, which ends its stream.
+    fn failure(&self, run: &Run) -> Failure {
+        Failure::rejected(Action::Read(&self.subject), run.build.report())
+    }
+
     /// The state, unless another call holds it.
-    fn lock(&self) -> Result<Held<'_>, Error> {
+    fn lock(&self) -> Result<Held<'_>, Failure> {
         let mut state = match self.try_hold() {
             Some(state) => state,
-            None => return Err(Error::Stream { code: "busy" }),
+            None => return Err(self.refusal(FailureKind::Stream { code: "busy" })),
         };
         if self.abandoned.swap(false, Ordering::SeqCst) {
             state.abandon();
@@ -277,25 +293,21 @@ impl Shared {
 
     /// Refuse to build a run that can call the host off the thread that
     /// started it.
-    fn on_owner(&self) -> Result<(), Error> {
+    fn on_owner(&self) -> Result<(), Failure> {
         if self.host && std::thread::current().id() != self.owner {
-            return Err(Error::Stream {
+            return Err(self.refusal(FailureKind::Stream {
                 code: "host_thread",
-            });
+            }));
         }
         Ok(())
     }
 }
 
-/// The error that ends the stream of the failed `run`: its issues.
-fn failure(run: &Run) -> Error {
-    Error::Rejected(run.build.report().clone())
-}
-
 /// One specification run whose output its consumer reads as a stream; see
 /// the [module](self) documentation. It is `Send` and `Sync`, and every
-/// method refuses with the `busy` code of [`Error::Stream`] while another
-/// call, such as a project function called by its own build, uses it.
+/// method refuses with the `busy` code of [`FailureKind::Stream`] while
+/// another call, such as a project function called by its own build, uses
+/// it.
 pub struct Streamed {
     shared: Arc<Shared>,
 }
@@ -373,11 +385,11 @@ impl Streamed {
     /// That pull starts the run's stream when no reader has, and builds the
     /// run; once the run ran whole, it reads the output table the run keeps,
     /// with a cursor of its own. Otherwise it fails: with the run's issues
-    /// for a failed run, [`Error::Cancelled`] for a cancelled one, and the
-    /// `stream_taken` code of [`Error::Stream`] when another reader started
-    /// the stream. A reader that would build a run that can call its host
-    /// off the thread that started it fails with `host_thread` and starts
-    /// nothing.
+    /// for a failed run, as [`FailureKind::Cancelled`] for a cancelled one,
+    /// and with the `stream_taken` code of [`FailureKind::Stream`] when
+    /// another reader started the stream. A reader that would build a run
+    /// that can call its host off the thread that started it fails with
+    /// `host_thread` and starts nothing.
     pub fn reader(&self) -> Batches {
         Batches {
             shared: Arc::clone(&self.shared),
@@ -391,12 +403,17 @@ impl Streamed {
     /// A run that nobody has started to read runs whole now, as
     /// [`SpecRequest::run`](crate::SpecRequest::run) runs it, and keeps its
     /// output table. While a reader's stream has not ended, this fails with
-    /// the `stream_open` code of [`Error::Stream`]; a cancelled run fails
-    /// with [`Error::Cancelled`], and one whose accepted output's batch could
-    /// not be built with that error; and a run that can call its host is
-    /// built only on the thread that started it, failing with `host_thread`
-    /// on another.
-    pub fn run(&self) -> Result<RunGuard<'_>, Error> {
+    /// the `stream_open` code of [`FailureKind::Stream`]; a cancelled run
+    /// fails as [`FailureKind::Cancelled`], and one whose accepted output's
+    /// batch could not be built with that failure; and a run that can call
+    /// its host is built only on the thread that started it, failing with
+    /// `host_thread` on another. A cancelled run stays cancelled, so its
+    /// refusal needs no lock: it answers as cancelled even while another call
+    /// holds the run, where any other refusal would be `busy`.
+    pub fn run(&self) -> Result<RunGuard<'_>, Failure> {
+        if self.progress() == StreamProgress::Cancelled {
+            return Err(self.shared.refusal(FailureKind::Cancelled));
+        }
         let mut state = self.shared.lock()?;
         if matches!(&*state, State::Unread(_)) {
             self.shared.on_owner()?;
@@ -413,34 +430,36 @@ impl Streamed {
         match &*state {
             State::Ended { .. } => Ok(RunGuard { state }),
             State::Failed(error) => Err(error.clone()),
-            State::Cancelled => Err(Error::Cancelled),
-            State::Unread(_) | State::Taken(_) | State::Producing { .. } => Err(Error::Stream {
-                code: "stream_open",
-            }),
+            State::Cancelled => Err(self.shared.refusal(FailureKind::Cancelled)),
+            State::Unread(_) | State::Taken(_) | State::Producing { .. } => {
+                Err(self.shared.refusal(FailureKind::Stream {
+                    code: "stream_open",
+                }))
+            }
         }
     }
 
     /// The output read whole: the table the run keeps once it ran whole,
     /// which it does now when nobody has started to read its output. A
-    /// failed run refuses with its issues ([`Error::Rejected`]), a run whose
-    /// output was read as a stream with the `stream_taken` code of
-    /// [`Error::Stream`], and otherwise this refuses as [`Streamed::run`]
-    /// does.
-    pub fn table(&self) -> Result<Table, Error> {
+    /// failed run refuses with its issues ([`FailureKind::Rejected`]), a run
+    /// whose output was read as a stream with the `stream_taken` code of
+    /// [`FailureKind::Stream`], and otherwise this refuses as
+    /// [`Streamed::run`] does.
+    pub fn table(&self) -> Result<Table, Failure> {
         let run = self.run()?;
         match run.output() {
             Some(table) => Ok(table.clone()),
-            None if run.status() == Status::Failed => Err(failure(&run)),
-            None => Err(Error::Stream {
+            None if run.status() == Status::Failed => Err(self.shared.failure(&run)),
+            None => Err(self.shared.refusal(FailureKind::Stream {
                 code: "stream_taken",
-            }),
+            })),
         }
     }
 }
 
 /// The result of a [`Streamed`] run, borrowed: it dereferences to the
 /// [`Run`]. While it lives, every other call on the streamed run refuses
-/// with the `busy` code of [`Error::Stream`].
+/// with the `busy` code of [`FailureKind::Stream`].
 pub struct RunGuard<'a> {
     state: Held<'a>,
 }
@@ -508,7 +527,7 @@ impl Batches {
 
     /// One pull that starts the stream, or continues the one this reader
     /// started.
-    fn pull(&mut self) -> Option<Result<RecordBatch, Error>> {
+    fn pull(&mut self) -> Option<Result<RecordBatch, Failure>> {
         let shared = Arc::clone(&self.shared);
         let mut state = match shared.lock() {
             Ok(state) => state,
@@ -535,7 +554,7 @@ impl Batches {
                 } => {
                     let Some(table) = run.output() else {
                         self.mode = Mode::Done;
-                        return Some(Err(failure(run)));
+                        return Some(Err(shared.failure(run)));
                     };
                     // The reader owns its cursor over the kept table's batches.
                     let owned: Vec<RecordBatch> = table.batches().to_vec();
@@ -546,17 +565,17 @@ impl Batches {
                 }
                 State::Cancelled => {
                     self.mode = Mode::Done;
-                    return Some(Err(Error::Cancelled));
+                    return Some(Err(shared.refusal(FailureKind::Cancelled)));
                 }
-                State::Failed(error) => {
+                State::Failed(failure) => {
                     self.mode = Mode::Done;
-                    return Some(Err(error.clone()));
+                    return Some(Err(failure.clone()));
                 }
                 State::Taken(_) | State::Producing { .. } | State::Ended { .. } => {
                     self.mode = Mode::Done;
-                    return Some(Err(Error::Stream {
+                    return Some(Err(shared.refusal(FailureKind::Stream {
                         code: "stream_taken",
-                    }));
+                    })));
                 }
             }
         }
@@ -571,7 +590,7 @@ impl Batches {
                 // The state stays cancelled.
                 None => {
                     self.mode = Mode::Done;
-                    return Some(Err(Error::Cancelled));
+                    return Some(Err(shared.refusal(FailureKind::Cancelled)));
                 }
                 Some((run, Some(batches))) => *state = State::Producing { run, batches },
                 Some((run, None)) => {
@@ -579,18 +598,18 @@ impl Batches {
                     // An accepted output whose batches cannot be built has no
                     // result to save.
                     if run.build.accepted() {
-                        let error = Error::Internal {
+                        let failure = shared.refusal(FailureKind::Internal {
                             code: "stream_batches",
-                        };
-                        *state = State::Failed(error.clone());
-                        return Some(Err(error));
+                        });
+                        *state = State::Failed(failure.clone());
+                        return Some(Err(failure));
                     }
-                    let error = failure(&run);
+                    let failure = shared.failure(&run);
                     *state = State::Ended {
                         run,
                         streamed: true,
                     };
-                    return Some(Err(error));
+                    return Some(Err(failure));
                 }
             }
         }
@@ -599,12 +618,12 @@ impl Batches {
         else {
             // Only this reader's own release cancels the stream it started.
             self.mode = Mode::Done;
-            return Some(Err(Error::Cancelled));
+            return Some(Err(shared.refusal(FailureKind::Cancelled)));
         };
         // Before each batch, the token; the state stays cancelled.
         if !batches.ended() && shared.token.is_cancelled() {
             self.mode = Mode::Done;
-            return Some(Err(Error::Cancelled));
+            return Some(Err(shared.refusal(FailureKind::Cancelled)));
         }
         match batches.next() {
             Some(Ok(batch)) => {
@@ -624,16 +643,17 @@ impl Batches {
             Some(Err(error)) => {
                 self.mode = Mode::Done;
                 drop(run);
-                let error = Error::Table(TableError::from_public(error));
-                *state = State::Failed(error.clone());
-                Some(Err(error))
+                let failure =
+                    shared.refusal(FailureKind::Table(Box::new(TableError::from_public(error))));
+                *state = State::Failed(failure.clone());
+                Some(Err(failure))
             }
         }
     }
 }
 
 impl Iterator for Batches {
-    type Item = Result<RecordBatch, Error>;
+    type Item = Result<RecordBatch, Failure>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.mode {
@@ -674,26 +694,21 @@ impl Iterator for Exported {
 
     /// One pull from the Arrow crate's `extern "C"` `get_next`. A panic
     /// while pulling ends the stream with the `stream_panic` code of
-    /// [`Error::Internal`] instead of unwinding into the C caller (#2870,
-    /// section 3.4); the run, which the pull left without a result, is then
-    /// cancelled.
+    /// [`FailureKind::Internal`] instead of unwinding into the C caller
+    /// (#2870, section 3.4); the run, which the pull left without a result,
+    /// is then cancelled.
     fn next(&mut self) -> Option<Self::Item> {
         let shared = Arc::clone(&self.0.shared);
         let next = match catch_unwind(AssertUnwindSafe(|| self.0.next())) {
             Ok(next) => next?,
             Err(_) => {
                 self.0.mode = Mode::Done;
-                Err(Error::Internal {
+                Err(shared.refusal(FailureKind::Internal {
                     code: "stream_panic",
-                })
+                }))
             }
         };
-        Some(next.map_err(|error| {
-            ArrowError::ExternalError(Box::new(Failure::from_error(
-                Action::Read(&shared.subject),
-                &error,
-            )))
-        }))
+        Some(next.map_err(|failure| ArrowError::ExternalError(Box::new(failure))))
     }
 }
 

@@ -5,10 +5,10 @@ use std::path::{Path, PathBuf};
 
 #[cfg(feature = "odm")]
 use yamaa::{DataType, StringArray, ODM_COLUMNS};
-use yamaa::{Engine, EngineOptions, Error, OdmOptions, Table};
+use yamaa::{Engine, EngineOptions, Failure, FailureKind, OdmOptions, Table};
 
 /// The items of the local file `path`, read as the command line reads them.
-fn read_odm(path: &Path, options: &OdmOptions) -> Result<Table, Error> {
+fn read_odm(path: &Path, options: &OdmOptions) -> Result<Table, Failure> {
     Engine::new(EngineOptions::neutral("test".into(), String::new()))
         .read_odm(path.to_str().unwrap(), options)
 }
@@ -74,15 +74,14 @@ fn clinical_items_read_into_the_fixed_table() {
     assert_eq!(text("Value", 1), None);
 }
 
-/// The one issue of a refusal, which a rejected report carries.
+/// The one issue of a refusal, which a rejected failure carries.
 #[cfg(feature = "odm")]
 #[track_caller]
-fn refusal(result: Result<yamaa::Table, Error>) -> yamaa::Diagnostic {
-    let Err(Error::Rejected(report)) = result else {
-        panic!("the read must be refused with its issue");
-    };
-    let [issue] = report.diagnostics.as_slice() else {
-        panic!("one issue, not {:?}", report.diagnostics);
+fn refusal(result: Result<yamaa::Table, Failure>) -> yamaa::Diagnostic {
+    let failure = result.expect_err("the read must be refused with its issue");
+    assert!(matches!(failure.kind, FailureKind::Rejected), "{failure:?}");
+    let [issue] = failure.diagnostics.as_slice() else {
+        panic!("one issue, not {:?}", failure.diagnostics);
     };
     issue.clone()
 }
@@ -92,7 +91,7 @@ fn refusal(result: Result<yamaa::Table, Error>) -> yamaa::Diagnostic {
 #[cfg(feature = "odm")]
 #[test]
 fn refusals_carry_their_registered_issue() {
-    use yamaa::{Action, ContextValue, Failure};
+    use yamaa::ContextValue;
     let file = File::new(
         "refused.xml",
         &DOCUMENT.replace("IsNull=\"Yes\"", "IsNull=\"maybe\""),
@@ -121,14 +120,15 @@ fn refusals_carry_their_registered_issue() {
     // An option below its minimum is refused at its name, before the source
     // is read.
     let options = OdmOptions::new().with_max_xml_depth(7);
-    let error = read_odm(&file.path, &options).unwrap_err();
-    let failure = Failure::from_error(Action::Read("edc/odm.xml"), &error);
+    let failure = read_odm(&file.path, &options).unwrap_err();
     assert_eq!(
         failure.message,
-        "cannot read edc/odm.xml: max_xml_depth has the value 7, which is not permitted \
-         [value_not_permitted, ODM-1]"
+        format!(
+            "cannot read {shown}: max_xml_depth has the value 7, which is not permitted \
+             [value_not_permitted, ODM-1]"
+        )
     );
-    let option = refusal(Err(error));
+    let option = refusal(Err(failure));
     assert_eq!(
         (option.phase.as_str(), option.spec_path.as_slice()),
         ("validation", &["max_xml_depth".to_owned()][..])
@@ -138,7 +138,7 @@ fn refusals_carry_their_registered_issue() {
 
     let options = OdmOptions::new().with_archive_member("odm.xml");
     let member = refusal(read_odm(&file.path, &options));
-    assert_eq!(member.code, "source_odm_archive_member");
+    assert_eq!(member.code.as_str(), "source_odm_archive_member");
     assert_eq!(
         member.message,
         format!("no member of {shown} can be read: archive_member requires a TAR input")
@@ -158,7 +158,7 @@ fn only_a_snapshot_with_clinical_data_reads() {
         ),
     );
     let issue = refusal(read_odm(&transactional.path, &OdmOptions::new()));
-    assert_eq!(issue.code, "source_odm_transactional");
+    assert_eq!(issue.code.as_str(), "source_odm_transactional");
     assert_eq!(
         issue.message,
         format!(
@@ -196,7 +196,7 @@ fn only_a_snapshot_with_clinical_data_reads() {
 fn builds_without_the_odm_feature_report_the_capability() {
     let file = File::new("unavailable.xml", DOCUMENT);
     assert!(matches!(
-        read_odm(&file.path, &OdmOptions::new()),
-        Err(Error::Unavailable { feature: "odm" })
+        read_odm(&file.path, &OdmOptions::new()).map_err(|failure| failure.kind),
+        Err(FailureKind::Unavailable { feature: "odm" })
     ));
 }

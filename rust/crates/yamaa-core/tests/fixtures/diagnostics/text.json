@@ -1,11 +1,35 @@
 {
-  "about": "The refusals of the text verbs str_pad, str_case, str_template and str_extract (TEXT-1 to TEXT-10, COLUMN-10, NAME-3), each reached by the verb's own declaration or step.",
+  "about": "The refusals of the text verbs str_pad, str_substr, str_length, str_case, str_template and str_extract (TEXT-1 to TEXT-10, TEXT-13, COLUMN-10, NAME-3), each reached by the verb's own declaration or step.",
   "cases": [
     {
       "case": "str_pad_refuses_a_width_that_is_not_a_positive_integer",
       "operation": "str_pad",
       "input": {"source": "SRC.V", "path": "columns.V.derivation.str_pad", "width": "0"},
       "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-2", "spec_paths": ["columns.V.derivation.str_pad.width"], "context": {"expected": "a positive integer width"}}]
+    },
+    {
+      "case": "str_substr_refuses_a_start_below_one",
+      "operation": "str_substr",
+      "input": {"source": "SRC.V", "path": "columns.V.derivation.str_substr", "start": "0"},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-13", "spec_paths": ["columns.V.derivation.str_substr.start"], "context": {"expected": "a positive integer start"}}]
+    },
+    {
+      "case": "str_substr_refuses_a_length_below_one",
+      "operation": "str_substr",
+      "input": {"source": "SRC.V", "path": "columns.V.derivation.str_substr", "start": "1", "length": "-3"},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-13", "spec_paths": ["columns.V.derivation.str_substr.length"], "context": {"expected": "a positive integer length"}}]
+    },
+    {
+      "case": "str_substr_refuses_a_source_that_is_not_text",
+      "operation": "str_substr_apply",
+      "input": {"source": "SRC.V", "path": "columns.V.derivation.str_substr", "start": "1", "value": {"date": "2024-03-10"}},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.V.derivation.str_substr.source"], "context": {"source": "SRC.V", "expected": "str", "actual": "date"}}]
+    },
+    {
+      "case": "str_length_refuses_a_source_that_is_not_text",
+      "operation": "str_length",
+      "input": {"source": "SRC.V", "path": "columns.V.derivation.str_length", "value": 1.5},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.V.derivation.str_length.source"], "context": {"source": "SRC.V", "expected": "str", "actual": "float"}}]
     },
     {
       "case": "str_case_refuses_a_source_that_is_not_text",

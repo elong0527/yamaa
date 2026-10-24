@@ -90,6 +90,8 @@ fn normalize(expression: &mut Expression, reads: &[MatchRead]) -> Result<(), Pla
         | Expression::StrReplace { source, .. }
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
+        | Expression::StrSubstr { source, .. }
+        | Expression::StrLength { source, .. }
         | Expression::Round { source, .. } => normalize(&mut source.expression, reads)?,
         Expression::Extreme { operands, .. }
         | Expression::StrTemplate { operands, .. }
@@ -134,6 +136,8 @@ fn contains_window(expression: &Expression, depth: usize) -> Result<bool, PlanEr
         | Expression::StrReplace { source, .. }
         | Expression::StrCase { source, .. }
         | Expression::StrPad { source, .. }
+        | Expression::StrSubstr { source, .. }
+        | Expression::StrLength { source, .. }
         | Expression::Round { source, .. } => contains_window(&source.expression, depth + 1),
         Expression::Extreme { operands, .. }
         | Expression::StrTemplate { operands, .. }

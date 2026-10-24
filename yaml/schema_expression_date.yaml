@@ -160,6 +160,16 @@ expressions:
         - invalid:
             type: substitute_value
             description: Literal result for invalid or out-of-range duration text (TIME-17).
+    duration_text: # See TIME-21.
+        - source:
+            type: variable
+            required: true
+            description: Signed int or float amount written as ISO 8601 fixed-length duration text (TIME-21).
+        - unit:
+            type: str
+            required: true
+            values: [second, minute, hour, day]
+            description: Elapsed unit of the source amount, second, minute, hour or day, where a day is 86400 seconds (TIME-21).
 
 temporal_type:
     type: str

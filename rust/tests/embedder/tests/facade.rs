@@ -126,7 +126,7 @@ fn mismatched_or_missing_closers_are_refused_without_panicking() {
         let conditions = check
             .diagnostics()
             .iter()
-            .map(|diagnostic| diagnostic.code.clone())
+            .map(|diagnostic| diagnostic.code.as_str())
             .collect::<Vec<_>>();
         assert_eq!(conditions, ["invalid_yaml"], "{flow}");
     }

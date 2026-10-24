@@ -621,6 +621,36 @@
           "invalid_count": 1
         },
         {
+          "name": "duration_text_canonical_forms_and_read_back",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      MINUTES: int\n      SECONDS: float\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - TEXT\n  - STEXT\n  - BACK\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: TEXT\n  type: str\n  label: TEXT\n  derivation:\n    duration_text:\n      source: RAW.MINUTES\n      unit: minute\n- name: STEXT\n  type: str\n  label: STEXT\n  derivation:\n    duration_text:\n      source: RAW.SECONDS\n      unit: second\n- name: BACK\n  type: float\n  label: BACK\n  derivation:\n    duration_value:\n      source: TEXT\n      unit: minute\n",
+          "inputs": {
+            "input.csv": "ID,MINUTES,SECONDS\n1,120,93780\n2,90,90.5\n3,45,0.5\n4,0,0\n5,-90,-900\n6,1560,86400\n7,,\n"
+          },
+          "csv": "ID,TEXT,STEXT,BACK\n1,PT2H,P1DT2H3M,120.00\n2,PT1H30M,PT1M30.5S,90.00\n3,PT45M,PT0.5S,45.00\n4,PT0S,PT0S,0.00\n5,-PT1H30M,-PT15M,-90.00\n6,P1DT2H,P1D,1560.00\n7,,,\n",
+          "check_issue": null,
+          "run_issue": null,
+          "invalid_count": 0
+        },
+        {
+          "name": "duration_text_seconds_beyond_the_float_range",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DAYS: float\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: str\n  label: RESULT\n  derivation:\n    duration_text:\n      source: RAW.DAYS\n      unit: day\n",
+          "inputs": {
+            "input.csv": "ID,DAYS\n1,1e304\n"
+          },
+          "csv": null,
+          "check_issue": null,
+          "run_issue": {
+            "phase": "convert",
+            "condition": "conversion_failed",
+            "rule": "TIME-21",
+            "spec_path": "columns.RESULT.derivation.duration_text"
+          },
+          "invalid_count": 0,
+          "covers": [
+            "duration_text"
+          ]
+        },
+        {
           "name": "date_shift_overflow_is_not_output_conversion",
           "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DATE: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: date\n  label: RESULT\n  derivation:\n    value:\n      shift:\n        type: date\n        source: RAW.DATE\n        days: 1\n    unconvertible: null\n",
           "inputs": {
@@ -635,6 +665,74 @@
             "spec_path": "columns.RESULT.derivation.shift"
           },
           "invalid_count": 0
+        }
+      ],
+      "text_positions": [
+        {
+          "name": "pieces_and_lengths_count_unicode_scalar_values",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: input.csv\noutput:\n  path: result.csv\n  columns: [ID, FIRST, REST, TAIL, LEN, BLANK, BLANKLEN]\ncolumns:\n- {name: ID, type: str, derivation: SRC.ID}\n- name: FIRST\n  type: str\n  derivation:\n    str_substr: {source: SRC.TEXT, start: 1, length: 2}\n- name: REST\n  type: str\n  derivation:\n    str_substr: {source: SRC.TEXT, start: 3, missing: NONE}\n- name: TAIL\n  type: str\n  derivation:\n    str_substr: {source: SRC.TEXT, start: 6, length: 5}\n- name: LEN\n  type: int\n  derivation:\n    str_length: {source: SRC.TEXT, missing: -1}\n- name: EMPTY\n  type: str\n  derivation: \"''\"\n- name: BLANK\n  type: str\n  derivation:\n    str_substr: {source: EMPTY, start: 1}\n- name: BLANKLEN\n  type: int\n  derivation:\n    str_length: {source: EMPTY}\n",
+          "inputs": {
+            "input.csv": "ID,TEXT\nrow1,ABCDEFG\nrow2,\u00e9\ud83e\udd80xyz\nrow3,\n"
+          },
+          "csv": "ID,FIRST,REST,TAIL,LEN,BLANK,BLANKLEN\nrow1,AB,CDEFG,FG,7,,0\nrow2,\u00e9\ud83e\udd80,xyz,,5,,0\nrow3,,NONE,,-1,,0\n",
+          "issues": null,
+          "missing_count": 4
+        },
+        {
+          "name": "a_length_below_one_is_refused_before_input",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: input.csv\noutput:\n  path: result.csv\n  columns: [ID, RESULT]\ncolumns:\n- {name: ID, type: str, derivation: SRC.ID}\n- name: RESULT\n  type: str\n  derivation:\n    str_substr: {source: SRC.TEXT, start: 2, length: 0}\n",
+          "inputs": {
+            "input.csv": "ID,TEXT\nrow1,ABC\n"
+          },
+          "csv": null,
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "invalid_field_type",
+              "rule": "TEXT-13",
+              "spec_paths": [
+                "columns.RESULT.derivation.str_substr.length"
+              ],
+              "context": {
+                "expected": "a positive integer length"
+              }
+            }
+          ],
+          "missing_count": 0
+        },
+        {
+          "name": "a_piece_of_a_number_in_a_row_template_is_refused_before_input",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput:\n  SRC: {path: input.csv, types: {NUM: int}}\noutput:\n  path: result.csv\n  columns: [ID, RESULT]\ncolumns:\n- {name: ID, type: str}\n- {name: RESULT, type: str}\nrows:\n- id: records\n  dataset: SRC\n  derivations:\n    ID: SRC.ID\n    RESULT:\n      str_substr: {source: SRC.NUM, start: 1}\n",
+          "inputs": {
+            "input.csv": "ID,NUM\nrow1,12\n"
+          },
+          "csv": null,
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "rule": "TEXT-1",
+              "spec_paths": [
+                "rows.records.derivations.RESULT.str_substr.source"
+              ],
+              "context": {
+                "source": "SRC.NUM",
+                "expected": "str",
+                "actual": "int"
+              }
+            }
+          ],
+          "missing_count": 0
+        },
+        {
+          "name": "a_continuation_row_is_built_for_a_text_beyond_one_piece",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, PIECE]\ninput:\n  SRC: input.csv\noutput:\n  path: result.csv\n  columns: [ID, PIECE, VALUE]\n  order_by: [ID, PIECE]\ncolumns:\n- {name: ID, type: str}\n- {name: PIECE, type: int}\n- {name: VALUE, type: str}\nrows:\n- id: first\n  dataset: SRC\n  derivations:\n    ID: SRC.ID\n    PIECE: 1\n    VALUE:\n      str_substr: {source: SRC.TEXT, start: 1, length: 3}\n- id: continuation\n  dataset: SRC\n  filter: 'str_contains(SRC.TEXT, ''^[\\s\\S]{4}'')'\n  derivations:\n    ID: SRC.ID\n    PIECE: 2\n    VALUE:\n      str_substr: {source: SRC.TEXT, start: 4, length: 3}\n",
+          "inputs": {
+            "input.csv": "ID,TEXT\nrow1,ABC\nrow2,\"AB\nCDE\"\nrow3,\n"
+          },
+          "csv": "ID,PIECE,VALUE\nrow1,1,ABC\nrow2,1,\"AB\n\"\nrow2,2,CDE\nrow3,1,\n",
+          "issues": null,
+          "missing_count": 2
         }
       ],
       "inheritance_nulls": [
@@ -6252,7 +6350,7 @@
       "rows": [
         ["allowed_values_failed", "error", ["verification"], ["CHECK-6", "CT-7", "CT-11"], "column {column} holds a value outside its allowed values", null, null],
         ["bare_derivation_scalar", "error", [], [], null, null, "1.0.0"],
-        ["conversion_failed", "error", ["convert", "validation"], ["TIME-14", "VALUE-3", "VALUE-7", "VALUE-15", "VALUE-24"], "{spec_path} gives a value that does not convert to {to}, or that leaves the range of {to}", null, null],
+        ["conversion_failed", "error", ["convert", "validation"], ["TIME-14", "TIME-21", "VALUE-3", "VALUE-7", "VALUE-15", "VALUE-24"], "{spec_path} gives a value that does not convert to {to}, or that leaves the range of {to}", null, null],
         ["day_not_permitted", "error", [], [], null, null, "1.0.0"],
         ["day_required", "error", [], [], null, null, "1.0.0"],
         ["duplicate_layer", "error", ["validation"], ["LAYER-3"], "include {path} names a layer the specification already composes", null, null],

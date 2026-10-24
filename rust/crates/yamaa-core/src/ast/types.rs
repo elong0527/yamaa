@@ -260,6 +260,7 @@ mod tests {
                 ),
                 value("SHIFTED", temporal("shift", "datetime", "hour")),
                 value("DURATION", temporal("duration_value", "datetime", "hour")),
+                value("WRITTEN", temporal("duration_text", "datetime", "minute")),
                 value(
                     "DTC",
                     op("dtc", fields(vec![("year", Tree::text("SRC.A"))]))
@@ -276,6 +277,17 @@ mod tests {
                         ])
                     )
                 ),
+                value(
+                    "PIECE",
+                    op(
+                        "str_substr",
+                        fields(vec![
+                            ("source", Tree::text("SRC.T")),
+                            ("start", Tree::integer(1))
+                        ])
+                    )
+                ),
+                value("LENGTH", source("str_length")),
                 value(
                     "ROUNDED",
                     op(
@@ -301,9 +313,12 @@ mod tests {
                 ResultType::DATETIME,
                 ResultType::FLOAT,
                 ResultType::STR,
+                ResultType::STR,
                 ResultType::DATE,
                 ResultType::DATE,
                 ResultType::STR,
+                ResultType::STR,
+                ResultType::INT,
                 ResultType::FLOAT,
                 ResultType::INT,
                 ResultType::STR,

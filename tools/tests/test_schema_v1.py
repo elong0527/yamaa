@@ -10,9 +10,10 @@ the table's kind. An entry the converter transforms (``reshape``, ``new``, or a
 entry is absent. Every field, keyword and value ``yaml/`` holds is accounted
 for by an entry, and no reserved spelling is admitted. The table's
 ``conditions``, ``paths`` and ``issues_columns`` describe diagnostics, which no
-schema holds.
+schema holds. Its summary states the counts the table holds.
 """
 
+import collections
 import copy
 import functools
 import json
@@ -316,6 +317,33 @@ EXPECTED = {
     ],
     "new.spec.clear": [Field("root_class", "clear", "list[spec_path]")],
     "new.spec.include": [Field("root_class", "include", "list[project_path]")],
+    # D264: duration_text writes a number in a declared unit as ISO 8601
+    # duration text, the inverse of duration_value (TIME-21).
+    "new.spec.expressions.duration_text": [
+        Keyword("expressions", "duration_text", "[]"),
+        Field("expressions.duration_text", "source", "variable", True, kind="name"),
+        Field(
+            "expressions.duration_text",
+            "unit",
+            "str",
+            True,
+            kind="value",
+            values=("second", "minute", "hour", "day"),
+        ),
+    ],
+    # D264: the positional text verbs (TEXT-13, TEXT-14).
+    "new.spec.expressions.str_substr": [
+        Keyword("expressions", "str_substr", "[]"),
+        Field("expressions.str_substr", "source", "variable", True, kind="name"),
+        Field("expressions.str_substr", "start", "int", True, kind="value"),
+        Field("expressions.str_substr", "length", "int", kind="value"),
+        Field("expressions.str_substr", "missing", "substitute_value", kind="value"),
+    ],
+    "new.spec.expressions.str_length": [
+        Keyword("expressions", "str_length", "[]"),
+        Field("expressions.str_length", "source", "variable", True, kind="name"),
+        Field("expressions.str_length", "missing", "substitute_value", kind="value"),
+    ],
     # #3774: the fields STR_JOIN and COUNT(x) read besides their argument
     # (FORMULA-18).
     "new.spec.aggregate_class.order_by": [
@@ -449,11 +477,31 @@ class RenameTableTests(unittest.TestCase):
             or (entry["kind"] == "rename" and entry["convert"]["action"] == "transform")
         }
         self.assertEqual(set(EXPECTED), transformed)
-        self.assertEqual(
-            len(rename_table()["entries"]), rename_table()["summary"]["entries"]
-        )
         for entry_id, (_, justified_by) in RETYPED.items():
             self.assertIn(justified_by, EXPECTED, entry_id)
+
+    def test_the_summary_states_the_tables_counts(self):
+        # Every count the summary states. Two branches that each add an
+        # entry and make the same change to a count merge without a
+        # conflict, and the count then falls short by one.
+        table = rename_table()
+        entries = table["entries"]
+        by_kind_and_decision = collections.Counter(
+            f"{entry['kind']}, {entry['decision'].split(' (', 1)[0]}"
+            for entry in entries
+        )
+        self.assertEqual(
+            table["summary"],
+            {
+                "entries": len(entries),
+                "changes": sum(entry["kind"] != "keep" for entry in entries),
+                "by_kind_and_decision": dict(by_kind_and_decision),
+                "conditions": len(table["conditions"]),
+                "paths": len(table["paths"]),
+                "reserved": len(table["reserved"]),
+            },
+            "the summary",
+        )
 
     def test_copied_and_renamed_fields_keep_type_requirement_default_and_kind(self):
         failures = []
@@ -649,10 +697,16 @@ class RenameTableTests(unittest.TestCase):
 
     def test_no_field_keyword_or_value_the_table_does_not_list(self):
         fields, values = self.accounted()
+        # A kept or reshaped 0.5 keyword, or one a new entry's reading names.
         keywords = {
             location(entry)
             for entry in rename_table()["entries"]
             if is_keyword(entry) and entry["kind"] in {"keep", "reshape"}
+        } | {
+            (check.registry, check.keyword)
+            for checks in EXPECTED.values()
+            for check in checks
+            if isinstance(check, Keyword)
         }
         failures = []
         for file_type, (entry, root) in generator.FILE_TYPES.items():
@@ -1011,9 +1065,6 @@ class ReservedSpellingTests(unittest.TestCase):
             (item["spelling"], item["where"]) for item in rename_table()["reserved"]
         }
         self.assertEqual(set(RESERVED), listed)
-        self.assertEqual(
-            len(rename_table()["reserved"]), rename_table()["summary"]["reserved"]
-        )
 
     def test_no_reserved_spelling_is_admitted(self):
         for (spelling, where), (file_type, fields, write) in RESERVED.items():

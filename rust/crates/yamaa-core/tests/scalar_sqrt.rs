@@ -1,5 +1,5 @@
 //! Scalar contracts: sqrt, temporal, temporal arithmetic, text case, text
-//! extract, text pad, text template and values.
+//! extract, text pad, text positions, text template and values.
 mod scalar {
     mod sqrt {
         use yamaa_core::numeric::{sqrt, ArithmeticErrorKind, Number};
@@ -424,6 +424,85 @@ mod scalar {
         }
 
         #[test]
+        fn duration_text_writes_one_canonical_text_for_each_amount() {
+            // TIME-21: days, then hours, minutes and seconds, each zero
+            // component left out and a fraction only on the seconds. An int
+            // scales exactly; a float scales once as binary64 and splits the
+            // shortest digits of its seconds (VALUE-8).
+            let tiny = format!("PT0.{}5S", "0".repeat(323));
+            for (amount, unit, expected) in [
+                (Value::Int(120), U::Minute, "PT2H"),
+                (Value::Int(90), U::Minute, "PT1H30M"),
+                (Value::Int(45), U::Minute, "PT45M"),
+                (Value::Int(0), U::Minute, "PT0S"),
+                (Value::Int(-90), U::Minute, "-PT1H30M"),
+                (Value::Int(26), U::Hour, "P1DT2H"),
+                (Value::Int(14), U::Day, "P14D"),
+                (Value::Int(86400), U::Second, "P1D"),
+                (Value::Int(3601), U::Second, "PT1H1S"),
+                (Value::Int(90061), U::Second, "P1DT1H1M1S"),
+                (Value::Int(93780), U::Second, "P1DT2H3M"),
+                (Value::Int(i64::MAX), U::Day, "P9223372036854775807D"),
+                (Value::Int(i64::MIN), U::Day, "-P9223372036854775808D"),
+                (
+                    Value::Int(i64::MIN),
+                    U::Second,
+                    "-P106751991167300DT15H30M8S",
+                ),
+                (Value::float(-0.25), U::Hour, "-PT15M"),
+                (Value::float(1.75), U::Hour, "PT1H45M"),
+                (Value::float(1.5), U::Minute, "PT1M30S"),
+                (Value::float(90.5), U::Second, "PT1M30.5S"),
+                (Value::float(0.5), U::Second, "PT0.5S"),
+                (Value::float(0.1), U::Second, "PT0.1S"),
+                // 0.1 minute is 6.0000000000000003 seconds exactly, within
+                // half a unit in the last place of 6.
+                (Value::float(0.1), U::Minute, "PT6S"),
+                // One third of an hour as a float is 1199.99999999999993
+                // seconds exactly, within half a unit in the last place of
+                // 1200.
+                (Value::float(1.0 / 3.0), U::Hour, "PT20M"),
+                (Value::float(-0.0), U::Second, "PT0S"),
+                (Value::float(0.0), U::Day, "PT0S"),
+                (Value::float(1e20), U::Second, "P1157407407407407DT9H46M40S"),
+                (Value::float(5e-324), U::Second, tiny.as_str()),
+            ] {
+                assert_eq!(
+                    result(K::DurationText { unit }, std::slice::from_ref(&amount)),
+                    text(expected),
+                    "{amount:?} {unit:?}"
+                );
+            }
+        }
+
+        #[test]
+        fn duration_text_read_back_returns_every_whole_second_amount() {
+            // TIME-21: an amount that is a whole number of seconds, at most
+            // 2^53 of them, reads back in its own unit as itself.
+            for (amount, unit) in [
+                (Value::Int(120), U::Minute),
+                (Value::Int(-90), U::Minute),
+                (Value::Int(0), U::Second),
+                (Value::Int(1 << 53), U::Second),
+                (Value::Int(-(1 << 53)), U::Second),
+                (Value::Int(104249991374), U::Day),
+                (Value::Int(26), U::Hour),
+                (Value::float(1.5), U::Minute),
+                (Value::float(-0.25), U::Hour),
+                (Value::float(2.5), U::Day),
+                (Value::float(9007199254740992.0), U::Second),
+            ] {
+                let written = result(K::DurationText { unit }, std::slice::from_ref(&amount));
+                let read = result(K::DurationValue { unit }, &[written]);
+                let expected = match &amount {
+                    Value::Int(whole) => Value::float(*whole as f64),
+                    other => other.clone(),
+                };
+                assert_eq!(read, expected, "{amount:?} {unit:?}");
+            }
+        }
+
+        #[test]
         fn invalid_duration_text_recovers_only_when_declared() {
             // A duration whose float is not finite is outside the numeric range.
             let infinite = format!("PT1{}S", "0".repeat(309));
@@ -531,6 +610,7 @@ mod scalar {
                 K::DateTimeDifference { unit: U::Hour },
                 K::DateTimeShift { unit: U::Second },
                 K::DurationValue { unit: U::Second },
+                K::DurationText { unit: U::Minute },
             ] {
                 assert_eq!(
                     result(kind, &vec![Value::Missing; kind.fields().len()]),
@@ -1027,6 +1107,181 @@ mod scalar {
             assert_eq!(finding.definition().condition, "invalid_field_type");
             assert_eq!(finding.definition().rule, Some("TEXT-2"));
             assert_eq!(finding.spec_paths, ["columns.C0.derivation.str_pad.width"]);
+        }
+    }
+    mod text_position {
+        //! TEXT-13 and TEXT-14: pieces and lengths by Unicode scalar position.
+        use yamaa_core::{
+            table::ValueRef,
+            text_position::{DeclarationError, Step, StringLength, StringSubstr},
+            value::Value,
+        };
+
+        const BEYOND: &str = "100000000000000000000000";
+
+        fn substr(start: &str, length: Option<&str>) -> Result<StringSubstr, DeclarationError> {
+            StringSubstr::new(
+                "SRC.T".into(),
+                "columns.T.derivation.str_substr".into(),
+                start,
+                length,
+                None,
+            )
+        }
+
+        #[test]
+        fn a_piece_takes_scalars_from_a_start_counted_from_one() {
+            for (label, text, start, length, expected) in [
+                ("the first two", "ABCDEFG", "1", Some("2"), Some("AB")),
+                ("every one to the end", "ABCDEFG", "3", None, Some("CDEFG")),
+                (
+                    "a short tail keeps those left",
+                    "ABCDEFG",
+                    "6",
+                    Some("5"),
+                    Some("FG"),
+                ),
+                ("the last scalar", "ABCDEFG", "7", Some("1"), Some("G")),
+                ("a start past the end", "ABCDEFG", "8", Some("1"), None),
+                ("any start on the empty string", "", "1", None, None),
+                (
+                    "scalars, not bytes",
+                    "\u{e9}\u{1f980}xyz",
+                    "2",
+                    Some("2"),
+                    Some("\u{1f980}x"),
+                ),
+                (
+                    "a start past five scalars",
+                    "\u{e9}\u{1f980}xyz",
+                    "6",
+                    None,
+                    None,
+                ),
+                (
+                    "a length beyond any integer",
+                    "ABC",
+                    "2",
+                    Some(BEYOND),
+                    Some("BC"),
+                ),
+                ("a start beyond any integer", "ABC", BEYOND, None, None),
+            ] {
+                let expected =
+                    expected.map_or(Value::Missing, |piece: &str| Value::Str(piece.into()));
+                assert_eq!(
+                    substr(start, length).unwrap().apply(ValueRef::Str(text)),
+                    Ok(Step::Value(expected)),
+                    "{label}"
+                );
+            }
+        }
+
+        #[test]
+        fn a_length_counts_scalars_not_bytes() {
+            let operation = StringLength::new(
+                "SRC.T".into(),
+                "columns.N.derivation.str_length".into(),
+                None,
+            )
+            .unwrap();
+            for (label, text, expected) in [
+                ("ASCII", "ABC", 3),
+                ("the empty string", "", 0),
+                ("a two-byte and a four-byte scalar", "\u{e9}\u{1f980}", 2),
+                ("a line break", "A\nB", 3),
+            ] {
+                assert_eq!(
+                    operation.apply(ValueRef::Str(text)),
+                    Ok(Step::Value(Value::Int(expected))),
+                    "{label}"
+                );
+            }
+        }
+
+        #[test]
+        fn a_missing_source_is_answered_by_the_declared_missing_or_missing() {
+            for handler in [None, Some(Value::Str("NONE".into())), Some(Value::Int(-1))] {
+                let substitute = handler.clone().unwrap_or(Value::Missing);
+                let piece =
+                    StringSubstr::new("SRC.T".into(), "p".into(), "1", None, handler.clone())
+                        .unwrap();
+                let length =
+                    StringLength::new("SRC.T".into(), "p".into(), handler.clone()).unwrap();
+                assert_eq!(
+                    (
+                        piece.apply(ValueRef::Missing),
+                        piece.missing_substitute(),
+                        length.apply(ValueRef::Missing),
+                        length.missing_substitute(),
+                    ),
+                    (
+                        Ok(Step::Recovered),
+                        substitute.clone(),
+                        Ok(Step::Recovered),
+                        substitute,
+                    ),
+                    "{handler:?}"
+                );
+            }
+        }
+
+        #[test]
+        fn a_start_or_length_below_one_is_the_declaration_defect() {
+            for (label, start, length, expected) in [
+                ("a zero start", "0", None, DeclarationError::Start),
+                (
+                    "a negative start",
+                    "-1",
+                    Some("200"),
+                    DeclarationError::Start,
+                ),
+                ("a zero length", "1", Some("0"), DeclarationError::Length),
+                (
+                    "a negative length",
+                    "201",
+                    Some("-200"),
+                    DeclarationError::Length,
+                ),
+                ("both below one", "0", Some("0"), DeclarationError::Start),
+                (
+                    "a start below any integer",
+                    "-100000000000000000000000",
+                    None,
+                    DeclarationError::Start,
+                ),
+            ] {
+                assert_eq!(substr(start, length), Err(expected), "{label}");
+            }
+        }
+
+        #[test]
+        fn only_what_lowering_never_writes_is_a_shape_failure() {
+            for (label, source, path, start, length) in [
+                ("no source", "", "p", "1", None),
+                ("no path", "SRC.T", "", "1", None),
+                ("a start that is not an integer", "SRC.T", "p", "1.5", None),
+                (
+                    "a length that is not an integer",
+                    "SRC.T",
+                    "p",
+                    "1",
+                    Some("x"),
+                ),
+            ] {
+                assert_eq!(
+                    StringSubstr::new(source.into(), path.into(), start, length, None),
+                    Err(DeclarationError::Shape),
+                    "{label}"
+                );
+            }
+            for (source, path) in [("", "p"), ("SRC.T", "")] {
+                assert_eq!(
+                    StringLength::new(source.into(), path.into(), None),
+                    None,
+                    "{source:?} {path:?}"
+                );
+            }
         }
     }
     mod text_template {

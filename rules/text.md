@@ -1,8 +1,9 @@
 # Text
 
-The text verbs pad, change case, interpolate templates, and extract and
-replace by pattern. They operate on the string values of
-[VALUE-11](values.md#value-11) and preserve every scalar they do not change.
+The text verbs pad, take a piece by position, count scalars, change case,
+interpolate templates, and extract and replace by pattern. They operate on the
+string values of [VALUE-11](values.md#value-11) and preserve every scalar they
+do not change.
 One portable regular-expression language serves every pattern in a
 specification.
 
@@ -12,11 +13,12 @@ specification.
 
 ### TEXT-1. Text verbs take string sources and fail rather than convert another type
 
-`str_extract`, `str_replace`, `str_template` and `str_case` require string
-sources; a source of another runtime type fails rather than being converted.
+`str_extract`, `str_replace`, `str_template`, `str_case`, `str_substr` and
+`str_length` require string sources; a source of another runtime type fails
+rather than being converted.
 
 Fails: `incompatible_input_type`.
-Evidence: `negative-str-case-number`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_case_refuses_a_source_that_is_not_text`.
+Evidence: `negative-str-case-number`, `negative-str-length-number`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/text.json::str_case_refuses_a_source_that_is_not_text`, `rust/tests/host-fixtures/cases.json::a_piece_of_a_number_in_a_row_template_is_refused_before_input`.
 
 A source of another type fails under [VALUE-2](values.md#value-2).
 
@@ -34,6 +36,81 @@ Fails: `invalid_field_type`.
 Evidence: `negative-str-pad-width`, `adam-adlb-supplb-padded-key`, `rust/crates/yamaa-adapters/tests/fixtures/text_pad_reference.json`.
 
 An unknown source or a failed conversion reports its existing condition.
+
+<a id="text-13"></a>
+
+### TEXT-13. str_substr takes the scalars of a text from a position counted from 1, and gives missing past its end
+
+`str_substr` takes `source`, a positive integer `start` and an optional
+positive integer `length`. It returns the Unicode scalar values of a present
+string source from position `start`, counted from 1, at most `length` of them,
+or every one to the end without `length`; fewer remaining give those that
+remain. A `start` past the source's last scalar gives missing. A missing source
+gives the declared `missing`, or missing. A `start` or `length` below one fails
+as `invalid_field_type`.
+
+Fails: `invalid_field_type`.
+Evidence: `sdtm-co-long-comments`, `negative-str-substr-start`, `rust/tests/host-fixtures/cases.json::pieces_and_lengths_count_unicode_scalar_values`, `rust/tests/host-fixtures/cases.json::a_length_below_one_is_refused_before_input`.
+
+A position counts the scalar values of [VALUE-11](values.md#value-11), never
+bytes or UTF-16 code units, so a text splits the same way on every host. The
+200 bytes [XPT-7](profiles/xpt.md#xpt-7) admits in a transport file and SDTM's
+200 characters coincide for the printable ASCII that file holds. A piece is
+never the empty string: a `start` within the source gives at least one scalar,
+and the empty string, which has no scalar, gives missing at every `start`. A
+`start` or `length` larger than any integer an implementation holds stays
+valid: no text reaches such a `start`, and such a `length` takes every
+remaining scalar, as an omitted one does.
+
+With `start: 201` and `length: 200`, a text of 450 scalars gives its scalars
+201 to 400, one of 250 scalars gives 201 to 250, and one of 200 scalars gives
+missing. SDTM's 200-character pieces of a long value are written one
+`str_substr` per piece, with `start` 1, 201, 401 and so on:
+
+```yaml
+- name: COVAL1
+  type: str
+  label: Comment
+  derivation:
+    str_substr: {source: CO_RAW.COMMENT, start: 201, length: 200}
+```
+
+`invalid_field_type` reports the field below one at its path, such as
+`columns.COVAL1.derivation.str_substr.start`, with `expected` naming a positive
+integer; when both fields are below one, `start` is reported. A source of
+another type fails under [TEXT-1](#text-1). `missing` answers a missing source
+and is counted under `missing`, declared or by default
+([COLUMN-10](columns.md#column-10)); a `start` past the end gives missing
+uncounted, as the verb's own result.
+
+<a id="text-14"></a>
+
+### TEXT-14. str_length counts the scalar values of a text as an int
+
+`str_length` takes `source` and returns the number of Unicode scalar values in
+a present string source as an `int`, the count that
+[SUB-8](profiles/submission.md#sub-8)'s `length` and
+[CHECK-8](verification.md#check-8)'s `max_length` bound, so a value that meets
+a declared length has a `str_length` at or below it. The empty string gives
+`0`. A missing source gives the declared `missing`, or missing.
+
+Evidence: `sdtm-co-long-comments`, `rust/tests/host-fixtures/cases.json::pieces_and_lengths_count_unicode_scalar_values`.
+
+A source of another type fails under [TEXT-1](#text-1). `missing` answers a
+missing source and is counted under `missing`, declared or by default
+([COLUMN-10](columns.md#column-10)).
+
+A row template's `filter` and every other predicate admit no text verb: the
+only functions they call are the numeric functions of
+[FORMULA-13](formulas.md#formula-13) and `str_contains`
+([FORMULA-8](formulas.md#formula-8)). A condition on a text's length is
+therefore written in one of two ways. `str_contains` tests the length with a
+quantified pattern:
+`str_contains(CO_RAW.COMMENT, '^[\s\S]{201}')` is true for a comment of more
+than 200 scalars, as a row template that writes a second piece filters on it;
+`.` matches no line terminator ([TEXT-7](#text-7)), and `[\s\S]` matches every
+scalar. Otherwise `str_length` is bound to a column, internal when it is not
+published, and the condition compares that column.
 
 ## String templates
 

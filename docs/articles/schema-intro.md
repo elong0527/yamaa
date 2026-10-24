@@ -134,10 +134,10 @@ in one schema module per family:
 |---|---|---|
 | Core selection | `schema_expression_core.yaml` | `source`, `first_available`, `greatest`, `least`, `case`, `flag` |
 | Vocabulary | `schema_expression_mapping.yaml` | `mapping`, `cut` |
-| Strings | `schema_expression_str.yaml` | `str_pad`, `str_extract`, `str_replace`, `str_template`, `str_case` |
+| Strings | `schema_expression_str.yaml` | `str_pad`, `str_substr`, `str_length`, `str_extract`, `str_replace`, `str_template`, `str_case` |
 | Rounding | `schema_expression_numeric.yaml` | `round_half_away_from_zero` |
 | Aggregation | `schema_expression_aggregate.yaml` | `aggregate` |
-| Dates | `schema_expression_date.yaml` | `diff`, `impute`, `precision`, `imputation_flag`, `to_date`, `study_day`, `to_epoch_day`, `dtc`, `time_of_day`, `shift`, `duration_value` |
+| Dates | `schema_expression_date.yaml` | `diff`, `impute`, `precision`, `imputation_flag`, `to_date`, `study_day`, `to_epoch_day`, `dtc`, `time_of_day`, `shift`, `duration_value`, `duration_text` |
 | Windows | `schema_expression_window.yaml` | `row_number`, `rank`, `row_value`, `locf`, `baseline_flag` |
 | Collected data | `schema_expression_odm.yaml` | `odm` |
 | Extension | `schema_expression_function.yaml` | `function` |
@@ -287,6 +287,8 @@ in its short form is listed under the field it fills.
 | `mapping` | | `source` | | `dict`, `case_sensitive`, `missing`, `unmapped` | |
 | `cut` | | `source` | | `breaks`, `labels`, `closed`, `missing` | |
 | `str_pad` | | `source` | | `width` | |
+| `str_substr` | | `source` | | `start`, `length`, `missing` | |
+| `str_length` | | `source` | | `missing` | |
 | `str_extract` | | `source` | | `pattern`, `group`, `missing`, `no_match` | |
 | `str_replace` | | `source` | | `pattern`, `replacement`, `missing` | |
 | `str_template` | `template` | | | `missing` | |
@@ -303,6 +305,7 @@ in its short form is listed under the field it fills.
 | `dtc` | | `year`, `month`, `day`, `hour`, `minute`, `second` | | `invalid` | |
 | `shift` | | `source`, `days`, `amount` | | `type`, `unit` | |
 | `duration_value` | | `source` | | `unit`, `invalid` | |
+| `duration_text` | | `source` | | `unit` | |
 | `row_number` | | | | | `window` |
 | `rank` | | | | `method` | `window` |
 | `row_value` | | `source` | | `offset` | `window` |

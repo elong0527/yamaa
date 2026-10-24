@@ -96,13 +96,13 @@ pub fn main() {
         println!("memory example: unavailable without the yaml feature, as reported");
     }
 
-    // Typed diagnostics out: a missing entry reports records, never text. A
-    // request given no token polls one that nothing cancels.
+    // Typed diagnostics out: a missing entry reports records, never text,
+    // each with its phase and its registered condition. A request given no
+    // token polls one that nothing cancels.
     let missing = engine.spec("missing.csv").check().unwrap().diagnostics();
-    assert!(!missing.is_empty());
-    assert!(!missing[0].code.is_empty());
+    let first = missing.first().expect("a missing entry reports an issue");
     println!(
-        "memory example: missing entry reports code '{}'",
-        missing[0].code
+        "memory example: missing entry reports {} in the {} phase",
+        first.code, first.phase
     );
 }

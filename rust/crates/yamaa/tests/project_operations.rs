@@ -388,10 +388,12 @@ fn a_project_spelled_through_a_linked_directory_keeps_its_authority() {
 
 /// The issue of a call refused for selecting `section`, which the project
 /// does not declare; `declared` are the sections it does, sorted.
-fn assert_unknown_section(error: Option<yamaa::Error>, section: &str, declared: &[&str]) {
-    let error = error.unwrap_or_else(|| panic!("selecting {section} refuses the call"));
-    assert!(matches!(error, yamaa::Error::Rejected(_)), "{error:?}");
-    let failure = yamaa::Failure::from_error(yamaa::Action::Select(section), &error);
+fn assert_unknown_section(failure: Option<yamaa::Failure>, section: &str, declared: &[&str]) {
+    let failure = failure.unwrap_or_else(|| panic!("selecting {section} refuses the call"));
+    assert!(
+        matches!(failure.kind, yamaa::FailureKind::Rejected),
+        "{failure:?}"
+    );
     assert_eq!(
         failure.message,
         format!(
@@ -401,7 +403,7 @@ fn assert_unknown_section(error: Option<yamaa::Error>, section: &str, declared: 
     );
     let issues = rows(&failure.issues);
     assert_eq!(issues.len(), 1, "{issues:?}");
-    assert_eq!(issues[0].phase, "validation");
+    assert_eq!(issues[0].phase.as_str(), "validation");
     assert_eq!(issues[0].condition, "unknown_section");
     assert_eq!(issues[0].rule.as_deref(), Some("PROJECT-14"));
     assert!(issues[0].spec_paths.is_empty());
@@ -538,7 +540,13 @@ fn a_user_interrupt_cancels_the_project_run() {
             .with_functions(functions.clone()),
     );
     let run = engine.project(&study.project()).run();
-    assert!(matches!(run, Err(yamaa::Error::Cancelled)));
+    assert!(matches!(
+        run,
+        Err(yamaa::Failure {
+            kind: yamaa::FailureKind::Cancelled,
+            ..
+        })
+    ));
     // TWO never builds, so no more project code runs after the interrupt.
     assert_eq!(functions.0.load(Ordering::Relaxed), 1);
 }
@@ -549,7 +557,7 @@ fn a_user_interrupt_cancels_the_project_run() {
 fn assert_nothing_to_save(issues: &Table, rule: &str) {
     let issues = rows(issues);
     assert_eq!(issues.len(), 1, "{issues:?}");
-    assert_eq!(issues[0].phase, "output");
+    assert_eq!(issues[0].phase.as_str(), "output");
     assert_eq!(issues[0].condition, "nothing_to_save");
     assert_eq!(issues[0].rule.as_deref(), Some(rule));
     assert!(issues[0].spec_paths.is_empty());
@@ -636,7 +644,7 @@ fn a_project_run_refuses_a_name_it_did_not_build() {
         );
         let issues = rows(&failure.issues);
         assert_eq!(issues.len(), 1, "{issues:?}");
-        assert_eq!(issues[0].phase, "validation");
+        assert_eq!(issues[0].phase.as_str(), "validation");
         assert_eq!(issues[0].condition, "unknown_specification_name");
         assert_eq!(issues[0].rule.as_deref(), Some("PROJECT-6"));
         assert!(issues[0].spec_paths.is_empty());
@@ -684,11 +692,17 @@ fn a_cancelled_call_returns_no_result_and_no_issue() {
             .project(&project)
             .cancel_with(&token)
             .check(),
-        Err(yamaa::Error::Cancelled)
+        Err(yamaa::Failure {
+            kind: yamaa::FailureKind::Cancelled,
+            ..
+        })
     ));
     assert!(matches!(
         engine.project(&project).cancel_with(&token).check(),
-        Err(yamaa::Error::Cancelled)
+        Err(yamaa::Failure {
+            kind: yamaa::FailureKind::Cancelled,
+            ..
+        })
     ));
     assert!(matches!(
         engine
@@ -696,18 +710,27 @@ fn a_cancelled_call_returns_no_result_and_no_issue() {
             .project(&project)
             .cancel_with(&token)
             .run(),
-        Err(yamaa::Error::Cancelled)
+        Err(yamaa::Failure {
+            kind: yamaa::FailureKind::Cancelled,
+            ..
+        })
     ));
     assert!(matches!(
         engine.project(&project).cancel_with(&token).run(),
-        Err(yamaa::Error::Cancelled)
+        Err(yamaa::Failure {
+            kind: yamaa::FailureKind::Cancelled,
+            ..
+        })
     ));
     assert!(matches!(
         engine
             .project(&project)
             .cancel_with(&token)
             .submission(&SubmissionOptions::new("0.4.0")),
-        Err(yamaa::Error::Cancelled)
+        Err(yamaa::Failure {
+            kind: yamaa::FailureKind::Cancelled,
+            ..
+        })
     ));
     assert_eq!(std::fs::read_dir(study.0.join("out")).unwrap().count(), 0);
 }
@@ -1759,7 +1782,7 @@ fn a_later_section_whose_target_cannot_be_written_saves_nothing() {
     // `define`, naming the file as written (FILE-7, #3030 D189).
     let issues = rows(&failure.issues);
     assert_eq!(issues.len(), 1, "{issues:?}");
-    assert_eq!(issues[0].phase, "output");
+    assert_eq!(issues[0].phase.as_str(), "output");
     assert_eq!(issues[0].condition, "resource_path_not_regular_file");
     assert_eq!(issues[0].spec_paths, ["adam.define"]);
     assert_eq!(issues[0].context["path"], text("adam-define.xml"));

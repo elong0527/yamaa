@@ -524,6 +524,12 @@ impl Lower<'_> {
                 },
                 SOURCE,
             ),
+            "duration_text" => (
+                ScalarOp::DurationText {
+                    unit: unit("unit")?,
+                },
+                SOURCE,
+            ),
             "dtc" => (
                 ScalarOp::Dtc,
                 &[
@@ -595,6 +601,17 @@ impl Lower<'_> {
                 },
                 SOURCE,
             ),
+            "str_substr" => (
+                ScalarOp::StrSubstr {
+                    start: integer("start")?,
+                    length: match self.field(p, "length") {
+                        Some(_) => Some(integer("length")?),
+                        None => None,
+                    },
+                },
+                SOURCE,
+            ),
+            "str_length" => (ScalarOp::StrLength, SOURCE),
             "str_extract" => (
                 ScalarOp::StrExtract {
                     pattern: text("pattern")?.into(),

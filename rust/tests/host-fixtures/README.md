@@ -282,14 +282,21 @@ authored conversion inputs, expected CSV bytes, refusal conditions and reached
 handler counts with the Rust adapter execution controls. Python and R exercise
 the same typed bindings through their installed public entry points.
 The `original-specifications.temporal_arithmetic` vectors likewise share
-PK relative times, civil shifts, duration parsing, static refusals,
-range failures and reached `invalid` handler counts across Rust, Python and R.
+PK relative times, civil shifts, duration parsing and writing, static
+refusals, range failures and reached `invalid` handler counts across Rust,
+Python and R.
 The `original-specifications.inheritance_nulls` cases share authored layers,
 missing-lookup CSV bytes, reached absence counts and refusal conditions for
 missing answers written as YAML null, empty children, `clear:` entries and
 rename-only intermediates in both hosts. Each case names `absent_count`,
 the number of times it reaches the handler an intermediate's absence counts
 under (D202).
+The `original-specifications.text_positions` cases share the pieces and
+lengths of `str_substr` and `str_length` over ASCII, non-ASCII and empty text
+(TEXT-13, TEXT-14), a continuation row filtered on a text's length, and two
+static refusals across Rust, Python and R. Each case names its complete issue
+rows, or its saved CSV bytes, and `missing_count`, the number of `missing`
+answers it reaches, a row template's filtered records included (ROW-3).
 
 ## Conditions no case reaches
 

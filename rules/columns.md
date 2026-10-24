@@ -267,7 +267,7 @@ the handler is omitted.
 | mapping | `mapping.missing` | Missing input | Missing |
 | mapping | `mapping.unmapped` | Non-missing value with no mapping | Fails |
 | mapping | `cut.missing` | Missing numeric input | Missing |
-| mapping | `missing` of `str_extract`, `str_replace` and `str_case` | Missing string input | Missing |
+| mapping | `missing` of `str_extract`, `str_replace`, `str_case`, `str_substr` and `str_length` | Missing string input | Missing |
 | mapping | `str_extract.no_match` | Non-missing string does not match | Fails |
 | mapping | `str_template.missing` | Any placeholder value is missing | Fails |
 | derivation | `flag.missing` | The condition is `UNKNOWN` ([EXPR-8](expressions.md#expr-8)) | Missing |
@@ -414,7 +414,8 @@ Evidence: `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.js
 
 A default substitution is counted where the handler it stands for would be:
 at `<operation>.missing` for `mapping`, `cut`, `str_extract`, `str_replace`,
-`str_case`, `flag`, `first_available`, `impute` and `precision`; and at
+`str_case`, `str_substr`, `str_length`, `flag`, `first_available`, `impute`
+and `precision`; and at
 `<path>.absent` for a read through an implicit join or of a named
 intermediate, at the source binding or operand that makes the read
 ([LOOKUP-24](lookup.md#lookup-24), [LOOKUP-14](lookup.md#lookup-14)). A

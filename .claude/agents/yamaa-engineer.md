@@ -20,15 +20,30 @@ Work this way.
    the shared `SCCACHE_DIR`; `CARGO_INCREMENTAL=0` for one-off checks), and
    run `make setup` once in the worktree.
 2. Read the files the issue names before editing them. Build the smallest
-   change that meets every "Done when" line. Remove obsolete interfaces and
-   their callers together; never add compatibility aliases.
+   change that meets every "Done when" line, in the data form that owns the
+   behaviour first (`AGENTS.md`, "Design principles"; the table in
+   `CONTRIBUTING.md#design-principles-in-practice`), and write Rust only for
+   the semantics and execution no form can hold. Never add a second code
+   path that must agree with an existing one: put the judgement behind one
+   abstraction, or generate both copies from one declaration and check
+   them equal. Remove obsolete interfaces and their callers together; never
+   add compatibility aliases.
 3. Tests prove one authored expectation each: derive expectations from a
    rule card, the registry, a grammar file or the engine's documented
-   geometry, and say so in the pull request body. Never paste what the
-   implementation printed, and never edit `benchmarks/**/input/` or
-   `benchmarks/**/expected/` to make a failing implementation pass.
-4. Run only the local checks `AGENTS.md` lists for the change: the tests
-   nearest it, `cargo fmt --all --check` and Clippy on each touched crate
+   geometry, and say so in the pull request body. A case that writes files
+   or documents, makes one call and compares rows or bytes is a fixture in
+   its owned home (a benchmark, a `rust/tests/host-fixtures/` family, the
+   crate's `tests/fixtures/`), never a new test function; a test function
+   you do write names in its first comment the seam no reader reaches.
+   Never paste what the implementation printed, and never edit
+   `benchmarks/**/input/` or `benchmarks/**/expected/` to make a failing
+   implementation pass.
+4. Keep every touched file under 3,000 lines and every function under 250
+   lines and seven parameters: split, or carry the arguments in a context
+   struct, rather than add an `allow`, and an `allow` you must add names
+   the issue that removes it. Then run only the local checks `AGENTS.md`
+   lists for the change: the tests nearest it, `cargo fmt --all --check`
+   and Clippy on each touched crate
    (`cargo clippy --locked -p <crate> --all-targets --all-features -- -D warnings`
    from `rust/`), and `make quick` only when generated files, rule cards,
    schemas, docs generators or Python changed. Never run
@@ -52,4 +67,5 @@ Work this way.
 Report back with: the pull request number and head commit, the CI state,
 each "Done when" line and its evidence, anything the issue asked to record
 on the planning issue (as a `D-next` paragraph, one short paragraph per
-user-visible change only), and anything you left out and why.
+user-visible change only), the per-crate line counts before and after
+when the issue moves code or tests, and anything you left out and why.

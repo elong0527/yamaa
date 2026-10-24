@@ -1,6 +1,7 @@
 # Installed original specifications, text family: string case, padding,
-# str_extract and str_template against independent exact outputs, complete
-# findings and reached handler ledgers. Python reads the same truth.
+# positional pieces and lengths, str_extract and str_template against
+# independent exact outputs, complete findings and reached handler ledgers.
+# Python reads the same truth.
 # The truth is JSON, and jsonlite, which reads it, is a suggested package:
 # where it is not installed, the file is skipped before it changes anything.
 if (!requireNamespace("jsonlite", quietly = TRUE)) {
@@ -265,6 +266,37 @@ local({
     if(name=="missing-null") expect_identical(result$output$RESULT,NA_character_,"a missing value gives missing")
   }
   cat("public str_template matches unchanged site bytes and complete ordered independent findings/handlers without Python passed\n")
+})
+
+# The positional text verbs, str_substr and str_length, from the shared truth
+# that Rust and Python replay too: each case's check before any input exists,
+# then its run, with the authored issue rows, saved CSV and missing answers.
+local({
+  for(truth in host_truth[["text_positions"]]) {
+    label <- truth$name
+    directory <- tempfile("public-text-positions-");dir.create(directory)
+    entry <- file.path(directory,"spec.yaml");writeBin(charToRaw(enc2utf8(truth$spec)),entry)
+    expected <- if(is.null(truth$issues)) list() else truth$issues
+    expect_issue_rows(check_spec(entry)$issues,expected,paste(label,"check"))
+    write_files(directory,truth$inputs)
+    result <- run_spec(entry)
+    expect_issue_rows(result$issues,expected,paste(label,"run"))
+    if(is.null(truth$csv)) {
+      stopifnot_case(label,"a refused run has no output"=is.null(result$output),"its save is refused"=save_refused(result),
+        "nothing is written"=!file.exists(file.path(directory,"result.csv")))
+    } else {
+      stopifnot_case(label,"the run saves"=saved(result))
+      expect_identical(rawfile(file.path(directory,"result.csv")),fixture_bytes(truth$csv),paste(label,"saves the authored CSV"))
+    }
+    observations <- domain_observations(result)
+    if(!is.null(observations)) {
+      reached <- reached_count(observations,"missing")
+      if(!isTRUE(reached==truth$missing_count))
+        fail_expectation(paste(label,"reaches its missing answers the authored number of times"),reached,truth$missing_count)
+    }
+    unlink(directory,recursive=TRUE)
+  }
+  cat("public str_substr and str_length count Unicode scalar values as the shared truth states without Python passed\n")
 })
 
 restore_path()

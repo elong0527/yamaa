@@ -634,6 +634,7 @@ class DerivationShapeTests(unittest.TestCase):
             "to_date",
             "dtc",
             "time_of_day",
+            "duration_text",
         )
         raw = []
         for benchmark in sorted(BENCHMARKS.iterdir()):
@@ -922,6 +923,39 @@ class DerivationShapeTests(unittest.TestCase):
         self.assertEqual(
             mapping_doc.describe_derivation({"time_of_day": {"source": "ASTDTM"}}),
             "Seconds since midnight for the time of day of ASTDTM.",
+        )
+
+    def test_duration_text_names_the_unit_its_number_counts(self):
+        self.assertEqual(
+            mapping_doc.describe_derivation(
+                {"duration_text": {"source": "EXDURMIN", "unit": "minute"}}
+            ),
+            "Write EXDURMIN, a number of minutes, as ISO 8601 duration text with "
+            "days as the largest unit.",
+        )
+
+    def test_str_substr_names_the_characters_it_keeps_and_when_it_is_blank(self):
+        for source, expected in [
+            (
+                {"source": "COMMENT", "start": 201, "length": 200},
+                "Take characters 201 to 400 of COMMENT, blank when it has fewer "
+                "than 201 characters.",
+            ),
+            (
+                {"source": "COMMENT", "start": 1, "missing": "NONE"},
+                "Take characters 1 to the end of COMMENT, blank when it is empty; "
+                "a missing source " + mapping_doc.ARROW + ' "NONE".',
+            ),
+        ]:
+            with self.subTest(source=source):
+                self.assertEqual(
+                    mapping_doc.describe_derivation({"str_substr": source}), expected
+                )
+
+    def test_str_length_counts_the_characters(self):
+        self.assertEqual(
+            mapping_doc.describe_derivation({"str_length": {"source": "COMMENT"}}),
+            "Number of characters in COMMENT.",
         )
 
     def test_cut_names_the_closed_side_of_each_interval(self):

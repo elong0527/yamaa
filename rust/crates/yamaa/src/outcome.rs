@@ -17,11 +17,11 @@ use yamaa_adapters::project_scope::identify;
 use yamaa_adapters::publication::{self, Cause};
 use yamaa_core::diagnostic::Diagnostic;
 
-use crate::api::{Failure, Run, Status};
+use crate::api::{Run, Status};
 use crate::cancel::CancellationToken;
 use crate::diagnostic::{Locator, Report, Severity};
 use crate::engine::Build;
-use crate::error::Error;
+use crate::error::Failure;
 use crate::internal::EngineShared;
 use crate::text::Action;
 
@@ -288,7 +288,7 @@ impl Part<'_> {
     /// The refusal of a save of `subject` stopped at this part, which wrote
     /// `paths`: the part's issues say why.
     fn refusal(&self, subject: &str, paths: Vec<String>) -> Failure {
-        Failure::new(Action::Save(subject), &self.report()).with_paths(paths)
+        Failure::rejected(Action::Save(subject), &self.report()).with_paths(paths)
     }
 }
 
@@ -336,7 +336,10 @@ pub(crate) fn save(
 ) -> Result<Vec<String>, Failure> {
     let action = Action::Save(subject);
     if !refusal.is_empty() {
-        return Err(Failure::new(action, &Report::located(refusal, locator)));
+        return Err(Failure::rejected(
+            action,
+            &Report::located(refusal, locator),
+        ));
     }
     if parts.is_empty() {
         let finding = match operation {
@@ -412,7 +415,7 @@ pub(crate) fn save(
         if let Ok(staged) = staged {
             staged.abort();
         }
-        return Err(Failure::from_error(action, &Error::Cancelled));
+        return Err(Failure::cancelled(action));
     }
     // 4. Commit in order.
     let committed = staged.and_then(publication::Staged::commit);
@@ -481,7 +484,7 @@ pub(crate) fn save(
                 .flat_map(|part| part.report().diagnostics)
                 .collect(),
         };
-        return Err(Failure::new(action, &report).with_paths(written));
+        return Err(Failure::rejected(action, &report).with_paths(written));
     }
     Ok(written)
 }

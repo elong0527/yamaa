@@ -18,16 +18,17 @@ use yamaa_adapters::file_application::Domain;
 use yamaa_adapters::specification_report::HostView;
 use yamaa_core::host_functions::{Empty, HostFunctions, Lock};
 
-use crate::cancel::CancellationToken;
+use crate::cancel::{CancellationToken, Cancelled};
 use crate::diagnostic::Locator;
 use crate::engine::Build;
-use crate::error::{Error, FunctionError, ResolverFailure};
+use crate::error::{Failure, FunctionError, ResolverFailure};
 use crate::functions::{
     Argument, BatchArgument, CallError, FunctionHandle, FunctionIdentity, HostLanguage,
     LockContext, LockKind, ProjectFunctions, Signature,
 };
 use crate::resolver::{ResolverReply, ResolverRequest, ResourceResolver};
 use crate::scalar::{Scalar, ScalarRef};
+use crate::text::Action;
 
 pub(crate) struct ResolverBridge {
     inner: Arc<dyn ResourceResolver>,
@@ -293,9 +294,9 @@ pub(crate) fn run_check(
     specification: &str,
     environment: Option<&str>,
     token: &CancellationToken,
-) -> Result<(Vec<yamaa_core::diagnostic::Diagnostic>, Arc<Locator>), Error> {
+) -> Result<(Vec<yamaa_core::diagnostic::Diagnostic>, Arc<Locator>), Cancelled> {
     if token.is_cancelled() {
-        return Err(Error::Cancelled);
+        return Err(Cancelled);
     }
     let (issues, locator) = yamaa_adapters::file_application::check_located(
         shared.language,
@@ -317,9 +318,10 @@ pub(crate) fn run_check_on(
     environment: Option<&str>,
     parent: &str,
     token: &CancellationToken,
-) -> Result<(Vec<yamaa_core::diagnostic::Diagnostic>, Arc<Locator>), Error> {
+) -> Result<(Vec<yamaa_core::diagnostic::Diagnostic>, Arc<Locator>), Failure> {
+    let action = Action::Read(specification);
     if token.is_cancelled() {
-        return Err(Error::Cancelled);
+        return Err(Failure::cancelled(action));
     }
     let (issues, locator) = yamaa_adapters::file_application::check_fragment_located(
         shared.language,
@@ -330,7 +332,7 @@ pub(crate) fn run_check_on(
         parent,
         resolver_bridge(shared),
     )
-    .map_err(|refusal| Error::Rejected(crate::diagnostic::Report::from_issues(&refusal)))?;
+    .map_err(|refusal| Failure::from_issues(action, &refusal))?;
     Ok((issues, Arc::new(locator)))
 }
 
