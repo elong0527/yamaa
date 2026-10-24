@@ -373,6 +373,8 @@ conditions! {
     ExpressionProhibitedConstruct => ("validation", "prohibited_construct", Some("FORMULA-27")),
     ExpressionProhibitedFunction => ("validation", "prohibited_function", Some("FORMULA-13")),
     ExpressionNestedReduction => ("validation", "nested_reduction", Some("FORMULA-21")),
+    // A `quantile` outside 0 through 1 (FORMULA-18).
+    AggregateQuantileRange => ("validation", "invalid_field_type", Some("FORMULA-18")),
     AggregateMultipleRecords => ("derivation", "aggregate_multiple_records", Some("FORMULA-20")),
     AggregateRowMultipleRecords => ("row_construction", "aggregate_multiple_records", Some("FORMULA-20")),
     AggregateIdentifierNotGrouped => ("validation", "aggregate_identifier_not_grouped", Some("FORMULA-22")),

@@ -29,6 +29,10 @@ aggregate_class:
         type: bool
         required: false
         description: When true, STR_JOIN writes each text once and COUNT(x) counts each value once; omitted, every value counts. Admitted only beside a bare STR_JOIN(x) or COUNT(x) (FORMULA-18).
+    - quantile:
+        type: float
+        required: false
+        description: Probability from 0 through 1 at which QUANTILE reads its quantile, R's default type 7; required beside QUANTILE and refused beside any other expression (FORMULA-18).
     - expr:
         type: aggregate_expression
         required: true

@@ -1,0 +1,10 @@
+phase: validation
+condition: unpaired_fields
+spec_paths:
+  - columns.AGEMED.derivation.aggregate
+rule: LOOKUP-10
+context:
+  declared:
+    - quantile
+  missing:
+    - QUANTILE(x)

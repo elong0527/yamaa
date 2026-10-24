@@ -129,6 +129,13 @@ vocabulary:
     MEAN: {argument: [expression]}
     ONLY: {argument: [expression]}
     STR_JOIN: {argument: [expression]}
+    MEDIAN: {argument: [expression]}
+    Q1: {argument: [expression]}
+    Q3: {argument: [expression]}
+    QUANTILE: {argument: [expression]}
+    STDDEV: {argument: [expression]}
+    VARIANCE: {argument: [expression]}
+    GEOMEAN: {argument: [expression]}
 # A reserved word is case-insensitive and cannot be a bare identifier. A
 # qualified field may still use one of these spellings after its qualifier.
 # `DATE` and `DATETIME` begin a temporal literal only before a string, and
@@ -1196,12 +1203,13 @@ cases:
     text: "AVG(A)"
     parse: reject
     condition: prohibited_function
-  - id: median-is-not-in-the-vocabulary
+  - id: median-is-in-the-vocabulary
     context: aggregate
-    covers: [vocabulary, rejection]
+    covers: [reduction, vocabulary]
     text: "MEDIAN(A)"
-    parse: reject
-    condition: prohibited_function
+    parse: accept
+    identifiers: [A]
+    shape: (reduce MEDIAN (id A))
   - id: rounding-a-reduction-is-not-in-the-vocabulary
     context: aggregate
     covers: [vocabulary, rejection]
@@ -1312,6 +1320,74 @@ cases:
     context: aggregate
     covers: [vocabulary, rejection]
     text: "STRING_AGG(SEQN)"
+    parse: reject
+    condition: prohibited_function
+  # Aggregate: the statistical reducers each reduce one expression, a number
+  # in arithmetic. QUANTILE's probability is a field of the aggregate, never
+  # an argument, and a quartile's spelling is still a name outside a call.
+  - id: the-quartiles-are-reducers
+    context: aggregate
+    covers: [reduction, vocabulary, arithmetic]
+    text: "Q3(A) - Q1(A)"
+    parse: accept
+    identifiers: [A]
+    shape: (- (reduce Q3 (id A)) (reduce Q1 (id A)))
+  - id: a-quartile-spelling-is-a-name-outside-a-call
+    context: aggregate
+    covers: [identifier, reduction]
+    text: "MEDIAN(Q1)"
+    parse: accept
+    identifiers: [Q1]
+    shape: (reduce MEDIAN (id Q1))
+  - id: quantile-reduces-one-expression
+    context: aggregate
+    covers: [reduction, vocabulary]
+    text: "QUANTILE(PC.PCSTRESN)"
+    parse: accept
+    identifiers: [PC.PCSTRESN]
+    shape: (reduce QUANTILE (id PC.PCSTRESN))
+  - id: a-probability-is-not-a-quantile-argument
+    context: aggregate
+    covers: [reduction, rejection]
+    text: "QUANTILE(A, 0.9)"
+    parse: reject
+    condition: invalid_expression
+  - id: a-deviation-may-stand-in-arithmetic
+    context: aggregate
+    covers: [reduction, arithmetic, precedence]
+    text: "100 * STDDEV(A) / MEAN(A)"
+    parse: accept
+    identifiers: [A]
+    shape: (/ (* (int 100) (reduce STDDEV (id A))) (reduce MEAN (id A)))
+  - id: variance-and-geomean-are-case-insensitive
+    context: aggregate
+    covers: [reduction, keyword-case]
+    text: "variance(A) + GeoMean(B)"
+    parse: accept
+    identifiers: [A, B]
+    shape: (+ (reduce VARIANCE (id A)) (reduce GEOMEAN (id B)))
+  - id: a-statistical-reducer-takes-no-record-star
+    context: aggregate
+    covers: [star, rejection]
+    text: "MEDIAN(AE.*)"
+    parse: reject
+    condition: invalid_expression
+  - id: percentile-is-not-the-quantile-name
+    context: aggregate
+    covers: [vocabulary, rejection]
+    text: "PERCENTILE(A)"
+    parse: reject
+    condition: prohibited_function
+  - id: stdev-is-not-the-deviation-name
+    context: aggregate
+    covers: [vocabulary, rejection]
+    text: "STDEV(A)"
+    parse: reject
+    condition: prohibited_function
+  - id: a-median-is-refused-in-an-expression-field
+    context: derivation
+    covers: [reduction, context, rejection]
+    text: "MEDIAN(AVAL)"
     parse: reject
     condition: prohibited_function
   # Predicates: the remaining refusals.

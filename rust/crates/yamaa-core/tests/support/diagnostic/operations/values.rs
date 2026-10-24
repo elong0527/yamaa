@@ -5,9 +5,8 @@ use super::{bindings, text, value, value_type, File};
 use crate::support::diagnostic::json::Json;
 use yamaa_core::{
     diagnostic::{DatasetFinding, Diagnostic},
-    expression::{compile, Context},
+    expression::{compile, Context, Reducer},
     mapping_cut::{AdmissionError, Cut, Mapping},
-    reduction::NumericReducer,
     table::ValueRef,
 };
 
@@ -156,11 +155,10 @@ fn dataset_finding(input: &Json) -> Vec<Diagnostic> {
             DatasetFinding::ReductionInputType {
                 path,
                 expression: text(input, "expression"),
-                reducer: match text(input, "reducer") {
-                    "SUM" => NumericReducer::Sum,
-                    "MEAN" => NumericReducer::Mean,
-                    other => panic!("no numeric reducer {other:?}"),
-                },
+                reducer: Reducer::ALL
+                    .into_iter()
+                    .find(|reducer| reducer.name() == text(input, "reducer"))
+                    .expect("a reducer of the grammar"),
                 source: text(input, "source"),
                 actual: value_type(input.field("actual")),
             }
