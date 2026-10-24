@@ -28,6 +28,8 @@ use crate::support::diagnostic::{
 use yamaa_core::{domain_entry::Request, json::Value};
 
 pub(super) const FILES: &[File] = &[
+    fixture!("check_row_phase_boundaries.json"),
+    fixture!("check_unknown_reads.json"),
     fixture!("declarative_case_predicates.json"),
     fixture!("declarative_self.json"),
     fixture!("inheritance.json"),
