@@ -390,7 +390,8 @@ impl ResolvedPlan {
     /// is global itself, through its derivations, its filter or its keys.
     /// The run's own reconciliation points, which the inventory also marks
     /// global, are not such steps, because the run holds what they need:
-    /// admission over the complete inputs, intermediate verification, SELF
+    /// admission over the complete inputs, intermediate verification without
+    /// global pair materialization, SELF
     /// publication, the final order over the complete accepted relation, and
     /// the declaration checks, which read no data.
     ///
@@ -402,6 +403,9 @@ impl ResolvedPlan {
         self.region_schedule(RegionId::DATASET)
             .iter()
             .find(|info| match info.step {
+                // Pair ports are materialized globally at this checkpoint,
+                // before any row, even when both sides read one input.
+                Step::VerifyIntermediates { self_rows: false } => self.pair_ports() != 0,
                 Step::Admit
                 | Step::VerifyIntermediates { .. }
                 | Step::PublishSelf(_)
@@ -466,6 +470,10 @@ impl ResolvedPlan {
                 .next()
                 .map_or("", |binding| &self.binding(binding).path),
             Step::Checks(check) => &self.check(check).path,
+            Step::VerifyIntermediates { self_rows: false } => self
+                .region_relations(RegionId::DATASET)
+                .find(|&relation| self.relation(relation).donor == Donor::Pairs)
+                .map_or("", |relation| &self.relation(relation).path),
             Step::Driver(template) => self
                 .template(template)
                 .driver

@@ -1,13 +1,15 @@
 #![cfg(feature = "yaml")]
-//! Execution contracts: declarative case predicates, declarative correlated
-//! predicates, declarative flags, declarative intermediate single key,
+//! Execution contracts: declarative case predicates, declarative flags,
 //! declarative intermediate keys, declarative intermediate ranges,
-//! declarative output ordering, declarative primary intermediates and
-//! declarative row intermediates.
+//! declarative output ordering and declarative row intermediates. Their cases
+//! that write files, run one specification and compare what it reports are
+//! cases of `tests/fixtures/diagnostics/declarative_case_predicates.json`
+//! (#3798). The tests here read what the replay does not: benchmarks, the
+//! truth files the installed hosts share, and a Parquet input rendered for
+//! the test.
 mod execution {
     mod declarative_case_predicates {
         //! Independently authored full case reports and unchanged original CSV truth.
-        use crate::support::Edit as _;
         use std::fs;
         use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
@@ -47,174 +49,64 @@ mod execution {
                 })
                 .collect()
         }
-        const SOURCE: &str = r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [ID]
-input: {SRC: {path: input.csv, types: {V: int}}}
-output: {path: result.csv, columns: [ID, VALUE]}
-columns:
-  - {name: ID, type: str, derivation: SRC.ID}
-  - name: VALUE
-    type: int
-    derivation:
-      case:
-        - when: "SRC.V > 0"
-          then: 7
-        - when: 'FALSE'
-          then: SRC.BAD
-        - otherwise: 8
-"#;
-        /// No benchmark's case predicate reads a key with several records,
-        /// as `a`'s present and missing `V` here (COLUMN-2), and none pins
-        /// the empty handler and verification ledgers of such a run.
+        /// A seam the replay cannot express: `saved` lists created or
+        /// changed files, so it cannot detect deletion of an existing target.
+        /// Read back the original case's sentinel as well (OUTPUT-7).
         #[test]
-        fn implicit_case_predicates_reduce_feeding_values_and_only_true_selects() {
-            let fixture = Fixture::new();
-            fs::write(
-                fixture.0.join("input.csv"),
-                "ID,V,BAD\na,1,hidden\na,,hidden\nb,,hidden\nc,-1,hidden\n",
-            )
-            .unwrap();
-            let mut result = fixture.run(SOURCE).unwrap();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert_eq!(
-                result.observations()["handler_counts"],
-                yamaa_adapters::json!([])
-            );
-            assert_eq!(
-                result.observations()["verifications"],
-                yamaa_adapters::json!([])
-            );
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read(fixture.0.join("result.csv")).unwrap(),
-                b"ID,VALUE\na,7\nb,8\nc,8\n"
-            );
-        }
-        /// No benchmark refuses a case predicate's read as
-        /// `multiple_values_per_key` (`negative-keys-conflict` and
-        /// `negative-sex-duplicate` refuse a source and a mapping), nor leaves
-        /// a file at a refused run's target, which the run must keep
-        /// (OUTPUT-7).
-        #[test]
-        fn case_predicate_multiplicity_retains_its_complete_report_and_blocks_publication() {
-            let fixture = Fixture::new();
-            fs::write(
-                fixture.0.join("input.csv"),
-                "ID,V,BAD\na,1,hidden\na,2,hidden\nb,,hidden\n",
-            )
-            .unwrap();
-            fs::write(fixture.0.join("result.csv"), "sentinel").unwrap();
-            let mut result = fixture.run(SOURCE).unwrap();
-            let issues = findings(&result);
-            assert_eq!(
-                issues,
-                vec![
-                    yamaa_adapters::json!({"phase":"derivation","condition":"multiple_values_per_key","rule":"COLUMN-2","spec_paths":["columns.VALUE.derivation.case[0].when"],"context":{"identifier":"SRC.V","value_count":2,"keys":[{"ID":"a"}]}})
-                ]
-            );
-            assert!(result.save().is_err());
-            assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(), b"sentinel");
-        }
-        /// `sdtm-ds-reasons` reads a filtered source in a case result of a
-        /// key-grain specification; no benchmark reads one in a record row
-        /// template, where it must give the same values.
-        #[test]
-        fn filtered_case_source_is_shared_by_columns_and_record_rows() {
-            let body = SOURCE
-                .edit("        - when: 'FALSE'\n          then: SRC.BAD\n", "")
-                .edit("when: \"SRC.V > 0\"", "when: 'TRUE'")
-                .edit(
-                    "then: 7",
-                    "then: {source: {variable: SRC.ID, filter: 'SRC.V > 0'}}",
-                )
-                .edit("    type: int", "    type: str");
-            for (rows, expected) in [
-                ("", b"ID,VALUE\na,a\nb,\n".as_slice()),
-                (
-                    "rows:\n  - id: records\n    dataset: SRC\n",
-                    b"ID,VALUE\na,a\nb,\n".as_slice(),
-                ),
-            ] {
-                let fixture = Fixture::new();
-                fs::write(
-                    fixture.0.join("input.csv"),
-                    "ID,V,BAD\na,1,hidden\nb,,hidden\n",
-                )
-                .unwrap();
-                let mut result = fixture.run(&format!("{body}{rows}")).unwrap();
-                assert!(result.issues().is_empty(), "{:?}", result.issues());
-                assert!(result.save().unwrap());
-                assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(), expected);
-            }
-        }
+        fn a_failed_case_predicate_save_preserves_the_existing_target() {
+            use crate::support::diagnostic::{operations, replay};
 
-        /// No benchmark captures a `str_extract` group in a row template,
-        /// whether in a record template's default or local derivation or in
-        /// a grouped template.
-        #[test]
-        fn qualified_case_predicate_and_full_pattern_capture_execute_in_each_expression_position() {
-            let expression = "{case: [{when: 'SRC.V > 0', then: {str_extract: {source: SRC.TEXT, pattern: 'prefix:([A-Z]+)$', group: 1}}}, {otherwise: \"'none'\"}]}";
-            let prefix = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n";
-            for (position, tail) in [
-        ("column-case", format!("  - {{name: VALUE, type: str, derivation: {expression}}}\n")),
-        ("record-default-case", format!("  - {{name: VALUE, type: str, derivation: {expression}}}\nrows: [{{id: records, dataset: SRC}}]\n")),
-        ("record-local-case", format!("  - {{name: VALUE, type: str}}\nrows: [{{id: records, dataset: SRC, derivations: {{VALUE: {expression}}}}}]\n")),
-        ("grouped-local-case", format!("  - {{name: VALUE, type: str}}\nrows: [{{id: groups, dataset: SRC, group_by: [SRC.ID, SRC.V, SRC.TEXT], derivations: {{VALUE: {expression}}}}}]\n")),
-    ] {
-        let fixture = Fixture::new();
-        fs::write(fixture.0.join("input.csv"), "ID,V,TEXT\na,1,prefix:ONE\nb,0,prefix:TWO\n").unwrap();
-        let mut result = fixture.run(&format!("{prefix}{tail}")).unwrap();
-        assert!(result.issues().is_empty(), "{position}: {:?}", result.issues());
-        assert!(result.save().unwrap(), "{position}");
-        assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(), b"ID,VALUE\na,ONE\nb,none\n", "{position}");
-    }
+            let case = replay::cases()
+                .into_iter()
+                .find(|case| {
+                    case.label == "declarative_case_predicates.json::case_predicate_multiplicity_retains_its_complete_report_and_blocks_publication"
+                })
+                .expect("the refused case predicate fixture");
+            let result = operations::run("save", &case.input);
+            assert_eq!(
+                fs::read(result.study.unwrap().join("result.csv")).unwrap(),
+                b"sentinel",
+                "{}: a failed save keeps the existing target's bytes",
+                case.label
+            );
         }
+        /// Seams the replay cannot express: an absent output table and the
+        /// save's return value. The family's authored build/save refusals
+        /// expose no output and return FailedBuild when they produce a domain.
+        #[test]
+        fn refused_case_predicate_domains_have_no_output_and_fail_saves() {
+            use crate::support::diagnostic::{operations, replay};
 
-        /// No benchmark refuses an assertion's `require`, whether a non-text
-        /// value or an incomplete predicate, and none writes float literals
-        /// in an integer column's `allowed_values` or `range`.
-        #[test]
-        fn verification_predicate_and_literals_check_completed_column_case_and_row_outputs() {
-            let prefix = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: int\n    verifications:\n      - allowed_values: {values: [0, 1.0]}\n      - range: {min: 0.0, max: 1.5}\n";
-            let expression = "{case: [{when: 'SRC.V > 0', then: 1}, {otherwise: 0}]}";
-            for tail in [
-        format!("    derivation: {expression}\n"),
-        format!("rows: [{{id: records, dataset: SRC, derivations: {{VALUE: {expression}}}}}]\n"),
-        format!("rows: [{{id: groups, dataset: SRC, group_by: [SRC.ID, SRC.V], derivations: {{VALUE: {expression}}}}}]\n"),
-    ] {
-        for predicate in ["VALUE >= 0", "VALUE =", "7"] {
-            let fixture = Fixture::new();
-            fs::write(fixture.0.join("input.csv"), "ID,V\na,1\nb,0\n").unwrap();
-            let declaration = if predicate == "7" { "7".into() } else { format!("'{predicate}'") };
-            let built = fixture.run(&format!("{prefix}{tail}verifications: [{{assert: {{require: {declaration}}}}}]\n"));
-            if predicate == "7" {
-                let Err(issues) = built else { panic!("non-text public predicate was admitted") };
-                assert_eq!(issues[0].condition(), "invalid_field_type");
-                assert_eq!(issues[0].rule(), Some("SCHEMA-12"));
-                assert_eq!(issues[0].spec_paths, ["verifications[0].assert.require"]);
-                assert!(!fixture.0.join("result.csv").exists());
-                continue;
-            }
-            let mut result = built.unwrap();
-            if predicate == "VALUE >= 0" {
-                assert!(result.issues().is_empty(), "{:?}", result.issues());
-                assert!(result.save().unwrap());
-                assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(), b"ID,VALUE\na,1\nb,0\n");
-            } else {
-                let issue = &result.issues()[0];
-                assert_eq!(issue.condition(), "invalid_expression");
-                assert_eq!(issue.spec_paths, ["verifications[0].assert.require"]);
-                assert!(result.output().is_none());
-                assert!(result.save().is_err());
-                assert!(!fixture.0.join("result.csv").exists());
+            let cases = replay::cases()
+                .into_iter()
+                .filter(|case| {
+                    case.label.starts_with("declarative_case_predicates.json::")
+                        && !case.issues.is_empty()
+                        && case
+                            .operations
+                            .iter()
+                            .any(|operation| matches!(operation.as_str(), "build" | "save"))
+                })
+                .collect::<Vec<_>>();
+            assert!(!cases.is_empty(), "the family has authored refusals");
+            for case in cases {
+                let fixture = Fixture(operations::study(&case.input));
+                let body = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
+                if let Ok(mut result) = fixture.run(&body) {
+                    let has_output = result.output().is_some();
+                    let save_failed = matches!(result.save(), Err(file_application::FailedBuild));
+                    assert_eq!(
+                        (has_output, save_failed),
+                        (false, true),
+                        "{}: a refused domain has no output and fails its save",
+                        case.label
+                    );
+                }
             }
         }
-    }
-        }
-        /// These benchmarks pin case predicates and filtered sources in the
-        /// bytes they save.
+        /// A seam the replay cannot reach: these benchmarks' own files, run
+        /// by `support::benchmarks::reproduce`. They pin case predicates and
+        /// filtered sources in the bytes they save.
         #[test]
         fn unchanged_original_case_and_filtered_source_truth_passes_in_full() {
             for name in [
@@ -231,8 +123,12 @@ columns:
             }
         }
 
-        /// Each case is an authored complete report, its findings or saved
-        /// bytes, which no benchmark states.
+        /// A seam the replay cannot reach: the native reader of
+        /// `fixtures/case_predicates.json` and its dispositions, which the
+        /// installed Python and R suites read in the same format
+        /// (`tools/staging/stage_specification_inputs.py`). Each case is an
+        /// authored complete report, its findings or saved bytes, which no
+        /// benchmark states.
         #[test]
         fn independently_authored_installed_host_truth_has_the_same_complete_native_observations() {
             let truth: yamaa_core::json::Value =
@@ -286,350 +182,6 @@ columns:
                     assert!(!fixture.0.join("result.csv").exists(), "{name}");
                 }
             }
-        }
-
-        fn lookup_fixture(name: &str) -> (Fixture, String) {
-            let truth: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(include_str!("fixtures/case_predicates.json"))
-                    .unwrap();
-            let case = &truth["cases"][name];
-            let fixture = Fixture::new();
-            for (filename, contents) in case["inputs"].as_object().unwrap() {
-                fs::write(fixture.0.join(filename), contents.as_str().unwrap()).unwrap();
-            }
-            (fixture, case["specification"].as_str().unwrap().into())
-        }
-
-        /// No benchmark pins the handler ledger of an assertion that reads a
-        /// lookup.
-        #[test]
-        fn assertion_lookup_reuses_current_selection_without_adding_derivation_handlers() {
-            let (fixture, body) = lookup_fixture("assert_lookup_selected");
-            let result = fixture.run(&body).unwrap();
-            assert!(result.issues().is_empty());
-            assert_eq!(
-                result.observations()["handler_counts"],
-                yamaa_adapters::json!([
-                    {"spec_path":"columns.VALUE.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"columns.VALUE.derivation.source.absent","handler":"absent","count":1}
-                ])
-            );
-        }
-
-        /// No benchmark's assertion reads a lookup that requires a match while
-        /// its `when` is false.
-        #[test]
-        fn false_when_still_resolves_require_lookup_and_refuses_a_required_match() {
-            let (fixture, body) = lookup_fixture("assert_lookup_only");
-            for pattern in ["    keep: last\n", "when: 'P.X IS NOT NULL'"] {
-                assert!(body.contains(pattern), "fixture drifted: {pattern}");
-            }
-            // An omitted `absent` answers with missing; `require_match` refuses.
-            let body = body
-                .edit(
-                    "    keep: last\n",
-                    "    keep: last\n    require_match: true\n",
-                )
-                .edit("when: 'P.X IS NOT NULL'", "when: 'FALSE'");
-            let mut result = fixture.run(&body).unwrap();
-            assert!(
-                !result.issues().is_empty(),
-                "require must be evaluated on exempt rows"
-            );
-            let definition = yamaa_core::diagnostic::ConditionCode::LookupUnmatchedKey.definition();
-            assert_eq!(result.issues().len(), 1);
-            assert_eq!(result.issues()[0].phase(), definition.phase);
-            assert_eq!(result.issues()[0].condition(), definition.condition);
-            assert_eq!(result.issues()[0].rule(), definition.rule);
-            assert!(result.output().is_none());
-            assert!(result.save().is_err());
-            assert!(!fixture.0.join("result.csv").exists());
-        }
-
-        /// No benchmark refuses an assertion's lookup operand types on an
-        /// empty output, nor pins that run's zero handler ledger.
-        #[test]
-        fn empty_output_validates_lookup_operand_types_without_selecting_a_donor() {
-            let (fixture, body) = lookup_fixture("assert_lookup_empty");
-            for pattern in [
-                "when: 'P.X IS NOT NULL'",
-                "require: 'VALUE = P.X AND P.X >= 10'",
-            ] {
-                assert!(body.contains(pattern), "fixture drifted: {pattern}");
-            }
-            let body = body.edit("when: 'P.X IS NOT NULL'", "when: 'FALSE'").edit(
-                "require: 'VALUE = P.X AND P.X >= 10'",
-                "require: \"P.X LIKE 'text%'\"",
-            );
-            let mut result = fixture.run(&body).unwrap();
-            assert!(
-                !result.issues().is_empty(),
-                "empty output still admits declaration types"
-            );
-            assert_eq!(
-                result.observations()["handler_counts"],
-                yamaa_adapters::json!([
-                    {"spec_path":"columns.VALUE.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
-                    {"spec_path":"columns.VALUE.derivation.source.absent","handler":"absent","count":0}
-                ])
-            );
-            assert!(result.output().is_none());
-            assert!(result.save().is_err());
-        }
-
-        /// No benchmark refuses a warning assertion's read of a lookup field
-        /// the lookup lacks, at its `when` or at its `require`.
-        #[test]
-        fn warning_assertion_missing_lookup_fields_retain_field_specific_diagnostics() {
-            for (field, pattern) in [
-                ("when", "when: 'P.X IS NOT NULL'"),
-                ("require", "require: 'P.X >= 10'"),
-            ] {
-                let (fixture, body) = lookup_fixture("assert_lookup_only");
-                for pattern in ["  - assert:\n", "output: {path: result.csv,", pattern] {
-                    assert!(body.contains(pattern), "fixture drifted: {pattern}");
-                }
-                let body = body
-                    .edit(
-                        "output: {path: result.csv,",
-                        "output: {path: result.csv, report: report.csv,",
-                    )
-                    .edit("  - assert:\n", "  - assert:\n      severity: warning\n")
-                    .replace(pattern, &pattern.edit("P.X", "P.MISSING"));
-                let mut result = fixture.run(&body).unwrap();
-                let definition =
-                    yamaa_core::diagnostic::ConditionCode::VerificationUnknownReference
-                        .definition();
-                assert_eq!(result.issues().len(), 1);
-                let issue = &result.issues()[0];
-                assert_eq!(issue.phase(), definition.phase);
-                assert_eq!(issue.condition(), definition.condition);
-                assert_eq!(issue.rule(), definition.rule);
-                assert_eq!(
-                    issue.spec_paths,
-                    vec![format!("verifications[0].assert.{field}")]
-                );
-                assert_eq!(
-                    yamaa_core::json::Value::Object(issue.context.clone()),
-                    yamaa_adapters::json!({"identifier": "P.MISSING"})
-                );
-                assert!(result.output().is_none());
-                assert!(result.save().is_err());
-                assert!(!fixture.0.join("result.csv").exists());
-            }
-        }
-    }
-    mod declarative_correlated_predicates {
-        //! Same-input donor selection retains one captured relation across driver scopes.
-        use crate::support::Edit as _;
-        use std::fs;
-        use yamaa_adapters::file_application;
-        use yamaa_core::domain_entry::Request;
-        struct Fixture(crate::support::Scratch);
-        impl Fixture {
-            fn new() -> Self {
-                let path = crate::support::Scratch::new("correlated-predicate");
-                Self(path)
-            }
-            fn run(
-                &self,
-                body: &str,
-            ) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>>
-            {
-                let specification = self.0.join("spec.yaml");
-                fs::write(&specification, body).unwrap();
-                let specification = specification.to_str().unwrap();
-                crate::support::study::domain(
-                    yamaa_core::project_function::Language::Python,
-                    Request {
-                        specification,
-                        environment: None,
-                    },
-                    crate::support::study::identity(
-                        "independent-correlated-predicate",
-                        specification,
-                    ),
-                )
-            }
-        }
-
-        const BODY: &str = r#"yamaa: "1.0"
-type: spec
-domain: TEST
-base: SRC
-keys: [ID, SEQ]
-input:
-  SRC: {path: src.csv, types: {ID: int, SEQ: int, CUT: int}}
-  D: {path: donor.csv, types: {ID: int, TIME: int}}
-output: {path: result.csv, columns: [ID, SEQ, A, B]}
-intermediates:
-  - id: P
-    dataset: D
-    key: [ID]
-    filter: "D.TIME < SRC.CUT"
-    order_by: [D.TIME]
-    keep: last
-columns:
-  - {name: ID, type: int, derivation: SRC.ID}
-  - {name: SEQ, type: int, derivation: SRC.SEQ}
-  - {name: A, type: str, derivation: P.A}
-  - {name: B, type: str, derivation: P.B}
-"#;
-        fn populate(fixture: &Fixture) {
-            fs::write(
-                fixture.0.join("src.csv"),
-                "ID,SEQ,CUT\n1,1,2\n1,2,4\n3,1,2\n1,3,\n",
-            )
-            .unwrap();
-            fs::write(
-                fixture.0.join("donor.csv"),
-                "ID,TIME,A,B\n1,1,one,x\n1,3,three,\n2,9,hidden,hidden\n",
-            )
-            .unwrap();
-            fs::write(fixture.0.join("alt.csv"), "ID,SEQ,CUT\n1,1,4\n3,1,2\n").unwrap();
-        }
-        fn finding(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
-            crate::support::study::issue_row(issue)
-        }
-        /// No benchmark pins the handler ledger of a correlated selection,
-        /// whose counts follow each current row.
-        #[test]
-        fn complete_root_outputs_and_handler_geometry_are_current_row_specific() {
-            let fixture = Fixture::new();
-            populate(&fixture);
-            let mut result = fixture.run(BODY).unwrap();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read_to_string(fixture.0.join("result.csv")).unwrap(),
-                "ID,SEQ,A,B\n1,1,one,x\n1,2,three,\n3,1,,\n1,3,,\n"
-            );
-            assert_eq!(
-                result.observations()["handler_counts"],
-                yamaa_adapters::json!([
-                    {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"columns.A.derivation.source.absent","handler":"absent","count":2},
-                    {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"columns.B.derivation.source.absent","handler":"absent","count":2}
-                ])
-            );
-        }
-        fn secondary_body(filter: &str) -> String {
-            BODY.edit("  D: {path:","  ALT: {path: alt.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path:")
-        .edit("D.TIME < SRC.CUT",filter)
-        .edit("columns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}","rows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, SEQ: ALT.SEQ, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: SEQ, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}")
-        }
-        /// No benchmark's correlated filter names its donor field and its
-        /// current field twice each.
-        #[test]
-        fn repeated_donor_and_current_identifiers_share_bindings_without_changing_selection() {
-            let fixture = Fixture::new();
-            populate(&fixture);
-            let body = BODY.edit(
-                "D.TIME < SRC.CUT",
-                "D.TIME < SRC.CUT AND (D.TIME IS NULL OR D.TIME < SRC.CUT)",
-            );
-            let mut result = fixture.run(&body).unwrap();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read(fixture.0.join("result.csv")).unwrap(),
-                b"ID,SEQ,A,B\n1,1,one,x\n1,2,three,\n3,1,,\n1,3,,\n"
-            );
-        }
-        /// No benchmark pins the handler ledger of a correlated selection that
-        /// a row template over another input reads.
-        #[test]
-        fn secondary_driver_fields_bind_to_the_actual_template_and_original_native_port() {
-            let fixture = Fixture::new();
-            populate(&fixture);
-            let mut result = fixture.run(&secondary_body("D.TIME < ALT.CUT")).unwrap();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read_to_string(fixture.0.join("result.csv")).unwrap(),
-                "ID,SEQ,A,B\n1,1,three,\n3,1,,\n"
-            );
-            assert_eq!(
-                result.observations()["handler_counts"],
-                yamaa_adapters::json!([
-                    {"spec_path":"rows.alternate.derivations.A.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"rows.alternate.derivations.A.source.absent","handler":"absent","count":1},
-                    {"spec_path":"rows.alternate.derivations.B.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"rows.alternate.derivations.B.source.absent","handler":"absent","count":1}
-                ])
-            );
-        }
-        fn refusal(fixture: &Fixture, body: &str) -> Vec<yamaa_core::json::Value> {
-            match fixture.run(body) {
-                Err(issues) => issues.iter().map(finding).collect(),
-                Ok(mut result) => {
-                    assert!(result.output().is_none());
-                    assert!(matches!(result.save(), Err(file_application::FailedBuild)));
-                    result.issues().iter().map(finding).collect()
-                }
-            }
-        }
-        /// `negative-row-filter-lookup-scope` refuses an intermediate's filter
-        /// that names an input building no row, and its `error.yaml` states
-        /// the first issue; what no benchmark pins is that the refusal is the
-        /// run's only issue, here for a read in a row template's derivation.
-        #[test]
-        fn known_unrelated_input_fields_are_refused_with_complete_selection_geometry() {
-            let fixture = Fixture::new();
-            populate(&fixture);
-            let issues = refusal(&fixture, &secondary_body("D.TIME < SRC.CUT"));
-            assert_eq!(
-                issues,
-                [
-                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"LOOKUP-7","spec_paths":["intermediates.P.filter"],"context":{"identifier":"SRC.CUT","intermediate":"P"}})
-                ]
-            );
-            assert!(!fixture.0.join("result.csv").exists());
-        }
-        /// No benchmark's refusal suggests a qualified name (`suggestion`),
-        /// and none pins the handler ledger of a filter that names only donor
-        /// fields.
-        #[test]
-        fn donor_qualifier_takes_precedence_and_bare_stored_fields_suggest_it() {
-            let fixture = Fixture::new();
-            populate(&fixture);
-            let mut result = fixture
-                .run(&BODY.edit("D.TIME < SRC.CUT", "D.TIME < D.ID"))
-                .unwrap();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read_to_string(fixture.0.join("result.csv")).unwrap(),
-                "ID,SEQ,A,B\n1,1,,\n1,2,,\n3,1,,\n1,3,,\n"
-            );
-            assert_eq!(
-                result.observations()["handler_counts"],
-                yamaa_adapters::json!([
-                    {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
-                    {"spec_path":"columns.A.derivation.source.absent","handler":"absent","count":4},
-                    {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
-                    {"spec_path":"columns.B.derivation.source.absent","handler":"absent","count":4}
-                ])
-            );
-            // Only B is neutralised: A still derives P.A, so pruning
-            // (LAYER-11) keeps P live and its filter is still refused. A
-            // refused intermediate's fields no longer bind, so A's read
-            // reports unknown_field as well — the same pair a composed
-            // specification (one with a parent) reports.
-            let issues = refusal(
-                &fixture,
-                &BODY
-                    .edit("D.TIME < SRC.CUT", "TIME < SRC.CUT")
-                    .edit("derivation: P.B", "derivation: \"'unused'\""),
-            );
-            assert_eq!(
-                issues,
-                [
-                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"LOOKUP-7","spec_paths":["intermediates.P.filter"],"context":{"identifier":"TIME","intermediate":"P","suggestion":"D.TIME"}}),
-                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["columns.A.derivation.source"],"context":{"identifier":"P.A"}})
-                ]
-            );
         }
     }
     mod declarative_flags {
@@ -688,6 +240,9 @@ columns:
         fn reference() -> yamaa_core::json::Value {
             yamaa_adapters::json_wire::decode(include_str!("fixtures/flag_reference.json")).unwrap()
         }
+        /// A seam the replay cannot reach: each benchmark's own files, and the
+        /// native reader of `flag_reference.json`'s originals, which the
+        /// installed Python and R suites also read.
         /// The benchmarks run as they are written, in either language: their
         /// handler counts and findings are the same in both (#3422), but for
         /// an intermediate's absence, which a 1.0 file counts under `absent`
@@ -720,6 +275,9 @@ columns:
                 );
             }
         }
+        /// A seam the replay cannot reach: each benchmark's own files, and the
+        /// native reader of `flag_reference.json`'s originals, which the
+        /// installed Python and R suites also read.
         /// Each benchmark's `error.yaml` states its first issue, which public
         /// conformance compares in part; what no benchmark pins is each run's
         /// complete findings as `flag_reference.json` captured them: the one
@@ -764,6 +322,9 @@ columns:
                 assert_eq!(actual, expected.as_array().unwrap().as_slice(), "{name}");
             }
         }
+        /// A seam the replay cannot reach: the native reader of
+        /// `flag_reference.json`'s witnesses, which the installed Python and R
+        /// suites also read.
         /// The witnesses are authored cases; no benchmark states their
         /// complete results: findings, handler ledgers and saved bytes.
         #[test]
@@ -832,88 +393,8 @@ columns:
             }
         }
     }
-    mod declarative_intermediate_single_key {
-        //! LOOKUP-5 single-column key list retains exact integers and shared donor choice.
-        use std::fs;
-        use yamaa_adapters::file_application;
-        use yamaa_core::domain_entry::Request;
-        struct Fixture(crate::support::Scratch);
-        impl Fixture {
-            fn new() -> Self {
-                let path = crate::support::Scratch::new("scalar-intermediate-key");
-                Self(path)
-            }
-            fn run(&self) -> file_application::Domain {
-                let path = self.0.join("spec.yaml");
-                fs::write(
-                    &path,
-                    r#"yamaa: "1.0"
-type: spec
-domain: TEST
-base: SRC
-keys: [ID]
-input:
-  SRC: {path: src.csv, types: {ID: int}}
-  D: {path: donor.csv, types: {ID: int, SEQ: int}}
-output: {path: result.csv, columns: [ID, A, B]}
-intermediates:
-  - id: P
-    dataset: D
-    key: [ID]
-    order_by: [D.SEQ]
-    keep: first
-columns:
-  - {name: ID, type: int, derivation: SRC.ID}
-  - {name: A, type: str, derivation: P.V}
-  - {name: B, type: str, derivation: P.V}
-"#,
-                )
-                .unwrap();
-                let path = path.to_str().unwrap();
-                crate::support::study::domain(
-                    yamaa_core::project_function::Language::Python,
-                    Request {
-                        specification: path,
-                        environment: None,
-                    },
-                    crate::support::study::identity("independent-key-shorthand", path),
-                )
-                .unwrap()
-            }
-        }
-        /// No benchmark keys a selection by integers beyond 2^53 or at the
-        /// 64-bit minimum, nor pins its handler ledger for each read.
-        #[test]
-        fn single_column_key_preserves_distinct_large_integer_keys_and_per_read_handlers() {
-            let fixture = Fixture::new();
-            fs::write(
-                fixture.0.join("src.csv"),
-                "ID\n9007199254740992\n9007199254740993\n-9223372036854775808\n",
-            )
-            .unwrap();
-            fs::write(
-        fixture.0.join("donor.csv"),
-        "ID,SEQ,V\n9007199254740992,1,lower\n9007199254740993,2,later\n9007199254740993,1,exact\n",
-    )
-    .unwrap();
-            let mut result = fixture.run();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(),b"ID,A,B\n9007199254740992,lower,lower\n9007199254740993,exact,exact\n-9223372036854775808,,\n");
-            assert_eq!(
-                result.observations()["handler_counts"],
-                yamaa_adapters::json!([
-                    {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"columns.A.derivation.source.absent","handler":"absent","count":1},
-                    {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"columns.B.derivation.source.absent","handler":"absent","count":1}
-                ])
-            );
-        }
-    }
     mod declarative_intermediate_keys {
         //! Unchanged public YAML and independent plain-reference outputs/findings.
-        use crate::support::Edit as _;
         use std::fs;
         use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
@@ -944,23 +425,14 @@ columns:
                 )
                 .unwrap()
             }
-            fn check(&self) -> Vec<yamaa_core::diagnostic::Diagnostic> {
-                let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-                file_application::check(
-                    yamaa_core::project_function::Language::Python,
-                    Request {
-                        specification: &specification,
-                        environment: None,
-                    },
-                    crate::support::study::identity("source-key-filter-check", &specification),
-                )
-            }
         }
         fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
             crate::support::study::issue_row(issue)
         }
-        /// Each case is an authored complete report, its findings or saved
-        /// bytes, which no benchmark states.
+        /// A seam the replay cannot reach: the native reader of
+        /// `fixtures/intermediate_key_reference.json`, which the installed
+        /// Python and R suites also read. Each case is an authored complete
+        /// report, its findings or saved bytes, which no benchmark states.
         #[test]
         fn independent_original_language_captures_match_all_output_bytes_and_complete_findings() {
             let cases: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
@@ -991,217 +463,20 @@ columns:
             }
         }
 
-        /// No benchmark refuses an intermediate's filter once its expression
-        /// key resolves, nor compares the check route's findings with the
-        /// build's.
+        /// A seam the replay cannot reach: the benchmark
+        /// `adam-adlb-supplb-padded-key`'s own files, run by
+        /// `support::benchmarks::reproduce`. It selects through a padded
+        /// expression key without a filter, checks clean and saves the bytes
+        /// it states. The twin with an integer filter beside an expression
+        /// key is `declarative_case_predicates.json`'s
+        /// `a_valid_expression_key_filter_selects_and_saves`.
         #[test]
-        fn resolved_source_keys_still_refuse_the_original_bad_donor_filter() {
-            let cases: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
-                "fixtures/intermediate_key_reference.json"
-            ))
-            .unwrap();
-            let mut case = cases["dependency_before_bad_filter"].clone();
-            // Eliminate the independently captured key-cardinality failure, leaving the
-            // same authored bad filter and a matched donor record for it to evaluate.
-            case["inputs"]["src.csv"] = yamaa_adapters::json!("ID,N\na,7\n");
-            let fixture = Fixture::new();
-            let mut result = fixture.run("resolved-source-key-bad-filter", &case);
-            assert_eq!(
-                fixture.check().iter().map(issue_json).collect::<Vec<_>>(),
-                result.issues().iter().map(issue_json).collect::<Vec<_>>()
-            );
-            assert_eq!(
-                result.issues().iter().map(issue_json).collect::<Vec<_>>(),
-                yamaa_adapters::json!([{
-                    "phase": "validation",
-                    "condition": "incompatible_input_type",
-                    "rule": "FORMULA-5",
-                    "spec_paths": ["intermediates.LOOK.filter"],
-                    "context": {"actual": "str", "left_type": "int", "right_type": "str"},
-                }])
-                .as_array()
-                .unwrap()
-                .as_slice()
-            );
-            assert!(result.output().is_none());
-            assert!(matches!(result.save(), Err(file_application::FailedBuild)));
-            assert!(!fixture.0.join("out.csv").exists());
-        }
-
-        /// No benchmark refuses an ill-typed intermediate filter beside a key
-        /// that reads a plain source field, nor compares the check route's
-        /// findings with the build's.
-        #[test]
-        fn ordinary_source_keys_keep_static_filter_types_before_key_cardinality() {
-            let cases: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
-                "fixtures/intermediate_key_reference.json"
-            ))
-            .unwrap();
-            let mut case = cases["dependency_before_bad_filter"].clone();
-            case["specification"] =
-                yamaa_adapters::json!(case["specification"].as_str().unwrap().edit(
-                    "key: {K: {str_pad: {source: SRC.N, width: 8}}}",
-                    "key: {KINT: SRC.N}"
-                ));
-            let fixture = Fixture::new();
-            let mut result = fixture.run("ordinary-source-key-bad-filter", &case);
-            assert_eq!(
-                fixture.check().iter().map(issue_json).collect::<Vec<_>>(),
-                result.issues().iter().map(issue_json).collect::<Vec<_>>()
-            );
-            assert_eq!(
-        result.issues().iter().map(issue_json).collect::<Vec<_>>(),
-        yamaa_adapters::json!([{
-            "phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5",
-            "spec_paths": ["intermediates.LOOK.filter"], "context": {"actual": "str", "left_type": "int", "right_type": "str"},
-        }]).as_array().unwrap().as_slice()
-    );
-            assert!(result.output().is_none());
-            assert!(matches!(result.save(), Err(file_application::FailedBuild)));
-            assert!(!fixture.0.join("out.csv").exists());
-        }
-
-        /// No benchmark refuses an ill-typed intermediate filter that never
-        /// runs (an empty donor or driver, a missing operand, an unread
-        /// branch), nor pins the operand route the report records or the
-        /// check without data, and none prunes an unread intermediate with an
-        /// ill-typed filter (LAYER-11).
-        #[test]
-        fn deferred_filter_types_refuse_empty_missing_and_unread_selectors() {
-            let cases: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
-                "fixtures/intermediate_key_reference.json"
-            ))
-            .unwrap();
-            for variant in [
-                "empty_donor",
-                "empty_driver",
-                "missing_filter_operand",
-                "unused",
-                "unread_branch",
-                "boolean_missing",
-            ] {
-                let mut case = cases["dependency_before_bad_filter"].clone();
-                case["inputs"]["src.csv"] = yamaa_adapters::json!("ID,N\na,7\n");
-                match variant {
-            "empty_donor" => case["inputs"]["tab.csv"] = yamaa_adapters::json!("K,KINT,KNUM,VAL\n"),
-            "empty_driver" => case["inputs"]["src.csv"] = yamaa_adapters::json!("ID,N\n"),
-            "missing_filter_operand" => {
-                case["inputs"]["tab.csv"] =
-                    yamaa_adapters::json!("K,KINT,KNUM,VAL\n\"       7\",,7,A\n")
-            }
-            "unused" => {
-                case["specification"] = yamaa_adapters::json!(case["specification"]
-                    .as_str()
-                    .unwrap()
-                    .replace("derivation: LOOK.VAL", "derivation: \"'ok'\""))
-            }
-            "unread_branch" => {
-                case["specification"] = yamaa_adapters::json!(case["specification"]
-                    .as_str()
-                    .unwrap()
-                    .replace("derivation: LOOK.VAL", "derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: \"'ok'\"}]}"))
-            }
-            "boolean_missing" => {
-                case["inputs"]["tab.csv"] = yamaa_adapters::json!("K,KINT,KNUM,VAL\n\"       7\",,7,A\n");
-                case["specification"] = yamaa_adapters::json!(case["specification"].as_str().unwrap().edit("TAB.KINT > 'bad'", "FALSE AND TAB.KINT > 'bad'"));
-            }
-            _ => unreachable!(),
-        }
-                let fixture = Fixture::new();
-                let mut result = fixture.run(variant, &case);
-                if variant == "unused" {
-                    // Option B (LAYER-11, LAYER-12): no column reads LOOK, so
-                    // pruning discards the intermediate together with its
-                    // ill-typed filter; the specification builds instead of
-                    // refusing the dead declaration.
-                    assert!(result.issues().is_empty(), "{variant}");
-                    assert!(result.output().is_some(), "{variant}");
-                    assert!(result.save().unwrap(), "{variant}");
-                    assert!(fixture.0.join("out.csv").exists(), "{variant}");
-                    for path in case["inputs"].as_object().unwrap().keys() {
-                        fs::remove_file(fixture.0.join(path)).unwrap();
-                    }
-                    assert!(fixture.check().is_empty(), "check without data: {variant}");
-                    continue;
-                }
-                let expected = yamaa_adapters::json!([{"phase":"validation","condition":"incompatible_input_type","rule":"FORMULA-5","spec_paths":["intermediates.LOOK.filter"],"context":{"actual":"str","left_type":"int","right_type":"str"}}]);
-                assert_eq!(
-                    result.issues().iter().map(issue_json).collect::<Vec<_>>(),
-                    expected.as_array().unwrap().as_slice(),
-                    "{variant}"
-                );
-                // The report projection carries the recorded geometry through:
-                // these predicate diagnostics recorded an empty operand route,
-                // except the boolean-missing variant, which recorded ["Right"].
-                let mut expected_report = expected.clone();
-                expected_report[0]["operand_route"] = if variant == "boolean_missing" {
-                    yamaa_adapters::json!(["Right"])
-                } else {
-                    yamaa_adapters::json!([])
-                };
-                assert_eq!(
-                    result.observations()["diagnostics"],
-                    expected_report,
-                    "{variant}"
-                );
-                assert_eq!(
-                    result.observations()["nodes"][0]["diagnostics"],
-                    expected_report,
-                    "{variant}"
-                );
-                assert!(result.output().is_none(), "{variant}");
-                for _ in 0..2 {
-                    assert!(
-                        matches!(result.save(), Err(file_application::FailedBuild)),
-                        "{variant}"
-                    );
-                }
-                assert!(!fixture.0.join("out.csv").exists(), "{variant}");
-                for path in case["inputs"].as_object().unwrap().keys() {
-                    fs::remove_file(fixture.0.join(path)).unwrap();
-                }
-                assert_eq!(
-                    fixture.check().iter().map(issue_json).collect::<Vec<_>>(),
-                    expected.as_array().unwrap().as_slice(),
-                    "check without data: {variant}"
-                );
-            }
-        }
-
-        /// `adam-adlb-supplb-padded-key` selects through a padded expression
-        /// key without a filter, and checks clean and saves the bytes it
-        /// states. No benchmark pins an integer filter beside an expression
-        /// key, the twin of `dependency_before_bad_filter`'s refused one:
-        /// `adam-adlb-end-of-treatment`'s filter compares text.
-        #[test]
-        fn expression_keys_without_type_refusals_keep_successful_selection_and_saves() {
+        fn a_padded_expression_key_reproduces_its_benchmark() {
             crate::support::benchmarks::reproduce("adam-adlb-supplb-padded-key");
-            let cases: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(include_str!(
-                "fixtures/intermediate_key_reference.json"
-            ))
-            .unwrap();
-            let mut case = cases["dependency_before_bad_filter"].clone();
-            case["inputs"]["src.csv"] = yamaa_adapters::json!("ID,N\na,7\n");
-            case["specification"] = yamaa_adapters::json!(case["specification"]
-                .as_str()
-                .unwrap()
-                .edit("filter: \"TAB.KINT > 'bad'\"", "filter: \"TAB.KINT > 0\""));
-            let fixture = Fixture::new();
-            let mut result = fixture.run("valid-expression-key-filter", &case);
-            assert!(fixture.check().is_empty());
-            assert!(result.issues().is_empty());
-            for _ in 0..2 {
-                assert!(result.save().unwrap());
-                assert_eq!(
-                    fs::read(fixture.0.join("out.csv")).unwrap(),
-                    b"ID,V,V2\na,A,A\n"
-                );
-            }
         }
     }
     mod declarative_intermediate_ranges {
         //! Complete independent reports for inclusive ranges and visible donor columns.
-        use crate::support::Edit as _;
         use std::{fs, path::PathBuf};
         use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
@@ -1226,304 +501,9 @@ columns:
                 .unwrap()
             }
         }
-        const BODY: &str = r#"yamaa: "1.0"
-type: spec
-domain: TEST
-base: SRC
-keys: [ID, SEQ]
-input:
-  SRC: {path: src.csv, types: {ID: int, SEQ: int, X: int}}
-  D: {path: donor.csv, types: {ID: int, LOW: int, HIGH: int, ORD: int}}
-output: {path: result.csv, columns: [ID, SEQ, X, A, B]}
-intermediates:
-  - id: P
-    dataset: D
-    key: [ID]
-    filter: "D.ELIG = 'Y'"
-    between: {value: X, lower: LOW, upper: HIGH}
-    columns: [V, W, V]
-    order_by: [D.ORD]
-    keep: first
-    absent: absent
-columns:
-  - {name: ID, type: int, derivation: SRC.ID}
-  - {name: SEQ, type: int, derivation: SRC.SEQ}
-  - {name: X, type: int, derivation: SRC.X}
-  - {name: A, type: str, derivation: P.V}
-  - {name: B, type: str, derivation: P.W}
-"#;
-        fn populate(f: &Fixture) {
-            fs::write(
-                f.0.join("src.csv"),
-                "ID,SEQ,X\n1,1,3\n1,2,4\n1,3,\n1,4,6\n2,1,3\n1,5,2\n",
-            )
-            .unwrap();
-            fs::write(f.0.join("donor.csv"), "ID,LOW,HIGH,ORD,ELIG,V,W\n1,1,3,2,Y,edge,\n1,3,5,1,Y,later,paired\n1,,10,3,Y,missing-bound,hidden\n1,1,10,0,N,filtered,hidden\n").unwrap();
-        }
-
-        /// No benchmark derives a range bound as a date from a timestamp, so
-        /// that a donor on the current date qualifies:
-        /// `adam-adae-post-dose-window` derives a datetime bound, and
-        /// `adam-adpc-relative-times` reads its lower bound as stored.
-        #[test]
-        fn derived_date_bound_keeps_the_last_record_on_the_current_date() {
-            let f = Fixture::new();
-            fs::write(
-                f.0.join("src.csv"),
-                "ID,TRTSDT\nS01,2030-01-10\nS02,2030-02-01\nS03,\n",
-            )
-            .unwrap();
-            fs::write(
-        f.0.join("donor.csv"),
-        "ID,VSDTC,WEIGHT\nS01,2030-01-05T08:00,70\nS01,2030-01-10T07:30,71\nS01,2030-01-15T09:00,72\nS02,2030-02-02T08:00,80\nS03,2030-01-03,60\n",
-    )
-    .unwrap();
-            let body = r#"yamaa: "1.0"
-type: spec
-domain: TEST
-base: SRC
-keys: [ID]
-input:
-  SRC: {path: src.csv, types: {TRTSDT: date}}
-  VS: {path: donor.csv, types: {WEIGHT: float}}
-output: {path: result.csv, columns: [ID, TRTSDT, WEIGHTBL]}
-intermediates:
-  - id: BL
-    dataset: VS
-    key: [ID]
-    derivations:
-      ADT: {to_date: {source: VSDTC}}
-    between: {value: TRTSDT, lower: ADT}
-    order_by: [VS.ADT]
-    keep: last
-columns:
-  - {name: ID, type: str, derivation: SRC.ID}
-  - {name: TRTSDT, type: date, derivation: SRC.TRTSDT}
-  - {name: WEIGHTBL, type: float, derivation: BL.WEIGHT}
-"#;
-            let mut result = f.run(body);
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(!f.0.join("result.csv").exists());
-            assert!(result.save().unwrap());
-            // S01's same-day timestamp qualifies after the bound is derived as a date.
-            // S02 has only a later donor; S03's missing current value selects no donor.
-            assert_eq!(
-                fs::read(f.0.join("result.csv")).unwrap(),
-                b"ID,TRTSDT,WEIGHTBL\nS01,2030-01-10,71\nS02,2030-02-01,\nS03,,\n"
-            );
-        }
-
-        /// No benchmark projects a range intermediate's `columns`, one of them
-        /// repeated, nor pins a range selection's handler ledger.
-        #[test]
-        fn inclusive_ranges_keep_one_record_choice_and_project_only_named_reads() {
-            let f = Fixture::new();
-            populate(&f);
-            let mut result = f.run(BODY);
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(fs::read(f.0.join("result.csv")).unwrap(), b"ID,SEQ,X,A,B\n1,1,3,later,paired\n1,2,4,later,paired\n1,3,,absent,absent\n1,4,6,absent,absent\n2,1,3,absent,absent\n1,5,2,edge,\n");
-            assert_eq!(
-                result.observations()["handler_counts"],
-                yamaa_adapters::json!([
-                    {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"columns.A.derivation.source.absent","handler":"absent","count":3},
-                    {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"columns.B.derivation.source.absent","handler":"absent","count":3}
-                ])
-            );
-        }
-        /// No benchmark selects a named intermediate through a range without a
-        /// lower bound.
-        #[test]
-        fn unstated_lower_bound_never_turns_a_missing_unused_donor_field_into_absence() {
-            let f = Fixture::new();
-            populate(&f);
-            let mut result =
-                f.run(&BODY.edit("value: X, lower: LOW, upper: HIGH", "value: X, upper: HIGH"));
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(fs::read(f.0.join("result.csv")).unwrap(), b"ID,SEQ,X,A,B\n1,1,3,later,paired\n1,2,4,later,paired\n1,3,,absent,absent\n1,4,6,missing-bound,hidden\n2,1,3,absent,absent\n1,5,2,later,paired\n");
-            assert_eq!(
-                result.observations()["handler_counts"],
-                yamaa_adapters::json!([
-                    {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":3},
-                    {"spec_path":"columns.A.derivation.source.absent","handler":"absent","count":2},
-                    {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":3},
-                    {"spec_path":"columns.B.derivation.source.absent","handler":"absent","count":2}
-                ])
-            );
-        }
-        /// No benchmark refuses a read of a donor field that the
-        /// intermediate's `columns` leaves out (LOOKUP-11).
-        #[test]
-        fn a_hidden_read_has_the_complete_original_reference_finding_and_no_output() {
-            let f = Fixture::new();
-            populate(&f);
-            let mut result = f.run(&BODY.edit("derivation: P.W", "derivation: P.LOW"));
-            assert_eq!(
-                result
-                    .issues()
-                    .iter()
-                    .map(|issue| {
-                        let mut value = yamaa_adapters::report_storage::diagnostic_value(issue);
-                        value["context"] = yamaa_core::json::Value::Object(issue.context.clone());
-                        value
-                    })
-                    .collect::<Vec<_>>(),
-                [
-                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"LOOKUP-11","spec_paths":["columns.B.derivation.source"],"context":{"identifier":"P.LOW"}})
-                ]
-            );
-            assert_eq!(
-                result.observations()["handler_counts"],
-                yamaa_adapters::json!([])
-            );
-            assert!(matches!(result.save(), Err(file_application::FailedBuild)));
-            assert!(!f.0.join("result.csv").exists());
-        }
-        /// No benchmark answers an absence with the 64-bit minimum or a
-        /// fraction, nor pins the ledger that counts it.
-        #[test]
-        fn typed_absence_replacements_keep_their_full_value_and_ledger() {
-            for (case, replacement, kind, expected) in [
-                (
-                    "integer",
-                    "-9223372036854775808",
-                    "int",
-                    b"ID,SEQ,X,A,B\n2,1,3,-9223372036854775808,-9223372036854775808\n".as_slice(),
-                ),
-                (
-                    "float",
-                    "0.5",
-                    "float",
-                    b"ID,SEQ,X,A,B\n2,1,3,0.5,0.5\n".as_slice(),
-                ),
-            ] {
-                let f = Fixture::new();
-                fs::write(f.0.join("src.csv"), "ID,SEQ,X\n2,1,3\n").unwrap();
-                fs::write(
-                    f.0.join("donor.csv"),
-                    "ID,LOW,HIGH,ORD,ELIG,V,W\n1,1,4,1,Y,3,4\n",
-                )
-                .unwrap();
-                let body = BODY
-                    .edit("absent: absent", &format!("absent: {replacement}"))
-                    .edit("name: A, type: str", &format!("name: A, type: {kind}"))
-                    .edit("name: B, type: str", &format!("name: B, type: {kind}"));
-                let mut result = f.run(&body);
-                assert!(result.issues().is_empty(), "{case}: {:?}", result.issues());
-                assert!(result.save().unwrap(), "{case}");
-                assert_eq!(
-                    fs::read(f.0.join("result.csv")).unwrap(),
-                    expected,
-                    "{case}"
-                );
-                assert_eq!(
-                    result.observations()["handler_counts"],
-                    yamaa_adapters::json!([
-                        {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
-                        {"spec_path":"columns.A.derivation.source.absent","handler":"absent","count":1},
-                        {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
-                        {"spec_path":"columns.B.derivation.source.absent","handler":"absent","count":1}
-                    ]),
-                    "{case}"
-                );
-            }
-        }
-
-        /// No benchmark reads a named range intermediate in a row template
-        /// whose range value and key are column defaults:
-        /// `schema-lookup-source-range-default` promotes the default of a
-        /// structured source's range value. None pins that ledger either.
-        #[test]
-        fn range_current_outputs_and_scalar_keys_promote_their_defaults_before_row_reads() {
-            let f = Fixture::new();
-            populate(&f);
-            let body = BODY
-        .edit("\ncolumns:\n", "\nrows:\n  - id: selected\n    dataset: SRC\n    derivations: {A: P.V, B: P.W}\ncolumns:\n")
-        .edit("name: A, type: str, derivation: P.V", "name: A, type: str")
-        .edit("name: B, type: str, derivation: P.W", "name: B, type: str");
-            let mut result = f.run(&body);
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(fs::read(f.0.join("result.csv")).unwrap(), b"ID,SEQ,X,A,B\n1,1,3,later,paired\n1,2,4,later,paired\n1,3,,absent,absent\n1,4,6,absent,absent\n2,1,3,absent,absent\n1,5,2,edge,\n");
-            assert_eq!(
-                result.observations()["handler_counts"],
-                yamaa_adapters::json!([
-                    {"spec_path":"rows.selected.derivations.A.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"rows.selected.derivations.A.source.absent","handler":"absent","count":3},
-                    {"spec_path":"rows.selected.derivations.B.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"rows.selected.derivations.B.source.absent","handler":"absent","count":3}
-                ])
-            );
-        }
-
-        /// No benchmark answers an absence with a boolean.
-        #[test]
-        fn boolean_absence_replacement_reaches_a_null_test_without_conversion() {
-            let f = Fixture::new();
-            fs::write(f.0.join("src.csv"), "ID,SEQ,X\n2,1,3\n").unwrap();
-            fs::write(
-                f.0.join("donor.csv"),
-                "ID,LOW,HIGH,ORD,ELIG,V,W\n1,1,4,1,Y,3,4\n",
-            )
-            .unwrap();
-            let body = BODY.edit("absent: absent", "absent: true")
-        .edit("derivation: P.V", "derivation: {flag: {condition: 'P.V IS NOT NULL', true_value: Y, false_value: N, missing: null}}")
-        .edit("derivation: P.W", "derivation: {flag: {condition: 'P.W IS NOT NULL', true_value: Y, false_value: N, missing: null}}");
-            let mut result = f.run(&body);
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read(f.0.join("result.csv")).unwrap(),
-                b"ID,SEQ,X,A,B\n2,1,3,Y,Y\n"
-            );
-            // Predicate normalization retains the literal value and discards recovery
-            // sites; each flag's UNKNOWN answer is registered and never reached.
-            assert_eq!(
-                result.observations()["handler_counts"],
-                yamaa_adapters::json!([
-                    {"spec_path":"columns.A.derivation.flag.missing","handler":"missing","count":0},
-                    {"spec_path":"columns.B.derivation.flag.missing","handler":"missing","count":0}
-                ])
-            );
-        }
-
-        /// No benchmark compares an integer beyond 2^53 with float range
-        /// endpoints.
-        #[test]
-        fn integer_current_values_do_not_round_into_a_float_donor_endpoint() {
-            let f = Fixture::new();
-            fs::write(
-                f.0.join("src.csv"),
-                "ID,SEQ,X\n1,1,9007199254740993\n1,2,9007199254740992\n",
-            )
-            .unwrap();
-            fs::write(
-                f.0.join("donor.csv"),
-                "ID,LOW,HIGH,ORD,ELIG,V,W\n1,9007199254740992,9007199254740992,1,Y,edge,paired\n",
-            )
-            .unwrap();
-            let body = BODY.edit("LOW: int, HIGH: int", "LOW: float, HIGH: float");
-            let mut result = f.run(&body);
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-        fs::read(f.0.join("result.csv")).unwrap(),
-        b"ID,SEQ,X,A,B\n1,1,9007199254740993,absent,absent\n1,2,9007199254740992,edge,paired\n"
-    );
-            assert_eq!(
-                result.observations()["handler_counts"],
-                yamaa_adapters::json!([
-                    {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
-                    {"spec_path":"columns.A.derivation.source.absent","handler":"absent","count":1},
-                    {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":0},
-                    {"spec_path":"columns.B.derivation.source.absent","handler":"absent","count":1}
-                ])
-            );
-        }
-
+        /// A seam the replay cannot reach: the benchmark's own files, and the
+        /// finding its `expected/error.yaml` states, read with
+        /// `support::benchmarks::error`.
         /// The benchmark's own specification and inputs, compared with the
         /// finding its `error.yaml` states; what no benchmark pins is that the
         /// finding is the run's only issue, with an empty handler ledger.
@@ -1609,17 +589,23 @@ columns:
                 )
             }
         }
+        // Its one caller reads a Parquet input.
+        #[cfg(feature = "parquet")]
         fn authored(spec: &str, input: &[u8]) -> Fixture {
             let f = Fixture::new("schema-ordering");
             fs::write(f.0.join("spec.yaml"), spec).unwrap();
             fs::write(f.0.join("source.csv"), input).unwrap();
             f
         }
-        /// The benchmark states the bytes its ordering saves.
+        /// A seam the replay cannot reach: the benchmark's own files, run by
+        /// `support::benchmarks::reproduce`. The benchmark states the bytes
+        /// its ordering saves.
         #[test]
         fn original_ordering_artifact_matches_immutable_csv_truth() {
             crate::support::benchmarks::reproduce("schema-ordering");
         }
+        /// A seam the replay cannot reach: these benchmarks' own files, run by
+        /// `support::benchmarks::reproduce`.
         /// `adam-adae-review-order` orders its rows by `SEVORD`, a working
         /// column outside the output, `schema-ordering` keeps tied rows in
         /// construction order, and `adam-adsl-site-parse`, which declares no
@@ -1634,6 +620,9 @@ columns:
                 crate::support::benchmarks::reproduce(benchmark);
             }
         }
+        /// A seam the replay cannot reach: these benchmarks' own files, and
+        /// the issue each one's `expected/error.yaml` states, read with
+        /// `support::benchmarks::error`.
         /// The benchmarks' own specifications, compared with the issue each
         /// one's `error.yaml` states; what no benchmark pins is that it is the
         /// run's only issue.
@@ -1662,183 +651,13 @@ columns:
                 );
             }
         }
-        /// `negative-csv-empty-string-present` refuses the declaration with its
-        /// input present; no benchmark shows the refusal comes before the
-        /// input is read, here with no input file.
-        #[test]
-        fn csv_present_empty_is_rejected_before_study_bytes_are_requested() {
-            let fixture = authored(
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [ID]
-input: {SRC: {path: absent.csv, empty_string: present}}
-output: {path: result.csv, columns: [ID]}
-columns: [{name: ID, type: str, derivation: SRC.ID}]
-"#,
-                b"unused\n",
-            );
-            let issues = fixture.run().err().expect("static declaration");
-            assert_issues(
-                &issues,
-                &[
-                    yamaa_adapters::json!({"phase":"validation","condition":"empty_string_present_unsupported","rule":"INPUT-9","spec_paths":["input.SRC.empty_string"],"context":{"dataset":"SRC"}}),
-                ],
-                "empty_string: present on a delimited input",
-            );
-            assert!(!fixture.0.join("result.csv").exists());
-        }
 
-        /// Root predicates gate raw base records before key conversion and keep first key appearance.
-        /// No benchmark's root filter reads a key field whose stored text
-        /// (`02`) differs from its converted key.
-        #[test]
-        fn root_filter_reads_raw_driver_values_before_key_derivation() {
-            let fixture = authored(
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [ID]
-input: {SRC: source.csv}
-filter: "SRC.KEEP = 'Y'"
-output: {path: result.csv, columns: [ID, V]}
-columns:
-  - {name: ID, type: int, derivation: SRC.ID}
-  - {name: V, type: str, derivation: SRC.V}
-"#,
-                b"ID,V,KEEP\nbad,excluded,N\n02,seven,Y\n2,conflict,\n1,eight,Y\n2,seven,Y\n",
-            );
-            let mut result = fixture.run().unwrap();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read(fixture.0.join("result.csv")).unwrap(),
-                b"ID,V\n2,seven\n1,eight\n"
-            );
-            // A raw string comparison would fail if the filter read the completed integer key.
-            let raw = authored(
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [ID]
-input: {SRC: source.csv}
-filter: "SRC.ID = '02'"
-output: {path: result.csv, columns: [ID]}
-columns: [{name: ID, type: int, derivation: SRC.ID}]
-"#,
-                b"ID\n02\n3\n",
-            );
-            let mut result = raw.run().unwrap();
-            assert!(result.issues().is_empty());
-            assert!(result.save().unwrap());
-            assert_eq!(fs::read(raw.0.join("result.csv")).unwrap(), b"ID\n2\n");
-        }
-        /// No benchmark's root filter reads a base declared after another
-        /// input: `adam-adrs-response-records` and `adam-adtte-dor` declare
-        /// theirs first.
-        #[test]
-        fn root_filter_uses_explicit_base_independently_of_input_declaration_order() {
-            let fixture = authored(
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [ID]
-input: {OTHER: other.csv, SRC: source.csv}
-base: SRC
-filter: "SRC.KEEP = 'Y'"
-output: {path: result.csv, columns: [ID]}
-columns: [{name: ID, type: str, derivation: SRC.ID}]
-"#,
-                b"ID,KEEP\na,N\nb,Y\n",
-            );
-            fs::write(fixture.0.join("other.csv"), b"ID,KEEP\nwrong,Y\n").unwrap();
-            let mut result = fixture.run().unwrap();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(), b"ID\nb\n");
-        }
-        /// No benchmark's root filter reads a column the specification
-        /// constructs. `negative-root-filter-with-rows` refuses a root filter
-        /// beside row templates, and its `error.yaml` states the first issue
-        /// in part; what no benchmark pins is that the refusal is the run's
-        /// only issue, before any input is read.
-        #[test]
-        fn root_filter_forbids_constructed_columns_and_conflicting_row_templates() {
-            let fixture = authored(
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [ID]
-input: {SRC: source.csv}
-filter: "ID = 'a'"
-output: {path: result.csv, columns: [ID]}
-columns: [{name: ID, type: str, derivation: SRC.ID}]
-"#,
-                b"ID\na\n",
-            );
-            let result = fixture.run().unwrap();
-            assert!(result.output().is_none());
-            assert_eq!(result.issues().len(), 1);
-            let issue = &result.issues()[0];
-            assert_eq!(
-                (issue.phase(), issue.condition(), issue.rule()),
-                ("validation", "phase_boundary", Some("ROW-9"))
-            );
-            assert_eq!(issue.spec_paths, ["filter"]);
-            assert_eq!(
-                yamaa_core::json::Value::Object(issue.context.clone()),
-                yamaa_adapters::json!({"identifier":"ID", "available_phase":"column_derivation", "required_phase":"row_filter"})
-            );
-            let mut spec = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
-            spec.push_str("rows: [{id: records, dataset: SRC}]\n");
-            fs::write(fixture.0.join("spec.yaml"), spec).unwrap();
-            fs::remove_file(fixture.0.join("source.csv")).unwrap();
-            let issues = fixture
-                .run()
-                .err()
-                .expect("static conflicting row construction");
-            assert_eq!(issues.len(), 1);
-            assert_eq!(
-                (issues[0].condition(), issues[0].rule()),
-                ("conflicting_row_construction", Some("ROW-9"))
-            );
-        }
-
-        /// `schema-source-ordinal` keeps each record's position through a row
-        /// filter; no benchmark's ordinal input holds a record on two lines,
-        /// or no record at all.
-        #[test]
-        fn source_ordinals_precede_filtering_and_count_multiline_records_once() {
-            let spec = r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [ID]
-input: {SRC: {path: source.csv, ordinal: REC}}
-filter: "SRC.KEEP = 'Y'"
-output: {path: result.csv, columns: [ID, POSITION]}
-columns:
-  - {name: ID, type: str, derivation: SRC.ID}
-  - {name: POSITION, type: int, derivation: SRC.REC}
-"#;
-            for (input, expected) in [
-                (
-                    b"ID,KEEP,NOTE\na,N,first\nb,Y,\"two\nlines\"\nc,Y,last\n".as_slice(),
-                    b"ID,POSITION\nb,2\nc,3\n".as_slice(),
-                ),
-                (b"ID,KEEP,NOTE\n", b"ID,POSITION\n"),
-            ] {
-                let fixture = authored(spec, input);
-                let mut result = fixture.run().unwrap();
-                assert!(result.issues().is_empty(), "{:?}", result.issues());
-                assert!(result.save().unwrap());
-                assert_eq!(fs::read(fixture.0.join("result.csv")).unwrap(), expected);
-            }
-        }
-
-        /// The first case is the benchmark's own specification, compared with
-        /// the issue its `error.yaml` states; what no benchmark pins is that it
-        /// is the run's only issue, and an ordinal on the fixed ODM schema
-        /// (INPUT-4).
+        /// A seam the replay cannot reach: the benchmark's own files, and the
+        /// issue its `expected/error.yaml` states, read with
+        /// `support::benchmarks::error`. What no benchmark pins is that it is
+        /// the run's only issue. An ordinal on the fixed ODM schema (INPUT-4)
+        /// is `declarative_case_predicates.json`'s
+        /// `an_ordinal_on_the_fixed_odm_schema_is_refused_before_capture`.
         #[test]
         fn ordinal_collision_and_fixed_odm_schema_have_complete_public_diagnostics() {
             let fixture = Fixture::new("negative-source-ordinal-collision");
@@ -1852,76 +671,11 @@ columns:
                 )],
                 "negative-source-ordinal-collision",
             );
-
-            let fixture = authored(
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [ID]
-input: {SRC: {path: absent.parquet, ordinal: REC}}
-output: {path: result.csv, columns: [ID]}
-columns: [{name: ID, type: str, derivation: {odm: SRC.ITEM}}]
-"#,
-                b"unused\n",
-            );
-            let issues = fixture
-                .run()
-                .err()
-                .expect("fixed schema rejects ordinal before capture");
-            assert_issues(
-                &issues,
-                &[
-                    yamaa_adapters::json!({"phase":"validation","condition":"odm_schema_field_type","rule":"INPUT-4","spec_paths":["input.SRC.ordinal"],"context":{"dataset":"SRC","declared":"ordinal"}}),
-                ],
-                "an ordinal on the fixed ODM schema",
-            );
         }
 
-        /// No benchmark declares an ordinal beside a column's `metadata.odm`.
-        #[test]
-        fn metadata_odm_spelling_does_not_turn_an_ordinal_source_into_odm() {
-            let fixture = authored(
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [ID]
-input: {SRC: {path: source.csv, ordinal: REC}}
-output: {path: result.csv, columns: [ID, POSITION]}
-columns:
-  - {name: ID, type: int, metadata: {odm: SRC.ITEM}, derivation: SRC.ID}
-  - {name: POSITION, type: int, derivation: SRC.REC}
-"#,
-                b"ID\n3\n1\n",
-            );
-            let mut result = fixture.run().unwrap();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read(fixture.0.join("result.csv")).unwrap(),
-                b"ID,POSITION\n3,1\n1,2\n"
-            );
-        }
-
-        /// No benchmark declares an ordinal on an input that a nested ODM
-        /// derivation reads.
-        #[test]
-        fn nested_column_and_row_odm_derivations_still_reject_ordinals_before_capture() {
-            for declarations in [
-        "columns:\n  - name: ID\n    type: str\n    derivation:\n      case:\n        - when: \"1 = 1\"\n          then: {odm: SRC.ITEM}\n        - otherwise: \"'x'\"\n",
-        "columns: [{name: ID, type: str, derivation: SRC.ID}]\nrows:\n  - id: records\n    derivations:\n      ID: {odm: SRC.ITEM}\n",
-    ] {
-        let fixture = authored(
-            &format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: {{path: absent.parquet, ordinal: REC}}}}\noutput: {{path: result.csv, columns: [ID]}}\n{declarations}"),
-            b"unused\n",
-        );
-        let issues = fixture.run().err().expect("ODM ordinal admission before capture");
-        assert_eq!(issues.len(), 1, "{issues:?}");
-        assert_eq!(issues[0].condition(), "odm_schema_field_type");
-        assert_eq!(issues[0].spec_paths, ["input.SRC.ordinal"]);
-    }
-        }
-
-        /// No benchmark declares an ordinal on a Parquet input.
+        /// A seam the replay cannot reach: a Parquet input the test renders
+        /// with `parquet_artifact::render`, bytes a case's text files cannot
+        /// hold. No benchmark declares an ordinal on a Parquet input.
         #[test]
         #[cfg(feature = "parquet")]
         fn parquet_records_expose_identical_ordinal_policy_without_changing_stored_fields() {
@@ -1957,119 +711,6 @@ columns:
             }
         }
     }
-    mod declarative_primary_intermediates {
-        //! Same-input donor selection retains one captured relation across driver scopes.
-        use crate::support::Edit as _;
-        use std::fs;
-        use yamaa_adapters::file_application;
-        use yamaa_core::domain_entry::Request;
-        struct Fixture(crate::support::Scratch);
-        impl Fixture {
-            fn new() -> Self {
-                let path = crate::support::Scratch::new("primary-intermediate");
-                Self(path)
-            }
-            fn run(
-                &self,
-                body: &str,
-            ) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>>
-            {
-                let specification = self.0.join("spec.yaml");
-                fs::write(&specification, body).unwrap();
-                let specification = specification.to_str().unwrap();
-                crate::support::study::domain(
-                    yamaa_core::project_function::Language::Python,
-                    Request {
-                        specification,
-                        environment: None,
-                    },
-                    crate::support::study::identity(
-                        "independent-primary-intermediate",
-                        specification,
-                    ),
-                )
-            }
-        }
-        const BODY: &str = r#"yamaa: "1.0"
-type: spec
-domain: TEST
-base: SRC
-keys: [ID, SEQ]
-input:
-  SRC: {path: src.csv, types: {ID: int, SEQ: int}}
-output: {path: result.csv, columns: [ID, SEQ, A, B]}
-intermediates:
-  - id: P
-    dataset: SRC
-    key: [ID]
-    filter: "SRC.ELIG = 'Y'"
-    order_by: [SRC.SEQ]
-    keep: last
-columns:
-  - {name: ID, type: int, derivation: SRC.ID}
-  - {name: SEQ, type: int, derivation: SRC.SEQ}
-  - {name: A, type: str, derivation: P.A}
-  - {name: B, type: str, derivation: P.B}
-"#;
-        fn populate(fixture: &Fixture) {
-            fs::write(
-                fixture.0.join("src.csv"),
-                "ID,SEQ,ELIG,A,B\n1,1,Y,early,x\n1,2,Y,last,\n2,1,N,hidden,hidden\n",
-            )
-            .unwrap();
-        }
-        /// No benchmark pins the handler ledger of a selection whose donor is
-        /// the driver's own input.
-        #[test]
-        fn driver_and_donor_share_the_input_but_selection_stays_at_the_donor_grain() {
-            let fixture = Fixture::new();
-            populate(&fixture);
-            let mut result = fixture.run(BODY).unwrap();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read_to_string(fixture.0.join("result.csv")).unwrap(),
-                "ID,SEQ,A,B\n1,1,last,\n1,2,last,\n2,1,,\n"
-            );
-            assert_eq!(
-                result.observations()["handler_counts"],
-                yamaa_adapters::json!([
-                    {"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":2},
-                    {"spec_path":"columns.A.derivation.source.absent","handler":"absent","count":1},
-                    {"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":2},
-                    {"spec_path":"columns.B.derivation.source.absent","handler":"absent","count":1},
-                ])
-            );
-        }
-        /// No benchmark pins the handler ledger of a row template over another
-        /// input that reads the base's records as donors.
-        #[test]
-        fn a_different_template_driver_still_reads_the_original_primary_donors() {
-            let fixture = Fixture::new();
-            populate(&fixture);
-            fs::write(fixture.0.join("alt.csv"), "ID\n1\n3\n2\n").unwrap();
-            let body = BODY.edit("keys: [ID, SEQ]", "keys: [ID]")
-        .edit("  SRC: {path: src.csv, types: {ID: int, SEQ: int}}", "  SRC: {path: src.csv, types: {ID: int, SEQ: int}}\n  ALT: {path: alt.csv, types: {ID: int}}")
-        .edit("output: {path: result.csv, columns: [ID, SEQ, A, B]}", "output: {path: result.csv, columns: [ID, A, B]}")
-        .edit("columns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}", "rows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}");
-            let mut result = fixture.run(&body).unwrap();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(result.save().unwrap());
-            assert_eq!(
-                fs::read_to_string(fixture.0.join("result.csv")).unwrap(),
-                "ID,A,B\n1,last,\n3,,\n2,,\n"
-            );
-            assert_eq!(
-                result.observations()["handler_counts"],
-                yamaa_adapters::json!([
-                    {"spec_path":"rows.alternate.derivations.A.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"rows.alternate.derivations.A.source.absent","handler":"absent","count":2},
-                    {"spec_path":"rows.alternate.derivations.B.source.multiple_matches","handler":"multiple_matches","count":1},
-                    {"spec_path":"rows.alternate.derivations.B.source.absent","handler":"absent","count":2},
-                ])
-            );
-        }
-    }
     mod declarative_row_intermediates {
         //! Unchanged public YAML and independent plain-reference outputs/findings.
         use std::fs;
@@ -2085,6 +726,9 @@ columns:
         fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
             crate::support::study::issue_row(issue)
         }
+        /// A seam the replay cannot reach: the native reader of
+        /// `fixtures/row_intermediate_reference.json`, which the installed
+        /// Python and R suites also read.
         /// The two originals copy `adam-adlb-supplb-padded-key` and
         /// `adam-adlb-end-of-treatment`, whose saved bytes their
         /// `expected/adlb.csv` pins; what no benchmark pins is each run's

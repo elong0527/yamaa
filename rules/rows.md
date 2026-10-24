@@ -160,7 +160,7 @@ inputs: no operation repeats a candidate a data-dependent number of times, and
 one row per related pair is a row template driving on an `inner_join`
 ([LOOKUP-27](lookup.md#lookup-27)).
 
-Evidence: `schema-row-templates`, `adam-adex-uncollected`, `schema-lookup-inner-join-pairs`.
+Evidence: `schema-row-templates`, `adam-adex-uncollected`, `schema-lookup-inner-join-pairs`, `adam-adaecm-related-pairs`.
 
 No generated index supports such repetition. A source value may decide whether
 a written row template keeps one candidate; it cannot create more rows. Row

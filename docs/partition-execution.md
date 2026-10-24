@@ -89,6 +89,7 @@ The inventory follows `Expression`, `RowMode` and the execution stages in
 | Key-grain rows (`Keys`) and `Collect` | Safe-with-combine-step | Finish the entire source filter before key lifecycles. Merge equal complete keys and distinct present raw readings across batches before conversion/choice. Preserve each missing-key record separately and the full feeding membership. |
 | `Joined`, `SourceLookup`, `JoinedSource` | Global | Match against the complete donor relation, detect multiplicity across batches, and apply eligibility, stable order/keep and no-match behavior in the assignment's original phase. A local match cannot prove global uniqueness. |
 | Named `Intermediate` reads, correlated derivations, range/filter selection | Global | Preserve the full eligible donor set and per-candidate choice/materialization. Resolve expression keys and correlated current values at their existing checkpoints; share a chosen record across reads without replaying handlers. |
+| Pair relations (`inner_join`) | Global | Materialize matching pairs before intermediate verification, even when both sides are intermediates over one physical input. Strict consecutive and key-bounded partitions refuse this step; the whole-table fallback admits the input whole before materializing it. |
 | `SELF` intermediates and template-to-template dependencies | Global | Later templates observe the completed prior-template relation. Publish/invalidate `SELF` state only at the existing template barrier; do not expose a partially constructed prior template. |
 | Aggregate `COUNT` without `distinct` | Safe-with-combine-step | Combine exact present-value or record counts over the complete selected relation, with checked capacity and the distinction between no records (missing) and existing all-missing records (zero for value counts). |
 | Aggregate `SUM`, `MEAN` | Global | Collect arguments before folding; replay the current ordered fold, including type/arithmetic error argument positions, missing handling, integer-to-float transitions and signed zero. Partial sums/means cannot be merged without changing semantics. |
@@ -255,10 +256,15 @@ with no host surface.
   `engine_rejected` with `step: execute` and `code: partition_global` at that
   step's spec path. With the fallback, those steps run over the whole input.
   The run's own reconciliation points are not refused, because it holds the
-  state they need: admission, intermediate verification, `SELF` publication,
+  state they need: admission, intermediate verification without pair
+  materialization, `SELF` publication,
   the final order and the declaration checks. Under key-bounded partitions a
   window or an aggregate that groups by every partition key is not such a
-  step.
+  step. A live pair relation materializes globally at the intermediate
+  verification checkpoint and is refused at its intermediate's path under
+  either strict partition mode, even when both sides read one physical input.
+  The input is read and admitted whole; partitioning cannot bypass its row or
+  cell limit before the join materializes it.
 - **Cancellation.** The token is polled at every checkpoint of the schedule,
   between the partitions of each divided unit, and before each batch of
   project-function calls. A cancelled run keeps nothing any partition built.
