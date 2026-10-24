@@ -64,18 +64,27 @@ impl Serialize for WireCell<'_> {
         map.end()
     }
 }
-pub(crate) fn encode_rows<T: TableAccess>(table: &T) -> Result<Arc<RawValue>, Error> {
+/// Every record of `table`, in order, as report rows. Its records divide into
+/// `partitions` of these sizes, each admitted within the fixed limits on its
+/// own: the whole table for a table held whole, and the partitions of an
+/// input read by partition (#3792).
+pub(crate) fn encode_partitions<T: TableAccess>(
+    table: &T,
+    partitions: &[usize],
+) -> Result<Arc<RawValue>, Error> {
     use std::io::Write;
-    yamaa_core::limits::Limits::table(table.row_count(), table.schema().columns().len()).map_err(
-        |error| {
-            Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                error.resource,
-                error.limit,
-                error.actual,
-                Vec::new(),
-            ))
-        },
-    )?;
+    for &rows in partitions {
+        yamaa_core::limits::Limits::table(rows, table.schema().columns().len()).map_err(
+            |error| {
+                Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                    error.resource,
+                    error.limit,
+                    error.actual,
+                    Vec::new(),
+                ))
+            },
+        )?;
+    }
     let mut bytes = Vec::new();
     bytes
         .write_all(b"[")
@@ -515,7 +524,7 @@ mod tests {
             visited: Default::default(),
         };
         assert!(matches!(
-            encode_rows(&table),
+            encode_partitions(&table, &[table.row_count()]),
             Err(Error::InvalidObservation)
         ));
         assert_eq!(*table.visited.borrow(), vec![(0, 0), (0, 1), (1, 0)]);

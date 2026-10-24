@@ -1342,6 +1342,13 @@ as `failed` and includes the refusal's `issues`.
 | YAML nesting depth | 64 |
 | Semantic expression and context nesting depth | 128 |
 
+In a run divided into partitions (`docs/partition-execution.md`), the row and
+cell limits bound each materialized partition of a CSV or Parquet driver input
+that the run reads by partition, which it does when that input is the
+specification's only one and its plan is safe under consecutive partitions,
+and each table it reads whole. A run that also reads the source of a lookup,
+join or named relation reads every input whole.
+
 A MiB is 1,048,576 bytes; a GiB is 1,073,741,824 bytes. File readers check the
 encoded size before retaining bytes and check growth during reading. A
 compressed SAS dataset is also refused when the bytes its records decompress

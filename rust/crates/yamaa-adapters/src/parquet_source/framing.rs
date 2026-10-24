@@ -78,6 +78,9 @@ pub(super) struct Framing<'a> {
     /// Where page headers hold a skipped binary whose bytes are not UTF-8,
     /// in the held file: shown to the native decoder as zero bytes.
     pub opaque: Vec<std::ops::Range<usize>>,
+    /// The row groups of each partition, in order (#3792): every row group
+    /// for a whole read, and one empty partition for a file without any.
+    pub partitions: Vec<std::ops::Range<usize>>,
 }
 
 fn integer(value: Option<Value<'_>>) -> Result<i64, Error> {
@@ -179,6 +182,19 @@ fn admit_row_groups(count: usize) -> Result<(), Error> {
 /// Collect borrowed page bodies from every stored column chunk in source order.
 /// The downstream codec remains responsible for physical format semantics.
 pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
+    admit_partitioned(bytes, None)
+}
+
+/// [`admit`], dividing the row groups into partitions of at most `rows`
+/// records each when `rows` is given (#3792): a partition takes the next row
+/// group while the group fits, and a row group of more records is a
+/// partition of its own. Each partition, not the whole file, is then
+/// admitted within the row and cell limits, as its row groups are reached.
+/// Without `rows`, the whole file is one partition, admitted as declared.
+pub(super) fn admit_partitioned(
+    bytes: &[u8],
+    rows: Option<std::num::NonZeroUsize>,
+) -> Result<Framing<'_>, Error> {
     yamaa_core::limits::Limits::source_bytes(bytes.len())?;
     if bytes.len() < 12 || &bytes[..4] != b"PAR1" || &bytes[bytes.len() - 4..] != b"PAR1" {
         return Err(Error::Malformed);
@@ -198,8 +214,11 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
     let groups = sequence(root.field(4)?)?;
     let schema = sequence(root.field(2)?)?;
     let (leaves, annotated) = admit_schema(schema, &footer.annotated)?;
-    yamaa_core::limits::Limits::table(declared_rows, leaves)?;
+    if rows.is_none() {
+        yamaa_core::limits::Limits::table(declared_rows, leaves)?;
+    }
     admit_row_groups(groups.len())?;
+    let group_count = groups.len();
     // The column orders follow the leaves one for one: the native decoder
     // refuses any other count, but only after it has read them all. A row
     // group's sorting columns are a subset of its columns, at most one per
@@ -215,14 +234,27 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
         pages: Vec::new(),
         headers: Vec::new(),
         opaque: Vec::new(),
+        partitions: Vec::new(),
     };
-    let mut rows = 0usize;
+    // The records of the partition being reached, and its first row group.
+    let (mut partition_rows, mut partition_start) = (0usize, 0);
     for (row_group, group) in groups.into_iter().enumerate() {
         let group = group?;
         let count_rows = count(group.field(3)?)?;
-        rows = rows.checked_add(count_rows).ok_or(Error::Malformed)?;
+        if let Some(rows) = rows {
+            let fits = partition_rows
+                .checked_add(count_rows)
+                .is_some_and(|sum| sum <= rows.get());
+            if partition_rows > 0 && !fits {
+                result.partitions.push(partition_start..row_group);
+                (partition_rows, partition_start) = (0, row_group);
+            }
+        }
+        partition_rows = partition_rows
+            .checked_add(count_rows)
+            .ok_or(Error::Malformed)?;
         let columns = sequence(group.field(1)?)?;
-        yamaa_core::limits::Limits::table(rows, columns.len())?;
+        yamaa_core::limits::Limits::table(partition_rows, columns.len())?;
         for (column, chunk) in columns.into_iter().enumerate() {
             let chunk = chunk?;
             let meta = chunk.field(3)?.ok_or(Error::Malformed)?;
@@ -325,6 +357,7 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
             }
         }
     }
+    result.partitions.push(partition_start..group_count);
     Ok(result)
 }
 

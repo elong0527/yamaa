@@ -28,6 +28,8 @@ impl Error {
 /// The generated field is admitted once, before any physical allocation.
 pub struct Ordinal {
     schema: TableSchema,
+    /// The records of the source before the first one admitted.
+    start: usize,
     rows: usize,
 }
 impl Ordinal {
@@ -59,15 +61,26 @@ impl Ordinal {
         });
         Ok(Self {
             schema: TableSchema::new(columns).map_err(|_| Error::InvalidName)?,
+            start: 0,
             rows,
         })
+    }
+    /// The same field for admitted records that follow `start` records of
+    /// their source, as one partition of a source read by partition does
+    /// (#3792): each value is the record's position in the whole source.
+    pub fn starting_at(self, start: usize) -> Self {
+        Self { start, ..self }
     }
     pub fn schema(&self) -> &TableSchema {
         &self.schema
     }
     pub fn value(&self, position: usize) -> Option<i64> {
         (position < self.rows)
-            .then(|| i64::try_from(position).ok()?.checked_add(1))
+            .then(|| {
+                i64::try_from(self.start.checked_add(position)?)
+                    .ok()?
+                    .checked_add(1)
+            })
             .flatten()
     }
 }

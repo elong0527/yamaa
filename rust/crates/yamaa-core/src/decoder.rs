@@ -2,16 +2,18 @@
 //! it, a document as written with the position of each node, a file a project
 //! names admitted as the type it is read as, or a table by an input's profile.
 //! The adapters implement it with the YAML reader, the shipped closures and
-//! the CSV, Parquet, SAS and ODM codecs; core holds no codec.
+//! the CSV, Parquet, SAS and ODM codecs; core holds no codec. A CSV or
+//! Parquet input can also be read by partition (#3792), each partition
+//! decoded and admitted on its own.
 use crate::{
     producer_contract::Contract,
     project_environment::LockKind,
     project_preparation::{DecodeTarget, Source},
     schema::Document,
     specification::{SourceDeclaration, SourceInterpretation},
-    table::TableAccess,
+    table::{TableAccess, TableSchema},
 };
-use std::any::Any;
+use std::{any::Any, num::NonZeroUsize};
 
 /// The engine's one way from held bytes to what it reads. Each request reads
 /// only the bytes it is given, applies its own physical limits before it
@@ -69,6 +71,43 @@ pub trait Decoder {
         _contract: Option<&Contract>,
     ) -> Option<Result<Self::Table, Self::Error>> {
         None
+    }
+    /// The schema of a captured input this decoder can read by partition
+    /// (#3792), read from its header or footer alone: the fields
+    /// [`Self::table`] gives the table when it finds nothing. `None` when
+    /// the decoder reads the input only whole, or its header or footer does
+    /// not read; such an input is read whole.
+    fn partition_schema(
+        &mut self,
+        _source: &SourceDeclaration,
+        _bytes: &[u8],
+        _interpretation: SourceInterpretation,
+    ) -> Option<TableSchema> {
+        None
+    }
+    /// Decode one captured input by partition (#3792), each partition of
+    /// about `rows` records and admitted on its own, in order. Every finding
+    /// [`Self::table`] reports is reported in the same order and with the
+    /// same context; only the row and cell limits bound each partition
+    /// instead of the whole table. The table holds every partition, which
+    /// [`Self::partitions`] gives.
+    fn partitioned(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        interpretation: SourceInterpretation,
+        contract: Option<&Contract>,
+        _rows: NonZeroUsize,
+    ) -> Result<Self::Table, Self::Error> {
+        self.table(source, bytes, interpretation, contract)
+    }
+    /// The partitions of `table` in order, each read by the coordinates of
+    /// its own records: those [`Self::partitioned`] decoded, or the table
+    /// alone for one decoded whole.
+    fn partitions(
+        table: &Self::Table,
+    ) -> Vec<&dyn TableAccess<Error = <Self::Table as TableAccess>::Error>> {
+        vec![table]
     }
     /// Whether a failed input is an ingestion finding, after which the
     /// remaining declared inputs still decode. A resource, transport or

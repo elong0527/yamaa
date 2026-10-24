@@ -102,15 +102,17 @@ fn collect<T: DataType>(
     Ok(result)
 }
 
-/// Read the file's pages through the native column readers. `source` is the
-/// held file with each page header presented as the footer is presented to
-/// the metadata decoder. Each call into the Parquet crate is contained on its
-/// own (`native`).
+/// Read the pages of the row groups `groups`, a run of the file's row groups
+/// such as one partition's (#3792), through the native column readers.
+/// `source` is the held file with each page header presented as the footer
+/// is presented to the metadata decoder. Each call into the Parquet crate is
+/// contained on its own (`native`).
 pub(super) fn read(
     source: bytes::Bytes,
     metadata: &ParquetMetaData,
     keep: &[bool],
     schema: &arrow_schema::Schema,
+    groups: std::ops::Range<usize>,
 ) -> Result<Vec<Column>, Error> {
     // Reuse the admitted metadata instead of reparsing the footer through the
     // native decoder's unknown-field skip a second time.
@@ -122,7 +124,10 @@ pub(super) fn read(
         return Err(Error::Malformed);
     }
     let mut result: Vec<_> = descriptors.iter().map(|_| Column::Discard).collect();
-    for (index, group) in metadata.row_groups().iter().enumerate() {
+    let first = groups.start;
+    let row_groups = metadata.row_groups().get(groups).ok_or(Error::Malformed)?;
+    for (offset, group) in row_groups.iter().enumerate() {
+        let index = first + offset;
         let group = native(|| {
             crate::storage_api::row_group_reader(
                 source.clone(),
@@ -226,7 +231,7 @@ mod tests {
         writer.close().unwrap();
         let bytes = bytes::Bytes::from(bytes);
         let reader = SerializedFileReader::new(bytes.clone()).unwrap();
-        let result = read(bytes, reader.metadata(), &[true], &schema).unwrap();
+        let result = read(bytes, reader.metadata(), &[true], &schema, 0..1).unwrap();
         assert!(matches!(&result[0], Column::Int64(values) if values == &[Some(1), Some(2)]));
     }
 }

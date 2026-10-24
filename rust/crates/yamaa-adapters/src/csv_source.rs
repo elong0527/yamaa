@@ -2,7 +2,16 @@
 //! and the undeclared-type text table it builds. Pure byte admission: the
 //! profile's models (the text table and its refusals) are core's, and
 //! filesystem authority stays with the resolver port (#3030 section 2.10).
+//!
+//! One lexer reads the profile (CSV-1 to CSV-8). The whole read keeps every
+//! record as it scans. A read by partition (#3792) scans every record once,
+//! keeping only where each partition of records begins, and then decodes one
+//! partition's records on demand ([`Partitions::records`]). Both scans report
+//! the same finding at the same record and field; only the row and cell
+//! limits differ: the whole read admits the whole table, a read by partition
+//! each partition on its own.
 use std::collections::BTreeSet;
+use std::num::NonZeroUsize;
 pub use yamaa_core::csv_source::{CsvSource, Error, Field, ProfileCause};
 
 fn failure(cause: ProfileCause, record: usize, field: usize) -> Error {
@@ -62,14 +71,16 @@ pub fn parse(content: &[u8]) -> Result<CsvSource, Error> {
     parse_declared(content, false)
 }
 
-/// Decode completely, then scan all syntax before header and row-width findings.
-/// File and table boundaries precede retaining the corresponding bytes or shape.
+/// The text of a source, decoded completely before any syntax is admitted:
+/// within the source byte limit, valid UTF-8, beginning with a byte-order
+/// mark exactly when `byte_order_mark` declares one, which is skipped, and
+/// holding a header.
 ///
 /// `byte_order_mark` is the input's declaration (CSV-10): when it is true the
 /// source must begin with one mark, which is skipped, and the first record
 /// starts after it. Any other mark at the start, including a second one after
 /// the declared mark, is refused: the declaration decides, never the file.
-pub fn parse_declared(content: &[u8], byte_order_mark: bool) -> Result<CsvSource, Error> {
+fn admitted_text(content: &[u8], byte_order_mark: bool) -> Result<&str, Error> {
     yamaa_core::limits::Limits::source_bytes(content.len()).map_err(limit_failure)?;
     let text = std::str::from_utf8(content).map_err(|error| {
         let (record, field) = coordinates(&content[..error.valid_up_to()]);
@@ -88,105 +99,169 @@ pub fn parse_declared(content: &[u8], byte_order_mark: bool) -> Result<CsvSource
     if text.is_empty() {
         return Err(failure(ProfileCause::HeaderAbsent, 1, 1));
     }
-    let Scanned {
-        records,
-        width_failure,
-    } = scan(text)?;
-    let mut records = records.into_iter();
-    let header = records.next().expect("nonempty text produces a record");
-    let mut names = Vec::with_capacity(header.len());
-    let mut seen = BTreeSet::new();
-    for (index, name) in header.into_iter().enumerate() {
-        let Some(name) = name else {
-            return Err(failure(ProfileCause::FieldNameEmpty, 1, index + 1));
-        };
-        if !seen.insert(name.clone()) {
-            return Err(Error::Profile {
-                cause: ProfileCause::FieldNameDuplicate,
-                record: 1,
-                field: Field::Name(name),
-            });
-        }
-        names.push(name);
-    }
-    if let Some(error) = width_failure {
-        return Err(error);
-    }
-    let mut rows = Vec::new();
-    for (index, record) in records.enumerate() {
-        if record.len() != names.len() {
-            return Err(failure(
-                ProfileCause::RecordWidth,
-                index + 2,
-                record.len().min(names.len()) + 1,
-            ));
-        }
-        rows.push(record);
-    }
-    yamaa_core::limits::Limits::table(rows.len(), names.len()).map_err(limit_failure)?;
+    Ok(text)
+}
+
+/// Decode completely, then scan all syntax before header and row-width findings.
+/// File and table boundaries precede retaining the corresponding bytes or shape.
+///
+/// `byte_order_mark` is the input's declaration (CSV-10), as
+/// [`admitted_text`] reads it.
+pub fn parse_declared(content: &[u8], byte_order_mark: bool) -> Result<CsvSource, Error> {
+    let text = admitted_text(content, byte_order_mark)?;
+    let mut records = Records::new(usize::MAX, true);
+    lex(text, 1, &mut records)?;
+    let names = records.names()?;
+    yamaa_core::limits::Limits::table(records.kept.len(), names.len()).map_err(limit_failure)?;
     Ok(CsvSource {
         names,
-        records: rows,
+        records: records.kept,
     })
 }
 
-struct Scanned {
-    records: Vec<Vec<Option<String>>>,
-    width_failure: Option<Error>,
+/// A source read by partition (#3792): its header, and where each partition
+/// of its records begins, from one scan of every record. The scan reports
+/// every finding the whole read reports, in the same order and at the same
+/// record and field, except that each partition, not the whole table, is
+/// admitted within the row and cell limits. A partition's records then
+/// decode on demand.
+#[derive(Debug)]
+pub struct Partitions<'t> {
+    text: &'t str,
+    names: Vec<String>,
+    /// The records of every partition but the last, which holds the rest.
+    rows: usize,
+    /// Where each partition's first record begins in `text`, then where the
+    /// last one ends: an empty source has one empty partition.
+    starts: Vec<usize>,
 }
-/// The previous physical record count includes the header; adding a data record
-/// gives exactly that many data rows. The header itself has zero data rows.
-fn admit_record(previous_records: usize, columns: usize) -> Result<(), Error> {
-    yamaa_core::limits::Limits::table(previous_records, columns).map_err(limit_failure)
-}
-impl Scanned {
-    fn push(&mut self, record: Vec<Option<String>>, number: usize) -> Result<(), Error> {
-        let width = self.records.first().map_or(record.len(), Vec::len);
-        admit_record(number - 1, width)?;
-        if number > 1 && record.len() != width && self.width_failure.is_none() {
-            self.width_failure = Some(failure(
-                ProfileCause::RecordWidth,
-                number,
-                record.len().min(width) + 1,
-            ));
+
+impl Partitions<'_> {
+    /// The header's field names.
+    pub fn names(&self) -> &[String] {
+        &self.names
+    }
+
+    /// The number of partitions, at least one.
+    pub fn len(&self) -> usize {
+        self.starts.len() - 1
+    }
+
+    /// Whether there are no partitions, which never holds.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// The position, among the source's records, of partition `index`'s
+    /// first record: the records of the partitions before it.
+    pub fn first_record(&self, index: usize) -> usize {
+        index.saturating_mul(self.rows)
+    }
+
+    /// Decode partition `index`'s records as the whole read decodes them.
+    /// The scan admitted every record, so this finds nothing; a finding
+    /// would be the scan's.
+    pub fn records(&self, index: usize) -> Result<CsvSource, Error> {
+        let text = &self.text[self.starts[index]..self.starts[index + 1]];
+        let mut kept = Kept(Vec::new());
+        if !text.is_empty() {
+            // The header is record 1, so data record `n` is record `n + 2`.
+            lex(text, self.first_record(index) + 2, &mut kept)?;
         }
-        // A malformed record cannot form a table. Keep its first finding and
-        // finish lexical scanning, while retaining only the valid prefix.
-        if self.width_failure.is_none() {
-            self.records.push(record);
-        }
-        Ok(())
+        Ok(CsvSource {
+            names: self.names.clone(),
+            records: kept.0,
+        })
     }
 }
 
-fn scan(text: &str) -> Result<Scanned, Error> {
+/// Scan a source as [`parse_declared`] reads it, keeping its records'
+/// partitions of `rows` records each, the last holding the rest, and admit
+/// each partition, not the whole table, within the row and cell limits.
+pub fn scan(
+    content: &[u8],
+    byte_order_mark: bool,
+    rows: NonZeroUsize,
+) -> Result<Partitions<'_>, Error> {
+    let text = admitted_text(content, byte_order_mark)?;
+    let mut records = Records::new(rows.get(), false);
+    lex(text, 1, &mut records)?;
+    let names = records.names()?;
+    let mut starts = records.starts;
+    if records.count % rows.get() != 0 || records.count == 0 {
+        starts.push(text.len());
+    }
+    Ok(Partitions {
+        text,
+        names,
+        rows: rows.get(),
+        starts,
+    })
+}
+
+/// Where a source's first record, its header, ends: after the first line
+/// feed outside a quoted field, or at the end of the source. The header
+/// alone reads as the source would, holding no records.
+pub fn header_end(content: &[u8]) -> usize {
+    let mut quoted = false;
+    for (index, &byte) in content.iter().enumerate() {
+        match byte {
+            b'"' => quoted = !quoted,
+            b'\n' if !quoted => return index + 1,
+            _ => {}
+        }
+    }
+    content.len()
+}
+
+/// One field as the lexer read it: the text of a bare field, or the text
+/// between the quotes of a quoted field, each doubled quote still doubled.
+#[derive(Clone, Copy)]
+enum Lexed<'t> {
+    Bare(&'t str),
+    Quoted(&'t str),
+}
+
+impl Lexed<'_> {
+    /// The field's collected text, missing when it is empty, quoted or not.
+    fn value(self) -> Option<String> {
+        match self {
+            Self::Bare("") | Self::Quoted("") => None,
+            Self::Bare(text) => Some(text.to_owned()),
+            Self::Quoted(text) => Some(text.replace("\"\"", "\"")),
+        }
+    }
+}
+
+/// What one pass of the lexer does with each record it reads.
+trait Sink<'t> {
+    /// Record `number`, whose fields are `fields`, ending at byte `end` of
+    /// the text: after its line ending, or at the end of the text.
+    fn record(&mut self, number: usize, fields: &[Lexed<'t>], end: usize) -> Result<(), Error>;
+}
+
+/// Read `text`, which begins at a record, record by record, numbering the
+/// first record `first`: a field's count is admitted before it is read, and
+/// a finding stops the pass at its record and field.
+fn lex<'t>(text: &'t str, first: usize, sink: &mut impl Sink<'t>) -> Result<(), Error> {
     let bytes = text.as_bytes();
-    let mut records = Scanned {
-        records: Vec::new(),
-        width_failure: None,
-    };
-    let mut record = Vec::new();
+    let mut fields = Vec::new();
     let mut index = 0;
-    let mut number = 1;
+    let mut number = first;
     loop {
-        let column = record.len() + 1;
+        let column = fields.len() + 1;
         yamaa_core::limits::Limits::columns(column).map_err(limit_failure)?;
         let field = if bytes.get(index) == Some(&b'"') {
             index += 1;
-            let mut start = index;
-            let mut value = String::new();
+            let start = index;
             loop {
                 match bytes.get(index) {
                     None => return Err(failure(ProfileCause::QuoteUnterminated, number, column)),
                     Some(b'"') => {
-                        value.push_str(&text[start..index]);
                         if bytes.get(index + 1) == Some(&b'"') {
-                            value.push('"');
                             index += 2;
-                            start = index;
                             continue;
                         }
-                        index += 1;
                         break;
                     }
                     Some(b'\r') => {
@@ -195,13 +270,15 @@ fn scan(text: &str) -> Result<Scanned, Error> {
                     _ => index += 1,
                 }
             }
+            let quoted = Lexed::Quoted(&text[start..index]);
+            index += 1;
             if bytes
                 .get(index)
                 .is_some_and(|b| !matches!(b, b',' | b'\r' | b'\n'))
             {
                 return Err(failure(ProfileCause::TextAfterQuote, number, column));
             }
-            value
+            quoted
         } else {
             let start = index;
             while let Some(byte) = bytes.get(index) {
@@ -211,13 +288,12 @@ fn scan(text: &str) -> Result<Scanned, Error> {
                     _ => index += 1,
                 }
             }
-
-            text[start..index].to_owned()
+            Lexed::Bare(&text[start..index])
         };
-        record.push(if field.is_empty() { None } else { Some(field) });
+        fields.push(field);
         match bytes.get(index) {
             None => {
-                records.push(record, number)?;
+                sink.record(number, &fields, index)?;
                 break;
             }
             Some(b',') => {
@@ -233,14 +309,120 @@ fn scan(text: &str) -> Result<Scanned, Error> {
             Some(b'\n') => index += 1,
             _ => unreachable!("scanned field stops at a delimiter"),
         }
-        records.push(record, number)?;
-        record = Vec::new();
+        sink.record(number, &fields, index)?;
+        fields.clear();
         number += 1;
         if index >= bytes.len() {
             break;
         }
     }
-    Ok(records)
+    Ok(())
+}
+
+/// The previous physical record count includes the header; adding a data record
+/// gives exactly that many data rows. The header itself has zero data rows.
+fn admit_record(previous_records: usize, columns: usize) -> Result<(), Error> {
+    yamaa_core::limits::Limits::table(previous_records, columns).map_err(limit_failure)
+}
+
+/// The records of a scan from the header on: the header's fields, the first
+/// record whose width is not the header's, each data record admitted with
+/// the records before it in its partition, and either every record (the
+/// whole read) or where each partition begins (a read by partition).
+struct Records {
+    /// The data records of each partition; `usize::MAX` admits the whole
+    /// source as one table.
+    rows: usize,
+    /// Whether every data record is kept, as the whole read keeps them.
+    keep: bool,
+    header: Vec<Option<String>>,
+    kept: Vec<Vec<Option<String>>>,
+    /// The data records read.
+    count: usize,
+    /// Where each partition's first record begins: after the header, then
+    /// after every `rows` data records.
+    starts: Vec<usize>,
+    width_failure: Option<Error>,
+}
+
+impl Records {
+    fn new(rows: usize, keep: bool) -> Self {
+        Self {
+            rows,
+            keep,
+            header: Vec::new(),
+            kept: Vec::new(),
+            count: 0,
+            starts: Vec::new(),
+            width_failure: None,
+        }
+    }
+
+    /// The header's names, refusing an empty or a repeated one, then the
+    /// first width finding: complete syntax precedes both.
+    fn names(&mut self) -> Result<Vec<String>, Error> {
+        let mut names = Vec::with_capacity(self.header.len());
+        let mut seen = BTreeSet::new();
+        for (index, name) in std::mem::take(&mut self.header).into_iter().enumerate() {
+            let Some(name) = name else {
+                return Err(failure(ProfileCause::FieldNameEmpty, 1, index + 1));
+            };
+            if !seen.insert(name.clone()) {
+                return Err(Error::Profile {
+                    cause: ProfileCause::FieldNameDuplicate,
+                    record: 1,
+                    field: Field::Name(name),
+                });
+            }
+            names.push(name);
+        }
+        match self.width_failure.take() {
+            Some(error) => Err(error),
+            None => Ok(names),
+        }
+    }
+}
+
+impl<'t> Sink<'t> for Records {
+    fn record(&mut self, number: usize, fields: &[Lexed<'t>], end: usize) -> Result<(), Error> {
+        if number == 1 {
+            admit_record(0, fields.len())?;
+            self.header = fields.iter().map(|field| field.value()).collect();
+            self.starts.push(end);
+            return Ok(());
+        }
+        let width = self.header.len();
+        admit_record(self.count % self.rows + 1, width)?;
+        // A malformed record cannot form a table. Keep its first finding and
+        // finish lexical scanning, while retaining only the valid prefix.
+        if fields.len() != width && self.width_failure.is_none() {
+            self.width_failure = Some(failure(
+                ProfileCause::RecordWidth,
+                number,
+                fields.len().min(width) + 1,
+            ));
+        }
+        if self.keep && self.width_failure.is_none() {
+            self.kept
+                .push(fields.iter().map(|field| field.value()).collect());
+        }
+        self.count += 1;
+        if self.count % self.rows == 0 {
+            self.starts.push(end);
+        }
+        Ok(())
+    }
+}
+
+/// Every record of a scanned partition, as the whole read keeps it.
+struct Kept(Vec<Vec<Option<String>>>);
+
+impl<'t> Sink<'t> for Kept {
+    fn record(&mut self, _: usize, fields: &[Lexed<'t>], _: usize) -> Result<(), Error> {
+        self.0
+            .push(fields.iter().map(|field| field.value()).collect());
+        Ok(())
+    }
 }
 
 /// Profile failures and table failures remain distinct to the compiler.
@@ -317,6 +499,37 @@ mod boundary_tests {
             })
         );
     }
+
+    /// A read by partition admits each data record with the records before
+    /// it in its partition: the first record of every partition is admitted
+    /// as one row, and the last of a full partition as `rows`, whatever its
+    /// position in the source. Records are admitted without being lexed, so
+    /// the geometry is the scan's own.
+    #[test]
+    fn a_partition_scan_admits_each_record_with_its_partition_only() {
+        // 179 fields, the widest a 3,575,418-record table admits. With
+        // partitions of 3,575,418 records, the record after a full partition
+        // starts the next one: the whole read refuses it, the scan admits it.
+        let fields = vec![Lexed::Bare("x"); 179];
+        let full = 3_575_418;
+        let mut records = Records::new(full, false);
+        records.record(1, &fields, 0).unwrap();
+        records.count = full - 1;
+        assert_eq!(records.record(full + 1, &fields, 1), Ok(()));
+        assert_eq!(records.starts, [0, 1]);
+        assert_eq!(records.record(full + 2, &fields, 2), Ok(()));
+        let mut whole = Records::new(usize::MAX, false);
+        whole.record(1, &fields, 0).unwrap();
+        whole.count = full;
+        assert_eq!(
+            whole.record(full + 2, &fields, 1),
+            Err(Error::Limit {
+                resource: "table_cells",
+                limit: Limits::TABLE_CELLS,
+                actual: Some(Limits::TABLE_CELLS + 1),
+            })
+        );
+    }
 }
 
 #[cfg(test)]
@@ -331,7 +544,7 @@ mod field_boundary_tests {
                 ",".repeat(yamaa_core::limits::Limits::COLUMNS)
             );
             assert_eq!(
-                scan(&source).err(),
+                lex(&source, 1, &mut Records::new(usize::MAX, true)).err(),
                 Some(Error::Limit {
                     resource: "columns",
                     limit: yamaa_core::limits::Limits::COLUMNS,

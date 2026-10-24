@@ -46,7 +46,9 @@ impl Error {
     }
 }
 
-/// Admitted declarations borrow immutable compiler metadata for one conversion.
+/// Admitted declarations borrow immutable compiler metadata for one
+/// conversion, or one for each partition of a source read by partition.
+#[derive(Clone, Copy)]
 pub struct PreparedTypes<'a>(&'a [(String, ColumnType)]);
 impl<'a> PreparedTypes<'a> {
     /// Declaration policy/shape is checked before callers decode source bytes.
