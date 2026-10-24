@@ -234,6 +234,9 @@ conditions:
   invalid_power:
     phases: [derivation]
     message: "{expr} raises {base} to the power {exponent}, which has no real result"
+  invalid_probability:
+    phases: [derivation]
+    message: "{expr} applies {function} to {value}, which is not a probability strictly between 0 and 1"
   invalid_producer_contract:
     phases: [validation]
     message: "the schema link of input {dataset} is not a valid producer contract"
@@ -260,7 +263,7 @@ conditions:
     message: "column {column} holds a value longer than {max} characters in {failure_count} of the rows"
   ln_of_nonpositive:
     phases: [derivation]
-    message: "{expr} takes the logarithm of a value that is not positive"
+    message: "{expr} applies {function} to a zero or negative value, which has no logarithm"
   matches_failed:
     phases: [verification]
     message: "column {column} holds a value that does not match its pattern in {failure_count} of the rows"

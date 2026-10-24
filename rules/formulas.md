@@ -423,11 +423,12 @@ The types of `aggregate.expr` follow [FORMULA-23](#formula-23).
 The numeric functions are exactly those below, and each takes exactly the
 arguments shown. Any other function name or argument count fails, and
 `str_contains` ([FORMULA-8](#formula-8)) is the only other function. `LOG` is
-excluded: write `LN(x)` or `LN(x) / LN(b)`. Widening the vocabulary amends
-this list.
+excluded: write `LOG10(x)` for the base-10 logarithm, `LN(x)` for the natural
+one and `LN(x) / LN(b)` for another base. Widening the vocabulary amends this
+list.
 
 Fails: `prohibited_function`.
-Evidence: `schema-numeric-functions`, `yaml/grammar/expression.yaml`, `rust/crates/yamaa-adapters/tests/fixtures/grammar_diagnostics.tsv`.
+Evidence: `schema-numeric-functions`, `yaml/grammar/expression.yaml`, `rust/crates/yamaa-adapters/tests/fixtures/grammar_diagnostics.tsv`, `yaml/conformance/expressions.yaml`, `rust/crates/yamaa-core/tests/fixtures/portable_math.tsv`.
 
 - `ABS(x)`: absolute value.
 - `CEIL(x)`: least integer value not less than `x`.
@@ -437,6 +438,11 @@ Evidence: `schema-numeric-functions`, `yaml/grammar/expression.yaml`, `rust/crat
 - `POWER(x, y)`: `x` raised to `y`.
 - `EXP(x)`: `e` raised to `x`.
 - `LN(x)`: natural logarithm.
+- `LOG10(x)`: base-10 logarithm.
+- `NORM_CDF(x)`: the standard normal distribution function, the probability
+  that a standard normal variable is at most `x`.
+- `NORM_INV(p)`: the standard normal quantile, the `x` whose `NORM_CDF(x)` is
+  `p`, for `p` strictly between 0 and 1.
 - `MOD(x, y)`: remainder of `x / y`, taking the sign of `x`.
 - `NULLIF(x, y)`: `NULL` when `x = y`, otherwise `x`.
 
@@ -444,6 +450,31 @@ A call of any other name fails with `prohibited_function` naming the function
 as written, and a listed function called with another number of arguments
 also reports the count. Every field admits the numeric functions; in a
 predicate they stand in an operand ([FORMULA-27](#formula-27)).
+
+Each function is one computation, the same binary64 operations on every
+platform, so it returns the same bits everywhere. `SQRT` is the correctly
+rounded square root, and `EXP`, `LN`, `LOG10` and `POWER` are the `exp`,
+`log`, `log10` and `pow` of the pinned Rust `libm` crate, a port of the musl
+C library. Three are defined further:
+
+- `LOG10(x)` is `log10` itself, never a quotient of natural logarithms:
+  `LOG10(1000)` is exactly 3, while `LN(1000) / LN(10)` is
+  2.9999999999999996.
+- `NORM_CDF(x)` is `0.5 * erfc(-x / SQRT(2))`, with the pinned `erfc` and
+  `SQRT(2)` the binary64 value 1.4142135623730951, each operation rounded to
+  binary64 in that order. It is 0.5 at 0 and lies from 0 to 1: it rounds to
+  1 above about 8.3 and to 0 below about -38.5.
+- `NORM_INV(p)` is algorithm AS 241 of Wichura (Applied Statistics 37(3),
+  1988), its double-precision routine PPND16: a rational approximation in
+  three regions, with no iteration, accurate to about 1 part in 10^16. With
+  `q = p - 0.5`, where `|q| <= 0.425` it is `q * A(r) / B(r)` at
+  `r = 0.180625 - q * q`. Elsewhere `r = SQRT(-LN(m))`, with `m` the smaller
+  of `p` and `1 - p`, and it is `C(r - 1.6) / D(r - 1.6)` where `r <= 5` and
+  `E(r - 5) / F(r - 5)` beyond, negated where `q < 0`. Each of `A` to `F` is
+  the published polynomial of degree 7, evaluated by Horner's rule from its
+  highest coefficient, each step one binary64 operation, with the `LN` and
+  `SQRT` above. `NORM_INV(0.5)` is 0, and `NORM_INV(NORM_CDF(1))` is 1 to 15
+  significant digits.
 
 No function in this grammar picks a row-wise extreme or the first present
 value. Those are the `greatest`, `least` and `first_available` expressions
@@ -470,20 +501,26 @@ follow their own tables rather than this rule.
 
 <a id="formula-15"></a>
 
-### FORMULA-15. Division by zero, an invalid root, logarithm or power, and int overflow fail the run
+### FORMULA-15. Division by zero, an invalid root, logarithm, power or probability, and int overflow fail the run
 
-Division by zero, by `/` or by `MOD`, `SQRT` of a negative argument, `LN` of a
-zero or negative argument, `POWER` with a zero base and a negative exponent or
-a negative base and a non-integer exponent, and an `int` result outside the
-`int` range each fail the run, in every field. A failure is never silently
-converted to missing, and `NULLIF(denominator, 0)` chooses missing
+Division by zero, by `/` or by `MOD`, `SQRT` of a negative argument, a
+logarithm of a zero or negative argument, `POWER` with a zero base and a
+negative exponent or a negative base and a non-integer exponent, `NORM_INV`
+of a value outside the open interval from 0 to 1, and an `int` result outside
+the `int` range each fail the run, in every field. A failure is never
+silently converted to missing, and `NULLIF(denominator, 0)` chooses missing
 explicitly. A failure reports the expression and the operation that failed.
 
-Fails: `division_by_zero`, `sqrt_of_negative`, `ln_of_nonpositive`, `invalid_power`, `integer_overflow`.
-Evidence: `negative-zero-division`, `negative-negative-sqrt`, `negative-log-zero`, `negative-integer-overflow`, `negative-power-negative-base`, `negative-geomean-zero`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`.
+Fails: `division_by_zero`, `sqrt_of_negative`, `ln_of_nonpositive`, `invalid_power`, `invalid_probability`, `integer_overflow`.
+Evidence: `negative-zero-division`, `negative-negative-sqrt`, `negative-log-zero`, `negative-log10-zero`, `negative-integer-overflow`, `negative-power-negative-base`, `negative-norm-inv-one`, `negative-geomean-zero`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `rust/crates/yamaa-core/tests/fixtures/portable_math.tsv`.
 
-An invalid `POWER` fails with `invalid_power`, and an `int` result outside
-the range fails with `integer_overflow` under [VALUE-5](values.md#value-5).
+A logarithm of `LN` or `LOG10` fails with `ln_of_nonpositive`, naming the
+function. `NORM_INV` fails with `invalid_probability`, naming the function
+and reporting the value, also at exactly 0 and 1, whose quantiles are
+infinite, and so at a `NORM_CDF` result that rounds to 1
+([FORMULA-13](#formula-13)). An invalid `POWER` fails with `invalid_power`,
+and an `int` result outside the range fails with `integer_overflow` under
+[VALUE-5](values.md#value-5).
 Failing rather than yielding missing is consistent with
 [Column derivation](columns.md). In a predicate, a failed operand fails the
 run rather than making its comparison `UNKNOWN`.
@@ -495,8 +532,8 @@ and `MEAN`, defined by `SUM`, fails on that intermediate overflow even when
 the mathematical mean would fit, as `VARIANCE` and `STDDEV` do through their
 `MEAN`. A quantile fails when the `int` difference of the two values it
 interpolates between leaves the `int` range ([FORMULA-18](#formula-18)), and
-`GEOMEAN` fails with `ln_of_nonpositive` on a zero or negative value, which
-its `LN` reads ([FORMULA-19](#formula-19)). The non-finite normalization of
+`GEOMEAN` fails with `ln_of_nonpositive`, naming `GEOMEAN`, on a zero or
+negative value, which its `LN` reads ([FORMULA-19](#formula-19)). The non-finite normalization of
 [Values](values.md) applies after every arithmetic or reduction result, so a
 step of a statistical reducer that leaves binary64 makes its result missing.
 

@@ -684,7 +684,8 @@ mod declaration {
             }
         }
 
-        fn replay(name: &str, expected: Option<(&str, &str, &str)>) {
+        /// Replay one specification of a case, `spec`, against its project.
+        fn replay(name: &str, spec: &str, expected: Option<(&str, &str, &str)>) {
             let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks");
             let case = root.join(name);
             let mut port = DeclaredProject {
@@ -710,7 +711,7 @@ mod declaration {
             assert_eq!(environment.environment().host(), Some(Language::R));
             assert_eq!(environment.environment().language(), Some(Language::R));
             let document = crate::support::specification_run::prepare(
-                &std::fs::read(case.join("spec.yaml")).unwrap(),
+                &std::fs::read(case.join(spec)).unwrap(),
             );
             let rows = match PreparedRun::prepare_with_environment(document, environment) {
                 Ok(run) => specification_check::issues(&run),
@@ -737,24 +738,25 @@ mod declaration {
 
         #[test]
         fn schema_functions_r_declared_calls_are_statically_admitted() {
-            replay("schema-functions", None);
+            replay("schema-functions", "spec.yaml", None);
         }
         #[test]
         fn schema_non_finite_r_declared_calls_are_statically_admitted() {
-            replay("schema-non-finite", None);
+            replay("schema-non-finite", "spec.yaml", None);
         }
         #[test]
         fn adam_adsl_bmi_r_declared_calls_are_statically_admitted() {
-            replay("adam-adsl-bmi", None);
+            replay("adam-adsl-bmi", "spec.yaml", None);
         }
         #[test]
         fn adam_advs_percentiles_r_declared_calls_are_statically_admitted() {
-            replay("adam-advs-percentiles", None);
+            replay("adam-advs-percentiles", "spec_function.yaml", None);
         }
         #[test]
         fn negative_function_contract_r_preserves_the_exact_static_issue() {
             replay(
                 "negative-function-contract",
+                "spec.yaml",
                 Some((
                     "invalid_function_argument",
                     "FUNC-5",

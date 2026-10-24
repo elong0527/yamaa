@@ -118,6 +118,9 @@ vocabulary:
     POWER: {min_arguments: 2, max_arguments: 2, result: numeric}
     EXP: {min_arguments: 1, max_arguments: 1, result: numeric}
     LN: {min_arguments: 1, max_arguments: 1, result: numeric}
+    LOG10: {min_arguments: 1, max_arguments: 1, result: numeric}
+    NORM_CDF: {min_arguments: 1, max_arguments: 1, result: numeric}
+    NORM_INV: {min_arguments: 1, max_arguments: 1, result: numeric}
     MOD: {min_arguments: 2, max_arguments: 2, result: numeric}
     NULLIF: {min_arguments: 2, max_arguments: 2, result: numeric}
     STR_CONTAINS: {min_arguments: 2, max_arguments: 2, result: boolean}
@@ -747,12 +750,14 @@ cases:
     context: derivation
     covers: [call, vocabulary]
     text: "ABS(A) + CEIL(A) + FLOOR(A) + TRUNC(A) + SQRT(A) + EXP(A)
-      + LN(A) + MOD(A, 2) + POWER(A, 2) + NULLIF(A, 1)"
+      + LN(A) + LOG10(A) + NORM_CDF(A) + NORM_INV(A) + MOD(A, 2)
+      + POWER(A, 2) + NULLIF(A, 1)"
     parse: accept
     identifiers: [A]
-    shape: (+ (+ (+ (+ (+ (+ (+ (+ (+ (call ABS (id A)) (call CEIL (id
-      A))) (call FLOOR (id A))) (call TRUNC (id A))) (call SQRT (id A)))
-      (call EXP (id A))) (call LN (id A))) (call MOD (id A) (int 2)))
+    shape: (+ (+ (+ (+ (+ (+ (+ (+ (+ (+ (+ (+ (call ABS (id A)) (call CEIL
+      (id A))) (call FLOOR (id A))) (call TRUNC (id A))) (call SQRT (id A)))
+      (call EXP (id A))) (call LN (id A))) (call LOG10 (id A))) (call
+      NORM_CDF (id A))) (call NORM_INV (id A))) (call MOD (id A) (int 2)))
       (call POWER (id A) (int 2))) (call NULLIF (id A) (int 1)))
   - id: average-daily-dose-guards-its-division
     context: derivation
@@ -813,6 +818,55 @@ cases:
     context: derivation
     covers: [vocabulary, rejection]
     text: "NULLIF(A, B, C)"
+    parse: reject
+    condition: prohibited_function
+  # The base-10 logarithm and the standard normal distribution functions
+  # each take one argument, in every field; no parameter selects another
+  # base, mean or deviation.
+  - id: a-percentile-is-a-hundred-times-norm-cdf
+    context: derivation
+    covers: [call, arithmetic]
+    text: "100 * NORM_CDF(ZNUM)"
+    parse: accept
+    identifiers: [ZNUM]
+    shape: (* (int 100) (call NORM_CDF (id ZNUM)))
+  - id: a-reference-limit-reads-norm-inv-between-reductions
+    context: aggregate
+    covers: [call, reduction, arithmetic, precedence]
+    text: "MEAN(LB.LBSTRESN) + NORM_INV(0.975) * STDDEV(LB.LBSTRESN)"
+    parse: accept
+    identifiers: [LB.LBSTRESN]
+    shape: (+ (reduce MEAN (id LB.LBSTRESN)) (* (call NORM_INV (float 0.975))
+      (reduce STDDEV (id LB.LBSTRESN))))
+  - id: log10-and-norm-inv-are-case-insensitive-in-a-predicate
+    context: predicate
+    covers: [call, keyword-case]
+    text: "log10(TITER) >= Norm_Inv(P)"
+    parse: accept
+    identifiers: [P, TITER]
+    shape: (>= (call LOG10 (id TITER)) (call NORM_INV (id P)))
+  - id: log10-takes-no-base
+    context: derivation
+    covers: [vocabulary, rejection]
+    text: "LOG10(A, 10)"
+    parse: reject
+    condition: prohibited_function
+  - id: norm-cdf-takes-no-mean-or-deviation
+    context: derivation
+    covers: [vocabulary, rejection]
+    text: "NORM_CDF(A, 0, 1)"
+    parse: reject
+    condition: prohibited_function
+  - id: norm-inv-requires-an-argument
+    context: derivation
+    covers: [vocabulary, rejection]
+    text: "NORM_INV()"
+    parse: reject
+    condition: prohibited_function
+  - id: probit-is-not-the-quantile-name
+    context: derivation
+    covers: [vocabulary, rejection]
+    text: "PROBIT(P)"
     parse: reject
     condition: prohibited_function
   # Expression fields: any value over the current row. A name or a literal

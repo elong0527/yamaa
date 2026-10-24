@@ -1,0 +1,14 @@
+phase: derivation
+condition: invalid_probability
+spec_paths:
+  - columns.AVAL.derivation
+rule: FORMULA-15
+context:
+  expr: "NORM_INV(PCTL / 100)"
+  function: NORM_INV
+  value: 1.0
+  keys:
+    - STUDYID: YAMAA-01
+      USUBJID: YAMAA-01-303
+      PARAMCD: BMIZ
+      AVISIT: MONTH 12

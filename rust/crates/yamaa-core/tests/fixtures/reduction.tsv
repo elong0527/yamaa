@@ -79,8 +79,8 @@ geomean-ones	GEOMEAN	int:1,int:1	float:3ff0000000000000
 geomean-skips-missing	GEOMEAN	missing,int:4,missing,int:9	float:4018000000000000
 geomean-all-missing	GEOMEAN	missing	missing
 geomean-empty	GEOMEAN	-	missing
-geomean-zero	GEOMEAN	int:2,int:0,int:3	error:ln_of_nonpositive:FORMULA-15@1
-geomean-negative	GEOMEAN	float:-1.5	error:ln_of_nonpositive:FORMULA-15@0
-geomean-negative-zero	GEOMEAN	float:-0.0	error:ln_of_nonpositive:FORMULA-15@0
+geomean-zero	GEOMEAN	int:2,int:0,int:3	error:ln_of_nonpositive:FORMULA-15:GEOMEAN@1
+geomean-negative	GEOMEAN	float:-1.5	error:ln_of_nonpositive:FORMULA-15:GEOMEAN@0
+geomean-negative-zero	GEOMEAN	float:-0.0	error:ln_of_nonpositive:FORMULA-15:GEOMEAN@0
 geomean-text-before-zero	GEOMEAN	str:a,int:0	error:incompatible_input_type:FORMULA-23:str
-geomean-zero-before-text	GEOMEAN	int:0,str:a	error:ln_of_nonpositive:FORMULA-15@0
+geomean-zero-before-text	GEOMEAN	int:0,str:a	error:ln_of_nonpositive:FORMULA-15:GEOMEAN@0

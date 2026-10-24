@@ -1,0 +1,53 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADIS
+keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
+input:
+  IS:
+    path: input/is.csv
+    types: {VISITNUM: int, ISSTRESN: int, ISLLOQ: int}
+
+# A titer below the assay's lower limit of quantitation is not a measured
+# value to transform, and a titer of zero has no logarithm at all, so those
+# records are left out. A record with no titer is kept, with no log value.
+base: IS
+filter: "IS.ISSTRESN IS NULL OR IS.ISSTRESN >= IS.ISLLOQ"
+
+output:
+  path: adis.csv
+  columns: [STUDYID, USUBJID, PARAMCD, AVISIT, AVAL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: IS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: IS.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: "'NABLOG10'"
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+    derivation: IS.VISIT
+
+  # The collected titer, a reciprocal dilution.
+  - name: TITER
+    type: int
+    label: Neutralizing Antibody Titer
+    derivation: IS.ISSTRESN
+
+  # The base-10 logarithm, one operation rather than LN(TITER) / LN(10),
+  # so a titer of 10 gives exactly 1.
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: "LOG10(TITER)"

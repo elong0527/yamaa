@@ -1,0 +1,94 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADVS
+keys: [STUDYID, USUBJID, AVISIT, PARAMCD]
+input:
+  ADVS_RAW:
+    path: input/advs_raw.csv
+    types: {AGE: int}
+  LMS:
+    path: input/lms_ref.csv
+    types: {L: float, M: float, S: float, AGE: int}
+base: ADVS_RAW
+
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, AVISIT, PARAMCD, PARAM, AVAL]
+
+# The growth reference row for the collected measurement code (not the
+# output PARAMCD, which is the percentile code), sex, and age in days.
+intermediates:
+  - id: GROWTH
+    dataset: LMS
+    key: {PARAMCD: ADVS_RAW.PARAMCD, SEX: ADVS_RAW.SEX, AGE: ADVS_RAW.AGE}
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ADVS_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ADVS_RAW.USUBJID
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+    derivation: ADVS_RAW.AVISIT
+
+  # The collected result as a number; the input stores it as text.
+  - name: AVALSRC
+    type: float
+    label: Source Analysis Value
+    derivation: ADVS_RAW.AVAL
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation:
+      case:
+        - when: "ADVS_RAW.PARAMCD = 'BMI'"
+          then: "'BMIPCTL'"
+        - when: "ADVS_RAW.PARAMCD = 'WEIGHT'"
+          then: "'WGTPCTL'"
+    verifications:
+      - allowed_values:
+          values: [BMIPCTL, WGTPCTL]
+
+  - name: PARAM
+    type: str
+    label: Parameter
+    derivation:
+      case:
+        - when: "PARAMCD = 'BMIPCTL'"
+          then: "'BMI-for-Age Percentile'"
+        - when: "PARAMCD = 'WGTPCTL'"
+          then: "'Weight-for-Age Percentile'"
+
+  # LMS z-score of the collected value X: ((X / M) ^ L - 1) / (L * S).
+  # With no reference row the coefficients are missing, and so is ZNUM.
+  - name: ZNUM
+    type: float
+    label: LMS Standard Normal Score
+    derivation: "(POWER(AVALSRC / GROWTH.M, GROWTH.L)
+          - 1) / (GROWTH.L * GROWTH.S)"
+
+  # The percentile is 100 times the standard normal probability of ZNUM;
+  # a measurement with no z-score gets no probability, and so no
+  # percentile.
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: "100 * NORM_CDF(ZNUM)"
+
+verifications:
+  - row_count:
+      min: 8
+      max: 8
+  - assert:
+      id: percentile-requires-a-growth-reference
+      when: "AVAL IS NOT NULL"
+      require: "ZNUM IS NOT NULL"
