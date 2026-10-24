@@ -95,13 +95,10 @@ mod file {
                 // Static checking reads the producing specification, not data.
                 assert!(study.check("consumer/root.yaml").is_empty(), "{profile}");
                 // Before the producer is built and saved, the consumer's input is
-                // an ordinary missing file.
+                // an ordinary missing file (`producer_links.json`), and the build
+                // has no output.
                 let early = study.build("consumer/root.yaml");
                 assert!(early.output().is_none());
-                let issues = early.issues();
-                assert_eq!(issues.len(), 1, "{profile}: {issues:?}");
-                assert_eq!(issues[0].condition(), "resource_path_missing");
-                assert_eq!(issues[0].spec_paths, ["input.FIRST.path"]);
                 assert!(!study.0.join("generated").exists());
 
                 fs::create_dir(study.0.join("generated")).unwrap();
@@ -137,32 +134,26 @@ mod file {
         fn a_consumer_may_not_write_a_file_of_the_producer_it_reads() {
             let study = study("csv");
             study.write("generated/producer.csv", "ID,VALUE\n1,7\n");
-            for (output, field) in [
-                ("path: ../generated/producer.csv", "output.path"),
-                (
-                    "path: ../generated/root.csv, report: ../generated/producer.csv",
-                    "output.report",
-                ),
+            for output in [
+                "path: ../generated/producer.csv",
+                "path: ../generated/root.csv, report: ../generated/producer.csv",
             ] {
                 study.write(
                     "consumer/root.yaml",
                     consumer("csv", "").edit("path: ../generated/root.csv", output),
                 );
-                // Refused while it is prepared, before any study read.
+                // Refused while it is prepared, before any study read, with
+                // the collision `producer_links.json` records.
                 let path = study.path("consumer/root.yaml");
-                let issues = crate::support::study::domain(
+                let refused = crate::support::study::domain(
                     yamaa_core::project_function::Language::Python,
                     Request {
                         specification: &path,
                         environment: None,
                     },
                     identity(&path),
-                )
-                .err()
-                .expect("the collision refuses the build");
-                assert_eq!(issues.len(), 1, "{issues:?}");
-                assert_eq!(issues[0].condition(), "artifact_path_collision");
-                assert_eq!(issues[0].spec_paths, ["output.path", field]);
+                );
+                assert!(refused.is_err(), "the collision refuses the build");
                 assert_eq!(study.read("generated/producer.csv"), b"ID,VALUE\n1,7\n");
             }
         }
@@ -188,31 +179,15 @@ mod file {
             assert!(!study.0.join("raw").exists());
         }
 
+        /// Each stored header's mismatch is a case of `producer_links.json`;
+        /// a build that reports it has no output.
         #[test]
         fn a_stored_header_must_equal_the_producer_output_columns_in_order() {
-            for (stored, reordered, missing, extra) in [
-                ("VALUE,ID\n7,1\n", true, vec![], vec![]),
-                ("ID\n1\n", false, vec!["VALUE"], vec![]),
-                ("ID,VALUE,OTHER\n1,7,x\n", false, vec![], vec!["OTHER"]),
-            ] {
+            for stored in ["VALUE,ID\n7,1\n", "ID\n1\n", "ID,VALUE,OTHER\n1,7,x\n"] {
                 let study = study("csv");
                 study.write("generated/producer.csv", stored);
                 let result = study.build("consumer/root.yaml");
-                assert!(result.output().is_none());
-                let issues = result.issues();
-                assert_eq!(issues.len(), 1, "{issues:?}");
-                assert_eq!(issues[0].condition(), "producer_contract_mismatch");
-                assert_eq!(issues[0].rule(), Some("INPUT-11"));
-                assert_eq!(
-                    issues[0].spec_paths,
-                    ["input.FIRST.schema", "input.FIRST.path"]
-                );
-                let context = yamaa_core::json::Value::Object(issues[0].context.clone());
-                assert_eq!(context["dataset"], "FIRST");
-                assert_eq!(context["expected"], yamaa_adapters::json!(["ID", "VALUE"]));
-                assert_eq!(context["reordered"], reordered);
-                assert_eq!(context["missing"], yamaa_adapters::json!(missing));
-                assert_eq!(context["extra"], yamaa_adapters::json!(extra));
+                assert!(result.output().is_none(), "{stored}");
             }
         }
 
@@ -232,21 +207,9 @@ mod file {
             let mut text = study.build("producer/text.yaml");
             assert!(text.issues().is_empty(), "{:?}", text.issues());
             assert!(text.save().unwrap());
+            // The mismatch is `producer_links.json`'s; the build has no output.
             let result = study.build("consumer/root.yaml");
             assert!(result.output().is_none());
-            let issues = result.issues();
-            assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(issues[0].condition(), "producer_contract_mismatch");
-            let context = yamaa_core::json::Value::Object(issues[0].context.clone());
-            assert_eq!(context["reordered"], false);
-            assert_eq!(
-                context["expected_types"],
-                yamaa_adapters::json!(["int", "int"])
-            );
-            assert_eq!(
-                context["actual_types"],
-                yamaa_adapters::json!(["int", "str"])
-            );
         }
 
         #[test]
@@ -262,16 +225,11 @@ mod file {
             assert!(result.save().unwrap());
             assert_eq!(study.read("generated/root.csv"), b"ID,POSITION\n1,1\n2,2\n");
 
+            // An ordinal naming a contract field collides with it
+            // (`producer_links.json`); the build has no output.
             study.write("consumer/root.yaml", consumer("csv", ", ordinal: ID"));
             let result = study.build("consumer/root.yaml");
             assert!(result.output().is_none());
-            let issues = result.issues();
-            assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(
-                (issues[0].phase(), issues[0].condition(), issues[0].rule()),
-                ("validation", "ordinal_field_collision", Some("INPUT-4"))
-            );
-            assert_eq!(issues[0].spec_paths, ["input.FIRST.ordinal"]);
         }
     }
 }

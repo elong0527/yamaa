@@ -84,7 +84,7 @@ The artifact at `path` is an ordinary input that must exist when the consumer
 is built. The consumer neither runs the producer nor compares the producer's
 `output.path` with its own `path`.
 
-Evidence: `adam-results-ae-incidence`, `sdtm-dm-race-ethnicity`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::callers_build_and_save_the_producer_before_its_consumer_reads_the_artifact`.
+Evidence: `adam-results-ae-incidence`, `sdtm-dm-race-ethnicity`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::callers_build_and_save_the_producer_before_its_consumer_reads_the_artifact`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_consumer_built_before_its_producer_is_saved_reads_a_missing_csv_artifact`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_consumer_built_before_its_producer_is_saved_reads_a_missing_parquet_artifact`.
 
 Checking reads no study data, so a link whose artifact does not exist yet
 passes `check`, and building fails with the ordinary missing-input finding at

@@ -119,15 +119,22 @@ fn a_declared_mark_is_skipped_by_every_specification_call() {
     let spec = study.path("spec.yaml");
     let engine = engine();
     let token = CancellationToken::new();
-    let checked = issues(&engine.spec_check(&spec, None, &token).unwrap().issues());
+    let checked = issues(
+        &engine
+            .spec(&spec)
+            .cancel_with(&token)
+            .check()
+            .unwrap()
+            .issues(),
+    );
     assert!(checked.is_empty(), "{checked:?}");
-    let mut run = engine.spec_run(&spec, None, &token).unwrap();
+    let mut run = engine.spec(&spec).cancel_with(&token).run().unwrap();
     let ran = issues(&run.issues());
     assert!(ran.is_empty(), "{ran:?}");
     run.save(&CancellationToken::new()).unwrap();
     assert_eq!(study.read("dm.csv"), LISTING);
     // The resolved specification keeps the declaration as written.
-    let resolved = engine.spec_resolve(&spec, None).unwrap();
+    let resolved = engine.spec(&spec).resolve().unwrap();
     let ContextValue::List(entries) = field(&resolved, "entries") else {
         panic!("entries")
     };
@@ -140,9 +147,7 @@ fn run_issue(raw: &[u8], spec: &str) -> Issue {
     let study = Study::new();
     study.write("raw.csv", raw);
     study.write("spec.yaml", spec);
-    let run = engine()
-        .spec_run(&study.path("spec.yaml"), None, &CancellationToken::new())
-        .unwrap();
+    let run = engine().spec(&study.path("spec.yaml")).run().unwrap();
     let mut found = issues(&run.issues());
     assert_eq!(found.len(), 1, "{found:?}");
     found.remove(0)
@@ -199,8 +204,22 @@ fn a_declared_mark_on_another_profile_fails_before_any_input_is_read() {
     let engine = engine();
     let token = CancellationToken::new();
     for found in [
-        issues(&engine.spec_check(&path, None, &token).unwrap().issues()),
-        issues(&engine.spec_run(&path, None, &token).unwrap().issues()),
+        issues(
+            &engine
+                .spec(&path)
+                .cancel_with(&token)
+                .check()
+                .unwrap()
+                .issues(),
+        ),
+        issues(
+            &engine
+                .spec(&path)
+                .cancel_with(&token)
+                .run()
+                .unwrap()
+                .issues(),
+        ),
     ] {
         let [issue] = found.as_slice() else {
             panic!("one issue: {found:?}")

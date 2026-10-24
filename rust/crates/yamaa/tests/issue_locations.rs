@@ -17,7 +17,10 @@
 
 use std::path::PathBuf;
 
-use yamaa::{CancellationToken, ContextValue, Diagnostic, Engine, EngineOptions, HostLanguage};
+use yamaa::{
+    CancellationToken, ContextValue, Diagnostic, Engine, EngineOptions, HostLanguage,
+    SubmissionOptions,
+};
 
 fn engine() -> Engine {
     Engine::new(EngineOptions::new(
@@ -92,9 +95,7 @@ fn a_path_locates_at_the_key_of_its_deepest_written_member() {
     ]);
     write(&study, "adae.yaml", &text);
     study.write("ae.csv", &["USUBJID,TRTSDT", "S1,3"]);
-    let check = engine()
-        .spec_check(&study.path("adae.yaml"), None, &CancellationToken::new())
-        .unwrap();
+    let check = engine().spec(&study.path("adae.yaml")).check().unwrap();
     let issues = check.diagnostics();
     // Line 9 of the body: the `derivation` key at column 5, after four
     // spaces.
@@ -147,9 +148,7 @@ fn a_path_into_an_expanded_long_form_stops_at_the_written_node() {
     let (text, offset) = spec(&body);
     write(&study, "dm.yaml", &text);
     study.write("raw.csv", &["USUBJID,AGE", "S1,30"]);
-    let run = engine()
-        .spec_run(&study.path("dm.yaml"), None, &CancellationToken::new())
-        .unwrap();
+    let run = engine().spec(&study.path("dm.yaml")).run().unwrap();
     let issues = run.diagnostics();
     assert_eq!(
         issues[0].spec_path,
@@ -206,9 +205,7 @@ fn a_layered_issue_is_located_in_the_layer_whose_value_took_effect() {
     write(&study, "rederived.yaml", &text);
     study.write("dm.csv", &["USUBJID,AGE,ZERO", "S1,30,0"]);
     let first = |name: &str| {
-        let run = engine()
-            .spec_run(&study.path(name), None, &CancellationToken::new())
-            .unwrap();
+        let run = engine().spec(&study.path(name)).run().unwrap();
         let issues = run.diagnostics();
         assert_eq!(issues[0].spec_path, [path], "{issues:?}");
         location(&issues)
@@ -254,9 +251,7 @@ fn a_child_source_shorthand_is_located_in_the_child_over_a_structured_parent() {
     ] {
         let (text, offset) = spec(&["parent: parent.yaml", "columns:", "  - name: V", derivation]);
         write(&study, "child.yaml", &text);
-        let run = engine()
-            .spec_run(&study.path("child.yaml"), None, &CancellationToken::new())
-            .unwrap();
+        let run = engine().spec(&study.path("child.yaml")).run().unwrap();
         let issues = run.diagnostics();
         assert_eq!(issues[0].code, "unknown_field", "{issues:?}");
         assert_eq!(issues[0].spec_path, ["columns.V.derivation.source"]);
@@ -280,9 +275,7 @@ fn a_child_source_shorthand_is_located_in_the_child_over_a_structured_parent() {
     ]);
     write(&study, "child.yaml", &text);
     study.write("raw.csv", &["ID", "S1"]);
-    let run = engine()
-        .spec_run(&study.path("child.yaml"), None, &CancellationToken::new())
-        .unwrap();
+    let run = engine().spec(&study.path("child.yaml")).run().unwrap();
     assert_eq!(
         location(&run.diagnostics()),
         Some((study.file("parent.yaml"), parent_offset + 11, 7))
@@ -305,9 +298,7 @@ fn a_child_source_shorthand_is_located_in_the_child_over_a_structured_parent() {
     ]);
     write(&study, "child.yaml", &text);
     study.write("raw.csv", &["ID,NEW", "S1,new"]);
-    let run = engine()
-        .spec_run(&study.path("child.yaml"), None, &CancellationToken::new())
-        .unwrap();
+    let run = engine().spec(&study.path("child.yaml")).run().unwrap();
     let issues = run.diagnostics();
     assert!(issues.is_empty(), "{issues:?}");
 }
@@ -334,7 +325,8 @@ fn replaced_and_cleared_fields_do_not_locate_in_overridden_parent_values() {
     study.write("raw.csv", &["ID", "S1"]);
     let check = |name: &str| {
         engine()
-            .spec_check(&study.path(name), None, &CancellationToken::new())
+            .spec(&study.path(name))
+            .check()
             .unwrap()
             .diagnostics()
     };
@@ -421,7 +413,8 @@ fn a_project_path_locates_in_the_project_or_the_file_it_lists() {
         ],
     );
     let check = engine()
-        .project_check(&study.path("project.yaml"), &CancellationToken::new())
+        .project(&study.path("project.yaml"))
+        .check()
         .unwrap();
     let issues = check.diagnostics();
     assert_eq!(issues[0].spec_path[0], "sdtm.specs[0]", "{issues:?}");
@@ -462,13 +455,9 @@ fn a_project_path_locates_in_the_project_or_the_file_it_lists() {
         ],
     );
     let submission = engine()
-        .project_submission(
-            &study.path("project.yaml"),
-            Some("sdtm"),
-            Some("2026-09-11T00:00:00"),
-            "0.4.0",
-            &CancellationToken::new(),
-        )
+        .project(&study.path("project.yaml"))
+        .section("sdtm")
+        .submission(&SubmissionOptions::new("0.4.0").with_created("2026-09-11T00:00:00"))
         .unwrap();
     let issues = submission.diagnostics();
     assert_eq!(issues[0].spec_path, ["sdtm.specs[0].model"], "{issues:?}");
@@ -502,8 +491,8 @@ fn a_linked_producer_s_header_finding_locates_in_the_producer() {
             "0".into(),
         ));
         let entry = study.path("dm.yaml");
-        let checked = engine.spec_check(&entry, None, &token).unwrap();
-        let run = engine.spec_run(&entry, None, &token).unwrap();
+        let checked = engine.spec(&entry).cancel_with(&token).check().unwrap();
+        let run = engine.spec(&entry).cancel_with(&token).run().unwrap();
         for issues in [checked.diagnostics(), run.diagnostics()] {
             let first = issues.first().expect("an issue");
             assert_eq!(
@@ -544,9 +533,7 @@ fn a_location_never_points_into_a_data_file() {
     let (text, offset) = spec(&body);
     write(&study, "dm.yaml", &text);
     study.write("raw.csv", &["USUBJID,AGE", "S1,30", "S2,NA"]);
-    let run = engine()
-        .spec_run(&study.path("dm.yaml"), None, &CancellationToken::new())
-        .unwrap();
+    let run = engine().spec(&study.path("dm.yaml")).run().unwrap();
     let issues = run.diagnostics();
     assert_eq!(issues[0].spec_path, ["input.RAW.types.AGE"], "{issues:?}");
     // Line 3 of the body, after `input: {RAW: {path: raw.csv, types: {`
@@ -573,7 +560,8 @@ fn only_a_refused_file_locates_an_issue_without_a_written_node() {
         &["yamaa: \"1.0\"", "type: project", "sdtm:", "  specs: []"],
     );
     let failure = engine()
-        .project_spec(&study.path("project.yaml"), "ADXX")
+        .project(&study.path("project.yaml"))
+        .spec("ADXX")
         .unwrap_err();
     assert!(failure.diagnostics[0].spec_path.is_empty());
     assert_eq!(failure.diagnostics[0].location, None);
@@ -583,9 +571,7 @@ fn only_a_refused_file_locates_an_issue_without_a_written_node() {
         "invalid.yaml",
         &["yamaa: \"1.0\"", "type: spec", "domain: [ADSL"],
     );
-    let check = engine()
-        .spec_check(&study.path("invalid.yaml"), None, &CancellationToken::new())
-        .unwrap();
+    let check = engine().spec(&study.path("invalid.yaml")).check().unwrap();
     let issues = check.diagnostics();
     assert_eq!(location(&issues), Some((study.file("invalid.yaml"), 4, 1)));
     assert_eq!(issues[0].context.get("line"), Some(&ContextValue::Int(4)));
@@ -597,13 +583,7 @@ fn only_a_refused_file_locates_an_issue_without_a_written_node() {
         "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\n# caf\u{e9}\n",
     )
     .unwrap();
-    let check = engine()
-        .spec_check(
-            &study.path("accented.yaml"),
-            None,
-            &CancellationToken::new(),
-        )
-        .unwrap();
+    let check = engine().spec(&study.path("accented.yaml")).check().unwrap();
     assert_eq!(
         location(&check.diagnostics()),
         Some((study.file("accented.yaml"), 4, 6))
@@ -620,18 +600,17 @@ fn only_a_refused_file_locates_an_issue_without_a_written_node() {
         ],
     );
     let check = engine()
-        .spec_check(
-            &study.path("accented.yaml"),
-            Some(&study.path("project.yaml")),
-            &CancellationToken::new(),
-        )
+        .spec(&study.path("accented.yaml"))
+        .project(&study.path("project.yaml"))
+        .check()
         .unwrap();
     assert_eq!(
         location(&check.diagnostics()),
         Some((study.file("project.yaml"), 4, 1))
     );
     let check = engine()
-        .project_check(&study.path("project.yaml"), &CancellationToken::new())
+        .project(&study.path("project.yaml"))
+        .check()
         .unwrap();
     assert_eq!(
         location(&check.diagnostics()),
@@ -661,9 +640,9 @@ fn a_parent_the_reader_refuses_locates_its_issue_in_that_parent() {
         (accented, "non_ascii_source", "SPEC-8", lines + 2, 6),
     ] {
         write(&study, "refused.yaml", &text);
-        let checked = engine().spec_check(&entry, None, &token).unwrap();
-        let ran = engine().spec_run(&entry, None, &token).unwrap();
-        let resolved = engine().spec_resolve(&entry, None).unwrap_err();
+        let checked = engine().spec(&entry).cancel_with(&token).check().unwrap();
+        let ran = engine().spec(&entry).cancel_with(&token).run().unwrap();
+        let resolved = engine().spec(&entry).resolve().unwrap_err();
         for issues in [
             checked.diagnostics(),
             ran.diagnostics(),
@@ -732,13 +711,9 @@ fn every_submission_negative_locates_its_first_issue() {
     for (name, case, benchmark) in cases {
         let project = case.join(field(&benchmark, "environment"));
         let submission = engine()
-            .project_submission(
-                project.to_str().unwrap(),
-                Some(&field(&benchmark, "standard")),
-                Some(&field(&benchmark, "created")),
-                "0.4.0",
-                &CancellationToken::new(),
-            )
+            .project(project.to_str().unwrap())
+            .section(&field(&benchmark, "standard"))
+            .submission(&SubmissionOptions::new("0.4.0").with_created(field(&benchmark, "created")))
             .unwrap();
         let issues = submission.diagnostics();
         let first = issues

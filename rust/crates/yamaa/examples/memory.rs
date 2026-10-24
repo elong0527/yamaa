@@ -1,7 +1,8 @@
 //! Run one specification entirely from memory: specification bytes and one
 //! Arrow input table enter through [`MemoryResolver`](yamaa::MemoryResolver),
 //! Arrow result tables and typed diagnostics come out, and no filesystem path
-//! is touched.
+//! is touched. One request, as [`Engine::spec`](yamaa::Engine::spec) gives
+//! it, checks the specification and runs it.
 //!
 //! Run it with `cargo run -p yamaa --example memory`. The gate in
 //! `tests/memory.rs` runs this same entry point, so the example cannot rot.
@@ -56,8 +57,11 @@ pub fn main() {
     );
     let token = CancellationToken::new();
 
-    let check = engine.spec_check("spec.yaml", None, &token).unwrap();
-    let mut run = engine.spec_run("spec.yaml", None, &token).unwrap();
+    // The request reads nothing until an operation runs, and each operation
+    // reads the specification afresh, as a host's specification object does.
+    let spec = engine.spec("spec.yaml").cancel_with(&token);
+    let check = spec.check().unwrap();
+    let mut run = spec.run().unwrap();
     if cfg!(feature = "yaml") {
         assert_eq!(check.issues().rows(), 0);
         assert_eq!(run.issues().rows(), 0);
@@ -92,11 +96,9 @@ pub fn main() {
         println!("memory example: unavailable without the yaml feature, as reported");
     }
 
-    // Typed diagnostics out: a missing entry reports records, never text.
-    let missing = engine
-        .spec_check("missing.csv", None, &token)
-        .unwrap()
-        .diagnostics();
+    // Typed diagnostics out: a missing entry reports records, never text. A
+    // request given no token polls one that nothing cancels.
+    let missing = engine.spec("missing.csv").check().unwrap().diagnostics();
     assert!(!missing.is_empty());
     assert!(!missing[0].code.is_empty());
     println!(

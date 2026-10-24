@@ -10,6 +10,10 @@
 #[allow(dead_code)]
 mod support;
 
+// The replay of the expected diagnostics written as data (#3691), apart
+// from the families below.
+mod diagnostics;
+
 mod arrow_host_bridge;
 mod ast_lowering;
 mod check_donor_reads;

@@ -245,9 +245,7 @@ fn a_saved_item_table_holds_the_bytes_a_run_saves_for_it() {
         let spec_text = copying_spec(&format!("run.{extension}"));
         resolver.insert("/", &spec, "spec:1", Arc::from(spec_text.as_bytes()));
         resolver.insert_frame(&format!("/{spec}"), "odm.parquet", "frame:1", &frame);
-        let mut run = engine
-            .spec_run(&spec, None, &CancellationToken::new())
-            .unwrap();
+        let mut run = engine.spec(&spec).run().unwrap();
         assert_eq!(run.status(), Status::Succeeded, "{:?}", run.diagnostics());
         let ran = format!("memory:/run.{extension}");
         assert_eq!(run.save(&CancellationToken::new()).unwrap(), [ran.as_str()]);
@@ -291,9 +289,7 @@ fn a_run_output_saved_as_a_table_holds_the_bytes_the_run_saved() {
     };
     for extension in extensions {
         study.write("spec.yaml", &typed_spec(&format!("run.{extension}")));
-        let mut run = engine
-            .spec_run(&study.path("spec.yaml"), None, &CancellationToken::new())
-            .unwrap();
+        let mut run = engine.spec(&study.path("spec.yaml")).run().unwrap();
         assert_eq!(run.status(), Status::Succeeded, "{:?}", run.diagnostics());
         run.save(&CancellationToken::new()).unwrap();
         let copy = format!("copy.{extension}");
@@ -351,9 +347,7 @@ fn run_refusal(study: &Study, engine: &Engine, output: &str) -> Diagnostic {
         "ids.yaml",
         &format!("yamaa: \"1.0\"\ntype: spec\ndomain: IDS\nkeys: [ID]\ninput:\n  RAW: {{path: ids.csv, types: {{ID: int}}}}\noutput: {{path: {output}, columns: [ID]}}\ncolumns:\n  - {{name: ID, type: int, label: Identifier, derivation: RAW.ID}}\n"),
     );
-    let mut run = engine
-        .spec_run(&study.path("ids.yaml"), None, &CancellationToken::new())
-        .unwrap();
+    let mut run = engine.spec(&study.path("ids.yaml")).run().unwrap();
     assert_eq!(run.status(), Status::Succeeded, "{:?}", run.diagnostics());
     issue(&run.save(&CancellationToken::new()).unwrap_err()).clone()
 }
@@ -515,7 +509,8 @@ fn a_table_neither_profile_writes_is_refused() {
     let study = Study::new();
     let engine = engine();
     let issues = engine
-        .project_spec(&study.path("absent.yaml"), "DM")
+        .project(&study.path("absent.yaml"))
+        .spec("DM")
         .unwrap_err()
         .issues;
     let out = study.path("issues.csv");

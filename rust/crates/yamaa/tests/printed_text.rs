@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use yamaa::{
     Action, CancellationToken, ContextValue, Engine, EngineOptions, Error, Failure, HostLanguage,
-    Status, Summary,
+    Status, SubmissionOptions, Summary,
 };
 
 use crate::support::NoFunctions;
@@ -91,7 +91,9 @@ fn a_run_prints_its_dataset_name_size_and_issue_count() {
     let study = study();
     let token = CancellationToken::new();
     let run = engine()
-        .spec_run(&study.path("adam/adsl.yaml"), None, &token)
+        .spec(&study.path("adam/adsl.yaml"))
+        .cancel_with(&token)
+        .run()
         .unwrap();
     assert_eq!(run.status(), Status::Succeeded);
     assert_eq!(
@@ -101,7 +103,9 @@ fn a_run_prints_its_dataset_name_size_and_issue_count() {
     assert_eq!(run.summary().first_issue, None);
 
     let run = engine()
-        .spec_run(&study.path("adam/adae.yaml"), None, &token)
+        .spec(&study.path("adam/adae.yaml"))
+        .cancel_with(&token)
+        .run()
         .unwrap();
     assert_eq!(
         run.summary().to_string(),
@@ -116,9 +120,7 @@ fn a_run_prints_its_dataset_name_size_and_issue_count() {
 fn a_run_whose_file_was_not_read_names_the_path_as_given() {
     let study = study();
     let given = study.path("adam/missing.yaml");
-    let run = engine()
-        .spec_run(&given, None, &CancellationToken::new())
-        .unwrap();
+    let run = engine().spec(&given).run().unwrap();
     let summary = run.summary();
     assert_eq!(
         summary.line,
@@ -136,7 +138,7 @@ fn a_check_prints_the_path_as_given_and_no_size() {
     let study = study();
     let token = CancellationToken::new();
     let given = study.path("adam/adae.yaml");
-    let check = engine().spec_check(&given, None, &token).unwrap();
+    let check = engine().spec(&given).cancel_with(&token).check().unwrap();
     assert_eq!(check.status(), Status::Failed);
     assert_eq!(
         check.summary().to_string(),
@@ -146,7 +148,9 @@ fn a_check_prints_the_path_as_given_and_no_size() {
         )
     );
     let check = engine()
-        .spec_check(&study.path("adam/adsl.yaml"), None, &token)
+        .spec(&study.path("adam/adsl.yaml"))
+        .cancel_with(&token)
+        .check()
         .unwrap();
     assert_eq!(
         check.summary().to_string(),
@@ -156,7 +160,11 @@ fn a_check_prints_the_path_as_given_and_no_size() {
         )
     );
     let project = study.path("project.yaml");
-    let check = engine().project_check(&project, &token).unwrap();
+    let check = engine()
+        .project(&project)
+        .cancel_with(&token)
+        .check()
+        .unwrap();
     assert_eq!(
         check.summary().to_string(),
         format!(
@@ -171,9 +179,7 @@ fn a_check_prints_the_path_as_given_and_no_size() {
 fn a_project_run_lists_its_members_between_the_two_lines() {
     let study = study();
     let project = study.path("project.yaml");
-    let runs = engine()
-        .project_run(&project, Some("adam"), &CancellationToken::new())
-        .unwrap();
+    let runs = engine().project(&project).section("adam").run().unwrap();
     assert_eq!(runs.names(), ["ADSL", "ADAE", "ADTTE"]);
     let summary = runs.summary();
     assert_eq!(
@@ -225,9 +231,7 @@ fn a_member_whose_listing_was_not_read_is_named_by_the_path_listed() {
         "yamaa: \"1.0\"\ntype: project\nadam:\n  specs: [adam/adsl.yaml, adam/missing.yaml, adam//adae.yaml]\n",
     );
     let project = study.path("project.yaml");
-    let runs = engine()
-        .project_run(&project, Some("adam"), &CancellationToken::new())
-        .unwrap();
+    let runs = engine().project(&project).section("adam").run().unwrap();
     assert_eq!(runs.names(), ["ADSL"]);
     let members = runs
         .members()
@@ -276,9 +280,7 @@ fn a_member_whose_listing_was_not_read_is_named_by_the_path_listed() {
 fn a_project_run_without_a_section_names_only_the_path() {
     let study = study();
     let project = study.path("project.yaml");
-    let runs = engine()
-        .project_run(&project, None, &CancellationToken::new())
-        .unwrap();
+    let runs = engine().project(&project).run().unwrap();
     assert!(runs.summary().line.starts_with(&format!(
         "yamaa project run of {project}: failed, 3 specifications"
     )));
@@ -303,13 +305,7 @@ fn error_text_carries_the_first_issue_and_the_count_of_the_others() {
             "columns: [USUBJID, ASTDY, AENDY, ADURN, TRTSDT, TRTEDT]",
         );
     study.write("adam/adae.yaml", three);
-    let mut run = engine()
-        .spec_run(
-            &study.path("adam/adae.yaml"),
-            None,
-            &CancellationToken::new(),
-        )
-        .unwrap();
+    let mut run = engine().spec(&study.path("adam/adae.yaml")).run().unwrap();
     assert_eq!(run.diagnostics().len(), 3, "{:?}", run.diagnostics());
     let failure = run.save(&CancellationToken::new()).unwrap_err();
     assert_eq!(
@@ -330,15 +326,20 @@ fn every_refusal_names_its_call() {
     let unknown =
         "the project has no specification named ADXX [unknown_specification_name, PROJECT-6]";
     // An unknown name, of the project and of a project run.
-    let failure = engine.project_spec(&project, "ADXX").unwrap_err();
+    let failure = engine.project(&project).spec("ADXX").unwrap_err();
     assert_eq!(failure.message, format!("cannot select ADXX: {unknown}"));
-    let runs = engine.project_run(&project, None, &token).unwrap();
+    let runs = engine.project(&project).cancel_with(&token).run().unwrap();
     let failure = runs.member("ADXX").err().unwrap();
     assert_eq!(failure.message, format!("cannot select ADXX: {unknown}"));
     // A save with nothing to write: the subject names the section, which
     // lists no specification.
     study.write("project.yaml", format!("{PROJECT}send:\n  specs: []\n"));
-    let mut send = engine.project_run(&project, Some("send"), &token).unwrap();
+    let mut send = engine
+        .project(&project)
+        .section("send")
+        .cancel_with(&token)
+        .run()
+        .unwrap();
     assert_eq!(
         send.summary().to_string(),
         format!(
@@ -351,7 +352,9 @@ fn every_refusal_names_its_call() {
         format!("cannot save {project}, section send: the project run has nothing to save [nothing_to_save, PROJECT-12]")
     );
     let mut submission = engine
-        .project_submission(&project, None, None, "0.4.0", &token)
+        .project(&project)
+        .cancel_with(&token)
+        .submission(&SubmissionOptions::new("0.4.0"))
         .unwrap();
     assert_eq!(
         submission.summary().to_string(),
@@ -363,7 +366,12 @@ fn every_refusal_names_its_call() {
         format!("cannot save {project}: the project submission has nothing to save [nothing_to_save, PROJECT-13]")
     );
     // An unknown section refuses the call; a host names the section.
-    let Err(error @ Error::Rejected(_)) = engine.project_run(&project, Some("sdtn"), &token) else {
+    let Err(error @ Error::Rejected(_)) = engine
+        .project(&project)
+        .section("sdtn")
+        .cancel_with(&token)
+        .run()
+    else {
         panic!("an unknown section refuses the run");
     };
     let failure = Failure::from_error(Action::Select("sdtn"), &error);
@@ -380,7 +388,7 @@ fn every_refusal_names_its_call() {
     assert_eq!(failure.issues.rows(), 0);
     // A resolve names the path as given.
     let given = study.path("adam/missing.yaml");
-    let failure = engine.spec_resolve(&given, None).unwrap_err();
+    let failure = engine.spec(&given).resolve().unwrap_err();
     assert!(
         failure
             .message
@@ -404,13 +412,9 @@ fn a_submission_counts_its_define_and_transport_files() {
     );
     let project = study.path("project.yaml");
     let submission = engine()
-        .project_submission(
-            &project,
-            Some("sdtm"),
-            Some("2026-09-11T00:00:00"),
-            "0.4.0",
-            &CancellationToken::new(),
-        )
+        .project(&project)
+        .section("sdtm")
+        .submission(&SubmissionOptions::new("0.4.0").with_created("2026-09-11T00:00:00"))
         .unwrap();
     assert_eq!(
         submission.summary().to_string(),
@@ -424,13 +428,7 @@ fn a_submission_counts_its_define_and_transport_files() {
 #[test]
 fn an_issue_as_json_has_the_twelve_keys_and_an_object_context() {
     let study = study();
-    let run = engine()
-        .spec_run(
-            &study.path("adam/adae.yaml"),
-            None,
-            &CancellationToken::new(),
-        )
-        .unwrap();
+    let run = engine().spec(&study.path("adam/adae.yaml")).run().unwrap();
     let diagnostics = run.diagnostics();
     let value = diagnostics[0].to_value();
     let ContextValue::Map(members) = &value else {
@@ -466,9 +464,7 @@ fn lazy_objects_print_without_reading() {
 
 /// The output of the specification at `name` in `study`, which builds.
 fn output(study: &Study, name: &str) -> yamaa::Table {
-    let run = engine()
-        .spec_run(&study.path(name), None, &CancellationToken::new())
-        .unwrap();
+    let run = engine().spec(&study.path(name)).run().unwrap();
     assert_eq!(run.status(), Status::Succeeded, "{:?}", run.diagnostics());
     run.output()
         .expect("a run that succeeded has an output")
@@ -557,7 +553,9 @@ fn an_issues_table_prints_its_list_columns() {
     let study = study();
     let token = CancellationToken::new();
     let run = engine()
-        .spec_run(&study.path("adam/adae.yaml"), None, &token)
+        .spec(&study.path("adam/adae.yaml"))
+        .cancel_with(&token)
+        .run()
         .unwrap();
     let path = located(&study, "adam/adae.yaml");
     let file = if path.chars().count() > 20 {
@@ -579,7 +577,9 @@ error     validation  forward_reference  COLUMN-5  [columns.ASTDY.de...  {file:<
     );
     // A table without rows prints its names and types.
     let run = engine()
-        .spec_run(&study.path("adam/adsl.yaml"), None, &token)
+        .spec(&study.path("adam/adsl.yaml"))
+        .cancel_with(&token)
+        .run()
         .unwrap();
     assert_eq!(
         run.issues().preview(),

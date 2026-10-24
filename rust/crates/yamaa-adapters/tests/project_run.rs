@@ -978,17 +978,11 @@ tests:
                 "study/domain.yaml",
                 raw.edit(", order_by: [SRC.N], keep: first", "").as_bytes(),
             );
-            let Err(rejected) = PreparedRun::prepare_with_environment(document, environment())
-            else {
-                panic!("kept scalar read required");
-            };
-            let issues = yamaa_adapters::specification_check::rejected(&rejected).unwrap();
+            // Without a kept record the scalar read is refused
+            // (`project_run.json`).
             assert!(
-                issues
-                    .iter()
-                    .any(|issue| issue.condition() == "invalid_derive_step"
-                        && issue.rule() == Some("LOOKUP-22")),
-                "{issues:?}"
+                PreparedRun::prepare_with_environment(document, environment()).is_err(),
+                "kept scalar read required"
             );
         }
 

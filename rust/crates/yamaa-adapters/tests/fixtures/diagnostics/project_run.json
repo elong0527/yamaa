@@ -1,0 +1,24 @@
+{
+  "about": "A project run's specification compiled under its project (LOOKUP-22): an aggregate derivation step that reads an intermediate's scalar needs the intermediate to keep one record. The project lists three function files and holds the Python lock beside the study. Moved from project_run.rs, whose test found the issue among the compilation's by its condition and rule; it compiled the specification under a project its scripted resolver served from these files, which a check reads from the study.",
+  "cases": [
+    {
+      "case": "an_aggregate_derivation_reads_an_intermediate_scalar_only_once_it_keeps_one_record",
+      "operation": "check",
+      "input": {
+        "files": {
+          "study/project.yaml": "yamaa: '1.0'\ntype: project\nfunctions: [functions/unused.yaml, functions/id.yaml, functions/pair.yaml]\nenvironments: {python: {lock: ../uv.lock}}\n",
+          "uv.lock": "version = 1\npackage = []\n",
+          "study/functions/unused.yaml": "yamaa: '1.0'\ntype: function\nname: unused\ndescription: Uncalled definition.\nparams: []\nreturns: int\nimplementations: {python: project.unused}\ntests: [{id: ordinary, covers: [normal, boundary], args: {}, result: 7}]\n",
+          "study/functions/id.yaml": "yamaa: '1.0'\ntype: function\nname: id\ndescription: Integer identity.\nparams: [{name: x, type: int}]\nreturns: int\nimplementations: {python: project.id}\ntests:\n  - {id: ordinary, covers: [normal], args: {x: 7}, result: 7}\n  - {id: boundary, covers: [boundary], args: {x: -9223372036854775808}, result: -9223372036854775808}\n  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+          "study/functions/pair.yaml": "yamaa: '1.0'\ntype: function\nname: pair\ndescription: Integer sum of a weight and an own value.\nparams: [{name: weight, type: int}, {name: own, type: int}]\nreturns: int\nimplementations: {python: project.pair}\ntests:\n  - {id: ordinary, covers: [normal], args: {weight: 7, own: 3}, result: 10}\n  - {id: boundary, covers: [boundary], args: {weight: 0, own: 0}, result: 0}\n  - {id: missing-weight, covers: ['short-circuit-missing:weight'], args: {weight: null, own: 1}, result: null}\n  - {id: missing-own, covers: ['short-circuit-missing:own'], args: {weight: 1, own: null}, result: null}\n",
+          "study/domain.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, key: [ID], types: {ID: int, N: int}}}\nkeys: [ID]\nintermediates:\n  - {id: CAP, dataset: SRC, key: {ID: ID}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: int\n    derivation:\n      aggregate:\n        derivations:\n          BASE: {type: int, derivation: SRC.N}\n          V: {type: int, derivation: {function: {name: id, args: {x: CAP.N}}}}\n        expr: SUM(V)\noutput: {path: output.csv, columns: [ID, VALUE]}\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml"
+      },
+      "compares": ["condition", "rule"],
+      "among": true,
+      "issues": [{"condition": "invalid_derive_step", "rule": "LOOKUP-22"}]
+    }
+  ]
+}
