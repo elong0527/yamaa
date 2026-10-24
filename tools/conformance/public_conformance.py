@@ -899,7 +899,10 @@ def uncompared_truth(example, case):
         entries.append({"artifact": "spec_resolved.yaml", "reason": RESOLVED_REASON})
     if example.get("define"):
         for truth in sorted((case / "expected").iterdir()):
-            if truth.suffix in {".xml", ".json", ".xpt"} or truth.name == "error.yaml":
+            if (
+                truth.suffix in {".xml", ".json", ".ndjson", ".xpt"}
+                or truth.name == "error.yaml"
+            ):
                 entries.append(
                     {
                         "artifact": truth.name,

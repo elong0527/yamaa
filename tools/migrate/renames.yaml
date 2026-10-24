@@ -7178,6 +7178,20 @@ entries:
     Additive.
   field_kind: value
   convert: {action: none}
+- id: new.project.transport=dataset_ndjson
+  file_type: project
+  path: <section>.transport
+  today: null
+  kind: new
+  proposed: dataset_ndjson
+  decision: decided (D-next, #3821)
+  ref: P-PRJ-1
+  reason: 'An addition to the approved table, agreed by the owner on #3821: Dataset-JSON 1.1 in its newline-delimited
+    representation, written as <dataset>.ndjson beside define.xml, its first line the single-object form''s object
+    without rows and each later line one row (JSON-1, JSON-4, JSON-13). P-PRJ-1 spelled dataset_json so that this
+    representation could be named beside it. No 0.5 file declares it, so the converter wrote none.'
+  field_kind: value
+  convert: {action: none}
 - id: new.spec.submission.role=closed
   file_type: spec
   path: columns[].submission.role
