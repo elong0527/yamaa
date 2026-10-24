@@ -1,0 +1,236 @@
+{
+  "about": "The ODM profile's findings: what an ODM input may not declare and its fixed item table (NAME-8, NAME-9, INPUT-4), an odm read outside its contexts (NAME-11) and one that matches several records (NAME-13), and the refusals of an ODM source (ODM-1): a source_odm_* condition in the ingest phase naming the source as given, with no spec path for read_odm and the input's dataset and path when an input reads it, an option below its minimum, and a source the host cannot read. Three refusals compare the fields their table compared.",
+  "cases": [
+    {
+      "case": "an_odm_input_that_declares_types_is_refused_at_its_types",
+      "operation": "odm_finding",
+      "input": {"finding": "declared", "dataset": "D", "declared": "types"},
+      "issues": [{"phase": "validation", "condition": "odm_schema_field_type", "rule": "NAME-8", "spec_paths": ["input.D.types"], "context": {"dataset": "D", "declared": "types"}}]
+    },
+    {
+      "case": "an_odm_input_that_declares_a_schema_is_refused_at_its_schema",
+      "operation": "odm_finding",
+      "input": {"finding": "declared", "dataset": "D", "declared": "schema"},
+      "issues": [{"phase": "validation", "condition": "odm_schema_field_type", "rule": "NAME-8", "spec_paths": ["input.D.schema"], "context": {"dataset": "D", "declared": "schema"}}]
+    },
+    {
+      "case": "an_odm_input_that_declares_an_ordinal_is_refused_at_its_ordinal",
+      "operation": "odm_finding",
+      "input": {"finding": "declared", "dataset": "D", "declared": "ordinal"},
+      "issues": [{"phase": "validation", "condition": "odm_schema_field_type", "rule": "INPUT-4", "spec_paths": ["input.D.ordinal"], "context": {"dataset": "D", "declared": "ordinal"}}]
+    },
+    {
+      "case": "an_odm_item_table_without_its_fields_names_them_in_order",
+      "operation": "odm_finding",
+      "input": {"finding": "missing_fields", "dataset": "D", "fields": ["FormOID", "Value"]},
+      "issues": [{"phase": "validation", "condition": "odm_schema_field_missing", "rule": "NAME-8", "spec_paths": ["input.D.path"], "context": {"dataset": "D", "fields": ["FormOID", "Value"]}}]
+    },
+    {
+      "case": "an_odm_field_stored_under_two_spellings_is_ambiguous",
+      "operation": "odm_finding",
+      "input": {"finding": "ambiguous_field", "dataset": "D", "field": "ItemOID", "stored": ["ITEMoid", "ItemOID"]},
+      "issues": [{"phase": "validation", "condition": "odm_schema_field_ambiguous", "rule": "NAME-8", "spec_paths": ["input.D.path"], "context": {"dataset": "D", "field": "ItemOID", "stored": ["ITEMoid", "ItemOID"]}}]
+    },
+    {
+      "case": "an_odm_field_stored_with_another_type_names_that_type",
+      "operation": "odm_finding",
+      "input": {"finding": "field_type", "dataset": "D", "field": "Value", "stored_field": "VALUE", "kind": "int"},
+      "issues": [{"phase": "validation", "condition": "odm_schema_field_type", "rule": "NAME-8", "spec_paths": ["input.D.path"], "context": {"dataset": "D", "field": "Value", "stored_field": "VALUE", "stored_type": "int"}}]
+    },
+    {
+      "case": "an_odm_field_stored_with_an_unsupported_type_names_it_unsupported",
+      "operation": "odm_finding",
+      "input": {"finding": "field_type", "dataset": "D", "field": "Value", "stored_field": "VALUE", "kind": null},
+      "issues": [{"phase": "validation", "condition": "odm_schema_field_type", "rule": "NAME-8", "spec_paths": ["input.D.path"], "context": {"dataset": "D", "field": "Value", "stored_field": "VALUE", "stored_type": "unsupported"}}]
+    },
+    {
+      "case": "an_odm_record_without_an_identifier_names_it_among_the_records",
+      "operation": "odm_finding",
+      "input": {"finding": "missing_values", "dataset": "D", "field": "SubjectKey", "record": 2, "records": 3},
+      "issues": [{"phase": "ingest", "condition": "odm_schema_value_missing", "rule": "NAME-9", "spec_paths": ["input.D.path"], "context": {"dataset": "D", "field": "SubjectKey", "record": 2, "records": 3}}]
+    },
+    {
+      "case": "an_odm_read_outside_its_contexts_names_the_column_location",
+      "operation": "odm_finding",
+      "input": {"finding": "invalid_context", "path": "columns.V.derivation.odm", "dataset": "D", "location": "column"},
+      "issues": [{"phase": "validation", "condition": "invalid_odm_context", "rule": "NAME-11", "spec_paths": ["columns.V.derivation.odm"], "context": {"dataset": "D", "location": "column"}}]
+    },
+    {
+      "case": "an_odm_read_outside_its_contexts_names_the_row_location",
+      "operation": "odm_finding",
+      "input": {"finding": "invalid_context", "path": "columns.V.derivation.odm", "dataset": "D", "location": "row"},
+      "issues": [{"phase": "validation", "condition": "invalid_odm_context", "rule": "NAME-11", "spec_paths": ["columns.V.derivation.odm"], "context": {"dataset": "D", "location": "row"}}]
+    },
+    {
+      "case": "an_odm_read_outside_its_contexts_names_the_intermediate_location",
+      "operation": "odm_finding",
+      "input": {"finding": "invalid_context", "path": "columns.V.derivation.odm", "dataset": "D", "location": "intermediate"},
+      "issues": [{"phase": "validation", "condition": "invalid_odm_context", "rule": "NAME-11", "spec_paths": ["columns.V.derivation.odm"], "context": {"dataset": "D", "location": "intermediate"}}]
+    },
+    {
+      "case": "an_odm_read_outside_its_contexts_names_the_derive_location",
+      "operation": "odm_finding",
+      "input": {"finding": "invalid_context", "path": "columns.V.derivation.odm", "dataset": "D", "location": "derive"},
+      "issues": [{"phase": "validation", "condition": "invalid_odm_context", "rule": "NAME-11", "spec_paths": ["columns.V.derivation.odm"], "context": {"dataset": "D", "location": "derive"}}]
+    },
+    {
+      "case": "an_odm_read_of_records_that_differ_is_not_unique_in_a_derivation",
+      "operation": "odm_finding",
+      "input": {"finding": "not_unique", "path": "rows[0].derivations.V.odm", "item": "D.Item.with.periods", "row": "sample", "phase": "derivation", "scope": {"StudyEventRepeatKey": null, "SubjectKey": "S1"}, "differ": {"FormOID": ["F2", "F1"]}, "records": 2},
+      "issues": [{"phase": "derivation", "condition": "odm_not_unique", "rule": "NAME-13", "spec_paths": ["rows[0].derivations.V.odm"], "context": {"item": "D.Item.with.periods", "row": "sample", "scope": {"StudyEventRepeatKey": null, "SubjectKey": "S1"}, "records": 2, "differ": {"FormOID": ["F2", "F1"]}, "repeated": false}}]
+    },
+    {
+      "case": "an_odm_read_of_one_record_repeated_is_not_unique_in_a_derivation",
+      "operation": "odm_finding",
+      "input": {"finding": "not_unique", "path": "rows[0].derivations.V.odm", "item": "D.Item.with.periods", "row": "sample", "phase": "derivation", "scope": {"StudyEventRepeatKey": null, "SubjectKey": "S1"}, "differ": {}, "records": 2},
+      "issues": [{"phase": "derivation", "condition": "odm_not_unique", "rule": "NAME-13", "spec_paths": ["rows[0].derivations.V.odm"], "context": {"item": "D.Item.with.periods", "row": "sample", "scope": {"StudyEventRepeatKey": null, "SubjectKey": "S1"}, "records": 2, "differ": {}, "repeated": true}}]
+    },
+    {
+      "case": "an_odm_read_of_records_that_differ_is_not_unique_in_row_construction",
+      "operation": "odm_finding",
+      "input": {"finding": "not_unique", "path": "rows[0].derivations.V.odm", "item": "D.Item.with.periods", "row": "sample", "phase": "row_construction", "scope": {"StudyEventRepeatKey": null, "SubjectKey": "S1"}, "differ": {"FormOID": ["F2", "F1"]}, "records": 2},
+      "issues": [{"phase": "row_construction", "condition": "odm_not_unique", "rule": "NAME-13", "spec_paths": ["rows[0].derivations.V.odm"], "context": {"item": "D.Item.with.periods", "row": "sample", "scope": {"StudyEventRepeatKey": null, "SubjectKey": "S1"}, "records": 2, "differ": {"FormOID": ["F2", "F1"]}, "repeated": false}}]
+    },
+    {
+      "case": "an_odm_read_of_one_record_repeated_is_not_unique_in_row_construction",
+      "operation": "odm_finding",
+      "input": {"finding": "not_unique", "path": "rows[0].derivations.V.odm", "item": "D.Item.with.periods", "row": "sample", "phase": "row_construction", "scope": {"StudyEventRepeatKey": null, "SubjectKey": "S1"}, "differ": {}, "records": 2},
+      "issues": [{"phase": "row_construction", "condition": "odm_not_unique", "rule": "NAME-13", "spec_paths": ["rows[0].derivations.V.odm"], "context": {"item": "D.Item.with.periods", "row": "sample", "scope": {"StudyEventRepeatKey": null, "SubjectKey": "S1"}, "records": 2, "differ": {}, "repeated": true}}]
+    },
+    {
+      "case": "an_odm_archive_that_cannot_be_read_names_the_reason",
+      "operation": "odm_read",
+      "input": {"refusal": {"archive": {"reason": "truncated TAR header"}}, "path": "edc/odm.xml"},
+      "issues": [{"phase": "ingest", "condition": "source_odm_archive_invalid", "rule": "ODM-1", "spec_paths": [], "context": {"path": "edc/odm.xml", "reason": "truncated TAR header"}}]
+    },
+    {
+      "case": "an_odm_archive_of_another_compression_names_the_format",
+      "operation": "odm_read",
+      "input": {"refusal": {"compression": {"format": "xz"}}, "path": "edc/odm.xml"},
+      "issues": [{"phase": "ingest", "condition": "source_odm_compression_unsupported", "rule": "ODM-1", "spec_paths": [], "context": {"path": "edc/odm.xml", "format": "xz"}}]
+    },
+    {
+      "case": "an_odm_archive_of_several_xml_members_needs_archive_member",
+      "operation": "odm_read",
+      "input": {"refusal": {"member_candidates": {"count": 2}}, "path": "edc/odm.xml"},
+      "issues": [{"phase": "ingest", "condition": "source_odm_archive_member", "rule": "ODM-1", "spec_paths": [], "context": {"path": "edc/odm.xml", "reason": "TAR input must contain exactly one XML member or receive archive_member"}}]
+    },
+    {
+      "case": "an_odm_archive_member_name_that_no_entry_has_counts_its_entries",
+      "operation": "odm_read",
+      "input": {"refusal": {"member_matches": {"name": "study/odm.xml", "count": 0}}, "path": "edc/odm.xml"},
+      "issues": [{"phase": "ingest", "condition": "source_odm_archive_member", "rule": "ODM-1", "spec_paths": [], "context": {"path": "edc/odm.xml", "reason": "TAR input contains 0 entries named \"study/odm.xml\""}}]
+    },
+    {
+      "case": "odm_xml_deeper_than_its_limit_exceeds_a_read_limit",
+      "operation": "odm_read",
+      "input": {"refusal": {"depth_limit": {"limit": 64}}, "path": "edc/odm.xml"},
+      "issues": [{"phase": "ingest", "condition": "source_odm_limit_exceeded", "rule": "ODM-1", "spec_paths": [], "context": {"path": "edc/odm.xml", "reason": "XML depth exceeds 64"}}]
+    },
+    {
+      "case": "malformed_odm_xml_names_its_byte_and_reason",
+      "operation": "odm_read",
+      "input": {"refusal": {"malformed": {"position": 41, "reason": "unclosed element"}}, "path": "edc/odm.xml"},
+      "issues": [{"phase": "ingest", "condition": "source_odm_xml_malformed", "rule": "ODM-1", "spec_paths": [], "context": {"path": "edc/odm.xml", "position": 41, "reason": "unclosed element"}}]
+    },
+    {
+      "case": "an_odm_doctype_declaration_is_xml_the_reader_does_not_support",
+      "operation": "odm_read",
+      "input": {"refusal": {"doctype": {}}, "path": "edc/odm.xml"},
+      "issues": [{"phase": "ingest", "condition": "source_odm_xml_unsupported", "rule": "ODM-1", "spec_paths": [], "context": {"path": "edc/odm.xml", "reason": "DOCTYPE declarations are not supported"}}]
+    },
+    {
+      "case": "odm_xml_in_another_encoding_than_utf8_is_xml_the_reader_does_not_support",
+      "operation": "odm_read",
+      "input": {"refusal": {"encoding": {"encoding": "UTF-16"}}, "path": "edc/odm.xml"},
+      "issues": [{"phase": "ingest", "condition": "source_odm_xml_unsupported", "rule": "ODM-1", "spec_paths": [], "context": {"path": "edc/odm.xml", "reason": "ODM XML must be encoded as UTF-8, not UTF-16"}}]
+    },
+    {
+      "case": "an_odm_root_without_a_namespace_is_an_unsupported_document",
+      "operation": "odm_read",
+      "input": {"refusal": {"namespace": {"namespace": null}}, "path": "edc/odm.xml"},
+      "issues": [{"phase": "ingest", "condition": "source_odm_document_unsupported", "rule": "ODM-1", "spec_paths": [], "context": {"path": "edc/odm.xml", "reason": "unsupported ODM namespace (none)"}}]
+    },
+    {
+      "case": "nested_odm_form_data_is_a_layout_the_item_table_cannot_represent",
+      "operation": "odm_read",
+      "input": {"refusal": {"nested_layout": {"element": "FormData"}}, "path": "edc/odm.xml"},
+      "issues": [{"phase": "ingest", "condition": "source_odm_layout_unsupported", "rule": "ODM-1", "spec_paths": [], "context": {"path": "edc/odm.xml", "reason": "nested FormData is not supported"}}]
+    },
+    {
+      "case": "odm_item_data_without_its_item_oid_misses_an_attribute",
+      "operation": "odm_read",
+      "input": {"refusal": {"missing_attribute": {"element": "ItemData", "attribute": "ItemOID"}}, "path": "edc/odm.xml"},
+      "issues": [{"phase": "ingest", "condition": "source_odm_attribute_missing", "rule": "ODM-1", "spec_paths": [], "context": {"path": "edc/odm.xml", "element": "ItemData", "attribute": "ItemOID"}}]
+    },
+    {
+      "case": "two_namespaced_odm_attributes_of_one_name_are_ambiguous",
+      "operation": "odm_read",
+      "input": {"refusal": {"ambiguous_attribute": {"name": "StudySubjectID"}}, "path": "edc/odm.xml"},
+      "issues": [{"phase": "ingest", "condition": "source_odm_attribute_ambiguous", "rule": "ODM-1", "spec_paths": [], "context": {"path": "edc/odm.xml", "attribute": "StudySubjectID"}}]
+    },
+    {
+      "case": "an_odm_is_null_value_outside_its_list_is_an_invalid_attribute",
+      "operation": "odm_read",
+      "input": {"refusal": {"invalid_attribute": {"element": "ItemData", "attribute": "IsNull", "value": "maybe"}}, "path": "edc/odm.xml"},
+      "issues": [{"phase": "ingest", "condition": "source_odm_attribute_invalid", "rule": "ODM-1", "spec_paths": [], "context": {"path": "edc/odm.xml", "element": "ItemData", "attribute": "IsNull", "value": "maybe"}}]
+    },
+    {
+      "case": "an_odm_file_type_outside_its_list_is_an_invalid_attribute",
+      "operation": "odm_read",
+      "input": {"refusal": {"invalid_attribute": {"element": "ODM", "attribute": "FileType", "value": "Archive"}}, "path": "edc/odm.xml"},
+      "issues": [{"phase": "ingest", "condition": "source_odm_attribute_invalid", "rule": "ODM-1", "spec_paths": [], "context": {"path": "edc/odm.xml", "element": "ODM", "attribute": "FileType", "value": "Archive"}}]
+    },
+    {
+      "case": "two_odm_definitions_of_one_key_with_different_names_conflict",
+      "operation": "odm_read",
+      "input": {"refusal": {"metadata_conflict": {"definition": "item", "study": "S", "version": "M", "oid": "I.AGE"}}, "path": "edc/odm.xml"},
+      "issues": [{"phase": "ingest", "condition": "source_odm_metadata_conflict", "rule": "ODM-1", "spec_paths": [], "context": {"path": "edc/odm.xml", "definition": "item", "study": "S", "metadata_version": "M", "oid": "I.AGE"}}]
+    },
+    {
+      "case": "odm_item_data_of_several_values_holds_a_value_the_item_table_cannot_represent",
+      "operation": "odm_read",
+      "input": {"refusal": {"value": {"item": "I.AGE", "refusal": "multiple_children"}}, "path": "edc/odm.xml"},
+      "issues": [{"phase": "ingest", "condition": "source_odm_value_unsupported", "rule": "ODM-1", "spec_paths": [], "context": {"path": "edc/odm.xml", "item": "I.AGE", "reason": "has multiple Value children"}}]
+    },
+    {
+      "case": "a_transactional_odm_file_is_not_a_snapshot",
+      "operation": "odm_read",
+      "input": {"refusal": {"transactional": {"element": "ODM", "attribute": "FileType", "value": "Transactional"}}, "path": "edc/odm.xml"},
+      "issues": [{"phase": "ingest", "condition": "source_odm_transactional", "rule": "ODM-1", "spec_paths": [], "context": {"path": "edc/odm.xml", "element": "ODM", "attribute": "FileType", "value": "Transactional"}}]
+    },
+    {
+      "case": "an_odm_item_group_its_transaction_type_removes_is_not_a_snapshot",
+      "operation": "odm_read",
+      "input": {"refusal": {"transactional": {"element": "ItemGroupData", "attribute": "TransactionType", "value": "Remove"}}, "path": "edc/odm.xml"},
+      "issues": [{"phase": "ingest", "condition": "source_odm_transactional", "rule": "ODM-1", "spec_paths": [], "context": {"path": "edc/odm.xml", "element": "ItemGroupData", "attribute": "TransactionType", "value": "Remove"}}]
+    },
+    {
+      "case": "an_odm_document_without_clinical_data_is_refused",
+      "operation": "odm_read",
+      "input": {"refusal": {"no_clinical_data": {}}, "path": "edc/odm.xml"},
+      "issues": [{"phase": "ingest", "condition": "source_odm_no_clinical_data", "rule": "ODM-1", "spec_paths": [], "context": {"path": "edc/odm.xml"}}]
+    },
+    {
+      "case": "an_odm_refusal_of_an_input_is_reported_at_the_input_path",
+      "operation": "odm_read",
+      "input": {"refusal": {"transactional": {"element": "ItemData", "attribute": "TransactionType", "value": "Remove"}}, "path": "raw/odm.xml", "dataset": "RAW"},
+      "compares": ["condition", "spec_paths", "context.dataset", "context.path"],
+      "issues": [{"condition": "source_odm_transactional", "spec_paths": ["input.RAW.path"], "context": {"dataset": "RAW", "path": "raw/odm.xml"}}]
+    },
+    {
+      "case": "an_odm_option_below_its_minimum_is_not_permitted_at_its_name",
+      "operation": "odm_read",
+      "input": {"refusal": {"option": {"option": "max_xml_depth", "minimum": 8, "value": 7}}, "path": "edc/odm.xml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "ODM-1", "spec_paths": ["max_xml_depth"], "context": {"minimum": 8, "value": 7}}]
+    },
+    {
+      "case": "an_odm_source_the_host_cannot_read_is_the_opaque_resource_refusal",
+      "operation": "odm_read",
+      "input": {"refusal": {"io": {"reason": "Input/output error"}}, "path": "edc/odm.xml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [{"condition": "engine_rejected", "rule": null, "spec_paths": [], "context": {"step": "ingest", "code": "resource_unreadable"}}]
+    }
+  ]
+}

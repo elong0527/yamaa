@@ -26,16 +26,6 @@ pub mod project_scope;
 pub mod record_operations;
 pub mod schema;
 
-pub mod aggregate;
-pub mod grammar;
-pub mod inheritance;
-pub mod odm;
-pub mod odm_read;
-pub mod project_activation;
-pub mod project_codelist_binding;
-pub mod project_lock;
-pub mod verification;
-
 use std::{cell::RefCell, collections::BTreeSet};
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
