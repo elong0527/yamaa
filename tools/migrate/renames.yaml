@@ -7184,7 +7184,7 @@ entries:
   today: null
   kind: new
   proposed: dataset_ndjson
-  decision: decided (D-next, #3821)
+  decision: decided (D275)
   ref: P-PRJ-1
   reason: 'An addition to the approved table, agreed by the owner on #3821: Dataset-JSON 1.1 in its newline-delimited
     representation, written as <dataset>.ndjson beside define.xml, its first line the single-object form''s object
