@@ -254,11 +254,11 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
     let contracts = replay::object(replay::field(&routes, "cases"));
     assert_eq!(
         contracts.len(),
-        138,
+        236,
         "every original API contract is authored"
     );
     let mut seen = BTreeSet::new();
-    let (mut domains, mut preparation) = (0, 0);
+    let (mut domains, mut preparation, mut either) = (0, 0, 0);
     let mut checks = 0;
     let (mut accepted_saves, mut refused_saves, mut no_save) = (0, 0, 0);
     for case in replay::cases() {
@@ -271,6 +271,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         match route {
             "domain" => domains += 1,
             "preparation" => preparation += 1,
+            "either" => either += 1,
             "check" => checks += 1,
             other => panic!("{}: unknown route {other}", case.label),
         }
@@ -303,7 +304,10 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         } else {
             "preparation"
         };
-        assert_eq!(route, actual_route, "{}: authored build route", case.label);
+        // A test that accepted either outcome pinned no route.
+        if route != "either" {
+            assert_eq!(route, actual_route, "{}: authored build route", case.label);
+        }
         let issues = match &built {
             Ok(domain) => domain.issues(),
             Err(issues) => issues.clone(),
@@ -328,26 +332,36 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
                         "{}: expected Ok(true), got {result:?}",
                         case.label
                     );
-                    let expected = case
-                        .stated
-                        .saved
-                        .as_ref()
-                        .expect("an authored positive save");
-                    saved_bytes(&study, expected, &case.label);
-                    // Save owns completed bytes, even after source inputs
-                    // change. Expectations still come from the fixture.
-                    for name in replay::object(replay::field(&case.input, "files")).keys() {
-                        if name.ends_with(".csv") && !expected.contains_key(name) {
-                            fs::write(study.join(name), "changed after build").unwrap();
+                    // A case whose own operation saves states the bytes; a
+                    // build case's test asserted the Ok(true) alone.
+                    if let Some(expected) = case.stated.saved.as_ref() {
+                        saved_bytes(&study, expected, &case.label);
+                        // Save owns completed bytes, even after source inputs
+                        // change. Expectations still come from the fixture.
+                        for name in replay::object(replay::field(&case.input, "files")).keys() {
+                            if name.ends_with(".csv") && !expected.contains_key(name) {
+                                fs::write(study.join(name), "changed after build").unwrap();
+                            }
                         }
+                        let again = domain.save();
+                        assert!(
+                            matches!(again, Ok(true)),
+                            "{}: repeated save: {again:?}",
+                            case.label
+                        );
+                        saved_bytes(&study, expected, &case.label);
+                    } else {
+                        assert_eq!(
+                            case.label,
+                            "row_scopes.json::when_binds_groups_without_changing_the_fraction_denominator",
+                            "an authored positive save states its bytes"
+                        );
+                        assert_eq!(
+                            case.operations,
+                            ["build"],
+                            "the return-value-only case builds without saving in the replay"
+                        );
                     }
-                    let again = domain.save();
-                    assert!(
-                        matches!(again, Ok(true)),
-                        "{}: repeated save: {again:?}",
-                        case.label
-                    );
-                    saved_bytes(&study, expected, &case.label);
                 } else {
                     assert!(
                         matches!(result, Err(file_application::FailedBuild)),
@@ -369,6 +383,6 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         contracts.keys().cloned().collect::<BTreeSet<_>>(),
         "every authored API case still exists"
     );
-    assert_eq!((domains, preparation, checks), (102, 1, 35));
-    assert_eq!((accepted_saves, refused_saves, no_save), (60, 19, 59));
+    assert_eq!((domains, preparation, either, checks), (178, 1, 4, 53));
+    assert_eq!((accepted_saves, refused_saves, no_save), (113, 30, 93));
 }
