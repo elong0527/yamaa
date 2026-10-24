@@ -174,6 +174,16 @@ impl Partitions {
     pub(super) fn ranges(&self) -> impl Iterator<Item = Range<usize>> + '_ {
         self.starts.windows(2).map(|bounds| bounds[0]..bounds[1])
     }
+
+    /// The records of the largest partition, at least one: the most rows one
+    /// partition of the output holds when the run divides every step (D264).
+    pub(super) fn largest(&self) -> std::num::NonZeroUsize {
+        self.ranges()
+            .map(|range| range.len())
+            .max()
+            .and_then(std::num::NonZeroUsize::new)
+            .unwrap_or(std::num::NonZeroUsize::MIN)
+    }
 }
 
 /// Partitions of `rows` consecutive records of an input of `len` records,

@@ -240,6 +240,10 @@ struct Run<'p, 'a, E> {
     pub stopped: std::cell::Cell<bool>,
     /// The partitions of a partitioned run's driver input (#3697).
     pub partitions: Option<partitions::Partitions>,
+    /// The most rows one partition of the output holds, once admission has
+    /// passed, for a partitioned run that divides every step (D264); none
+    /// while the output is admitted whole.
+    pub output_partition: Option<std::num::NonZeroUsize>,
 }
 
 /// What a batch unit restores before it replays in row mode.
@@ -386,6 +390,7 @@ impl ResolvedPlan {
             cancelled,
             stopped: std::cell::Cell::new(false),
             partitions,
+            output_partition: None,
         };
         let mut records = Vec::new();
         let mut templates = Vec::new();
@@ -529,8 +534,15 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                 }));
             }
         }
-        // Admitted: a key-bounded run cuts its input now (#3763).
+        // Admitted: a key-bounded run cuts its input now (#3763), and a run
+        // that divides every step admits its output a partition at a time
+        // from here on (D264).
         self.cut_by_keys();
+        self.output_partition = self
+            .partitions
+            .as_ref()
+            .filter(|partitions| plan.whole_table_step(partitions.keys).is_none())
+            .map(partitions::Partitions::largest);
         observer(ExecutionEvent::Exit {
             phase: ExecutionPhase::Admission,
             outcome: crate::application_observer::Outcome::Succeeded,
@@ -590,10 +602,13 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         Ok(Execution {
             dataset: Dataset::from_rows(plan.region(region).output.clone(), rows),
             verifications: std::mem::take(records),
+            partition_rows: self.output_partition,
         })
     }
 
-    /// Reject cardinality overflow and excessive output slots before deriving rows.
+    /// Reject cardinality overflow and excessive output slots before deriving
+    /// rows: the whole output, or each of its partitions in a run that admits
+    /// it a partition at a time (D264).
     fn check_capacity(
         &self,
         region: RegionId,
@@ -608,7 +623,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             })
         })?;
         let width = self.plan.region(region).output.columns().len();
-        Limits::table(rows, width).map_err(|error| {
+        Limits::partitioned(rows, self.output_partition, width).map_err(|error| {
             if error.resource == "columns" {
                 return Box::new(ExecutionError::ScopedLimit {
                     resource: Resource::OutputColumns,

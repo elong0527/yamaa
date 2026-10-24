@@ -169,6 +169,12 @@ pub struct CodelistObservation {
 pub struct Execution {
     pub dataset: Dataset,
     pub verifications: Vec<CheckRecord>,
+    /// The most rows one partition of the output holds (D264). A
+    /// partitioned run that divided every step admitted its output in
+    /// consecutive partitions of at most as many rows as its largest driver
+    /// partition holds, and the output is encoded, admitted and published one
+    /// such partition at a time; none when the run admitted its output whole.
+    pub partition_rows: Option<std::num::NonZeroUsize>,
 }
 
 /// One completed row template: the rows it emitted and the driver records it

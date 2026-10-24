@@ -1,4 +1,5 @@
 //! Fixed logical admission boundaries, independent of available process memory.
+use std::num::NonZeroUsize;
 
 /// One shared policy. Callers supply observed sizes, never resource profiles.
 pub struct Limits;
@@ -58,6 +59,21 @@ impl Limits {
         Self::columns(columns)?;
         check("table_rows", Some(rows), Self::TABLE_ROWS)?;
         check("table_cells", rows.checked_mul(columns), Self::TABLE_CELLS)
+    }
+
+    /// Admit a table of `rows` rows held in consecutive partitions of at most
+    /// `partition` rows, each partition as [`Self::table`] admits a table
+    /// (D264). The first partition holds the most rows, so it alone decides;
+    /// with no partitions the whole table does.
+    pub fn partitioned(
+        rows: usize,
+        partition: Option<NonZeroUsize>,
+        columns: usize,
+    ) -> Result<(), LimitExceeded> {
+        Self::table(
+            partition.map_or(rows, |partition| rows.min(partition.get())),
+            columns,
+        )
     }
 
     pub fn columns(actual: usize) -> Result<(), LimitExceeded> {
@@ -199,5 +215,62 @@ mod tests {
                 actual: Some(Limits::COLUMNS + 1),
             })
         );
+    }
+
+    /// A partitioned table is admitted by its first partition, the largest:
+    /// 25,000,000 rows in partitions of 1,000,000 fit at 64 columns, as
+    /// 1,000,000 x 64 cells do, while the same rows whole do not; a partition
+    /// size beyond the table admits the table whole; and a partition is
+    /// refused on its own rows or cells, 11,000,000 rows, or 1,000,000 x 1,024
+    /// cells.
+    #[test]
+    fn a_partitioned_table_is_admitted_one_partition_at_a_time() {
+        let rows = |rows| NonZeroUsize::new(rows);
+        let refused = |resource, limit, actual| {
+            Err(LimitExceeded {
+                resource,
+                limit,
+                actual: Some(actual),
+            })
+        };
+        let cases = [
+            ("partitions of a million", 25_000_000, rows(1_000_000), 64, Ok(())),
+            (
+                "the same rows whole",
+                25_000_000,
+                None,
+                64,
+                refused("table_rows", Limits::TABLE_ROWS, 25_000_000),
+            ),
+            ("a partition beyond the table", 5, rows(10), 3, Ok(())),
+            (
+                "a partition beyond the row limit",
+                12_000_000,
+                rows(11_000_000),
+                1,
+                refused("table_rows", Limits::TABLE_ROWS, 11_000_000),
+            ),
+            (
+                "a partition beyond the cell limit",
+                20_000_000,
+                rows(1_000_000),
+                1024,
+                refused("table_cells", Limits::TABLE_CELLS, 1_024_000_000),
+            ),
+            (
+                "too many columns",
+                1,
+                rows(1),
+                Limits::COLUMNS + 1,
+                refused("columns", Limits::COLUMNS, Limits::COLUMNS + 1),
+            ),
+        ];
+        for (label, total, partition, columns, expected) in cases {
+            assert_eq!(
+                Limits::partitioned(total, partition, columns),
+                expected,
+                "{label}"
+            );
+        }
     }
 }
