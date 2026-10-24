@@ -67,12 +67,18 @@ pub(crate) fn key_type(
 
 /// A read of an input that declares no `key`, by an implicit join or by a
 /// qualified aggregate without `key` of its own, at the read (LOOKUP-1,
-/// LOOKUP-5; D23, D63).
-pub(crate) fn undeclared_input_key(path: &str, dataset: &str, aggregate: bool) -> Diagnostic {
-    let hint = if aggregate {
-        "declare `key` on the input or on the aggregate"
-    } else {
-        "declare `key` on the input"
+/// LOOKUP-5; D23, D63). A pair relation, which can declare no input `key`,
+/// is read through a lookup or an aggregate keyed on its own (LOOKUP-27).
+pub(crate) fn undeclared_input_key(
+    path: &str,
+    dataset: &str,
+    aggregate: bool,
+    pair: bool,
+) -> Diagnostic {
+    let hint = match (pair, aggregate) {
+        (true, _) => "read it through a named intermediate or an aggregate with a `key` of its own",
+        (false, true) => "declare `key` on the input or on the aggregate",
+        (false, false) => "declare `key` on the input",
     };
     finding(
         C::LookupNoApplicableKeys,

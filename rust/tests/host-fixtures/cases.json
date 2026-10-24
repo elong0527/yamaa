@@ -5395,6 +5395,30 @@
           ]
         },
         {
+          "name": "a_pair_relation_key_beyond_the_key_limit",
+          "call": "check",
+          "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, RID]\ninput:\n  L: input.csv\n  R: input.csv\nintermediates:\n  - id: P\n    dataset: L\n    inner_join: R\n    key: [K0, K1, K2, K3, K4, K5, K6, K7, K8, K9, K10, K11, K12, K13, K14, K15, K16, K17, K18, K19, K20, K21, K22, K23, K24, K25, K26, K27, K28, K29, K30, K31, K32, K33, K34, K35, K36, K37, K38, K39, K40, K41, K42, K43, K44, K45, K46, K47, K48, K49, K50, K51, K52, K53, K54, K55, K56, K57, K58, K59, K60, K61, K62, K63, K64]\n    derivations: {ID: L.ID, RID: R.ID}\ncolumns:\n  - {name: ID, type: str}\n  - {name: RID, type: str}\nrows:\n  - {id: pairs, dataset: P, derivations: {ID: P.ID, RID: P.RID}}\noutput: {path: output.csv, columns: [ID, RID]}\n",
+          "input_csv": "ID\na\n",
+          "issues": [
+            {
+              "severity": "error",
+              "phase": "engine",
+              "condition": "engine_rejected",
+              "rule": null,
+              "spec_paths": [
+                "intermediates.P.key"
+              ],
+              "file": "spec.yaml",
+              "line": 12,
+              "column": 5,
+              "message": "the engine refused the operation in its prepare step: compiler_limit",
+              "context": "{\"actual\":65,\"code\":\"compiler_limit\",\"limit\":64,\"resource\":\"intermediate_keys\",\"step\":\"prepare\"}",
+              "source_span": null,
+              "operand_route": null
+            }
+          ]
+        },
+        {
           "name": "check_refuses_a_specification_in_language_0_5",
           "call": "check",
           "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\noutput: {path: output.csv, columns: [ID]}\n",

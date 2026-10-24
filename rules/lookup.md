@@ -1543,7 +1543,7 @@ read as an input is. Its select and absence steps are none
 ([LOOKUP-25](#lookup-25)).
 
 Fails: `prohibited_construct`, `missing_required_field`, `invalid_field_type`, `duplicate_identifier`, `invalid_intermediate_driver`, `unknown_intermediate_driver_type`, `unknown_field`, `incompatible_input_type`.
-Evidence: `schema-lookup-inner-join-pairs`, `schema-lookup-inner-join-aggregate`, `schema-lookup-inner-join-filter`, `schema-lookup-inner-join-missing-key`, `negative-lookup-inner-join-keep`, `negative-lookup-inner-join-no-key`, `negative-lookup-inner-join-self`, `schema-lookup-inner-join-lookup`, `schema-lookup-inner-join-grouped`, `schema-lookup-inner-join-expression-key`, `schema-lookup-inner-join-unconvertible`, `negative-lookup-inner-join-duplicate-pairs`, `negative-lookup-inner-join-key-type`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_refuses_an_order_and_a_keep_written_beside_inner_join_naming_the_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_refuses_self_as_its_right_side`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_pairs_two_relations`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_is_no_side_of_another`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_pair_relation_without_derivations_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_pair_relation_key_pair_compares_its_two_types`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_pair_relation_side_reads_no_other_record`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_pair_relation_exposes_fields_of_one_type`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_read_through_a_pair_relation_s_implicit_join_has_no_applicable_keys`.
+Evidence: `schema-lookup-inner-join-pairs`, `schema-lookup-inner-join-aggregate`, `schema-lookup-inner-join-filter`, `schema-lookup-inner-join-missing-key`, `negative-lookup-inner-join-keep`, `negative-lookup-inner-join-no-key`, `negative-lookup-inner-join-self`, `schema-lookup-inner-join-lookup`, `schema-lookup-inner-join-grouped`, `schema-lookup-inner-join-expression-key`, `schema-lookup-inner-join-unconvertible`, `negative-lookup-inner-join-duplicate-pairs`, `negative-lookup-inner-join-key-type`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_refuses_an_order_and_a_keep_written_beside_inner_join_naming_the_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_refuses_self_as_its_right_side`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_pairs_two_relations`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_pair_relation_is_no_side_of_another`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_pair_relation_without_derivations_is_refused`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_pair_relation_key_pair_compares_its_two_types`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_pair_relation_side_reads_no_other_record`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_pair_relation_exposes_fields_of_one_type`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_read_through_a_pair_relation_s_implicit_join_has_no_applicable_keys`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_keyless_aggregate_over_a_pair_relation_has_no_applicable_keys`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_pair_relation_side_may_read_a_lookup_keyed_by_its_own_record`, `rust/tests/host-fixtures/cases.json::a_pair_relation_key_beyond_the_key_limit`.
 
 ```yaml
 intermediates:
@@ -1605,7 +1605,9 @@ per value fails the same way when that value is compared. A field a side does
 not have, and a name written alone that reads no field of the left side, fail
 as `unknown_field` at `key`. A missing `key` fails as
 `missing_required_field` at `key`, and one that names no pair as
-`invalid_field_type` ([LOOKUP-5](#lookup-5)). Key values constant on both
+`invalid_field_type` ([LOOKUP-5](#lookup-5)), and one of more than 64 pairs
+is refused as every key is, under the [fixed resource
+policy](../docs/release.md#resource-limits). Key values constant on both
 sides pair every record of one side with every record of the other: the
 relation holds at most as many records as the product of its sides'.
 
@@ -1628,7 +1630,7 @@ A pair relation selects nothing, ranges over nothing and answers no absence:
 `between`, `order_by`, `keep`, `nearest`, `absent` and `require_match`
 written beside `inner_join`, and `SELF` as either side, fail before any input
 is read as `prohibited_construct`, naming each of them and then `inner_join`,
-in specification order, with the relation's id as `intermediate` and the first
+in the order listed here, with the relation's id as `intermediate` and the first
 of them as `construct`: a field's name, or `SELF`.
 
 The relation is built once, before any row is built and before any
@@ -1639,4 +1641,6 @@ it up with a `key` of its own ([LOOKUP-3](#lookup-3)); and a qualified
 aggregate with a `key` of its own reduces it ([LOOKUP-18](#lookup-18)), so
 `COUNT(PAIRS.*)` keyed by an event counts the event's pairs. It declares no
 input `key`, so a read through its implicit join, and a qualified aggregate
-over it without `key`, fail as `no_applicable_keys` ([LOOKUP-5](#lookup-5)).
+over it without `key`, fail as `no_applicable_keys` ([LOOKUP-5](#lookup-5)),
+whose hint names the routes that read it: a named intermediate or an
+aggregate with a `key` of its own.

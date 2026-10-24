@@ -205,7 +205,7 @@ impl<'a> Reads<'a> {
     /// column. True when it binds, as far as the declarations decide.
     fn join(&self, path: &str, owner: &str, findings: &mut Vec<BindFinding>) -> bool {
         if super::keyless(self.spec, owner) {
-            findings.push(super::undeclared_key(path, owner));
+            findings.push(super::undeclared_key(self.spec, path, owner));
             return false;
         }
         let pairing = match (self.phase, self.row, self.drivers) {

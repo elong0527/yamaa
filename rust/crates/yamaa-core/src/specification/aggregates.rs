@@ -1108,6 +1108,7 @@ fn bound_relation(
                         Finding::UndeclaredInputKey {
                             path: &declaration.path,
                             dataset: relation,
+                            pair: catalog.joined(relation).is_some_and(|joined| joined.pair),
                         }
                     },
                     findings,

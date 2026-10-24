@@ -101,6 +101,9 @@ pub(crate) struct JoinedRelation {
     /// declared column the specification does not declare (LOOKUP-1).
     pub keys: std::vec::Vec<(String, Option<usize>)>,
     pub schema: std::sync::Arc<crate::table::TableSchema>,
+    /// A pair relation's port, which declares no input `key`
+    /// (LOOKUP-27).
+    pub pair: bool,
 }
 
 /// A kept relation used by a scalar callback, with its original key dependencies.
@@ -245,9 +248,9 @@ impl Catalog {
     /// metadata: the input's declared key, as each relation gives it.
     pub(crate) fn with_joined(
         mut self,
-        relations: &[(usize, Dataset<'_>, std::vec::Vec<&str>)],
+        relations: &[(usize, Dataset<'_>, std::vec::Vec<&str>, bool)],
     ) -> Result<Self, Error> {
-        for (source, relation, names) in relations {
+        for (source, relation, names, pair) in relations {
             let inference = crate::key_relation::declared(&self, names, relation.fields)?;
             let retained_keys = names
                 .iter()
@@ -285,6 +288,7 @@ impl Catalog {
                     inference,
                     keys: retained_keys,
                     schema,
+                    pair: *pair,
                 },
             );
         }

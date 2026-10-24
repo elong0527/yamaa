@@ -1181,8 +1181,10 @@ S1,001,PF03,SCALE,3
 
         /// Validation negatives whose first issue `check` does not report, with
         /// what decides it. `domain` reaches each of them once it reads or binds
-        /// the inputs. The list may only shrink: a case that `check` starts to
-        /// report fails until it leaves this list.
+        /// the inputs. A case joins only when the input itself decides its
+        /// finding: the fields a file stores, whether it exists, or a value its
+        /// records hold, which no declaration states. A case that `check`
+        /// starts to report fails until it leaves this list.
         const NOT_REPORTED_BY_CHECK: &[(&str, &str)] = &[
             (
                 "negative-linked-artifact-header",

@@ -411,7 +411,7 @@
       "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.order_by", "intermediates.P.keep", "intermediates.P.inner_join"], "context": {"intermediate": "P", "construct": "order_by"}}]
     },
     {
-      "case": "a_pair_relation_refuses_a_range_and_an_absence_written_beside_inner_join_in_specification_order",
+      "case": "a_pair_relation_refuses_an_absence_and_a_range_written_beside_inner_join_in_the_listed_order",
       "operation": "prepare",
       "input": {
         "base": "spec",

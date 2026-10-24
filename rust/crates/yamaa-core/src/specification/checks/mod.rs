@@ -182,9 +182,14 @@ pub(super) fn keyless(spec: &Spec, owner: &str) -> bool {
 /// The refusal at `path` of a read of the keyless input `dataset` through
 /// its implicit join (`no_applicable_keys`, LOOKUP-5, D111), as binding
 /// reports it ([`crate::reference_binding::JoinedFinding::key_diagnostic`]).
-pub(super) fn undeclared_key(path: &str, dataset: &str) -> BindFinding {
+pub(super) fn undeclared_key(spec: &Spec, path: &str, dataset: &str) -> BindFinding {
     BindFinding::Source(source_expressions::SourceFinding::from_diagnostic(
-        crate::diagnostic::lookup::undeclared_input_key(path, dataset, false),
+        crate::diagnostic::lookup::undeclared_input_key(
+            path,
+            dataset,
+            false,
+            spec.pair_relation(dataset).is_some(),
+        ),
     ))
 }
 

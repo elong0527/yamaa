@@ -1009,40 +1009,39 @@ impl Declarations {
                 );
                 continue;
             };
+            // Every key names at most `Limits::KEYS` pairs, a pair relation's
+            // among them, in either form.
+            let written = match &item.key {
+                Some(ast::JoinKey::Columns { columns, meta }) => Some((columns.len(), meta)),
+                Some(ast::JoinKey::Pairs { pairs, meta }) => Some((pairs.len(), meta)),
+                _ => None,
+            };
+            if let Some((count, meta)) =
+                written.filter(|&(count, _)| count > crate::limits::Limits::KEYS)
+            {
+                return Err(PrepareError::limit(
+                    "intermediate_keys",
+                    crate::limits::Limits::KEYS,
+                    Some(count),
+                    Some(&checks::render(spec, *meta)),
+                ));
+            }
             // A pair relation's key pairs its sides, not a current row's values
             // ([`pairs::prepare`]).
             let keys = match &item.key {
                 _ if pair.is_some() => None,
-                Some(ast::JoinKey::Columns { columns, meta }) => {
-                    if columns.len() > crate::limits::Limits::KEYS {
-                        return Err(PrepareError::limit(
-                            "intermediate_keys",
-                            crate::limits::Limits::KEYS,
-                            Some(columns.len()),
-                            Some(&checks::render(spec, *meta)),
-                        ));
-                    }
-                    Some(
-                        columns
-                            .iter()
-                            .map(|column| {
-                                (
-                                    column.name.clone(),
-                                    match_values::Declaration::Variable(column.name.clone()),
-                                )
-                            })
-                            .collect(),
-                    )
-                }
+                Some(ast::JoinKey::Columns { columns, .. }) => Some(
+                    columns
+                        .iter()
+                        .map(|column| {
+                            (
+                                column.name.clone(),
+                                match_values::Declaration::Variable(column.name.clone()),
+                            )
+                        })
+                        .collect(),
+                ),
                 Some(ast::JoinKey::Pairs { pairs, meta }) => {
-                    if pairs.len() > crate::limits::Limits::KEYS {
-                        return Err(PrepareError::limit(
-                            "intermediate_keys",
-                            crate::limits::Limits::KEYS,
-                            Some(pairs.len()),
-                            Some(&checks::render(spec, *meta)),
-                        ));
-                    }
                     if pairs.is_empty() {
                         reject(extra, "intermediate_key", checks::render(spec, *meta));
                     }

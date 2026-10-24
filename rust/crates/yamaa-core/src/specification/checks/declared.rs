@@ -571,7 +571,7 @@ impl Checks<'_> {
             return true;
         }
         let refused = if keyless(self.spec, owner) {
-            Some(undeclared_key(path, owner))
+            Some(undeclared_key(self.spec, path, owner))
         } else {
             declared_key(
                 self.spec,
@@ -865,7 +865,12 @@ impl Checks<'_> {
             {
                 if keyless(spec, relation) {
                     findings.push(BindFinding::AggregateDiagnostic(
-                        lookup::undeclared_input_key(&path(spec, e), relation, true),
+                        lookup::undeclared_input_key(
+                            &path(spec, e),
+                            relation,
+                            true,
+                            spec.pair_relation(relation).is_some(),
+                        ),
                     ));
                 } else {
                     self.aggregate_key(aggregate, relation, findings);

@@ -174,7 +174,39 @@
         ],
         "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
       },
-      "issues": [{"phase": "validation", "condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.RID.derivation.source"], "context": {"dataset": "P", "hint": "declare `key` on the input"}}]
+      "issues": [{"phase": "validation", "condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.RID.derivation.source"], "context": {"dataset": "P", "hint": "read it through a named intermediate or an aggregate with a `key` of its own"}}]
+    },
+    {
+      "case": "a_pair_relation_side_may_read_a_lookup_keyed_by_its_own_record",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "pairs",
+        "edits": [
+          {"set": ["intermediates"], "to": [
+            {"id": "SEL", "dataset": "R", "key": {"K": "L.K"}},
+            {"id": "LM", "dataset": "L", "derivations": {"PARTNER": "SEL.ID"}},
+            {"id": "P", "dataset": "LM", "inner_join": "R", "key": ["K"], "derivations": {"ID": "LM.ID", "RID": "R.ID"}}
+          ]}
+        ],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": []
+    },
+    {
+      "case": "a_keyless_aggregate_over_a_pair_relation_has_no_applicable_keys",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "pairs",
+        "edits": [
+          {"remove": ["rows"]},
+          {"set": ["base"], "to": "L"},
+          {"set": ["keys"], "to": ["ID"]},
+          {"set": ["output", "columns"], "to": ["ID", "N"]},
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": "L.ID"}, {"name": "N", "type": "int", "derivation": {"aggregate": "COUNT(P.*)"}}]}
+        ],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.N.derivation.aggregate"], "context": {"dataset": "P", "hint": "read it through a named intermediate or an aggregate with a `key` of its own"}}]
     },
     {
       "case": "a_source_keep_without_an_order_is_unpaired",
