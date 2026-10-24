@@ -207,6 +207,27 @@ fn relation(region: RegionId, kind: RelationKind, path: &str, donor: Donor) -> R
     }
 }
 
+/// A join's options: the range, filter and selection that narrow and choose
+/// its record.
+#[derive(Clone, Copy)]
+struct JoinOptions<'o> {
+    range: Option<&'o RelationRange>,
+    filter: Option<&'o BoundPredicate>,
+    selection: Option<&'o SourceSelection>,
+}
+
+/// One check as lowering declares it: its path, what it checks and at which
+/// severity, its position among the checks of its scope, and what it
+/// evaluates.
+struct CheckDeclaration<'d> {
+    path: &'d str,
+    scope: CheckScope,
+    family: CheckFamily,
+    severity: VerificationSeverity,
+    position: usize,
+    payload: CheckPayload,
+}
+
 impl<'p> Builder<'p> {
     fn reserve_region(&mut self, plan: &'p DatasetPlan, kind: RegionKind) -> RegionId {
         let id = RegionId(self.out.regions.len() as u32);
@@ -923,9 +944,11 @@ impl<'p> Builder<'p> {
                     path,
                     donor,
                     keys,
-                    range.as_ref(),
-                    filter.as_ref(),
-                    selection.as_ref(),
+                    JoinOptions {
+                        range: range.as_ref(),
+                        filter: filter.as_ref(),
+                        selection: selection.as_ref(),
+                    },
                 )?;
                 node.kind = ExprKind::SourceLookup(relation);
                 node.op = Op::SourceLookup {
@@ -1254,17 +1277,19 @@ impl<'p> Builder<'p> {
 
     /// An implicit join: equality keys and an optional range over one donor
     /// source, with an optional donor filter and stable selection (LOOKUP-25).
-    #[allow(clippy::too_many_arguments)]
     fn join(
         &mut self,
         cx: &Cx<'p>,
         path: &str,
         donor: SourceId,
         keys: Vec<(usize, Read)>,
-        range: Option<&RelationRange>,
-        filter: Option<&BoundPredicate>,
-        selection: Option<&SourceSelection>,
+        options: JoinOptions<'_>,
     ) -> Result<RelationId, ResolutionError> {
+        let JoinOptions {
+            range,
+            filter,
+            selection,
+        } = options;
         let mut node = relation(cx.region, RelationKind::Join, path, Donor::Source(donor));
         for (donor_field, current) in keys {
             node.keys.push(RelationKey {
@@ -1309,7 +1334,12 @@ impl<'p> Builder<'p> {
             };
             keys.push((key.source_column, current));
         }
-        self.join(cx, path, donor, keys, range, filter, selection)
+        let options = JoinOptions {
+            range,
+            filter,
+            selection,
+        };
+        self.join(cx, path, donor, keys, options)
     }
 
     /// Match values in written order; expression keys become nodes.
@@ -1710,18 +1740,20 @@ impl<'p> Builder<'p> {
         Ok(id)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn check(
         &mut self,
-        path: &str,
-        scope: CheckScope,
-        family: CheckFamily,
-        severity: VerificationSeverity,
+        declared: CheckDeclaration<'_>,
         reads: &[Read],
         predicates: Vec<ExprId>,
-        position: usize,
-        payload: CheckPayload,
     ) -> Result<(), ResolutionError> {
+        let CheckDeclaration {
+            path,
+            scope,
+            family,
+            severity,
+            position,
+            payload,
+        } = declared;
         let start = self.out.reads.len();
         self.out.reads.extend_from_slice(reads);
         let reads = span(start, self.out.reads.len())?;
@@ -1751,14 +1783,16 @@ impl<'p> Builder<'p> {
                 let family = CheckFamily::IntermediateUnique;
                 let payload = CheckPayload::Unique(check.clone());
                 self.check(
-                    &check.path,
-                    scope,
-                    family,
-                    check.severity,
+                    CheckDeclaration {
+                        path: &check.path,
+                        scope,
+                        family,
+                        severity: check.severity,
+                        position,
+                        payload,
+                    },
                     &[],
                     Vec::new(),
-                    position,
-                    payload,
                 )?;
             }
         }
@@ -1782,14 +1816,16 @@ impl<'p> Builder<'p> {
                 let family = check_family(&verification.check);
                 let scope = CheckScope::Column(column);
                 self.check(
-                    &verification.path,
-                    scope,
-                    family,
-                    severity,
+                    CheckDeclaration {
+                        path: &verification.path,
+                        scope,
+                        family,
+                        severity,
+                        position,
+                        payload: CheckPayload::Declared(verification.check.clone()),
+                    },
                     &reads,
                     Vec::new(),
-                    position,
-                    CheckPayload::Declared(verification.check.clone()),
                 )?;
             }
         }
@@ -1800,26 +1836,30 @@ impl<'p> Builder<'p> {
             let path = format!("keys[{position}]");
             let family = CheckFamily::KeyMissing;
             self.check(
-                &path,
-                CheckScope::OutputKeys,
-                family,
-                Error,
+                CheckDeclaration {
+                    path: &path,
+                    scope: CheckScope::OutputKeys,
+                    family,
+                    severity: Error,
+                    position,
+                    payload: CheckPayload::Keys,
+                },
                 &[read],
                 Vec::new(),
-                position,
-                CheckPayload::Keys,
             )?;
         }
         let family = CheckFamily::KeyDuplicates;
         self.check(
-            "keys",
-            CheckScope::OutputKeys,
-            family,
-            Error,
+            CheckDeclaration {
+                path: "keys",
+                scope: CheckScope::OutputKeys,
+                family,
+                severity: Error,
+                position: 0,
+                payload: CheckPayload::Keys,
+            },
             &keys,
             Vec::new(),
-            0,
-            CheckPayload::Keys,
         )?;
         for (position, verification) in plan.verifications().iter().enumerate() {
             let mut reads = Vec::new();
@@ -1852,14 +1892,16 @@ impl<'p> Builder<'p> {
             let family = check_family(&verification.check);
             let scope = CheckScope::Dataset;
             self.check(
-                &verification.path,
-                scope,
-                family,
-                severity,
+                CheckDeclaration {
+                    path: &verification.path,
+                    scope,
+                    family,
+                    severity,
+                    position,
+                    payload: CheckPayload::Declared(verification.check.clone()),
+                },
                 &reads,
                 predicates,
-                position,
-                CheckPayload::Declared(verification.check.clone()),
             )?;
         }
         Ok(())
