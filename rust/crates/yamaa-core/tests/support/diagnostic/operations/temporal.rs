@@ -1,6 +1,6 @@
 //! The date and time entry points: civil arithmetic, `dtc` and
-//! `time_of_day` (TIME-4, TIME-14, TIME-17, TIME-19, TIME-20), and date
-//! completion (TIME-1 to TIME-18).
+//! `time_of_day` (TIME-4, TIME-14, TIME-17, TIME-19, TIME-20, TIME-21), and
+//! date completion (TIME-1 to TIME-18).
 use super::{text, value, File};
 use crate::support::diagnostic::json::Json;
 use yamaa_core::{
@@ -29,8 +29,8 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
 /// its operand, `{kind, path, values}`: `kind` is `"date_shift"`,
 /// `"study_day"`, `"epoch_day"` or `"time_of_day"`, or one of
 /// `{"difference": <unit>, "bounds": ...}`, `{"datetime_difference":
-/// <unit>}`, `{"datetime_shift": <unit>}`, `{"duration_value": <unit>}` and
-/// `{"date_text": <depth>}`.
+/// <unit>}`, `{"datetime_shift": <unit>}`, `{"duration_value": <unit>}`,
+/// `{"duration_text": <unit>}` and `{"date_text": <depth>}`.
 fn temporal(input: &Json) -> Vec<Diagnostic> {
     let input = input.closed(&["kind", "path", "values"]);
     let elapsed = |unit: &Json| match unit.text() {
@@ -73,6 +73,9 @@ fn temporal(input: &Json) -> Vec<Diagnostic> {
                 unit: elapsed(unit),
             },
             [(name, unit)] if name == "duration_value" => TemporalKind::DurationValue {
+                unit: elapsed(unit),
+            },
+            [(name, unit)] if name == "duration_text" => TemporalKind::DurationText {
                 unit: elapsed(unit),
             },
             [(name, depth)] if name == "date_text" => TemporalKind::DateText {

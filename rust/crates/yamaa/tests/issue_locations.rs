@@ -253,7 +253,7 @@ fn a_child_source_shorthand_is_located_in_the_child_over_a_structured_parent() {
         write(&study, "child.yaml", &text);
         let run = engine().spec(&study.path("child.yaml")).run().unwrap();
         let issues = run.diagnostics();
-        assert_eq!(issues[0].code, "unknown_field", "{issues:?}");
+        assert_eq!(issues[0].code.as_str(), "unknown_field", "{issues:?}");
         assert_eq!(issues[0].spec_path, ["columns.V.derivation.source"]);
         // Shorthand is at its derivation key; the long form at source.
         let column = if derivation == "    derivation: RAW.NEW" {
@@ -339,7 +339,7 @@ fn replaced_and_cleared_fields_do_not_locate_in_overridden_parent_values() {
     ]);
     write(&study, "child.yaml", &text);
     let issues = check("child.yaml");
-    assert_eq!(issues[0].code, "missing_report", "{issues:?}");
+    assert_eq!(issues[0].code.as_str(), "missing_report", "{issues:?}");
     assert_eq!(issues[0].spec_path, ["output.report"]);
     assert_eq!(
         location(&issues),
@@ -356,7 +356,7 @@ fn replaced_and_cleared_fields_do_not_locate_in_overridden_parent_values() {
         let (text, offset) = spec(&["parent: parent.yaml", &format!("clear: [{cleared}]")]);
         write(&study, "cleared.yaml", &text);
         let issues = check("cleared.yaml");
-        assert_eq!(issues[0].code, code, "{issues:?}");
+        assert_eq!(issues[0].code.as_str(), code, "{issues:?}");
         assert_eq!(issues[0].spec_path, [path]);
         // The clear entry follows `clear: [` (eight characters).
         assert_eq!(
@@ -374,7 +374,7 @@ fn replaced_and_cleared_fields_do_not_locate_in_overridden_parent_values() {
     ]);
     write(&study, "grandchild.yaml", &text);
     let issues = check("grandchild.yaml");
-    assert_eq!(issues[0].code, "missing_report", "{issues:?}");
+    assert_eq!(issues[0].code.as_str(), "missing_report", "{issues:?}");
     assert_eq!(
         location(&issues),
         Some((study.file("grandchild.yaml"), offset + 2, 1))

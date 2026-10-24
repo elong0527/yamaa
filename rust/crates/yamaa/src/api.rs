@@ -24,85 +24,16 @@ use yamaa_core::application_issue::{Fault, Step};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::project_environment::Submission as Section;
 
-use crate::cancel::CancellationToken;
+use crate::cancel::{CancellationToken, Cancelled};
 use crate::diagnostic::{context_value_from_core, ContextValue, Locator, Report};
 use crate::engine::{Build, Engine, Request};
-use crate::error::Error;
+use crate::error::Failure;
 use crate::outcome::{fails, DefineBuild, Member, Outcome, Work};
 use crate::plan::Plan;
 #[cfg(feature = "arrow")]
 use crate::stream::Streamed;
 use crate::table::Table;
 use crate::text::{self, Action, Head, MemberLine, Summary};
-
-/// A refused operation: D39's error text, the issues that explain it, and
-/// the files it wrote before it was refused (P-API-1).
-#[non_exhaustive]
-#[derive(Clone, Debug)]
-pub struct Failure {
-    /// D39's error text: the call that refused, the first issue's line and
-    /// the count of the other issues, such as `cannot save ADAE: column ASTDY
-    /// reads TRTSDT, which is declared after it [forward_reference, COLUMN-5]
-    /// (and 2 more issues)`. Only ASCII; see [`crate::text`].
-    pub message: String,
-    /// The issues table both hosts attach to their error (D28).
-    pub issues: Table,
-    /// The same issues as typed records, first issue first, for the command
-    /// line's printed lines and JSON.
-    pub diagnostics: Vec<crate::diagnostic::Diagnostic>,
-    /// The files a refused save wrote before it stopped, such as a failed
-    /// run's report, in publication order and spelled as `save` returns
-    /// them; empty for any other refusal.
-    pub paths: Vec<String>,
-}
-
-impl Failure {
-    /// The refusal of `action`, which `report`'s issues explain.
-    pub fn new(action: Action<'_>, report: &Report) -> Self {
-        Self {
-            message: text::error_text(action, &report.diagnostics, None),
-            issues: report.table(),
-            diagnostics: report.diagnostics.clone(),
-            paths: Vec::new(),
-        }
-    }
-
-    /// The same refusal, after a save wrote `paths`.
-    pub(crate) fn with_paths(mut self, paths: Vec<String>) -> Self {
-        self.paths = paths;
-        self
-    }
-
-    /// The refusal of `action` for `error`: the issues of an engine refusal,
-    /// or, for an error that carries none, the error's own text after the
-    /// prefix.
-    pub fn from_error(action: Action<'_>, error: &Error) -> Self {
-        match error {
-            Error::Rejected(report) => Self::new(action, report),
-            other => Self {
-                message: text::error_text(action, &[], Some(&other.to_string())),
-                ..Self::new(action, &Report::default())
-            },
-        }
-    }
-
-    pub(crate) fn from_issues(action: Action<'_>, issues: &[Diagnostic]) -> Self {
-        Self::new(action, &Report::from_issues(issues))
-    }
-
-    /// A refusal that one registered finding explains.
-    pub(crate) fn from_finding(action: Action<'_>, finding: Diagnostic) -> Self {
-        Self::from_issues(action, std::slice::from_ref(&finding))
-    }
-}
-
-impl std::fmt::Display for Failure {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.message)
-    }
-}
-
-impl std::error::Error for Failure {}
 
 /// The status of a result or of one member of it (P-STATUS-1). Rust computes
 /// it from the issues and the build; it is never stored. A warning never
@@ -439,13 +370,13 @@ impl Engine {
         nodes: Vec<Node<'_>>,
         plans: &Plans,
         token: &CancellationToken,
-    ) -> Result<Outcome, Error> {
+    ) -> Result<Outcome, Cancelled> {
         let mut held = yamaa_adapters::file_resources::HeldArtifacts::new();
         let mut succeeded = vec![false; nodes.len()];
         let mut members = Vec::with_capacity(nodes.len());
         for (position, node) in nodes.into_iter().enumerate() {
             if token.is_cancelled() {
-                return Err(Error::Cancelled);
+                return Err(Cancelled);
             }
             let blocked = node
                 .producers
@@ -537,8 +468,10 @@ impl<'a> SpecRequest<'a> {
     }
 
     /// The same request, whose operations poll `token`: a cancelled
-    /// operation fails with [`Error::Cancelled`], with no result and no
-    /// issue. See [`CancellationToken`] for where an operation polls it.
+    /// operation fails with a
+    /// [`FailureKind::Cancelled`](crate::FailureKind::Cancelled) failure, with no
+    /// result and no issue. See [`CancellationToken`] for where an operation
+    /// polls it.
     pub fn cancel_with(mut self, token: &'a CancellationToken) -> Self {
         self.token = Some(token);
         self
@@ -595,13 +528,14 @@ impl<'a> SpecRequest<'a> {
     ///     assert!(!check.diagnostics().is_empty());
     /// }
     /// ```
-    pub fn check(&self) -> Result<Check, Error> {
+    pub fn check(&self) -> Result<Check, Failure> {
         let (issues, locator) = crate::internal::run_check(
             self.engine.shared(),
             &self.path,
             self.project,
             &self.token(),
-        )?;
+        )
+        .map_err(|Cancelled| self.cancelled())?;
         Ok(Check::of(&self.path, issues, locator))
     }
 
@@ -611,13 +545,13 @@ impl<'a> SpecRequest<'a> {
     /// `parent` as its parent, includes the fragment and writes nothing else:
     /// the parent's layers first, then the fragment (LAYER-3). The fragment
     /// stands as the entry, so every issue is located in it or in a layer of
-    /// the parent (P-ISSUE-1), and `parent` is a caller path like
-    /// this request's path: one that cannot be read is the check's issue, naming
-    /// it as given at no field (FILE-1). A specification that declares
-    /// `parent` or `include` refuses the given parent: the call fails with
-    /// `value_not_permitted` at `parent` (LAYER-4). Otherwise only
-    /// cancellation fails the call.
-    pub fn check_on(&self, parent: &str) -> Result<Check, Error> {
+    /// the parent (P-ISSUE-1), and `parent` is a caller path like the
+    /// request's: one that cannot be read is the check's issue, naming it as
+    /// given at no field (FILE-1). A specification that declares `parent` or
+    /// `include` refuses the given parent: the call fails as
+    /// `cannot read <path>`, with `value_not_permitted` at `parent`
+    /// (LAYER-4). Otherwise only cancellation fails the call.
+    pub fn check_on(&self, parent: &str) -> Result<Check, Failure> {
         let (issues, locator) = crate::internal::run_check_on(
             self.engine.shared(),
             &self.path,
@@ -685,7 +619,7 @@ impl<'a> SpecRequest<'a> {
     ///     assert!(!run.diagnostics().is_empty());
     /// }
     /// ```
-    pub fn run(&self) -> Result<Run, Error> {
+    pub fn run(&self) -> Result<Run, Failure> {
         let once = Plans::new();
         let plans = self.plans.unwrap_or(&once);
         let request = self.request();
@@ -705,7 +639,10 @@ impl<'a> SpecRequest<'a> {
             artifact: None,
             locator: Arc::new(Locator::none()),
         };
-        let outcome = self.engine.run_graph(vec![node], plans, &self.token())?;
+        let outcome = self
+            .engine
+            .run_graph(vec![node], plans, &self.token())
+            .map_err(|Cancelled| self.cancelled())?;
         let member = outcome
             .members
             .into_iter()
@@ -768,10 +705,10 @@ impl<'a> SpecRequest<'a> {
     /// }
     /// ```
     #[cfg(feature = "arrow")]
-    pub fn stream(&self) -> Result<Streamed, Error> {
+    pub fn stream(&self) -> Result<Streamed, Failure> {
         let token = self.token();
         if token.is_cancelled() {
-            return Err(Error::Cancelled);
+            return Err(self.cancelled());
         }
         let once = Plans::new();
         let plans = self.plans.unwrap_or(&once);
@@ -801,8 +738,14 @@ impl<'a> SpecRequest<'a> {
         let resolved = self
             .engine
             .resolve_specification(&self.request())
-            .map_err(|error| Failure::from_error(Action::Resolve(&self.path), &error))?;
+            .map_err(|report| Failure::rejected(Action::Resolve(&self.path), &report))?;
         resolved_value(&self.path, resolved.to_value())
+    }
+
+    /// The cancellation of an operation that reads the specification:
+    /// `cannot read <path>: operation cancelled`.
+    fn cancelled(&self) -> Failure {
+        Failure::cancelled(Action::Read(&self.path))
     }
 }
 
@@ -821,9 +764,9 @@ impl std::fmt::Debug for SpecRequest<'_> {
 /// cannot represent are an engine fault, refused with `engine_rejected`.
 fn resolved_value(
     specification: &str,
-    tree: Result<yamaa_core::json::Value, Error>,
+    tree: Option<yamaa_core::json::Value>,
 ) -> Result<ContextValue, Failure> {
-    let tree = tree.map_err(|_| {
+    let tree = tree.ok_or_else(|| {
         Failure::from_issues(
             Action::Resolve(specification),
             &yamaa_adapters::file_application::rejected(
@@ -837,12 +780,12 @@ fn resolved_value(
 
 /// The section a caller names, which must be one `read` declares. Any other
 /// text, a name outside `sdtm`, `adam` and `send` included, refuses the call
-/// with `unknown_section`, naming the sections the project declares
-/// (PROJECT-14).
+/// as `cannot select <section>`, with `unknown_section` naming the sections
+/// the project declares (PROJECT-14).
 fn select(
     read: &yamaa_adapters::project_scope::Project,
     section: Option<&str>,
-) -> Result<Option<Section>, Error> {
+) -> Result<Option<Section>, Failure> {
     let Some(key) = section else {
         return Ok(None);
     };
@@ -855,7 +798,7 @@ fn select(
                 .map(yamaa_core::project_scope::key)
                 .collect::<Vec<_>>();
             let finding = yamaa_core::project_scope::unknown_section(key, &declared);
-            Error::Rejected(Report::from_issues(&[finding]))
+            Failure::from_finding(Action::Select(key), finding)
         })
 }
 
@@ -1122,8 +1065,8 @@ impl<'a> ProjectRequest<'a> {
     /// The same request, whose run builds, and whose submission composes,
     /// the one section `section`, one of [`SECTIONS`]. Once the project file
     /// is read, a section it does not declare, or any other text, fails the
-    /// run or the submission with `unknown_section` (PROJECT-14) as
-    /// [`Error::Rejected`]. [`ProjectRequest::check`],
+    /// run or the submission as `cannot select <section>`, with
+    /// `unknown_section` (PROJECT-14). [`ProjectRequest::check`],
     /// [`ProjectRequest::names`] and [`ProjectRequest::spec`] read every
     /// section, whichever the request names.
     pub fn section(mut self, section: &'a str) -> Self {
@@ -1145,8 +1088,10 @@ impl<'a> ProjectRequest<'a> {
     }
 
     /// The same request, whose operations poll `token`: a cancelled
-    /// operation fails with [`Error::Cancelled`], with no result and no
-    /// issue. See [`CancellationToken`] for where an operation polls it.
+    /// operation fails with a
+    /// [`FailureKind::Cancelled`](crate::FailureKind::Cancelled) failure, with no
+    /// result and no issue. See [`CancellationToken`] for where an operation
+    /// polls it.
     pub fn cancel_with(mut self, token: &'a CancellationToken) -> Self {
         self.token = Some(token);
         self
@@ -1156,6 +1101,12 @@ impl<'a> ProjectRequest<'a> {
     /// nothing cancels. A clone shares the request's flag and probe.
     fn token(&self) -> CancellationToken {
         self.token.cloned().unwrap_or_default()
+    }
+
+    /// The cancellation of an operation that reads the project file:
+    /// `cannot read <path>: operation cancelled`.
+    fn cancelled(&self) -> Failure {
+        Failure::cancelled(Action::Read(self.path))
     }
 
     /// The request of the listed specification whose `domain` is `name`,
@@ -1171,11 +1122,11 @@ impl<'a> ProjectRequest<'a> {
     pub fn spec(&self, name: &str) -> Result<SpecRequest<'a>, Failure> {
         let action = Action::Select(name);
         let read = crate::internal::read_project(self.engine.shared(), self.path).map_err(
-            |(issues, locator)| Failure::new(action, &Report::located(&issues, &locator)),
+            |(issues, locator)| Failure::rejected(action, &Report::located(&issues, &locator)),
         )?;
         let duplicates = read.duplicates();
         if !duplicates.is_empty() {
-            return Err(Failure::new(
+            return Err(Failure::rejected(
                 action,
                 &Report::located(&duplicates, read.locator()),
             ));
@@ -1208,11 +1159,11 @@ impl<'a> ProjectRequest<'a> {
     pub fn names(&self) -> Result<Vec<String>, Failure> {
         let action = Action::Read(self.path);
         let read = crate::internal::read_project(self.engine.shared(), self.path).map_err(
-            |(issues, locator)| Failure::new(action, &Report::located(&issues, &locator)),
+            |(issues, locator)| Failure::rejected(action, &Report::located(&issues, &locator)),
         )?;
         let duplicates = read.duplicates();
         if !duplicates.is_empty() {
-            return Err(Failure::new(
+            return Err(Failure::rejected(
                 action,
                 &Report::located(&duplicates, read.locator()),
             ));
@@ -1230,10 +1181,10 @@ impl<'a> ProjectRequest<'a> {
     /// read a listed artifact without a `schema` link, and colliding files.
     /// Only cancellation fails the call, with no result: a check cancelled
     /// between specifications returns none of the findings it gathered.
-    pub fn check(&self) -> Result<Check, Error> {
+    pub fn check(&self) -> Result<Check, Failure> {
         let (project, token) = (self.path, self.token());
         if token.is_cancelled() {
-            return Err(Error::Cancelled);
+            return Err(self.cancelled());
         }
         let shared = self.engine.shared();
         let read = match crate::internal::read_project(shared, project) {
@@ -1248,10 +1199,11 @@ impl<'a> ProjectRequest<'a> {
         let mut members = Vec::with_capacity(read.listed().len());
         for listed in read.listed() {
             if token.is_cancelled() {
-                return Err(Error::Cancelled);
+                return Err(self.cancelled());
             }
             let (issues, locator) = if listed.failure().is_empty() {
-                crate::internal::run_check(shared, listed.path(), Some(project), &token)?
+                crate::internal::run_check(shared, listed.path(), Some(project), &token)
+                    .map_err(|Cancelled| self.cancelled())?
             } else {
                 (listed.failure().to_vec(), Arc::clone(read.locator()))
             };
@@ -1280,11 +1232,11 @@ impl<'a> ProjectRequest<'a> {
     /// and cancellation fail the call, and a user interrupt in project code
     /// cancels it (D46), so no later specification builds. Once the project
     /// file is read, a section it does not declare, or any other text, fails
-    /// with `unknown_section` (PROJECT-14) as [`Error::Rejected`].
-    pub fn run(&self) -> Result<ProjectRun, Error> {
+    /// as `cannot select <section>`, with `unknown_section` (PROJECT-14).
+    pub fn run(&self) -> Result<ProjectRun, Failure> {
         let (project, section, token) = (self.path, self.section, self.token());
         if token.is_cancelled() {
-            return Err(Error::Cancelled);
+            return Err(self.cancelled());
         }
         let once = Plans::new();
         let plans = self.plans.unwrap_or(&once);
@@ -1354,7 +1306,10 @@ impl<'a> ProjectRequest<'a> {
             })
             .collect();
         Ok(ProjectRun {
-            outcome: self.engine.run_graph(nodes, plans, &token)?,
+            outcome: self
+                .engine
+                .run_graph(nodes, plans, &token)
+                .map_err(|Cancelled| self.cancelled())?,
             subject,
         })
     }
@@ -1366,12 +1321,12 @@ impl<'a> ProjectRequest<'a> {
     /// else the current UTC time, read once before the project file (D129).
     /// Project problems come back as issues; only an unknown section and
     /// cancellation fail the call. Once the project file is read, a section
-    /// it does not declare, or any other text, fails with `unknown_section`
-    /// (PROJECT-14) as [`Error::Rejected`].
-    pub fn submission(&self, options: &SubmissionOptions) -> Result<Submission, Error> {
+    /// it does not declare, or any other text, fails as
+    /// `cannot select <section>`, with `unknown_section` (PROJECT-14).
+    pub fn submission(&self, options: &SubmissionOptions) -> Result<Submission, Failure> {
         let token = self.token();
         if token.is_cancelled() {
-            return Err(Error::Cancelled);
+            return Err(self.cancelled());
         }
         // One creation time for every section (D129). A clock that gives no
         // time leaves each section to read it and refuse it (DEFINE-3).
@@ -1395,7 +1350,7 @@ impl<'a> ProjectRequest<'a> {
         created: Option<&str>,
         installed_version: &str,
         token: &CancellationToken,
-    ) -> Result<Outcome, Error> {
+    ) -> Result<Outcome, Failure> {
         let (project, shared) = (self.path, self.engine.shared());
         let read = match crate::internal::read_project(shared, project) {
             Ok(read) => read,
@@ -1413,7 +1368,7 @@ impl<'a> ProjectRequest<'a> {
         let mut members = Vec::with_capacity(sections.len());
         for section in sections {
             if token.is_cancelled() {
-                return Err(Error::Cancelled);
+                return Err(self.cancelled());
             }
             let define = DefineBuild::compose(shared, project, section, created, installed_version);
             members.push(Member {
@@ -1612,10 +1567,8 @@ mod tests {
     #[test]
     fn unrepresentable_resolved_facts_are_an_engine_fault() {
         let fault = yamaa_core::diagnostic::ConditionCode::ApplicationRejected.definition();
-        let unwritten = Error::Internal {
-            code: "resolved_serialization",
-        };
-        let failure = resolved_value("adam/adsl.yaml", Err(unwritten)).unwrap_err();
+        let failure = resolved_value("adam/adsl.yaml", None).unwrap_err();
+        assert!(matches!(failure.kind, crate::error::FailureKind::Rejected));
         assert_eq!(
             failure.message,
             format!(
@@ -1647,7 +1600,7 @@ mod tests {
             .into(),
         );
         assert_eq!(
-            resolved_value("adam/adsl.yaml", Ok(tree)).unwrap(),
+            resolved_value("adam/adsl.yaml", Some(tree)).unwrap(),
             ContextValue::Map(
                 [(
                     "entry".to_owned(),

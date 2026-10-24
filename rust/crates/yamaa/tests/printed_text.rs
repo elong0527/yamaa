@@ -11,8 +11,8 @@ use std::path::Path;
 use std::sync::Arc;
 
 use yamaa::{
-    Action, CancellationToken, ContextValue, Engine, EngineOptions, Error, Failure, HostLanguage,
-    Status, SubmissionOptions, Summary,
+    CancellationToken, ContextValue, Engine, EngineOptions, FailureKind, HostLanguage, Status,
+    SubmissionOptions, Summary,
 };
 
 use crate::support::NoFunctions;
@@ -366,7 +366,7 @@ fn every_refusal_names_its_call() {
         format!("cannot save {project}: the project submission has nothing to save [nothing_to_save, PROJECT-13]")
     );
     // An unknown section refuses the call; a host names the section.
-    let Err(error @ Error::Rejected(_)) = engine
+    let Err(failure) = engine
         .project(&project)
         .section("sdtn")
         .cancel_with(&token)
@@ -374,13 +374,19 @@ fn every_refusal_names_its_call() {
     else {
         panic!("an unknown section refuses the run");
     };
-    let failure = Failure::from_error(Action::Select("sdtn"), &error);
+    assert!(matches!(failure.kind, FailureKind::Rejected));
     assert_eq!(
         failure.message,
         "cannot select sdtn: the project declares no section sdtn [unknown_section, PROJECT-14]"
     );
-    // A refusal with no issue keeps the error's own text after the prefix.
-    let failure = Failure::from_error(Action::Read("edc/odm.xml"), &Error::Cancelled);
+    // A refusal with no issue names what failed after the prefix: a check
+    // the token already cancelled reads nothing.
+    let cancelled = CancellationToken::new();
+    cancelled.cancel();
+    let Err(failure) = engine.spec("edc/odm.xml").cancel_with(&cancelled).check() else {
+        panic!("a cancelled check fails");
+    };
+    assert!(matches!(failure.kind, FailureKind::Cancelled));
     assert_eq!(
         failure.message,
         "cannot read edc/odm.xml: operation cancelled"

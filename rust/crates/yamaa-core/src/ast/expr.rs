@@ -290,6 +290,10 @@ pub enum ScalarOp {
     DurationValue {
         unit: TimeUnit,
     },
+    /// `dataset::Temporal`: the inverse of `DurationValue`.
+    DurationText {
+        unit: TimeUnit,
+    },
     /// `dataset::Temporal`: the parts are the operands, year first.
     Dtc,
     /// `dataset::Temporal`.

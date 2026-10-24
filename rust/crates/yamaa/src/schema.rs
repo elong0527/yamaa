@@ -10,7 +10,7 @@
 //! run time, and every host returns the same text, which the command line
 //! prints.
 
-use crate::api::Failure;
+use crate::error::Failure;
 use crate::file_type::FileType;
 use crate::text::Action;
 

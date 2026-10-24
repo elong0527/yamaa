@@ -22,6 +22,7 @@ use std::collections::BTreeMap;
 
 pub(crate) use yamaa_adapters::issue_location::Locator;
 
+use crate::conditions::ConditionCode;
 use crate::table::Table;
 
 // The host tables' columns and the closed vocabularies of their values.
@@ -61,6 +62,73 @@ pub const PHASES: [&str; 12] = [
     "output",
     "engine",
 ];
+
+/// The phase that reported an issue: one of the twelve phases the
+/// registered conditions name, in run order, as [`PHASES`] writes them.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Phase {
+    Validation,
+    Planning,
+    Ingest,
+    RowConstruction,
+    Join,
+    Mapping,
+    Impute,
+    Derivation,
+    Convert,
+    Verification,
+    Output,
+    Engine,
+}
+
+/// The phases in run order, one for each entry of [`PHASES`].
+const PHASE_ORDER: [Phase; 12] = [
+    Phase::Validation,
+    Phase::Planning,
+    Phase::Ingest,
+    Phase::RowConstruction,
+    Phase::Join,
+    Phase::Mapping,
+    Phase::Impute,
+    Phase::Derivation,
+    Phase::Convert,
+    Phase::Verification,
+    Phase::Output,
+    Phase::Engine,
+];
+
+impl Phase {
+    /// The phase as written, such as `row_construction`: one of [`PHASES`].
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Validation => "validation",
+            Self::Planning => "planning",
+            Self::Ingest => "ingest",
+            Self::RowConstruction => "row_construction",
+            Self::Join => "join",
+            Self::Mapping => "mapping",
+            Self::Impute => "impute",
+            Self::Derivation => "derivation",
+            Self::Convert => "convert",
+            Self::Verification => "verification",
+            Self::Output => "output",
+            Self::Engine => "engine",
+        }
+    }
+
+    /// The phase written `text`, or none for text that names none of the
+    /// twelve phases.
+    pub fn parse(text: &str) -> Option<Self> {
+        PHASE_ORDER.into_iter().find(|phase| phase.as_str() == text)
+    }
+}
+
+impl std::fmt::Display for Phase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
 
 /// The columns of the run report, in order.
 pub const REPORT_COLUMNS: &[&str] = yamaa_core::run_report::COLUMNS;
@@ -271,9 +339,10 @@ impl DiagnosticContext {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Diagnostic {
     pub severity: Severity,
-    pub phase: String,
-    /// The condition.
-    pub code: String,
+    /// The phase that reported the issue.
+    pub phase: Phase,
+    /// The condition, as the issues table's `condition` column names it.
+    pub code: ConditionCode,
     pub rule: Option<String>,
     pub spec_path: Vec<String>,
     /// Where the first spec path is written (P-ISSUE-1): the YAML file of
@@ -320,8 +389,10 @@ impl Diagnostic {
         let definition = diagnostic.definition();
         Self {
             severity: severity(diagnostic),
-            phase: definition.phase.to_owned(),
-            code: definition.condition.to_owned(),
+            phase: Phase::parse(definition.phase)
+                .expect("a registered condition names one of the twelve phases"),
+            code: ConditionCode::parse(definition.condition)
+                .expect("every condition core reports is registered"),
             rule: definition.rule.map(str::to_owned),
             spec_path: diagnostic.spec_paths.clone(),
             location: locator.locate(diagnostic).map(|location| Location {
@@ -366,8 +437,8 @@ impl Diagnostic {
             .and_then(|location| location.position);
         let values = [
             ("severity", text(self.severity.as_str())),
-            ("phase", text(&self.phase)),
-            ("condition", text(&self.code)),
+            ("phase", text(self.phase.as_str())),
+            ("condition", text(self.code.as_str())),
             (
                 "rule",
                 self.rule.as_deref().map_or(ContextValue::Null, text),
@@ -472,8 +543,8 @@ impl Report {
         let lists = |list: List| PublicColumn::List(Box::new(list));
         let columns: [PublicColumn; ISSUE_COLUMNS.len()] = [
             text(|diagnostic| Some(diagnostic.severity.as_str())),
-            text(|diagnostic| Some(&diagnostic.phase)),
-            text(|diagnostic| Some(&diagnostic.code)),
+            text(|diagnostic| Some(diagnostic.phase.as_str())),
+            text(|diagnostic| Some(diagnostic.code.as_str())),
             text(|diagnostic| diagnostic.rule.as_deref()),
             lists(List::text(diagnostics.iter().map(|diagnostic| {
                 Some(diagnostic.spec_path.iter().map(String::as_str).collect())
@@ -554,8 +625,8 @@ mod tests {
         assert!(!report.is_empty());
         let diagnostic = &report.diagnostics[0];
         assert_eq!(diagnostic.severity, Severity::Error);
-        assert_eq!(diagnostic.phase, CODE.definition().phase);
-        assert_eq!(diagnostic.code, CODE.definition().condition);
+        assert_eq!(diagnostic.phase.as_str(), CODE.definition().phase);
+        assert_eq!(diagnostic.code.as_str(), CODE.definition().condition);
         assert_eq!(diagnostic.rule.as_deref(), None);
         assert_eq!(diagnostic.spec_path, ["columns.A"]);
         assert_eq!(diagnostic.context.to_json(), CONTEXT);
@@ -814,6 +885,48 @@ mod tests {
             .collect::<std::collections::BTreeSet<_>>();
         assert_eq!(declared.len(), PHASES.len(), "a phase is listed twice");
         assert_eq!(registered, declared);
+    }
+
+    #[test]
+    fn phases_are_the_phases_in_order() {
+        for phase in PHASE_ORDER {
+            // Exhaustive: a new phase fails to compile here until it is
+            // listed in PHASE_ORDER, and so in PHASES.
+            match phase {
+                Phase::Validation
+                | Phase::Planning
+                | Phase::Ingest
+                | Phase::RowConstruction
+                | Phase::Join
+                | Phase::Mapping
+                | Phase::Impute
+                | Phase::Derivation
+                | Phase::Convert
+                | Phase::Verification
+                | Phase::Output
+                | Phase::Engine => {}
+            }
+            assert_eq!(Phase::parse(phase.as_str()), Some(phase));
+        }
+        assert_eq!(PHASE_ORDER.map(Phase::as_str), PHASES);
+        assert!(PHASE_ORDER.windows(2).all(|pair| pair[0] < pair[1]));
+    }
+
+    /// Every cause core can report converts: its phase is one of the twelve
+    /// and its condition is registered, so a diagnostic's typed fields name
+    /// what core's record names.
+    #[test]
+    fn every_cause_core_reports_has_a_typed_phase_and_condition() {
+        for cause in yamaa_core::diagnostic::CONDITIONS {
+            let definition = cause.definition();
+            let phase = Phase::parse(definition.phase);
+            let code = ConditionCode::parse(definition.condition);
+            assert_eq!(
+                (phase.map(Phase::as_str), code.map(ConditionCode::as_str)),
+                (Some(definition.phase), Some(definition.condition)),
+                "{cause:?}"
+            );
+        }
     }
 
     #[test]

@@ -15,9 +15,9 @@ use std::sync::{
 /// each member it builds, before each submission section, at every
 /// checkpoint of a dataset's schedule and before each batch of
 /// project-function calls, and once in a save, after every file is staged
-/// and before the first commit (D74). A cancelled operation returns
-/// [`Error::Cancelled`](crate::Error::Cancelled) with no result and no
-/// issue, and a cancelled save writes nothing.
+/// and before the first commit (D74). A cancelled operation fails with a
+/// [`FailureKind::Cancelled`](crate::FailureKind::Cancelled) failure, with no
+/// result and no issue, and a cancelled save writes nothing.
 ///
 /// A host makes its token with [`CancellationToken::with_probe`], whose
 /// probe asks the interpreter whether an interrupt is pending, keeps that
@@ -29,6 +29,12 @@ pub struct CancellationToken {
     cancelled: Arc<AtomicBool>,
     probe: Option<Arc<dyn Fn() -> bool + Send + Sync>>,
 }
+
+/// Why an internal step stopped: its token was found cancelled, or a project
+/// function raised the host's interrupt (D46). The operation that ran the
+/// step turns it into its own cancelled [`Failure`](crate::Failure).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Cancelled;
 
 impl std::fmt::Debug for CancellationToken {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

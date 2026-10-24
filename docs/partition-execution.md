@@ -274,14 +274,14 @@ of `save()`.
 
 | Phase | Cancel | Fail |
 | --- | --- | --- |
-| Before start, through admission | `Error::Cancelled`; no result, nothing staged or published | A failed result with no output, such as the `partition_global` refusal; its save writes only the report file |
-| Mid-partition, through output keys and verification | `Error::Cancelled`; every partition's partial state is dropped; nothing staged or published | The whole-table run's first failure, handler counts and retained records; no output; its save writes only the report file |
+| Before start, through admission | a `FailureKind::Cancelled` failure; no result, nothing staged or published | A failed result with no output, such as the `partition_global` refusal; its save writes only the report file |
+| Mid-partition, through output keys and verification | a `FailureKind::Cancelled` failure; every partition's partial state is dropped; nothing staged or published | The whole-table run's first failure, handler counts and retained records; no output; its save writes only the report file |
 | Mid-stream, while a reader pulls the batches of a streamed run | Releasing the reader or a token found before a batch ends production; no batch is retained; no result, so nothing published | A batch that cannot be produced, at the first pull a failed run's, ends the stream with the run's issue; its save writes only the report file |
 | During publication | Polled once, after every file is staged and before the first commit (D74): every staged file removed, nothing published | Before the first commit: nothing published, staged files removed. During the commit: earlier files stay replaced whole, later staged files removed, `Failure.paths` lists the files written |
 
-In every cell a cancellation is `Error::Cancelled` with no result and no issue
-(D186), and a failure is an issue of the run's result, which names its phase;
-no target ever holds part of a file (OUTPUT-8).
+In every cell a cancellation is a `FailureKind::Cancelled` failure with no
+result and no issue (D186), and a failure is an issue of the run's result,
+which names its phase; no target ever holds part of a file (OUTPUT-8).
 
 ## Proof obligations for a future executor
 

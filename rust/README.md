@@ -267,7 +267,7 @@ impl Engine {
     pub fn project<'a>(&'a self, path: &'a str) -> ProjectRequest<'a>;
     // Single files.
     pub fn file_type(&self, path: &str) -> Result<FileType, Failure>;
-    pub fn read_odm(&self, source: &str, options: &OdmOptions) -> Result<Table, Error>;
+    pub fn read_odm(&self, source: &str, options: &OdmOptions) -> Result<Table, Failure>;
     pub fn save_table(&self, table: &Table, out: &str) -> Result<Vec<String>, Failure>;
 }
 
@@ -279,10 +279,10 @@ impl<'a> SpecRequest<'a> {
     pub fn reusing(mut self, plans: &'a Plans) -> Self;       // none: an empty holder
     pub fn cancel_with(mut self, token: &'a CancellationToken) -> Self;  // none: never
     pub fn path(&self) -> &str;
-    pub fn check(&self) -> Result<Check, Error>;
-    pub fn check_on(&self, parent: &str) -> Result<Check, Error>;
-    pub fn run(&self) -> Result<Run, Error>;
-    pub fn stream(&self) -> Result<Streamed, Error>;          // the `arrow` feature
+    pub fn check(&self) -> Result<Check, Failure>;
+    pub fn check_on(&self, parent: &str) -> Result<Check, Failure>;  // a fragment (#3694)
+    pub fn run(&self) -> Result<Run, Failure>;
+    pub fn stream(&self) -> Result<Streamed, Failure>;        // the `arrow` feature
     pub fn resolve(&self) -> Result<ContextValue, Failure>;
 }
 
@@ -295,9 +295,9 @@ impl<'a> ProjectRequest<'a> {
     pub fn cancel_with(mut self, token: &'a CancellationToken) -> Self;
     pub fn spec(&self, name: &str) -> Result<SpecRequest<'a>, Failure>;
     pub fn names(&self) -> Result<Vec<String>, Failure>;
-    pub fn check(&self) -> Result<Check, Error>;
-    pub fn run(&self) -> Result<ProjectRun, Error>;
-    pub fn submission(&self, options: &SubmissionOptions) -> Result<Submission, Error>;
+    pub fn check(&self) -> Result<Check, Failure>;
+    pub fn run(&self) -> Result<ProjectRun, Failure>;
+    pub fn submission(&self, options: &SubmissionOptions) -> Result<Submission, Failure>;
 }
 
 #[non_exhaustive]
@@ -341,12 +341,13 @@ pub fn selftest(host: Host, host_version: Option<&str>) -> SelfTest;
   specification is read alone, a project run builds and a submission composes
   every section, every run compiles through an empty holder, and the
   operations poll a token that nothing cancels. `check`, `check_on`, `run`,
-  `stream` and `submission` poll the token; `resolve`, `names` and `spec` read files alone
-  and poll none. A project request's `check`, `names` and `spec` read the
-  whole project, whichever section it names. `ProjectRequest::spec(name)`
-  gives the request of the listed specification, read with that project file
-  and polling the project request's token; it reuses none of the project
-  request's plans, as each host object keeps a holder of its own. Both
+  `stream` and `submission` poll the token; `resolve`, `names` and `spec`
+  read files alone and poll none. A project request's `check`, `names` and
+  `spec` read the whole project, whichever section it names.
+  `ProjectRequest::spec(name)` gives the request of the listed
+  specification, read with that project file and polling the project
+  request's token; it reuses none of the project request's plans, as each
+  host object keeps a holder of its own. Both
   requests are `#[non_exhaustive]` and `#[must_use]`, and only
   `Engine::spec`, `Engine::project` and `ProjectRequest::spec` build them. A
   request borrows the engine, holder, token and paths it is given; a request
@@ -355,15 +356,16 @@ pub fn selftest(host: Host, host_version: Option<&str>) -> SelfTest;
 - A check reports admission and preparation failures as the issues of its
   `Check`, never as a second error channel, and a run returns a `Run` for
   every adjudicated outcome, with its output, issues and run report. Only
-  cancellation fails either: a cancelled call returns `Error::Cancelled`, with
-  no result and no issue, as every cancellable operation does.
+  cancellation fails either: a cancelled call fails as
+  `FailureKind::Cancelled`, with no result and no issue, as every cancellable
+  operation does.
 - `SpecRequest::check_on(parent)` checks a fragment on the specification
-  `parent` names, a caller path read as the request's path is: the fragment composes as it would
-  in a file that names `parent` as its parent, includes the fragment and
-  writes nothing else (LAYER-4, #3694). A specification that declares
-  `parent` or `include` is no fragment, so the call refuses the given parent
-  with `Error::Rejected` and the one `value_not_permitted` issue at
-  `parent`.
+  `parent` names, a caller path read as the request's own path is: the
+  fragment composes as it would in a file that names `parent` as its parent,
+  includes the fragment and writes nothing else (LAYER-4, #3694). A
+  specification that declares `parent` or `include` is no fragment, so the
+  call refuses the given parent as `cannot read <path>`, with the one
+  `value_not_permitted` issue at `parent`.
 - `save` is the one save every result shares: `Run`, `ProjectRun` and
   `Submission` save their outcome through it, a run as an outcome of one
   member. It plans every file, opens and stages all of them,
@@ -472,8 +474,8 @@ Diagnostics are typed records, never JSON text or tuples:
 ```rust
 pub struct Diagnostic {           // #[non_exhaustive]
     pub severity: Severity,       // Error | Warning
-    pub phase: String,            // stage that produced the record
-    pub code: String,             // stable condition code, e.g. `unknown_field`
+    pub phase: Phase,             // the phase that reported the issue
+    pub code: ConditionCode,      // its registered condition, e.g. `unknown_field`
     pub rule: Option<String>,     // the rule card the condition cites
     pub spec_path: Vec<String>,   // ordered path segments
     pub location: Option<Location>,  // where the first spec path is written
@@ -484,12 +486,34 @@ pub struct Diagnostic {           // #[non_exhaustive]
 }
 pub struct SourceSpan { pub start: usize, pub end: usize }  // #[non_exhaustive]
 pub struct Report { pub diagnostics: Vec<Diagnostic> }  // #[non_exhaustive]
+
+pub enum Phase {                  // #[non_exhaustive], the twelve in run order
+    Validation, Planning, Ingest, RowConstruction, Join, Mapping,
+    Impute, Derivation, Convert, Verification, Output, Engine,
+}
+impl Phase {
+    pub fn as_str(self) -> &'static str;          // one of PHASES
+    pub fn parse(text: &str) -> Option<Phase>;
+}
+
+pub struct ConditionCode(/* private */);
+impl ConditionCode {
+    pub fn parse(name: &str) -> Option<ConditionCode>;  // a name the registry holds
+    pub fn as_str(self) -> &'static str;
+}
 ```
 
 This is the public form of core's `yamaa_core::diagnostic::Diagnostic`, the one
 record from the failure site to this edge: the registry names its phase,
 condition and rule, and it carries spec paths, structured context and
-optional geometry. `DiagnosticContext` is
+optional geometry. The phase and the condition are typed (#3765): `Phase` is
+one of the twelve phases the registered conditions name, which `PHASES` also
+lists as written for the hosts' vocabulary check, and `ConditionCode` a
+condition `yaml/conditions.yaml` holds, registered or retired, which its
+`parse` validates. Each prints and converts with `as_str()`, so the issues
+table, an issue's line and its JSON object write the same text as before; the
+catalogue's `Condition` names its condition and phases with the same types.
+`DiagnosticContext` is
 a structured value map, not a formatted string: `ContextValue` keeps integer
 tokens exact (`Int`, `Uint`, or `Wide` with the decimal spelling of a token
 outside both 64-bit ranges), fraction/exponent tokens as `Float`, and nested
@@ -509,23 +533,54 @@ the first issue's line and the count of the others.
 
 ### Errors
 
-One public error type at the operation boundary, converted inside the facade
-from the internal errors consolidated per module in #2658:
+One public error type, `Failure`, is the error of every facade operation
+(#3765, which replaced the two channels of this note's first design, an
+`Error` enum for a run beside the `Failure` of a resolve or a save). It is
+converted inside the facade from the internal errors consolidated per module
+in #2658:
 
 ```rust
-pub enum Error {                  // #[non_exhaustive]
-    Rejected(Report),             // the operation was refused with diagnostics
-    Resolver(ResolverFailure),    // a caller-supplied resolver failed
-    Host(FunctionError),          // a caller-supplied project function failed
-    Table(TableError),            // a table could not be built or imported
-    Unavailable { feature: &'static str },  // a format feature is not compiled in
+pub struct Failure {              // #[non_exhaustive]
+    pub kind: FailureKind,        // what refused the operation
+    pub message: String,          // D39's error text
+    pub issues: Table,            // the issues table both hosts attach (D28)
+    pub diagnostics: Vec<Diagnostic>,
+    pub paths: Vec<String>,       // what a refused save wrote first
+}
+
+pub enum FailureKind {            // #[non_exhaustive], PartialEq, Eq
+    Rejected,                     // refused with the failure's issues
     Cancelled,                    // the call was cancelled (see Cancellation)
+    Table(Box<TableError>),       // a table could not be built or imported
+    Unavailable { feature: &'static str },  // a format feature is not compiled in
     Internal { code: &'static str },        // stable code, no internal payload
+    Stream { code: &'static str },          // a streamed run refused (#3697)
 }
 ```
 
-`ResolverFailure`, `FunctionError` and `TableError` are small facade-owned
-types (also `#[non_exhaustive]`) carrying a stable code and a message. Internal
+Every message has the hosts' form, `cannot <action> <subject>: <first issue>
+(and N more issues)`: the call that refused and what it names, as the
+command line and both hosts print it, then the first issue's printed line
+and the count of the others, or, for a kind no issue explains, what failed,
+such as `cannot read adae.yaml: operation cancelled` or `cannot read
+edc/odm.xml: format feature not compiled in: odm`. A check, run, stream or
+submission that its token cancels names reading its specification or
+project; an unknown section, selecting it; and a streamed run's refusal,
+reading its subject. Only a `Rejected` failure carries issues, and only a
+refused save carries paths. A table's failure is boxed, so every
+`Result<_, Failure>` stays small. The engine answers a `Cancelled` failure
+with the hosts' cancellation and every other failure with their one error.
+No operation fails because a caller's project function or resolver failed:
+those failures are issues of the result, and a host's interrupt cancels the
+call.
+
+The ports keep their own errors, which a `Failure` never carries:
+`FunctionError` and `CallError` are the `ProjectFunctions` port's,
+`ResolverFailure` the resolver's, and `LockSyntaxError` and
+`ScalarDecodeError` belong to the port helpers; `InputFrame::import`, a
+value constructor with no action to name, keeps `TableError`. Each is a
+small facade-owned type (also `#[non_exhaustive]`) carrying a stable code
+and a message. Internal
 error enums -- `file_workflow::SelectionError`, `file_resources::Error`,
 `yaml_decode::DecodeFailure`, the `file_define::Failure` family and the rest --
 never appear in a facade signature; #2658's per-module consolidation is what
@@ -553,9 +608,9 @@ project run or check and after each member it builds, before each submission
 section, at every step of a dataset's schedule marked `checkpoint` and before
 each batch of project-function calls (`ResolvedPlan::execute`, #2822 step 1),
 and once in a save, after every file is staged and before the first commit
-(D74). A cancelled operation returns `Error::Cancelled`, with no result and
-no issue: a cancelled run keeps nothing it built, and a cancelled save
-removes what it staged and fails with `cannot save <subject>: operation
+(D74). A cancelled operation fails as `FailureKind::Cancelled`, with no
+result and no issue: a cancelled run keeps nothing it built, and a cancelled
+save removes what it staged and fails with `cannot save <subject>: operation
 cancelled`. A save writes either nothing or everything it planned, and
 nothing is rolled back once committed. A project function that raises the
 host's interrupt, as `ProjectFunctions::is_interrupt` classifies it, cancels
@@ -579,7 +634,8 @@ remains, exactly as described in the feature table above. A capability a build o
 today: the stable codes (`yaml_reader_unavailable`,
 `parquet_reader_unavailable`, `sas_reader_unavailable`,
 `odm_reader_unavailable`, `parquet_codec_unavailable`) surface as
-diagnostics or as `Error::Unavailable`. The facade adds no native dependencies of its own.
+diagnostics or as a `FailureKind::Unavailable` failure. The facade adds no
+native dependencies of its own.
 
 ### Stability policy
 
@@ -649,13 +705,13 @@ was removed. Any module not listed here is internal by default.
 | `file_define` | Internal -- each section's composition behind `ProjectRequest::submission`, which `Submission::save` publishes. |
 | `file_preparation` | Internal -- `FileSpecification`, the one prepared specification, alone or with its project, behind each run and the kept plans of a `Plans` holder. |
 | `file_project` | Internal -- project environment capture for preparation. |
-| `file_resources` | Internal -- its `Error` converts into `ResolverFailure`/`Error::Internal`. |
-| `file_workflow` | Internal -- `SelectionError` converts into diagnostics/`Error`. |
+| `file_resources` | Internal -- its `Error` converts into `ResolverFailure`/`FailureKind::Internal`. |
+| `file_workflow` | Internal -- `SelectionError` converts into diagnostics/`Failure`. |
 | `host_resources` | Facade -- the `ResourceResolver` trait, `MemoryResolver`, and the resolver request/reply/failure types. |
 | `ipc_table` | Removed -- `public_table::TableError` converts into the facade `TableError`; no IPC route remains. |
 | `issue_rows` | Removed -- core's `Diagnostic` is the one record; the facade's `Diagnostic` and `Report` are its public form. |
 | `project_application` | Internal -- selection failures convert into diagnostics. |
-| `project_attempt` | Internal -- host-failure traversal; failures surface as `Error::Host`. |
+| `project_attempt` | Internal -- host-failure traversal; failures surface as the result's issues, and a host interrupt as `FailureKind::Cancelled`. |
 | `project_lock` | Facade -- `LockFinding`/`LockReason` are the public lock-finding types, `decode_renv_lock` is the public renv admission, and `verify_uv_lock` compares a uv lock with the installation an `InstalledDistributions` reports (#3030 D172); lock-kind detection stays internal (the engine supplies `LockKind` through `LockContext`). |
 | `project_report` | Internal -- the activation and project-function half of the one result builder; `Classified` stays an internal constructor. |
 | `project_run` | Removed -- `specification_run::PreparedRun` is the one prepared run, alone or with a project; a kept plan wraps it (#2821), and it stays internal with its `Attempt`. |
@@ -664,7 +720,7 @@ was removed. Any module not listed here is internal by default.
 | `scalar_bytes` | Internal -- scalar decoding is a conversion detail; project functions exchange facade `Scalar` values. |
 | `specification_report` | Facade -- the one result builder behind `Run`; its `Identity` folds into `EngineOptions` (`runtime_name`/`runtime_version`); the module is internal. |
 | `style_values` | Internal -- the value comparison that proves `lint`'s fixes. |
-| `yaml_decode` | Internal -- `DecodeFailure` converts into diagnostics/`Error::Unavailable`. |
+| `yaml_decode` | Internal -- `DecodeFailure` converts into diagnostics/`FailureKind::Unavailable`. |
 | `yamaa_core::application_observer` | Internal -- the observer port: each build's phase and stage events reach the adapters' measurements, which the facade passes in the build's `Scope` beside its cancellation probe; there is no public progress port (#3030 D72). |
 | `yamaa_core::domain_entry` | Internal -- the observed preparation and build phases behind `Engine`. |
 | `yamaa_core::function_batch` | Facade -- `ProjectFunctions::call_batch` with facade scalar arguments; the batch invocation of the core host-functions port stays internal. |

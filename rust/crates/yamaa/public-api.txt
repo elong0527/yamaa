@@ -30,6 +30,7 @@ yamaa::CancellationToken: pub use yamaa::cancel::CancellationToken
 yamaa::Check: pub use yamaa::api::Check
 yamaa::ColumnType: pub use yamaa::functions::ColumnType
 yamaa::Condition: pub use yamaa::conditions::Condition
+yamaa::ConditionCode: pub use yamaa::conditions::ConditionCode
 yamaa::Conditions: pub use yamaa::conditions::Conditions
 yamaa::ContextValue: pub use yamaa::diagnostic::ContextValue
 yamaa::DataType: pub use yamaa::table::DataType [cfg(feature = "arrow")]
@@ -41,11 +42,11 @@ yamaa::DiagnosticContext: pub use yamaa::diagnostic::DiagnosticContext
 yamaa::EncodedScalar: pub use yamaa::scalar::EncodedScalar
 yamaa::Engine: pub use yamaa::engine::Engine
 yamaa::EngineOptions: pub use yamaa::engine::EngineOptions
-yamaa::Error: pub use yamaa::error::Error
 yamaa::FEATURES: pub use yamaa::info::FEATURES
 yamaa::FFI_ArrowArrayStream: pub use yamaa::table::FFI_ArrowArrayStream [cfg(feature = "arrow")]
 yamaa::FILE_TYPES: pub use yamaa::file_type::FILE_TYPES
-yamaa::Failure: pub use yamaa::api::Failure
+yamaa::Failure: pub use yamaa::error::Failure
+yamaa::FailureKind: pub use yamaa::error::FailureKind
 yamaa::Field: pub use yamaa::table::Field [cfg(feature = "arrow")]
 yamaa::Fields: pub use yamaa::table::Fields [cfg(feature = "arrow")]
 yamaa::FileType: pub use yamaa::file_type::FileType
@@ -81,6 +82,7 @@ yamaa::OdmOptions: pub use yamaa::odm::OdmOptions
 yamaa::PHASES: pub use yamaa::diagnostic::PHASES
 yamaa::Parameter: pub use yamaa::functions::Parameter
 yamaa::Partitions: pub use yamaa::engine::Partitions
+yamaa::Phase: pub use yamaa::diagnostic::Phase
 yamaa::Plans: pub use yamaa::api::Plans
 yamaa::Position: pub use yamaa::diagnostic::Position
 yamaa::ProjectFunctions: pub use yamaa::functions::ProjectFunctions
@@ -137,16 +139,6 @@ yamaa::api::Check::summary: pub fn summary(&self) -> Summary
 yamaa::api::Engine: impl Engine
 yamaa::api::Engine::project: pub fn project<'a>(&'a self, path: &'a str) -> ProjectRequest<'a>
 yamaa::api::Engine::spec: pub fn spec<'a>(&'a self, path: &'a str) -> SpecRequest<'a>
-yamaa::api::Failure: impl Failure
-yamaa::api::Failure: impl std::error::Error for Failure
-yamaa::api::Failure: impl std::fmt::Display for Failure
-yamaa::api::Failure: pub struct Failure [derive(Clone, Debug)] [non_exhaustive]
-yamaa::api::Failure::diagnostics: pub diagnostics: Vec<yamaa::diagnostic::Diagnostic>
-yamaa::api::Failure::from_error: pub fn from_error(action: Action<'_>, error: &Error) -> Self
-yamaa::api::Failure::issues: pub issues: Table
-yamaa::api::Failure::message: pub message: String
-yamaa::api::Failure::new: pub fn new(action: Action<'_>, report: &Report) -> Self
-yamaa::api::Failure::paths: pub paths: Vec<String>
 yamaa::api::Plans: impl Plans
 yamaa::api::Plans: pub struct Plans [derive(Default)]
 yamaa::api::Plans::new: pub fn new() -> Self
@@ -154,13 +146,13 @@ yamaa::api::ProjectRequest: impl std::fmt::Debug for ProjectRequest<'_>
 yamaa::api::ProjectRequest: impl<'a> ProjectRequest<'a>
 yamaa::api::ProjectRequest: pub struct ProjectRequest<'a> [derive(Clone)] [non_exhaustive]
 yamaa::api::ProjectRequest::cancel_with: pub fn cancel_with(mut self, token: &'a CancellationToken) -> Self
-yamaa::api::ProjectRequest::check: pub fn check(&self) -> Result<Check, Error>
+yamaa::api::ProjectRequest::check: pub fn check(&self) -> Result<Check, Failure>
 yamaa::api::ProjectRequest::names: pub fn names(&self) -> Result<Vec<String>, Failure>
 yamaa::api::ProjectRequest::reusing: pub fn reusing(mut self, plans: &'a Plans) -> Self
-yamaa::api::ProjectRequest::run: pub fn run(&self) -> Result<ProjectRun, Error>
+yamaa::api::ProjectRequest::run: pub fn run(&self) -> Result<ProjectRun, Failure>
 yamaa::api::ProjectRequest::section: pub fn section(mut self, section: &'a str) -> Self
 yamaa::api::ProjectRequest::spec: pub fn spec(&self, name: &str) -> Result<SpecRequest<'a>, Failure>
-yamaa::api::ProjectRequest::submission: pub fn submission(&self, options: &SubmissionOptions) -> Result<Submission, Error>
+yamaa::api::ProjectRequest::submission: pub fn submission(&self, options: &SubmissionOptions) -> Result<Submission, Failure>
 yamaa::api::ProjectRun: impl ProjectRun
 yamaa::api::ProjectRun: pub struct ProjectRun
 yamaa::api::ProjectRun::diagnostics: pub fn diagnostics(&self) -> Vec<yamaa::diagnostic::Diagnostic>
@@ -189,14 +181,14 @@ yamaa::api::SpecRequest: impl std::fmt::Debug for SpecRequest<'_>
 yamaa::api::SpecRequest: impl<'a> SpecRequest<'a>
 yamaa::api::SpecRequest: pub struct SpecRequest<'a> [derive(Clone)] [non_exhaustive]
 yamaa::api::SpecRequest::cancel_with: pub fn cancel_with(mut self, token: &'a CancellationToken) -> Self
-yamaa::api::SpecRequest::check: pub fn check(&self) -> Result<Check, Error>
-yamaa::api::SpecRequest::check_on: pub fn check_on(&self, parent: &str) -> Result<Check, Error>
+yamaa::api::SpecRequest::check: pub fn check(&self) -> Result<Check, Failure>
+yamaa::api::SpecRequest::check_on: pub fn check_on(&self, parent: &str) -> Result<Check, Failure>
 yamaa::api::SpecRequest::path: pub fn path(&self) -> &str
 yamaa::api::SpecRequest::project: pub fn project(mut self, project: &'a str) -> Self
 yamaa::api::SpecRequest::resolve: pub fn resolve(&self) -> Result<ContextValue, Failure>
 yamaa::api::SpecRequest::reusing: pub fn reusing(mut self, plans: &'a Plans) -> Self
-yamaa::api::SpecRequest::run: pub fn run(&self) -> Result<Run, Error>
-yamaa::api::SpecRequest::stream: pub fn stream(&self) -> Result<Streamed, Error> [cfg(feature = "arrow")]
+yamaa::api::SpecRequest::run: pub fn run(&self) -> Result<Run, Failure>
+yamaa::api::SpecRequest::stream: pub fn stream(&self) -> Result<Streamed, Failure> [cfg(feature = "arrow")]
 yamaa::api::Status: impl Status
 yamaa::api::Status: pub enum Status [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::api::Status::Failed: Failed
@@ -228,15 +220,20 @@ yamaa::conditions: pub use yamaa::conditions::conditions
 yamaa::conditions::CONDITION_COLUMNS: pub const CONDITION_COLUMNS: [&str; 7]
 yamaa::conditions::Condition: impl Condition
 yamaa::conditions::Condition: pub struct Condition [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::conditions::Condition::condition: pub condition: &'static str
+yamaa::conditions::Condition::condition: pub condition: ConditionCode
 yamaa::conditions::Condition::message: pub message: Option<&'static str>
-yamaa::conditions::Condition::phases: pub phases: Vec<&'static str>
+yamaa::conditions::Condition::phases: pub phases: Vec<Phase>
 yamaa::conditions::Condition::renamed_from: pub renamed_from: Option<&'static str>
 yamaa::conditions::Condition::retired_in: pub retired_in: Option<&'static str>
 yamaa::conditions::Condition::rules: pub rules: Vec<&'static str>
 yamaa::conditions::Condition::severity: pub severity: Severity
 yamaa::conditions::Condition::text: pub fn text(&self) -> String
 yamaa::conditions::Condition::to_value: pub fn to_value(&self) -> ContextValue
+yamaa::conditions::ConditionCode: impl ConditionCode
+yamaa::conditions::ConditionCode: impl std::fmt::Display for ConditionCode
+yamaa::conditions::ConditionCode: pub struct ConditionCode [derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+yamaa::conditions::ConditionCode::as_str: pub fn as_str(self) -> &'static str
+yamaa::conditions::ConditionCode::parse: pub fn parse(name: &str) -> Option<Self>
 yamaa::conditions::Conditions: impl Conditions
 yamaa::conditions::Conditions: pub struct Conditions [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::conditions::Conditions::entries: pub fn entries(&self) -> &[Condition]
@@ -258,12 +255,12 @@ yamaa::diagnostic::ContextValue::Wide: Wide(String)
 yamaa::diagnostic::ContextValue::to_json: pub fn to_json(&self) -> String
 yamaa::diagnostic::Diagnostic: impl Diagnostic
 yamaa::diagnostic::Diagnostic: pub struct Diagnostic [derive(Clone, Debug, PartialEq)] [non_exhaustive]
-yamaa::diagnostic::Diagnostic::code: pub code: String
+yamaa::diagnostic::Diagnostic::code: pub code: ConditionCode
 yamaa::diagnostic::Diagnostic::context: pub context: DiagnosticContext
 yamaa::diagnostic::Diagnostic::location: pub location: Option<Location>
 yamaa::diagnostic::Diagnostic::message: pub message: String
 yamaa::diagnostic::Diagnostic::operand_route: pub operand_route: Option<Vec<String>>
-yamaa::diagnostic::Diagnostic::phase: pub phase: String
+yamaa::diagnostic::Diagnostic::phase: pub phase: Phase
 yamaa::diagnostic::Diagnostic::rule: pub rule: Option<String>
 yamaa::diagnostic::Diagnostic::severity: pub severity: Severity
 yamaa::diagnostic::Diagnostic::source_span: pub source_span: Option<SourceSpan>
@@ -282,6 +279,23 @@ yamaa::diagnostic::Location: pub struct Location [derive(Clone, Debug, Eq, Parti
 yamaa::diagnostic::Location::file: pub file: String
 yamaa::diagnostic::Location::position: pub position: Option<Position>
 yamaa::diagnostic::PHASES: pub const PHASES: [&str; 12]
+yamaa::diagnostic::Phase: impl Phase
+yamaa::diagnostic::Phase: impl std::fmt::Display for Phase
+yamaa::diagnostic::Phase: pub enum Phase [derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)] [non_exhaustive]
+yamaa::diagnostic::Phase::Convert: Convert
+yamaa::diagnostic::Phase::Derivation: Derivation
+yamaa::diagnostic::Phase::Engine: Engine
+yamaa::diagnostic::Phase::Impute: Impute
+yamaa::diagnostic::Phase::Ingest: Ingest
+yamaa::diagnostic::Phase::Join: Join
+yamaa::diagnostic::Phase::Mapping: Mapping
+yamaa::diagnostic::Phase::Output: Output
+yamaa::diagnostic::Phase::Planning: Planning
+yamaa::diagnostic::Phase::RowConstruction: RowConstruction
+yamaa::diagnostic::Phase::Validation: Validation
+yamaa::diagnostic::Phase::Verification: Verification
+yamaa::diagnostic::Phase::as_str: pub fn as_str(self) -> &'static str
+yamaa::diagnostic::Phase::parse: pub fn parse(text: &str) -> Option<Self>
 yamaa::diagnostic::Position: pub struct Position [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::diagnostic::Position::column: pub column: usize
 yamaa::diagnostic::Position::line: pub line: usize
@@ -325,17 +339,23 @@ yamaa::engine::Partitions::new: pub fn new(rows: NonZeroUsize) -> Self
 yamaa::engine::Partitions::rows: pub rows: NonZeroUsize
 yamaa::engine::Partitions::whole_table_fallback: pub whole_table_fallback: bool
 yamaa::engine::Partitions::with_whole_table_fallback: pub fn with_whole_table_fallback(mut self) -> Self
-yamaa::error::Error: impl std::error::Error for Error
-yamaa::error::Error: impl std::fmt::Display for Error
-yamaa::error::Error: pub enum Error [derive(Clone, Debug)] [non_exhaustive]
-yamaa::error::Error::Cancelled: Cancelled
-yamaa::error::Error::Host: Host(FunctionError)
-yamaa::error::Error::Internal: Internal { code: &'static str }
-yamaa::error::Error::Rejected: Rejected(Report)
-yamaa::error::Error::Resolver: Resolver(ResolverFailure)
-yamaa::error::Error::Stream: Stream { code: &'static str }
-yamaa::error::Error::Table: Table(TableError)
-yamaa::error::Error::Unavailable: Unavailable { feature: &'static str }
+yamaa::error::Failure: impl Failure
+yamaa::error::Failure: impl std::error::Error for Failure
+yamaa::error::Failure: impl std::fmt::Display for Failure
+yamaa::error::Failure: pub struct Failure [derive(Clone, Debug)] [non_exhaustive]
+yamaa::error::Failure::diagnostics: pub diagnostics: Vec<Diagnostic>
+yamaa::error::Failure::issues: pub issues: Table
+yamaa::error::Failure::kind: pub kind: FailureKind
+yamaa::error::Failure::message: pub message: String
+yamaa::error::Failure::paths: pub paths: Vec<String>
+yamaa::error::FailureKind: impl FailureKind
+yamaa::error::FailureKind: pub enum FailureKind [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::error::FailureKind::Cancelled: Cancelled
+yamaa::error::FailureKind::Internal: Internal { code: &'static str }
+yamaa::error::FailureKind::Rejected: Rejected
+yamaa::error::FailureKind::Stream: Stream { code: &'static str }
+yamaa::error::FailureKind::Table: Table(Box<TableError>)
+yamaa::error::FailureKind::Unavailable: Unavailable { feature: &'static str }
 yamaa::error::FunctionError: impl FunctionError
 yamaa::error::FunctionError: pub enum FunctionError [derive(Clone, Debug)] [non_exhaustive]
 yamaa::error::FunctionError::Exception: Exception { class: String, message: String, payload: Option<HostPayload>, }
@@ -510,7 +530,7 @@ yamaa::lint::LintFinding::text: pub fn text(&self) -> String
 yamaa::lint::LintFinding::to_value: pub fn to_value(&self) -> ContextValue
 yamaa::lint::lint: pub fn lint(paths: &[String], fix: bool) -> Result<Lint, Failure>
 yamaa::odm::Engine: impl Engine
-yamaa::odm::Engine::read_odm: pub fn read_odm(&self, source: &str, options: &OdmOptions) -> Result<Table, Error>
+yamaa::odm::Engine::read_odm: pub fn read_odm(&self, source: &str, options: &OdmOptions) -> Result<Table, Failure>
 yamaa::odm::ODM_COLUMNS: pub const ODM_COLUMNS: [&str; 30]
 yamaa::odm::OdmOptions: impl Default for OdmOptions
 yamaa::odm::OdmOptions: impl OdmOptions
@@ -652,10 +672,10 @@ yamaa::stream::Streamed: impl Streamed
 yamaa::stream::Streamed: pub struct Streamed
 yamaa::stream::Streamed::progress: pub fn progress(&self) -> StreamProgress
 yamaa::stream::Streamed::reader: pub fn reader(&self) -> Batches
-yamaa::stream::Streamed::run: pub fn run(&self) -> Result<RunGuard<'_>, Error>
+yamaa::stream::Streamed::run: pub fn run(&self) -> Result<RunGuard<'_>, Failure>
 yamaa::stream::Streamed::schema: pub fn schema(&self) -> Option<&SchemaRef>
 yamaa::stream::Streamed::subject: pub fn subject(&self) -> &str
-yamaa::stream::Streamed::table: pub fn table(&self) -> Result<Table, Error>
+yamaa::stream::Streamed::table: pub fn table(&self) -> Result<Table, Failure>
 yamaa::table::Array: pub use arrow_array::Array [cfg(feature = "arrow")]
 yamaa::table::DataType: pub use arrow_schema::DataType [cfg(feature = "arrow")]
 yamaa::table::Date32Array: pub use arrow_array::Date32Array [cfg(feature = "arrow")]

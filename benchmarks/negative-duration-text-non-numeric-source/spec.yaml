@@ -1,0 +1,38 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: EX
+keys: [STUDYID, USUBJID, EXSEQ]
+input:
+  EX_RAW: {path: input/ex_raw.csv, types: {EXSEQ: int}}
+
+output:
+  path: ex.csv
+  columns: [STUDYID, USUBJID, EXSEQ, EXDUR]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: EX_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: EX_RAW.USUBJID
+
+  - name: EXSEQ
+    type: int
+    label: Sequence Number
+    derivation: EX_RAW.EXSEQ
+
+  # EX_RAW.EXDURMIN has no declared input type, so it is text, and only a
+  # number of minutes is written as a duration: the specification is
+  # rejected before any data is read.
+  - name: EXDUR
+    type: str
+    label: Duration of Treatment
+    derivation:
+      duration_text:
+        source: EX_RAW.EXDURMIN
+        unit: minute

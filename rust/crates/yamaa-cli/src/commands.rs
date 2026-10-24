@@ -77,9 +77,9 @@ use std::collections::BTreeMap;
 use std::ffi::OsStr;
 
 use yamaa::{
-    Action, CancellationToken, Condition, ContextValue, Diagnostic, Engine, EngineOptions, Error,
-    Failure, FileType, Host, Info, LintFinding, OdmOptions, ProjectRequest, ProjectRun, Run,
-    Status, SubmissionOptions, Summary,
+    CancellationToken, Condition, ContextValue, Diagnostic, Engine, EngineOptions, Failure,
+    FileType, Host, Info, LintFinding, OdmOptions, ProjectRequest, ProjectRun, Run, Status,
+    SubmissionOptions, Summary,
 };
 
 use crate::arguments::{Call, Format, Usage};
@@ -358,24 +358,15 @@ fn check(call: &Call, token: &CancellationToken) -> Result<Printed, Execution> {
         Ok(file_type) => file_type,
         Err(failure) => return Ok(refusal(document, failure)),
     };
-    // The path a refusal of the check names: the specification checked, or
-    // the project.
-    let (checked, subject) = match (file_type, name, parent) {
-        (FileType::Spec, None, None) => (
-            engine.spec(path).cancel_with(token).check(),
-            path.to_owned(),
-        ),
-        (FileType::Spec, None, Some(parent)) => (
-            engine.spec(path).cancel_with(token).check_on(parent),
-            path.to_owned(),
-        ),
-        (FileType::Project, None, None) => (
-            engine.project(path).cancel_with(token).check(),
-            path.to_owned(),
-        ),
+    let checked = match (file_type, name, parent) {
+        (FileType::Spec, None, None) => engine.spec(path).cancel_with(token).check(),
+        (FileType::Spec, None, Some(parent)) => {
+            engine.spec(path).cancel_with(token).check_on(parent)
+        }
+        (FileType::Project, None, None) => engine.project(path).cancel_with(token).check(),
         (FileType::Project, Some(name), None) => {
             match engine.project(path).cancel_with(token).spec(name) {
-                Ok(spec) => (spec.check(), spec.path().to_owned()),
+                Ok(spec) => spec.check(),
                 Err(failure) => return Ok(refusal(document, failure)),
             }
         }
@@ -395,10 +386,7 @@ fn check(call: &Call, token: &CancellationToken) -> Result<Printed, Execution> {
             check.diagnostics(),
             None,
         ),
-        Err(error) => refusal(
-            document,
-            Failure::from_error(Action::Read(&subject), &error),
-        ),
+        Err(failure) => refusal(document, failure),
     })
 }
 
@@ -426,15 +414,12 @@ fn run(call: &Call, token: &CancellationToken) -> Result<Printed, Execution> {
     };
     // The arguments give `--spec` or `--section`, not both.
     Ok(match (file_type, name, section) {
-        (FileType::Spec, None, None) => saved(
-            document,
-            engine.spec(path).cancel_with(token).run(),
-            path,
-            token,
-        ),
+        (FileType::Spec, None, None) => {
+            saved(document, engine.spec(path).cancel_with(token).run(), token)
+        }
         (FileType::Project, Some(name), _) => {
             match engine.project(path).cancel_with(token).spec(name) {
-                Ok(spec) => saved(document, spec.run(), spec.path(), token),
+                Ok(spec) => saved(document, spec.run(), token),
                 Err(failure) => refusal(document, failure),
             }
         }
@@ -453,10 +438,7 @@ fn run(call: &Call, token: &CancellationToken) -> Result<Printed, Execution> {
                         Some(saved),
                     )
                 }
-                Err(error) => {
-                    let action = section.map_or(Action::Read(path), Action::Select);
-                    refusal(document, Failure::from_error(action, &error))
-                }
+                Err(failure) => refusal(document, failure),
             }
         }
         (FileType::Spec, Some(_), _) => {
@@ -470,13 +452,8 @@ fn run(call: &Call, token: &CancellationToken) -> Result<Printed, Execution> {
 }
 
 /// One specification's run, then its save, which polls `token`; a refusal of
-/// the run names the specification's path, `subject`.
-fn saved(
-    document: Document,
-    run: Result<Run, Error>,
-    subject: &str,
-    token: &CancellationToken,
-) -> Printed {
+/// the run names the specification's path.
+fn saved(document: Document, run: Result<Run, Failure>, token: &CancellationToken) -> Printed {
     match run {
         Ok(mut run) => {
             let saved = run.save(token);
@@ -488,7 +465,7 @@ fn saved(
                 Some(saved),
             )
         }
-        Err(error) => refusal(document, Failure::from_error(Action::Read(subject), &error)),
+        Err(failure) => refusal(document, failure),
     }
 }
 
@@ -565,10 +542,7 @@ fn submission(call: &Call, token: &CancellationToken) -> Result<Printed, Executi
             printed
         }
         // An unknown section refuses the submission (D98).
-        Err(error) => {
-            let action = section.map_or(Action::Read(path), Action::Select);
-            refusal(document, Failure::from_error(action, &error))
-        }
+        Err(failure) => refusal(document, failure),
     })
 }
 
@@ -654,12 +628,7 @@ fn read_odm(call: &Call) -> Result<Printed, Execution> {
     let engine = engine();
     let table = match engine.read_odm(source, &options) {
         Ok(table) => table,
-        Err(error) => {
-            return Ok(refusal(
-                document,
-                Failure::from_error(Action::Read(source), &error),
-            ))
-        }
+        Err(failure) => return Ok(refusal(document, failure)),
     };
     document.insert("rows".into(), count(table.rows()));
     Ok(match engine.save_table(&table, out) {
@@ -852,7 +821,16 @@ mod tests {
 
     #[test]
     fn a_refusal_prints_its_error_text_and_has_the_status_failed() {
-        let failure = Failure::from_error(Action::Read("odm.xml"), &yamaa::Error::Cancelled);
+        // A check the token already cancelled reads nothing and refuses with
+        // the cancellation's error text alone.
+        let token = CancellationToken::new();
+        token.cancel();
+        let failure = engine()
+            .spec("odm.xml")
+            .cancel_with(&token)
+            .check()
+            .err()
+            .expect("a check the token cancelled fails");
         let printed = refusal(
             document("run", [("paths", ContextValue::List(Vec::new()))]),
             failure.clone(),

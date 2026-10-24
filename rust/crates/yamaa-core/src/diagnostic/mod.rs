@@ -204,6 +204,8 @@ conditions! {
     DatetimeShiftRange => ("convert", "conversion_failed", Some("TIME-14")),
     DurationValueInput => ("validation", "incompatible_input_type", Some("TIME-17")),
     DurationInvalid => ("impute", "invalid_duration_text", Some("TIME-17")),
+    DurationTextInput => ("validation", "incompatible_input_type", Some("TIME-21")),
+    DurationTextRange => ("convert", "conversion_failed", Some("TIME-21")),
     DateTextInput => ("validation", "incompatible_input_type", Some("TIME-19")),
     DateTextGap => ("validation", "missing_required_field", Some("TIME-19")),
     DateTextInvalid => ("impute", "invalid_date_text", Some("TIME-19")),

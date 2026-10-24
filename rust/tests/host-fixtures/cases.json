@@ -621,6 +621,36 @@
           "invalid_count": 1
         },
         {
+          "name": "duration_text_canonical_forms_and_read_back",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      MINUTES: int\n      SECONDS: float\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - TEXT\n  - STEXT\n  - BACK\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: TEXT\n  type: str\n  label: TEXT\n  derivation:\n    duration_text:\n      source: RAW.MINUTES\n      unit: minute\n- name: STEXT\n  type: str\n  label: STEXT\n  derivation:\n    duration_text:\n      source: RAW.SECONDS\n      unit: second\n- name: BACK\n  type: float\n  label: BACK\n  derivation:\n    duration_value:\n      source: TEXT\n      unit: minute\n",
+          "inputs": {
+            "input.csv": "ID,MINUTES,SECONDS\n1,120,93780\n2,90,90.5\n3,45,0.5\n4,0,0\n5,-90,-900\n6,1560,86400\n7,,\n"
+          },
+          "csv": "ID,TEXT,STEXT,BACK\n1,PT2H,P1DT2H3M,120.00\n2,PT1H30M,PT1M30.5S,90.00\n3,PT45M,PT0.5S,45.00\n4,PT0S,PT0S,0.00\n5,-PT1H30M,-PT15M,-90.00\n6,P1DT2H,P1D,1560.00\n7,,,\n",
+          "check_issue": null,
+          "run_issue": null,
+          "invalid_count": 0
+        },
+        {
+          "name": "duration_text_seconds_beyond_the_float_range",
+          "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DAYS: float\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: str\n  label: RESULT\n  derivation:\n    duration_text:\n      source: RAW.DAYS\n      unit: day\n",
+          "inputs": {
+            "input.csv": "ID,DAYS\n1,1e304\n"
+          },
+          "csv": null,
+          "check_issue": null,
+          "run_issue": {
+            "phase": "convert",
+            "condition": "conversion_failed",
+            "rule": "TIME-21",
+            "spec_path": "columns.RESULT.derivation.duration_text"
+          },
+          "invalid_count": 0,
+          "covers": [
+            "duration_text"
+          ]
+        },
+        {
           "name": "date_shift_overflow_is_not_output_conversion",
           "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: RAW\nkeys:\n- ID\ninput:\n  RAW:\n    path: input.csv\n    types:\n      ID: int\n      DATE: date\noutput:\n  path: result.csv\n  columns:\n  - ID\n  - RESULT\n  decimals: 2\ncolumns:\n- name: ID\n  type: int\n  label: ID\n  derivation: RAW.ID\n- name: RESULT\n  type: date\n  label: RESULT\n  derivation:\n    value:\n      shift:\n        type: date\n        source: RAW.DATE\n        days: 1\n    unconvertible: null\n",
           "inputs": {
@@ -6320,7 +6350,7 @@
       "rows": [
         ["allowed_values_failed", "error", ["verification"], ["CHECK-6", "CT-7", "CT-11"], "column {column} holds a value outside its allowed values", null, null],
         ["bare_derivation_scalar", "error", [], [], null, null, "1.0.0"],
-        ["conversion_failed", "error", ["convert", "validation"], ["TIME-14", "VALUE-3", "VALUE-7", "VALUE-15", "VALUE-24"], "{spec_path} gives a value that does not convert to {to}, or that leaves the range of {to}", null, null],
+        ["conversion_failed", "error", ["convert", "validation"], ["TIME-14", "TIME-21", "VALUE-3", "VALUE-7", "VALUE-15", "VALUE-24"], "{spec_path} gives a value that does not convert to {to}, or that leaves the range of {to}", null, null],
         ["day_not_permitted", "error", [], [], null, null, "1.0.0"],
         ["day_required", "error", [], [], null, null, "1.0.0"],
         ["duplicate_layer", "error", ["validation"], ["LAYER-3"], "include {path} names a layer the specification already composes", null, null],
