@@ -79,6 +79,7 @@ mod scalar_bytes;
 mod scalar_declarative_text_case;
 mod scalar_declarative_text_decimal;
 mod scalar_declarative_text_extract;
+mod scalar_declarative_text_pad;
 mod scalar_declarative_text_replace;
 mod scalar_declarative_text_template;
 mod scalar_language;
