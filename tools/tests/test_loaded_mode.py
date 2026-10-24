@@ -1,15 +1,19 @@
 """The tooling of the test-only loaded mode: the link mode that YAMAA_ENGINE
-selects, and a staged R package patched to build its binding and the engine
-library that way, while the repository's own build files stay linked."""
+selects, a staged R package patched to build its binding and the engine
+library that way, while the repository's own build files stay linked, and
+the checks of native qualification's native-loaded jobs, which keep their
+logs."""
 
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from tools.commands import check_r, loaded
+from tools.commands import check_r, loaded, loaded_checks
 from tools.paths import ROOT
+from tools.tests import support
 
 R_SOURCE = ROOT / "R/yamaa/src"
 
@@ -92,10 +96,6 @@ class StagedRPackage(unittest.TestCase):
                 )
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class LoadedPackageCheck(unittest.TestCase):
     # R CMD check's note on a library in libs/ that registers no routines,
     # as it prints it for the engine library.
@@ -148,3 +148,130 @@ class LoadedPackageCheck(unittest.TestCase):
                     ),
                     problems,
                 )
+
+
+class LoadedChecks(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.work = Path(directory.name) / "work"
+        self.logs = Path(directory.name) / "logs"
+        self.work.mkdir()
+
+    def test_the_checks_refuse_the_linked_mode(self):
+        with mock.patch.dict(loaded.os.environ, {"YAMAA_ENGINE": "linked"}):
+            status, _, errors = support.run_main(
+                loaded_checks.main, "--host", "python", "--logs", str(self.logs)
+            )
+        # The usage line names the program as it was started.
+        self.assertEqual(
+            (status, errors.splitlines()[-1].partition(" error: ")[2]),
+            (2, "these checks are of the loaded mode: set YAMAA_ENGINE=loaded"),
+        )
+
+    def test_the_python_check_runs_the_installed_suites_with_the_fixture_engines(self):
+        fixtures = self.work / "fixture-engines"
+        with (
+            mock.patch.dict(loaded_checks.os.environ),
+            mock.patch.object(
+                loaded_checks.equivalence,
+                "install_python",
+                autospec=True,
+                return_value=Path("python"),
+            ) as install,
+            mock.patch.object(
+                loaded_checks.loaded,
+                "build_fixtures",
+                autospec=True,
+                return_value=fixtures,
+            ) as build,
+            mock.patch.object(
+                loaded_checks.python_tests, "run_installed_suites", autospec=True
+            ) as suites,
+        ):
+            failed = loaded_checks.run("python", self.work, "uv", self.logs)
+            variable = loaded_checks.os.environ[loaded.FIXTURES_VARIABLE]
+        self.assertEqual(
+            (
+                failed,
+                install.call_args_list,
+                build.call_args_list,
+                variable,
+                suites.call_args_list,
+            ),
+            (
+                [],
+                [mock.call(self.work / "install", "uv")],
+                [mock.call(fixtures)],
+                str(fixtures),
+                [
+                    mock.call(
+                        Path("python"),
+                        self.work / "suites",
+                        log=self.logs / "installed-suites.log",
+                    )
+                ],
+            ),
+        )
+
+    def test_the_r_check_keeps_its_logs_whether_it_passes_or_fails(self):
+        # R CMD check's directory holds the check's log, the installation's
+        # output and each test file's output, beside the files it checked.
+        written = (
+            "yamaa.Rcheck/00check.log",
+            "yamaa.Rcheck/00install.out",
+            "yamaa.Rcheck/tests/interface.R",
+            "yamaa.Rcheck/tests/interface.Rout",
+            "yamaa.Rcheck/tests/streaming.Rout.fail",
+            "yamaa.Rcheck/yamaa/DESCRIPTION",
+        )
+        kept = [
+            "yamaa.Rcheck/00check.log",
+            "yamaa.Rcheck/00install.out",
+            "yamaa.Rcheck/tests/interface.Rout",
+            "yamaa.Rcheck/tests/streaming.Rout.fail",
+        ]
+        failure = subprocess.CalledProcessError(1, ["R", "CMD", "check"])
+        for label, error, failed in (
+            ("a passing check", None, []),
+            ("a failing check", failure, ["R package check"]),
+        ):
+            with self.subTest(case=label):
+                work, logs = self.work / label, self.logs / label
+
+                def check(archive, environment, directory, error=error):
+                    for name in written:
+                        support.write(directory, name, name)
+                    if error:
+                        raise error
+
+                with (
+                    mock.patch.object(
+                        loaded_checks.r_tests,
+                        "install",
+                        autospec=True,
+                        return_value=(Path("yamaa_1.0.0.tar.gz"), {}),
+                    ),
+                    mock.patch.object(
+                        loaded_checks.r_tests,
+                        "check_install",
+                        autospec=True,
+                        side_effect=check,
+                    ),
+                ):
+                    result = loaded_checks.run("r", work, "uv", logs)
+                self.assertEqual(
+                    (
+                        result,
+                        sorted(
+                            path.relative_to(logs).as_posix()
+                            for path in logs.rglob("*")
+                            if path.is_file()
+                        ),
+                    ),
+                    (failed, kept),
+                )
+
+
+if __name__ == "__main__":
+    unittest.main()

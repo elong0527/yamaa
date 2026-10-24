@@ -3,9 +3,10 @@
 Only known independent areas narrow the checks. An unrecognized path runs
 every one of the four required lanes, so adding a build input cannot
 accidentally bypass qualification. The fifth lane, the test-only loaded mode
-(rust/interface/README.md), runs only when an input of that mode changes,
-and is not required. Each job runs this cheap selection before installing
-its tools; no planning job or extra required status is needed.
+(rust/interface/README.md), runs on a pull request only when an input of
+that mode changes, and on main's schedule and dispatch, and is not required.
+Each job runs this cheap selection before installing its tools; no planning
+job or extra required status is needed.
 """
 
 import argparse
@@ -147,7 +148,10 @@ def decision(event, base="", head="", root=ROOT):
         raise ValueError(f"unsupported CI event: {event!r}")
     result = dict.fromkeys(FLAGS, True) | {"repository": "full"}
     gates = event == "workflow_dispatch"
-    result.update(equivalence_python=gates, equivalence_r=gates, loaded=gates)
+    result.update(equivalence_python=gates, equivalence_r=gates)
+    # Main's schedule checks the loaded mode too, which a release push, the
+    # one push event, leaves out.
+    result["loaded"] = event in ("schedule", "workflow_dispatch")
     return result
 
 

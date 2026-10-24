@@ -561,7 +561,8 @@ also qualifies both hosts against benchmark truth. A fifth lane, `loaded`,
 which is not required, checks both freshly installed hosts in the test-only
 loaded mode (`YAMAA_ENGINE=loaded`) when an input of that mode changes: the
 boundary, the engine's C ABI, either binding, the R build files, the
-interface suites or the tooling that builds the hosts; dispatch runs it too.
+interface suites or the tooling that builds the hosts; main's schedule and
+dispatch run it too.
 
 The `Release compatibility` workflow checks the minimum Rust toolchain, the R
 source package built with it, minimal format builds, Python 3.15 and minimum

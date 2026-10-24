@@ -213,11 +213,15 @@ and the R source package from the checkout with their bindings'
 each module with that host's toolchain: MSVC beside the wheel's module, and
 Rtools' GNU target beside the R package's on Windows. It then runs the
 installed Python suites and the R package check with `YAMAA_ENGINE=loaded`
-(`tools/commands/host_checks.py`), where both interface suites also load each
-fixture engine. In that mode the R package check accepts one more note, on the
-engine library, which registers no R routines since the loader, not R, loads
-it. CI's `loaded` lane runs the same checks on Linux for a change to the
-boundary. No release asset comes from these jobs.
+(`tools/commands/loaded_checks.py`), where both interface suites also load
+each fixture engine, and keeps their logs as the job's artifact. In that mode
+the R package check accepts one more note, on the engine library, which
+registers no R routines since the loader, not R, loads it. Both checks
+continue on error until their first green run on main promotes them to
+blocking: until then a release requires each job to finish, not its checks to
+pass. CI's `loaded` lane runs the complete host checks in that mode on Linux,
+for a change to an input of the mode and on main's schedule. No release asset
+comes from these jobs.
 
 The native run also runs CRAN's incoming checks on the R source archive that a
 release publishes, the bytes of its `native-r-ubuntu-24.04` artifact: its

@@ -9,7 +9,8 @@ binding and the engine library that way. A repository check refuses the
 feature in every build that ships (tools/validation/check_loaded_mode.py).
 
 YAMAA_ENGINE selects the link mode of `make setup`, `make test-python`,
-`make test-r` and CI's host checks: `linked`, the default, which every
+`make test-r`, CI's host checks and native qualification's loaded checks
+(tools/commands/loaded_checks.py): `linked`, the default, which every
 shipped package uses, or `loaded`. In the loaded mode the host suites find
 the fixture engines in the directory that YAMAA_FIXTURE_ENGINES names.
 """

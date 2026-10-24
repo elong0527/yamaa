@@ -133,9 +133,12 @@ class AffectedLanes(unittest.TestCase):
             "workflow_lint": True,
             "loaded": False,
         }
-        for event in ("push", "schedule"):
+        # Main's schedule also checks the loaded mode; a release push does not.
+        for event, loaded in (("push", False), ("schedule", True)):
             with self.subTest(event=event):
-                self.assertEqual(pr_changes.decision(event), development)
+                self.assertEqual(
+                    pr_changes.decision(event), development | {"loaded": loaded}
+                )
         self.assertEqual(
             pr_changes.decision("workflow_dispatch"),
             FULL | {"workflow_lint": True, "loaded": True},

@@ -52,23 +52,30 @@ table through the same client:
   `yamaa_engine.dll` on Windows, and looks up the one symbol that every
   boundary version keeps, `yamaa_engine_negotiate`. The loader computes the
   library's absolute path from the module's own location (`dladdr`, or
-  `GetModuleHandleExW` with `GetModuleFileNameW`), never searches `PATH`,
-  `LD_LIBRARY_PATH`, `DYLD_*` or the current directory, opens it with
-  `RTLD_NOW | RTLD_LOCAL` or with `LoadLibraryExW` and
-  `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS`,
-  takes the entry only from the file it asked for, and never unloads it. A
-  module beside which no engine library loads, or whose library exports no
-  entry, refuses the handshake as `missing_interface`. The engine library is
-  `yamaa-engine` built as a library with its own `dynamic-engine` feature,
-  with each host's toolchain: MSVC beside the wheel's module, and Rtools' GNU
-  target beside the R package's on Windows. `YAMAA_ENGINE=loaded` selects
-  this mode for `make setup`, `make test-python`, `make test-r` and the host
-  checks (`tools/commands/loaded.py`), which CI's `loaded` lane runs on
-  Linux for a change to the boundary, and native qualification on Windows x64
-  and macOS arm64. A repository check refuses the feature in
-  `pyproject.toml`, the R build files, the release workflows and the staging
-  tools (`tools/validation/check_loaded_mode.py`), so no shipped package
-  carries a loader.
+  `GetModuleHandleExW` with `GetModuleFileNameW`), refuses a path that names
+  no regular file, searches neither `PATH`, `LD_LIBRARY_PATH` nor the
+  current directory, opens the library with `RTLD_NOW | RTLD_LOCAL` or with
+  `LoadLibraryExW` and
+  `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS`, and
+  never unloads it. On macOS, dyld may still honour `DYLD_LIBRARY_PATH` and
+  open a library of the same file name from another directory; the loader
+  takes the entry only from the file it asked for, so it then refuses that
+  entry. A module beside which no engine library loads, or whose library
+  exports no entry, refuses the handshake as `missing_interface`, and says
+  why on standard error. The engine library is `yamaa-engine` built as a
+  library with its own `dynamic-engine` feature, with each host's toolchain:
+  MSVC beside the wheel's module, and Rtools' GNU target beside the R
+  package's on Windows. `YAMAA_ENGINE=loaded` selects this mode for
+  `make setup`, `make test-python`, `make test-r` and the host checks
+  (`tools/commands/loaded.py`). CI's `loaded` lane runs the host checks so on
+  Linux, for a change to an input of the mode and on main's schedule, and
+  native qualification runs the installed Python suites and the R package
+  check so on Windows x64 and macOS arm64 (`tools/commands/loaded_checks.py`).
+  A repository check refuses the mode in `pyproject.toml`, the R build files,
+  the release workflows, the build and staging tools, every job of the
+  native workflow but its loaded one, and the default features of the
+  boundary's four crates (`tools/validation/check_loaded_mode.py`), so no
+  shipped package carries a loader.
 
 Four fixture engines, `rust/crates/yamaa-engine/examples/`, answer the
 generated request as engines of other builds would: one of the next boundary

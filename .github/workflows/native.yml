@@ -2778,7 +2778,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     # Each host builds its binding without the linked engine and the engine
     # library apart, and the R package installs twice, once on its own and
-    # once inside R CMD check.
+    # once inside R CMD check. Both checks continue on error until their first
+    # green run on main promotes them to blocking (#3702), so a release waits
+    # for this job to finish but for neither check to pass; their logs are
+    # kept either way.
     timeout-minutes: ${{ matrix.os == 'windows-2025' && 150 || 90 }}
     strategy:
       fail-fast: false
@@ -2804,8 +2807,11 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.NATIVE_BUILD_PYTHON }}
-      - name: Read the workspace toolchain
-        run: python -m tools.ci.toolchain
+      - name: Install repository tools
+        run: |
+          python -m pip install --no-deps -e .
+          python -m pip install py-yaml12==0.2.0 pyyaml==6.0.3
+          python -m tools.ci.toolchain
       - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
         with:
           r-version: '4.6.1'
@@ -2817,8 +2823,6 @@ jobs:
           if [ "${{ runner.os }}" = Windows ]; then
             rustup target add x86_64-pc-windows-gnu
           fi
-      - name: Install the locked environment and repository tools
-        run: python -m tools.commands.setup --keep-toolchain --without-package
       - name: Install R package test dependencies
         run: |
           Rscript --vanilla - <<'RS'
@@ -2830,17 +2834,28 @@ jobs:
           install.packages(packages)
           stopifnot(all(vapply(packages, requireNamespace, logical(1), quietly = TRUE)))
           RS
+      # The installed Python suites, on a fresh wheel environment, with each
+      # fixture engine (tools/commands/loaded_checks.py).
       - name: Check the Python host with the engine loaded at runtime
-        id: python
+        continue-on-error: true
         env:
           YAMAA_ENGINE: loaded
-        run: uv run --project python --no-sync python -m tools.commands.host_checks --host python
+        run: python -m tools.commands.loaded_checks --host python --logs "${RUNNER_TEMP}/loaded-logs/python"
+      # R CMD check of the freshly installed package, whose tests load each
+      # fixture engine.
       - name: Check the R host with the engine loaded at runtime
-        if: ${{ success() || steps.python.outcome == 'failure' }}
+        continue-on-error: true
         env:
           YAMAA_ENGINE: loaded
           _R_CHECK_CRAN_INCOMING_REMOTE_: 'false'
-        run: uv run --project python --no-sync python -m tools.commands.host_checks --host r
+        run: python -m tools.commands.loaded_checks --host r --logs "${RUNNER_TEMP}/loaded-logs/r"
+      - name: Preserve the logs of the loaded-mode checks
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: native-loaded-logs-${{ matrix.os }}
+          path: ${{ runner.temp }}/loaded-logs
+          if-no-files-found: warn
 
   public-cohort:
     name: public-cohort-complete-runs

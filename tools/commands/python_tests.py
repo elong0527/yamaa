@@ -13,12 +13,12 @@ from tools.conformance.supplemental_inventory import load_catalog
 from tools.paths import ROOT
 
 
-def run_installed_suites(python, work, workers=None):
+def run_installed_suites(python, work, workers=None, log=None):
     """Stage the cataloged Python suites into work and run them with python.
 
     Each suite is its own process over the staged copy, so they run in
-    parallel; their output is printed in catalog order and every failing
-    suite is reported.
+    parallel; their output is printed in catalog order, and written to the
+    file `log` when one is named, and every failing suite is reported.
     """
     catalog = load_catalog(ROOT, ROOT / "rust/qualification/supplemental.json")
     stage("python", work)
@@ -39,12 +39,15 @@ def run_installed_suites(python, work, workers=None):
 
     with ThreadPoolExecutor(max_workers=workers or os.cpu_count() or 1) as pool:
         results = list(pool.map(run, suites))
-    failed = []
+    failed, output = [], []
     for path, result in zip(suites, results):
-        print(f"== {path}", flush=True)
-        print(result.stdout, end="", flush=True)
+        output.append(f"== {path}\n{result.stdout}")
+        print(output[-1], end="", flush=True)
         if result.returncode:
             failed.append(path)
+    if log is not None:
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text("".join(output), encoding="utf-8")
     if failed:
         raise RuntimeError(f"installed suites failed: {', '.join(failed)}")
 

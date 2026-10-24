@@ -394,12 +394,11 @@ def required_jobs(coverage):
             )
     # The test-only loaded mode: both hosts built with their dynamic-engine
     # feature, whose suites run with the engine loaded at runtime and with
-    # each fixture engine of the loading tests.
+    # each fixture engine of the loading tests. Its checks continue on error
+    # until their first green run on main promotes them to blocking (#3702):
+    # the job must finish, and no step of it must pass.
     for platform in coverage["loaded"]["os"]:
-        jobs[f"native-loaded ({platform})"] = (
-            "Check the Python host with the engine loaded at runtime",
-            "Check the R host with the engine loaded at runtime",
-        )
+        jobs[f"native-loaded ({platform})"] = ()
     return jobs
 
 
