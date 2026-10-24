@@ -128,7 +128,7 @@ characters of printable ASCII, `0x20` through `0x7E`. A name or label that does
 not fit fails before any data is read, under `transport: xpt` in every context.
 
 Fails: `sas_name_too_long`, `transport_label_invalid`.
-Evidence: `negative-transport-name-too-long`, `negative-transport-label-too-long`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionLabelInvalid`.
+Evidence: `negative-transport-name-too-long`, `negative-transport-label-too-long`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_label_beyond_forty_characters_cannot_travel_by_xpt`.
 
 `context: Submission` imposes the same names and labels on every composed
 dataset, with or without a transport ([DEFINE-4](define-xml.md#define-4)). A
@@ -223,7 +223,7 @@ beside a width. A declared format that does not parse fails under
 carries no format.
 
 Fails: `xpt_display_format_invalid`.
-Evidence: `adam-adsl-xpt`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::XptDisplayFormatInvalid`.
+Evidence: `adam-adsl-xpt`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_numeric_display_format_under_xpt_must_parse_as_a_sas_format`.
 
 Width and decimals are decimal integers without a leading zero, at most 32767,
 and decimals may be `0`. `8.2` is the empty name with width 8 and 2 decimals,
