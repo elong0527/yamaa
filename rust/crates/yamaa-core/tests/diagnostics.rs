@@ -647,6 +647,40 @@ mod diagnostics {
             }
         }
 
+        /// The replay runs its cases on several threads and returns what
+        /// each returned, in the cases' order; a case that fails stops no
+        /// other, and the replay then fails naming each failed case, in
+        /// order, with its own message.
+        #[test]
+        fn in_parallel_returns_each_case_in_order_or_names_each_failed_case() {
+            use crate::support::diagnostic::form::in_parallel;
+            let cases = (0..64).map(|n| format!("case {n}")).collect::<Vec<_>>();
+            for (failing, expected, label) in [
+                (&[][..], Ok(cases.clone()), "every case passes"),
+                (
+                    &["case 40", "case 3"][..],
+                    Err(
+                        "2 of 64 cases failed:\n\ncase 3:\ncase 3 fails\n\ncase 40:\ncase 40 fails",
+                    ),
+                    "two cases fail",
+                ),
+            ] {
+                let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    in_parallel(&cases, String::as_str, |case| {
+                        assert!(!failing.contains(&case.as_str()), "{case} fails");
+                        case.clone()
+                    })
+                }));
+                let ran = ran.map_err(|payload| {
+                    payload
+                        .downcast_ref::<String>()
+                        .cloned()
+                        .unwrap_or_else(|| "a failure with no message".into())
+                });
+                assert_eq!(ran, expected.map_err(str::to_owned), "{label}");
+            }
+        }
+
         /// An `among` case's rows are some of the issues its operation
         /// reports: each matches a distinct reported row, in any order, and
         /// a row that matches none is named.

@@ -36,6 +36,9 @@
 //! [`super::form`] reads them for both crates' replays, and each is
 //! compared with what the operation reports.
 //!
+//! The cases run in parallel ([`form::in_parallel`]), each operation in a
+//! study directory of its own.
+//!
 //! Every row was authored: in the test it moved from, or from the rule card,
 //! registry entry or sibling record its pull request names. No run wrote one.
 use super::{
@@ -72,6 +75,13 @@ pub struct Case {
     pub issues: Vec<Value>,
     /// The tables and files the case states beside its issues.
     pub stated: Stated,
+}
+
+impl Case {
+    /// The case's label, which names it in a failure.
+    pub fn label(&self) -> &str {
+        &self.label
+    }
 }
 
 /// Every case of every fixture file, by file name and then as written. A
@@ -153,7 +163,7 @@ pub fn cases() -> Vec<Case> {
 /// states, and the operations of a case that names several must report the
 /// same complete rows.
 pub fn replay() {
-    for case in cases() {
+    form::in_parallel(&cases(), Case::label, |case| {
         let mut reported = Vec::new();
         for operation in &case.operations {
             let label = match case.operations.len() {
@@ -166,7 +176,7 @@ pub fn replay() {
                 study,
                 outcome,
             } = operations::run(operation, &case.input);
-            compare_issues(&case, &issues, study.as_ref(), &label);
+            compare_issues(case, &issues, study.as_ref(), &label);
             case.stated.compare(&outcome, operation, &label);
             let actual = crate::support::rows(&issues);
             let complete = match &study {
@@ -179,7 +189,7 @@ pub fn replay() {
             reported.push((operation.as_str(), complete));
         }
         form::same_issues(&reported, &case.label);
-    }
+    });
 }
 
 /// Compare the issues of a call with the case's authored rows. API seams
