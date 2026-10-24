@@ -1441,7 +1441,7 @@ local `group_by`: the enclosing `row.group_by` already fixes its current
 relation and keys.
 
 Fails: `invalid_aggregate_context`.
-Evidence: `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-core/tests/schema_windows.rs`.
+Evidence: `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/compiler.json::a_qualified_aggregate_group_by_column_must_be_an_output_key`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/compiler.json::a_qualified_aggregate_grouped_by_the_output_key_binds`.
 
 A qualified `group_by` column that is not an output key fails, as does an
 unqualified expression with no `group_by` or with a `between`. A grouped-row
