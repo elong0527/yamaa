@@ -1,10 +1,11 @@
-//! The text verbs' entry points (TEXT-1 to TEXT-10, TEXT-13, TEXT-14).
+//! The text verbs' entry points (TEXT-1 to TEXT-10, TEXT-13 to TEXT-15).
 use super::{text, value, File};
 use crate::support::diagnostic::json::Json;
 use yamaa_core::{
     diagnostic::Diagnostic,
     table::ValueRef,
     text_case::{Case, Error as CaseError, StringCase},
+    text_decimal::{Admission, Error as DecimalError, StringDecimal},
     text_extract::{Error as ExtractError, Step, StringExtract},
     text_pad::StringPad,
     text_position::{DeclarationError, Error as PositionError, StringLength, StringSubstr},
@@ -16,6 +17,8 @@ pub(super) const FILES: &[File] = &[fixture!("text.json")];
 pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
     Some(match operation {
         "str_case" => str_case(input),
+        "str_decimal" => str_decimal(input),
+        "str_decimal_apply" => str_decimal_apply(input),
         "str_extract" => str_extract(input),
         "str_extract_apply" => str_extract_apply(input),
         "str_extract_unknown" => str_extract_unknown(input),
@@ -93,6 +96,41 @@ fn str_pad(input: &Json) -> Vec<Diagnostic> {
         Ok(_) => Vec::new(),
         Err(refusal) => refusal.diagnostic(path).into_iter().collect(),
     }
+}
+
+/// The members every `str_decimal` operation reads; `width` is optional.
+const DECIMAL: [&str; 4] = ["source", "path", "decimals", "width"];
+
+/// `str_decimal`'s declaration, `{source, path, decimals, width?}`: its
+/// refusals, in field order.
+fn str_decimal(input: &Json) -> Vec<Diagnostic> {
+    match decimal(input.closed(&DECIMAL)) {
+        Ok(_) => Vec::new(),
+        Err(Admission::Findings(findings)) => findings,
+        Err(Admission::Shape) => panic!("the lowering never writes {input:?}"),
+    }
+}
+
+/// `str_decimal` applied to `value`.
+fn str_decimal_apply(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&[DECIMAL.as_slice(), &["value"]].concat());
+    let value = value(input.field("value"));
+    let operation = decimal(input).expect("an admitted declaration");
+    match operation.apply(ValueRef::from(&value)) {
+        Ok(_) => Vec::new(),
+        Err(DecimalError::Diagnostic(diagnostic)) => vec![diagnostic],
+        Err(DecimalError::Allocation) => panic!("{input:?} writes text the engine holds"),
+    }
+}
+
+fn decimal(input: &Json) -> Result<StringDecimal, Admission> {
+    StringDecimal::new(
+        text(input, "source").into(),
+        text(input, "path").into(),
+        text(input, "decimals"),
+        input.get("width").map(Json::text),
+        None,
+    )
 }
 
 /// `str_case` in `case` applied to `value`, `{source, path, case, value}`.

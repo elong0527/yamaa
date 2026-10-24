@@ -806,9 +806,9 @@ or is an `odm` read. A recode that reads otherwise, through another named
 intermediate or, in a `case`, from an output column, is anything else.
 
 Anything else computes its value: arithmetic and rounding (text in an
-expression field that computes, and `round_half_away_from_zero`), every
-aggregation but an `ONLY` pivot, windows, temporal computation (the date and
-datetime operations other than `to_date`, `date_text`, `dtc` and
+expression field that computes, `round_half_away_from_zero` and `str_decimal`),
+every aggregation but an `ONLY` pivot, windows, temporal computation (the date
+and datetime operations other than `to_date`, `date_text`, `dtc` and
 `duration_text`), `flag`, `cut`, `str_length`, `greatest` and `least`,
 `function`, and every read through a named intermediate that is not a plain
 lookup: one that declares `derivations`, whose fields it computes, or one over

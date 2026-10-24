@@ -1613,6 +1613,31 @@ fn restated_defaults_are_removed() {
     ]);
 }
 
+/// A missing source to `str_decimal` gives missing without `missing`
+/// (COLUMN-10), so `missing: null` restates that answer, while a written
+/// period declares one.
+#[test]
+fn a_decimal_text_restates_its_missing_answer_as_null() {
+    let decimal = |missing: &str| {
+        SPELLED.replace(
+            "    type: int\n    label: Age\n    derivation: DM.AGE\n",
+            &format!(
+                "    type: str\n    label: Age\n    derivation:\n      \
+                 str_decimal: {{source: DM.AGE, decimals: 1{missing}}}\n"
+            ),
+        )
+    };
+    assert_eq!(
+        paths(&decimal(", missing: null")),
+        [(
+            "restated_default",
+            "columns.AGE.derivation.str_decimal.missing".to_owned()
+        )]
+    );
+    assert_eq!(fixed(&decimal(", missing: null")), decimal(""));
+    assert!(names(&decimal(", missing: '.'")).is_empty());
+}
+
 #[test]
 fn a_positional_text_verbs_missing_null_restates_its_default() {
     // An omitted `missing` answers a missing source with missing (TEXT-13,

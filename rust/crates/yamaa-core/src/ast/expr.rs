@@ -336,6 +336,11 @@ pub enum ScalarOp {
     },
     /// `text_position::StringLength`.
     StrLength,
+    /// `text_decimal::StringDecimal`, decimals and width as written.
+    StrDecimal {
+        decimals: String,
+        width: Option<String>,
+    },
     /// `text_extract::StringExtract`, group as written.
     StrExtract {
         pattern: String,

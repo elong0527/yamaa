@@ -859,6 +859,13 @@ impl<'p> Builder<'p> {
                 self.site(&mut node, true, site, H::Missing);
                 values.push((source, Value, Always));
             }
+            E::StrDecimal { source, operation } => {
+                node.kind = ExprKind::StrDecimal;
+                node.op = Op::StrDecimal(operation.clone());
+                let site = format!("{}.missing", operation.path());
+                self.site(&mut node, true, site, H::Missing);
+                values.push((source, Value, Always));
+            }
             E::SourceBinding {
                 source,
                 absent,
@@ -1914,6 +1921,7 @@ fn deferred_odm(expression: &Expression) -> Option<&[OdmTemplateScope]> {
         | E::StrPad { source, .. }
         | E::StrSubstr { source, .. }
         | E::StrLength { source, .. }
+        | E::StrDecimal { source, .. }
         | E::Round { source, .. } => deferred_odm(&source.expression),
         E::Extreme { operands, .. }
         | E::StrTemplate { operands, .. }

@@ -1,0 +1,40 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADLB
+keys: [STUDYID, USUBJID, PARAMCD]
+input:
+  LB: {path: input/lb.csv, types: {AVAL: float}}
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, PARAMCD, AVAL, AVALC]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: LB.PARAMCD
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: LB.AVAL
+
+  # The defect: the text must fill at least one character, so a width of
+  # zero is rejected before any data is read.
+  - name: AVALC
+    type: str
+    label: Analysis Value (C)
+    derivation:
+      str_decimal: {source: AVAL, decimals: 2, width: 0}

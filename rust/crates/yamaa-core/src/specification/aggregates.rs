@@ -1556,6 +1556,7 @@ fn visit(expression: &Expression, visitor: &mut impl FnMut(&crate::dataset::Boun
         | Expression::StrPad { source, .. }
         | Expression::StrSubstr { source, .. }
         | Expression::StrLength { source, .. }
+        | Expression::StrDecimal { source, .. }
         | Expression::StrExtract { source, .. }
         | Expression::StrReplace { source, .. }
         | Expression::Round { source, .. } => visit(&source.expression, visitor),
