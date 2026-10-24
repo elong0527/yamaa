@@ -553,7 +553,7 @@ impl Checks<'_> {
     /// the input itself, or the input a driver intermediate reads.
     fn driver_input<'s>(&'s self, driver: &'s str) -> Option<&'s str> {
         let prepared = self.prepared;
-        if prepared.sources.iter().any(|source| source.name == driver) {
+        if reads_as_input(prepared, driver) {
             return Some(driver);
         }
         prepared
@@ -718,10 +718,9 @@ impl Checks<'_> {
     ) -> Result<(), BindError> {
         let spec = self.spec;
         let named = &self.prepared.intermediates;
-        let inputs = &self.prepared.sources;
         let refused = |value: &str, drivers: &[(&str, Option<&str>)]| {
             value.split_once('.').is_some_and(|(qualifier, _)| {
-                inputs.iter().any(|input| input.name == qualifier)
+                reads_as_input(self.prepared, qualifier)
                     && drivers.iter().any(|&(driver, _)| driver != qualifier)
             })
         };
@@ -864,11 +863,7 @@ impl Checks<'_> {
         let Some(drivers) = phases
             .iter()
             .map(|template| {
-                if prepared
-                    .sources
-                    .iter()
-                    .any(|source| source.name == template.driver)
-                {
+                if reads_as_input(prepared, template.driver) {
                     Some((template.driver, None))
                 } else {
                     prepared
@@ -980,12 +975,7 @@ impl Checks<'_> {
                 ExprKind::Source(source) if scope == ast::Scope::Row => {
                     let variable = name(spec, source.variable).unwrap_or_default();
                     let join = variable.split_once('.').is_some_and(|(qualifier, _)| {
-                        own != Some(qualifier)
-                            && self
-                                .prepared
-                                .sources
-                                .iter()
-                                .any(|input| input.name == qualifier)
+                        own != Some(qualifier) && reads_as_input(self.prepared, qualifier)
                     });
                     source
                         .between

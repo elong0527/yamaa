@@ -5,7 +5,9 @@
 //! snapshot, and every record keeps its coordinate in the whole input: the
 //! run reads them as one [`Concatenated`] table, so a read, a failure and a
 //! row identity name the record as the whole-table run names it. Admission
-//! checks the complete input once, before any partition is read.
+//! checks each partition of the driver input on its own, before any record
+//! is read (#3792): the row and cell limits bound a partition, not the
+//! input. Every other source is admitted whole.
 //!
 //! Key-bounded partitions (#3763) are cut only between two runs of records
 //! whose partition key fields differ, so no partition splits a group of the
@@ -263,6 +265,16 @@ impl<E> Run<'_, '_, E> {
         self.plan.reads_driver(template)
     }
 
+    /// The records of each partition of the driver input, which a
+    /// partitioned run admits each on its own (#3792), or the whole input's
+    /// records in a run over the whole input.
+    pub(super) fn driver_admissions(&self) -> Vec<usize> {
+        match &self.partitions {
+            Some(partitions) => partitions.ranges().map(|range| range.len()).collect(),
+            None => vec![self.primary.row_count()],
+        }
+    }
+
     /// The partition of a driver record, in a partitioned run.
     fn partition_of(&self, record: usize) -> Option<usize> {
         self.partitions
@@ -345,9 +357,9 @@ impl<E> Run<'_, '_, E> {
 
     /// A divided template's driver records grouped by `fields`, as
     /// `table_grouping::partition` groups the whole input: each partition's
-    /// records grouped, then the partitions' key groups merged. Admission,
-    /// the order of the reads and the first failing cell are the whole
-    /// input's.
+    /// records grouped, then the partitions' key groups merged. Each
+    /// partition is admitted on its own; the order of the reads and the
+    /// first failing cell are the whole input's.
     pub(super) fn partition_groups<'t>(
         &self,
         table: Table<'t, E>,
@@ -369,12 +381,15 @@ impl<E> Run<'_, '_, E> {
                 }));
             }
         }
-        Limits::table(table.row_count(), width)
-            .map_err(|error| grouping(GroupingError::Limit(error)))?;
         let partitions = self
             .partitions
             .as_ref()
             .expect("a divided template belongs to a partitioned run");
+        // Each partition is admitted on its own (#3792).
+        for range in partitions.ranges() {
+            Limits::table(range.len(), width)
+                .map_err(|error| grouping(GroupingError::Limit(error)))?;
+        }
         let mut parts: Vec<Vec<Vec<usize>>> = Vec::new();
         // The key of each partition group's first record, which the merge
         // compares.
@@ -418,7 +433,8 @@ impl ResolvedPlan {
     /// [`Self::execute`] executes it whole (#3697). Each record keeps its
     /// coordinate in the whole input, which is every partition in order.
     ///
-    /// Admission checks the complete input once, and every partition's
+    /// Admission checks each partition within the row and cell limits on
+    /// its own (#3792), every other source whole, and every partition's
     /// schema, before any record is read. Then, without
     /// `whole_table_fallback`, a plan with a step that needs the whole table
     /// ([`Self::whole_table_step`]) fails at admission with

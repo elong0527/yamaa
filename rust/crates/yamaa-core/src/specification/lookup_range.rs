@@ -249,7 +249,7 @@ fn stored_record(item: &Intermediate, column: usize) -> Option<usize> {
     match item.source {
         IntermediateSource::Input(index) => Some(index + 1),
         IntermediateSource::Primary { .. } => Some(0),
-        IntermediateSource::SelfRows { .. } => None,
+        IntermediateSource::SelfRows { .. } | IntermediateSource::Pairs(_) => None,
     }
 }
 

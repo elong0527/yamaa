@@ -29,10 +29,10 @@
 //! other records than its own ([`key_record`]); it calls the same check.
 //!
 //! Each node kind's checks are a module of their own: the intermediates
-//! ([`intermediate`]), an aggregate ([`aggregate`]), the rows ([`template`])
-//! and one derivation node by node ([`derivation`]). This module holds what
-//! they share: the state of one pass, its entry points and the checks
-//! several kinds call.
+//! ([`intermediate`]) and the pair relations among them ([`pairs`]), an
+//! aggregate ([`aggregate`]), the rows ([`template`]) and one derivation
+//! node by node ([`derivation`]). This module holds what they share: the
+//! state of one pass, its entry points and the checks several kinds call.
 use super::*;
 use crate::ast::{Slot, WindowFunction};
 use crate::diagnostic::{
@@ -47,6 +47,7 @@ use std::collections::BTreeSet;
 mod aggregate;
 mod derivation;
 mod intermediate;
+mod pairs;
 mod template;
 
 /// The rows a derivation evaluates on, as binding scopes its reads.
@@ -644,7 +645,7 @@ pub(super) fn range_types(
     let value = name(spec, between.value)?;
     let typed = match value.split_once('.') {
         None => spec.columns.iter().any(|column| column.name.name == value),
-        Some((owner, _)) => prepared.sources.iter().any(|input| input.name == owner),
+        Some((owner, _)) => reads_as_input(prepared, owner),
     };
     let value_type = typed.then(|| declared.name(value).single()).flatten()?;
     let bound = |bound: Option<ExprId>| match bound {

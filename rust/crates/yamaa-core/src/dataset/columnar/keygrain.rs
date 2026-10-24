@@ -10,10 +10,10 @@ use crate::table_grouping::GroupingError;
 use crate::value::Value;
 
 /// Build the candidates of the key-grain template into `frame`.
-pub(super) fn construct<'a, E>(
+pub(super) fn construct<'a: 's, 's, E>(
     run: &mut Run<'_, 'a, E>,
     frame: &mut Frame,
-    secondary: &[Table<'a, E>],
+    secondary: &[Table<'s, E>],
 ) -> Result<(), Fail<E>> {
     let plan = run.plan;
     let region = RegionId::DATASET;
@@ -23,8 +23,11 @@ pub(super) fn construct<'a, E>(
         .expect("the key grain has one template");
     let table = Table::Source(run.primary);
     let rows = table.row_count();
-    crate::limits::Limits::table(rows, plan.keys().len())
-        .map_err(|error| Box::new(ExecutionError::Grouping(GroupingError::Limit(error))))?;
+    // A partitioned run admits each partition's records on its own (#3792).
+    for records in run.driver_admissions() {
+        crate::limits::Limits::table(records, plan.keys().len())
+            .map_err(|error| Box::new(ExecutionError::Grouping(GroupingError::Limit(error))))?;
+    }
     // The template's first step, its filter or else its first key binding,
     // is its checkpoint (#2822).
     let filter = plan.template(template).filter;
@@ -173,12 +176,12 @@ pub(super) fn construct<'a, E>(
 }
 
 /// One key binding over the probe rows of its records.
-fn complete<'a, E>(
+fn complete<'a: 's, 's, E>(
     run: &mut Run<'_, 'a, E>,
     probes: &mut Frame,
     binding: BindingId,
-    table: Table<'a, E>,
-    secondary: &[Table<'a, E>],
+    table: Table<'s, E>,
+    secondary: &[Table<'s, E>],
     rows: &[usize],
 ) -> Result<(), Fail<E>> {
     let plan = run.plan;

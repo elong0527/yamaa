@@ -531,6 +531,7 @@ fn fold<E>(
     let fields = ReductionFields {
         separator: bound.separator(),
         distinct: bound.distinct(),
+        quantile: bound.quantile(),
     };
     let error = match reduce_values(
         values,
@@ -554,11 +555,7 @@ fn fold<E>(
         ) => Err(Box::new(ExecutionError::ReductionType {
             path: bound.expression().spec_path().into(),
             expression: bound.expression().expression().into(),
-            reducer: if reduction.reducer == Reducer::Sum {
-                crate::reduction::NumericReducer::Sum
-            } else {
-                crate::reduction::NumericReducer::Mean
-            },
+            reducer: reduction.reducer,
             source: match &reduction.operand {
                 ReductionOperand::Value(name) => name.clone(),
                 _ => bound.expression().expression().into(),

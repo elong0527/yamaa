@@ -294,11 +294,17 @@ pub struct ImplementationGuide {
     pub meta: Meta,
 }
 
-/// The one transport file a section writes for each composed dataset.
+/// The one transport file a section writes for each composed dataset: a SAS
+/// Transport file, or a Dataset-JSON 1.1 file in the representation the
+/// section selects (JSON-4).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Transport {
     Xpt,
+    /// Dataset-JSON in its single-object form.
     DatasetJson,
+    /// Dataset-JSON in its newline-delimited form: the metadata object on
+    /// the first line, then one row per line.
+    DatasetNdjson,
 }
 
 impl Transport {
@@ -307,6 +313,7 @@ impl Transport {
         match self {
             Self::Xpt => "xpt",
             Self::DatasetJson => "json",
+            Self::DatasetNdjson => "ndjson",
         }
     }
 }

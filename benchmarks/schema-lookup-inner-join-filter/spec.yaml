@@ -1,0 +1,58 @@
+yamaa: "1.0"
+type: spec
+domain: AECM
+keys: [USUBJID, AESEQ, CMSEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int, AESTDT: date}}
+  CM: {path: input/cm.csv, types: {CMSEQ: int, CMSTDT: date}}
+
+output:
+  path: aecm.csv
+  columns: [USUBJID, AESEQ, CMSEQ, AETERM, CMTRT]
+
+intermediates:
+  # Each adverse event paired with each medication of the same subject
+  # started on or after the day the event started; the filter reads both
+  # sides.
+  - id: AFTER
+    dataset: AE
+    inner_join: CM
+    key: [USUBJID]
+    filter: "CM.CMSTDT >= AE.AESTDT"
+    derivations:
+      USUBJID: AE.USUBJID
+      AESEQ: AE.AESEQ
+      AETERM: AE.AETERM
+      CMSEQ: CM.CMSEQ
+      CMTRT: CM.CMTRT
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number of the Adverse Event
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number of the Medication
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+
+  - name: CMTRT
+    type: str
+    label: Reported Name of Drug, Med, or Therapy
+
+rows:
+  - id: pairs
+    dataset: AFTER
+    derivations:
+      USUBJID: AFTER.USUBJID
+      AESEQ: AFTER.AESEQ
+      CMSEQ: AFTER.CMSEQ
+      AETERM: AFTER.AETERM
+      CMTRT: AFTER.CMTRT

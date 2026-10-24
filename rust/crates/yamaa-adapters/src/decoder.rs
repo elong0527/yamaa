@@ -2,9 +2,11 @@
 //! file decodes with the shared YAML reader, keeping the position of each
 //! node; a file a project names decodes and admits against the 1.0 closure
 //! of its type; and an input's bytes decode by its profile (CSV, Parquet, SAS or
-//! ODM) into a table that keeps a caller's opaque error. Snapshot cells
-//! remain infallible; the error type is only the engine's shared callback
-//! boundary. This grants no host access or activation authority.
+//! ODM) into a table that keeps a caller's opaque error. A CSV or Parquet
+//! input also decodes by partition (#3792), into a snapshot of its
+//! partitions' tables. Snapshot cells remain infallible; the error type is
+//! only the engine's shared callback boundary. This grants no host access or
+//! activation authority.
 use crate::{
     column_table::ColumnTable,
     document::Closures,
@@ -20,31 +22,94 @@ use yamaa_core::{
     table::{CellError, TableAccess, TableSchema, ValueRef},
 };
 
+/// One decoded input: a table, or the partitions of an input read by
+/// partition (#3792), read as the one table they divide.
 pub struct Snapshot<E> {
-    table: ColumnTable,
-    error: PhantomData<fn() -> E>,
+    storage: Storage<E>,
+}
+enum Storage<E> {
+    Whole(ColumnTable, PhantomData<fn() -> E>),
+    /// Each partition's table, in order, and where each starts in the whole
+    /// input, then the input's size.
+    Partitioned {
+        parts: Vec<Snapshot<E>>,
+        starts: Vec<usize>,
+    },
 }
 impl<E> Snapshot<E> {
-    pub fn table(&self) -> &ColumnTable {
-        &self.table
+    fn whole(table: ColumnTable) -> Self {
+        Self {
+            storage: Storage::Whole(table, PhantomData),
+        }
     }
-    pub fn into_table(self) -> ColumnTable {
-        self.table
+    /// The input read as `parts`, its partitions in order: at least one.
+    fn partitioned(parts: Vec<ColumnTable>) -> Self {
+        let mut starts = Vec::with_capacity(parts.len() + 1);
+        let mut start = 0usize;
+        starts.push(start);
+        for part in &parts {
+            start = start.saturating_add(part.row_count());
+            starts.push(start);
+        }
+        Self {
+            storage: Storage::Partitioned {
+                parts: parts.into_iter().map(Self::whole).collect(),
+                starts,
+            },
+        }
+    }
+    /// The table of an input read whole; `None` for one read by partition.
+    pub fn into_table(self) -> Option<ColumnTable> {
+        match self.storage {
+            Storage::Whole(table, _) => Some(table),
+            Storage::Partitioned { .. } => None,
+        }
+    }
+    /// The partitions in order: those of an input read by partition, or the
+    /// snapshot alone.
+    pub fn partitions(&self) -> Vec<&dyn TableAccess<Error = E>> {
+        match &self.storage {
+            Storage::Whole(..) => vec![self],
+            Storage::Partitioned { parts, .. } => parts
+                .iter()
+                .map(|part| part as &dyn TableAccess<Error = E>)
+                .collect(),
+        }
     }
 }
 impl<E> TableAccess for Snapshot<E> {
     type Error = E;
     fn schema(&self) -> &TableSchema {
-        self.table.schema()
+        match &self.storage {
+            Storage::Whole(table, _) => table.schema(),
+            Storage::Partitioned { parts, .. } => parts[0].schema(),
+        }
     }
     fn row_count(&self) -> usize {
-        self.table.row_count()
+        match &self.storage {
+            Storage::Whole(table, _) => table.row_count(),
+            Storage::Partitioned { starts, .. } => starts[starts.len() - 1],
+        }
     }
     fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<E>> {
-        self.table.cell(row, column).map_err(|error| match error {
-            CellError::OutOfBounds { row, column } => CellError::OutOfBounds { row, column },
-            CellError::Access(never) => match never {},
-        })
+        match &self.storage {
+            Storage::Whole(table, _) => table.cell(row, column).map_err(|error| match error {
+                CellError::OutOfBounds { row, column } => CellError::OutOfBounds { row, column },
+                CellError::Access(never) => match never {},
+            }),
+            Storage::Partitioned { parts, starts } => {
+                if row >= self.row_count() {
+                    return Err(CellError::OutOfBounds { row, column });
+                }
+                let part = starts.partition_point(|&start| start <= row) - 1;
+                parts[part]
+                    .cell(row - starts[part], column)
+                    .map_err(|error| match error {
+                        CellError::OutOfBounds { .. } => CellError::OutOfBounds { row, column },
+                        error => error,
+                    })
+            }
+        }
     }
 }
 pub struct Decoder<E> {
@@ -115,10 +180,7 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
     ) -> Option<Result<Self::Table, Error>> {
         table.downcast_ref::<ColumnTable>().map(|table| {
             crate::specification_run::decode_frame(source, table.clone(), interpretation, contract)
-                .map(|table| Snapshot {
-                    table,
-                    error: PhantomData,
-                })
+                .map(Snapshot::whole)
         })
     }
     /// A profile, typing, ordinal, metadata or document finding in one input
@@ -154,12 +216,32 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
         interpretation: yamaa_core::specification::SourceInterpretation,
         contract: Option<&yamaa_core::producer_contract::Contract>,
     ) -> Result<Snapshot<E>, Error> {
-        crate::specification_run::decode_source(source, bytes, interpretation, contract).map(
-            |table| Snapshot {
-                table,
-                error: PhantomData,
-            },
-        )
+        crate::specification_run::decode_source(source, bytes, interpretation, contract)
+            .map(Snapshot::whole)
+    }
+    /// A CSV input's header or a Parquet input's footer gives the schema;
+    /// every other profile is read whole.
+    fn partition_schema(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        interpretation: yamaa_core::specification::SourceInterpretation,
+    ) -> Option<TableSchema> {
+        crate::specification_run::source_schema(source, bytes, interpretation)
+    }
+    fn partitioned(
+        &mut self,
+        source: &SourceDeclaration,
+        bytes: &[u8],
+        interpretation: yamaa_core::specification::SourceInterpretation,
+        contract: Option<&yamaa_core::producer_contract::Contract>,
+        rows: std::num::NonZeroUsize,
+    ) -> Result<Snapshot<E>, Error> {
+        crate::specification_run::decode_partitions(source, bytes, interpretation, contract, rows)
+            .map(Snapshot::partitioned)
+    }
+    fn partitions(table: &Snapshot<E>) -> Vec<&dyn TableAccess<Error = E>> {
+        table.partitions()
     }
 }
 

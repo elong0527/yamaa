@@ -1,0 +1,1141 @@
+{
+  "about": "Declarative case predicates and the predicates beside them: a case predicate over a key with several records (COLUMN-2), a refused run that keeps the file at its target (OUTPUT-7), a str_extract capture in each expression position, an assertion's predicate and float literals over completed outputs, assertions that read a lookup (CHECK-4, LOOKUP-24), correlated intermediate filters (LOOKUP-7), a single-column key of large integers (LOOKUP-5), an expression key beside an ill-typed filter (FORMULA-5, LAYER-11), inclusive range intermediates, their projected columns and their absence answers (LOOKUP-9, LOOKUP-11, LOOKUP-24), root filters (ROW-9), source ordinals (INPUT-3, INPUT-4), a delimited input's present empty string (INPUT-9), and selections whose donor is the driver's own input. Moved from execution_declarative_case_predicates.rs. A case whose test projected each issue to its phase, condition, rule, spec paths and context, or read some fields of the first issue, names them in compares. A handler ledger is the report's handler rows at SPEC_PATH, NAME and COUNT, the spec_path, handler and count its test compared, and an empty ledger is a kind with no row. The documents assert_lookup_selected (also assert_lookup_empty's specification), assert_lookup_only and dependency_before_bad_filter, with their inputs, are those cases' of case_predicates.json and intermediate_key_reference.json, the truth both installed hosts read; the bytes case_predicates.json states for implicit and assert_lookup_selected are not restated here, and its column_filter and record_filter cases pin the filtered case source. A required match's refusal and a missing lookup field have the phase, condition and rule the registry gives LookupUnmatchedKey and VerificationUnknownReference. An assertion's LIKE over an integer fails with incompatible_input_type (FORMULA-7), a row found among the issues since its test stated none. An intermediate no column reads is pruned with its filter, so its specification saves its one subject with the literal ok in V and V2.",
+  "documents": {
+    "case_value": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: int\n    derivation:\n      case:\n        - when: \"SRC.V > 0\"\n          then: 7\n        - when: 'FALSE'\n          then: SRC.BAD\n        - otherwise: 8\n",
+    "capture": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n",
+    "checked": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {V: int}}}\noutput: {path: result.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - name: VALUE\n    type: int\n    verifications:\n      - allowed_values: {values: [0, 1.0]}\n      - range: {min: 0.0, max: 1.5}\n",
+    "assert_lookup_selected": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: input.csv, types: {ID: int, SEQ: int, LIMIT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int, X: int}}\noutput: {path: result.csv, columns: [ID, SEQ, VALUE]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: 'D.TIME <= SRC.LIMIT'\n    order_by: [D.TIME]\n    keep: last\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: VALUE, type: int, derivation: P.X}\nverifications:\n  - assert:\n      when: 'P.X IS NOT NULL'\n      require: 'VALUE = P.X AND P.X >= 10'\n",
+    "assert_lookup_only": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: input.csv, types: {ID: int, SEQ: int, LIMIT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int, X: int}}\noutput: {path: result.csv, columns: [ID, SEQ, VALUE]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: 'D.TIME <= SRC.LIMIT'\n    order_by: [D.TIME]\n    keep: last\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: VALUE, type: int, derivation: 0}\nverifications:\n  - assert:\n      when: 'P.X IS NOT NULL'\n      require: 'P.X >= 10'\n",
+    "correlated": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: \"D.TIME < SRC.CUT\"\n    order_by: [D.TIME]\n    keep: last\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}\n",
+    "correlated_source": "ID,SEQ,CUT\n1,1,2\n1,2,4\n3,1,2\n1,3,\n",
+    "correlated_donor": "ID,TIME,A,B\n1,1,one,x\n1,3,three,\n2,9,hidden,hidden\n",
+    "correlated_alternate": "ID,SEQ,CUT\n1,1,4\n3,1,2\n",
+    "single_key": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {ID: int}}\n  D: {path: donor.csv, types: {ID: int, SEQ: int}}\noutput: {path: result.csv, columns: [ID, A, B]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    order_by: [D.SEQ]\n    keep: first\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: A, type: str, derivation: P.V}\n  - {name: B, type: str, derivation: P.V}\n",
+    "dependency_before_bad_filter": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\nbase: SRC\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {K: {str_pad: {source: SRC.N, width: 8}}}\n    filter: \"TAB.KINT > 'bad'\"\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "bad_filter_table": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n\"SRC.ABSENT\",9007199254740992,9007199254740992,TEXT\n",
+    "range": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int, X: int}}\n  D: {path: donor.csv, types: {ID: int, LOW: int, HIGH: int, ORD: int}}\noutput: {path: result.csv, columns: [ID, SEQ, X, A, B]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: \"D.ELIG = 'Y'\"\n    between: {value: X, lower: LOW, upper: HIGH}\n    columns: [V, W, V]\n    order_by: [D.ORD]\n    keep: first\n    absent: absent\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: X, type: int, derivation: SRC.X}\n  - {name: A, type: str, derivation: P.V}\n  - {name: B, type: str, derivation: P.W}\n",
+    "range_source": "ID,SEQ,X\n1,1,3\n1,2,4\n1,3,\n1,4,6\n2,1,3\n1,5,2\n",
+    "range_donor": "ID,LOW,HIGH,ORD,ELIG,V,W\n1,1,3,2,Y,edge,\n1,3,5,1,Y,later,paired\n1,,10,3,Y,missing-bound,hidden\n1,1,10,0,N,filtered,hidden\n",
+    "baseline": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: src.csv, types: {TRTSDT: date}}\n  VS: {path: donor.csv, types: {WEIGHT: float}}\noutput: {path: result.csv, columns: [ID, TRTSDT, WEIGHTBL]}\nintermediates:\n  - id: BL\n    dataset: VS\n    key: [ID]\n    derivations:\n      ADT: {to_date: {source: VSDTC}}\n    between: {value: TRTSDT, lower: ADT}\n    order_by: [VS.ADT]\n    keep: last\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: TRTSDT, type: date, derivation: SRC.TRTSDT}\n  - {name: WEIGHTBL, type: float, derivation: BL.WEIGHT}\n",
+    "empty_string_present": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: absent.csv, empty_string: present}}\noutput: {path: result.csv, columns: [ID]}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}]\n",
+    "root_filter": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\nfilter: \"SRC.KEEP = 'Y'\"\noutput: {path: result.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: V, type: str, derivation: SRC.V}\n",
+    "raw_root_filter": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\nfilter: \"SRC.ID = '02'\"\noutput: {path: result.csv, columns: [ID]}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\n",
+    "explicit_base": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {OTHER: other.csv, SRC: source.csv}\nbase: SRC\nfilter: \"SRC.KEEP = 'Y'\"\noutput: {path: result.csv, columns: [ID]}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}]\n",
+    "constructed_filter": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: source.csv}\nfilter: \"ID = 'a'\"\noutput: {path: result.csv, columns: [ID]}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}]\n",
+    "ordinal": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, ordinal: REC}}\nfilter: \"SRC.KEEP = 'Y'\"\noutput: {path: result.csv, columns: [ID, POSITION]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: POSITION, type: int, derivation: SRC.REC}\n",
+    "odm_ordinal": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: absent.parquet, ordinal: REC}}\noutput: {path: result.csv, columns: [ID]}\n",
+    "metadata_odm": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: source.csv, ordinal: REC}}\noutput: {path: result.csv, columns: [ID, POSITION]}\ncolumns:\n  - {name: ID, type: int, metadata: {odm: SRC.ITEM}, derivation: SRC.ID}\n  - {name: POSITION, type: int, derivation: SRC.REC}\n",
+    "primary": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: SRC\n    key: [ID]\n    filter: \"SRC.ELIG = 'Y'\"\n    order_by: [SRC.SEQ]\n    keep: last\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}\n",
+    "primary_source": "ID,SEQ,ELIG,A,B\n1,1,Y,early,x\n1,2,Y,last,\n2,1,N,hidden,hidden\n"
+  },
+  "cases": [
+    {
+      "case": "implicit_case_predicates_reduce_feeding_values_and_only_true_selects",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "case_value"}, "input.csv": "ID,V,BAD\na,1,hidden\na,,hidden\nb,,hidden\nc,-1,hidden\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "report": {
+        "handler": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"]
+        ],
+        "check": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"]
+        ]
+      }
+    },
+    {
+      "case": "case_predicate_multiplicity_retains_its_complete_report_and_blocks_publication",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "case_value"}, "input.csv": "ID,V,BAD\na,1,hidden\na,2,hidden\nb,,hidden\n", "result.csv": "sentinel"}, "specification": "spec.yaml"},
+      "issues": [{"phase": "derivation", "condition": "multiple_values_per_key", "rule": "COLUMN-2", "spec_paths": ["columns.VALUE.derivation.case[0].when"], "context": {"identifier": "SRC.V", "value_count": 2, "keys": [{"ID": "a"}]}}],
+      "saved": {}
+    },
+    {
+      "case": "a_qualified_case_capture_executes_in_a_column_derivation",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "capture",
+            "edits": [
+              {
+                "from": "  - {name: ID, type: str, derivation: SRC.ID}\n",
+                "to": "  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {case: [{when: 'SRC.V > 0', then: {str_extract: {source: SRC.TEXT, pattern: 'prefix:([A-Z]+)$', group: 1}}}, {otherwise: \"'none'\"}]}}\n"
+              }
+            ]
+          },
+          "input.csv": "ID,V,TEXT\na,1,prefix:ONE\nb,0,prefix:TWO\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,VALUE\na,ONE\nb,none\n"}
+    },
+    {
+      "case": "a_qualified_case_capture_executes_in_a_record_default",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "capture",
+            "edits": [
+              {
+                "from": "  - {name: ID, type: str, derivation: SRC.ID}\n",
+                "to": "  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {case: [{when: 'SRC.V > 0', then: {str_extract: {source: SRC.TEXT, pattern: 'prefix:([A-Z]+)$', group: 1}}}, {otherwise: \"'none'\"}]}}\nrows: [{id: records, dataset: SRC}]\n"
+              }
+            ]
+          },
+          "input.csv": "ID,V,TEXT\na,1,prefix:ONE\nb,0,prefix:TWO\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,VALUE\na,ONE\nb,none\n"}
+    },
+    {
+      "case": "a_qualified_case_capture_executes_in_a_record_derivation",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "capture",
+            "edits": [
+              {
+                "from": "  - {name: ID, type: str, derivation: SRC.ID}\n",
+                "to": "  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str}\nrows: [{id: records, dataset: SRC, derivations: {VALUE: {case: [{when: 'SRC.V > 0', then: {str_extract: {source: SRC.TEXT, pattern: 'prefix:([A-Z]+)$', group: 1}}}, {otherwise: \"'none'\"}]}}}]\n"
+              }
+            ]
+          },
+          "input.csv": "ID,V,TEXT\na,1,prefix:ONE\nb,0,prefix:TWO\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,VALUE\na,ONE\nb,none\n"}
+    },
+    {
+      "case": "a_qualified_case_capture_executes_in_a_grouped_derivation",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "capture",
+            "edits": [
+              {
+                "from": "  - {name: ID, type: str, derivation: SRC.ID}\n",
+                "to": "  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str}\nrows: [{id: groups, dataset: SRC, group_by: [SRC.ID, SRC.V, SRC.TEXT], derivations: {VALUE: {case: [{when: 'SRC.V > 0', then: {str_extract: {source: SRC.TEXT, pattern: 'prefix:([A-Z]+)$', group: 1}}}, {otherwise: \"'none'\"}]}}}]\n"
+              }
+            ]
+          },
+          "input.csv": "ID,V,TEXT\na,1,prefix:ONE\nb,0,prefix:TWO\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,VALUE\na,ONE\nb,none\n"}
+    },
+    {
+      "case": "verification_literals_and_a_holding_predicate_check_a_column_case",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "checked",
+            "edits": [
+              {
+                "from": "      - range: {min: 0.0, max: 1.5}\n",
+                "to": "      - range: {min: 0.0, max: 1.5}\n    derivation: {case: [{when: 'SRC.V > 0', then: 1}, {otherwise: 0}]}\nverifications: [{assert: {require: 'VALUE >= 0'}}]\n"
+              }
+            ]
+          },
+          "input.csv": "ID,V\na,1\nb,0\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,VALUE\na,1\nb,0\n"}
+    },
+    {
+      "case": "verification_literals_and_a_holding_predicate_check_a_record_row",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "checked",
+            "edits": [
+              {
+                "from": "      - range: {min: 0.0, max: 1.5}\n",
+                "to": "      - range: {min: 0.0, max: 1.5}\nrows: [{id: records, dataset: SRC, derivations: {VALUE: {case: [{when: 'SRC.V > 0', then: 1}, {otherwise: 0}]}}}]\nverifications: [{assert: {require: 'VALUE >= 0'}}]\n"
+              }
+            ]
+          },
+          "input.csv": "ID,V\na,1\nb,0\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,VALUE\na,1\nb,0\n"}
+    },
+    {
+      "case": "verification_literals_and_a_holding_predicate_check_a_grouped_row",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "checked",
+            "edits": [
+              {
+                "from": "      - range: {min: 0.0, max: 1.5}\n",
+                "to": "      - range: {min: 0.0, max: 1.5}\nrows: [{id: groups, dataset: SRC, group_by: [SRC.ID, SRC.V], derivations: {VALUE: {case: [{when: 'SRC.V > 0', then: 1}, {otherwise: 0}]}}}]\nverifications: [{assert: {require: 'VALUE >= 0'}}]\n"
+              }
+            ]
+          },
+          "input.csv": "ID,V\na,1\nb,0\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,VALUE\na,1\nb,0\n"}
+    },
+    {
+      "case": "an_incomplete_verification_predicate_refuses_a_column_case",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "checked",
+            "edits": [
+              {
+                "from": "      - range: {min: 0.0, max: 1.5}\n",
+                "to": "      - range: {min: 0.0, max: 1.5}\n    derivation: {case: [{when: 'SRC.V > 0', then: 1}, {otherwise: 0}]}\nverifications: [{assert: {require: 'VALUE ='}}]\n"
+              }
+            ]
+          },
+          "input.csv": "ID,V\na,1\nb,0\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "invalid_expression", "spec_paths": ["verifications[0].assert.require"]}],
+      "saved": {}
+    },
+    {
+      "case": "an_incomplete_verification_predicate_refuses_a_record_row",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "checked",
+            "edits": [
+              {
+                "from": "      - range: {min: 0.0, max: 1.5}\n",
+                "to": "      - range: {min: 0.0, max: 1.5}\nrows: [{id: records, dataset: SRC, derivations: {VALUE: {case: [{when: 'SRC.V > 0', then: 1}, {otherwise: 0}]}}}]\nverifications: [{assert: {require: 'VALUE ='}}]\n"
+              }
+            ]
+          },
+          "input.csv": "ID,V\na,1\nb,0\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "invalid_expression", "spec_paths": ["verifications[0].assert.require"]}],
+      "saved": {}
+    },
+    {
+      "case": "an_incomplete_verification_predicate_refuses_a_grouped_row",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "checked",
+            "edits": [
+              {
+                "from": "      - range: {min: 0.0, max: 1.5}\n",
+                "to": "      - range: {min: 0.0, max: 1.5}\nrows: [{id: groups, dataset: SRC, group_by: [SRC.ID, SRC.V], derivations: {VALUE: {case: [{when: 'SRC.V > 0', then: 1}, {otherwise: 0}]}}}]\nverifications: [{assert: {require: 'VALUE ='}}]\n"
+              }
+            ]
+          },
+          "input.csv": "ID,V\na,1\nb,0\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "invalid_expression", "spec_paths": ["verifications[0].assert.require"]}],
+      "saved": {}
+    },
+    {
+      "case": "a_non_text_verification_predicate_is_refused_beside_a_column_case",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "checked",
+            "edits": [
+              {
+                "from": "      - range: {min: 0.0, max: 1.5}\n",
+                "to": "      - range: {min: 0.0, max: 1.5}\n    derivation: {case: [{when: 'SRC.V > 0', then: 1}, {otherwise: 0}]}\nverifications: [{assert: {require: 7}}]\n"
+              }
+            ]
+          },
+          "input.csv": "ID,V\na,1\nb,0\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [{"condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["verifications[0].assert.require"]}],
+      "saved": {}
+    },
+    {
+      "case": "a_non_text_verification_predicate_is_refused_beside_a_record_row",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "checked",
+            "edits": [
+              {
+                "from": "      - range: {min: 0.0, max: 1.5}\n",
+                "to": "      - range: {min: 0.0, max: 1.5}\nrows: [{id: records, dataset: SRC, derivations: {VALUE: {case: [{when: 'SRC.V > 0', then: 1}, {otherwise: 0}]}}}]\nverifications: [{assert: {require: 7}}]\n"
+              }
+            ]
+          },
+          "input.csv": "ID,V\na,1\nb,0\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [{"condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["verifications[0].assert.require"]}],
+      "saved": {}
+    },
+    {
+      "case": "a_non_text_verification_predicate_is_refused_beside_a_grouped_row",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "checked",
+            "edits": [
+              {
+                "from": "      - range: {min: 0.0, max: 1.5}\n",
+                "to": "      - range: {min: 0.0, max: 1.5}\nrows: [{id: groups, dataset: SRC, group_by: [SRC.ID, SRC.V], derivations: {VALUE: {case: [{when: 'SRC.V > 0', then: 1}, {otherwise: 0}]}}}]\nverifications: [{assert: {require: 7}}]\n"
+              }
+            ]
+          },
+          "input.csv": "ID,V\na,1\nb,0\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths"],
+      "issues": [{"condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["verifications[0].assert.require"]}],
+      "saved": {}
+    },
+    {
+      "case": "assertion_lookup_reuses_current_selection_without_adding_derivation_handlers",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "assert_lookup_selected"}, "input.csv": "ID,SEQ,LIMIT\n1,1,2\n1,2,4\n2,1,2\n", "donor.csv": "ID,TIME,X\n1,1,10\n1,3,30\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.VALUE.derivation.source.multiple_matches", "multiple_matches", 1],
+          ["columns.VALUE.derivation.source.absent", "absent", 1]
+        ]
+      }
+    },
+    {
+      "case": "false_when_still_resolves_require_lookup_and_refuses_a_required_match",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "assert_lookup_only",
+            "edits": [
+              {"from": "    keep: last\n", "to": "    keep: last\n    require_match: true\n"},
+              {"from": "when: 'P.X IS NOT NULL'", "to": "when: 'FALSE'"}
+            ]
+          },
+          "input.csv": "ID,SEQ,LIMIT\n1,1,2\n1,2,4\n2,1,2\n",
+          "donor.csv": "ID,TIME,X\n1,1,10\n1,3,30\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "join", "condition": "unmatched_key", "rule": "LOOKUP-24"}],
+      "saved": {}
+    },
+    {
+      "case": "empty_output_validates_lookup_operand_types_without_selecting_a_donor",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "assert_lookup_selected",
+            "edits": [
+              {"from": "when: 'P.X IS NOT NULL'", "to": "when: 'FALSE'"},
+              {"from": "require: 'VALUE = P.X AND P.X >= 10'", "to": "require: \"P.X LIKE 'text%'\""}
+            ]
+          },
+          "input.csv": "ID,SEQ,LIMIT\n",
+          "donor.csv": "ID,TIME,X\n1,1,10\n1,3,30\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition"],
+      "among": true,
+      "issues": [{"condition": "incompatible_input_type"}],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.VALUE.derivation.source.multiple_matches", "multiple_matches", 0],
+          ["columns.VALUE.derivation.source.absent", "absent", 0]
+        ]
+      },
+      "saved": {}
+    },
+    {
+      "case": "a_warning_assertion_refuses_a_missing_lookup_field_at_its_when",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "assert_lookup_only",
+            "edits": [
+              {"from": "output: {path: result.csv,", "to": "output: {path: result.csv, report: report.csv,"},
+              {"from": "  - assert:\n", "to": "  - assert:\n      severity: warning\n"},
+              {"from": "when: 'P.X IS NOT NULL'", "to": "when: 'P.MISSING IS NOT NULL'"}
+            ]
+          },
+          "input.csv": "ID,SEQ,LIMIT\n1,1,2\n1,2,4\n2,1,2\n",
+          "donor.csv": "ID,TIME,X\n1,1,10\n1,3,30\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "CHECK-4", "spec_paths": ["verifications[0].assert.when"], "context": {"identifier": "P.MISSING"}}]
+    },
+    {
+      "case": "a_warning_assertion_refuses_a_missing_lookup_field_at_its_require",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "assert_lookup_only",
+            "edits": [
+              {"from": "output: {path: result.csv,", "to": "output: {path: result.csv, report: report.csv,"},
+              {"from": "  - assert:\n", "to": "  - assert:\n      severity: warning\n"},
+              {"from": "require: 'P.X >= 10'", "to": "require: 'P.MISSING >= 10'"}
+            ]
+          },
+          "input.csv": "ID,SEQ,LIMIT\n1,1,2\n1,2,4\n2,1,2\n",
+          "donor.csv": "ID,TIME,X\n1,1,10\n1,3,30\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "CHECK-4", "spec_paths": ["verifications[0].assert.require"], "context": {"identifier": "P.MISSING"}}]
+    },
+    {
+      "case": "complete_root_outputs_and_handler_geometry_are_current_row_specific",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "correlated"}, "src.csv": {"base": "correlated_source"}, "donor.csv": {"base": "correlated_donor"}, "alt.csv": {"base": "correlated_alternate"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.A.derivation.source.multiple_matches", "multiple_matches", 1],
+          ["columns.A.derivation.source.absent", "absent", 2],
+          ["columns.B.derivation.source.multiple_matches", "multiple_matches", 1],
+          ["columns.B.derivation.source.absent", "absent", 2]
+        ]
+      },
+      "saved": {"result.csv": "ID,SEQ,A,B\n1,1,one,x\n1,2,three,\n3,1,,\n1,3,,\n"}
+    },
+    {
+      "case": "repeated_donor_and_current_identifiers_share_bindings_without_changing_selection",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "correlated", "edits": [{"from": "D.TIME < SRC.CUT", "to": "D.TIME < SRC.CUT AND (D.TIME IS NULL OR D.TIME < SRC.CUT)"}]},
+          "src.csv": {"base": "correlated_source"},
+          "donor.csv": {"base": "correlated_donor"},
+          "alt.csv": {"base": "correlated_alternate"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,SEQ,A,B\n1,1,one,x\n1,2,three,\n3,1,,\n1,3,,\n"}
+    },
+    {
+      "case": "secondary_driver_fields_bind_to_the_actual_template_and_original_native_port",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "correlated",
+            "edits": [
+              {"from": "  D: {path:", "to": "  ALT: {path: alt.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path:"},
+              {"from": "D.TIME < SRC.CUT", "to": "D.TIME < ALT.CUT"},
+              {
+                "from": "columns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}",
+                "to": "rows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, SEQ: ALT.SEQ, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: SEQ, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}"
+              }
+            ]
+          },
+          "src.csv": {"base": "correlated_source"},
+          "donor.csv": {"base": "correlated_donor"},
+          "alt.csv": {"base": "correlated_alternate"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["rows.alternate.derivations.A.source.multiple_matches", "multiple_matches", 1],
+          ["rows.alternate.derivations.A.source.absent", "absent", 1],
+          ["rows.alternate.derivations.B.source.multiple_matches", "multiple_matches", 1],
+          ["rows.alternate.derivations.B.source.absent", "absent", 1]
+        ]
+      },
+      "saved": {"result.csv": "ID,SEQ,A,B\n1,1,three,\n3,1,,\n"}
+    },
+    {
+      "case": "known_unrelated_input_fields_are_refused_with_complete_selection_geometry",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "correlated",
+            "edits": [
+              {"from": "  D: {path:", "to": "  ALT: {path: alt.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path:"},
+              {
+                "from": "columns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}",
+                "to": "rows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, SEQ: ALT.SEQ, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: SEQ, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}"
+              }
+            ]
+          },
+          "src.csv": {"base": "correlated_source"},
+          "donor.csv": {"base": "correlated_donor"},
+          "alt.csv": {"base": "correlated_alternate"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-7", "spec_paths": ["intermediates.P.filter"], "context": {"identifier": "SRC.CUT", "intermediate": "P"}}],
+      "saved": {}
+    },
+    {
+      "case": "the_donor_qualifier_takes_precedence_in_a_correlated_filter",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "correlated", "edits": [{"from": "D.TIME < SRC.CUT", "to": "D.TIME < D.ID"}]},
+          "src.csv": {"base": "correlated_source"},
+          "donor.csv": {"base": "correlated_donor"},
+          "alt.csv": {"base": "correlated_alternate"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.A.derivation.source.multiple_matches", "multiple_matches", 0],
+          ["columns.A.derivation.source.absent", "absent", 4],
+          ["columns.B.derivation.source.multiple_matches", "multiple_matches", 0],
+          ["columns.B.derivation.source.absent", "absent", 4]
+        ]
+      },
+      "saved": {"result.csv": "ID,SEQ,A,B\n1,1,,\n1,2,,\n3,1,,\n1,3,,\n"}
+    },
+    {
+      "case": "a_bare_stored_field_in_a_correlated_filter_suggests_its_qualifier",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "correlated",
+            "edits": [
+              {"from": "D.TIME < SRC.CUT", "to": "TIME < SRC.CUT"},
+              {"from": "derivation: P.B", "to": "derivation: \"'unused'\""}
+            ]
+          },
+          "src.csv": {"base": "correlated_source"},
+          "donor.csv": {"base": "correlated_donor"},
+          "alt.csv": {"base": "correlated_alternate"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-7", "spec_paths": ["intermediates.P.filter"], "context": {"identifier": "TIME", "intermediate": "P", "suggestion": "D.TIME"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.A.derivation.source"], "context": {"identifier": "P.A"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "single_column_key_preserves_distinct_large_integer_keys_and_per_read_handlers",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "single_key"},
+          "src.csv": "ID\n9007199254740992\n9007199254740993\n-9223372036854775808\n",
+          "donor.csv": "ID,SEQ,V\n9007199254740992,1,lower\n9007199254740993,2,later\n9007199254740993,1,exact\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.A.derivation.source.multiple_matches", "multiple_matches", 1],
+          ["columns.A.derivation.source.absent", "absent", 1],
+          ["columns.B.derivation.source.multiple_matches", "multiple_matches", 1],
+          ["columns.B.derivation.source.absent", "absent", 1]
+        ]
+      },
+      "saved": {"result.csv": "ID,A,B\n9007199254740992,lower,lower\n9007199254740993,exact,exact\n-9223372036854775808,,\n"}
+    },
+    {
+      "case": "resolved_source_keys_still_refuse_the_original_bad_donor_filter",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": {"base": "dependency_before_bad_filter"}, "src.csv": "ID,N\na,7\n", "tab.csv": {"base": "bad_filter_table"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5", "spec_paths": ["intermediates.LOOK.filter"], "context": {"actual": "str", "left_type": "int", "right_type": "str"}}]
+    },
+    {
+      "case": "ordinary_source_keys_keep_static_filter_types_before_key_cardinality",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "dependency_before_bad_filter", "edits": [{"from": "key: {K: {str_pad: {source: SRC.N, width: 8}}}", "to": "key: {KINT: SRC.N}"}]},
+          "src.csv": "ID,N\na,7\na,8\n",
+          "tab.csv": {"base": "bad_filter_table"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5", "spec_paths": ["intermediates.LOOK.filter"], "context": {"actual": "str", "left_type": "int", "right_type": "str"}}]
+    },
+    {
+      "case": "a_deferred_filter_type_is_refused_over_an_empty_donor",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "dependency_before_bad_filter"}, "src.csv": "ID,N\na,7\n", "tab.csv": "K,KINT,KNUM,VAL\n"}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5", "spec_paths": ["intermediates.LOOK.filter"], "context": {"actual": "str", "left_type": "int", "right_type": "str"}, "operand_route": []}],
+      "saved": {}
+    },
+    {
+      "case": "a_deferred_filter_type_is_refused_over_an_empty_driver",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "dependency_before_bad_filter"}, "src.csv": "ID,N\n", "tab.csv": {"base": "bad_filter_table"}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5", "spec_paths": ["intermediates.LOOK.filter"], "context": {"actual": "str", "left_type": "int", "right_type": "str"}, "operand_route": []}],
+      "saved": {}
+    },
+    {
+      "case": "a_deferred_filter_type_is_refused_over_a_missing_operand",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "dependency_before_bad_filter"}, "src.csv": "ID,N\na,7\n", "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",,7,A\n"}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5", "spec_paths": ["intermediates.LOOK.filter"], "context": {"actual": "str", "left_type": "int", "right_type": "str"}, "operand_route": []}],
+      "saved": {}
+    },
+    {
+      "case": "a_deferred_filter_type_is_refused_in_an_unread_branch",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "dependency_before_bad_filter",
+            "edits": [
+              {"from": "{name: V, type: str, derivation: LOOK.VAL}", "to": "{name: V, type: str, derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: \"'ok'\"}]}}"},
+              {"from": "{name: V2, type: str, derivation: LOOK.VAL}", "to": "{name: V2, type: str, derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: \"'ok'\"}]}}"}
+            ]
+          },
+          "src.csv": "ID,N\na,7\n",
+          "tab.csv": {"base": "bad_filter_table"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5", "spec_paths": ["intermediates.LOOK.filter"], "context": {"actual": "str", "left_type": "int", "right_type": "str"}, "operand_route": []}],
+      "saved": {}
+    },
+    {
+      "case": "a_deferred_filter_type_is_refused_beside_a_false_conjunct",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "dependency_before_bad_filter", "edits": [{"from": "TAB.KINT > 'bad'", "to": "FALSE AND TAB.KINT > 'bad'"}]},
+          "src.csv": "ID,N\na,7\n",
+          "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",,7,A\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5", "spec_paths": ["intermediates.LOOK.filter"], "context": {"actual": "str", "left_type": "int", "right_type": "str"}, "operand_route": ["Right"]}],
+      "saved": {}
+    },
+    {
+      "case": "an_unread_intermediate_is_pruned_with_its_ill_typed_filter",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "dependency_before_bad_filter",
+            "edits": [
+              {"from": "{name: V, type: str, derivation: LOOK.VAL}", "to": "{name: V, type: str, derivation: \"'ok'\"}"},
+              {"from": "{name: V2, type: str, derivation: LOOK.VAL}", "to": "{name: V2, type: str, derivation: \"'ok'\"}"}
+            ]
+          },
+          "src.csv": "ID,N\na,7\n",
+          "tab.csv": {"base": "bad_filter_table"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,V,V2\na,ok,ok\n"}
+    },
+    {
+      "case": "a_check_without_data_refuses_the_deferred_filter_type",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "dependency_before_bad_filter"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5", "spec_paths": ["intermediates.LOOK.filter"], "context": {"actual": "str", "left_type": "int", "right_type": "str"}}]
+    },
+    {
+      "case": "a_check_without_data_refuses_the_filter_type_in_an_unread_branch",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "dependency_before_bad_filter",
+            "edits": [
+              {"from": "{name: V, type: str, derivation: LOOK.VAL}", "to": "{name: V, type: str, derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: \"'ok'\"}]}}"},
+              {"from": "{name: V2, type: str, derivation: LOOK.VAL}", "to": "{name: V2, type: str, derivation: {case: [{when: 'FALSE', then: LOOK.VAL}, {otherwise: \"'ok'\"}]}}"}
+            ]
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5", "spec_paths": ["intermediates.LOOK.filter"], "context": {"actual": "str", "left_type": "int", "right_type": "str"}}]
+    },
+    {
+      "case": "a_check_without_data_refuses_the_filter_type_beside_a_false_conjunct",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "dependency_before_bad_filter", "edits": [{"from": "TAB.KINT > 'bad'", "to": "FALSE AND TAB.KINT > 'bad'"}]}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5", "spec_paths": ["intermediates.LOOK.filter"], "context": {"actual": "str", "left_type": "int", "right_type": "str"}}]
+    },
+    {
+      "case": "a_check_without_data_prunes_an_unread_intermediate",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "dependency_before_bad_filter",
+            "edits": [
+              {"from": "{name: V, type: str, derivation: LOOK.VAL}", "to": "{name: V, type: str, derivation: \"'ok'\"}"},
+              {"from": "{name: V2, type: str, derivation: LOOK.VAL}", "to": "{name: V2, type: str, derivation: \"'ok'\"}"}
+            ]
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_valid_expression_key_filter_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "dependency_before_bad_filter", "edits": [{"from": "filter: \"TAB.KINT > 'bad'\"", "to": "filter: \"TAB.KINT > 0\""}]},
+          "src.csv": "ID,N\na,7\n",
+          "tab.csv": {"base": "bad_filter_table"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_valid_expression_key_filter_selects_and_saves",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "dependency_before_bad_filter", "edits": [{"from": "filter: \"TAB.KINT > 'bad'\"", "to": "filter: \"TAB.KINT > 0\""}]},
+          "src.csv": "ID,N\na,7\n",
+          "tab.csv": {"base": "bad_filter_table"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,V,V2\na,A,A\n"}
+    },
+    {
+      "case": "derived_date_bound_keeps_the_last_record_on_the_current_date",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "baseline"},
+          "src.csv": "ID,TRTSDT\nS01,2030-01-10\nS02,2030-02-01\nS03,\n",
+          "donor.csv": "ID,VSDTC,WEIGHT\nS01,2030-01-05T08:00,70\nS01,2030-01-10T07:30,71\nS01,2030-01-15T09:00,72\nS02,2030-02-02T08:00,80\nS03,2030-01-03,60\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"result.csv": "ID,TRTSDT,WEIGHTBL\nS01,2030-01-10,71\nS02,2030-02-01,\nS03,,\n"}
+    },
+    {
+      "case": "inclusive_ranges_keep_one_record_choice_and_project_only_named_reads",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "range"}, "src.csv": {"base": "range_source"}, "donor.csv": {"base": "range_donor"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.A.derivation.source.multiple_matches", "multiple_matches", 1],
+          ["columns.A.derivation.source.absent", "absent", 3],
+          ["columns.B.derivation.source.multiple_matches", "multiple_matches", 1],
+          ["columns.B.derivation.source.absent", "absent", 3]
+        ]
+      },
+      "saved": {"result.csv": "ID,SEQ,X,A,B\n1,1,3,later,paired\n1,2,4,later,paired\n1,3,,absent,absent\n1,4,6,absent,absent\n2,1,3,absent,absent\n1,5,2,edge,\n"}
+    },
+    {
+      "case": "unstated_lower_bound_never_turns_a_missing_unused_donor_field_into_absence",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "range", "edits": [{"from": "value: X, lower: LOW, upper: HIGH", "to": "value: X, upper: HIGH"}]},
+          "src.csv": {"base": "range_source"},
+          "donor.csv": {"base": "range_donor"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.A.derivation.source.multiple_matches", "multiple_matches", 3],
+          ["columns.A.derivation.source.absent", "absent", 2],
+          ["columns.B.derivation.source.multiple_matches", "multiple_matches", 3],
+          ["columns.B.derivation.source.absent", "absent", 2]
+        ]
+      },
+      "saved": {"result.csv": "ID,SEQ,X,A,B\n1,1,3,later,paired\n1,2,4,later,paired\n1,3,,absent,absent\n1,4,6,missing-bound,hidden\n2,1,3,absent,absent\n1,5,2,later,paired\n"}
+    },
+    {
+      "case": "a_hidden_read_has_the_complete_original_reference_finding_and_no_output",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "range", "edits": [{"from": "derivation: P.W", "to": "derivation: P.LOW"}]},
+          "src.csv": {"base": "range_source"},
+          "donor.csv": {"base": "range_donor"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-11", "spec_paths": ["columns.B.derivation.source"], "context": {"identifier": "P.LOW"}}],
+      "report": {
+        "handler": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"]
+        ]
+      },
+      "saved": {}
+    },
+    {
+      "case": "an_integer_absence_replacement_keeps_its_full_value_and_ledger",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "range",
+            "edits": [
+              {"from": "absent: absent", "to": "absent: -9223372036854775808"},
+              {"from": "name: A, type: str", "to": "name: A, type: int"},
+              {"from": "name: B, type: str", "to": "name: B, type: int"}
+            ]
+          },
+          "src.csv": "ID,SEQ,X\n2,1,3\n",
+          "donor.csv": "ID,LOW,HIGH,ORD,ELIG,V,W\n1,1,4,1,Y,3,4\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.A.derivation.source.multiple_matches", "multiple_matches", 0],
+          ["columns.A.derivation.source.absent", "absent", 1],
+          ["columns.B.derivation.source.multiple_matches", "multiple_matches", 0],
+          ["columns.B.derivation.source.absent", "absent", 1]
+        ]
+      },
+      "saved": {"result.csv": "ID,SEQ,X,A,B\n2,1,3,-9223372036854775808,-9223372036854775808\n"}
+    },
+    {
+      "case": "a_float_absence_replacement_keeps_its_full_value_and_ledger",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "range",
+            "edits": [
+              {"from": "absent: absent", "to": "absent: 0.5"},
+              {"from": "name: A, type: str", "to": "name: A, type: float"},
+              {"from": "name: B, type: str", "to": "name: B, type: float"}
+            ]
+          },
+          "src.csv": "ID,SEQ,X\n2,1,3\n",
+          "donor.csv": "ID,LOW,HIGH,ORD,ELIG,V,W\n1,1,4,1,Y,3,4\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.A.derivation.source.multiple_matches", "multiple_matches", 0],
+          ["columns.A.derivation.source.absent", "absent", 1],
+          ["columns.B.derivation.source.multiple_matches", "multiple_matches", 0],
+          ["columns.B.derivation.source.absent", "absent", 1]
+        ]
+      },
+      "saved": {"result.csv": "ID,SEQ,X,A,B\n2,1,3,0.5,0.5\n"}
+    },
+    {
+      "case": "range_current_outputs_and_scalar_keys_promote_their_defaults_before_row_reads",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "range",
+            "edits": [
+              {"from": "\ncolumns:\n", "to": "\nrows:\n  - id: selected\n    dataset: SRC\n    derivations: {A: P.V, B: P.W}\ncolumns:\n"},
+              {"from": "name: A, type: str, derivation: P.V", "to": "name: A, type: str"},
+              {"from": "name: B, type: str, derivation: P.W", "to": "name: B, type: str"}
+            ]
+          },
+          "src.csv": {"base": "range_source"},
+          "donor.csv": {"base": "range_donor"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["rows.selected.derivations.A.source.multiple_matches", "multiple_matches", 1],
+          ["rows.selected.derivations.A.source.absent", "absent", 3],
+          ["rows.selected.derivations.B.source.multiple_matches", "multiple_matches", 1],
+          ["rows.selected.derivations.B.source.absent", "absent", 3]
+        ]
+      },
+      "saved": {"result.csv": "ID,SEQ,X,A,B\n1,1,3,later,paired\n1,2,4,later,paired\n1,3,,absent,absent\n1,4,6,absent,absent\n2,1,3,absent,absent\n1,5,2,edge,\n"}
+    },
+    {
+      "case": "boolean_absence_replacement_reaches_a_null_test_without_conversion",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "range",
+            "edits": [
+              {"from": "absent: absent", "to": "absent: true"},
+              {"from": "derivation: P.V", "to": "derivation: {flag: {condition: 'P.V IS NOT NULL', true_value: Y, false_value: N, missing: null}}"},
+              {"from": "derivation: P.W", "to": "derivation: {flag: {condition: 'P.W IS NOT NULL', true_value: Y, false_value: N, missing: null}}"}
+            ]
+          },
+          "src.csv": "ID,SEQ,X\n2,1,3\n",
+          "donor.csv": "ID,LOW,HIGH,ORD,ELIG,V,W\n1,1,4,1,Y,3,4\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.A.derivation.flag.missing", "missing", 0],
+          ["columns.B.derivation.flag.missing", "missing", 0]
+        ]
+      },
+      "saved": {"result.csv": "ID,SEQ,X,A,B\n2,1,3,Y,Y\n"}
+    },
+    {
+      "case": "integer_current_values_do_not_round_into_a_float_donor_endpoint",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "range", "edits": [{"from": "LOW: int, HIGH: int", "to": "LOW: float, HIGH: float"}]},
+          "src.csv": "ID,SEQ,X\n1,1,9007199254740993\n1,2,9007199254740992\n",
+          "donor.csv": "ID,LOW,HIGH,ORD,ELIG,V,W\n1,9007199254740992,9007199254740992,1,Y,edge,paired\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.A.derivation.source.multiple_matches", "multiple_matches", 0],
+          ["columns.A.derivation.source.absent", "absent", 1],
+          ["columns.B.derivation.source.multiple_matches", "multiple_matches", 0],
+          ["columns.B.derivation.source.absent", "absent", 1]
+        ]
+      },
+      "saved": {"result.csv": "ID,SEQ,X,A,B\n1,1,9007199254740993,absent,absent\n1,2,9007199254740992,edge,paired\n"}
+    },
+    {
+      "case": "csv_present_empty_is_rejected_before_study_bytes_are_requested",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "empty_string_present"}, "source.csv": "unused\n"}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "empty_string_present_unsupported", "rule": "INPUT-9", "spec_paths": ["input.SRC.empty_string"], "context": {"dataset": "SRC"}}],
+      "saved": {}
+    },
+    {
+      "case": "root_filter_reads_raw_driver_values_before_key_derivation",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "root_filter"}, "source.csv": "ID,V,KEEP\nbad,excluded,N\n02,seven,Y\n2,conflict,\n1,eight,Y\n2,seven,Y\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID,V\n2,seven\n1,eight\n"}
+    },
+    {
+      "case": "a_root_filter_compares_a_key_by_its_stored_text",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "raw_root_filter"}, "source.csv": "ID\n02\n3\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID\n2\n"}
+    },
+    {
+      "case": "root_filter_uses_explicit_base_independently_of_input_declaration_order",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "explicit_base"}, "source.csv": "ID,KEEP\na,N\nb,Y\n", "other.csv": "ID,KEEP\nwrong,Y\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID\nb\n"}
+    },
+    {
+      "case": "a_root_filter_forbids_a_constructed_column",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "constructed_filter"}, "source.csv": "ID\na\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "phase_boundary", "rule": "ROW-9", "spec_paths": ["filter"], "context": {"identifier": "ID", "available_phase": "column_derivation", "required_phase": "row_filter"}}]
+    },
+    {
+      "case": "a_root_filter_forbids_conflicting_row_templates_before_reading_input",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "constructed_filter", "edits": [{"from": "columns: [{name: ID, type: str, derivation: SRC.ID}]\n", "to": "columns: [{name: ID, type: str, derivation: SRC.ID}]\nrows: [{id: records, dataset: SRC}]\n"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule"],
+      "issues": [{"condition": "conflicting_row_construction", "rule": "ROW-9"}]
+    },
+    {
+      "case": "source_ordinals_precede_filtering_and_count_multiline_records_once",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "ordinal"}, "source.csv": "ID,KEEP,NOTE\na,N,first\nb,Y,\"two\nlines\"\nc,Y,last\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID,POSITION\nb,2\nc,3\n"}
+    },
+    {
+      "case": "an_ordinal_input_with_no_record_saves_its_header_alone",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "ordinal"}, "source.csv": "ID,KEEP,NOTE\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID,POSITION\n"}
+    },
+    {
+      "case": "an_ordinal_on_the_fixed_odm_schema_is_refused_before_capture",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "odm_ordinal", "edits": [{"from": "output: {path: result.csv, columns: [ID]}\n", "to": "output: {path: result.csv, columns: [ID]}\ncolumns: [{name: ID, type: str, derivation: {odm: SRC.ITEM}}]\n"}]},
+          "source.csv": "unused\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "odm_schema_field_type", "rule": "INPUT-4", "spec_paths": ["input.SRC.ordinal"], "context": {"dataset": "SRC", "declared": "ordinal"}}]
+    },
+    {
+      "case": "metadata_odm_spelling_does_not_turn_an_ordinal_source_into_odm",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "metadata_odm"}, "source.csv": "ID\n3\n1\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID,POSITION\n3,1\n1,2\n"}
+    },
+    {
+      "case": "a_nested_column_odm_derivation_still_rejects_an_ordinal_before_capture",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "odm_ordinal", "edits": [{"from": "output: {path: result.csv, columns: [ID]}\n", "to": "output: {path: result.csv, columns: [ID]}\ncolumns:\n  - name: ID\n    type: str\n    derivation:\n      case:\n        - when: \"1 = 1\"\n          then: {odm: SRC.ITEM}\n        - otherwise: \"'x'\"\n"}]},
+          "source.csv": "unused\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "odm_schema_field_type", "spec_paths": ["input.SRC.ordinal"]}]
+    },
+    {
+      "case": "a_row_odm_derivation_still_rejects_an_ordinal_before_capture",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "odm_ordinal", "edits": [{"from": "output: {path: result.csv, columns: [ID]}\n", "to": "output: {path: result.csv, columns: [ID]}\ncolumns: [{name: ID, type: str, derivation: SRC.ID}]\nrows:\n  - id: records\n    derivations:\n      ID: {odm: SRC.ITEM}\n"}]},
+          "source.csv": "unused\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "odm_schema_field_type", "spec_paths": ["input.SRC.ordinal"]}]
+    },
+    {
+      "case": "driver_and_donor_share_the_input_but_selection_stays_at_the_donor_grain",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "primary"}, "src.csv": {"base": "primary_source"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.A.derivation.source.multiple_matches", "multiple_matches", 2],
+          ["columns.A.derivation.source.absent", "absent", 1],
+          ["columns.B.derivation.source.multiple_matches", "multiple_matches", 2],
+          ["columns.B.derivation.source.absent", "absent", 1]
+        ]
+      },
+      "saved": {"result.csv": "ID,SEQ,A,B\n1,1,last,\n1,2,last,\n2,1,,\n"}
+    },
+    {
+      "case": "a_different_template_driver_still_reads_the_original_primary_donors",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "primary",
+            "edits": [
+              {"from": "keys: [ID, SEQ]", "to": "keys: [ID]"},
+              {"from": "  SRC: {path: src.csv, types: {ID: int, SEQ: int}}", "to": "  SRC: {path: src.csv, types: {ID: int, SEQ: int}}\n  ALT: {path: alt.csv, types: {ID: int}}"},
+              {"from": "output: {path: result.csv, columns: [ID, SEQ, A, B]}", "to": "output: {path: result.csv, columns: [ID, A, B]}"},
+              {
+                "from": "columns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: A, type: str, derivation: P.A}\n  - {name: B, type: str, derivation: P.B}",
+                "to": "rows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}"
+              }
+            ]
+          },
+          "src.csv": {"base": "primary_source"},
+          "alt.csv": "ID\n1\n3\n2\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["rows.alternate.derivations.A.source.multiple_matches", "multiple_matches", 1],
+          ["rows.alternate.derivations.A.source.absent", "absent", 2],
+          ["rows.alternate.derivations.B.source.multiple_matches", "multiple_matches", 1],
+          ["rows.alternate.derivations.B.source.absent", "absent", 2]
+        ]
+      },
+      "saved": {"result.csv": "ID,A,B\n1,last,\n3,,\n2,,\n"}
+    }
+  ]
+}

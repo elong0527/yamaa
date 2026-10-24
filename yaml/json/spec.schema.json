@@ -64,6 +64,12 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "bool"
         },
+        "quantile": {
+          "type": "number",
+          "description": "Probability from 0 through 1 at which QUANTILE reads its quantile, R's default type 7; required beside QUANTILE and refused beside any other expression (FORMULA-18).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "float"
+        },
         "expr": {
           "$ref": "#/$defs/aggregate_expression",
           "description": "Closed reducer expression over the records of one relation (FORMULA-17).",
@@ -1017,6 +1023,12 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "bool"
         },
+        "quantile": {
+          "type": "number",
+          "description": "Probability from 0 through 1 at which QUANTILE reads its quantile, R's default type 7; required beside QUANTILE and refused beside any other expression (FORMULA-18).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "float"
+        },
         "expr": {
           "$ref": "#/$defs/aggregate_expression",
           "description": "Closed reducer expression over the records of one relation (FORMULA-17).",
@@ -1632,13 +1644,19 @@
         },
         "dataset": {
           "$ref": "#/$defs/identifier",
-          "description": "Declared input dataset, or SELF for completed derived rows (LOOKUP-7).",
+          "description": "Declared input dataset or pair relation, SELF for completed derived rows (LOOKUP-7), or the left side of a pair relation (LOOKUP-27).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "identifier"
+        },
+        "inner_join": {
+          "$ref": "#/$defs/identifier",
+          "description": "Right side of a pair relation, one record per matching pair of `dataset` and this relation on `key`; it cannot be declared with between, order_by, keep, nearest, absent or require_match (LOOKUP-27).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "identifier"
         },
         "key": {
           "$ref": "#/$defs/fragment.match_key",
-          "description": "Match key of the lookup, required unless the intermediate drives a row template, which declares none (LOOKUP-3, ROW-2).",
+          "description": "Match key of the lookup, required unless the intermediate drives a row template, which declares none (LOOKUP-3, ROW-2); a pair relation's key pairs its two sides (LOOKUP-27).",
           "x-yamaa-kind": "expression",
           "x-yamaa-type": "match_key"
         },
@@ -1700,7 +1718,7 @@
           "additionalProperties": {
             "$ref": "#/$defs/fragment.intermediate_derivation"
           },
-          "description": "Per-record derivations over donor fields, the current input record and records other named intermediates select for it (LOOKUP-15).",
+          "description": "Per-record derivations over donor fields, the current input record and records other named intermediates select for it (LOOKUP-15); a pair relation requires them, as the fields it exposes (LOOKUP-27).",
           "x-yamaa-kind": "expression",
           "x-yamaa-type": "dict[identifier, intermediate_derivation]"
         },
@@ -3517,13 +3535,19 @@
         },
         "dataset": {
           "$ref": "#/$defs/identifier",
-          "description": "Declared input dataset, or SELF for completed derived rows (LOOKUP-7).",
+          "description": "Declared input dataset or pair relation, SELF for completed derived rows (LOOKUP-7), or the left side of a pair relation (LOOKUP-27).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "identifier"
+        },
+        "inner_join": {
+          "$ref": "#/$defs/identifier",
+          "description": "Right side of a pair relation, one record per matching pair of `dataset` and this relation on `key`; it cannot be declared with between, order_by, keep, nearest, absent or require_match (LOOKUP-27).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "identifier"
         },
         "key": {
           "$ref": "#/$defs/match_key",
-          "description": "Match key of the lookup, required unless the intermediate drives a row template, which declares none (LOOKUP-3, ROW-2).",
+          "description": "Match key of the lookup, required unless the intermediate drives a row template, which declares none (LOOKUP-3, ROW-2); a pair relation's key pairs its two sides (LOOKUP-27).",
           "x-yamaa-kind": "expression",
           "x-yamaa-type": "match_key"
         },
@@ -3585,7 +3609,7 @@
           "additionalProperties": {
             "$ref": "#/$defs/intermediate_derivation"
           },
-          "description": "Per-record derivations over donor fields, the current input record and records other named intermediates select for it (LOOKUP-15).",
+          "description": "Per-record derivations over donor fields, the current input record and records other named intermediates select for it (LOOKUP-15); a pair relation requires them, as the fields it exposes (LOOKUP-27).",
           "x-yamaa-kind": "expression",
           "x-yamaa-type": "dict[identifier, intermediate_derivation]"
         },

@@ -45,7 +45,10 @@ partitioned attempt `P` must have the same observable result as `W`:
   must not turn an unobserved failure into an observed one.
 - **Boundaries:** admission and limits apply to the same complete logical inputs
   and outputs. A batch cannot reset a table cap or admit a table that whole-table
-  execution refuses. Keep phase entry/exit, outcome and refusal identity.
+  execution refuses. The one exception is a driver input that a partitioned run
+  reads by partition (#3792, D264): the row and cell limits bound each of its
+  partitions instead of the whole input.
+  Keep phase entry/exit, outcome and refusal identity.
   Elapsed time and allocation measurements need not be equal. Incidental
   allocator/OS exhaustion cannot be made identical by a scheduling contract;
   it must still refuse without exposing a partial accepted dataset.
@@ -76,7 +79,7 @@ The inventory follows `Expression`, `RowMode` and the execution stages in
 
 | Family | Class | Required scope or reconciliation |
 | --- | --- | --- |
-| Plan/schema admission, function binding, source geometry and fixed limits | Global | Admit once in the current order before data reads; retain complete-table row/cell/column counts and source-list positions. |
+| Plan/schema admission, function binding, source geometry and fixed limits | Global | Admit once in the current order before data reads, a driver input read by partition a partition at a time (#3792); retain complete-table row/cell/column counts and source-list positions. |
 | `Source`, `Column`, `Literal`; `Compute`, `Round`, `Temporal`, `Imputation`, `Extreme`; string template, extract, case and pad | Safe | Complete operands first; retain conversion/handler order and exact arithmetic. Regex matching is linear and cannot be refused. A scalar wrapping a lookup or window inherits that dependency. |
 | `Case`, `FirstAvailable`, `Flag`, `SourceBinding` and bound predicates | Safe | Keep authored operand order, three-valued truth, lazy branch/operand evaluation and binding-handler ownership. Never evaluate a suppressed alternative to fill a batch. |
 | `MappingCut` (dictionary mapping and interval cut) | Safe | Admit dictionaries/breaks once; select independently from each completed source value with exact mixed-number comparison, then convert and record missing/unmapped handlers in order. |
@@ -86,10 +89,12 @@ The inventory follows `Expression`, `RowMode` and the execution stages in
 | Key-grain rows (`Keys`) and `Collect` | Safe-with-combine-step | Finish the entire source filter before key lifecycles. Merge equal complete keys and distinct present raw readings across batches before conversion/choice. Preserve each missing-key record separately and the full feeding membership. |
 | `Joined`, `SourceLookup`, `JoinedSource` | Global | Match against the complete donor relation, detect multiplicity across batches, and apply eligibility, stable order/keep and no-match behavior in the assignment's original phase. A local match cannot prove global uniqueness. |
 | Named `Intermediate` reads, correlated derivations, range/filter selection | Global | Preserve the full eligible donor set and per-candidate choice/materialization. Resolve expression keys and correlated current values at their existing checkpoints; share a chosen record across reads without replaying handlers. |
+| Pair relations (`inner_join`) | Global | Materialize matching pairs before intermediate verification, even when both sides are intermediates over one physical input. Strict consecutive and key-bounded partitions refuse this step; the whole-table fallback admits the input whole before materializing it. |
 | `SELF` intermediates and template-to-template dependencies | Global | Later templates observe the completed prior-template relation. Publish/invalidate `SELF` state only at the existing template barrier; do not expose a partially constructed prior template. |
 | Aggregate `COUNT` without `distinct` | Safe-with-combine-step | Combine exact present-value or record counts over the complete selected relation, with checked capacity and the distinction between no records (missing) and existing all-missing records (zero for value counts). |
 | Aggregate `SUM`, `MEAN` | Global | Collect arguments before folding; replay the current ordered fold, including type/arithmetic error argument positions, missing handling, integer-to-float transitions and signed zero. Partial sums/means cannot be merged without changing semantics. |
 | Aggregate `STR_JOIN`, and `COUNT(x)` with `distinct` | Global | Sort the complete selected relation by the declared order, ties in relation order, before joining; `distinct` keeps a text's first occurrence, or counts a value once, across the whole relation. Partial joins or distinct counts cannot be merged without changing semantics. |
+| Aggregate `MEDIAN`, `Q1`, `Q3`, `QUANTILE`, `STDDEV`, `VARIANCE`, `GEOMEAN` | Global | Collect arguments before reducing. A quantile sorts the complete group's present values stably, equal values in relation order; the deviations replay the ordered `MEAN` and then the ordered sum of squared deviations, and the geometric mean the ordered sum of logarithms, keeping type/arithmetic error argument positions. Partial sorts or sums cannot be merged without changing semantics. |
 | Aggregate `MIN`, `MAX`, `ONLY` and aggregate expressions | Global | Preserve relation order, original selected value/type on ties, first incompatible argument, and `ONLY` record cardinality including missing-valued records. Retain aggregate selection/filter and donor-derived dependencies before reduction. |
 | `Window`, `ContextWindow`, nested and row-template windows | Global | Finish the complete logical window group in its declared scope before evaluation. Preserve pre-window versus post-window filters and group order; see the window inventory below. |
 | `ProjectFunction` | Global | Use the same activated function port and ordered invocation/conversion sequence. Callbacks may be stateful or interrupt; do not assume purity, regroup calls or move them to host-incompatible threads. Chunked invocation must preserve its all-or-nothing cancellation contract. |
@@ -203,9 +208,27 @@ with no host surface.
 
 - **One input.** The run reads the partitions as one table, so every record
   keeps its coordinate in the whole input, and reads, failures and row
-  identities name it as the whole-table run does. Admission checks the
-  complete input and every partition's schema once, before any record is
-  read.
+  identities name it as the whole-table run does. Admission checks every
+  partition's schema, and each partition within the row and cell limits on
+  its own, before any record is read; every other source is admitted whole.
+- **Reading by partition.** A run whose specification reads one input, CSV
+  or Parquet, and whose plan is safe under consecutive partitions reads
+  that input by partition (#3792), every partition before any derivation.
+  A plan that only key-bounded partitions can divide reads the input whole
+  and admits it whole before cutting its key-bounded partitions: the
+  reader's record ranges do not preserve key groups.
+  The CSV reader scans every record once, then decodes and converts one
+  partition of records after another, so only one partition's intermediates
+  exist at a time. The Parquet reader divides the file into runs of whole row
+  groups, a row group of more records than a partition being a partition of
+  its own, and decodes every run before it builds any partition's table, so
+  its peak memory is the whole read's. Each partition is admitted on its
+  own, its generated ordinal counts records in the whole input, and every
+  finding is the whole read's, at the same record, row and field. Every
+  other run reads each input whole and admits it whole, a run with a lookup,
+  join or named relation's source included, so a plan with a step that needs
+  the whole table, run with the fallback or not, refuses an input beyond the
+  limits as an unpartitioned run does.
 - **Units, one partition at a time.** The schedule's units run in their
   order. A unit whose steps are all `Safe` or `CombineStep`, and whose rows
   come from the driver input, runs over each partition's rows in turn, each
@@ -233,10 +256,15 @@ with no host surface.
   `engine_rejected` with `step: execute` and `code: partition_global` at that
   step's spec path. With the fallback, those steps run over the whole input.
   The run's own reconciliation points are not refused, because it holds the
-  state they need: admission, intermediate verification, `SELF` publication,
+  state they need: admission, intermediate verification without pair
+  materialization, `SELF` publication,
   the final order and the declaration checks. Under key-bounded partitions a
   window or an aggregate that groups by every partition key is not such a
-  step.
+  step. A live pair relation materializes globally at the intermediate
+  verification checkpoint and is refused at its intermediate's path under
+  either strict partition mode, even when both sides read one physical input.
+  The input is read and admitted whole; partitioning cannot bypass its row or
+  cell limit before the join materializes it.
 - **Cancellation.** The token is polled at every checkpoint of the schedule,
   between the partitions of each divided unit, and before each batch of
   project-function calls. A cancelled run keeps nothing any partition built.

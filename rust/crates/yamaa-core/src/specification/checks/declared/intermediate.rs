@@ -215,8 +215,33 @@ impl Checks<'_> {
                         .map(|column| (column.name.name.clone(), ResultType::column(column.kind))),
                 );
             }
+            // A pair relation's derivations read its two sides' fields by
+            // their qualifiers and its earlier derivations by name
+            // (LOOKUP-27).
+            let right = item.inner_join.as_ref().map(|right| right.name.as_str());
+            let side = |side: &str, field: &str| match inputs.get(side) {
+                _ if spec.inputs.iter().any(|input| input.name.name == side) => stored(side, field),
+                _ if known.contains_key(&format!("{side}.{field}")) => {
+                    known.get(&format!("{side}.{field}")).copied()
+                }
+                Some(input) => stored(input, field),
+                None => None,
+            };
             for binding in &item.bindings {
                 let input = |name: &str| {
+                    if let Some(right) = right {
+                        return match name.split_once('.') {
+                            Some((owner, field)) if owner == dataset || owner == right => {
+                                side(owner, field).unwrap_or(ResultType::UNKNOWN)
+                            }
+                            Some(_) => ResultType::UNKNOWN,
+                            None => donor
+                                .fields
+                                .get(name)
+                                .copied()
+                                .unwrap_or(ResultType::UNKNOWN),
+                        };
+                    }
                     let (owner, field) = name.split_once('.').unwrap_or((dataset, name));
                     if owner == dataset {
                         donor.field(field, stored).unwrap_or(ResultType::UNKNOWN)
@@ -591,6 +616,14 @@ impl Checks<'_> {
         for (position, donor) in donors.iter().enumerate() {
             let (index, item) = (donor.index, donor.item);
             let identifier = item.id.name.as_str();
+            // A pair relation binds over its joined record, not a lookup's
+            // donor record (LOOKUP-27).
+            if item.pairs() {
+                if self.pair(donor, &donors, &stored, findings)? {
+                    refused.insert(index);
+                }
+                continue;
+            }
             // The derivations read the donor's records in an ungrouped row
             // phase, typed as binding's captured types type them: a field of
             // the donor record, of another lookup's, or of an input's.
@@ -840,12 +873,15 @@ impl Checks<'_> {
         // ROW-2: a driver must expose a single column type for every
         // derived field it keeps. UNKNOWN still needs captured input types;
         // an authored union or missing-only result already has no type.
+        // A pair relation is driven as an input is, its fields typed where
+        // it binds (LOOKUP-27).
         for template in &spec.rows.templates {
             let Some(donor) = donors.iter().find(|donor| {
-                template
-                    .driver
-                    .as_ref()
-                    .is_some_and(|driver| driver.name == donor.item.id.name)
+                !donor.item.pairs()
+                    && template
+                        .driver
+                        .as_ref()
+                        .is_some_and(|driver| driver.name == donor.item.id.name)
             }) else {
                 continue;
             };

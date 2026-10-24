@@ -30,16 +30,16 @@ eligibility is checked separately under [ROW-2](#row-2).
 ### ROW-2. An intermediate drives rows only when it reads an input and exposes typed fields
 
 A named intermediate used as a row template's `dataset` exposes its source-only
-filtered records, in source order, after its ordered `derivations` have
-completed. The row template reads them through the intermediate's qualifier as
-its current driver record, not through a keyed lookup. A driver intermediate
-must read an `input` dataset and may not declare `key`, `between`, `order_by`,
-`keep`, `nearest`, `absent` or `require_match`, and every derived field it
-exposes must have one column type as its result type
-([EXPR-14](expressions.md#expr-14)).
+filtered records, in source order, its `derivations` complete, read through its
+qualifier as the current driver record, not through a keyed lookup. It must
+read an `input` dataset, declare none of `key`, `between`, `order_by`, `keep`,
+`nearest`, `absent` and `require_match`, and expose derived fields each of one
+column type ([EXPR-14](expressions.md#expr-14)). A pair relation
+([LOOKUP-27](lookup.md#lookup-27)) drives rows as an input does: it reads
+inputs through its sides, and its `key` matches its sides, not the current row.
 
 Fails: `invalid_intermediate_driver`, `unknown_intermediate_driver_type`.
-Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::an_intermediate_that_drives_row_templates_declares_no_key`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::a_driving_intermediate_field_whose_type_is_decided_per_value_has_no_layout`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs::a_driving_intermediate_exposes_each_derived_field_as_its_one_result_type`, `rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json`, `rust/crates/yamaa-adapters/tests/project_run.rs::callback_derived_fields_expose_their_declared_result_type_to_row_drivers`, `schema-intermediate-driver-columns`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::an_intermediate_that_drives_row_templates_declares_no_key`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::a_driving_intermediate_field_whose_type_is_decided_per_value_has_no_layout`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs::a_driving_intermediate_exposes_each_derived_field_as_its_one_result_type`, `rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json`, `rust/crates/yamaa-adapters/tests/project_run.rs::callback_derived_fields_expose_their_declared_result_type_to_row_drivers`, `schema-intermediate-driver-columns`, `schema-lookup-inner-join-pairs`.
 
 The intermediate's `columns` list, when present, limits the fields the row
 template may read; otherwise all stored and derived fields are visible. Its
@@ -56,6 +56,13 @@ column type; a `source` reading another intermediate's column under
 `int` or a `str` and a Boolean literal have none, and an exposed derived
 field without one fails row-driver validation as
 `unknown_intermediate_driver_type`.
+
+A row template driving on a pair relation reads its records as it reads an
+input's: each record, a matching pair, builds one candidate row, its fields
+are the relation's exposed derivations, read through the relation's id, and
+the template may group them. The sides of a pair relation are read as a driver
+intermediate is, so a side that names an intermediate obeys this rule
+([LOOKUP-27](lookup.md#lookup-27)).
 
 <a id="row-3"></a>
 
@@ -146,16 +153,27 @@ identifier, available phase and required filter phase.
 
 When `rows` is present, row templates construct the rows. Each row template is
 one section, and each driver record or group its `filter` retains yields one
-row. Constructed rows are appended section by section in specification order;
-a record-driven section keeps driver record order and a group-driven section
-keeps first-occurrence group order. Input datasets and row templates fix the
-output rows: no operation repeats a candidate a data-dependent number of times.
+row. Sections are appended in specification order; a record-driven section
+keeps driver record order and a group-driven section keeps first-occurrence
+group order. Every output row is a record, or a pair of records, of declared
+inputs: no operation repeats a candidate a data-dependent number of times, and
+one row per related pair is a row template driving on an `inner_join`
+([LOOKUP-27](lookup.md#lookup-27)).
 
-Evidence: `schema-row-templates`, `adam-adex-uncollected`.
+Evidence: `schema-row-templates`, `adam-adex-uncollected`, `schema-lookup-inner-join-pairs`, `adam-adaecm-related-pairs`.
 
 No generated index supports such repetition. A source value may decide whether
 a written row template keeps one candidate; it cannot create more rows. Row
 templates build rows finer than input records only as this rule permits.
+
+A pair of records is a record of a pair relation: one record of each of two
+declared relations whose key values are equal ([LOOKUP-27](lookup.md#lookup-27)).
+The pairs are bounded by the records of the two relations, so no count read
+from the data decides how many rows a record yields, and the partner's key
+joins the output `keys`, so [OUTPUT-3](output.md#output-3) still checks every
+row's identity. A lookup never multiplies rows
+([LOOKUP-10](lookup.md#lookup-10)): reading one of several partners with
+`order_by` and `keep` builds one row, not one for each partner.
 
 When the required artifact has one row per observation, administration, or
 planned event, an input dataset must contain one input record per required row.

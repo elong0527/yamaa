@@ -30,6 +30,7 @@ pub use intermediates::IntermediateCheck;
 mod lookup_diagnostics;
 mod lookup_range;
 mod match_values;
+mod pairs;
 mod relation_predicates;
 mod types;
 pub use lookup_diagnostics::LookupFinding;

@@ -64,6 +64,8 @@ pub enum AggregateFinding<'a> {
     UndeclaredInputKey {
         path: &'a str,
         dataset: &'a str,
+        /// The input is a pair relation, which declares no `key` (LOOKUP-27).
+        pair: bool,
     },
 }
 #[derive(Clone, Copy, Debug)]
@@ -155,8 +157,12 @@ impl AggregateFinding<'_> {
                     actual.into(),
                 ))
             }
-            Self::UndeclaredInputKey { path, dataset } => {
-                return Ok(lookup::undeclared_input_key(path, dataset, true));
+            Self::UndeclaredInputKey {
+                path,
+                dataset,
+                pair,
+            } => {
+                return Ok(lookup::undeclared_input_key(path, dataset, true, pair));
             }
             _ => {}
         }

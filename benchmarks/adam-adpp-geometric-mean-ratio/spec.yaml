@@ -1,0 +1,78 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADPP
+keys: [STUDYID, USUBJID, PARAMCD]
+input:
+  PP: {path: input/pp.csv, types: {PPSTRESN: float}}
+  PC: {path: input/pc.csv, types: {PCSTRESN: float, PCREPNUM: int}}
+
+output:
+  path: adpp.csv
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVAL, AVALU]
+  order_by: [STUDYID, USUBJID, PARAMCD]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: PARAM
+    type: str
+    label: Parameter
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+
+  - name: AVALU
+    type: str
+    label: Analysis Value Unit
+
+rows:
+  # yamaa-lint: allow repeated_row_derivation -- keys stay beside each grouping
+  # One geometric mean per subject over its periods' metabolite ratios. A
+  # ratio of zero has no logarithm, so the filter leaves it out; a ratio not
+  # calculated is skipped as every missing value is.
+  - id: ratio_geomean
+    dataset: PP
+    group_by: [PP.STUDYID, PP.USUBJID]
+    derivations:
+      STUDYID: PP.STUDYID
+      USUBJID: PP.USUBJID
+      PARAMCD: "'MRCMAXGM'"
+      PARAM: "'Geometric Mean Metabolite Ratio Cmax'"
+      AVAL:
+        aggregate:
+          filter: "PP.PPTESTCD = 'MRCMAX' AND PP.PPSTRESN > 0"
+          expr: "GEOMEAN(PP.PPSTRESN)"
+      AVALU: "'RATIO'"
+
+  # The sample standard deviation of the replicate assays of each subject's
+  # 2-hour sample, missing for a sample assayed once.
+  - id: replicate_sd
+    dataset: PC
+    group_by: [PC.STUDYID, PC.USUBJID]
+    derivations:
+      STUDYID: PC.STUDYID
+      USUBJID: PC.USUBJID
+      PARAMCD: "'C2HREPSD'"
+      PARAM: "'Replicate SD of 2 H Concentration'"
+      AVAL:
+        aggregate:
+          filter: "PC.PCTPT = '2H'"
+          expr: "STDDEV(PC.PCSTRESN)"
+      AVALU: "'ng/mL'"
+
+verifications:
+  - row_count:
+      min: 8
+      max: 8

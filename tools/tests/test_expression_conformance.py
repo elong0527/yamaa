@@ -200,6 +200,26 @@ class DocumentRulesTests(unittest.TestCase):
                 ],
             ),
             (
+                "a quantile outside an aggregate",
+                case(quantile=0.5),
+                [f"{label}: only an aggregate case gives ['quantile']"],
+            ),
+            (
+                "a quantile that is text",
+                case(**aggregate, quantile="half"),
+                [f"{label}: quantile must be a number"],
+            ),
+            (
+                "a quantile that is Boolean",
+                case(**aggregate, quantile=True),
+                [f"{label}: quantile must be a number"],
+            ),
+            (
+                "a quantile outside 0 through 1, which a refused case shows",
+                case(**aggregate, quantile=1.5),
+                [],
+            ),
+            (
                 "values and an issue",
                 case(phase="derivation"),
                 [f"{label}: a case gives values or an issue, not both"],
@@ -610,6 +630,59 @@ class StagingTests(unittest.TestCase):
                                         ],
                                         "separator": ", ",
                                         "distinct": True,
+                                    }
+                                },
+                            },
+                        ],
+                        "output": {
+                            "path": "unwritten.csv",
+                            "columns": ["GROUPID", "RESULT"],
+                        },
+                    },
+                    {"groups.csv": "GROUPID\n1\n", "records.csv": "GROUPID,X\n1,2\n"},
+                ),
+            ),
+            (
+                "an aggregate case's quantile stands beside its text",
+                case(
+                    context="aggregate",
+                    covers=["QUANTILE"],
+                    text="QUANTILE(R.X)",
+                    rows=...,
+                    groups=[[{"X": 2}]],
+                    type="float",
+                    values=[2.0],
+                    quantile=0.9,
+                ),
+                (
+                    {
+                        **header,
+                        "keys": ["GROUPID"],
+                        "input": {
+                            "GROUPS": {
+                                "path": "groups.csv",
+                                "types": {"GROUPID": "int"},
+                            },
+                            "R": {
+                                "path": "records.csv",
+                                "types": {"GROUPID": "int", "X": "int"},
+                                "key": ["GROUPID"],
+                            },
+                        },
+                        "base": "GROUPS",
+                        "columns": [
+                            {
+                                "name": "GROUPID",
+                                "type": "int",
+                                "derivation": "GROUPS.GROUPID",
+                            },
+                            {
+                                "name": "RESULT",
+                                "type": "float",
+                                "derivation": {
+                                    "aggregate": {
+                                        "expr": "QUANTILE(R.X)",
+                                        "quantile": 0.9,
                                     }
                                 },
                             },

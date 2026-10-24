@@ -67,12 +67,18 @@ pub(crate) fn key_type(
 
 /// A read of an input that declares no `key`, by an implicit join or by a
 /// qualified aggregate without `key` of its own, at the read (LOOKUP-1,
-/// LOOKUP-5; D23, D63).
-pub(crate) fn undeclared_input_key(path: &str, dataset: &str, aggregate: bool) -> Diagnostic {
-    let hint = if aggregate {
-        "declare `key` on the input or on the aggregate"
-    } else {
-        "declare `key` on the input"
+/// LOOKUP-5; D23, D63). A pair relation, which can declare no input `key`,
+/// is read through a lookup or an aggregate keyed on its own (LOOKUP-27).
+pub(crate) fn undeclared_input_key(
+    path: &str,
+    dataset: &str,
+    aggregate: bool,
+    pair: bool,
+) -> Diagnostic {
+    let hint = match (pair, aggregate) {
+        (true, _) => "read it through a named intermediate or an aggregate with a `key` of its own",
+        (false, true) => "declare `key` on the input or on the aggregate",
+        (false, false) => "declare `key` on the input",
     };
     finding(
         C::LookupNoApplicableKeys,
@@ -221,6 +227,143 @@ pub(crate) fn nearest_reference_type(
     .into();
     owner.add(&mut context);
     finding(C::LookupNearestReferenceType, vec![path.into()], context)
+}
+
+/// What a pair relation's `inner_join` admits none of beside it (LOOKUP-27):
+/// each field written that selects, ranges or answers absence, and a side
+/// that names `SELF`, then `inner_join`, in LOOKUP-27's listed order. `construct`
+/// is the first of them, a field's name or `SELF`, which its message names.
+pub(crate) fn pair_construct(
+    paths: Vec<String>,
+    intermediate: &str,
+    construct: &str,
+) -> Diagnostic {
+    finding(
+        C::LookupPairConstruct,
+        paths,
+        [
+            ("intermediate".into(), text(intermediate)),
+            ("construct".into(), text(construct)),
+        ]
+        .into(),
+    )
+}
+
+/// A pair relation without its `key` or its `derivations`, each of which it
+/// requires (LOOKUP-27). The record is the schema's own for a missing
+/// required field: the field and its class.
+pub(crate) fn pair_required(path: &str, field: &str) -> Diagnostic {
+    finding(
+        if field == "key" {
+            C::LookupPairKeyRequired
+        } else {
+            C::LookupPairDerivationsRequired
+        },
+        vec![path.into()],
+        [
+            ("field".into(), text(field)),
+            ("class".into(), text("intermediate_class")),
+        ]
+        .into(),
+    )
+}
+
+/// A side of a pair relation that its records cannot come from, at the
+/// pair's field that names it (LOOKUP-27): an intermediate that declares a
+/// field a row driver may not, or that reads no input (ROW-2), named with
+/// each such field.
+pub(crate) fn pair_side(path: &str, side: &str, fields: &[&str]) -> Diagnostic {
+    finding(
+        C::LookupPairSide,
+        vec![path.into()],
+        [
+            ("intermediate".into(), text(side)),
+            ("fields".into(), texts(fields)),
+        ]
+        .into(),
+    )
+}
+
+/// A pair relation whose two sides are one relation, which no qualifier
+/// could tell apart (LOOKUP-27): at `inner_join`, then `dataset`.
+pub(crate) fn pair_side_repeated(
+    inner_join: String,
+    dataset: String,
+    identifier: &str,
+) -> Diagnostic {
+    finding(
+        C::LookupPairSideRepeated,
+        vec![inner_join, dataset],
+        [("identifier".into(), text(identifier))].into(),
+    )
+}
+
+/// Fields without one column type (EXPR-14), at the pair relation's field
+/// that exposes them (LOOKUP-27): a side intermediate's derived fields at
+/// the side's field, or the pair relation's own derivations.
+pub(crate) fn pair_field_type(path: &str, intermediate: &str, columns: &[&str]) -> Diagnostic {
+    finding(
+        C::LookupPairFieldType,
+        vec![path.into()],
+        [
+            ("intermediate".into(), text(intermediate)),
+            ("columns".into(), texts(columns)),
+        ]
+        .into(),
+    )
+}
+
+/// A pair relation's key column, or the left value of a mapping pair, that
+/// names no field of its side, at `key` (LOOKUP-27). `identifier` is the
+/// name qualified by the side.
+pub(crate) fn pair_key_reference(path: &str, intermediate: &str, identifier: &str) -> Diagnostic {
+    finding(
+        C::LookupPairKeyReference,
+        vec![path.into()],
+        [
+            ("intermediate".into(), text(intermediate)),
+            ("identifier".into(), text(identifier)),
+        ]
+        .into(),
+    )
+}
+
+/// A pair relation's key pair whose two sides' types cannot compare
+/// (LOOKUP-27, LOOKUP-9): `source` is the right side's column qualified by
+/// it, `expected` the left value's type and `actual` the column's.
+pub(crate) fn pair_key_type(
+    path: &str,
+    intermediate: &str,
+    source: &str,
+    expected: ResultType,
+    actual: ResultType,
+) -> Diagnostic {
+    finding(
+        C::LookupPairKeyType,
+        vec![path.into()],
+        [
+            ("intermediate".into(), text(intermediate)),
+            ("source".into(), text(source)),
+            ("expected".into(), text(&expected.name())),
+            ("actual".into(), text(&actual.name())),
+        ]
+        .into(),
+    )
+}
+
+/// A name a pair relation's `filter` or derivation reads that is no field of
+/// its two sides, qualified by the side, and no derivation declared before
+/// it (LOOKUP-27).
+pub(crate) fn pair_reference(path: &str, intermediate: &str, identifier: &str) -> Diagnostic {
+    finding(
+        C::LookupPairReference,
+        vec![path.into()],
+        [
+            ("intermediate".into(), text(intermediate)),
+            ("identifier".into(), text(identifier)),
+        ]
+        .into(),
+    )
 }
 
 /// `require_match: true` beside a declared absence value (LOOKUP-24), naming

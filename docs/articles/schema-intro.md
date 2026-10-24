@@ -264,7 +264,7 @@ in its short form is listed under the field it fills.
 | `output` | | `order_by` | `columns` | `relative_to`, `decimals` | `path`, `report` | |
 | An order term written in full | | `variable` | | `direction`, `nulls` | | |
 | A window: `windows.<name>`, or a verb's `window` written in full | `filter` | `group_by`, `order_by` | | | | |
-| A named intermediate | `key`, `filter`, `derivations` | `order_by` | `id`, `dataset`, `columns` | `keep`, `absent`, `require_match` | | `between`, `nearest`, `verifications` |
+| A named intermediate | `key`, `filter`, `derivations` | `order_by` | `id`, `dataset`, `inner_join`, `columns` | `keep`, `absent`, `require_match` | | `between`, `nearest`, `verifications` |
 | `between`, in a named intermediate, `source` or `aggregate` | | `value` | `lower`, `upper` | | | |
 | `nearest`, in a named intermediate | `to` | | `source` | `unit` | | |
 | A named intermediate's derivation written in full | `derivation` | | | `type`, `unconvertible` | | |
@@ -295,7 +295,7 @@ in its short form is listed under the field it fills.
 | `str_case` | | `source` | | `to`, `delimiters`, `missing` | |
 | `round_half_away_from_zero` | | `source` | | `digits` | |
 | `str_decimal` | | `source` | | `decimals`, `width`, `missing` | |
-| `aggregate` | `key`, `filter`, `expr` | `group_by`, `order_by` | | `separator`, `distinct` | `between`, `derivations` |
+| `aggregate` | `key`, `filter`, `expr` | `group_by`, `order_by` | | `separator`, `distinct`, `quantile` | `between`, `derivations` |
 | An `aggregate` derivation | `derivation` | | | `type` | |
 | `diff` | | `start`, `end` | | `type`, `unit`, `closed` | |
 | `impute` | | `source`, `not_before`, `not_after`, `fallback` | | `type`, `month`, `day`, `time`, `invalid` | |

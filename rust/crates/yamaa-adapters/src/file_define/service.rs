@@ -193,7 +193,7 @@ fn admit_transport<T: TableAccess>(
         ),
         // Dataset-JSON refuses no file as a whole; its writer bounds the
         // output bytes as it encodes.
-        Transport::DatasetJson => Ok(()),
+        Transport::DatasetJson | Transport::DatasetNdjson => Ok(()),
     }
 }
 /// Encode one admitted transport file over its held table; `define` is the
@@ -209,9 +209,14 @@ fn render_transport<T: TableAccess>(
         Transport::Xpt => {
             crate::submission_xpt::render(&crate::submission_xpt::document(study, dataset), table)
         }
-        Transport::DatasetJson => crate::submission_json::render(
+        Transport::DatasetJson | Transport::DatasetNdjson => crate::submission_json::render(
             &crate::submission_json::document(study, dataset, define),
             table,
+            if transport == Transport::DatasetNdjson {
+                crate::submission_json::Layout::Lines
+            } else {
+                crate::submission_json::Layout::Object
+            },
         ),
     }
 }

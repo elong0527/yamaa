@@ -351,6 +351,8 @@ fn execute_inner_into<R: Resolver, D: Decoder>(
         return;
     }
     let mut errors = Vec::new();
+    // Whether the driver input was read by partition (#3792).
+    let mut by_partition = false;
     for (index, declaration) in prepared.sources().iter().enumerate() {
         // Record the request before crossing the host boundary so a panic leaves
         // a truthful incomplete observation without discarding earlier sources.
@@ -396,8 +398,20 @@ fn execute_inner_into<R: Resolver, D: Decoder>(
         // Only a table the owned decoder accepted replaces the byte snapshot;
         // a byte fallback keeps the bytes it actually decoded.
         let used_owned = owned_decoded.is_some();
-        let decoded = owned_decoded
-            .unwrap_or_else(|| decoder.table(declaration, bytes, interpretation, contract));
+        let partitioning = scope.partitioning().filter(|_| {
+            !used_owned && reads_by_partition(prepared, decoder, declaration, bytes, interpretation)
+        });
+        by_partition = partitioning.is_some();
+        let decoded = owned_decoded.unwrap_or_else(|| match partitioning {
+            Some(partitioning) => decoder.partitioned(
+                declaration,
+                bytes,
+                interpretation,
+                contract,
+                partitioning.rows,
+            ),
+            None => decoder.table(declaration, bytes, interpretation, contract),
+        });
         if used_owned {
             observed.snapshot = None;
             observed.owned_snapshot = owned;
@@ -406,9 +420,12 @@ fn execute_inner_into<R: Resolver, D: Decoder>(
             Ok(table) => {
                 observed.table = Some(table);
                 let table = observed.table.as_ref().expect("decoded source");
-                if let Err(error) =
-                    crate::limits::Limits::table(table.row_count(), table.schema().columns().len())
-                {
+                // An input read by partition is admitted a partition at a
+                // time, each on its own; any other input is admitted whole.
+                let admitted = D::partitions(table).into_iter().try_for_each(|part| {
+                    crate::limits::Limits::table(part.row_count(), part.schema().columns().len())
+                });
+                if let Err(error) = admitted {
                     attempt.result = Err(PortError::Run(RunError::Boundary {
                         source: index,
                         error,
@@ -492,14 +509,51 @@ fn execute_inner_into<R: Resolver, D: Decoder>(
         }
     };
     let cancelled = || scope.cancelled();
-    attempt.result = Ok(plan.execute_divided(
-        scope.partitioning(),
-        primary,
-        &secondary,
-        &mut functions,
-        Some(&mut observer),
-        &cancelled,
-    ));
+    attempt.result = Ok(match scope.partitioning().filter(|_| by_partition) {
+        // The partitions the input was read in are the run's (#3792).
+        Some(partitioning) => plan.execute_partitioned(
+            &D::partitions(primary),
+            &secondary,
+            &mut functions,
+            Some(&mut observer),
+            &cancelled,
+            partitioning.whole_table_fallback,
+        ),
+        None => plan.execute_divided(
+            scope.partitioning(),
+            primary,
+            &secondary,
+            &mut functions,
+            Some(&mut observer),
+            &cancelled,
+        ),
+    });
+}
+
+/// Whether a partitioned run reads its driver input by partition (#3792):
+/// the specification reads no other input, the decoder reads this one's
+/// profile by partition, and the plan, bound to the schema the input's
+/// header or footer declares, has no step that needs the whole table. Every
+/// other run reads each input whole and admits it whole, so a plan with such
+/// a step, or the whole-table fallback that runs it, refuses an input beyond
+/// the row or cell limit exactly as an unpartitioned run does.
+/// The reader's ranges are consecutive, so a plan that only key-bounded
+/// partitions can divide keeps the whole read until its keys are cut.
+fn reads_by_partition<D: Decoder>(
+    prepared: &PreparedSpecification,
+    decoder: &mut D,
+    declaration: &SourceDeclaration,
+    bytes: &[u8],
+    interpretation: SourceInterpretation,
+) -> bool {
+    prepared.sources().len() == 1
+        && decoder
+            .partition_schema(declaration, bytes, interpretation)
+            .is_some_and(|schema| {
+                prepared
+                    .bind_sources(&[&schema])
+                    .is_ok_and(|plan| plan.whole_table_step(0).is_none())
+            })
 }
 
 impl<E: std::fmt::Debug> std::fmt::Display for RunError<E> {

@@ -161,17 +161,11 @@ impl Checks<'_> {
         let Some((owner, _)) = name.split_once('.') else {
             return true;
         };
-        if scope.drivers.contains(&owner)
-            || !self
-                .prepared
-                .sources
-                .iter()
-                .any(|input| input.name == owner)
-        {
+        if scope.drivers.contains(&owner) || !reads_as_input(self.prepared, owner) {
             return true;
         }
         let refused = if keyless(self.spec, owner) {
-            Some(undeclared_key(path, owner))
+            Some(undeclared_key(self.spec, path, owner))
         } else {
             declared_key(
                 self.spec,
@@ -330,12 +324,7 @@ impl Checks<'_> {
             .and_then(|between| Some((between, name(spec, between.value)?)))
             .filter(|_| {
                 variable.split_once('.').is_some_and(|(owner, _)| {
-                    !scope.drivers.contains(&owner)
-                        && self
-                            .prepared
-                            .sources
-                            .iter()
-                            .any(|input| input.name == owner)
+                    !scope.drivers.contains(&owner) && reads_as_input(self.prepared, owner)
                 })
             })
             .filter(|&(_, value)| {
@@ -355,12 +344,7 @@ impl Checks<'_> {
         }
         // A read of another input through its implicit join binds its range.
         if variable.split_once('.').is_some_and(|(owner, _)| {
-            !scope.drivers.contains(&owner)
-                && self
-                    .prepared
-                    .sources
-                    .iter()
-                    .any(|input| input.name == owner)
+            !scope.drivers.contains(&owner) && reads_as_input(self.prepared, owner)
         }) {
             findings.extend(join_range_findings(spec, self.prepared, e));
             return Ok(());
@@ -639,12 +623,7 @@ impl Checks<'_> {
                 let (Some(_), true, Ok(plan)) = (
                     scope,
                     findings.len() == start
-                        && (undeclared
-                            || self
-                                .prepared
-                                .sources
-                                .iter()
-                                .any(|input| input.name == dataset)),
+                        && (undeclared || reads_as_input(self.prepared, dataset)),
                     &formula.compiled,
                 ) else {
                     return Ok(false);

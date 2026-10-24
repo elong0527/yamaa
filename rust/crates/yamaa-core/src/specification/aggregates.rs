@@ -39,6 +39,9 @@ pub(super) struct Declaration {
     separator: Option<String>,
     /// Whether `STR_JOIN` and `COUNT(x)` take each value once (FORMULA-18).
     distinct: bool,
+    /// The probability at which `QUANTILE` reads its quantile, from 0 to 1
+    /// once admitted (FORMULA-18).
+    quantile: Option<f64>,
 }
 #[derive(Clone, Debug)]
 struct DeriveDeclaration {
@@ -145,7 +148,16 @@ impl Declaration {
                 .collect::<Result<_, _>>()?,
             separator: aggregate.separator.as_ref().map(|text| text.text.clone()),
             distinct: aggregate.distinct == Some(true),
+            quantile: aggregate.quantile.as_ref().and_then(probability),
         })
+    }
+}
+/// A written probability: an integer or a binary64 value (FORMULA-18).
+fn probability(constant: &ast::Constant) -> Option<f64> {
+    match &constant.value {
+        ast::Literal::Int(text) => text.parse().ok(),
+        ast::Literal::Float(value) => Some(*value),
+        _ => None,
     }
 }
 fn diagnostic(
@@ -393,11 +405,12 @@ pub(super) fn admit(
             Some(&checks::render(spec, formula.text.meta)),
         ));
     }
+    let mut findings = quantile_range(spec, aggregate);
     if let Ok(compiled) = &formula.compiled {
-        let findings = unpaired(spec, e, aggregate, compiled);
-        if !findings.is_empty() {
-            return Err(PrepareError::Invalid(findings));
-        }
+        findings.extend(unpaired(spec, e, aggregate, compiled));
+    }
+    if !findings.is_empty() {
+        return Err(PrepareError::Invalid(findings));
     }
     let named = admission.intermediates;
     let contains = |name: &str| named.contains(name);
@@ -458,6 +471,23 @@ pub(super) fn admit(
     }
     Ok(())
 }
+/// A written `quantile` outside 0 through 1 fails at the field as
+/// `invalid_field_type`, as a `str_pad` width below one does (FORMULA-18).
+fn quantile_range(spec: &ast::Spec, aggregate: &ast::Aggregate) -> Vec<PreflightFinding> {
+    let Some(written) = &aggregate.quantile else {
+        return Vec::new();
+    };
+    match probability(written) {
+        Some(p) if (0.0..=1.0).contains(&p) => Vec::new(),
+        // A value of another type is the schema's finding (SCHEMA-12).
+        None => Vec::new(),
+        Some(_) => vec![PreflightFinding::Scalar(diagnostic(
+            crate::diagnostic::ConditionCode::AggregateQuantileRange,
+            &checks::render(spec, written.meta),
+            &[("expected", "a number from 0 through 1")],
+        ))],
+    }
+}
 /// A reduction that reads fields of the aggregate, named as FORMULA-18's
 /// field table writes it: the reducer over an expression, never `D.*`.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -474,6 +504,10 @@ const COUNT: Reader = Reader {
     reducer: crate::expression::Reducer::Count,
     form: "COUNT(x)",
 };
+const QUANTILE: Reader = Reader {
+    reducer: crate::expression::Reducer::Quantile,
+    form: "QUANTILE(x)",
+};
 
 /// One row of FORMULA-18's field table: a field of the aggregate, the
 /// reductions that read it, whether each of them needs it, and whether a
@@ -486,7 +520,7 @@ struct ReducerField {
 }
 
 /// FORMULA-18's field table, row for row and in its order.
-const REDUCER_FIELDS: [ReducerField; 3] = [
+const REDUCER_FIELDS: [ReducerField; 4] = [
     ReducerField {
         field: "order_by",
         readers: &[JOIN],
@@ -504,6 +538,12 @@ const REDUCER_FIELDS: [ReducerField; 3] = [
         readers: &[JOIN, COUNT],
         needed: false,
         whole: true,
+    },
+    ReducerField {
+        field: "quantile",
+        readers: &[QUANTILE],
+        needed: true,
+        whole: false,
     },
 ];
 
@@ -548,6 +588,7 @@ fn unpaired(
     let written = |field: &str| aggregate.written.contains(field);
     let supplied = |field: &str| match field {
         "order_by" => !aggregate.order_by.is_empty(),
+        "quantile" => aggregate.quantile.is_some(),
         field => written(field),
     };
     let mut findings = Vec::new();
@@ -1122,6 +1163,7 @@ fn bound_relation(
                         Finding::UndeclaredInputKey {
                             path: &declaration.path,
                             dataset: relation,
+                            pair: catalog.joined(relation).is_some_and(|joined| joined.pair),
                         }
                     },
                     findings,
@@ -1478,6 +1520,7 @@ pub(super) fn bind(
         order,
         declaration.separator.clone().unwrap_or_default(),
         declaration.distinct,
+        declaration.quantile.unwrap_or_default(),
     );
     let _ = output;
     Ok(Some(Expression::Aggregate(std::boxed::Box::new(bound))))

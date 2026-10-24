@@ -246,6 +246,11 @@ EXPECTED = {
     "new.project.standards.status=Provisional": [
         Values("implementation_guide_class", "status", ("Provisional",))
     ],
+    # #3821: a section's transport writes Dataset-JSON 1.1 in its
+    # newline-delimited representation (JSON-1, JSON-4).
+    "new.project.transport=dataset_ndjson": [
+        Values("submission_section_class", "transport", ("dataset_ndjson",))
+    ],
     # P-VOC-1: roles and a terminology standard's name close to the lists the
     # CDISC vocabulary file holds.
     "new.spec.submission.role=closed": [
@@ -314,6 +319,11 @@ EXPECTED = {
             kind="value",
             values=("day", "week", "month", "year", "second", "minute", "hour"),
         ),
+    ],
+    # D263: a named intermediate pairs its dataset with a second relation
+    # (LOOKUP-27).
+    "new.spec.intermediate.inner_join": [
+        Field("intermediate_class", "inner_join", "identifier")
     ],
     "new.spec.clear": [Field("root_class", "clear", "list[spec_path]")],
     "new.spec.include": [Field("root_class", "include", "list[project_path]")],
@@ -388,6 +398,10 @@ EXPECTED = {
             ),
         ),
         Field("expressions.date_text", "invalid", "substitute_value", kind="value"),
+    ],
+    # #3779: the probability QUANTILE reads (FORMULA-18).
+    "new.spec.aggregate_class.quantile": [
+        Field("aggregate_class", "quantile", "float")
     ],
     # A lint suppression comment and a profile chosen by the path's
     # extension: neither is a schema field.

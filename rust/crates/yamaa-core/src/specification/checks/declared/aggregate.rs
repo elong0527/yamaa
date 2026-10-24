@@ -56,15 +56,16 @@ impl Checks<'_> {
             (scope, relation, &aggregate.key)
         {
             if !matches!(scope.phase, Some(Phase::Row { .. }))
-                && self
-                    .prepared
-                    .sources
-                    .iter()
-                    .any(|input| input.name == relation)
+                && reads_as_input(self.prepared, relation)
             {
                 if keyless(spec, relation) {
                     findings.push(BindFinding::AggregateDiagnostic(
-                        lookup::undeclared_input_key(&path(spec, e), relation, true),
+                        lookup::undeclared_input_key(
+                            &path(spec, e),
+                            relation,
+                            true,
+                            spec.pair_relation(relation).is_some(),
+                        ),
                     ));
                 } else {
                     self.aggregate_key(aggregate, relation, findings);
@@ -496,12 +497,7 @@ impl Checks<'_> {
         // The relation is the rows' driver or another declared input; a
         // relation no binding's driver is either fails in every binding.
         if let Some(relation) = relation.filter(|relation| {
-            !scope.drivers.contains(relation)
-                && !self
-                    .prepared
-                    .sources
-                    .iter()
-                    .any(|input| input.name == *relation)
+            !scope.drivers.contains(relation) && !reads_as_input(self.prepared, relation)
         }) {
             let reference = derived
                 .iter()
