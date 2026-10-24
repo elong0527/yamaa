@@ -80,6 +80,8 @@ fn adsl_specification(source: &str) -> String {
     )
 }
 
+/// No benchmark gives a mapping source an order and a keep:
+/// `sdtm-dm-basic`'s carries a filter alone.
 #[test]
 fn mapping_source_with_filter_and_selection_replaces_the_helper_column() {
     let fixture = Fixture::new(
@@ -94,18 +96,16 @@ fn mapping_source_with_filter_and_selection_replaces_the_helper_column() {
     );
 }
 
+/// `sdtm-dm-basic` maps SEX through a mapping source whose filter selects the
+/// subject's sex item among its other items.
 #[test]
 fn mapping_source_with_a_filter_alone_reads_the_selected_record() {
-    let fixture = Fixture::new(
-        &adsl_specification("{variable: DM.SEX, filter: \"DM.VISIT = 'BASELINE'\"}"),
-        &[("dm.csv", VISITS)],
-    );
-    assert_eq!(
-        fixture.saved("adsl.csv"),
-        "STUDYID,USUBJID,SEX\nS1,001,Female\nS1,002,Male\n"
-    );
+    crate::support::benchmarks::reproduce("sdtm-dm-basic");
 }
 
+/// No benchmark refuses a mapping source's unpaired selection:
+/// `negative-lookup-unordered` and `negative-lookup-empty-order` refuse a
+/// named intermediate's.
 #[test]
 fn mapping_source_selection_without_its_pair_is_rejected() {
     for source in [
@@ -133,6 +133,7 @@ fn mapping_source_selection_without_its_pair_is_rejected() {
     }
 }
 
+/// No benchmark filters a `cut` source.
 #[test]
 fn cut_source_with_a_filter_reads_only_the_selected_records() {
     let fixture = Fixture::new(
@@ -155,6 +156,7 @@ fn cut_source_with_a_filter_reads_only_the_selected_records() {
     assert_eq!(fixture.saved("out.csv"), "ID,VALUE\n001,<65\n002,>=65\n");
 }
 
+/// No benchmark gives a `first_available` source an order and a keep.
 #[test]
 fn first_available_source_with_a_selection_reads_the_ordered_match() {
     let fixture = Fixture::new(

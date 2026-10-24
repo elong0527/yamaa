@@ -69,6 +69,11 @@ fn refused(rule: &str, path: &str, identifier: &str, intermediate: &str) -> Vec<
 
 const INPUT: &str = "input:\n  SRC: {path: source.csv, types: {ID: int, VAL: int}}\n  DONOR: {path: donor.csv, types: {KEY: int, X: int}}\n  WIN: {path: win.csv, types: {ID: int, LO: int, HI: int}}\n";
 
+/// `negative-grouped-lookup-ungrouped-key` and
+/// `negative-grouped-range-ungrouped-value` state the refusals of a match
+/// value and a range value outside the groups as a first issue, not as the
+/// only issue this test pins. No benchmark pins a lookup derivation or a
+/// correlated filter that reads a driver field outside the groups.
 #[test]
 fn a_grouped_row_template_reads_a_lookup_only_through_its_groups() {
     // One row per group of source records, reading `intermediate` through
@@ -154,6 +159,12 @@ fn a_grouped_row_template_reads_a_lookup_only_through_its_groups() {
     assert_eq!(run(&top), Ok("GRP,VALUE\nA,LOW\nB,HIGH\n".into()));
 }
 
+/// No benchmark refuses a named intermediate that each row template reads in
+/// its own derivations or filter for naming the other template's driver:
+/// `negative-lookup-derivation-scope` and `negative-lookup-key-other-template`
+/// refuse one read through a column every template leaves to the column
+/// phase, and `negative-row-filter-lookup-scope`'s filter names an input that
+/// builds no row.
 #[test]
 fn a_correlated_lookup_reads_only_the_driver_of_the_reading_template() {
     // Rows from the source records, then from the donor records; `source`
@@ -285,6 +296,10 @@ fn a_correlated_lookup_reads_only_the_driver_of_the_reading_template() {
     );
 }
 
+/// `negative-verification-lookup-key` states the refusal of a match value
+/// that names an input building no row as a first issue, not as the only
+/// issue this test pins. No benchmark refuses such a read through a range
+/// value.
 #[test]
 fn a_dataset_verification_reads_a_lookup_as_a_column_does() {
     let verified = |intermediate: &str| {
@@ -321,6 +336,9 @@ fn a_dataset_verification_reads_a_lookup_as_a_column_does() {
     );
 }
 
+/// No benchmark has two row templates that both fail the same read, and an
+/// `error.yaml`, which states a first issue, could not pin that the cause is
+/// reported once.
 #[test]
 fn a_lookup_read_by_several_row_templates_is_reported_once() {
     // Two row templates over `driver` read the window through one column

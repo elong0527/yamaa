@@ -83,6 +83,7 @@ fn keyed(keys: &str, types: &str, columns: &str, rest: &str) -> String {
     )
 }
 
+/// No benchmark refuses a pattern read from data (FORMULA-7).
 #[test]
 fn a_require_pattern_read_from_data_fails_although_when_exempts_the_row() {
     // `require` is evaluated on every row whatever `when` answers (CHECK-12),
@@ -116,6 +117,7 @@ fn a_require_pattern_read_from_data_fails_although_when_exempts_the_row() {
     );
 }
 
+/// No benchmark refuses a pattern read from data (FORMULA-7).
 #[test]
 fn a_source_filter_is_asked_about_every_record_of_the_key() {
     // The first record already passes the filter and both carry the same
@@ -143,6 +145,8 @@ fn a_source_filter_is_asked_about_every_record_of_the_key() {
     );
 }
 
+/// No benchmark counts two readings that convert to one value:
+/// `negative-keys-conflict`'s readings differ after conversion too.
 #[test]
 fn a_key_counts_every_distinct_raw_reading_before_conversion() {
     // V is text: `07` and `7` are two readings although both convert to the
@@ -165,6 +169,8 @@ fn a_key_counts_every_distinct_raw_reading_before_conversion() {
     );
 }
 
+/// No benchmark keeps two records missing a key apart until the output gate:
+/// `negative-output-missing-key` has one.
 #[test]
 fn records_missing_a_key_reach_the_output_gate_without_collapsing() {
     // The two records missing ID stay two rows, so their different values
@@ -213,6 +219,9 @@ fn ordered(direction: &str, nulls: &str, keep: &str) -> String {
     )
 }
 
+/// No benchmark orders a source binding's records by an integer beyond 2^53
+/// or puts a missing order first, and none counts the choices a source
+/// binding's own `keep` makes.
 #[test]
 fn source_order_keeps_a_present_reading_stably_and_counts_real_choices() {
     // ORDER compares exactly beyond 2^53, a missing ORDER sorts where `nulls`
@@ -255,6 +264,8 @@ fn source_order_keeps_a_present_reading_stably_and_counts_real_choices() {
     }
 }
 
+/// No benchmark completes a match value with `impute`, or matches a negative
+/// zero against a donor's key.
 #[test]
 fn match_values_compare_as_calendar_values_and_exact_numbers() {
     // The date completed from `2025` keeps collected precision year and the
@@ -314,6 +325,8 @@ fn padded(width: &str) -> Fixture {
     )
 }
 
+/// No benchmark writes a missing match value, or pads one past every text's
+/// width: `adam-adlb-supplb-padded-key` pads to a width its text reaches.
 #[test]
 fn a_missing_first_match_value_does_not_skip_a_later_one() {
     // A missing match value seeks no record, so every row answers absent;

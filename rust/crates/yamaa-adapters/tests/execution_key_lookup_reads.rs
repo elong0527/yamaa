@@ -105,6 +105,9 @@ fn specification(body: &str, keys: &str) -> String {
     format!("{HEAD}{}", body.edit("KEYS", keys))
 }
 
+/// No benchmark suppresses a candidate that would find no record of a
+/// required lookup its key column reads: `sdtm-suppmh-linkage`'s suppressed
+/// candidates all have one.
 #[test]
 fn grouped_key_column_is_not_read_for_a_suppressed_group() {
     let in_keys = Fixture::new(
@@ -124,6 +127,9 @@ fn grouped_key_column_is_not_read_for_a_suppressed_group() {
     );
 }
 
+/// No benchmark suppresses a candidate that would find no record of a
+/// required lookup its key column reads: `sdtm-suppmh-linkage`'s suppressed
+/// candidates all have one.
 #[test]
 fn ungrouped_key_column_is_not_read_for_a_suppressed_record() {
     let in_keys = Fixture::new(
@@ -164,6 +170,7 @@ fn assert_unmatched_key(fixture: &Fixture) {
     );
 }
 
+/// No benchmark fails `unmatched_key` under row templates.
 #[test]
 fn grouped_unmatched_key_still_fails_for_a_kept_group() {
     let fixture = Fixture::new(
@@ -177,6 +184,7 @@ fn grouped_unmatched_key_still_fails_for_a_kept_group() {
     assert_unmatched_key(&fixture);
 }
 
+/// No benchmark fails `unmatched_key` under row templates.
 #[test]
 fn ungrouped_unmatched_key_still_fails_for_a_kept_record() {
     let fixture = Fixture::new(
