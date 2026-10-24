@@ -2,7 +2,7 @@
 mod diagnostics {
     mod diagnostic {
         use crate::support::diagnostic::*;
-        use std::{collections::BTreeSet, convert::Infallible};
+        use std::convert::Infallible;
         use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             conversion::convert,
@@ -220,10 +220,66 @@ mod diagnostics {
         /// vocabulary is independent literal truth, not copied from the registry at runtime.
         #[test]
         fn every_registered_cause_is_reached_with_its_normative_mapping() {
-            let mut reached = BTreeSet::new();
+            // The expected issues written as data, under tests/fixtures/diagnostics/.
+            let mut reached = replay::replay();
+            // The tables still written in Rust, one group for each part of
+            // #3691 that moves them, so the parts never edit the same lines.
+            // Submission and the front end (A1).
+            reached.extend(submission::reached());
+            reached.extend(front_end::reached());
+            reached.extend(front_end::project_binding_reached());
+
+            // Preflight and binding (A2).
+            reached.extend(preflight::reached());
+            reached.extend(preflight::self_reached());
+            reached.extend(preflight::intermediate_reached());
+            reached.extend(preflight::namespace_reached());
+            reached.extend(preflight::output_reached());
+            reached.extend(preflight::temporal_reached());
+            reached.extend(binding::reached());
+            reached.extend(binding::key_record_reached());
+            reached.extend(binding::window_reached());
+            reached.extend(binding::window_driver_reached());
+            reached.extend(binding::lookup_reached());
+            reached.extend(binding::nearest_reached());
+            reached.extend(binding::source_filter_reached());
+            reached.extend(binding::source_match_reached());
+            reached.extend(binding::source_range_reached());
+            reached.extend(binding::verification_reached());
+            reached.extend(binding::verification_declarations_reached());
+
+            // The other declarations (B1).
+            reached.extend(intermediate_scopes::reached());
+            reached.extend(intermediate_ranges::reached());
+            reached.extend(intermediate_ranges::match_phase_reached());
             reached.extend(record_operations::reached());
-            reached.extend(mapping_cut::reached());
-            reached.extend(temporal_arithmetic::reached());
+            reached.extend(project_functions::reached());
+            reached.extend(project_functions::donor_keep_reached());
+            reached.extend(project_scope::reached());
+            reached.extend(producer::reached());
+            reached.extend(copy_entry::reached());
+            reached.extend(declarative_flags::reached());
+            reached.extend(schema::reached());
+            reached.extend(language::reached());
+
+            // The other findings (B2).
+            reached.extend(aggregate::reached());
+            reached.extend(odm::reached());
+            reached.extend(odm_read::reached());
+            reached.extend(grammar::reached());
+            reached.extend(grammar::predicate_reached());
+            reached.extend(inheritance::reached());
+            reached.extend(verification::reached());
+            reached.extend(project_lock::reached());
+            reached.extend(project_activation::reached());
+            reached.extend(project_codelist_binding::reached());
+
+            // The project environment (C).
+            reached.extend(project_environment::reached());
+            reached.extend(project_environment::extended_alias_reached());
+            reached.extend(project_environment::format_name_reached());
+            reached.extend(project_environment::function_file_reached());
+
             let publication =
                 yamaa_core::application_issue::publication_failed("generated/producer.csv");
             assert_eq!(
@@ -433,18 +489,6 @@ mod diagnostics {
             );
             assert_eq!(changed.context["dataset"], JsonValue::String("SRC".into()));
             reached.insert(rendered(&changed));
-            reached.extend(submission::reached());
-            reached.extend(schema::reached());
-            reached.extend(yaml_source::reached());
-            reached.extend(project_activation::reached());
-            reached.extend(project_functions::reached());
-            reached.extend(project_functions::donor_keep_reached());
-            reached.extend(project_environment::reached());
-            reached.extend(project_environment::extended_alias_reached());
-            reached.extend(project_environment::format_name_reached());
-            reached.extend(project_environment::function_file_reached());
-            reached.extend(project_lock::reached());
-            reached.extend(project_scope::reached());
             let lock = yamaa_core::application_issue::lock_mismatch(
                 "lock",
                 [("package".into(), JsonValue::String("project".into()))].into(),
@@ -460,35 +504,6 @@ mod diagnostics {
             assert_eq!(lock.spec_paths, ["lock"]);
             assert_eq!(lock.context["package"], JsonValue::String("project".into()));
             reached.insert(rendered(&lock));
-            reached.extend(project_codelist_binding::reached());
-            reached.extend(preflight::reached());
-            reached.extend(preflight::self_reached());
-            reached.extend(preflight::intermediate_reached());
-            reached.extend(preflight::namespace_reached());
-            reached.extend(binding::key_record_reached());
-            reached.extend(intermediate_ranges::reached());
-            reached.extend(intermediate_ranges::match_phase_reached());
-            reached.extend(producer::reached());
-            reached.extend(copy_entry::reached());
-            reached.extend(preflight::output_reached());
-            reached.extend(grammar::reached());
-            reached.extend(inheritance::reached());
-            reached.extend(language::reached());
-            reached.extend(front_end::reached());
-            reached.extend(front_end::project_binding_reached());
-            reached.extend(grammar::predicate_reached());
-            reached.extend(predicate_evaluation::reached());
-            reached.extend(binding::reached());
-            reached.extend(intermediate_scopes::reached());
-            reached.extend(binding::window_reached());
-            reached.extend(binding::window_driver_reached());
-            reached.extend(binding::lookup_reached());
-            reached.extend(binding::nearest_reached());
-            reached.extend(binding::source_filter_reached());
-            reached.extend(binding::source_match_reached());
-            reached.extend(binding::source_range_reached());
-            reached.extend(binding::verification_reached());
-            reached.extend(binding::verification_declarations_reached());
             let result = yamaa_core::dataset_checks::not_missing(&[
                 Value::Int(0),
                 Value::Missing,
@@ -725,10 +740,6 @@ mod diagnostics {
             assert_eq!(diagnostic.context["pattern"], JsonValue::String("(".into()));
             assert_eq!(diagnostic.source_span, None);
             reached.insert(rendered(&diagnostic));
-            reached.extend(dataset::reached());
-            reached.extend(aggregate::reached());
-            reached.extend(verification::reached());
-            reached.extend(odm::reached());
             let diagnostic = yamaa_core::dataset::Rounding::new(
                 "SEX",
                 "columns.RND.derivation.round_half_away_from_zero",
@@ -753,19 +764,6 @@ mod diagnostics {
             assert_eq!(diagnostic.source_span, None);
             assert_eq!(diagnostic.operand_route, None);
             reached.insert(rendered(&diagnostic));
-            reached.extend(preflight::temporal_reached());
-            reached.extend(temporal_imputation::reached());
-            reached.extend(text_case::reached());
-            reached.extend(text_pad::reached());
-            reached.extend(declarative_flags::reached());
-            reached.extend(text_extract::reached());
-            reached.extend(text_template::reached());
-            reached.extend(csv::reached());
-            reached.extend(csv::typing_reached());
-            reached.extend(parquet::reached());
-            reached.extend(sas::reached());
-            reached.extend(odm_read::reached());
-            reached.extend(result_types::reached());
             let check = yamaa_core::dataset::Check::Codelist {
                 id: "SEX".into(),
                 values: vec![Value::Str("F".into())],

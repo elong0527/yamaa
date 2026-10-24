@@ -658,7 +658,6 @@ mod scalar {
             }
         }
 
-        use crate::support::diagnostic::text_case as diagnostic;
         #[test]
         fn owned_declarations_preserve_missing_literal_presence_and_semantic_truth() {
             use yamaa_core::{
@@ -666,7 +665,6 @@ mod scalar {
                 text_case::{Step, StringCase},
                 value::Value,
             };
-            assert_eq!(diagnostic::reached().len(), 1);
             // An omitted handler answers a missing source with missing.
             let omitted =
                 StringCase::new("SRC.V".into(), "case".into(), Case::Lower, None).unwrap();
@@ -780,6 +778,7 @@ mod scalar {
                 Ok(Step::Recovered("missing"))
             );
             assert_eq!(omitted.substitute("missing"), Value::Missing);
+            assert_eq!(omitted.failure_diagnostic(Step::Recovered("missing")), None);
         }
         #[test]
         fn long_subjects_are_searched_to_completion_before_no_match() {
@@ -832,12 +831,6 @@ mod scalar {
                 finding.context["value"],
                 yamaa_core::json::Value::from(subject)
             );
-        }
-        use crate::support::diagnostic::text_extract as diagnostic;
-        #[test]
-        fn all_extraction_semantic_causes_preserve_independent_complete_facts() {
-            // A missing source is answered, never failed (COLUMN-10).
-            assert_eq!(diagnostic::reached().len(), 5);
         }
     }
     mod text_pad {
@@ -1144,12 +1137,6 @@ mod scalar {
                     StringTemplate::new("{A}".into(), "path".into(), Some(value.clone())).unwrap();
                 assert_eq!(op.missing(), Some(&value));
             }
-        }
-        use crate::support::diagnostic::text_template as diagnostic;
-        #[test]
-        fn complete_canonical_grammar_causes_are_reached() {
-            // The grammar refusal and the missing placeholder a template still fails on.
-            assert_eq!(diagnostic::reached().len(), 2);
         }
         #[test]
         fn many_unique_names_retain_first_occurrence_indexes_without_a_work_quota() {

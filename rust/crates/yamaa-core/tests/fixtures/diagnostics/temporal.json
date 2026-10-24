@@ -1,0 +1,171 @@
+{
+  "about": "The refusals of the date and time operations: civil arithmetic, dtc and time_of_day (TIME-4, TIME-14, TIME-17, TIME-19, TIME-20), whose cases compare the fields their table compared, and date completion: impute's policy (TIME-10), the text impute, precision and to_date read (TIME-2, TIME-10, TIME-13) and their operands' types (TIME-1, TIME-2, TIME-7, TIME-8, TIME-18).",
+  "cases": [
+    {
+      "case": "date_shift_refuses_a_source_that_is_not_a_date",
+      "operation": "temporal",
+      "input": {"kind": "date_shift", "path": "columns.RESULT.derivation", "values": ["2030-01-01", 1]},
+      "compares": ["phase", "condition", "rule", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-14"}]
+    },
+    {
+      "case": "date_shift_fails_past_year_9999",
+      "operation": "temporal",
+      "input": {"kind": "date_shift", "path": "columns.RESULT.derivation", "values": [{"date": "9999-12-31"}, 1]},
+      "compares": ["phase", "condition", "rule", "source_span", "operand_route"],
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "TIME-14"}]
+    },
+    {
+      "case": "a_datetime_difference_refuses_a_date_operand",
+      "operation": "temporal",
+      "input": {"kind": {"datetime_difference": "hour"}, "path": "columns.RESULT.derivation", "values": [{"date": "2030-01-01"}, null]},
+      "compares": ["phase", "condition", "rule", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-4"}]
+    },
+    {
+      "case": "a_datetime_shift_in_seconds_refuses_a_float_amount",
+      "operation": "temporal",
+      "input": {"kind": {"datetime_shift": "second"}, "path": "columns.RESULT.derivation", "values": [null, 1.0]},
+      "compares": ["phase", "condition", "rule", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-14"}]
+    },
+    {
+      "case": "a_datetime_shift_fails_past_year_9999",
+      "operation": "temporal",
+      "input": {"kind": {"datetime_shift": "second"}, "path": "columns.RESULT.derivation", "values": [{"datetime": "9999-12-31T23:59:59"}, 1]},
+      "compares": ["phase", "condition", "rule", "source_span", "operand_route"],
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "TIME-14"}]
+    },
+    {
+      "case": "duration_value_refuses_a_source_that_is_not_text",
+      "operation": "temporal",
+      "input": {"kind": {"duration_value": "second"}, "path": "columns.RESULT.derivation", "values": [1]},
+      "compares": ["phase", "condition", "rule", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-17"}]
+    },
+    {
+      "case": "duration_value_fails_on_a_calendar_month",
+      "operation": "temporal",
+      "input": {"kind": {"duration_value": "hour"}, "path": "columns.RESULT.derivation", "values": ["P1M"]},
+      "compares": ["phase", "condition", "rule", "source_span", "operand_route"],
+      "issues": [{"phase": "impute", "condition": "invalid_duration_text", "rule": "TIME-17"}]
+    },
+    {
+      "case": "dtc_refuses_a_float_part",
+      "operation": "temporal",
+      "input": {"kind": {"date_text": 2}, "path": "columns.RESULT.derivation", "values": ["2030", 1.0]},
+      "compares": ["phase", "condition", "rule", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-19"}]
+    },
+    {
+      "case": "dtc_fails_on_a_month_outside_its_range",
+      "operation": "temporal",
+      "input": {"kind": {"date_text": 2}, "path": "columns.RESULT.derivation", "values": ["2030", "13"]},
+      "compares": ["phase", "condition", "rule", "source_span", "operand_route"],
+      "issues": [{"phase": "impute", "condition": "invalid_date_text", "rule": "TIME-19"}]
+    },
+    {
+      "case": "time_of_day_refuses_a_source_that_is_not_a_datetime",
+      "operation": "temporal",
+      "input": {"kind": "time_of_day", "path": "columns.RESULT.derivation", "values": ["08:30"]},
+      "compares": ["phase", "condition", "rule", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-20"}]
+    },
+    {
+      "case": "an_impute_month_above_twelve_is_out_of_range",
+      "operation": "impute_policy",
+      "input": {"type": "date", "month": "15", "day": {"number": "1"}, "path": "impute"},
+      "issues": [{"phase": "validation", "condition": "month_out_of_range", "rule": "TIME-10", "spec_paths": ["impute.month"], "context": {"month": 15}}]
+    },
+    {
+      "case": "an_impute_day_number_above_thirty_one_is_not_permitted",
+      "operation": "impute_policy",
+      "input": {"type": "date", "month": "6", "day": {"number": "32"}, "path": "impute"},
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "TIME-10", "spec_paths": ["impute"], "context": {"field": "day", "value": 32, "permitted": "1 to 31"}}]
+    },
+    {
+      "case": "an_impute_day_position_other_than_first_or_last_is_not_permitted",
+      "operation": "impute_policy",
+      "input": {"type": "date", "month": "6", "day": {"position": "mid"}, "path": "impute"},
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "TIME-10", "spec_paths": ["impute.day"], "context": {"value": "mid", "permitted": ["first", "last"]}}]
+    },
+    {
+      "case": "a_date_impute_fails_on_text_that_is_not_collected_date_text",
+      "operation": "impute",
+      "input": {"kind": {"impute": {"type": "date", "month": "12", "day": {"number": "31"}, "path": "impute"}}, "source": "SRC.V", "path": "columns.V.derivation.impute", "value": "UNK"},
+      "issues": [{"phase": "impute", "condition": "invalid_date_text", "rule": "TIME-13", "spec_paths": ["columns.V.derivation.impute"], "context": {"operation": "impute", "source": "SRC.V", "value": "UNK"}}]
+    },
+    {
+      "case": "a_datetime_impute_fails_on_text_that_is_not_collected_date_text",
+      "operation": "impute",
+      "input": {"kind": {"impute": {"type": "datetime", "time": "first", "path": "impute"}}, "source": "SRC.V", "path": "columns.V.derivation.impute", "value": "UNK"},
+      "issues": [{"phase": "impute", "condition": "invalid_date_text", "rule": "TIME-13", "spec_paths": ["columns.V.derivation.impute"], "context": {"operation": "impute", "source": "SRC.V", "value": "UNK"}}]
+    },
+    {
+      "case": "a_date_precision_fails_on_text_that_is_not_collected_date_text",
+      "operation": "impute",
+      "input": {"kind": {"precision": "date"}, "source": "SRC.V", "path": "columns.V.derivation.impute", "value": "UNK"},
+      "issues": [{"phase": "impute", "condition": "invalid_date_text", "rule": "TIME-13", "spec_paths": ["columns.V.derivation.impute"], "context": {"operation": "precision", "source": "SRC.V", "value": "UNK"}}]
+    },
+    {
+      "case": "a_datetime_precision_fails_on_text_that_is_not_collected_date_text",
+      "operation": "impute",
+      "input": {"kind": {"precision": "datetime"}, "source": "SRC.V", "path": "columns.V.derivation.impute", "value": "UNK"},
+      "issues": [{"phase": "impute", "condition": "invalid_date_text", "rule": "TIME-13", "spec_paths": ["columns.V.derivation.impute"], "context": {"operation": "precision", "source": "SRC.V", "value": "UNK"}}]
+    },
+    {
+      "case": "an_impute_that_completes_a_day_past_the_month_end_fails",
+      "operation": "impute",
+      "input": {"kind": {"impute": {"type": "date", "month": "12", "day": {"number": "31"}, "path": "impute"}}, "source": "SRC.V", "path": "columns.V.derivation.impute", "value": "2023-04"},
+      "issues": [{"phase": "impute", "condition": "invalid_calendar_date", "rule": "TIME-10", "spec_paths": ["columns.V.derivation.impute"], "context": {"value": "2023-04", "completed": "2023-04-31"}}]
+    },
+    {
+      "case": "a_date_impute_refuses_a_source_that_is_neither_text_nor_a_date",
+      "operation": "impute",
+      "input": {"kind": {"impute": {"type": "date", "month": "12", "day": {"number": "31"}, "path": "impute"}}, "source": "SRC.V", "path": "columns.V.derivation.impute", "value": 1},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-1", "spec_paths": ["columns.V.derivation.impute.source"], "context": {"source": "SRC.V", "expected": "str or date", "actual": "int"}}]
+    },
+    {
+      "case": "a_datetime_impute_refuses_a_source_that_is_neither_text_nor_a_datetime",
+      "operation": "impute",
+      "input": {"kind": {"impute": {"type": "datetime", "time": "first", "path": "impute"}}, "source": "SRC.V", "path": "columns.V.derivation.impute", "value": 1},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-8", "spec_paths": ["columns.V.derivation.impute.source"], "context": {"source": "SRC.V", "expected": "str or datetime", "actual": "int"}}]
+    },
+    {
+      "case": "a_datetime_precision_refuses_a_source_that_is_neither_text_nor_a_datetime",
+      "operation": "impute",
+      "input": {"kind": {"precision": "datetime"}, "source": "SRC.V", "path": "columns.V.derivation.impute", "value": 1},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-7", "spec_paths": ["columns.V.derivation.impute.source"], "context": {"source": "SRC.V", "expected": "str or datetime", "actual": "int"}}]
+    },
+    {
+      "case": "an_imputation_flag_refuses_a_source_that_is_not_temporal",
+      "operation": "impute",
+      "input": {"kind": {"flag": "date", "seconds_collected": true}, "source": "SRC.V", "path": "columns.V.derivation.impute", "value": 1},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-18", "spec_paths": ["columns.V.derivation.impute.source"], "context": {"source": "SRC.V", "expected": "date or datetime", "actual": "int"}}]
+    },
+    {
+      "case": "to_date_refuses_a_source_that_is_neither_a_datetime_nor_iso_text",
+      "operation": "impute",
+      "input": {"kind": "to_date", "source": "SRC.V", "path": "columns.V.derivation.impute", "value": 1},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-2", "spec_paths": ["columns.V.derivation.impute.source"], "context": {"source": "SRC.V", "expected": "datetime, ISO date text, or ISO 8601 datetime text", "actual": "int"}}]
+    },
+    {
+      "case": "to_date_refuses_text_that_is_not_a_date",
+      "operation": "impute",
+      "input": {"kind": "to_date", "source": "SRC.V", "path": "columns.V.derivation.impute", "value": "2024-13"},
+      "issues": [{"phase": "validation", "condition": "invalid_date_text", "rule": "TIME-2", "spec_paths": ["columns.V.derivation.impute"], "context": {"operation": "to_date", "value": "2024-13"}}]
+    },
+    {
+      "case": "an_impute_fails_on_an_interval_naming_no_single_date",
+      "operation": "impute",
+      "input": {"kind": {"impute": {"type": "date", "month": "12", "day": {"number": "31"}, "path": "impute"}}, "source": "SRC.V", "path": "columns.V.derivation.impute", "value": "2024-01-01/2024-01-10"},
+      "issues": [{"phase": "impute", "condition": "interval_or_duration_text", "rule": "TIME-13", "spec_paths": ["columns.V.derivation.impute"], "context": {"operation": "impute", "source": "SRC.V", "value": "2024-01-01/2024-01-10"}}]
+    },
+    {
+      "case": "to_date_fails_on_a_duration_naming_no_single_date",
+      "operation": "impute",
+      "input": {"kind": "to_date", "source": "SRC.V", "path": "columns.V.derivation.impute", "value": "P3D"},
+      "issues": [{"phase": "impute", "condition": "interval_or_duration_text", "rule": "TIME-2", "spec_paths": ["columns.V.derivation.impute"], "context": {"operation": "to_date", "source": "SRC.V", "value": "P3D"}}]
+    }
+  ]
+}

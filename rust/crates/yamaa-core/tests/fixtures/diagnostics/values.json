@@ -1,0 +1,101 @@
+{
+  "about": "Value-level refusals: mapping and cut (EXPR-11 to EXPR-13, COLUMN-10), the findings a run reports for a key, lookup, baseline or reduction (COLUMN-2, LOOKUP-10, LOOKUP-24, WINDOW-9, FORMULA-23), and predicate evaluation over bound values (FORMULA-5 to FORMULA-9), whose operand route names the failing operand.",
+  "cases": [
+    {
+      "case": "a_mapping_refuses_a_source_that_is_not_text",
+      "operation": "mapping",
+      "input": {"source": "SRC.V", "path": "columns.V.derivation.mapping", "entries": [], "case_sensitive": true, "select": 1},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "EXPR-11", "spec_paths": ["columns.V.derivation.mapping.source"], "context": {"source": "SRC.V", "expected": "str", "actual": "int"}}]
+    },
+    {
+      "case": "a_case_insensitive_mapping_refuses_keys_that_fold_together",
+      "operation": "mapping",
+      "input": {"source": "SRC.V", "path": "columns.V.derivation.mapping", "entries": [["Y", 1], ["y", 2], ["a", 3], ["A", 4]], "case_sensitive": false},
+      "issues": [{"phase": "validation", "condition": "ambiguous_dictionary", "rule": "EXPR-12", "spec_paths": ["columns.V.derivation.mapping.dict"], "context": {"folded_key": "A", "entries": ["a", "A"]}}]
+    },
+    {
+      "case": "a_mapping_fails_on_a_value_it_does_not_list",
+      "operation": "mapping",
+      "input": {"source": "SRC.V", "path": "columns.V.derivation.mapping", "entries": [], "case_sensitive": true, "select": "unlisted"},
+      "issues": [{"phase": "mapping", "condition": "unmapped_value", "rule": "COLUMN-10", "spec_paths": ["columns.V.derivation.mapping"], "context": {"source": "SRC.V", "value": "unlisted"}}]
+    },
+    {
+      "case": "a_cut_refuses_a_source_that_is_not_numeric",
+      "operation": "cut",
+      "input": {"source": "AGE", "path": "columns.C.derivation.cut", "breaks": [18.0], "labels": ["child", "adult"], "right": false, "select": "1"},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "EXPR-13", "spec_paths": ["columns.C.derivation.cut.source"], "context": {"source": "AGE", "expected": "numeric", "actual": "str"}}]
+    },
+    {
+      "case": "a_cut_refuses_breaks_that_do_not_ascend",
+      "operation": "cut",
+      "input": {"source": "AGE", "path": "columns.C.derivation.cut", "breaks": [2.0, 1.0], "labels": ["a", "b", "c"], "right": false},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "EXPR-13", "spec_paths": ["columns.C.derivation.cut"], "context": {"operation": "cut", "expected": "ascending breaks"}}]
+    },
+    {
+      "case": "a_key_with_several_values_counts_them",
+      "operation": "dataset_finding",
+      "input": {"finding": "multiple_values", "path": "columns.A.source", "identifier": "SRC.A", "count": 3},
+      "issues": [{"phase": "derivation", "condition": "multiple_values_per_key", "rule": "COLUMN-2", "spec_paths": ["columns.A.source"], "context": {"identifier": "SRC.A", "value_count": 3}}]
+    },
+    {
+      "case": "a_required_match_without_a_record_names_its_intermediate",
+      "operation": "dataset_finding",
+      "input": {"finding": "unmatched_key", "path": "columns.A.source", "dataset": "DM", "intermediate": "I"},
+      "issues": [{"phase": "join", "condition": "unmatched_key", "rule": "LOOKUP-24", "spec_paths": ["columns.A.source"], "context": {"dataset": "DM", "intermediate": "I"}}]
+    },
+    {
+      "case": "a_required_match_of_a_dataset_lookup_names_the_dataset_as_its_intermediate",
+      "operation": "dataset_finding",
+      "input": {"finding": "unmatched_key", "path": "columns.A.derivation.source", "dataset": "DM", "intermediate": "intermediate(DM)"},
+      "issues": [{"phase": "join", "condition": "unmatched_key", "rule": "LOOKUP-24", "spec_paths": ["columns.A.derivation.source"], "context": {"dataset": "DM", "intermediate": "intermediate(DM)"}}]
+    },
+    {
+      "case": "a_lookup_with_several_matches_counts_them",
+      "operation": "dataset_finding",
+      "input": {"finding": "multiple_matches", "path": "columns.A.source", "dataset": "DM", "intermediate": "I", "count": 4},
+      "issues": [{"phase": "join", "condition": "multiple_matches", "rule": "LOOKUP-10", "spec_paths": ["columns.A.source"], "context": {"dataset": "DM", "intermediate": "I", "match_count": 4}}]
+    },
+    {
+      "case": "an_ambiguous_baseline_names_the_tied_date_in_full",
+      "operation": "dataset_finding",
+      "input": {"finding": "baseline_ambiguity", "path": "columns.A.baseline", "column": "A", "date": {"date": "2024-02-29", "precision": "month"}, "count": 2},
+      "issues": [{"phase": "derivation", "condition": "ambiguous_baseline", "rule": "WINDOW-9", "spec_paths": ["columns.A.baseline"], "context": {"column": "A", "operation": "baseline_flag", "date": "2024-02-29", "match_count": 2}}]
+    },
+    {
+      "case": "a_numeric_reduction_refuses_a_value_that_is_not_numeric",
+      "operation": "dataset_finding",
+      "input": {"finding": "reduction_input_type", "path": "columns.A.aggregate", "expression": "MEAN(SRC.A)", "reducer": "MEAN", "source": "SRC.A", "actual": "bool"},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-23", "spec_paths": ["columns.A.aggregate"], "context": {"expr": "MEAN(SRC.A)", "reducer": "MEAN", "source": "SRC.A", "expected": "numeric", "actual": "bool"}}]
+    },
+    {
+      "case": "a_predicate_reads_an_unknown_field_even_behind_false",
+      "operation": "predicate",
+      "input": {"expression": "FALSE AND UNKNOWN = 1", "path": "rows[2].filter", "bindings": {}},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "FORMULA-9", "spec_paths": ["rows[2].filter"], "context": {"identifier": "UNKNOWN"}, "operand_route": ["Right", "Left"]}]
+    },
+    {
+      "case": "a_comparison_refuses_a_right_operand_of_another_type_than_the_left",
+      "operation": "predicate",
+      "input": {"expression": "NOT (FLAG = 1)", "path": "rows[2].filter", "bindings": {"FLAG": true, "DAY": {"date": "2024-02-29"}, "TEXT": "text", "PATTERN": "tail!"}},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5", "spec_paths": ["rows[2].filter"], "context": {"left_type": "bool", "right_type": "int", "actual": "int"}, "operand_route": ["Child"]}]
+    },
+    {
+      "case": "like_refuses_a_subject_that_is_not_text",
+      "operation": "predicate",
+      "input": {"expression": "DAY LIKE '%'", "path": "rows[2].filter", "bindings": {"FLAG": true, "DAY": {"date": "2024-02-29"}, "TEXT": "text", "PATTERN": "tail!"}},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5", "spec_paths": ["rows[2].filter"], "context": {"expected": "str", "actual": "date"}, "operand_route": []}]
+    },
+    {
+      "case": "str_contains_refuses_a_subject_that_is_not_text",
+      "operation": "predicate",
+      "input": {"expression": "TRUE OR str_contains(FLAG, 'a')", "path": "rows[2].filter", "bindings": {"FLAG": true, "DAY": {"date": "2024-02-29"}, "TEXT": "text", "PATTERN": "tail!"}},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-8", "spec_paths": ["rows[2].filter"], "context": {"expected": "str", "actual": "bool"}, "operand_route": ["Right"]}]
+    },
+    {
+      "case": "like_fails_on_a_pattern_that_ends_in_its_escape",
+      "operation": "predicate",
+      "input": {"expression": "TEXT LIKE PATTERN ESCAPE '!'", "path": "rows[2].filter", "bindings": {"FLAG": true, "DAY": {"date": "2024-02-29"}, "TEXT": "text", "PATTERN": "tail!"}},
+      "issues": [{"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-7", "spec_paths": ["rows[2].filter"], "context": {"expr": "TEXT LIKE PATTERN ESCAPE '!'", "reason": "LIKE pattern has a dangling escape"}, "operand_route": []}]
+    }
+  ]
+}

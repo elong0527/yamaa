@@ -1,0 +1,100 @@
+{
+  "about": "VALUE-24's refusal of a declared type that no result of the column's expression can take (EXPR-14), which check and binding report alike before any record is read, and three declarations it admits. Each case gives the column VALUE of the specification `value` its type and derivation.",
+  "documents": {
+    "value": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "input": {"SRC": {"path": "input.csv", "types": {"ID": "int"}}},
+      "keys": ["ID"],
+      "columns": [
+        {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+        {"name": "VALUE"}
+      ],
+      "output": {"path": "output.csv", "columns": ["ID", "VALUE"]}
+    }
+  },
+  "cases": [
+    {
+      "case": "a_row_number_is_refused_for_a_datetime_column",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "value",
+        "edits": [
+          {"set": ["columns", "1", "type"], "to": "datetime"},
+          {"set": ["columns", "1", "derivation"], "to": {"value": {"row_number": {"window": {"order_by": ["ID"]}}}}}
+        ],
+        "sources": {"SRC": [["ID", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "conversion_failed", "rule": "VALUE-24", "spec_paths": ["columns.VALUE"], "context": {"from": "int", "to": "datetime"}}]
+    },
+    {
+      "case": "an_integer_literal_is_refused_for_a_date_column",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "value",
+        "edits": [
+          {"set": ["columns", "1", "type"], "to": "date"},
+          {"set": ["columns", "1", "derivation"], "to": {"value": 5}}
+        ],
+        "sources": {"SRC": [["ID", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "conversion_failed", "rule": "VALUE-24", "spec_paths": ["columns.VALUE"], "context": {"from": "int", "to": "date"}}]
+    },
+    {
+      "case": "a_boolean_literal_is_refused_for_a_text_column",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "value",
+        "edits": [
+          {"set": ["columns", "1", "type"], "to": "str"},
+          {"set": ["columns", "1", "derivation"], "to": {"value": true}}
+        ],
+        "sources": {"SRC": [["ID", "int"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "conversion_failed", "rule": "VALUE-24", "spec_paths": ["columns.VALUE"], "context": {"from": "bool", "to": "str"}}]
+    },
+    {
+      "case": "an_unconvertible_handler_answers_an_integer_literal_for_a_date_column",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "value",
+        "edits": [
+          {"set": ["columns", "1", "type"], "to": "date"},
+          {"set": ["columns", "1", "derivation"], "to": {"value": 5, "unconvertible": null}}
+        ],
+        "sources": {"SRC": [["ID", "int"]]}
+      },
+      "issues": []
+    },
+    {
+      "case": "a_text_literal_may_parse_as_a_date",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "value",
+        "edits": [
+          {"set": ["columns", "1", "type"], "to": "date"},
+          {"set": ["columns", "1", "derivation"], "to": {"value": "'2025-01-02'"}}
+        ],
+        "sources": {"SRC": [["ID", "int"]]}
+      },
+      "issues": []
+    },
+    {
+      "case": "a_row_number_converts_to_an_int_column",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "value",
+        "edits": [
+          {"set": ["columns", "1", "type"], "to": "int"},
+          {"set": ["columns", "1", "derivation"], "to": {"value": {"row_number": {"window": {"order_by": ["ID"]}}}}}
+        ],
+        "sources": {"SRC": [["ID", "int"]]}
+      },
+      "issues": []
+    }
+  ]
+}

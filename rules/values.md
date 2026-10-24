@@ -103,7 +103,7 @@ refused, as its literal answers each failure, and a result that is always
 missing converts to every type.
 
 Fails: `conversion_failed`.
-Evidence: `negative-study-day-date-column`, `rust/crates/yamaa-core/tests/support/diagnostic/result_types.rs`, `rust/crates/yamaa-adapters/tests/fixtures/column_literals.json`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::row_boolean_is_refused_at_validation_and_refuses_every_save`.
+Evidence: `negative-study-day-date-column`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/result_types.json::a_row_number_is_refused_for_a_datetime_column`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/result_types.json::an_integer_literal_is_refused_for_a_date_column`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/result_types.json::a_boolean_literal_is_refused_for_a_text_column`, `rust/crates/yamaa-adapters/tests/fixtures/column_literals.json`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::row_boolean_is_refused_at_validation_and_refuses_every_save`.
 
 The failure names the column whose lifecycle cannot complete, as a
 conversion failure does, or the typed intermediate derivation or aggregate
@@ -343,7 +343,7 @@ where one is specified. Ill-formed encoded text or a decoded surrogate code
 point fails with `invalid_text` at its entry boundary.
 
 Fails: `invalid_text`.
-Evidence: `negative-source-bad-encoding`, `rust/crates/yamaa-core/tests/support/diagnostic/yaml_source.rs`.
+Evidence: `negative-source-bad-encoding`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::a_decoded_yaml_surrogate_is_invalid_text_at_its_path`.
 
 Surrogate code points are invalid. Ill-formed encoded values are rejected,
 never replaced, skipped or decoded by a machine default, and no host default

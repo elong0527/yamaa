@@ -140,7 +140,7 @@ before `end`, each anniversary's day clamped to its month's length. With
 86400. An earlier `end` gives a negative result in every unit.
 
 Fails: `value_not_permitted`, `incompatible_input_type`.
-Evidence: `adam-adsl-analysis-age`, `adam-adsl-duration`, `sdtm-dm-age`, `adam-adpc-relative-times`, `adam-adex-infusion-duration`, `rust/crates/yamaa-core/tests/support/diagnostic/temporal_arithmetic.rs`.
+Evidence: `adam-adsl-analysis-age`, `adam-adsl-duration`, `sdtm-dm-age`, `adam-adpc-relative-times`, `adam-adex-infusion-duration`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::a_datetime_difference_refuses_a_date_operand`.
 
 A `unit` the declared type does not count in fails with `value_not_permitted`
 where the specification is read: `type: date` counts in `day`, `week`, `month`
@@ -381,7 +381,7 @@ position and is rejected where the specification is read, before any data is
 seen.
 
 Fails: `missing_required_field`, `month_out_of_range`, `value_not_permitted`, `invalid_calendar_date`.
-Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_month_rule_without_a_day_rule_fails_at_the_impute`, `rust/crates/yamaa-core/tests/support/diagnostic/front_end.rs`, `negative-impute-bad-month`, `negative-impute-bad-day`, `negative-impute-day-rule`, `rust/crates/yamaa-core/tests/support/diagnostic/temporal_imputation.rs`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_month_rule_without_a_day_rule_fails_at_the_impute`, `rust/crates/yamaa-core/tests/support/diagnostic/front_end.rs`, `negative-impute-bad-month`, `negative-impute-bad-day`, `negative-impute-day-rule`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::an_impute_month_above_twelve_is_out_of_range`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::an_impute_day_number_above_thirty_one_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::an_impute_day_position_other_than_first_or_last_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::an_impute_that_completes_a_day_past_the_month_end_fails`.
 
 A `month` without `day` fails as `missing_required_field` at the `impute`,
 naming `day`: a source missing its month also misses its day, so the `month`
@@ -446,7 +446,7 @@ with the one rounding of [FORMULA-16](formulas.md#formula-16) before it is
 added exactly. The result keeps the source's collected precision.
 
 Fails: `incompatible_input_type`, `conversion_failed`.
-Evidence: `adam-adsl-period-dates`, `adam-adae-post-dose-window`, `rust/crates/yamaa-core/tests/support/diagnostic/temporal_arithmetic.rs`, `rust/tests/host-fixtures/cases.json`.
+Evidence: `adam-adsl-period-dates`, `adam-adae-post-dose-window`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::date_shift_refuses_a_source_that_is_not_a_date`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::date_shift_fails_past_year_9999`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::a_datetime_shift_in_seconds_refuses_a_float_amount`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::a_datetime_shift_fails_past_year_9999`, `rust/tests/host-fixtures/cases.json`.
 
 `days` is a signed integer literal or integer variable; a negative count moves
 backward. `minute`, `hour` and `day` admit integer or float amounts; integer
@@ -475,7 +475,7 @@ comma. Whitespace, a leading plus sign, component signs, exponent notation,
 years and calendar months are invalid.
 
 Fails: `incompatible_input_type`, `invalid_duration_text`.
-Evidence: `adam-adex-infusion-duration`, `rust/crates/yamaa-core/tests/support/diagnostic/temporal_arithmetic.rs`, `rust/crates/yamaa-core/tests/scalar_sqrt.rs::duration_value_reads_signed_fractional_and_week_forms_exactly`, `rust/tests/host-fixtures/cases.json`.
+Evidence: `adam-adex-infusion-duration`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::duration_value_refuses_a_source_that_is_not_text`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::duration_value_fails_on_a_calendar_month`, `rust/crates/yamaa-core/tests/scalar_sqrt.rs::duration_value_reads_signed_fractional_and_week_forms_exactly`, `rust/tests/host-fixtures/cases.json`.
 
 `PT1M` is one minute; `P1M` is a calendar month and is invalid. A week is seven
 days and a day is 86400 seconds. A missing source returns missing without

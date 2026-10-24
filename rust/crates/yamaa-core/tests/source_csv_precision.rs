@@ -300,6 +300,41 @@ mod source {
             }
         }
 
+        /// An omitted `missing` answers a missing source with missing, counted
+        /// under `missing` (COLUMN-10); the refusals are cases of
+        /// `tests/fixtures/diagnostics/values.json`.
+        #[test]
+        fn an_omitted_missing_handler_answers_a_missing_source_with_missing() {
+            let mapping = Mapping::new(
+                "SRC.V".into(),
+                "columns.V.derivation.mapping".into(),
+                vec![],
+                true,
+                None,
+                None,
+            )
+            .unwrap();
+            let cut = Cut::new(
+                "AGE".into(),
+                "columns.C.derivation.cut".into(),
+                vec![18.0],
+                vec!["child".into(), "adult".into()],
+                false,
+                None,
+            )
+            .unwrap();
+            for (selected, label) in [
+                (mapping.select(ValueRef::Missing).unwrap(), "mapping"),
+                (cut.select(ValueRef::Missing).unwrap(), "cut"),
+            ] {
+                assert_eq!(
+                    (selected.value, selected.handler),
+                    (SelectedValue::Missing, Some("missing")),
+                    "{label}"
+                );
+            }
+        }
+
         #[test]
         fn large_mapping_results_and_cut_labels_preserve_the_declared_text() {
             let size = 8 * 1024 * 1024;
@@ -1361,13 +1396,13 @@ mod source {
             .diagnostic();
             assert_eq!(actual.context["record"], V::from(usize::MAX));
             assert_eq!(actual.context["value"], V::from(i64::MIN));
-            assert!(csv_source::Error::Limit {
+            let limit = csv_source::Error::Limit {
                 resource: "source_bytes",
                 limit: 0,
-                actual: Some(1)
-            }
-            .finding("SRC", "s.csv")
-            .is_none());
+                actual: Some(1),
+            };
+            assert!(limit.finding("SRC", "s.csv").is_none());
+            assert_eq!(limit.rule(), None);
             for error in [
                 yamaa_core::typed_csv::Error::InvalidDeclarations,
                 yamaa_core::typed_csv::Error::InvalidSource,

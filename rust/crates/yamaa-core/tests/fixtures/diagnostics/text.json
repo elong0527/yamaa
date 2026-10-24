@@ -1,0 +1,83 @@
+{
+  "about": "The refusals of the text verbs str_pad, str_case, str_template and str_extract (TEXT-1 to TEXT-10, COLUMN-10, NAME-3), each reached by the verb's own declaration or step.",
+  "cases": [
+    {
+      "case": "str_pad_refuses_a_width_that_is_not_a_positive_integer",
+      "operation": "str_pad",
+      "input": {"source": "SRC.V", "path": "columns.V.derivation.str_pad", "width": "0"},
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "TEXT-2", "spec_paths": ["columns.V.derivation.str_pad.width"], "context": {"expected": "a positive integer width"}}]
+    },
+    {
+      "case": "str_case_refuses_a_source_that_is_not_text",
+      "operation": "str_case",
+      "input": {"source": "SRC.V", "path": "columns.V.derivation.str_case", "case": "title", "value": 1},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.V.derivation.str_case.source"], "context": {"source": "SRC.V", "expected": "str", "actual": "int"}}]
+    },
+    {
+      "case": "str_template_refuses_a_placeholder_that_is_not_a_name",
+      "operation": "str_template",
+      "input": {"template": "{A + B}", "path": "columns.RESULT.derivation.str_template"},
+      "issues": [{"phase": "validation", "condition": "invalid_string_template", "rule": "TEXT-3", "spec_paths": ["columns.RESULT.derivation.str_template"], "context": {"reason": "invalid_placeholder", "placeholder": "A + B"}}]
+    },
+    {
+      "case": "str_template_refuses_an_empty_placeholder",
+      "operation": "str_template",
+      "input": {"template": "{}", "path": "columns.RESULT.derivation.str_template"},
+      "issues": [{"phase": "validation", "condition": "invalid_string_template", "rule": "TEXT-3", "spec_paths": ["columns.RESULT.derivation.str_template"], "context": {"reason": "invalid_placeholder", "placeholder": ""}}]
+    },
+    {
+      "case": "str_template_refuses_a_brace_that_is_never_closed",
+      "operation": "str_template",
+      "input": {"template": "{A", "path": "columns.RESULT.derivation.str_template"},
+      "issues": [{"phase": "validation", "condition": "invalid_string_template", "rule": "TEXT-3", "spec_paths": ["columns.RESULT.derivation.str_template"], "context": {"reason": "unmatched_brace"}}]
+    },
+    {
+      "case": "str_template_refuses_a_brace_that_is_never_opened",
+      "operation": "str_template",
+      "input": {"template": "}", "path": "columns.RESULT.derivation.str_template"},
+      "issues": [{"phase": "validation", "condition": "invalid_string_template", "rule": "TEXT-3", "spec_paths": ["columns.RESULT.derivation.str_template"], "context": {"reason": "unmatched_brace"}}]
+    },
+    {
+      "case": "str_template_fails_when_a_placeholder_reads_a_missing_value",
+      "operation": "str_template_missing",
+      "input": {"template": "{A}:{B}", "path": "columns.RESULT.derivation.str_template", "part": 1},
+      "issues": [{"phase": "mapping", "condition": "missing_input", "rule": "COLUMN-10", "spec_paths": ["columns.RESULT.derivation.str_template"], "context": {"variable": "B"}}]
+    },
+    {
+      "case": "str_extract_refuses_a_source_that_is_not_text",
+      "operation": "str_extract_apply",
+      "input": {"source": "SRC.TEXT", "path": "columns.TEXT.derivation.str_extract", "pattern": "(a)", "group": "1", "value": 7},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["columns.TEXT.derivation.str_extract.source"], "context": {"source": "SRC.TEXT", "expected": "str", "actual": "int"}}]
+    },
+    {
+      "case": "str_extract_fails_where_its_pattern_matches_nowhere",
+      "operation": "str_extract_unmatched",
+      "input": {"source": "SRC.TEXT", "path": "columns.TEXT.derivation.str_extract", "pattern": "(a)", "group": "1", "value": "abc"},
+      "issues": [{"phase": "mapping", "condition": "unmatched_pattern", "rule": "COLUMN-10", "spec_paths": ["columns.TEXT.derivation.str_extract"], "context": {"value": "abc", "pattern": "(a)"}}]
+    },
+    {
+      "case": "str_extract_refuses_a_source_that_names_no_field",
+      "operation": "str_extract_unknown",
+      "input": {"source": "SRC.TEXT", "path": "columns.TEXT.derivation.str_extract", "pattern": "(a)", "group": "1"},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.TEXT.derivation.str_extract.source"], "context": {"identifier": "SRC.TEXT"}}]
+    },
+    {
+      "case": "str_extract_refuses_a_pattern_outside_the_portable_subset",
+      "operation": "str_extract",
+      "input": {"source": "SRC.TEXT", "path": "columns.TEXT.derivation.str_extract", "pattern": "[", "group": "0"},
+      "issues": [{"phase": "validation", "condition": "invalid_regex", "rule": "TEXT-6", "spec_paths": ["columns.TEXT.derivation.str_extract.pattern"], "context": {"pattern": "[", "reason": "a character class is never closed"}}]
+    },
+    {
+      "case": "str_extract_refuses_a_group_its_pattern_does_not_have",
+      "operation": "str_extract",
+      "input": {"source": "SRC.TEXT", "path": "columns.TEXT.derivation.str_extract", "pattern": "(a)", "group": "2"},
+      "issues": [{"phase": "validation", "condition": "regex_group_out_of_range", "rule": "TEXT-10", "spec_paths": ["columns.TEXT.derivation.str_extract.group"], "context": {"group": 2, "group_count": 1, "pattern": "(a)"}}]
+    },
+    {
+      "case": "str_extract_names_a_group_wider_than_any_integer_in_full",
+      "operation": "str_extract",
+      "input": {"source": "SRC.TEXT", "path": "columns.TEXT.derivation.str_extract", "pattern": "(a)", "group": "100000000000000000000000000000000000000000000000000000000000000000000000000000000"},
+      "issues": [{"phase": "validation", "condition": "regex_group_out_of_range", "rule": "TEXT-10", "spec_paths": ["columns.TEXT.derivation.str_extract.group"], "context": {"group": 100000000000000000000000000000000000000000000000000000000000000000000000000000000, "group_count": 1, "pattern": "(a)"}}]
+    }
+  ]
+}
