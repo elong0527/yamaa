@@ -66,6 +66,52 @@ pub fn error(name: &str) -> Value {
     yaml(&path(name).join("expected/error.yaml"))
 }
 
+/// Copy the files of the benchmark `name` into the directory `into`, each at
+/// its path in the benchmark, as a run of the case reads them: every file but
+/// the case's truth and its description, its `expected/` directory,
+/// `README.md` and `benchmark.yaml`. A symbolic link fails the call, since
+/// the copy does not keep one. Returns each copied file's path in `into`,
+/// with forward slashes.
+#[track_caller]
+pub fn stage(name: &str, into: &Path) -> Vec<String> {
+    fn copy(name: &str, from: &Path, to: &Path, at: &str, staged: &mut Vec<String>) {
+        let entries = std::fs::read_dir(from)
+            .unwrap_or_else(|error| panic!("{name}: {}: {error}", from.display()));
+        for entry in entries {
+            let entry = entry.unwrap_or_else(|error| panic!("{name}: {}: {error}", from.display()));
+            let (path, file) = (entry.path(), entry.file_name());
+            if at.is_empty()
+                && ["expected", "README.md", "benchmark.yaml"]
+                    .iter()
+                    .any(|skipped| file == *skipped)
+            {
+                continue;
+            }
+            let kind = entry
+                .file_type()
+                .unwrap_or_else(|error| panic!("{name}: {}: {error}", path.display()));
+            assert!(
+                !kind.is_symlink(),
+                "{name}: {} is a symbolic link, which this copy does not keep",
+                path.display()
+            );
+            let (target, written) = (to.join(&file), format!("{at}{}", file.to_string_lossy()));
+            if kind.is_dir() {
+                std::fs::create_dir(&target)
+                    .unwrap_or_else(|error| panic!("{name}: {}: {error}", target.display()));
+                copy(name, &path, &target, &format!("{written}/"), staged);
+            } else {
+                std::fs::copy(&path, &target)
+                    .unwrap_or_else(|error| panic!("{name}: {}: {error}", path.display()));
+                staged.push(written);
+            }
+        }
+    }
+    let mut staged = Vec::new();
+    copy(name, &path(name), into, "", &mut staged);
+    staged
+}
+
 /// Run the benchmark `name` on the file route for the Python host and compare
 /// the run with what its `expected/` files state, as public conformance reads
 /// them (`tools/conformance/public_conformance.py`, #3691).
@@ -98,37 +144,6 @@ pub fn error(name: &str) -> Value {
 /// and no entry of a negative benchmark exposes or saves an output.
 #[track_caller]
 pub fn reproduce(name: &str) {
-    fn stage(name: &str, from: &Path, to: &Path) {
-        let entries = std::fs::read_dir(from)
-            .unwrap_or_else(|error| panic!("{name}: {}: {error}", from.display()));
-        for entry in entries {
-            let entry = entry.unwrap_or_else(|error| panic!("{name}: {}: {error}", from.display()));
-            let (path, file) = (entry.path(), entry.file_name());
-            if ["expected", "README.md", "benchmark.yaml"]
-                .iter()
-                .any(|skipped| file == *skipped)
-            {
-                continue;
-            }
-            let kind = entry
-                .file_type()
-                .unwrap_or_else(|error| panic!("{name}: {}: {error}", path.display()));
-            assert!(
-                !kind.is_symlink(),
-                "{name}: {} is a symbolic link, which this copy does not keep",
-                path.display()
-            );
-            let target = to.join(&file);
-            if kind.is_dir() {
-                std::fs::create_dir(&target)
-                    .unwrap_or_else(|error| panic!("{name}: {}: {error}", target.display()));
-                stage(name, &path, &target);
-            } else {
-                std::fs::copy(&path, &target)
-                    .unwrap_or_else(|error| panic!("{name}: {}: {error}", path.display()));
-            }
-        }
-    }
     /// Every file below `root`.
     fn files(name: &str, root: &Path) -> std::collections::BTreeSet<PathBuf> {
         let mut found = std::collections::BTreeSet::new();
@@ -261,7 +276,7 @@ pub fn reproduce(name: &str) {
         );
     }
     let study = super::Scratch::new(name);
-    stage(name, &case, &study);
+    stage(name, &study);
     let staged = files(name, &study);
     let negative = case.join("expected/error.yaml").is_file();
     let host = yamaa_core::project_function::Language::Python;
