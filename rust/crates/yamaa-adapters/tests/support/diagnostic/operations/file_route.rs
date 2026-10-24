@@ -22,7 +22,9 @@ use crate::support::diagnostic::replay::{closed, field, items, text};
 use yamaa_core::{domain_entry::Request, json::Value};
 
 pub(super) const FILES: &[File] = &[
+    fixture!("language_header.json"),
     fixture!("producer_links.json"),
+    fixture!("project_run.json"),
     fixture!("submission.json"),
     fixture!("workflow.json"),
 ];

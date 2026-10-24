@@ -188,28 +188,16 @@ mod declaration {
             // The engine reads 1.0 (D76).
             study.write("spec.yaml", SPEC);
             assert_eq!(study.check("spec.yaml", None), []);
-            // A missing parent fails where the 1.0 entry names it (LAYER-2).
-            study.write("spec.yaml", &format!("{SPEC}parent: missing.yaml\n"));
-            let issue = only(&study.check("spec.yaml", None)).clone();
-            assert_eq!(issue.condition(), "parent_not_found");
-            assert_eq!(issue.spec_paths, ["parent"]);
-            assert_eq!(issue.context["source"], study.path("spec.yaml"));
-            // A newer version, whatever the rest of the file holds, at `yamaa`.
+            // A missing parent fails where the 1.0 entry names it (LAYER-2),
+            // and an unquoted version is a YAML float and no version
+            // (SCHEMA-4), as `language_header.json` records. A newer version,
+            // whatever the rest of the file holds, fails at `yamaa`.
             study.write("spec.yaml", "yamaa: \"1.4\"\nanything: [1, 2]\n");
             refused(
                 only(&study.check("spec.yaml", None)),
                 "SCHEMA-2",
                 "yamaa",
                 json!({"version": "1.4", "language_versions": ["1.0"]}),
-            );
-            // An unquoted version is a YAML float and no version (SCHEMA-4).
-            study.write("spec.yaml", "yamaa: 1.0\ntype: spec\n");
-            let issue = only(&study.check("spec.yaml", None)).clone();
-            assert_eq!(issue.condition(), "invalid_field_type");
-            assert_eq!(issue.spec_paths, ["yamaa"]);
-            assert_eq!(
-                Value::Object(issue.context),
-                json!({"expected": "language_version", "actual": "float"})
             );
         }
 
@@ -228,11 +216,8 @@ mod declaration {
                     json!({"version": "0.5", "language_versions": ["1.0"]}),
                 );
             }
-            // A file that declares neither has no header.
-            study.write("spec.yaml", "domain: TEST\n");
-            let issue = only(&study.check("spec.yaml", None)).clone();
-            assert_eq!(issue.condition(), "missing_required_field");
-            assert_eq!(issue.spec_paths, ["yamaa"]);
+            // A file that declares neither has no header
+            // (`language_header.json`).
         }
 
         /// The project file a call names is read by its own header (SCHEMA-2):
