@@ -452,8 +452,8 @@ pub(super) fn verify_output<'a: 's, 's, E>(
             });
         }
     }
-    let groups =
-        partition(frame, &keys).map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
+    let groups = partition(frame, &keys, run.output_partition)
+        .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
     let duplicates: Vec<usize> = groups
         .iter()
         .filter(|members| members.len() > 1)
@@ -575,7 +575,7 @@ pub(super) fn verify_output<'a: 's, 's, E>(
                         distinct.push(column);
                     }
                 }
-                let groups = partition(frame, &distinct)
+                let groups = partition(frame, &distinct, run.output_partition)
                     .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
                 let repeated: Vec<&Vec<usize>> =
                     groups.iter().filter(|members| members.len() > 1).collect();
@@ -867,7 +867,7 @@ fn row_count_check<'a: 's, 's, E>(
         });
     }
     let groups = if let Some(columns) = &count.group_by {
-        partition(frame, columns)
+        partition(frame, columns, run.output_partition)
             .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?
     } else {
         vec![(0..rows).collect()]
@@ -916,12 +916,14 @@ fn row_count_check<'a: 's, 's, E>(
 
 /// Partition rows by columns in first-occurrence order: missing values
 /// compare equal, text is exact, temporal precision and float zero signs do
-/// not affect equality (ROW-4).
+/// not affect equality (ROW-4). The rows are admitted as the output is: each
+/// partition of at most `partition` rows, or whole (D264).
 pub(super) fn partition(
     frame: &Frame,
     columns: &[usize],
+    partition: Option<std::num::NonZeroUsize>,
 ) -> Result<Vec<Vec<usize>>, crate::table_grouping::GroupingError<Infallible>> {
-    super::group::admit(columns, frame.width(), frame.rows())?;
+    super::group::admit(columns, frame.width(), frame.rows(), partition)?;
     Ok(
         super::group::partition(frame.rows(), columns.len(), |row, position| {
             frame.get(row, columns[position])

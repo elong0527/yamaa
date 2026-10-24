@@ -377,18 +377,10 @@ fn dataset_failure<'a, C, E>(
     report["verifications"] = json!(verifications);
     Ok(report)
 }
-pub(crate) fn table_observation_projected<T: TableAccess>(
-    table: &T,
-    id: &Identity<'_>,
-    stage: &str,
-    name: &str,
-) -> Result<StoredTable, Error> {
-    table_observation(table, id, stage, name, &[table.row_count()])
-}
-
 /// The observation of a table whose records divide into `partitions` of
 /// these sizes, each admitted on its own: one partition for a table held
-/// whole, and those of an input read by partition (#3792).
+/// whole, those of an input read by partition (#3792), and those of an
+/// output held in partitions (D264).
 fn table_observation<T: TableAccess>(
     table: &T,
     id: &Identity<'_>,
@@ -484,12 +476,17 @@ pub(crate) fn set_handler_counts(report: &mut Value, counts: &[HandlerCount]) {
 }
 
 /// The primary artifact of an accepted build: the path its specification
-/// declares, its encoded bytes and the projection they hold. They belong to
-/// the build; a save publishes them and never encodes again.
+/// declares, its encoded bytes, where each partition of them ends, and the
+/// projection they hold. They belong to the build; a save publishes them a
+/// partition at a time and never encodes again.
 #[derive(Debug)]
 struct Artifact {
     path: String,
     bytes: std::sync::Arc<[u8]>,
+    /// The end of each partition's bytes, the last at their length, for an
+    /// output encoded a partition at a time (D264); empty for one encoded
+    /// whole.
+    partitions: Vec<usize>,
     projection: Vec<usize>,
 }
 
@@ -594,17 +591,20 @@ impl BuildResult {
     }
     /// Failed results have only an explicit diagnostic publication capability:
     /// the declared report file. The primary artifact requires the accepted
-    /// primary owner.
-    pub(crate) fn publication_items(&self) -> Vec<(&str, &[u8], &Value)> {
+    /// primary owner. Each item is the path its specification wrote, its
+    /// complete bytes, where each of its partitions ends (none for a file
+    /// written whole) and its artifact observation.
+    pub(crate) fn publication_items(&self) -> Vec<(&str, &[u8], &[usize], &Value)> {
         let mut items = Vec::new();
-        if let Some(file) = self.report.file() {
-            items.push(file);
+        if let Some((path, bytes, observation)) = self.report.file() {
+            items.push((path, bytes, &[][..], observation));
         }
         if self.accepted() {
             if let Some(artifact) = self.prepared.artifact() {
                 items.push((
                     artifact.path.as_str(),
                     &artifact.bytes[..],
+                    &artifact.partitions[..],
                     self.prepared.prepared_report()["artifacts"]
                         .as_array()
                         .expect("prepared artifacts")
@@ -622,7 +622,7 @@ impl BuildResult {
     pub fn files(&self) -> Vec<(&str, &[u8])> {
         self.publication_items()
             .into_iter()
-            .map(|(path, bytes, _)| (path, bytes))
+            .map(|(path, bytes, _, _)| (path, bytes))
             .collect()
     }
     /// The observations a save that writes every one of [`Self::files`]
@@ -647,7 +647,7 @@ impl BuildResult {
             items
                 .into_iter()
                 .take(completed)
-                .map(|(_, _, value)| value.clone())
+                .map(|(_, _, _, value)| value.clone())
                 .collect(),
         );
         Ok(report)
@@ -758,15 +758,18 @@ pub(crate) fn prepare_result(
     let table = prepared
         .artifact()
         .map(|artifact| {
-            let dataset = &execution.ok_or(Error::InvalidObservation)?.dataset;
+            let execution = execution.ok_or(Error::InvalidObservation)?;
+            let (dataset, partition) = (&execution.dataset, execution.partition_rows);
             match view {
-                HostView::Table => {
-                    crate::public_table::PublicTable::from_table(dataset, &artifact.projection)
-                        .map(View::Table)
-                }
+                HostView::Table => crate::public_table::PublicTable::from_partitions(
+                    dataset,
+                    &artifact.projection,
+                    partition,
+                )
+                .map(View::Table),
                 // Built batch by batch as it is read, after the same checks.
                 HostView::Deferred => {
-                    crate::public_table::check_table(dataset, &artifact.projection)
+                    crate::public_table::check_table(dataset, &artifact.projection, partition)
                         .map(|_| View::Deferred)
                 }
             }
@@ -861,10 +864,10 @@ fn prepare_output(
                 .ok_or(Error::InvalidObservation)
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let bytes = encode(
+    let (bytes, partitions) = encode(
         compiled.output_profile(),
         compiled.output_decimals(),
-        &execution.dataset,
+        execution,
         &projection,
     )?;
     yamaa_core::limits::Limits::output_bytes(bytes.len()).map_err(|error| {
@@ -881,6 +884,7 @@ fn prepare_output(
         artifact: Some(Artifact {
             path: compiled.output_path().into(),
             bytes: bytes.into(),
+            partitions,
             projection,
         }),
     })
@@ -936,54 +940,62 @@ pub(crate) fn output_diagnostics(
         .map(|finding| finding.diagnostic())
         .collect()
 }
-/// Encode the projected dataset under the specification's output `profile`,
-/// with its CSV display `decimals`. Each codec bounds its allocation as it
-/// encodes; the caller bounds the bytes it returns.
+/// Encode the projected output under the specification's output `profile`,
+/// with its CSV display `decimals`, one partition of the output at a time
+/// (D264): its bytes, and where each partition's bytes end, the last at
+/// their length. An output admitted whole is one partition. Each codec
+/// bounds its allocation as it encodes; the caller bounds the bytes it
+/// returns.
 fn encode(
     profile: Option<&'static str>,
     decimals: Option<&str>,
-    dataset: &yamaa_core::dataset::Dataset,
+    execution: &yamaa_core::dataset::Execution,
     projection: &[usize],
-) -> Result<Vec<u8>, Error> {
+) -> Result<(Vec<u8>, Vec<usize>), Error> {
+    let dataset = &execution.dataset;
+    let partitions = execution.output_partitions();
     match profile {
-        Some("csv") => crate::csv_artifact::render(dataset, projection, decimals).map_err(
-            |error| match error {
-                crate::csv_artifact::Error::Limit {
-                    resource,
-                    limit,
-                    actual,
-                    decimal_formatting,
-                } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                    resource,
-                    limit,
-                    actual,
-                    vec![if decimal_formatting {
-                        "output.decimals"
-                    } else {
-                        "output.path"
-                    }
-                    .into()],
-                )),
-                _ => Error::InvalidObservation,
-            },
-        ),
+        Some("csv") => {
+            crate::csv_artifact::render_partitions(dataset, projection, decimals, &partitions)
+                .map_err(|error| match error {
+                    crate::csv_artifact::Error::Limit {
+                        resource,
+                        limit,
+                        actual,
+                        decimal_formatting,
+                    } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                        resource,
+                        limit,
+                        actual,
+                        vec![if decimal_formatting {
+                            "output.decimals"
+                        } else {
+                            "output.path"
+                        }
+                        .into()],
+                    )),
+                    _ => Error::InvalidObservation,
+                })
+        }
         Some("parquet") => {
-            crate::parquet_artifact::render(dataset, projection).map_err(|error| match error {
-                crate::parquet_artifact::Error::Unavailable => {
-                    Error::CapabilityUnavailable { feature: "parquet" }
-                }
-                crate::parquet_artifact::Error::Limit {
-                    resource,
-                    limit,
-                    actual,
-                } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                    resource,
-                    limit,
-                    actual,
-                    vec!["output.path".into()],
-                )),
-                _ => Error::InvalidObservation,
-            })
+            crate::parquet_artifact::render_partitions(dataset, projection, &partitions).map_err(
+                |error| match error {
+                    crate::parquet_artifact::Error::Unavailable => {
+                        Error::CapabilityUnavailable { feature: "parquet" }
+                    }
+                    crate::parquet_artifact::Error::Limit {
+                        resource,
+                        limit,
+                        actual,
+                    } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                        resource,
+                        limit,
+                        actual,
+                        vec!["output.path".into()],
+                    )),
+                    _ => Error::InvalidObservation,
+                },
+            )
         }
         _ => Err(Error::InvalidObservation),
     }
@@ -1043,8 +1055,8 @@ pub(crate) fn artifact_report(
             .collect::<Vec<_>>();
         (content, records)
     } else {
-        let records =
-            crate::parquet_artifact::records(table, projection).map_err(|error| match error {
+        let records = crate::parquet_artifact::records(table, projection, execution.partition_rows)
+            .map_err(|error| match error {
                 crate::parquet_artifact::Error::Limit {
                     resource,
                     limit,
@@ -1060,7 +1072,19 @@ pub(crate) fn artifact_report(
         ("", records)
     };
     report["artifacts"] = json!([{"name":run.compiled().output_name(),"profile":profile,"columns":run.compiled().projection(),"types":projection.iter().map(|&c|specification_diagnostics::type_name(table.schema().columns()[c].kind)).collect::<Vec<_>>(),"row_count":table.row_count(),"records":records,"byte_length":bytes.len(),"content":content}]);
-    report.push_table(table_observation_projected(table, id, "derived", "output")?)?;
+    // The output observed as it is held: whole, or a partition at a time.
+    let partitions = execution
+        .output_partitions()
+        .iter()
+        .map(|rows| rows.len())
+        .collect::<Vec<_>>();
+    report.push_table(table_observation(
+        table,
+        id,
+        "derived",
+        "output",
+        &partitions,
+    )?)?;
     report["outcome"] = json!("success");
     report["nodes"][0]["outcome"] = json!("success");
     Ok(report)

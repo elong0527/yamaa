@@ -13,7 +13,6 @@ use crate::epoch::{date_days, datetime_seconds};
 use arrow_array::RecordBatch;
 #[cfg(feature = "arrow")]
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
-#[cfg(feature = "arrow")]
 use std::num::NonZeroUsize;
 use std::{convert::Infallible, fmt, ops::Range, sync::Arc};
 use yamaa_core::{
@@ -333,6 +332,17 @@ impl PublicTable {
                 required: None,
             })?;
         Limits::table(rows, columns.len()).map_err(limit)?;
+        Self::assemble(columns, chunks, rows)
+    }
+
+    /// `columns` of `rows` rows each in record batches of `chunks` rows,
+    /// once their geometry is admitted: every column has that many rows and
+    /// each batch's text in each column fits Arrow's Utf8 offsets.
+    fn assemble(
+        columns: Vec<(String, PublicColumn)>,
+        chunks: Vec<usize>,
+        rows: usize,
+    ) -> Result<Self, TableError> {
         if columns.iter().any(|(_, column)| column.len() != rows) {
             return Err(TableError::InvalidTable);
         }
@@ -369,7 +379,21 @@ impl PublicTable {
         table: &T,
         projection: &[usize],
     ) -> Result<Self, TableError> {
-        let selected = check_table(table, projection)?.columns().to_vec();
+        Self::from_partitions(table, projection, None)
+    }
+
+    /// [`Self::from_table`] for a table held in consecutive partitions of
+    /// at most `partition` rows, such as a run's output admitted a partition
+    /// at a time (D264): each partition is admitted on its own, the whole
+    /// table when `partition` is none. The record batches are the same.
+    pub fn from_partitions<T: TableAccess<Error = Infallible>>(
+        table: &T,
+        projection: &[usize],
+        partition: Option<NonZeroUsize>,
+    ) -> Result<Self, TableError> {
+        let selected = check_table(table, projection, partition)?
+            .columns()
+            .to_vec();
         let rows = table.row_count();
         let chunks = if rows == 0 {
             vec![0]
@@ -381,7 +405,7 @@ impl PublicTable {
         Self::from_rows(table, projection, selected, 0..rows, chunks)
     }
 
-    /// Build only the requested rows after whole-table admission.
+    /// Build only the requested rows after the table's admission.
     fn from_rows<T: TableAccess<Error = Infallible>>(
         table: &T,
         projection: &[usize],
@@ -440,7 +464,7 @@ impl PublicTable {
                 (field.name, column)
             })
             .collect();
-        Self::chunked(columns, chunks)
+        Self::assemble(columns, chunks, rows.len())
     }
 
     /// `tables`, which have the same column names and types, stacked in
@@ -618,14 +642,17 @@ fn projected<T: TableAccess>(table: &T, projection: &[usize]) -> Result<TableSch
 }
 
 /// Admission shared by whole-table and deferred output, before any batch
-/// is handed to a host.
+/// is handed to a host: the table whole, or each of its partitions of at most
+/// `partition` rows for an output held in partitions (D264).
 pub(crate) fn check_table<T: TableAccess<Error = Infallible>>(
     table: &T,
     projection: &[usize],
+    partition: Option<NonZeroUsize>,
 ) -> Result<TableSchema, TableError> {
     let logical = projected(table, projection)?;
     let columns = table.schema().columns();
-    yamaa_core::limits::Limits::table(table.row_count(), columns.len()).map_err(limit)?;
+    yamaa_core::limits::Limits::partitioned(table.row_count(), partition, columns.len())
+        .map_err(limit)?;
     for (column, field) in columns.iter().enumerate() {
         if field.kind != ColumnType::Str {
             continue;
@@ -672,9 +699,15 @@ pub struct PublicBatches<T = yamaa_core::dataset::Dataset> {
 impl<T: TableAccess<Error = Infallible>> PublicBatches<T> {
     /// The batches of `table`'s columns `projection`, at most `rows` records
     /// each. `table` is refused here, before any batch is built, exactly when
-    /// [`PublicTable::from_table`] refuses it (see [`PublicBatches::check`]).
-    pub fn new(table: T, projection: Vec<usize>, rows: NonZeroUsize) -> Result<Self, TableError> {
-        let logical = Self::check(&table, &projection)?;
+    /// [`PublicTable::from_partitions`] refuses it with the same `partition`
+    /// (see [`PublicBatches::check`]).
+    pub fn new(
+        table: T,
+        projection: Vec<usize>,
+        rows: NonZeroUsize,
+        partition: Option<NonZeroUsize>,
+    ) -> Result<Self, TableError> {
+        let logical = Self::check(&table, &projection, partition)?;
         Ok(Self {
             schema: public_schema(logical.columns()),
             logical,
@@ -686,15 +719,20 @@ impl<T: TableAccess<Error = Infallible>> PublicBatches<T> {
         })
     }
 
-    /// Whether [`PublicTable::from_table`] can build the host view of
-    /// `table`'s columns `projection`, checked without building it: the
-    /// projection and the table's geometry, then the one refusal that depends
-    /// on the values, a batch whose text in one column exceeds Arrow `Utf8`'s
+    /// Whether [`PublicTable::from_partitions`] can build the host view of
+    /// `table`'s columns `projection`, admitted whole or in partitions of at
+    /// most `partition` rows, checked without building it: the projection
+    /// and the table's geometry, then the one refusal that depends on the
+    /// values, a batch whose text in one column exceeds Arrow `Utf8`'s
     /// 32-bit offsets. The whole table is rebuilt in batches of 65,536
     /// records, every column of each, so each such batch of each text column
     /// is measured. Returns the projection's logical schema.
-    pub fn check(table: &T, projection: &[usize]) -> Result<TableSchema, TableError> {
-        check_table(table, projection)
+    pub fn check(
+        table: &T,
+        projection: &[usize],
+        partition: Option<NonZeroUsize>,
+    ) -> Result<TableSchema, TableError> {
+        check_table(table, projection, partition)
     }
 
     /// The public schema of every batch, known before any is built.
