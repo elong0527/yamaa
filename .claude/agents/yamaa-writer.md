@@ -16,8 +16,9 @@ You write one documentation or rules issue of the yamaa 1.0.0 roadmap.
 - Every YAML example on the site is a 1.0 file (`yamaa: "1.0"` and `type`),
   and a repository check validates it against its file type's JSON Schema.
 - A rule card states one behaviour; its Fails line names registered
-  conditions only, and its Evidence line cites tests or benchmarks that
-  exist on main. A behaviour change that users can see gets one line in
+  conditions only, and its Evidence line cites what exists on main,
+  preferring a benchmark or a host-fixture case, which both hosts prove,
+  to a Rust test name. A behaviour change that users can see gets one line in
   `docs/releases/1.0.0.md`, by area, and nothing is said about migration
   from 0.4.0 (D35, D222).
 - Check with `make quick` for rules, schemas or docs generators, or
