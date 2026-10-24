@@ -1,0 +1,56 @@
+yamaa: "1.0"
+type: spec
+domain: AECM
+keys: [USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int}}
+  CM: {path: input/cm.csv, types: {CMSEQ: int}}
+
+output:
+  path: aecm.csv
+  columns: [USUBJID, AESEQ, CMSEQ, CMTRT]
+
+intermediates:
+  # Each adverse event paired with the rescue medication its term calls for,
+  # by the medication's sequence number in the subject's records; one entry
+  # of the list writes that number as a word.
+  - id: RESCUE
+    dataset: AE
+    inner_join: CM
+    key:
+      USUBJID: AE.USUBJID
+      CMSEQ:
+        mapping:
+          source: AE.AETERM
+          dict: {HEADACHE: 1, NAUSEA: two}
+    derivations:
+      USUBJID: AE.USUBJID
+      AESEQ: AE.AESEQ
+      CMSEQ: CM.CMSEQ
+      CMTRT: CM.CMTRT
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number of the Adverse Event
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number of the Rescue Medication
+
+  - name: CMTRT
+    type: str
+    label: Reported Name of Drug, Med, or Therapy
+
+rows:
+  - id: rescue
+    dataset: RESCUE
+    derivations:
+      USUBJID: RESCUE.USUBJID
+      AESEQ: RESCUE.AESEQ
+      CMSEQ: RESCUE.CMSEQ
+      CMTRT: RESCUE.CMTRT

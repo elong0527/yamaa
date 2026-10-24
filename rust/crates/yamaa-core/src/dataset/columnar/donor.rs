@@ -44,7 +44,7 @@ impl Built {
         }
     }
 
-    fn whole(donor: Rc<Donor>) -> Self {
+    pub(super) fn whole(donor: Rc<Donor>) -> Self {
         let rows = donor.frame.rows();
         Self {
             donor,
@@ -94,6 +94,11 @@ pub(super) fn materialize<E>(
 ) -> Result<Option<Built>, Fail<E>> {
     let plan = run.plan;
     let item = relations::item(plan, relation);
+    // A pair relation's records are its matching pairs, built once a run
+    // from its two sides (LOOKUP-27).
+    if item.source.pairs().is_some() {
+        return super::pairs::materialize(run, cx, relation).map(Some);
+    }
     let Some(derived) = &item.derivations else {
         return Ok(None);
     };
@@ -105,7 +110,8 @@ pub(super) fn materialize<E>(
         return Ok(Some(data));
     }
     let current = current_fields(run, cx, item, derived, site, row)?;
-    let data = Built::whole(build(run, cx, relation, &current, 0, Records::All)?);
+    let table = input_table(item, cx);
+    let data = Built::whole(build(run, cx, relation, table, &current, 0, Records::All)?);
     run.relations
         .insert_materialized(relation, key, data.clone());
     Ok(Some(data))
@@ -143,7 +149,8 @@ pub(super) fn materialize_matched<E>(
     } else {
         Records::Matched(&matched)
     };
-    let data = Built::whole(build(run, cx, relation, &current, 0, records)?);
+    let table = input_table(item, cx);
+    let data = Built::whole(build(run, cx, relation, table, &current, 0, records)?);
     run.relations
         .insert_materialized(relation, Some(cx.frame.identity(row)), data.clone());
     Ok((data, keys))
@@ -196,14 +203,46 @@ pub(super) fn build_matched<E>(
     stride: usize,
     records: &[usize],
 ) -> Result<Rc<Donor>, Fail<E>> {
+    let table = input_table(relations::item(run.plan, relation), cx);
     build(
         run,
         cx,
         relation,
+        table,
         current,
         stride,
         Records::Compact(records),
     )
+}
+
+/// A pair relation's records (LOOKUP-27): `records` of its joined
+/// records `joined`, the matching pairs its filter keeps, each at a position
+/// of its own, with every derivation evaluated over them.
+pub(super) fn build_pairs<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    relation: RelationId,
+    joined: Table<'_, E>,
+    records: &[usize],
+) -> Result<Rc<Donor>, Fail<E>> {
+    build(run, cx, relation, joined, &[], 0, Records::Compact(records))
+}
+
+/// The table a derived intermediate's stored fields come from: its input,
+/// the driver, or the completed rows of earlier templates. A pair relation
+/// builds its joined records itself ([`build_pairs`]).
+fn input_table<'t, E>(item: &Intermediate, cx: &Cx<'t, E>) -> Table<'t, E> {
+    match &item.source {
+        IntermediateSource::Input(index) => cx.secondary[*index],
+        IntermediateSource::Primary { .. } => cx.primary,
+        IntermediateSource::SelfRows { .. } => Table::Rows {
+            frame: cx.frame,
+            schema: cx.schema,
+            start: 0,
+            rows: cx.self_rows,
+        },
+        IntermediateSource::Pairs(join) => cx.secondary[join.port],
+    }
 }
 
 /// A derived intermediate's donor records: their stored fields copied, then
@@ -214,6 +253,7 @@ fn build<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,
     relation: RelationId,
+    table: Table<'_, E>,
     current: &[Value],
     stride: usize,
     records: Records<'_>,
@@ -228,16 +268,6 @@ fn build<E>(
         .relation(relation)
         .derivations
         .expect("a derived intermediate has a donor region");
-    let table = match &item.source {
-        IntermediateSource::Input(index) => cx.secondary[*index],
-        IntermediateSource::Primary { .. } => cx.primary,
-        IntermediateSource::SelfRows { .. } => Table::Rows {
-            frame: cx.frame,
-            schema: cx.schema,
-            start: 0,
-            rows: cx.self_rows,
-        },
-    };
     let input_schema = plan.sources()[plan
         .region_sources(region)
         .next()
@@ -328,7 +358,7 @@ fn build<E>(
 /// order. `current` is one set of current values for every record, or one
 /// set per record when `stride` is its width.
 #[allow(clippy::too_many_arguments)]
-fn derive<E>(
+pub(super) fn derive<E>(
     run: &mut Run<'_, '_, E>,
     region: RegionId,
     frame: &mut Frame,

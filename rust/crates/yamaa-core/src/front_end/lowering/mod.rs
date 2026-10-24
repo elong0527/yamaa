@@ -558,6 +558,8 @@ impl<'d> Lower<'d> {
                 name: String::new(),
                 meta,
             });
+            // The right side of a pair relation (LOOKUP-27).
+            let inner_join = self.named(meta, item, "inner_join");
             // An intermediate states its own key (D23), and one that does not
             // keeps none here: the front end refuses it unless it drives rows
             // (LOOKUP-3, ROW-2).
@@ -614,6 +616,7 @@ impl<'d> Lower<'d> {
             intermediates.push(Intermediate {
                 id: declared,
                 dataset,
+                inner_join,
                 key,
                 between,
                 filter,
@@ -628,6 +631,7 @@ impl<'d> Lower<'d> {
                 written: self.written(
                     item,
                     &[
+                        "inner_join",
                         "key",
                         "between",
                         "filter",

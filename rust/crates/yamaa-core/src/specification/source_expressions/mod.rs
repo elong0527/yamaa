@@ -760,8 +760,15 @@ fn bind_implicit_source(
                             })
                     }
                     refused => {
-                        cx.findings
-                            .push(join_key_finding(path, dataset, &key_names, refused)?);
+                        cx.findings.push(join_key_finding(
+                            path,
+                            dataset,
+                            &key_names,
+                            refused,
+                            catalog
+                                .joined(dataset)
+                                .is_some_and(|relation| relation.pair),
+                        )?);
                         None
                     }
                 }
@@ -910,7 +917,10 @@ pub(super) fn bind_implicit(
             }))
         }
         refused => {
-            findings.push(join_key_finding(path, dataset, key_names, refused)?);
+            let pair = catalog
+                .joined(dataset)
+                .is_some_and(|relation| relation.pair);
+            findings.push(join_key_finding(path, dataset, key_names, refused, pair)?);
             Ok(None)
         }
     }
@@ -925,10 +935,11 @@ pub(super) fn join_key_finding(
     dataset: &str,
     key_names: &[&str],
     refused: crate::key_relation::Inference,
+    pair: bool,
 ) -> Result<BindFinding, BindError> {
     use crate::key_relation::Inference;
     let diagnostic = match refused {
-        Inference::NoApplicableKeys => lookup::undeclared_input_key(path, dataset, false),
+        Inference::NoApplicableKeys => lookup::undeclared_input_key(path, dataset, false, pair),
         Inference::Incompatible {
             key,
             expected,

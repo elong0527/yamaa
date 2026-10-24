@@ -1,0 +1,11 @@
+ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS
+aecm.csv,run,output,,,,,,succeeded,,6,,,{}
+aecm.csv,input,input.AE,AE,,,,,,,4,,,"{""bytes"":72,""path"":""input/ae.csv"",""profile"":""csv""}"
+aecm.csv,input,input.CM,CM,,,,,,,4,,,"{""bytes"":151,""path"":""input/cm.csv"",""profile"":""csv""}"
+aecm.csv,rows,rows.pairs,GIVEN,,,,,,,6,6,,{}
+aecm.csv,handler,intermediates.GIVEN.derivations.CMDOSE.unconvertible,unconvertible,,,VALUE-3,,,,2,,,{}
+aecm.csv,column,columns.USUBJID,USUBJID,,,,,,,0,6,,"{""max_length"":2}"
+aecm.csv,column,columns.AESEQ,AESEQ,,,,,,,0,6,,{}
+aecm.csv,column,columns.CMSEQ,CMSEQ,,,,,,,0,6,,{}
+aecm.csv,column,columns.CMTRT,CMTRT,,,,,,,0,6,,"{""max_length"":11}"
+aecm.csv,column,columns.CMDOSE,CMDOSE,,,,,,,2,6,,{}

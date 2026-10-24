@@ -413,10 +413,10 @@ fn column_check<E>(
 
 /// Check output key completeness and uniqueness, then run every declared
 /// dataset check over the completed rows.
-pub(super) fn verify_output<'a, E>(
+pub(super) fn verify_output<'a: 's, 's, E>(
     run: &mut Run<'_, 'a, E>,
     frame: &Frame,
-    secondary: &[Table<'a, E>],
+    secondary: &[Table<'s, E>],
     records: &mut Vec<CheckRecord>,
     observer: &mut dyn FnMut(ExecutionEvent),
 ) -> Result<(), Fail<E>> {
@@ -770,10 +770,10 @@ fn completed_truth<E>(
 /// One row's truth of a verification predicate: over the completed values,
 /// or through the case evaluator when it reads a lookup.
 #[allow(clippy::too_many_arguments)]
-fn evaluate_predicate<'a, E>(
+fn evaluate_predicate<'a: 's, 's, E>(
     run: &mut Run<'_, 'a, E>,
     frame: &Frame,
-    secondary: &[Table<'a, E>],
+    secondary: &[Table<'s, E>],
     dataset: &Completed<'_>,
     predicate: &BoundPredicate,
     expr: crate::dataset::resolved::ExprId,
@@ -817,10 +817,10 @@ fn evaluate_predicate<'a, E>(
 /// Partition all artifact rows before applying predicates; a filtered-empty
 /// group remains visible.
 #[allow(clippy::too_many_arguments)]
-fn row_count_check<'a, E>(
+fn row_count_check<'a: 's, 's, E>(
     run: &mut Run<'_, 'a, E>,
     frame: &Frame,
-    secondary: &[Table<'a, E>],
+    secondary: &[Table<'s, E>],
     dataset: &Completed<'_>,
     check: CheckId,
     count: &crate::dataset::RowCount,

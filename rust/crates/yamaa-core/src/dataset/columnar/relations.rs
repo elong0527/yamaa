@@ -240,11 +240,13 @@ fn source_name<'i>(
         IntermediateSource::Input(index) => &secondary[*index].name,
         IntermediateSource::Primary { name, .. } => name,
         IntermediateSource::SelfRows { .. } => "SELF",
+        // A pair relation's records are its own (LOOKUP-27).
+        IntermediateSource::Pairs(_) => &item.identifier,
     }
 }
 
 /// The table a named intermediate's records come from.
-fn source_table<'t, E>(item: &Intermediate, cx: &Cx<'t, E>) -> Table<'t, E> {
+pub(super) fn source_table<'t, E>(item: &Intermediate, cx: &Cx<'t, E>) -> Table<'t, E> {
     match &item.source {
         IntermediateSource::Input(index) => cx.secondary[*index],
         IntermediateSource::Primary { .. } => cx.primary,
@@ -254,6 +256,8 @@ fn source_table<'t, E>(item: &Intermediate, cx: &Cx<'t, E>) -> Table<'t, E> {
             start: 0,
             rows: cx.self_rows,
         },
+        // Readers read a pair relation through its port (LOOKUP-27).
+        IntermediateSource::Pairs(join) => cx.secondary[join.port],
     }
 }
 
@@ -311,7 +315,7 @@ pub(super) fn check_unobserved_filter_types<E>(plan: &ResolvedPlan) -> Result<()
 }
 
 /// Whether a filter that reads only the donor records keeps one of them.
-fn keeps<E>(
+pub(super) fn keeps<E>(
     table: Table<'_, E>,
     filter: &RelationPredicate,
     source_row: usize,
@@ -327,7 +331,10 @@ fn keeps<E>(
 }
 
 /// Every donor record a filter that reads only the donor records keeps.
-fn eligibility<E>(table: Table<'_, E>, item: &Intermediate) -> Result<Vec<usize>, Fail<E>> {
+pub(super) fn eligibility<E>(
+    table: Table<'_, E>,
+    item: &Intermediate,
+) -> Result<Vec<usize>, Fail<E>> {
     check_deferred_filter_types(item)?;
     let mut eligible = Vec::new();
     super::reserved(eligible.try_reserve_exact(table.row_count()))?;
@@ -388,11 +395,11 @@ pub(super) struct Driver {
 }
 
 /// Row drivers consume the complete source-only donor set without executing a match.
-pub(super) fn driver<'a, E>(
+pub(super) fn driver<'a: 's, 's, E>(
     run: &mut Run<'_, 'a, E>,
     template: crate::dataset::resolved::TemplateId,
     frame: &Frame,
-    secondary: &[Table<'a, E>],
+    secondary: &[Table<'s, E>],
 ) -> Result<Driver, Fail<E>> {
     let plan = run.plan;
     let node = plan.template(template);
@@ -410,7 +417,7 @@ pub(super) fn driver<'a, E>(
         None => match &item.source {
             IntermediateSource::Input(index) => secondary[*index],
             IntermediateSource::Primary { .. } => Table::Source(run.primary),
-            IntermediateSource::SelfRows { .. } => {
+            IntermediateSource::SelfRows { .. } | IntermediateSource::Pairs(_) => {
                 return Err(Box::new(ExecutionError::SchemaMismatch))
             }
         },
@@ -428,10 +435,10 @@ pub(super) fn driver<'a, E>(
 /// fails the run; each `warning` check, held or violated, is a record in
 /// `records`, those of one pass in declaration order, and a `SELF` check's
 /// one record holds its last evaluation (LOOKUP-17, CHECK-23).
-pub(super) fn verify<'a, E>(
+pub(super) fn verify<'a: 's, 's, E>(
     run: &mut Run<'_, 'a, E>,
     frame: &Frame,
-    secondary: &[Table<'a, E>],
+    secondary: &[Table<'s, E>],
     self_only: bool,
     records: &mut Vec<CheckRecord>,
 ) -> Result<(), Fail<E>> {
@@ -1305,7 +1312,9 @@ fn correlated<E>(
                                 source_row: self.source_row,
                                 error,
                             },
-                            IntermediateSource::SelfRows { .. } => ExecutionError::SchemaMismatch,
+                            IntermediateSource::SelfRows { .. } | IntermediateSource::Pairs(_) => {
+                                ExecutionError::SchemaMismatch
+                            }
                         })
                     })?;
                     owned(value)

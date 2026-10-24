@@ -52,17 +52,16 @@ pub(super) struct Scopes<'a> {
 
 impl Scopes<'_> {
     fn input(&self, owner: &str) -> bool {
-        self.prepared
-            .sources
-            .iter()
-            .any(|source| source.name == owner)
+        super::reads_as_input(self.prepared, owner)
     }
 
+    /// The lookup `owner` names; a pair relation is read as an input is
+    /// (LOOKUP-27).
     fn lookup(&self, owner: &str) -> Option<usize> {
         self.spec
             .intermediates
             .iter()
-            .position(|item| item.id.name == owner)
+            .position(|item| item.id.name == owner && !item.pairs())
     }
 
     /// LOOKUP-5 for each matched aggregate a context evaluates: a key value

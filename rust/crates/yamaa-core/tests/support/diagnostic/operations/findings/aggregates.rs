@@ -156,6 +156,7 @@ fn aggregate_finding(input: &Json) -> Diagnostic {
             Finding::UndeclaredInputKey {
                 path,
                 dataset: text(input, "dataset"),
+                pair: false,
             }
         }
         other => panic!("no aggregate finding {other:?}"),
