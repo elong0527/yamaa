@@ -290,7 +290,7 @@ in its short form is listed under the field it fills.
 | `str_extract` | | `source` | | `pattern`, `group`, `missing`, `no_match` | |
 | `str_replace` | | `source` | | `pattern`, `replacement`, `missing` | |
 | `str_template` | `template` | | | `missing` | |
-| `str_case` | | `source` | | `to`, `missing` | |
+| `str_case` | | `source` | | `to`, `delimiters`, `missing` | |
 | `round_half_away_from_zero` | | `source` | | `digits` | |
 | `aggregate` | `key`, `filter`, `expr` | `group_by` | | | `between`, `derivations` |
 | An `aggregate` derivation | `derivation` | | | `type` | |

@@ -1,0 +1,9 @@
+STUDYID,USUBJID,AESEQ,AETERM,AETERMPC,AETERMPB
+YAMAA-01,YAMAA-01-101,1,NOT RECOVERED/NOT RESOLVED,Not Recovered/Not Resolved,Not Recovered/Not Resolved
+YAMAA-01,YAMAA-01-101,2,NON-CARDIAC CHEST PAIN,Non-Cardiac Chest Pain,Non-Cardiac Chest Pain
+YAMAA-01,YAMAA-01-101,3,MILD (GRADE 1),Mild (Grade 1),Mild (Grade 1)
+YAMAA-01,YAMAA-01-102,1,INVESTIGATOR'S DECISION,Investigator's Decision,Investigator's Decision
+YAMAA-01,YAMAA-01-102,2,2ND DEGREE BURN,2nd Degree Burn,2nd Degree Burn
+YAMAA-01,YAMAA-01-102,3,"PAIN,BACK","Pain,back","Pain,Back"
+YAMAA-01,YAMAA-01-103,1,RASH [LEFT ARM],Rash [left Arm],Rash [Left Arm]
+YAMAA-01,YAMAA-01-103,2,,Not Reported,Not Reported

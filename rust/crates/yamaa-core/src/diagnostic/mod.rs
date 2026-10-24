@@ -229,6 +229,8 @@ conditions! {
     ExtractNoMatch => ("mapping", "unmatched_pattern", Some("COLUMN-10")),
     ExtractUnknown => ("validation", "unknown_field", Some("NAME-3")),
     StrCaseInput => ("validation", "incompatible_input_type", Some("TEXT-1")),
+    StrCaseDelimitersNotTaken => ("validation", "unknown_field", Some("TEXT-5")),
+    StrCaseDelimiters => ("validation", "invalid_field_type", Some("TEXT-5")),
     MappingInput => ("validation", "incompatible_input_type", Some("EXPR-11")),
     MappingAmbiguousDictionary => ("validation", "ambiguous_dictionary", Some("EXPR-12")),
     MappingUnmapped => ("mapping", "unmapped_value", Some("COLUMN-10")),

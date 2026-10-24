@@ -11,8 +11,8 @@ recorded in capitals.
 - `SITE` would be the site name with its first letter capitalized and
   every later letter in lower case.
 
-The requested case, `capitalize`, is none of the four cases a site name
-can be put in: upper, lower, sentence, and title. The request is
+The requested case, `capitalize`, is none of the five cases a site name
+can be put in: upper, lower, sentence, title, and proper. The request is
 rejected before any data is read, and no artifact is accepted.
 
 ## How to fix

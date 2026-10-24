@@ -1037,6 +1037,10 @@ def describe_str_case(node, ctx=None, depth=0):
         + to
         + " case"
     )
+    # A declared list replaces the characters after which proper case starts
+    # a word (TEXT-5).
+    if declared(node, "delimiters"):
+        text += ", starting a word after any of " + literal_text(node["delimiters"])
     return sentence(
         text + handler_phrase(node, "missing", "a missing source", restated=True)
     )

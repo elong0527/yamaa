@@ -605,6 +605,24 @@ class DerivationShapeTests(unittest.TestCase):
         self.assertIn('"N" otherwise', rule)
         self.assertIn('"U" when the condition is unknown', rule)
 
+    def test_proper_case_names_its_declared_word_separators(self):
+        # SAS's six separators are the default and go unstated; a declared
+        # list replaces them, so the sheet quotes it (TEXT-5).
+        for node, expected in (
+            (
+                {"source": "AETERM", "to": "proper"},
+                "Convert AETERM to proper case.",
+            ),
+            (
+                {"source": "AETERM", "to": "proper", "delimiters": " /-(.,["},
+                'Convert AETERM to proper case, starting a word after any of " /-(.,[".',
+            ),
+        ):
+            with self.subTest(case=node):
+                self.assertEqual(
+                    mapping_doc.describe_derivation({"str_case": node}), expected
+                )
+
     def test_case_otherwise_branch_carries_its_own_value(self):
         rule = mapping_doc.describe_derivation(
             {

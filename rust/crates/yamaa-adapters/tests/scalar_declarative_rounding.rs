@@ -1466,6 +1466,117 @@ columns:
             assert!(result.save().unwrap());
             assert_eq!(fs::read(fixture.0.join("output.csv")).unwrap(),"ID,UP,LOW,SENT,TITLE\n1,FOLLOW-UP,follow-up,Follow-up,Follow-Up\n2,\u{00df}\u{0130}\u{00e9}\u{1f642}ABC,\u{00df}\u{0130}\u{00e9}\u{1f642}abc,\u{00df}\u{0130}\u{00e9}\u{1f642}abc,\u{00df}\u{0130}\u{00e9}\u{1f642}Abc\n3,A\0BC,a\0bc,A\0bc,A\0Bc\n4,MiXeD,,,\n".as_bytes());
         }
+        /// The proper-case benchmarks give their authored output and refusal:
+        /// SAS's six delimiters and a declared list, and a list beside
+        /// `title` (TEXT-5).
+        #[test]
+        fn proper_case_benchmarks_reproduce_their_expected_files() {
+            for name in [
+                "adam-adae-proper-case-terms",
+                "negative-str-case-delimiters-mode",
+            ] {
+                crate::support::benchmarks::reproduce(name);
+            }
+        }
+        /// `list` as a YAML double-quoted scalar. A list a row declares is
+        /// printable ASCII or the tab, which the scalar writes as its escape.
+        fn yaml_quoted(list: &str) -> String {
+            let mut quoted = String::from('"');
+            for scalar in list.chars() {
+                match scalar {
+                    '"' | '\\' => {
+                        quoted.push('\\');
+                        quoted.push(scalar);
+                    }
+                    '\t' => quoted.push_str("\\t"),
+                    ' '..='~' => quoted.push(scalar),
+                    other => panic!("a declared list holds {other:?}"),
+                }
+            }
+            quoted.push('"');
+            quoted
+        }
+        #[test]
+        fn proper_raises_the_first_scalar_and_each_scalar_after_a_delimiter() {
+            // The shared proper-case rows (TEXT-5), each read in the column
+            // of its list: P0 takes SAS PROPCASE's six delimiters, and each
+            // later column one list that a row declares.
+            let reference: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(
+                include_str!("fixtures/text_case_reference.json"),
+            )
+            .unwrap();
+            let rows = reference["proper"].as_array().unwrap();
+            assert_eq!(rows.len(), 16, "the authored proper-case rows");
+            let list = |row: &yamaa_core::json::Value| {
+                row.get("delimiters")
+                    .map(|list| list.as_str().unwrap().to_owned())
+            };
+            let mut lists = vec![None];
+            for row in rows {
+                if !lists.contains(&list(row)) {
+                    lists.push(list(row));
+                }
+            }
+            let names = (0..lists.len())
+                .map(|index| format!("P{index}"))
+                .collect::<Vec<_>>();
+            let mut source = format!(
+                "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: output.csv, columns: [ID, {}]}}\ncolumns:\n  - {{name: ID, type: str, derivation: SRC.ID}}\n",
+                names.join(", ")
+            );
+            for (name, list) in names.iter().zip(&lists) {
+                let delimiters = list
+                    .as_deref()
+                    .map(|list| format!(", delimiters: {}", yaml_quoted(list)))
+                    .unwrap_or_default();
+                source.push_str(&format!(
+                    "  - {{name: {name}, type: str, derivation: {{str_case: {{source: SRC.TEXT, to: proper{delimiters}}}}}}}\n"
+                ));
+            }
+            let mut input = String::from("ID,TEXT\n");
+            for (index, row) in rows.iter().enumerate() {
+                let text = row["source"].as_str().unwrap().replace('"', "\"\"");
+                input.push_str(&format!("{index:02},\"{text}\"\n"));
+            }
+            let fixture = bespoke(&source, input.as_bytes());
+            let result = fixture.run();
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            let table = result.output().unwrap();
+            let text = |name: &str| {
+                let column = table.names().position(|written| written == name).unwrap();
+                table
+                    .batches()
+                    .iter()
+                    .flat_map(|batch| {
+                        batch
+                            .column(column)
+                            .as_any()
+                            .downcast_ref::<arrow_array::StringArray>()
+                            .unwrap()
+                            .iter()
+                            .map(|value| value.map(str::to_owned))
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>()
+            };
+            let ids = text("ID");
+            let columns = names.iter().map(|name| text(name)).collect::<Vec<_>>();
+            for (index, row) in rows.iter().enumerate() {
+                let label = format!("{:?} with {:?}", row["source"], list(row));
+                let column = lists
+                    .iter()
+                    .position(|written| *written == list(row))
+                    .unwrap();
+                assert_eq!(
+                    (ids[index].as_deref(), columns[column][index].as_deref()),
+                    (
+                        Some(format!("{index:02}").as_str()),
+                        row["expected"].as_str()
+                    ),
+                    "{label}"
+                );
+            }
+        }
         const MISSING_SPEC: &str = r#"yamaa: "1.0"
 type: spec
 domain: TEST

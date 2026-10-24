@@ -560,7 +560,54 @@ mod scalar {
         }
     }
     mod text_case {
-        use yamaa_core::text_case::{transform, Case};
+        use yamaa_core::text_case::{transform, Case, Delimiters};
+
+        /// The proper-case rows of the adapters' shared truth (TEXT-5), which
+        /// both crates read, so each proves the same authored rows.
+        #[test]
+        fn proper_raises_the_first_scalar_and_each_scalar_after_a_delimiter() {
+            let reference = crate::support::diagnostic::json::read(
+                include_str!("../../yamaa-adapters/tests/fixtures/text_case_reference.json"),
+                "text_case_reference.json",
+            );
+            let rows = reference.field("proper").items();
+            assert_eq!(rows.len(), 16, "the authored proper-case rows");
+            for row in rows {
+                let row = row.closed(&["source", "delimiters", "expected"]);
+                let source = row.field("source").text();
+                let list = row.get("delimiters").map(|list| list.text());
+                let delimiters = list
+                    .map_or(Some(Delimiters::PROPCASE), Delimiters::new)
+                    .expect("a row declares an admitted list");
+                let actual = transform(source, Case::Proper(delimiters));
+                assert_eq!(
+                    (actual.as_str(), actual.len()),
+                    (row.field("expected").text(), source.len()),
+                    "{source:?} with {list:?}"
+                );
+            }
+        }
+
+        /// Without a list, `proper` takes SAS PROPCASE's six delimiters; a
+        /// list names a set only when it holds ASCII scalars, each once, from
+        /// `U+0000` to `U+007F` (TEXT-5).
+        #[test]
+        fn proper_takes_sas_six_delimiters_or_a_list_of_distinct_ascii_scalars() {
+            assert_eq!(
+                Delimiters::new(" /-(.\t"),
+                Some(Delimiters::PROPCASE),
+                "the blank, slash, hyphen, open parenthesis, period and tab"
+            );
+            for (list, admitted, label) in [
+                ("", false, "an empty list"),
+                ("-/-", false, "a repeated scalar"),
+                ("-\u{80}", false, "the first scalar outside ASCII"),
+                ("\0", true, "the first ASCII scalar"),
+                ("\u{7f}", true, "the last ASCII scalar"),
+            ] {
+                assert_eq!(Delimiters::new(list).is_some(), admitted, "{label}");
+            }
+        }
 
         #[test]
         fn normative_ascii_modes_preserve_foreign_scalars_and_first_scalar_boundaries() {
@@ -649,11 +696,21 @@ mod scalar {
             for source in [
                 "\u{00df}", "\u{0130}", "\u{0131}", "\u{212a}", "\u{00e9}", "\u{00c9}",
             ] {
-                for mode in [Case::Upper, Case::Lower, Case::Sentence, Case::Title] {
+                for mode in [
+                    Case::Upper,
+                    Case::Lower,
+                    Case::Sentence,
+                    Case::Title,
+                    Case::Proper(Delimiters::PROPCASE),
+                ] {
                     assert_eq!(transform(source, mode), source);
                 }
             }
-            for mode in [Case::Sentence, Case::Title] {
+            for mode in [
+                Case::Sentence,
+                Case::Title,
+                Case::Proper(Delimiters::PROPCASE),
+            ] {
                 assert_eq!(transform("", mode), "");
             }
         }

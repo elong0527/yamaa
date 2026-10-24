@@ -316,6 +316,12 @@ EXPECTED = {
     ],
     "new.spec.clear": [Field("root_class", "clear", "list[spec_path]")],
     "new.spec.include": [Field("root_class", "include", "list[project_path]")],
+    # D264: str_case writes proper case as SAS PROPCASE does, after the
+    # delimiters a declared list names (TEXT-5).
+    "new.spec.str_case.to=proper": [Values("expressions.str_case", "to", ("proper",))],
+    "new.spec.str_case.delimiters": [
+        Field("expressions.str_case", "delimiters", "str")
+    ],
     # A lint suppression comment and a profile chosen by the path's
     # extension: neither is a schema field.
     "new.any.suppression_comment": [],
