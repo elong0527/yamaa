@@ -1,11 +1,12 @@
 {
-  "about": "A child inherits its parent's meaning (LAYER-5): an empty child saves what its parent saves and fails as its parent fails. An aggregate's derive bindings stay local to it, whether a later binding reads an earlier one or a binding shares an output column's name, so none becomes a column dependency: subject 1's exposures start on 2025-01-05 and 2025-01-02, so its earliest is 2025-01-02, epoch day 20090, and subject 2's is 2025-02-10, epoch day 20129. An intermediate whose verification is its only use stays in the run (LAYER-11), so when two donor records of kind X share code A, parent and empty child both fail as duplicate_intermediate_records (LOOKUP-17), whether or not a column reads it; #2189 pruned it, and the child saved. An intermediate with empty verifications that nothing reads keeps neither itself nor its input, whose file does not exist, in the run. An intermediate a child declares under an input's name collides with it as in a flat specification, in the check as in the build (SCHEMA-8, LOOKUP-3). No benchmark composes these through a child: the one empty layer, negative-cyclic-parent's layers/parent.yaml, sits in a refused cycle. negative-lookup-id-collision and negative-lookup-duplicate-intermediate refuse the flat collision and the duplicate records, and schema-inheritance keeps an unread inherited intermediate out of its run. Moved from execution_declarative_self.rs, whose tests compared the saved artifact, or each issue's phase, condition, rule, spec paths and context; the collision's spec paths are the intermediate's id, then the input, as negative-lookup-id-collision's error.yaml writes them.",
+  "about": "A child inherits its parent's meaning (LAYER-5): an empty child saves what its parent saves and fails as its parent fails. An aggregate's derive bindings stay local to it, whether a later binding reads an earlier one or a binding shares an output column's name, so none becomes a column dependency: subject 1's exposures start on 2025-01-05 and 2025-01-02, so its earliest is 2025-01-02, epoch day 20090, and subject 2's is 2025-02-10, epoch day 20129. An intermediate whose verification is its only use stays in the run (LAYER-11), so when two donor records of kind X share code A, parent and empty child both fail as duplicate_intermediate_records (LOOKUP-17), whether or not a column reads it; #2189 pruned it, and the child saved. An intermediate with empty verifications that nothing reads keeps neither itself nor its input, whose file does not exist, in the run. An intermediate a child declares under an input's name collides with it as in a flat specification, in the check as in the build (SCHEMA-8, LOOKUP-3). A lookup's or an aggregate's key keeps the current-row columns it reads when the resolver prunes, whether the key is a list or a mapping and the read is plain, in a case result, in a row template or an aggregate's, so each parent and its empty child check clean and save the same artifact: each code matches one label, and one REF record. No benchmark composes these through a child: the one empty layer, negative-cyclic-parent's layers/parent.yaml, sits in a refused cycle. negative-lookup-id-collision and negative-lookup-duplicate-intermediate refuse the flat collision and the duplicate records, and schema-inheritance keeps an unread inherited intermediate out of its run. Moved from execution_declarative_self.rs, whose tests compared the saved artifact, an empty static check, or each issue's phase, condition, rule, spec paths and context; the collision's spec paths are the intermediate's id, then the input, as negative-lookup-id-collision's error.yaml writes them.",
   "documents": {
     "child": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n",
     "aggregate_parent": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: DM\ninput: {DM: dm.csv, EX: {path: ex.csv, key: [ID]}}\noutput: {path: result.csv, columns: [ID, RESULT]}\ncolumns:\n  - {name: ID, type: str, derivation: DM.ID}\n  - name: RESULT\n    type: date\n    derivation:\n      aggregate:\n        expr: MIN(STDT)\n        derivations:\n          STDT: {type: date, derivation: {to_date: {source: EX.EXSTDTC}}}\n",
     "collision_parent": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: OBS\ninput: {OBS: obs.csv, REF: ref.csv}\noutput: {path: result.csv, columns: [ID, TRT]}\ncolumns:\n  - {name: ID, type: str, derivation: OBS.ID}\n  - {name: TRT, type: str, derivation: REF.TRT}\n",
     "verification_parent": "yamaa: \"1.0\"\ntype: spec\ndomain: PV\nkeys: [ID]\ninput: {OBS: obs.csv, REF: ref.csv}\nbase: OBS\nintermediates:\n  - id: REFCHK\n    dataset: REF\n    key: {CODE: CODE}\n    filter: \"REF.KIND = 'X'\"\n    verifications:\n      - unique: [CODE]\noutput: {path: result.csv, columns: [ID, CODE]}\ncolumns:\n  - {name: ID, type: str, derivation: OBS.ID}\n  - {name: CODE, type: str, derivation: OBS.CODE}\n",
-    "unread_parent": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: OBS\ninput: {OBS: obs.csv, UNUSED: absent.csv}\noutput: {path: result.csv, columns: [ID]}\nintermediates:\n  - id: UNREAD\n    dataset: UNUSED\n    key: [ID]\n    require_match: true\n    verifications: []\ncolumns:\n  - {name: ID, type: str, derivation: OBS.ID}\n"
+    "unread_parent": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: OBS\ninput: {OBS: obs.csv, UNUSED: absent.csv}\noutput: {path: result.csv, columns: [ID]}\nintermediates:\n  - id: UNREAD\n    dataset: UNUSED\n    key: [ID]\n    require_match: true\n    verifications: []\ncolumns:\n  - {name: ID, type: str, derivation: OBS.ID}\n",
+    "lookup_parent": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {OBS: obs.csv, REF: ref.csv}\nbase: OBS\noutput: {path: result.csv, columns: [ID, RESULT]}\nintermediates:\n  - {id: REFLOOK, dataset: REF, key: [CODE]}\ncolumns:\n  - {name: ID, type: str, derivation: OBS.ID}\n  - {name: CODE, type: str, derivation: OBS.CODE}\n  - {name: RESULT, type: str, derivation: REFLOOK.LABEL}\n"
   },
   "cases": [
     {
@@ -333,6 +334,214 @@
       },
       "issues": [],
       "saved": {"result.csv": "ID\n1\n2\n"}
+    },
+    {
+      "case": "a_lookup_read_through_a_list_key_checks_clean_in_the_parent",
+      "operation": "check",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent"}, "child.yaml": {"base": "child"}}, "specification": "parent.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_lookup_read_through_a_list_key_survives_pruning_in_the_parent",
+      "operation": "save",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent"}, "child.yaml": {"base": "child"}}, "specification": "parent.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT\n1,Alpha\n2,Beta\n"}
+    },
+    {
+      "case": "a_lookup_read_through_a_list_key_checks_clean_in_an_empty_child",
+      "operation": "check",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent"}, "child.yaml": {"base": "child"}}, "specification": "child.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_lookup_read_through_a_list_key_survives_pruning_in_an_empty_child",
+      "operation": "save",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent"}, "child.yaml": {"base": "child"}}, "specification": "child.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT\n1,Alpha\n2,Beta\n"}
+    },
+    {
+      "case": "a_case_read_through_a_list_key_checks_clean_in_the_parent",
+      "operation": "check",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "derivation: REFLOOK.LABEL}\n", "to": "derivation: {case: [{when: \"CODE = 'A'\", then: REFLOOK.LABEL}, {otherwise: REFLOOK.LABEL}]}}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "parent.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_case_read_through_a_list_key_survives_pruning_in_the_parent",
+      "operation": "save",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "derivation: REFLOOK.LABEL}\n", "to": "derivation: {case: [{when: \"CODE = 'A'\", then: REFLOOK.LABEL}, {otherwise: REFLOOK.LABEL}]}}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "parent.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT\n1,Alpha\n2,Beta\n"}
+    },
+    {
+      "case": "a_case_read_through_a_list_key_checks_clean_in_an_empty_child",
+      "operation": "check",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "derivation: REFLOOK.LABEL}\n", "to": "derivation: {case: [{when: \"CODE = 'A'\", then: REFLOOK.LABEL}, {otherwise: REFLOOK.LABEL}]}}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "child.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_case_read_through_a_list_key_survives_pruning_in_an_empty_child",
+      "operation": "save",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "derivation: REFLOOK.LABEL}\n", "to": "derivation: {case: [{when: \"CODE = 'A'\", then: REFLOOK.LABEL}, {otherwise: REFLOOK.LABEL}]}}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "child.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT\n1,Alpha\n2,Beta\n"}
+    },
+    {
+      "case": "a_row_template_read_through_a_list_key_checks_clean_in_the_parent",
+      "operation": "check",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "  - {name: ID, type: str, derivation: OBS.ID}\n  - {name: CODE, type: str, derivation: OBS.CODE}\n  - {name: RESULT, type: str, derivation: REFLOOK.LABEL}\n", "to": "  - {name: ID, type: str}\n  - {name: CODE, type: str}\n  - {name: RESULT, type: str}\nrows:\n  - id: ROW\n    dataset: OBS\n    derivations: {ID: OBS.ID, CODE: OBS.CODE, RESULT: REFLOOK.LABEL}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "parent.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_row_template_read_through_a_list_key_survives_pruning_in_the_parent",
+      "operation": "save",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "  - {name: ID, type: str, derivation: OBS.ID}\n  - {name: CODE, type: str, derivation: OBS.CODE}\n  - {name: RESULT, type: str, derivation: REFLOOK.LABEL}\n", "to": "  - {name: ID, type: str}\n  - {name: CODE, type: str}\n  - {name: RESULT, type: str}\nrows:\n  - id: ROW\n    dataset: OBS\n    derivations: {ID: OBS.ID, CODE: OBS.CODE, RESULT: REFLOOK.LABEL}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "parent.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT\n1,Alpha\n2,Beta\n"}
+    },
+    {
+      "case": "a_row_template_read_through_a_list_key_checks_clean_in_an_empty_child",
+      "operation": "check",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "  - {name: ID, type: str, derivation: OBS.ID}\n  - {name: CODE, type: str, derivation: OBS.CODE}\n  - {name: RESULT, type: str, derivation: REFLOOK.LABEL}\n", "to": "  - {name: ID, type: str}\n  - {name: CODE, type: str}\n  - {name: RESULT, type: str}\nrows:\n  - id: ROW\n    dataset: OBS\n    derivations: {ID: OBS.ID, CODE: OBS.CODE, RESULT: REFLOOK.LABEL}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "child.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_row_template_read_through_a_list_key_survives_pruning_in_an_empty_child",
+      "operation": "save",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "  - {name: ID, type: str, derivation: OBS.ID}\n  - {name: CODE, type: str, derivation: OBS.CODE}\n  - {name: RESULT, type: str, derivation: REFLOOK.LABEL}\n", "to": "  - {name: ID, type: str}\n  - {name: CODE, type: str}\n  - {name: RESULT, type: str}\nrows:\n  - id: ROW\n    dataset: OBS\n    derivations: {ID: OBS.ID, CODE: OBS.CODE, RESULT: REFLOOK.LABEL}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "child.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT\n1,Alpha\n2,Beta\n"}
+    },
+    {
+      "case": "an_aggregate_through_a_list_key_checks_clean_in_the_parent",
+      "operation": "check",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "intermediates:\n  - {id: REFLOOK, dataset: REF, key: [CODE]}\n", "to": ""}, {"from": "  - {name: RESULT, type: str, derivation: REFLOOK.LABEL}\n", "to": "  - {name: RESULT, type: int, derivation: {aggregate: {key: [CODE], expr: COUNT(REF.LABEL)}}}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "parent.yaml"},
+      "issues": []
+    },
+    {
+      "case": "an_aggregate_through_a_list_key_survives_pruning_in_the_parent",
+      "operation": "save",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "intermediates:\n  - {id: REFLOOK, dataset: REF, key: [CODE]}\n", "to": ""}, {"from": "  - {name: RESULT, type: str, derivation: REFLOOK.LABEL}\n", "to": "  - {name: RESULT, type: int, derivation: {aggregate: {key: [CODE], expr: COUNT(REF.LABEL)}}}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "parent.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT\n1,1\n2,1\n"}
+    },
+    {
+      "case": "an_aggregate_through_a_list_key_checks_clean_in_an_empty_child",
+      "operation": "check",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "intermediates:\n  - {id: REFLOOK, dataset: REF, key: [CODE]}\n", "to": ""}, {"from": "  - {name: RESULT, type: str, derivation: REFLOOK.LABEL}\n", "to": "  - {name: RESULT, type: int, derivation: {aggregate: {key: [CODE], expr: COUNT(REF.LABEL)}}}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "child.yaml"},
+      "issues": []
+    },
+    {
+      "case": "an_aggregate_through_a_list_key_survives_pruning_in_an_empty_child",
+      "operation": "save",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "intermediates:\n  - {id: REFLOOK, dataset: REF, key: [CODE]}\n", "to": ""}, {"from": "  - {name: RESULT, type: str, derivation: REFLOOK.LABEL}\n", "to": "  - {name: RESULT, type: int, derivation: {aggregate: {key: [CODE], expr: COUNT(REF.LABEL)}}}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "child.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT\n1,1\n2,1\n"}
+    },
+    {
+      "case": "a_lookup_read_through_a_mapped_key_checks_clean_in_the_parent",
+      "operation": "check",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "key: [CODE]}", "to": "key: {CODE: CODE}}"}]}, "child.yaml": {"base": "child"}}, "specification": "parent.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_lookup_read_through_a_mapped_key_survives_pruning_in_the_parent",
+      "operation": "save",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "key: [CODE]}", "to": "key: {CODE: CODE}}"}]}, "child.yaml": {"base": "child"}}, "specification": "parent.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT\n1,Alpha\n2,Beta\n"}
+    },
+    {
+      "case": "a_lookup_read_through_a_mapped_key_checks_clean_in_an_empty_child",
+      "operation": "check",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "key: [CODE]}", "to": "key: {CODE: CODE}}"}]}, "child.yaml": {"base": "child"}}, "specification": "child.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_lookup_read_through_a_mapped_key_survives_pruning_in_an_empty_child",
+      "operation": "save",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "key: [CODE]}", "to": "key: {CODE: CODE}}"}]}, "child.yaml": {"base": "child"}}, "specification": "child.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT\n1,Alpha\n2,Beta\n"}
+    },
+    {
+      "case": "a_case_read_through_a_mapped_key_checks_clean_in_the_parent",
+      "operation": "check",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "key: [CODE]}", "to": "key: {CODE: CODE}}"}, {"from": "derivation: REFLOOK.LABEL}\n", "to": "derivation: {case: [{when: \"CODE = 'A'\", then: REFLOOK.LABEL}, {otherwise: REFLOOK.LABEL}]}}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "parent.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_case_read_through_a_mapped_key_survives_pruning_in_the_parent",
+      "operation": "save",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "key: [CODE]}", "to": "key: {CODE: CODE}}"}, {"from": "derivation: REFLOOK.LABEL}\n", "to": "derivation: {case: [{when: \"CODE = 'A'\", then: REFLOOK.LABEL}, {otherwise: REFLOOK.LABEL}]}}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "parent.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT\n1,Alpha\n2,Beta\n"}
+    },
+    {
+      "case": "a_case_read_through_a_mapped_key_checks_clean_in_an_empty_child",
+      "operation": "check",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "key: [CODE]}", "to": "key: {CODE: CODE}}"}, {"from": "derivation: REFLOOK.LABEL}\n", "to": "derivation: {case: [{when: \"CODE = 'A'\", then: REFLOOK.LABEL}, {otherwise: REFLOOK.LABEL}]}}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "child.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_case_read_through_a_mapped_key_survives_pruning_in_an_empty_child",
+      "operation": "save",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "key: [CODE]}", "to": "key: {CODE: CODE}}"}, {"from": "derivation: REFLOOK.LABEL}\n", "to": "derivation: {case: [{when: \"CODE = 'A'\", then: REFLOOK.LABEL}, {otherwise: REFLOOK.LABEL}]}}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "child.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT\n1,Alpha\n2,Beta\n"}
+    },
+    {
+      "case": "a_row_template_read_through_a_mapped_key_checks_clean_in_the_parent",
+      "operation": "check",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "key: [CODE]}", "to": "key: {CODE: CODE}}"}, {"from": "  - {name: ID, type: str, derivation: OBS.ID}\n  - {name: CODE, type: str, derivation: OBS.CODE}\n  - {name: RESULT, type: str, derivation: REFLOOK.LABEL}\n", "to": "  - {name: ID, type: str}\n  - {name: CODE, type: str}\n  - {name: RESULT, type: str}\nrows:\n  - id: ROW\n    dataset: OBS\n    derivations: {ID: OBS.ID, CODE: OBS.CODE, RESULT: REFLOOK.LABEL}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "parent.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_row_template_read_through_a_mapped_key_survives_pruning_in_the_parent",
+      "operation": "save",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "key: [CODE]}", "to": "key: {CODE: CODE}}"}, {"from": "  - {name: ID, type: str, derivation: OBS.ID}\n  - {name: CODE, type: str, derivation: OBS.CODE}\n  - {name: RESULT, type: str, derivation: REFLOOK.LABEL}\n", "to": "  - {name: ID, type: str}\n  - {name: CODE, type: str}\n  - {name: RESULT, type: str}\nrows:\n  - id: ROW\n    dataset: OBS\n    derivations: {ID: OBS.ID, CODE: OBS.CODE, RESULT: REFLOOK.LABEL}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "parent.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT\n1,Alpha\n2,Beta\n"}
+    },
+    {
+      "case": "a_row_template_read_through_a_mapped_key_checks_clean_in_an_empty_child",
+      "operation": "check",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "key: [CODE]}", "to": "key: {CODE: CODE}}"}, {"from": "  - {name: ID, type: str, derivation: OBS.ID}\n  - {name: CODE, type: str, derivation: OBS.CODE}\n  - {name: RESULT, type: str, derivation: REFLOOK.LABEL}\n", "to": "  - {name: ID, type: str}\n  - {name: CODE, type: str}\n  - {name: RESULT, type: str}\nrows:\n  - id: ROW\n    dataset: OBS\n    derivations: {ID: OBS.ID, CODE: OBS.CODE, RESULT: REFLOOK.LABEL}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "child.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_row_template_read_through_a_mapped_key_survives_pruning_in_an_empty_child",
+      "operation": "save",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "key: [CODE]}", "to": "key: {CODE: CODE}}"}, {"from": "  - {name: ID, type: str, derivation: OBS.ID}\n  - {name: CODE, type: str, derivation: OBS.CODE}\n  - {name: RESULT, type: str, derivation: REFLOOK.LABEL}\n", "to": "  - {name: ID, type: str}\n  - {name: CODE, type: str}\n  - {name: RESULT, type: str}\nrows:\n  - id: ROW\n    dataset: OBS\n    derivations: {ID: OBS.ID, CODE: OBS.CODE, RESULT: REFLOOK.LABEL}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "child.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT\n1,Alpha\n2,Beta\n"}
+    },
+    {
+      "case": "an_aggregate_through_a_mapped_key_checks_clean_in_the_parent",
+      "operation": "check",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "intermediates:\n  - {id: REFLOOK, dataset: REF, key: [CODE]}\n", "to": ""}, {"from": "  - {name: RESULT, type: str, derivation: REFLOOK.LABEL}\n", "to": "  - {name: RESULT, type: int, derivation: {aggregate: {key: {CODE: CODE}, expr: COUNT(REF.LABEL)}}}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "parent.yaml"},
+      "issues": []
+    },
+    {
+      "case": "an_aggregate_through_a_mapped_key_survives_pruning_in_the_parent",
+      "operation": "save",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "intermediates:\n  - {id: REFLOOK, dataset: REF, key: [CODE]}\n", "to": ""}, {"from": "  - {name: RESULT, type: str, derivation: REFLOOK.LABEL}\n", "to": "  - {name: RESULT, type: int, derivation: {aggregate: {key: {CODE: CODE}, expr: COUNT(REF.LABEL)}}}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "parent.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT\n1,1\n2,1\n"}
+    },
+    {
+      "case": "an_aggregate_through_a_mapped_key_checks_clean_in_an_empty_child",
+      "operation": "check",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "intermediates:\n  - {id: REFLOOK, dataset: REF, key: [CODE]}\n", "to": ""}, {"from": "  - {name: RESULT, type: str, derivation: REFLOOK.LABEL}\n", "to": "  - {name: RESULT, type: int, derivation: {aggregate: {key: {CODE: CODE}, expr: COUNT(REF.LABEL)}}}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "child.yaml"},
+      "issues": []
+    },
+    {
+      "case": "an_aggregate_through_a_mapped_key_survives_pruning_in_an_empty_child",
+      "operation": "save",
+      "input": {"files": {"obs.csv": "ID,CODE\n1,A\n2,B\n", "ref.csv": "CODE,LABEL\nA,Alpha\nB,Beta\n", "parent.yaml": {"base": "lookup_parent", "edits": [{"from": "intermediates:\n  - {id: REFLOOK, dataset: REF, key: [CODE]}\n", "to": ""}, {"from": "  - {name: RESULT, type: str, derivation: REFLOOK.LABEL}\n", "to": "  - {name: RESULT, type: int, derivation: {aggregate: {key: {CODE: CODE}, expr: COUNT(REF.LABEL)}}}\n"}]}, "child.yaml": {"base": "child"}}, "specification": "child.yaml"},
+      "issues": [],
+      "saved": {"result.csv": "ID,RESULT\n1,1\n2,1\n"}
     }
   ]
 }

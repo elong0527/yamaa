@@ -1,13 +1,12 @@
 #![cfg(feature = "yaml")]
-//! Execution contracts: declarative source selection, diagnostic sites, empty
-//! child condition, inherited lookup keys, integer literal overflow,
-//! intermediate dependencies, intermediate row drivers, key expressions,
-//! namespace admission, nested windows, original named windows, original
-//! verification, predicate suggestions, missing order and baseline operands.
-//! The declarative SELF cases and those of inherited aggregate bindings,
-//! identifier collisions and intermediate verifications are in
-//! `tests/fixtures/diagnostics/`, `declarative_self.json` and
-//! `inheritance.json` (#3798).
+//! Execution contracts read from shared truth: declarative source selection,
+//! diagnostic sites, empty child condition, intermediate dependencies,
+//! intermediate row drivers, key expressions, namespace admission, the window
+//! defaults of an output key, and predicate suggestions. The family's other
+//! cases are in `tests/fixtures/diagnostics/`: `declarative_self.json`,
+//! `inheritance.json`, `integer_literals.json`, `windows.json`,
+//! `verification.json` and `missing_order.json` (#3798); `refused_domains`
+//! holds the seam their refusals keep in Rust (#3845).
 
 mod execution {
     mod declarative_source_selection {
@@ -422,310 +421,13 @@ mod execution {
             );
         }
     }
-    mod inherited_lookup_keys {
-        //! An inherited lookup key retains its internal current-row dependencies.
-        use std::fs;
-        use yamaa_adapters::file_application;
-        use yamaa_core::domain_entry::Request;
-        struct Fixture(crate::support::Scratch);
-        impl Fixture {
-            fn new() -> Self {
-                let path = crate::support::Scratch::new("inherited-keys");
-                Self(path)
-            }
-            fn build(&self, name: &str) -> file_application::Domain {
-                let path = self.0.join(name);
-                let path = path.to_str().unwrap();
-                let identity = || crate::support::study::identity("inherited-keys", path);
-                assert!(file_application::check(
-                    yamaa_core::project_function::Language::Python,
-                    Request {
-                        specification: path,
-                        environment: None
-                    },
-                    identity()
-                )
-                .is_empty());
-                crate::support::study::domain(
-                    yamaa_core::project_function::Language::Python,
-                    Request {
-                        specification: path,
-                        environment: None,
-                    },
-                    identity(),
-                )
-                .unwrap()
-            }
-        }
-        /// No benchmark composes lookup and aggregate keys through an empty
-        /// child: the one empty layer, `negative-cyclic-parent`'s
-        /// `layers/parent.yaml`, sits in a refused cycle.
-        #[test]
-        fn lookup_and_aggregate_keys_survive_pruning_in_plain_case_and_row_derivations() {
-            for key in ["[CODE]", "{CODE: CODE}"] {
-                for shape in ["lookup", "case", "row", "aggregate"] {
-                    let fixture = Fixture::new();
-                    fs::write(fixture.0.join("obs.csv"), "ID,CODE\n1,A\n2,B\n").unwrap();
-                    fs::write(fixture.0.join("ref.csv"), "CODE,LABEL\nA,Alpha\nB,Beta\n").unwrap();
-                    let lookup =
-                        format!("intermediates:\n  - {{id: REFLOOK, dataset: REF, key: {key}}}\n");
-                    let derive = match shape {
-                "case" => "{case: [{when: \"CODE = 'A'\", then: REFLOOK.LABEL}, {otherwise: REFLOOK.LABEL}]}".to_owned(),
-                "aggregate" => format!("{{aggregate: {{key: {key}, expr: COUNT(REF.LABEL)}}}}"),
-                _ => "REFLOOK.LABEL".to_owned(),
-            };
-                    let (declarations, rows) = if shape == "row" {
-                        ("  - {name: ID, type: str}\n  - {name: CODE, type: str}\n  - {name: RESULT, type: str}\n".to_owned(), format!("rows:\n  - id: ROW\n    dataset: OBS\n    derivations: {{ID: OBS.ID, CODE: OBS.CODE, RESULT: {derive}}}\n"))
-                    } else {
-                        (format!("  - {{name: ID, type: str, derivation: OBS.ID}}\n  - {{name: CODE, type: str, derivation: OBS.CODE}}\n  - {{name: RESULT, type: {}, derivation: {derive}}}\n", if shape == "aggregate" {"int"} else {"str"}), String::new())
-                    };
-                    let parent = format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{OBS: obs.csv, REF: ref.csv}}\nbase: OBS\noutput: {{path: result.csv, columns: [ID, RESULT]}}\n{}columns:\n{declarations}{rows}", if shape == "aggregate" {""} else {&lookup});
-                    fs::write(fixture.0.join("parent.yaml"), parent).unwrap();
-                    fs::write(
-                        fixture.0.join("child.yaml"),
-                        "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n",
-                    )
-                    .unwrap();
-                    for entry in ["parent.yaml", "child.yaml"] {
-                        let mut result = fixture.build(entry);
-                        assert!(
-                            result.issues().is_empty(),
-                            "{key} {shape} {entry}: {:?}",
-                            result.issues()
-                        );
-                        assert!(result.save().unwrap());
-                        let expected = if shape == "aggregate" {
-                            "ID,RESULT\n1,1\n2,1\n"
-                        } else {
-                            "ID,RESULT\n1,Alpha\n2,Beta\n"
-                        };
-                        assert_eq!(
-                            fs::read_to_string(fixture.0.join("result.csv")).unwrap(),
-                            expected,
-                            "{key} {shape} {entry}"
-                        );
-                    }
-                }
-            }
-        }
-    }
-    mod integer_literal_overflow {
-        //! Signed-i64 runtime literals fail before study access, with the same complete
-        //! issue in both shared host routes. Declaration count bounds stay mathematical.
-        use std::fs;
-        use yamaa_adapters::{file_application, specification_report::Identity};
-        use yamaa_core::diagnostic::Diagnostic;
-        use yamaa_core::domain_entry::Request;
-
-        struct Fixture(crate::support::Scratch);
-        impl Fixture {
-            fn new(column: &str, extra: &str) -> Self {
-                let root = crate::support::Scratch::new("integer-literal");
-                fs::write(root.join("spec.yaml"), format!(
-            "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput: {{DM: input.csv}}\noutput: {{path: out.csv, columns: [USUBJID, N]}}\ncolumns:\n  - {{name: USUBJID, type: str, derivation: DM.USUBJID}}\n{column}\n{extra}"
-        )).unwrap();
-                Self(root)
-            }
-
-            fn input(&self) {
-                fs::write(self.0.join("input.csv"), "USUBJID,AGE\nS-001,34\n").unwrap();
-            }
-
-            fn specification(&self) -> String {
-                self.0.join("spec.yaml").to_str().unwrap().to_owned()
-            }
-        }
-
-        fn identity<'a>(runtime: &'a str, specification: &'a str) -> Identity<'a> {
-            Identity {
-                runtime,
-                runtime_version: "test",
-                engine_version: yamaa_core::VERSION,
-                example: "integer-literal-overflow",
-                specification,
-                base_directory: ".",
-            }
-        }
-
-        fn issue(value: &Diagnostic) -> yamaa_core::json::Value {
-            crate::support::study::issue_row(value)
-        }
-
-        fn assert_overflow(fixture: &Fixture, path: &str, actual: &str) {
-            let mut expected: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(
-                include_str!("fixtures/integer_literal_overflow.json"),
-            )
-            .unwrap();
-            expected["spec_paths"] = yamaa_adapters::json!([path]);
-            expected["context"]["actual"] = yamaa_adapters::json_wire::decode(actual).unwrap();
-            // The literal's canonical text, which the message names.
-            expected["context"]["value"] = yamaa_core::json::Value::String(actual.into());
-            let specification = fixture.specification();
-            for runtime in ["python", "r"] {
-                let request = || Request {
-                    specification: &specification,
-                    environment: None,
-                };
-                let checked = file_application::check(
-                    crate::support::host(runtime),
-                    request(),
-                    identity(runtime, &specification),
-                );
-                let built = match crate::support::study::domain(
-                    crate::support::host(runtime),
-                    request(),
-                    identity(runtime, &specification),
-                ) {
-                    Ok(domain) => domain.issues(),
-                    Err(issues) => issues,
-                };
-                for (route, issues) in [("check", checked), ("domain", built)] {
-                    assert_eq!(issues.len(), 1, "{runtime}/{route}: {issues:?}");
-                    assert_eq!(issue(&issues[0]), expected, "{runtime}/{route}: {path}");
-                }
-            }
-            assert!(!fixture.0.join("out.csv").exists());
-        }
-
-        /// No benchmark refuses an integer literal beyond 64 bits in either
-        /// host route: `negative-integer-overflow` overflows a product while
-        /// the run derives it.
-        #[test]
-        fn wide_runtime_literals_report_validation_before_missing_study_input() {
-            let huge = format!("1{}", "0".repeat(400));
-            for (written, actual) in [
-                ("9223372036854775808", "9223372036854775808"),
-                ("-9223372036854775809", "-9223372036854775809"),
-                ("18446744073709551616", "18446744073709551616"),
-                ("0x8000000000000000", "9223372036854775808"),
-                (huge.as_str(), huge.as_str()),
-            ] {
-                let cases = [
-            (format!("  - {{name: N, type: int, derivation: {written}}}"), "columns.N.derivation"),
-            (format!("  - {{name: N, type: float, derivation: {written}}}"), "columns.N.derivation"),
-            (format!("  - {{name: N, type: str, derivation: {written}}}"), "columns.N.derivation"),
-            (format!("  - {{name: N, type: int, derivation: DM.AGE, verifications: [{{allowed_values: {{values: [34, {written}]}}}}]}}"), "columns.N.verifications[0].allowed_values.values[1]"),
-            (format!("  - {{name: N, type: int, derivation: DM.AGE, verifications: [{{range: {{min: {written}}}}}]}}"), "columns.N.verifications[0].range.min"),
-            (format!("  - {{name: N, type: int, derivation: DM.AGE, verifications: [{{range: {{max: {written}}}}}]}}"), "columns.N.verifications[0].range.max"),
-            (format!("  - {{name: N, type: str, derivation: DM.USUBJID, verifications: [{{max_length: {{max: {written}}}}}]}}"), "columns.N.verifications[0].max_length.max"),
-            (format!("  - {{name: N, type: int, derivation: {{value: DM.AGE, unconvertible: {written}}}}}"), "columns.N.derivation.unconvertible"),
-        ];
-                for (column, path) in cases {
-                    // No input.csv exists: preparation must report the literal, before IO.
-                    assert_overflow(&Fixture::new(&column, ""), path, actual);
-                }
-            }
-        }
-
-        /// No benchmark refuses a wide literal in a row template or in an
-        /// unselected case branch, directly or through a child.
-        #[test]
-        fn row_and_unselected_case_literals_keep_their_authored_paths() {
-            let wide = "9223372036854775808";
-            let row = Fixture::new(
-                "  - {name: N, type: int}",
-                &format!("rows:\n  - {{id: record, dataset: DM, derivations: {{N: {wide}}}}}\n"),
-            );
-            assert_overflow(&row, "rows.record.derivations.N", wide);
-            let case = Fixture::new(
-        &format!("  - {{name: N, type: int, derivation: {{case: [{{when: 'FALSE', then: {wide}}}, {{otherwise: 0}}]}}}}"),
-        "",
-    );
-            assert_overflow(&case, "columns.N.derivation.case[0].then", wide);
-            fs::rename(case.0.join("spec.yaml"), case.0.join("parent.yaml")).unwrap();
-            fs::write(
-                case.0.join("spec.yaml"),
-                "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n",
-            )
-            .unwrap();
-            assert_overflow(&case, "columns.N.derivation.case[0].then", wide);
-        }
-
-        /// No benchmark writes the 64-bit integer endpoints, a hexadecimal
-        /// literal, or a wide number quoted as text or written as a float.
-        #[test]
-        fn integer_endpoints_quoted_identifiers_and_explicit_floats_still_build() {
-            for (kind, written, expected) in [
-                ("int", "-9223372036854775808", "-9223372036854775808"),
-                ("int", "9223372036854775807", "9223372036854775807"),
-                ("int", "0x7fffffffffffffff", "9223372036854775807"),
-                ("str", "\"'9223372036854775808'\"", "9223372036854775808"),
-                ("float", "9223372036854775808.0", "9223372036854776000"),
-            ] {
-                let fixture = Fixture::new(
-                    &format!("  - {{name: N, type: {kind}, derivation: {written}}}"),
-                    "",
-                );
-                fixture.input();
-                let specification = fixture.specification();
-                for runtime in ["python", "r"] {
-                    let request = || Request {
-                        specification: &specification,
-                        environment: None,
-                    };
-                    assert!(file_application::check(
-                        crate::support::host(runtime),
-                        request(),
-                        identity(runtime, &specification)
-                    )
-                    .is_empty());
-                    let mut domain = crate::support::study::domain(
-                        crate::support::host(runtime),
-                        request(),
-                        identity(runtime, &specification),
-                    )
-                    .unwrap();
-                    assert!(
-                        domain.issues().is_empty(),
-                        "{written}: {:?}",
-                        domain.issues()
-                    );
-                    assert!(domain.save().unwrap());
-                    assert_eq!(
-                        fs::read_to_string(fixture.0.join("out.csv")).unwrap(),
-                        format!("USUBJID,N\nS-001,{expected}\n")
-                    );
-                }
-            }
-        }
-
-        /// No benchmark bounds a row count beyond 64 bits.
-        #[test]
-        fn wide_mathematical_count_bounds_still_check_and_build() {
-            for maximum in [
-                "9223372036854775808".to_owned(),
-                format!("1{}", "0".repeat(400)),
-            ] {
-                let fixture = Fixture::new(
-                    "  - {name: N, type: int, derivation: DM.AGE}",
-                    &format!("verifications:\n  - row_count: {{max: {maximum}}}\n"),
-                );
-                fixture.input();
-                let specification = fixture.specification();
-                for runtime in ["python", "r"] {
-                    let request = || Request {
-                        specification: &specification,
-                        environment: None,
-                    };
-                    assert!(file_application::check(
-                        crate::support::host(runtime),
-                        request(),
-                        identity(runtime, &specification)
-                    )
-                    .is_empty());
-                    let domain = crate::support::study::domain(
-                        crate::support::host(runtime),
-                        request(),
-                        identity(runtime, &specification),
-                    )
-                    .unwrap();
-                    assert!(domain.issues().is_empty(), "{:?}", domain.issues());
-                }
-            }
-        }
-    }
     mod intermediate_dependencies {
         //! Original cyclic donor reads and valid dependency order through public routes.
+        //!
+        //! This stays beside the replay (#3798): its truth is a host-fixture
+        //! family both installed hosts read, and it checks each specification
+        //! before and after its inputs exist, where a replay case writes one
+        //! set of files.
         use std::fs;
         use yamaa_adapters::file_application;
         use yamaa_core::diagnostic::Diagnostic;
@@ -840,6 +542,9 @@ mod execution {
     }
     mod intermediate_row_drivers {
         //! Named row drivers traverse filtered donor records without lookup keys.
+        //!
+        //! This stays beside the replay (#3798): its truth is a host-fixture
+        //! family both installed hosts read.
         use std::fs;
         use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
@@ -925,6 +630,11 @@ mod execution {
     }
     mod key_expressions {
         //! Independent current-row key operands through complete file check/build/save routes.
+        //!
+        //! These stay beside the replay (#3798): each reads the host-fixture
+        //! family both installed hosts read, the first checking each
+        //! specification before and after its inputs are captured, and the
+        //! second running one of its specifications with inputs missing.
         use crate::support::Edit as _;
         use std::fs;
         use yamaa_adapters::file_application;
@@ -1161,6 +871,9 @@ mod execution {
     }
     mod namespace_admission {
         //! The original namespace obligations through complete public check and build.
+        //!
+        //! This stays beside the replay (#3798): its truth is a host-fixture
+        //! family both installed hosts read.
         use std::fs;
         use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
@@ -1234,108 +947,10 @@ mod execution {
         }
     }
     mod nested_windows {
-        use crate::support::Edit as _;
-        use std::fs;
-        use yamaa_adapters::file_application;
-        use yamaa_core::domain_entry::Request;
-        struct Study(crate::support::Scratch);
-        impl Study {
-            fn new(input: &str, specification: &str) -> Self {
-                let path = crate::support::Scratch::new("nested-windows");
-                fs::write(path.join("input.csv"), input).unwrap();
-                fs::write(path.join("spec.yaml"), specification).unwrap();
-                Self(path.resolved(std::fs::canonicalize))
-            }
-            fn build(&self) -> file_application::Domain {
-                self.try_build().unwrap()
-            }
-            fn try_build(&self) -> Result<file_application::Domain, file_application::Failure> {
-                let path = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-                crate::support::study::domain(
-                    yamaa_core::project_function::Language::Python,
-                    Request {
-                        specification: &path,
-                        environment: None,
-                    },
-                    crate::support::study::identity("nested-windows", &path),
-                )
-            }
-            fn saved(&self) -> String {
-                let mut result = self.build();
-                assert!(result.issues().is_empty(), "{:?}", result.issues());
-                assert!(result.save().unwrap());
-                fs::read_to_string(self.0.join("out.csv")).unwrap()
-            }
-        }
-        /// No benchmark nests a window operation in a case result.
-        #[test]
-        fn nested_case_windows_use_the_full_completed_context() {
-            let study = Study::new(
-                "I,G,O,V\n1,A,2,a2\n2,A,1,a1\n3,A,3,a3\n4,B,1,b1\n",
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [I]
-input: {SRC: {path: input.csv, types: {I: int, O: int}}}
-columns:
-  - {name: I, type: int, derivation: SRC.I}
-  - name: N
-    type: int
-    derivation:
-      case:
-        - when: 'I > 1'
-          then: {row_number: {window: {group_by: [SRC.G], order_by: [SRC.O]}}}
-        - otherwise: -1
-  - name: P
-    type: str
-    derivation:
-      case:
-        - when: 'I = 3'
-          then: {row_value: {source: SRC.V, offset: -1, window: {group_by: [SRC.G], order_by: [SRC.O]}}}
-        - otherwise: "'skip'"
-  - name: C
-    type: str
-    derivation: {str_template: 'prior={P}'}
-output: {path: out.csv, columns: [I, N, C]}
-"#,
-            );
-            assert_eq!(
-                study.saved(),
-                "I,N,C\n1,-1,prior=skip\n2,1,prior=skip\n3,3,prior=a2\n4,1,prior=skip\n"
-            );
-        }
-        /// No benchmark nests a window operation in a row template's case
-        /// result.
-        #[test]
-        fn nested_windows_remain_template_local_and_observe_pre_window_row_filtering() {
-            let study = Study::new(
-                "I,O\n1,2\n2,1\n3,3\n",
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [T, I]
-input: {SRC: {path: input.csv, types: {I: int, O: int}}}
-columns:
-  - {name: T, type: str}
-  - {name: I, type: int, derivation: SRC.I}
-  - {name: N, type: int}
-rows:
-  - id: first
-    dataset: SRC
-    derivations:
-      T: "'A'"
-      N: {case: [{when: 'I > 0', then: {row_number: {window: {order_by: [SRC.O]}}}}]}
-  - id: second
-    dataset: SRC
-    filter: 'SRC.I > 1'
-    derivations:
-      T: "'B'"
-      N: {case: [{when: 'I > 0', then: {row_number: {window: {order_by: [SRC.O]}}}}]}
-output: {path: out.csv, columns: [T, I, N]}
-"#,
-            );
-            assert_eq!(study.saved(), "T,I,N\nA,1,2\nA,2,1\nA,3,3\nB,2,1\nB,3,2\n");
-        }
+        //! The window defaults an output key reads transitively, through two
+        //! benchmarks. This stays beside the replay (#3798): it reproduces
+        //! benchmarks, which a replay case cannot run. The family's other
+        //! cases are in `tests/fixtures/diagnostics/windows.json`.
         /// `adam-adlb-bds` keys its rows by `ASEQ`, a column window over the
         /// rows of three filtered templates ordered by the `PARAMCD` each
         /// template derives, and `sdtm-dm-race-ethnicity` keys `SUPPDM` by
@@ -1346,402 +961,12 @@ output: {path: out.csv, columns: [T, I, N]}
                 crate::support::benchmarks::reproduce(benchmark);
             }
         }
-        /// No benchmark nests `baseline_flag` in a case result, reached or
-        /// not.
-        #[test]
-        fn unreachable_window_branch_has_no_runtime_failure_but_reached_branch_retains_it() {
-            let specification = r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [I]
-input: {SRC: {path: input.csv, types: {I: int, D: date}}}
-columns:
-  - {name: I, type: int, derivation: SRC.I}
-  - {name: D, type: date, derivation: SRC.D}
-  - name: B
-    type: str
-    derivation:
-      case:
-        - when: 'I < 0'
-          then: {baseline_flag: {date: D, reference: D, source: I}}
-        - otherwise: "'skipped'"
-output: {path: out.csv, columns: [I, B]}
-"#;
-            let input = "I,D\n1,2024-01-01\n2,2024-01-01\n";
-            let skipped = Study::new(input, specification);
-            assert_eq!(skipped.saved(), "I,B\n1,skipped\n2,skipped\n");
-            let reached = Study::new(input, &specification.edit("I < 0", "I = 2"));
-            let result = reached.build();
-            assert!(result.output().is_none());
-            assert_eq!(result.issues().len(), 1, "{:?}", result.issues());
-            assert_eq!(result.issues()[0].condition(), "ambiguous_baseline");
-            assert!(result.issues()[0]
-                .spec_paths
-                .iter()
-                .any(|path| path.contains("case[0].then.baseline_flag")));
-        }
-        /// No benchmark offsets `row_value` beyond 64 bits.
-        #[test]
-        fn arbitrary_width_window_offsets_select_absent_neighbors_without_float_conversion() {
-            let study = Study::new(
-                "I,V\n1,a\n2,b\n",
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [I]
-input: {SRC: input.csv}
-columns:
-  - {name: I, type: int, derivation: SRC.I}
-  - {name: V, type: str, derivation: SRC.V}
-  - name: BEFORE
-    type: str
-    derivation: {row_value: {source: V, offset: -99999999999999999999999999999999999999, window: {order_by: [I]}}}
-  - name: AFTER
-    type: str
-    derivation: {row_value: {source: V, offset: 99999999999999999999999999999999999999, window: {order_by: [I]}}}
-output: {path: out.csv, columns: [I, BEFORE, AFTER]}
-"#,
-            );
-            assert_eq!(study.saved(), "I,BEFORE,AFTER\n1,,\n2,,\n");
-        }
-
-        /// No benchmark nests a grouped `baseline_flag` in a case result.
-        #[test]
-        fn selected_window_partition_does_not_evaluate_unselected_partition_failures() {
-            let study = Study::new(
-                "I,G,D\n1,A,2024-01-01\n2,B,2024-01-01\n3,B,2024-01-01\n",
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [I]
-input: {SRC: {path: input.csv, types: {I: int, D: date}}}
-columns:
-  - {name: I, type: int, derivation: SRC.I}
-  - {name: G, type: str, derivation: SRC.G}
-  - {name: D, type: date, derivation: SRC.D}
-  - name: B
-    type: str
-    derivation:
-      case:
-        - when: "G = 'A'"
-          then: {baseline_flag: {date: D, reference: D, source: I, window: {group_by: [G]}}}
-        - otherwise: "'skipped'"
-output: {path: out.csv, columns: [I, B]}
-"#,
-            );
-            assert_eq!(study.saved(), "I,B\n1,Y\n2,skipped\n3,skipped\n");
-        }
-    }
-    mod original_named_windows {
-        //! Original named-window witnesses retired with the Python evaluator in #2110.
-        //! Inputs come from schema/test_named_windows.py at c7b88a4f; expected values
-        //! are its independent row results or follow its asserted atomic replacement.
-        use std::fs;
-        use yamaa_adapters::file_application;
-        use yamaa_adapters::json;
-        use yamaa_core::diagnostic::Diagnostic;
-        use yamaa_core::domain_entry::Request;
-        use yamaa_core::json::Value;
-
-        const INPUT: &str = "ID,G,SEQ,VAL\n01,a,1,10\n02,a,2,20\n03,b,1,30\n04,b,2,40\n";
-
-        struct Study(crate::support::Scratch);
-        impl Study {
-            fn new() -> Self {
-                let path = crate::support::Scratch::new("original-named-windows");
-                Self(path)
-            }
-            fn write(&self, name: &str, document: &Value) {
-                fs::write(
-                    self.0.join(name),
-                    yamaa_adapters::json_wire::encode(document).into_bytes(),
-                )
-                .unwrap();
-            }
-            fn build(&self) -> Result<file_application::Domain, Vec<Diagnostic>> {
-                let entry = self.0.join("spec.yaml");
-                let entry = entry.to_str().unwrap();
-                crate::support::study::domain(
-                    yamaa_core::project_function::Language::Python,
-                    Request {
-                        specification: entry,
-                        environment: None,
-                    },
-                    crate::support::study::identity("original-named-windows", entry),
-                )
-            }
-            fn saved(&self) -> String {
-                let mut result = self.build().unwrap();
-                assert!(result.issues().is_empty(), "{:?}", result.issues());
-                assert!(!self.0.join("out.csv").exists());
-                assert!(result.save().unwrap());
-                let expected = fs::read_to_string(self.0.join("out.csv")).unwrap();
-                // Save owns the completed bytes, including the evaluated window scope.
-                fs::write(self.0.join("input.csv"), "changed after build").unwrap();
-                assert!(result.save().unwrap());
-                assert_eq!(
-                    fs::read_to_string(self.0.join("out.csv")).unwrap(),
-                    expected
-                );
-                expected
-            }
-            fn refused(&self) -> Vec<Diagnostic> {
-                let issues = match self.build() {
-                    Ok(mut result) => {
-                        assert!(result.output().is_none());
-                        assert!(result.save().is_err());
-                        result.issues().to_vec()
-                    }
-                    Err(issues) => issues,
-                };
-                assert!(!issues.is_empty());
-                assert!(!self.0.join("out.csv").exists());
-                issues
-            }
-        }
-
-        fn document() -> Value {
-            json!({
-                "yamaa":"1.0", "type":"spec", "domain":"OUT", "base":"SRC", "keys":["ID"],
-                "input":{"SRC":{"path":"input.csv","types":{"SEQ":"int","VAL":"int"}}},
-                "output":{"path":"out.csv","columns":["ID","PREV"]},
-                "windows":{"VISITS":{"group_by":["G"],"order_by":["SEQ"]}},
-                "columns":[
-                    {"name":"ID","type":"str","label":"ID","derivation":"SRC.ID"},
-                    {"name":"G","type":"str","label":"G","derivation":"SRC.G"},
-                    {"name":"SEQ","type":"int","label":"SEQ","derivation":"SRC.SEQ"},
-                    {"name":"VAL","type":"int","label":"VAL","derivation":"SRC.VAL"},
-                    {"name":"PREV","type":"int","label":"Previous value","derivation":{"row_value":{"source":"VAL","offset":-1,"window":"VISITS"}}}
-                ]
-            })
-        }
-
-        /// No benchmark reads a named window in a row template.
-        #[test]
-        fn shared_named_window_is_evaluated_in_each_filtered_row_template() {
-            let study = Study::new();
-            let mut authored = document();
-            authored["windows"]["VISITS"] = json!({"order_by":["SEQ"]});
-            let mut derivations = yamaa_core::json::Map::new();
-            for column in authored["columns"].as_array_mut().unwrap() {
-                let name = column["name"].as_str().unwrap().to_owned();
-                derivations.insert(
-                    name,
-                    column
-                        .as_object_mut()
-                        .unwrap()
-                        .remove("derivation")
-                        .unwrap(),
-                );
-            }
-            authored["rows"] = ["a", "b"]
-        .map(|group| json!({"id":group,"dataset":"SRC","filter":format!("SRC.G = '{group}'"),"derivations":derivations}))
-        .into();
-            study.write("spec.yaml", &authored);
-            fs::write(study.0.join("input.csv"), INPUT).unwrap();
-            assert_eq!(study.saved(), "ID,PREV\n01,\n02,10\n03,\n04,30\n");
-        }
-
-        /// No benchmark's child replaces a named window reference.
-        #[test]
-        fn replacing_named_selection_with_inline_or_another_name_is_atomic() {
-            for replacement in [json!("OTHER"), json!({"order_by":["VAL"]})] {
-                let study = Study::new();
-                let mut parent = document();
-                parent["windows"]["OTHER"] = json!({"order_by":["VAL"]});
-                study.write("parent.yaml", &parent);
-                study.write(
-            "spec.yaml",
-            &json!({
-                "yamaa":"1.0", "type":"spec", "parent":"parent.yaml",
-                "columns":[{"name":"PREV","derivation":{"row_value":{"window":replacement}}}]
-            }),
-        );
-                fs::write(study.0.join("input.csv"), INPUT).unwrap();
-                // The replacement loses VISITS.group_by. Its VAL order therefore
-                // has one partition: 10, 20, 30, 40 across both original groups.
-                assert_eq!(study.saved(), "ID,PREV\n01,\n02,10\n03,20\n04,30\n");
-            }
-        }
-
-        /// `negative-unknown-window` refuses a misspelled window name; no
-        /// benchmark's child clears the definitions a surviving reference
-        /// names.
-        #[test]
-        fn clearing_named_definitions_rejects_the_surviving_reference_before_input_access() {
-            let study = Study::new();
-            study.write("parent.yaml", &document());
-            study.write(
-                "spec.yaml",
-                &json!({"yamaa":"1.0","type":"spec","parent":"parent.yaml","clear":["windows"]}),
-            );
-            let issues = study.refused();
-            assert_eq!(issues[0].condition(), "unknown_window");
-            assert_eq!(issues[0].rule(), Some("WINDOW-1"));
-            assert_eq!(
-                issues[0].spec_paths,
-                ["columns.PREV.derivation.row_value.window"]
-            );
-            assert!(!study.0.join("input.csv").exists());
-        }
-
-        /// A named window keeps each operation's restrictions where it is
-        /// expanded: a `row_number` over a window without `order_by` is refused
-        /// (WINDOW-5). `negative-locf-no-order` refuses an inline window
-        /// without one; no benchmark refuses a named window for it.
-        #[test]
-        fn named_expansion_preserves_each_operations_window_restrictions() {
-            let study = Study::new();
-            let mut authored = document();
-            authored["windows"]["VISITS"] = json!({});
-            authored["columns"][4]["type"] = "int".into();
-            authored["columns"][4]["derivation"] = json!({"row_number": {"window": "VISITS"}});
-            study.write("spec.yaml", &authored);
-            fs::write(study.0.join("input.csv"), INPUT).unwrap();
-            let issues = study.refused();
-            assert_eq!(
-                issues[0].condition(),
-                "window_order_by_required",
-                "{issues:?}"
-            );
-        }
-    }
-    mod original_verification {
-        //! Original verification witnesses from python/tests/verification/test_checks.py
-        //! at c7b88a4f, before the reference evaluator retired in #2110.
-        use std::fs;
-        use yamaa_adapters::file_application;
-        use yamaa_adapters::json;
-        use yamaa_core::domain_entry::Request;
-        use yamaa_core::json::Value;
-
-        struct Study(crate::support::Scratch);
-        impl Study {
-            fn new() -> Self {
-                let path = crate::support::Scratch::new("original-verification");
-                Self(path)
-            }
-            fn build(
-                &self,
-                columns: Value,
-                checks: Value,
-                input: &str,
-            ) -> file_application::Domain {
-                let output = columns
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .map(|column| column["name"].clone())
-                    .collect::<Vec<_>>();
-                let input_source = if output.iter().any(|name| name == "VAL") {
-                    json!({"path":"input.csv","types":{"VAL":"int"}})
-                } else {
-                    json!("input.csv")
-                };
-                let document = json!({
-                    "yamaa":"1.0", "type":"spec", "domain":"OUT", "base":"SRC",
-                    "keys":["STUDYID","USUBJID"],
-                    "input":{"SRC":input_source},
-                    "columns":columns, "verifications":checks,
-                    "output":{"path":"out.csv","columns":output}
-                });
-                let entry = self.0.join("spec.yaml");
-                fs::write(
-                    &entry,
-                    yamaa_adapters::json_wire::encode(&document).into_bytes(),
-                )
-                .unwrap();
-                fs::write(self.0.join("input.csv"), input).unwrap();
-                let entry = entry.to_str().unwrap();
-                crate::support::study::domain(
-                    yamaa_core::project_function::Language::Python,
-                    Request {
-                        specification: entry,
-                        environment: None,
-                    },
-                    crate::support::study::identity("original-verification", entry),
-                )
-                .unwrap()
-            }
-        }
-        fn columns() -> Value {
-            json!([
-                {"name":"STUDYID","type":"str","derivation":"SRC.STUDYID"},
-                {"name":"USUBJID","type":"str","derivation":"SRC.USUBJID"}
-            ])
-        }
-
-        /// No benchmark bounds the row count fraction of an empty artifact.
-        #[test]
-        fn fractional_row_count_on_an_empty_artifact_is_zero() {
-            for (bound, passes) in [
-                (json!({"max_fraction":0}), true),
-                (json!({"min_fraction":0.1}), false),
-            ] {
-                let study = Study::new();
-                let mut result =
-                    study.build(columns(), json!([{"row_count":bound}]), "STUDYID,USUBJID\n");
-                if passes {
-                    assert!(result.issues().is_empty(), "{:?}", result.issues());
-                    assert!(result.output().is_some());
-                    assert!(result.save().unwrap());
-                    assert_eq!(
-                        fs::read_to_string(study.0.join("out.csv")).unwrap(),
-                        "STUDYID,USUBJID\n"
-                    );
-                } else {
-                    assert!(result.output().is_none());
-                    let issues = result.issues();
-                    assert_eq!(issues.len(), 1, "{issues:?}");
-                    assert_eq!(issues[0].condition(), "row_count_failed");
-                    assert_eq!(issues[0].rule(), Some("CHECK-13"));
-                    assert_eq!(issues[0].spec_paths, ["verifications[0].row_count"]);
-                    let context = yamaa_core::json::Value::Object(issues[0].context.clone());
-                    assert_eq!(context["denominator"], 0);
-                    assert_eq!(context["count"], 0);
-                    assert_eq!(context["keys"], json!([{}]));
-                    assert!(result.save().is_err());
-                    assert!(!study.0.join("out.csv").exists());
-                }
-            }
-        }
-
-        /// No benchmark's assertion fails a row whose `require` is unknown:
-        /// the rows the `assert_failed` benchmarks report fail a comparison
-        /// of present values.
-        #[test]
-        fn assertion_when_exempts_false_and_unknown_rows_but_require_must_be_true() {
-            let study = Study::new();
-            let mut columns = columns();
-            columns.as_array_mut().unwrap().extend([
-                json!({"name":"GATE","type":"str","derivation":"SRC.GATE"}),
-                json!({"name":"VAL","type":"int","derivation":"SRC.VAL"}),
-            ]);
-            let mut result = study.build(
-        columns,
-        json!([{"assert":{"when":"GATE = 'Y'","require":"VAL > 0"}}]),
-        "STUDYID,USUBJID,GATE,VAL\nS,S-01,Y,1\nS,S-02,Y,0\nS,S-03,Y,\nS,S-04,N,0\nS,S-05,,0\n",
-    );
-            let issues = result.issues();
-            assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(issues[0].condition(), "assert_failed");
-            assert_eq!(issues[0].rule(), Some("CHECK-12"));
-            assert_eq!(issues[0].spec_paths, ["verifications[0].assert"]);
-            let context = yamaa_core::json::Value::Object(issues[0].context.clone());
-            assert_eq!(
-                context["keys"],
-                json!([
-                    {"STUDYID":"S","USUBJID":"S-02"},
-                    {"STUDYID":"S","USUBJID":"S-03"}
-                ])
-            );
-            assert!(result.output().is_none());
-            assert!(result.save().is_err());
-            assert!(!study.0.join("out.csv").exists());
-        }
     }
     mod predicate_suggestions {
         //! Original qualified-name suggestions and their unknown/ambiguous neighbors.
+        //!
+        //! This stays beside the replay (#3798): its truth is a host-fixture
+        //! family both installed hosts read.
         use std::fs;
         use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
@@ -1813,121 +1038,61 @@ output: {path: out.csv, columns: [I, B]}
             }
         }
     }
-    mod missing_order {
-        //! Every order term places an undeclared missing value lowest: first
-        //! ascending and last descending. A declared `nulls` never flips.
-        use crate::support::Edit as _;
-        use std::fs;
+    mod refused_domains {
+        //! A seam the replay cannot express (#3845): a refused build's absent
+        //! output table and its save's `FailedBuild`. Every authored refusal
+        //! that this file's families replay through `build` or `save` exposes
+        //! no output and fails its save whenever the build returns a domain;
+        //! a refused preparation returns none, and the replay compares its
+        //! complete issues.
+        use crate::support::diagnostic::{operations, replay};
+        use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
-        struct Study(crate::support::Scratch);
-        impl Study {
-            fn new(input: &str, specification: &str) -> Self {
-                let path = crate::support::Scratch::new("missing-order");
-                fs::write(path.join("input.csv"), input).unwrap();
-                fs::write(path.join("spec.yaml"), specification).unwrap();
-                Self(path.resolved(std::fs::canonicalize))
-            }
-            fn saved(&self) -> String {
-                let path = self.0.join("spec.yaml").to_str().unwrap().to_owned();
-                let mut result = crate::support::study::domain(
-                    yamaa_core::project_function::Language::Python,
+
+        #[test]
+        fn refused_domains_have_no_output_and_fail_their_save() {
+            let families = [
+                "declarative_self.json::",
+                "inheritance.json::",
+                "integer_literals.json::",
+                "verification.json::",
+                "windows.json::",
+            ];
+            let cases = replay::cases()
+                .into_iter()
+                .filter(|case| {
+                    families.iter().any(|family| case.label.starts_with(family))
+                        && !case.issues.is_empty()
+                        && case
+                            .operations
+                            .iter()
+                            .any(|operation| matches!(operation.as_str(), "build" | "save"))
+                })
+                .collect::<Vec<_>>();
+            assert!(!cases.is_empty(), "the families have authored refusals");
+            for case in cases {
+                let study = operations::study(&case.input);
+                let name = case.input["specification"].as_str().unwrap();
+                let specification = study.join(name).to_str().unwrap().replace('\\', "/");
+                let host = case.input.get("host").and_then(|host| host.as_str());
+                if let Ok(mut result) = crate::support::study::domain(
+                    crate::support::host(host.unwrap_or("python")),
                     Request {
-                        specification: &path,
+                        specification: &specification,
                         environment: None,
                     },
-                    crate::support::study::identity("missing-order", &path),
-                )
-                .unwrap_or_else(|_| panic!("valid missing-order study"));
-                assert!(result.issues().is_empty(), "{:?}", result.issues());
-                assert!(result.save().unwrap());
-                fs::read_to_string(self.0.join("out.csv")).unwrap()
+                    crate::support::study::identity("refused-domains", &specification),
+                ) {
+                    let has_output = result.output().is_some();
+                    let save_failed = matches!(result.save(), Err(file_application::FailedBuild));
+                    assert_eq!(
+                        (has_output, save_failed),
+                        (false, true),
+                        "{}: a refused domain has no output and fails its save",
+                        case.label
+                    );
+                }
             }
-        }
-
-        /// `schema-ordering`, `adam-adae-review-order` and
-        /// `adam-adae-serious-sequence` place missing values in output and
-        /// window order; no benchmark's window declares `nulls: first` under
-        /// `desc`.
-        #[test]
-        fn windows_and_presentation_sort_an_undeclared_missing_value_lowest() {
-            let specification = r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [I]
-input: {SRC: {path: input.csv, types: {I: int, D: int}}}
-columns:
-  - {name: I, type: int, derivation: SRC.I}
-  - {name: D, type: int, derivation: SRC.D}
-  - name: ASC
-    type: int
-    derivation: {row_number: {window: {order_by: [D]}}}
-  - name: DESC
-    type: int
-    derivation: {row_number: {window: {order_by: [{variable: D, direction: desc}]}}}
-  - name: LAST
-    type: int
-    derivation: {row_number: {window: {order_by: [{variable: D, nulls: last}]}}}
-  - name: FIRST
-    type: int
-    derivation:
-      row_number: {window: {order_by: [{variable: D, direction: desc, nulls: first}]}}
-output: {path: out.csv, columns: [I, D, ASC, DESC, LAST, FIRST], order_by: [D]}
-"#;
-            let input = "I,D\n1,3\n2,\n3,1\n";
-            assert_eq!(
-                Study::new(input, specification).saved(),
-                "I,D,ASC,DESC,LAST,FIRST\n2,,1,3,3,1\n3,1,2,2,1,3\n1,3,3,1,2,2\n"
-            );
-            let descending = specification.edit(
-                "order_by: [D]}\n",
-                "order_by: [{variable: D, direction: desc}]}\n",
-            );
-            assert_ne!(descending, specification);
-            assert_eq!(
-                Study::new(input, &descending).saved(),
-                "I,D,ASC,DESC,LAST,FIRST\n1,3,3,1,2,2\n3,1,2,2,1,3\n2,,1,3,3,1\n"
-            );
-        }
-
-        /// No benchmark's structured source orders by `desc`:
-        /// `adam-adsl-crossover-periods`'s declares `nulls: last` alone.
-        #[test]
-        fn source_and_lookup_selection_sort_an_undeclared_missing_value_lowest() {
-            let study = Study::new(
-                "G,D,S\nA,3,a3\nA,,amiss\nA,1,a1\nB,2,b2\nB,,bmiss\n",
-                r#"yamaa: "1.0"
-type: spec
-domain: TEST
-keys: [G]
-input: {SRC: {path: input.csv, types: {D: int}}}
-base: SRC
-intermediates:
-  - id: LATEST
-    dataset: SRC
-    key: [G]
-    order_by: [{variable: SRC.D, direction: desc}]
-    keep: last
-columns:
-  - {name: G, type: str, derivation: SRC.G}
-  - name: LOWEST
-    type: str
-    derivation: {source: {variable: SRC.S, order_by: [SRC.D], keep: first}}
-  - name: HIGHEST
-    type: str
-    derivation:
-      source: {variable: SRC.S, order_by: [{variable: SRC.D, direction: desc}], keep: first}
-  - name: DATED
-    type: str
-    derivation:
-      source: {variable: SRC.S, order_by: [{variable: SRC.D, nulls: last}], keep: first}
-  - {name: TRAILING, type: str, derivation: LATEST.S}
-output: {path: out.csv, columns: [G, LOWEST, HIGHEST, DATED, TRAILING]}
-"#,
-            );
-            assert_eq!(
-                study.saved(),
-                "G,LOWEST,HIGHEST,DATED,TRAILING\nA,amiss,a3,a1,amiss\nB,bmiss,b2,b2,bmiss\n"
-            );
         }
     }
 }

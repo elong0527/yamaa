@@ -27,14 +27,6 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/integer_literal_overflow.json",
-      "family": "diagnostics",
-      "level": "component",
-      "consumers": [
-        "rust/crates/yamaa-adapters/tests/execution_declarative_self.rs"
-      ]
-    },
-    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/csv_precision_limit.json",
       "family": "diagnostics",
       "level": "component",
