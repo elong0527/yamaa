@@ -1030,4 +1030,105 @@ mod diagnostics {
             );
         }
     }
+
+    /// How the replay compares an authored case with what its operation
+    /// reports (#3691).
+    mod replay {
+        use crate::support::diagnostic::replay::{among, compared};
+        use yamaa_core::json::Value;
+
+        /// A case that compares some keys of the context reads a reported
+        /// context at those keys alone: another reported key is ignored, and
+        /// a named key the report lacks leaves the row unequal to its author's.
+        #[test]
+        fn compares_reads_a_context_only_at_the_keys_it_names() {
+            let row = |context: &[(&str, &str)]| {
+                Value::Object(
+                    [
+                        (
+                            "condition".into(),
+                            Value::String("undeclared_column".into()),
+                        ),
+                        (
+                            "context".into(),
+                            Value::Object(
+                                context
+                                    .iter()
+                                    .map(|(key, value)| {
+                                        ((*key).into(), Value::String((*value).into()))
+                                    })
+                                    .collect(),
+                            ),
+                        ),
+                        ("phase".into(), Value::String("validation".into())),
+                    ]
+                    .into(),
+                )
+            };
+            let compares = ["condition".to_owned(), "context.column".to_owned()];
+            let projected = |context: &[(&str, &str)]| {
+                let Value::Object(mut row) = row(context) else {
+                    unreachable!("a row is an object")
+                };
+                row.remove("phase");
+                Value::Object(row)
+            };
+            let authored = projected(&[("column", "VALUE")]);
+            for (reported, expected, matches, label) in [
+                (
+                    row(&[("column", "VALUE"), ("detail", "VALUE")]),
+                    projected(&[("column", "VALUE")]),
+                    true,
+                    "another reported key is ignored",
+                ),
+                (
+                    row(&[("column", "OTHER")]),
+                    projected(&[("column", "OTHER")]),
+                    false,
+                    "the named key is compared",
+                ),
+                (
+                    row(&[("detail", "VALUE")]),
+                    projected(&[]),
+                    false,
+                    "a named key the report lacks",
+                ),
+            ] {
+                let actual = compared(reported, Some(&compares));
+                let equal = actual == authored;
+                assert_eq!((actual, equal), (expected, matches), "{label}");
+            }
+        }
+
+        /// An `among` case's rows are some of the issues its operation
+        /// reports: each matches a distinct reported row, in any order, and
+        /// a row that matches none is named.
+        #[test]
+        fn among_rows_each_match_a_distinct_reported_row_in_any_order() {
+            let row = |condition: &str| {
+                Value::Object([("condition".into(), Value::String(condition.into()))].into())
+            };
+            let reported = [row("a"), row("b"), row("c")];
+            for (authored, expected, label) in [
+                (vec![row("b")], Ok(vec![1]), "one row among extra rows"),
+                (
+                    vec![row("c"), row("a")],
+                    Ok(vec![2, 0]),
+                    "rows in another order",
+                ),
+                (
+                    vec![row("d")],
+                    Err(vec![row("d")]),
+                    "a row reported nowhere",
+                ),
+                (
+                    vec![row("a"), row("a")],
+                    Err(vec![row("a")]),
+                    "a row written twice and reported once",
+                ),
+            ] {
+                assert_eq!(among(&authored, &reported), expected, "{label}");
+            }
+        }
+    }
 }
