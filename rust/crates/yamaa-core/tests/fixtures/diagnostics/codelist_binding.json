@@ -1,0 +1,22 @@
+{
+  "about": "Binding a specification's codelists to the project's catalogue: a codelist the catalogue does not hold (CT-1), one whose data type the column's type does not admit (CT-8), and an allowed_values verification that restates a bound codelist's items (CT-9), every fault reported in order. The case compares the fields its table compared.",
+  "cases": [
+    {
+      "case": "every_codelist_binding_fault_is_reported_in_binding_order",
+      "operation": "codelist_binding",
+      "input": {
+        "codelists": [{"id": "SEX", "name": "Sex", "data_type": "text", "extensible": false, "items": ["F"]}],
+        "bindings": [
+          {"column": 0, "name": "X", "kind": "str", "path": "columns.X.submission.codelist", "codelist": "UNKNOWN", "allowed_values": []},
+          {"column": 0, "name": "X", "kind": "int", "path": "columns.X.submission.codelist", "codelist": "SEX", "allowed_values": ["columns.X.verifications[0].allowed_values"]}
+        ]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_codelist", "rule": "CT-1"},
+        {"phase": "validation", "condition": "codelist_type_mismatch", "rule": "CT-8"},
+        {"phase": "validation", "condition": "redundant_declaration", "rule": "CT-9"}
+      ]
+    }
+  ]
+}

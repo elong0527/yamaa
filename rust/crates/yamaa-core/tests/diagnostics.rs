@@ -258,18 +258,6 @@ mod diagnostics {
             reached.extend(schema::reached());
             reached.extend(language::reached());
 
-            // The other findings (B2).
-            reached.extend(aggregate::reached());
-            reached.extend(odm::reached());
-            reached.extend(odm_read::reached());
-            reached.extend(grammar::reached());
-            reached.extend(grammar::predicate_reached());
-            reached.extend(inheritance::reached());
-            reached.extend(verification::reached());
-            reached.extend(project_lock::reached());
-            reached.extend(project_activation::reached());
-            reached.extend(project_codelist_binding::reached());
-
             // The project environment (C).
             reached.extend(project_environment::reached());
             reached.extend(project_environment::extended_alias_reached());
