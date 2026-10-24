@@ -44,9 +44,9 @@ type Cells<'a> = (
 
 fn cells(entry: &Condition) -> Cells<'_> {
     (
-        entry.condition,
+        entry.condition.as_str(),
         entry.severity.as_str(),
-        entry.phases.clone(),
+        entry.phases.iter().map(|phase| phase.as_str()).collect(),
         entry.rules.clone(),
         entry.message,
         entry.renamed_from,
@@ -60,7 +60,7 @@ fn the_catalogue_names_every_registered_and_retired_condition_in_name_order() {
     let names = catalogue
         .entries()
         .iter()
-        .map(|entry| entry.condition)
+        .map(|entry| entry.condition.as_str())
         .collect::<Vec<_>>();
     assert_eq!(names, texts(&TRUTH["names"]));
     assert_eq!(texts(&TRUTH["columns"]), CONDITION_COLUMNS);
@@ -83,7 +83,7 @@ fn each_authored_row_is_the_entry_of_its_condition() {
         let entry = catalogue
             .entries()
             .iter()
-            .find(|entry| entry.condition == expected.0)
+            .find(|entry| entry.condition.as_str() == expected.0)
             .unwrap_or_else(|| panic!("no entry for {}", expected.0));
         assert_eq!(cells(entry), expected, "{}", expected.0);
     }
@@ -119,7 +119,9 @@ fn a_former_name_names_no_condition_of_the_catalogue() {
         if let Some(former) = entry.renamed_from {
             let claims = entries
                 .iter()
-                .filter(|other| other.condition == former || other.renamed_from == Some(former))
+                .filter(|other| {
+                    other.condition.as_str() == former || other.renamed_from == Some(former)
+                })
                 .map(|other| other.condition)
                 .collect::<Vec<_>>();
             assert_eq!(claims, [entry.condition], "{former}");
@@ -187,7 +189,7 @@ fn an_entry_prints_as_a_tab_separated_line_and_one_object() {
         catalogue
             .entries()
             .iter()
-            .find(|entry| entry.condition == name)
+            .find(|entry| entry.condition.as_str() == name)
             .unwrap()
     };
     for (name, line, object) in [

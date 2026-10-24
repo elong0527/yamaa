@@ -19,8 +19,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 use yamaa::{
-    Action, CancellationToken, ContextValue, EngineOptions, HostLanguage, ProjectRequest,
-    SpecRequest, SubmissionOptions,
+    CancellationToken, ContextValue, EngineOptions, HostLanguage, ProjectRequest, SpecRequest,
+    SubmissionOptions,
 };
 use yamaa_boundary::abi::{
     self, ArrowArray, ArrowArrayStream, ArrowSchema, Buffer, Call, Handle, Refusal, Status, Str,
@@ -43,9 +43,14 @@ enum Fault {
     Boundary(String),
 }
 
+/// A facade failure: a cancelled one answers the cancellation, and any other
+/// the refusal, with its message, issues and paths.
 impl From<yamaa::Failure> for Fault {
     fn from(failure: yamaa::Failure) -> Self {
-        Fault::Refused(failure)
+        match failure.kind {
+            yamaa::FailureKind::Cancelled => Fault::Cancelled,
+            _ => Fault::Refused(failure),
+        }
     }
 }
 
@@ -53,14 +58,6 @@ type Answer<T> = Result<T, Fault>;
 
 fn boundary(reason: impl Into<String>) -> Fault {
     Fault::Boundary(reason.into())
-}
-
-/// The refusal of `action` for `error` (D39), or the cancellation.
-fn failed(action: Action<'_>, error: yamaa::Error) -> Fault {
-    match error {
-        yamaa::Error::Cancelled => Fault::Cancelled,
-        error => Fault::Refused(yamaa::Failure::from_error(action, &error)),
-    }
 }
 
 // -- arguments ----------------------------------------------------------------
@@ -514,9 +511,10 @@ fn another(entry: &str, kind: HandleKind) -> Fault {
 }
 
 /// Stream accessors have the same boundary refusal text as the host's former
-/// direct facade calls, including cancellation and an already-taken stream.
-fn stream_fault(streamed: &yamaa::Streamed, error: yamaa::Error) -> Fault {
-    boundary(yamaa::Failure::from_error(Action::Read(streamed.subject()), &error).message)
+/// direct facade calls, including cancellation and an already-taken stream:
+/// the failure's message, `cannot read <subject>: ...`.
+fn stream_fault(failure: yamaa::Failure) -> Fault {
+    boundary(failure.message)
 }
 
 /// A result, unless another call holds it.
@@ -563,9 +561,7 @@ fn view<T>(
         Value::Check(check) => read(View::Check(&*locked(check, kind)?)),
         Value::Run(run) => read(View::Run(&*locked(run, kind)?)),
         Value::Streamed(streamed) => {
-            let run = streamed
-                .run()
-                .map_err(|error| stream_fault(streamed, error))?;
+            let run = streamed.run().map_err(stream_fault)?;
             read(View::Run(&run))
         }
         Value::ProjectRun(runs) => {
@@ -587,9 +583,7 @@ fn table<T>(handle: Handle, entry: &str, read: impl FnOnce(&yamaa::Table) -> T) 
     match &held.value {
         Value::Table(table) => Ok(read(table)),
         Value::StreamTable(streamed) => {
-            let table = streamed
-                .table()
-                .map_err(|error| stream_fault(streamed, error))?;
+            let table = streamed.table().map_err(stream_fault)?;
             Ok(read(&table))
         }
         other => Err(another(entry, other.kind())),
@@ -655,7 +649,7 @@ entries! {
             spec_request(&call.engine(), specification, project)
                 .cancel_with(token)
                 .check()
-                .map_err(|error| failed(Action::Read(specification), error))
+                .map_err(Fault::from)
         })?;
         insert(Value::Check(Mutex::new(check)))
     }
@@ -671,7 +665,7 @@ entries! {
             spec_request(&call.engine(), specification, project)
                 .cancel_with(token)
                 .check_on(parent)
-                .map_err(|error| failed(Action::Read(specification), error))
+                .map_err(Fault::from)
         })?;
         insert(Value::Check(Mutex::new(check)))
     }
@@ -684,7 +678,7 @@ entries! {
                 .project(project)
                 .cancel_with(token)
                 .check()
-                .map_err(|error| failed(Action::Read(project), error))
+                .map_err(Fault::from)
         })?;
         insert(Value::Check(Mutex::new(check)))
     }
@@ -703,7 +697,7 @@ entries! {
                     None => request,
                 }
                 .run()
-                .map_err(|error| failed(Action::Read(specification), error))
+                .map_err(Fault::from)
             })
         })?;
         insert(Value::Run(Mutex::new(built)))
@@ -723,7 +717,7 @@ entries! {
                     None => request,
                 }
                 .stream()
-                .map_err(|error| failed(Action::Read(specification), error))
+                .map_err(Fault::from)
             })
         })?;
         insert(Value::Streamed(Arc::new(streamed)))
@@ -748,7 +742,7 @@ entries! {
                 }
                 .run()
                 // Only an unknown section refuses the call with issues.
-                .map_err(|error| failed(Action::Select(section.unwrap_or_default()), error))
+                .map_err(Fault::from)
             })
         })?;
         insert(Value::ProjectRun(Mutex::new(built)))
@@ -767,7 +761,7 @@ entries! {
             project_request(&call.engine(), project, section)
                 .cancel_with(token)
                 .submission(&options)
-                .map_err(|error| failed(Action::Select(section.unwrap_or_default()), error))
+                .map_err(Fault::from)
         })?;
         insert(Value::Submission(Mutex::new(submission)))
     }
@@ -792,7 +786,7 @@ entries! {
         let items = call
             .engine()
             .read_odm(source, &read)
-            .map_err(|error| failed(Action::Read(source), error))?;
+            .map_err(Fault::from)?;
         insert(Value::Table(items))
     }
 
@@ -918,9 +912,9 @@ entries! {
         if member.is_none() {
             if let Value::Streamed(streamed) = &held(result)?.value {
                 match streamed.progress() {
-                    yamaa::StreamProgress::Cancelled => return Err(stream_fault(streamed, yamaa::Error::Cancelled)),
-                    yamaa::StreamProgress::Ended => {
-                        let run = streamed.run().map_err(|error| stream_fault(streamed, error))?;
+                    // A cancelled run's result refuses as cancelled.
+                    yamaa::StreamProgress::Cancelled | yamaa::StreamProgress::Ended => {
+                        let run = streamed.run().map_err(stream_fault)?;
                         if run.output().is_some() || run.status() == yamaa::Status::Failed {
                             return handed_table(run.output());
                         }
@@ -953,7 +947,7 @@ entries! {
             Ok(match &held.value {
                 Value::Run(run) => locked(run, kind)?.save(token),
                 Value::Streamed(streamed) => streamed.run()
-                    .map_err(|error| stream_fault(streamed, error))?.save(token),
+                    .map_err(stream_fault)?.save(token),
                 Value::ProjectRun(runs) => locked(runs, kind)?.save(token),
                 Value::Submission(submission) => locked(submission, kind)?.save(token),
                 _ => return Err(another("save", kind)),

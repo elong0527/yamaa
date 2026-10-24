@@ -66,8 +66,8 @@ fn rows(diagnostics: &[Diagnostic]) -> Vec<Row> {
         .iter()
         .map(|issue| {
             (
-                issue.phase.clone(),
-                issue.code.clone(),
+                issue.phase.as_str().to_owned(),
+                issue.code.as_str().to_owned(),
                 issue.rule.clone(),
                 issue.spec_path.clone(),
                 issue.context.to_json().to_owned(),

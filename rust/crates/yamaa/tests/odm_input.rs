@@ -311,12 +311,14 @@ fn nothing_is_sniffed_so_an_archive_named_xml_is_refused_as_xml() {
     let archive = [0_u8; 512];
     let study = Study::new();
     study.write("odm.xml", archive);
-    let Err(yamaa::Error::Rejected(report)) =
-        engine().read_odm(&study.path("odm.xml"), &yamaa::OdmOptions::new())
-    else {
-        panic!("read_odm refuses an archive without an XML member");
-    };
-    assert_eq!(report.diagnostics[0].code, "source_odm_archive_member");
+    let failure = engine()
+        .read_odm(&study.path("odm.xml"), &yamaa::OdmOptions::new())
+        .expect_err("read_odm refuses an archive without an XML member");
+    assert!(matches!(failure.kind, yamaa::FailureKind::Rejected));
+    assert_eq!(
+        failure.diagnostics[0].code.as_str(),
+        "source_odm_archive_member"
+    );
     // The input's extension selected XML, which the bytes are not.
     let issue = run_issue(&archive);
     assert_eq!(issue.condition, "source_odm_xml_malformed");

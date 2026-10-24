@@ -17,10 +17,10 @@ use std::sync::{
 };
 
 use yamaa::{
-    Argument, CallError, CancellationToken, Engine, EngineOptions, Error, Failure, FunctionError,
-    FunctionHandle, FunctionIdentity, HostLanguage, LockContext, MemoryResolver, Partitions,
-    ProjectFunctions, ResolverFailure, ResolverReply, ResolverRequest, ResourceResolver, Run,
-    Scalar, ScalarRef, Signature,
+    Argument, CallError, CancellationToken, Engine, EngineOptions, Failure, FailureKind,
+    FunctionError, FunctionHandle, FunctionIdentity, HostLanguage, LockContext, MemoryResolver,
+    Partitions, ProjectFunctions, ResolverFailure, ResolverReply, ResolverRequest,
+    ResourceResolver, Run, Scalar, ScalarRef, Signature,
 };
 
 /// A partition-safe specification: W converts V to an integer, and the run
@@ -199,7 +199,16 @@ fn before_start_a_cancelled_run_returns_no_result_and_publishes_nothing() {
             .spec("spec.yaml")
             .cancel_with(&token)
             .run();
-        assert!(matches!(result, Err(Error::Cancelled)), "{label}");
+        assert!(
+            matches!(
+                result,
+                Err(Failure {
+                    kind: FailureKind::Cancelled,
+                    ..
+                })
+            ),
+            "{label}"
+        );
         assert_eq!(
             end_state(&resolver, "cancelled".into(), String::new()),
             EndState {
@@ -299,7 +308,16 @@ fn mid_partition_a_cancelled_run_returns_no_result_and_publishes_nothing() {
             .spec("spec.yaml")
             .cancel_with(&counting(Some(from)))
             .run();
-        assert!(matches!(result, Err(Error::Cancelled)), "poll {from}");
+        assert!(
+            matches!(
+                result,
+                Err(Failure {
+                    kind: FailureKind::Cancelled,
+                    ..
+                })
+            ),
+            "poll {from}"
+        );
         assert_eq!(
             end_state(&resolver, "cancelled".into(), String::new()),
             EndState {
@@ -454,7 +472,13 @@ fn mid_partition_a_project_function_interrupt_cancels_the_call() {
         .project("project.yaml")
         .cancel_with(&token)
         .run();
-    assert!(matches!(result, Err(Error::Cancelled)));
+    assert!(matches!(
+        result,
+        Err(Failure {
+            kind: FailureKind::Cancelled,
+            ..
+        })
+    ));
     assert_eq!(
         functions.calls.load(Ordering::SeqCst),
         1,
@@ -562,11 +586,23 @@ fn mid_stream_a_cancelled_run_builds_nothing_more_and_publishes_nothing() {
             ended
         };
         assert!(
-            matches!(ended, None | Some(Err(Error::Cancelled))),
+            matches!(
+                ended,
+                None | Some(Err(Failure {
+                    kind: FailureKind::Cancelled,
+                    ..
+                }))
+            ),
             "{label}: {ended:?}"
         );
         assert!(
-            matches!(streamed.run(), Err(Error::Cancelled)),
+            matches!(
+                streamed.run(),
+                Err(Failure {
+                    kind: FailureKind::Cancelled,
+                    ..
+                })
+            ),
             "{label}: no result"
         );
         assert_eq!(
@@ -604,9 +640,21 @@ fn mid_stream_a_project_function_interrupt_cancels_the_run() {
         .stream()
         .unwrap();
     let mut reader = streamed.reader();
-    assert!(matches!(reader.next(), Some(Err(Error::Cancelled))));
+    assert!(matches!(
+        reader.next(),
+        Some(Err(Failure {
+            kind: FailureKind::Cancelled,
+            ..
+        }))
+    ));
     assert!(reader.next().is_none(), "no later batch");
-    assert!(matches!(streamed.run(), Err(Error::Cancelled)));
+    assert!(matches!(
+        streamed.run(),
+        Err(Failure {
+            kind: FailureKind::Cancelled,
+            ..
+        })
+    ));
     assert_eq!(
         (
             functions.calls.load(Ordering::SeqCst),
@@ -627,12 +675,18 @@ fn mid_stream_a_failed_run_ends_its_stream_with_its_issue() {
     let resolver = Recording::new(SPEC, FAILING, None);
     let streamed = streamed(&resolver, &CancellationToken::new());
     let mut reader = streamed.reader();
-    let Some(Err(Error::Rejected(report))) = reader.next() else {
+    let Some(Err(
+        failure @ Failure {
+            kind: FailureKind::Rejected,
+            ..
+        },
+    )) = reader.next()
+    else {
         panic!("the stream ends with the run's issue");
     };
     assert!(reader.next().is_none(), "no later batch");
     let outcome = r#"Error convert conversion_failed Some("VALUE-7") ["columns.W"] {"from":"float","keys":[{"ID":3}],"to":"int","value":3.5} None None"#.to_owned();
-    assert_eq!(issues(&report.diagnostics), outcome, "the stream's error");
+    assert_eq!(issues(&failure.diagnostics), outcome, "the stream's error");
     let mut run = streamed.run().unwrap();
     assert!(run.output().is_none());
     assert_eq!(

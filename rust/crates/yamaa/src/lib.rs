@@ -27,10 +27,10 @@
 //! A capability a build omits fails the same way it does in adapters: the
 //! stable codes (`yaml_reader_unavailable`, `parquet_reader_unavailable`,
 //! `sas_reader_unavailable`, `odm_reader_unavailable`,
-//! `parquet_codec_unavailable`) surface as diagnostics or as
-//! [`Error::Unavailable`], and [`Engine::read_odm`] without `odm` returns
-//! `Error::Unavailable { feature: "odm" }`. The facade adds no native
-//! dependencies of its own.
+//! `parquet_codec_unavailable`) surface as diagnostics or as a
+//! [`FailureKind::Unavailable`] failure, and [`Engine::read_odm`] without
+//! `odm` fails with `FailureKind::Unavailable { feature: "odm" }`. The facade
+//! adds no native dependencies of its own.
 //!
 //! Malformed Parquet input can make the Parquet or Arrow crate panic. The
 //! engine contains each such panic as a finding and keeps it off stderr: its
@@ -76,19 +76,19 @@ mod outcome;
 mod plan;
 
 pub use api::{
-    Check, Failure, Plans, ProjectRequest, ProjectRun, Run, SpecRequest, Status, Submission,
+    Check, Plans, ProjectRequest, ProjectRun, Run, SpecRequest, Status, Submission,
     SubmissionOptions, SECTIONS, STATUSES,
 };
 pub use cancel::CancellationToken;
-pub use conditions::{conditions, Condition, Conditions, CONDITION_COLUMNS};
+pub use conditions::{conditions, Condition, ConditionCode, Conditions, CONDITION_COLUMNS};
 pub use diagnostic::{
-    ContextValue, Diagnostic, DiagnosticContext, Location, Position, Report, Severity, SourceSpan,
-    ISSUE_COLUMNS, PHASES, REPORT_COLUMNS, REPORT_KINDS, REPORT_OUTCOMES, SEVERITIES,
+    ContextValue, Diagnostic, DiagnosticContext, Location, Phase, Position, Report, Severity,
+    SourceSpan, ISSUE_COLUMNS, PHASES, REPORT_COLUMNS, REPORT_KINDS, REPORT_OUTCOMES, SEVERITIES,
 };
 pub use engine::{Engine, EngineOptions, Partitions};
 pub use error::{
-    Error, FunctionError, HostPayload, LockFinding, LockReason, LockSyntaxError, ResolverFailure,
-    TableError,
+    Failure, FailureKind, FunctionError, HostPayload, LockFinding, LockReason, LockSyntaxError,
+    ResolverFailure, TableError,
 };
 pub use file_type::{FileType, FILE_TYPES};
 pub use functions::{

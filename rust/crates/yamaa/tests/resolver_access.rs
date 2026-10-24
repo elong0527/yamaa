@@ -287,7 +287,10 @@ fn project_names_read_no_input_data_and_name_what_a_run_builds() {
             Ok(names) if runs.names().is_empty() && !names.is_empty() => {
                 let codes: Vec<_> = runs.diagnostics().into_iter().map(|d| d.code).collect();
                 assert!(
-                    !codes.is_empty() && codes.iter().all(|code| code == "artifact_path_collision"),
+                    !codes.is_empty()
+                        && codes
+                            .iter()
+                            .all(|code| code.as_str() == "artifact_path_collision"),
                     "{benchmark}: {codes:?}"
                 );
                 for name in &names {
@@ -454,16 +457,16 @@ fn read_odm_captures_its_source_once_and_its_table_saves_through_the_resolver() 
                 yamaa::ODM_COLUMNS.join(",")
             )
         );
-        let Err(yamaa::Error::Rejected(report)) =
-            case.engine().read_odm("odm/absent.xml", &OdmOptions::new())
-        else {
-            panic!("a source the resolver lacks is refused with its issue");
-        };
+        let failure = case
+            .engine()
+            .read_odm("odm/absent.xml", &OdmOptions::new())
+            .unwrap_err();
+        assert!(matches!(failure.kind, yamaa::FailureKind::Rejected));
         // The caller's own path, named as given (FILE-7).
-        let [issue] = report.diagnostics.as_slice() else {
-            panic!("one issue: {report:?}");
+        let [issue] = failure.diagnostics.as_slice() else {
+            panic!("one issue: {failure:?}");
         };
-        assert_eq!(issue.code, "resource_path_missing");
+        assert_eq!(issue.code.as_str(), "resource_path_missing");
         assert_eq!(
             issue.context.get("path"),
             Some(&yamaa::ContextValue::Text("odm/absent.xml".into()))
@@ -471,8 +474,8 @@ fn read_odm_captures_its_source_once_and_its_table_saves_through_the_resolver() 
         assert_eq!(case.requests(), once("/odm/absent.xml"));
     } else {
         assert!(matches!(
-            result,
-            Err(yamaa::Error::Unavailable { feature: "odm" })
+            result.map_err(|failure| failure.kind),
+            Err(yamaa::FailureKind::Unavailable { feature: "odm" })
         ));
         assert_eq!(case.requests(), Vec::new());
     }

@@ -18,10 +18,9 @@ use yamaa_adapters::application_measurements::Measurements;
 use yamaa_adapters::file_application::Domain;
 use yamaa_core::diagnostic::Diagnostic;
 
-use crate::api::Failure;
-use crate::cancel::CancellationToken;
+use crate::cancel::{CancellationToken, Cancelled};
 use crate::diagnostic::{Locator, Report};
-use crate::error::{Error, FunctionError};
+use crate::error::{Failure, FunctionError};
 use crate::functions::{HostLanguage, ProjectFunctions};
 use crate::internal::EngineShared;
 use crate::plan::Plan;
@@ -255,7 +254,7 @@ impl Engine {
     /// The run polls `token`, and so does this call once the member is
     /// built: a cancelled build, or one whose project function raised the
     /// host's interrupt (as [`ProjectFunctions::is_interrupt`] classifies
-    /// it), fails the call with [`Error::Cancelled`] and is dropped.
+    /// it), stops the call as [`Cancelled`] and is dropped.
     pub(crate) fn build_reusing(
         &self,
         plans: &crate::api::Plans,
@@ -263,7 +262,7 @@ impl Engine {
         identity: Option<crate::api::PlanKey>,
         held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
         token: &CancellationToken,
-    ) -> Result<Build, Error> {
+    ) -> Result<Build, Cancelled> {
         let measurements = Arc::new(Measurements::new());
         let (plan, compiled) = self.plan_reusing(plans, request, identity.as_ref(), &measurements);
         // A compilation has just captured the files it holds.
@@ -272,7 +271,7 @@ impl Engine {
             self.keep(plans, request, identity, &plan);
         }
         if build.interrupted() || token.is_cancelled() {
-            return Err(Error::Cancelled);
+            return Err(Cancelled);
         }
         measurements.complete(build.accepted());
         let subject = plan.name().unwrap_or(request.specification);
@@ -351,11 +350,12 @@ impl Engine {
     }
 
     /// Resolve one specification entry into its owned inspection artifact,
-    /// reading through the engine's resolver; a refusal carries its issues.
+    /// reading through the engine's resolver; a refusal is the report of its
+    /// issues.
     pub(crate) fn resolve_specification(
         &self,
         request: &Request<'_>,
-    ) -> Result<ResolvedSpecification, Error> {
+    ) -> Result<ResolvedSpecification, Report> {
         match yamaa_adapters::resolved_artifact::resolve_located(
             request.specification,
             request.environment,
@@ -363,7 +363,7 @@ impl Engine {
             crate::internal::resolver_bridge(&self.shared),
         ) {
             Ok(artifact) => Ok(ResolvedSpecification { inner: artifact }),
-            Err((issues, locator)) => Err(Error::Rejected(Report::located(&issues, &locator))),
+            Err((issues, locator)) => Err(Report::located(&issues, &locator)),
         }
     }
 }
@@ -640,11 +640,10 @@ pub(crate) struct ResolvedSpecification {
 }
 
 impl ResolvedSpecification {
-    /// The facts the artifact holds, as one owned tree.
-    pub(crate) fn to_value(&self) -> Result<yamaa_core::json::Value, Error> {
-        self.inner.to_value().map_err(|_| Error::Internal {
-            code: "resolved_serialization",
-        })
+    /// The facts the artifact holds, as one owned tree, or none when the
+    /// engine cannot represent them.
+    pub(crate) fn to_value(&self) -> Option<yamaa_core::json::Value> {
+        self.inner.to_value().ok()
     }
 }
 
@@ -675,16 +674,21 @@ mod tests {
         assert!(options.functions.is_none());
     }
 
-    /// A cancelled call returns `Error::Cancelled`, with no result and no
-    /// issue; a check is no exception.
+    /// A cancelled call fails as cancelled, with no result and no issue; a
+    /// check is no exception.
     #[test]
     fn cancelled_tokens_fail_operations_before_entry() {
+        use crate::error::FailureKind;
         let engine = Engine::new(options());
         let token = CancellationToken::new();
         token.cancel();
         let request = engine.spec("spec").cancel_with(&token);
-        assert!(matches!(request.run(), Err(Error::Cancelled)));
-        assert!(matches!(request.check(), Err(Error::Cancelled)));
+        for failure in [request.run().err(), request.check().err()] {
+            let failure = failure.expect("a cancelled call fails");
+            assert!(matches!(failure.kind, FailureKind::Cancelled));
+            assert_eq!(failure.message, "cannot read spec: operation cancelled");
+            assert!(failure.diagnostics.is_empty());
+        }
     }
 
     #[test]

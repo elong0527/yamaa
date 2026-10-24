@@ -5,8 +5,8 @@
 //! project run and after each member it builds, at every checkpoint of a
 //! dataset's schedule and before each batch of project-function calls, and
 //! a save polls it once, after every file is staged and before the first
-//! commit. Whichever poll finds the token cancelled, the call returns
-//! `Error::Cancelled` with no result and no issue, and a cancelled save
+//! commit. Whichever poll finds the token cancelled, the call fails as
+//! `FailureKind::Cancelled` with no result and no issue, and a cancelled save
 //! writes nothing. A project function that raises the host's interrupt
 //! cancels the call the same way.
 use std::sync::{
@@ -15,10 +15,10 @@ use std::sync::{
 };
 
 use yamaa::{
-    Argument, CallError, CancellationToken, Engine, EngineOptions, Error, FunctionError,
-    FunctionHandle, FunctionIdentity, HostLanguage, LockContext, MemoryResolver, ProjectFunctions,
-    ResolverFailure, ResolverReply, ResolverRequest, ResourceResolver, Scalar, ScalarRef,
-    Signature, SubmissionOptions,
+    Argument, CallError, CancellationToken, Engine, EngineOptions, Failure, FailureKind,
+    FunctionError, FunctionHandle, FunctionIdentity, HostLanguage, LockContext, MemoryResolver,
+    ProjectFunctions, ResolverFailure, ResolverReply, ResolverRequest, ResourceResolver, Scalar,
+    ScalarRef, Signature, SubmissionOptions,
 };
 
 const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, key: [ID]}}\noutput: {path: out.csv, columns: [ID, NAME]}\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: SRC.ID}\n  - {name: NAME, type: str, label: Name, derivation: SRC.NAME}\n";
@@ -118,8 +118,14 @@ fn engine(resolver: Arc<dyn ResourceResolver>) -> Engine {
     )
 }
 
-fn cancelled<T>(result: Result<T, Error>) -> bool {
-    matches!(result, Err(Error::Cancelled))
+fn cancelled<T>(result: Result<T, Failure>) -> bool {
+    matches!(
+        result,
+        Err(Failure {
+            kind: FailureKind::Cancelled,
+            ..
+        })
+    )
 }
 
 /// A token cancelled before a call fails every cancellable operation before
@@ -178,8 +184,8 @@ fn a_listed_specifications_request_polls_its_project_requests_token() {
     assert!(cancelled(listed.run()));
 }
 
-/// Whichever poll of a run finds its token cancelled, the run returns
-/// `Error::Cancelled` and its probe is asked no more. An uncancelled run
+/// Whichever poll of a run finds its token cancelled, the run fails as
+/// cancelled and its probe is asked no more. An uncancelled run
 /// polls before its member, at each checkpoint of its dataset and once its
 /// member is built.
 #[test]
@@ -364,7 +370,7 @@ fn function_study(functions: Arc<Echo>) -> (Engine, Arc<Recording>) {
 }
 
 /// A project function that raises the host's interrupt cancels the call
-/// (D46): the run returns `Error::Cancelled`, and a project run builds no
+/// (D46): the run fails as cancelled, and a project run builds no
 /// later member, so no later member binds or calls project code.
 #[test]
 fn a_project_function_interrupt_cancels_the_call() {

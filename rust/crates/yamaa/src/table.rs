@@ -18,8 +18,8 @@
 
 use std::sync::Arc;
 
-use crate::api::Failure;
 use crate::engine::Engine;
+use crate::error::Failure;
 #[cfg(feature = "arrow")]
 use crate::error::TableError;
 use crate::text::Action;
@@ -150,7 +150,7 @@ impl Engine {
     /// ```
     /// use std::sync::Arc;
     ///
-    /// use yamaa::{Engine, EngineOptions, Error, MemoryResolver, OdmOptions};
+    /// use yamaa::{Engine, EngineOptions, FailureKind, MemoryResolver, OdmOptions};
     ///
     /// let resolver = Arc::new(MemoryResolver::new());
     /// resolver.insert("/", "odm.xml", "odm:1", Arc::from(
@@ -181,7 +181,9 @@ impl Engine {
     ///         );
     ///         assert!(resolver.published("memory:/items.txt").is_none());
     ///     }
-    ///     Err(error) => assert!(matches!(error, Error::Unavailable { feature: "odm" })),
+    ///     Err(failure) => {
+    ///         assert_eq!(failure.kind, FailureKind::Unavailable { feature: "odm" });
+    ///     }
     /// }
     /// ```
     pub fn save_table(&self, table: &Table, out: &str) -> Result<Vec<String>, Failure> {

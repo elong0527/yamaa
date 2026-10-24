@@ -33,8 +33,8 @@
 //! as YAML, or a directory that cannot be listed, refuses the whole call with
 //! the issue that says why, before any file is written.
 
-use crate::api::Failure;
 use crate::diagnostic::{ContextValue, Report};
+use crate::error::Failure;
 use crate::table::Table;
 use crate::text::{self, Action};
 
@@ -251,7 +251,7 @@ fn refusal(error: &yamaa_adapters::lint::Error, paths: &[String]) -> Failure {
         Some(file) => text::relative(file, &directory),
         None => paths.first().map_or("", String::as_str).into(),
     };
-    Failure::new(
+    Failure::rejected(
         Action::Lint(&path),
         &Report::from_issues(&error.diagnostics()),
     )

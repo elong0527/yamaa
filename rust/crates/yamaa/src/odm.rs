@@ -10,12 +10,13 @@
 //! `ClinicalData` are refused, and audit records, signatures, annotations,
 //! reference data and administrative data are skipped.
 //!
-//! A refusal is [`Error::Rejected`] with one issue, so a host's error carries
-//! it (#3030 D73, D158): a `source_odm_*` condition for the source, naming
-//! it as given in `context.path`; FILE-7's and FILE-8's conditions for a
-//! path that reaches no regular file; `value_not_permitted` at an option
-//! below its minimum; and `engine_rejected` for a file the host cannot read.
-//! A build without the `odm` feature returns [`Error::Unavailable`].
+//! A refusal is a [`FailureKind::Rejected`] failure with one issue, so a
+//! host's error carries it (#3030 D73, D158): a `source_odm_*` condition for
+//! the source, naming it as given in `context.path`; FILE-7's and FILE-8's
+//! conditions for a path that reaches no regular file; `value_not_permitted`
+//! at an option below its minimum; and `engine_rejected` for a file the host
+//! cannot read. A build without the `odm` feature fails with
+//! [`FailureKind::Unavailable`].
 //!
 //! The source is captured once through a resolver, as every other read is:
 //! the engine's, or else the local file resolver, which reads a local caller
@@ -26,8 +27,9 @@ use std::path::Path;
 
 use crate::diagnostic::Report;
 use crate::engine::Engine;
-use crate::error::{Error, TableError};
+use crate::error::{Failure, FailureKind, TableError};
 use crate::table::Table;
+use crate::text::Action;
 
 /// The clinical-item columns in table order.
 pub const ODM_COLUMNS: [&str; 30] = yamaa_core::odm_items::COLUMNS;
@@ -105,13 +107,12 @@ impl OdmOptions {
     }
 }
 
-/// Every clinical item of the local file `path`, captured once through the
-/// local file resolver; a refusal names the path as given.
-fn read_local(path: &Path, options: &OdmOptions) -> Result<Table, Error> {
-    let source = path.display().to_string();
+/// Every clinical item of the local file `source`, captured once through
+/// the local file resolver; a refusal names the path as given.
+fn read_local(source: &str, options: &OdmOptions) -> Result<Table, Failure> {
     table(
-        yamaa_adapters::odm_xml::read(path, &options.to_core()),
-        &source,
+        yamaa_adapters::odm_xml::read(Path::new(source), &options.to_core()),
+        source,
     )
 }
 
@@ -119,8 +120,10 @@ impl Engine {
     /// Read every clinical item of one ODM 1.3 or 2.0 snapshot into a table,
     /// through this engine's resolver, which serves `source` under that name:
     /// one capture, as an input. Without a resolver, `source` is a local path
-    /// that the local file resolver reads. A refusal is [`Error::Rejected`]
-    /// with one issue, naming `source` as given.
+    /// that the local file resolver reads. A refusal is `cannot read
+    /// <source>`, naming `source` as given, with one issue.
+    /// [`FailureKind::Unavailable`] is the failure of a build without the
+    /// `odm` feature.
     ///
     /// A resolver's source is held whole before it is read as XML or TAR,
     /// so the per-file source bound of 10 GiB applies first: a larger source
@@ -136,7 +139,7 @@ impl Engine {
     /// ```
     /// use std::sync::Arc;
     ///
-    /// use yamaa::{Engine, EngineOptions, Error, HostLanguage, MemoryResolver, OdmOptions};
+    /// use yamaa::{Engine, EngineOptions, FailureKind, HostLanguage, MemoryResolver, OdmOptions};
     ///
     /// let resolver = Arc::new(MemoryResolver::new());
     /// resolver.insert("/", "study/odm.xml", "odm:1", Arc::from(
@@ -158,35 +161,46 @@ impl Engine {
     /// if cfg!(feature = "odm") {
     ///     assert_eq!(result.unwrap().rows(), 1);
     /// } else {
-    ///     assert!(matches!(result, Err(Error::Unavailable { feature: "odm" })));
+    ///     let failure = result.unwrap_err();
+    ///     assert_eq!(failure.kind, FailureKind::Unavailable { feature: "odm" });
+    ///     assert_eq!(
+    ///         failure.message,
+    ///         "cannot read study/odm.xml: format feature not compiled in: odm"
+    ///     );
     /// }
     /// ```
-    pub fn read_odm(&self, source: &str, options: &OdmOptions) -> Result<Table, Error> {
+    pub fn read_odm(&self, source: &str, options: &OdmOptions) -> Result<Table, Failure> {
         match crate::internal::resolver_bridge(self.shared()) {
             Some(resolver) => table(
                 yamaa_adapters::odm_xml::read_with_resolver(resolver, source, &options.to_core()),
                 source,
             ),
-            None => read_local(Path::new(source), options),
+            None => read_local(source, options),
         }
     }
 }
 
-/// The table, or the refusal of `source`, named as given: one issue in a
-/// rejected report, or a capability or representation failure, which
-/// carries none.
+/// The table, or the refusal of reading `source`, named as given: one issue,
+/// or a capability or representation failure, which carries none.
 fn table(
     result: Result<yamaa_adapters::public_table::PublicTable, yamaa_adapters::odm_xml::Error>,
     source: &str,
-) -> Result<Table, Error> {
+) -> Result<Table, Failure> {
     use yamaa_adapters::odm_xml;
+    let action = Action::Read(source);
     match result {
         Ok(table) => Ok(Table::from_adapter(&table)),
-        Err(odm_xml::Error::Unavailable) => Err(Error::Unavailable { feature: "odm" }),
-        Err(odm_xml::Error::Table(error)) => Err(Error::Table(TableError::from_public(error))),
+        Err(odm_xml::Error::Unavailable) => Err(Failure::of(
+            action,
+            FailureKind::Unavailable { feature: "odm" },
+        )),
+        Err(odm_xml::Error::Table(error)) => Err(Failure::of(
+            action,
+            FailureKind::Table(Box::new(TableError::from_public(error))),
+        )),
         Err(error) => {
             let issues = error.issue(source).into_iter().collect::<Vec<_>>();
-            Err(Error::Rejected(Report::from_issues(&issues)))
+            Err(Failure::rejected(action, &Report::from_issues(&issues)))
         }
     }
 }
