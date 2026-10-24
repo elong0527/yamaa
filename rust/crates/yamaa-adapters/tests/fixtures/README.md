@@ -67,11 +67,10 @@ Expected report strings use canonical UTF-8 JSON, matching the installed R repor
 
 `converted/` holds benchmark specifications, and the projects of the two
 transport cases, converted to 1.0 by `tools/migrate` for the tests that edit
-their text: `scalar_declarative_rounding.rs`, `scalar_language.rs`,
-`specification_sources.rs` and `submission_transport.rs`. These copies kept
-the edits and expectations of these tests in one language while the corpus
-moved to 1.0. The tests read inputs and expected files from the benchmark
-itself.
+their text: `scalar_language.rs`, `specification_sources.rs` and
+`submission_transport.rs`. These copies kept the edits and expectations of
+these tests in one language while the corpus moved to 1.0. The tests read
+inputs and expected files from the benchmark itself.
 
 ## correlated_aggregates
 # Aggregate relation controls

@@ -1,0 +1,328 @@
+{
+  "about": "The round_half_away_from_zero verb in a specification (FORMULA-16): what the check refuses before any study data is read, what a run reports for a source in a relation no input declares, and the rows a run gives when its source is qualified by its driver, read through a named intermediate, nested in a case result or derived in a row template. The document positive is the specification of the benchmark schema-round-half-away-from-zero-ties and adsl its input; negative is the specification of negative-round-half-away-from-zero-non-numeric-source, whose study data no case writes. A case that keeps the independent rows states the benchmark's authored expected/adsl.csv as its output, read with the declared types: STUDYID and USUBJID are str and VAL1, VAL0, RND1 and RND0 are float, an empty field missing; a rounded zero is positive zero (FORMULA-16). Moved from the declarative_rounding module of scalar_declarative_rounding.rs, whose tests compared the fields each case's compares names, the complete issue rows, or that a variant checks clean, builds without an issue and gives the table of that expected file.",
+  "documents": {
+    "positive": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADSL\nkeys: [STUDYID, USUBJID]\ninput:\n  SOURCE: input/adsl.csv\n\noutput:\n  path: adsl.csv\n  columns: [STUDYID, USUBJID, VAL1, VAL0, RND1, RND0]\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: SOURCE.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: SOURCE.USUBJID\n\n  - name: VAL1\n    type: float\n    label: Source Value for One-Decimal Rounding\n    derivation: SOURCE.VAL1\n\n  - name: VAL0\n    type: float\n    label: Source Value for Whole-Number Rounding\n    derivation: SOURCE.VAL0\n\n  # FORMULA-16: exact ties and near ties below them move away from zero.\n  - name: RND1\n    type: float\n    label: Value Rounded to One Decimal Place\n    derivation:\n      round_half_away_from_zero:\n        source: VAL1\n        digits: 1\n\n  - name: RND0\n    type: float\n    label: Value Rounded to a Whole Number\n    derivation:\n      round_half_away_from_zero:\n        source: VAL0\n        digits: 0\n",
+    "negative": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADSL\nkeys: [STUDYID, USUBJID]\ninput:\n  DM: input/dm.csv\n\noutput:\n  path: adsl.csv\n  columns: [STUDYID, USUBJID, RNDVAL]\n\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: DM.STUDYID\n\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n\n  - name: SEX\n    type: str\n    label: Sex\n    derivation: DM.SEX\n\n  # The defect: SEX is a text code, and rounding accepts only a numeric\n  # source, so the specification is rejected before any data is read.\n  - name: RNDVAL\n    type: float\n    label: Rounded Value\n    derivation:\n      round_half_away_from_zero:\n        source: SEX\n        digits: 1\n",
+    "adsl": "STUDYID,USUBJID,VAL1,VAL0\nYAMAA-01,YAMAA-01-001,2.45,\nYAMAA-01,YAMAA-01-002,-2.45,\nYAMAA-01,YAMAA-01-003,2.41,\nYAMAA-01,YAMAA-01-004,2.449999999,\nYAMAA-01,YAMAA-01-005,2.44999999,\nYAMAA-01,YAMAA-01-006,-2.449999999,\nYAMAA-01,YAMAA-01-007,-2.44999999,\nYAMAA-01,YAMAA-01-008,-0.04,\nYAMAA-01,YAMAA-01-009,,\nYAMAA-01,YAMAA-01-010,,2.5\nYAMAA-01,YAMAA-01-011,,-2.5\nYAMAA-01,YAMAA-01-012,,2.4\nYAMAA-01,YAMAA-01-013,,2.4999999999\nYAMAA-01,YAMAA-01-014,,2.4999999\nYAMAA-01,YAMAA-01-015,,-2.4999999999\nYAMAA-01,YAMAA-01-016,,-0.4\n"
+  },
+  "cases": [
+    {
+      "case": "malformed_digits_precede_unknown_source_and_missing_study_data",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "negative",
+            "edits": [
+              {
+                "from": "source: SEX",
+                "to": "source: ABSENT"
+              },
+              {
+                "from": "digits: 1",
+                "to": "digits: true"
+              }
+            ]
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.RNDVAL.derivation.round_half_away_from_zero.digits"]}]
+    },
+    {
+      "case": "undeclared_rounding_relation_is_classified_with_actual_source_schema",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "positive",
+            "edits": [
+              {
+                "from": "source: VAL1",
+                "to": "source: OTHER.VAL1"
+              }
+            ]
+          },
+          "input/adsl.csv": {"base": "adsl"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context"],
+      "issues": [{"condition": "unknown_field", "spec_paths": ["columns.RND1.derivation.round_half_away_from_zero.source"], "context": {"identifier": "OTHER.VAL1"}}]
+    },
+    {
+      "case": "a_driver_qualified_rounding_source_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "positive",
+            "edits": [
+              {
+                "from": "SOURCE: input/adsl.csv",
+                "to": "SOURCE: {path: input/adsl.csv, types: {VAL1: float, VAL0: float}}"
+              },
+              {
+                "from": "source: VAL1",
+                "to": "source: SOURCE.VAL1"
+              }
+            ]
+          },
+          "input/adsl.csv": {"base": "adsl"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_driver_qualified_rounding_source_keeps_the_independent_rows",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "positive",
+            "edits": [
+              {
+                "from": "SOURCE: input/adsl.csv",
+                "to": "SOURCE: {path: input/adsl.csv, types: {VAL1: float, VAL0: float}}"
+              },
+              {
+                "from": "source: VAL1",
+                "to": "source: SOURCE.VAL1"
+              }
+            ]
+          },
+          "input/adsl.csv": {"base": "adsl"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [
+        ["STUDYID", "USUBJID", "VAL1", "VAL0", "RND1", "RND0"],
+        ["YAMAA-01", "YAMAA-01-001", 2.45, null, 2.5, null],
+        ["YAMAA-01", "YAMAA-01-002", -2.45, null, -2.5, null],
+        ["YAMAA-01", "YAMAA-01-003", 2.41, null, 2.4, null],
+        ["YAMAA-01", "YAMAA-01-004", 2.449999999, null, 2.5, null],
+        ["YAMAA-01", "YAMAA-01-005", 2.44999999, null, 2.4, null],
+        ["YAMAA-01", "YAMAA-01-006", -2.449999999, null, -2.5, null],
+        ["YAMAA-01", "YAMAA-01-007", -2.44999999, null, -2.4, null],
+        ["YAMAA-01", "YAMAA-01-008", -0.04, null, 0.0, null],
+        ["YAMAA-01", "YAMAA-01-009", null, null, null, null],
+        ["YAMAA-01", "YAMAA-01-010", null, 2.5, null, 3.0],
+        ["YAMAA-01", "YAMAA-01-011", null, -2.5, null, -3.0],
+        ["YAMAA-01", "YAMAA-01-012", null, 2.4, null, 2.0],
+        ["YAMAA-01", "YAMAA-01-013", null, 2.4999999999, null, 3.0],
+        ["YAMAA-01", "YAMAA-01-014", null, 2.4999999, null, 2.0],
+        ["YAMAA-01", "YAMAA-01-015", null, -2.4999999999, null, -3.0],
+        ["YAMAA-01", "YAMAA-01-016", null, -0.4, null, 0.0]
+      ]
+    },
+    {
+      "case": "a_rounding_source_read_through_a_named_intermediate_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "positive",
+            "edits": [
+              {
+                "from": "SOURCE: input/adsl.csv",
+                "to": "SOURCE: input/adsl.csv\n  LOOKUP: {path: input/lookup.csv, types: {VAL1: float}}\nbase: SOURCE\nintermediates:\n  - id: SELECTED\n    dataset: LOOKUP\n    key: [STUDYID, USUBJID]"
+              },
+              {
+                "from": "source: VAL1",
+                "to": "source: SELECTED.VAL1"
+              }
+            ]
+          },
+          "input/adsl.csv": {"base": "adsl"},
+          "input/lookup.csv": {"base": "adsl"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_rounding_source_read_through_a_named_intermediate_keeps_the_independent_rows",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "positive",
+            "edits": [
+              {
+                "from": "SOURCE: input/adsl.csv",
+                "to": "SOURCE: input/adsl.csv\n  LOOKUP: {path: input/lookup.csv, types: {VAL1: float}}\nbase: SOURCE\nintermediates:\n  - id: SELECTED\n    dataset: LOOKUP\n    key: [STUDYID, USUBJID]"
+              },
+              {
+                "from": "source: VAL1",
+                "to": "source: SELECTED.VAL1"
+              }
+            ]
+          },
+          "input/adsl.csv": {"base": "adsl"},
+          "input/lookup.csv": {"base": "adsl"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [
+        ["STUDYID", "USUBJID", "VAL1", "VAL0", "RND1", "RND0"],
+        ["YAMAA-01", "YAMAA-01-001", 2.45, null, 2.5, null],
+        ["YAMAA-01", "YAMAA-01-002", -2.45, null, -2.5, null],
+        ["YAMAA-01", "YAMAA-01-003", 2.41, null, 2.4, null],
+        ["YAMAA-01", "YAMAA-01-004", 2.449999999, null, 2.5, null],
+        ["YAMAA-01", "YAMAA-01-005", 2.44999999, null, 2.4, null],
+        ["YAMAA-01", "YAMAA-01-006", -2.449999999, null, -2.5, null],
+        ["YAMAA-01", "YAMAA-01-007", -2.44999999, null, -2.4, null],
+        ["YAMAA-01", "YAMAA-01-008", -0.04, null, 0.0, null],
+        ["YAMAA-01", "YAMAA-01-009", null, null, null, null],
+        ["YAMAA-01", "YAMAA-01-010", null, 2.5, null, 3.0],
+        ["YAMAA-01", "YAMAA-01-011", null, -2.5, null, -3.0],
+        ["YAMAA-01", "YAMAA-01-012", null, 2.4, null, 2.0],
+        ["YAMAA-01", "YAMAA-01-013", null, 2.4999999999, null, 3.0],
+        ["YAMAA-01", "YAMAA-01-014", null, 2.4999999, null, 2.0],
+        ["YAMAA-01", "YAMAA-01-015", null, -2.4999999999, null, -3.0],
+        ["YAMAA-01", "YAMAA-01-016", null, -0.4, null, 0.0]
+      ]
+    },
+    {
+      "case": "rounding_nested_in_a_case_result_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "positive",
+            "edits": [
+              {
+                "from": "round_half_away_from_zero:\n        source: VAL1\n        digits: 1",
+                "to": "case:\n        - when: \"VAL1 IS NOT NULL\"\n          then: {round_half_away_from_zero: {source: VAL1, digits: 1}}\n        - otherwise: null"
+              }
+            ]
+          },
+          "input/adsl.csv": {"base": "adsl"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "rounding_nested_in_a_case_result_keeps_the_independent_rows",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "positive",
+            "edits": [
+              {
+                "from": "round_half_away_from_zero:\n        source: VAL1\n        digits: 1",
+                "to": "case:\n        - when: \"VAL1 IS NOT NULL\"\n          then: {round_half_away_from_zero: {source: VAL1, digits: 1}}\n        - otherwise: null"
+              }
+            ]
+          },
+          "input/adsl.csv": {"base": "adsl"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [
+        ["STUDYID", "USUBJID", "VAL1", "VAL0", "RND1", "RND0"],
+        ["YAMAA-01", "YAMAA-01-001", 2.45, null, 2.5, null],
+        ["YAMAA-01", "YAMAA-01-002", -2.45, null, -2.5, null],
+        ["YAMAA-01", "YAMAA-01-003", 2.41, null, 2.4, null],
+        ["YAMAA-01", "YAMAA-01-004", 2.449999999, null, 2.5, null],
+        ["YAMAA-01", "YAMAA-01-005", 2.44999999, null, 2.4, null],
+        ["YAMAA-01", "YAMAA-01-006", -2.449999999, null, -2.5, null],
+        ["YAMAA-01", "YAMAA-01-007", -2.44999999, null, -2.4, null],
+        ["YAMAA-01", "YAMAA-01-008", -0.04, null, 0.0, null],
+        ["YAMAA-01", "YAMAA-01-009", null, null, null, null],
+        ["YAMAA-01", "YAMAA-01-010", null, 2.5, null, 3.0],
+        ["YAMAA-01", "YAMAA-01-011", null, -2.5, null, -3.0],
+        ["YAMAA-01", "YAMAA-01-012", null, 2.4, null, 2.0],
+        ["YAMAA-01", "YAMAA-01-013", null, 2.4999999999, null, 3.0],
+        ["YAMAA-01", "YAMAA-01-014", null, 2.4999999, null, 2.0],
+        ["YAMAA-01", "YAMAA-01-015", null, -2.4999999999, null, -3.0],
+        ["YAMAA-01", "YAMAA-01-016", null, -0.4, null, 0.0]
+      ]
+    },
+    {
+      "case": "rounding_in_a_row_template_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "positive",
+            "edits": [
+              {
+                "from": "        digits: 0\n",
+                "to": "        digits: 0\n\nrows:\n  - id: RECORDS\n    dataset: SOURCE\n    derivations:\n      RND1: {round_half_away_from_zero: {source: VAL1, digits: 1}}\n"
+              }
+            ]
+          },
+          "input/adsl.csv": {"base": "adsl"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "rounding_in_a_row_template_keeps_the_independent_rows",
+      "operation": "build",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "positive",
+            "edits": [
+              {
+                "from": "        digits: 0\n",
+                "to": "        digits: 0\n\nrows:\n  - id: RECORDS\n    dataset: SOURCE\n    derivations:\n      RND1: {round_half_away_from_zero: {source: VAL1, digits: 1}}\n"
+              }
+            ]
+          },
+          "input/adsl.csv": {"base": "adsl"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "output": [
+        ["STUDYID", "USUBJID", "VAL1", "VAL0", "RND1", "RND0"],
+        ["YAMAA-01", "YAMAA-01-001", 2.45, null, 2.5, null],
+        ["YAMAA-01", "YAMAA-01-002", -2.45, null, -2.5, null],
+        ["YAMAA-01", "YAMAA-01-003", 2.41, null, 2.4, null],
+        ["YAMAA-01", "YAMAA-01-004", 2.449999999, null, 2.5, null],
+        ["YAMAA-01", "YAMAA-01-005", 2.44999999, null, 2.4, null],
+        ["YAMAA-01", "YAMAA-01-006", -2.449999999, null, -2.5, null],
+        ["YAMAA-01", "YAMAA-01-007", -2.44999999, null, -2.4, null],
+        ["YAMAA-01", "YAMAA-01-008", -0.04, null, 0.0, null],
+        ["YAMAA-01", "YAMAA-01-009", null, null, null, null],
+        ["YAMAA-01", "YAMAA-01-010", null, 2.5, null, 3.0],
+        ["YAMAA-01", "YAMAA-01-011", null, -2.5, null, -3.0],
+        ["YAMAA-01", "YAMAA-01-012", null, 2.4, null, 2.0],
+        ["YAMAA-01", "YAMAA-01-013", null, 2.4999999999, null, 3.0],
+        ["YAMAA-01", "YAMAA-01-014", null, 2.4999999, null, 2.0],
+        ["YAMAA-01", "YAMAA-01-015", null, -2.4999999999, null, -3.0],
+        ["YAMAA-01", "YAMAA-01-016", null, -0.4, null, 0.0]
+      ]
+    },
+    {
+      "case": "unselected_case_uses_static_known_type_validation_before_study_capture",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {
+            "base": "negative",
+            "edits": [
+              {
+                "from": "round_half_away_from_zero:\n        source: SEX\n        digits: 1",
+                "to": "case:\n        - when: \"SEX = 'NEVER'\"\n          then: {round_half_away_from_zero: {source: SEX, digits: 1}}\n        - otherwise: null"
+              }
+            ]
+          }
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-16", "spec_paths": ["columns.RNDVAL.derivation.case[0].then.round_half_away_from_zero.source"], "context": {"source": "SEX", "expected": "numeric", "actual": "str"}}]
+    }
+  ]
+}
