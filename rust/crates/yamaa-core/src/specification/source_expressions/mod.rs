@@ -197,7 +197,7 @@ impl Declaration {
         &self,
         path: &str,
         source: &str,
-        schema: &TableSchema,
+        (schema, kinds): (&TableSchema, &[Option<ColumnType>]),
         intermediates: &intermediates::Declarations,
         findings: &mut Vec<BindFinding>,
     ) -> Result<Option<BoundPredicate>, BindError> {
@@ -285,9 +285,9 @@ impl Declaration {
             crate::result_type::ResultType::declared(
                 name.split_once('.')
                     .and_then(|(_, field)| {
-                        schema.columns().iter().find(|column| column.name == field)
+                        schema.columns().iter().position(|column| column.name == field)
                     })
-                    .map(|column| column.kind),
+                    .and_then(|column| kinds.get(column).copied().flatten()),
             )
         });
         BoundPredicate::new(typed, bindings)
@@ -486,7 +486,7 @@ impl Declaration {
     pub(super) fn bind_range(
         &self,
         cx: &mut BindContext<'_, '_>,
-        donor: &TableSchema,
+        (donor, kinds): (&TableSchema, &[Option<ColumnType>]),
         driver: Option<&str>,
     ) -> Result<Option<Option<crate::dataset::RelationRange>>, BindError> {
         let binder::Donors {
@@ -505,7 +505,7 @@ impl Declaration {
         let bounds = range.bind_bounds(
             owner,
             donor,
-            &|column| donor.columns().get(column).map(|field| field.kind),
+            &|column| kinds.get(column).copied().flatten(),
             &|_| true,
             &mut diagnostics,
         );
@@ -542,7 +542,15 @@ impl Declaration {
             return Ok(None);
         }
         let Some((read, kind)) =
-            range.current_value(catalog, secondary, intermediates, driver, available, edges)?
+            range.current_value(
+                catalog,
+                cx.donors.inputs,
+                secondary,
+                intermediates,
+                driver,
+                available,
+                edges,
+            )?
         else {
             findings.push(wrap(range.unknown_value(owner)));
             return Ok(None);
@@ -636,32 +644,35 @@ fn bind_implicit_source(
         named,
         secondary,
         items,
+        ..
     } = cx.donors;
     let base = cx.scope.driver;
-    let base_fields = catalog
-        .fields(base)
-        .map(|fields| {
-            TableSchema::new(
-                fields
-                    .into_iter()
-                    .map(|field| crate::table::Column {
-                        name: field.name.into(),
-                        kind: field.column_type,
-                    })
-                    .collect(),
-            )
-        })
-        .transpose()
-        .map_err(|_| BindError::Internal)?
-        .ok_or(BindError::Internal)?;
+    let fields = catalog.fields(base).ok_or(BindError::Internal)?;
+    let base_kinds = fields.iter().map(|field| field.column_type).collect::<Vec<_>>();
+    let base_fields = TableSchema::new(
+        fields
+            .into_iter()
+            .map(|field| crate::table::Column {
+                name: field.name.into(),
+                // A layout slot; its kind is `base_kinds`'s.
+                kind: field.column_type.unwrap_or(ColumnType::Str),
+            })
+            .collect(),
+    )
+    .map_err(|_| BindError::Internal)?;
+    let base = (&base_fields, &base_kinds[..]);
     let name = &declaration.variable;
     let expression = if let Some((index, field)) = named.reference(name) {
         if let Some(item) = &items[index] {
             // A filtered-source operand naming one intermediate record cannot filter it again.
+            let schema = item.source_schema(secondary).ok_or(BindError::Internal)?;
+            let kinds = (0..schema.columns().len())
+                .map(|column| cx.donors.kind(item, column))
+                .collect::<Vec<_>>();
             declaration.bind_filter_named(
                 path,
-                base,
-                item.source_schema(secondary).ok_or(BindError::Internal)?,
+                cx.scope.driver,
+                (schema, &kinds[..]),
                 named,
                 cx.findings,
             )?;
@@ -693,21 +704,19 @@ fn bind_implicit_source(
             .enumerate()
             .find(|(_, source)| source.name == dataset)
         {
-            let filter =
-                declaration.bind_filter_named(path, dataset, &source.schema, named, cx.findings)?;
+            let kinds = cx.donors.inputs.kinds_of(dataset, &source.schema);
+            let filter = declaration.bind_filter_named(
+                path,
+                dataset,
+                (&source.schema, &kinds[..]),
+                named,
+                cx.findings,
+            )?;
             let selection = declaration.bind_selection(path, dataset, &source.schema, cx.findings);
             if let Some(source_column) =
                 source.schema.columns().iter().position(|c| c.name == field)
             {
-                let donor_fields = source
-                    .schema
-                    .columns()
-                    .iter()
-                    .map(|field| reference_binding::Field {
-                        name: &field.name,
-                        column_type: field.kind,
-                    })
-                    .collect::<Vec<_>>();
+                let donor_fields = cx.donors.inputs.fields_of(dataset, &source.schema);
                 // The input's declared key (LOOKUP-1).
                 let key_names = row_drivers::declared_key(cx.spec(), dataset);
                 match crate::key_relation::declared(catalog, &key_names, &donor_fields)
@@ -736,7 +745,7 @@ fn bind_implicit_source(
                         }
                         let keys = pairs;
                         declaration
-                            .bind_range(cx, &source.schema, None)?
+                            .bind_range(cx, (&source.schema, &kinds[..]), None)?
                             .map(|range| Expression::SourceLookup {
                                 lookup: crate::dataset::Lookup {
                                     source: source_index,
@@ -769,10 +778,10 @@ fn bind_implicit_source(
                 });
                 None
             }
-        } else if dataset == base {
+        } else if dataset == cx.scope.driver {
             let filter =
-                declaration.bind_filter_named(path, base, &base_fields, named, cx.findings)?;
-            let selection = declaration.bind_selection(path, dataset, &base_fields, cx.findings);
+                declaration.bind_filter_named(path, dataset, base, named, cx.findings)?;
+            let selection = declaration.bind_selection(path, dataset, base.0, cx.findings);
             if let Some(reference_binding::Binding::Dataset { field, .. }) = catalog.bind(name) {
                 if implicit.key && filter.is_none() && selection.is_none() {
                     Some(Expression::Source(field))
@@ -811,7 +820,7 @@ fn bind_implicit_source(
             });
             return Ok(None);
         }
-        declaration.bind_filter_named(path, base, &base_fields, named, cx.findings)?;
+        declaration.bind_filter_named(path, cx.scope.driver, base, named, cx.findings)?;
         if let Some(reference_binding::Binding::Output { column, .. }) = catalog.bind(name) {
             cx.edges.push(column);
             Some(Expression::Column(column))
@@ -840,7 +849,7 @@ pub(super) fn bind_implicit(
     path: &str,
     key_names: &[&str],
     catalog: &Catalog,
-    secondary: &[crate::dataset::SecondarySource],
+    (inputs, secondary): (binder::Inputs<'_>, &[crate::dataset::SecondarySource]),
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<Expression>, BindError> {
@@ -863,15 +872,7 @@ pub(super) fn bind_implicit(
         return Ok(None);
     };
     let outputs = catalog.output_names();
-    let donor = source
-        .schema
-        .columns()
-        .iter()
-        .map(|column| reference_binding::Field {
-            name: &column.name,
-            column_type: column.kind,
-        })
-        .collect::<Vec<_>>();
+    let donor = inputs.fields_of(dataset, &source.schema);
     match crate::key_relation::declared(catalog, key_names, &donor).map_err(BindError::Catalog)? {
         crate::key_relation::Inference::Keys { keys } => {
             let mut bound = Vec::new();

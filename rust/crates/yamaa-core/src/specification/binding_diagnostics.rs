@@ -99,6 +99,7 @@ impl BindFinding {
             Self::Source(finding) => return Some(vec![finding.diagnostic()]),
             Self::Window(finding) => return Some(vec![finding.diagnostic()]),
             Self::Lookup(finding) => return Some(vec![finding.diagnostic()]),
+            Self::Withheld(finding) => return finding.diagnostics(source),
             Self::RowFilterPhase {
                 path,
                 identifier,

@@ -4,7 +4,7 @@ use crate::{
     bound_expression::{Binding, BoundPredicate, Read},
     dataset::{
         AggregateBinding, AggregatePhase, AggregateRelation, AggregateRowContext, AggregateSource,
-        BoundAggregate, IntermediateKey, SecondarySource,
+        BoundAggregate, IntermediateKey,
     },
     diagnostic::{AggregateContextCause as Cause, AggregateFinding as Finding},
     reference_scope::Phase,
@@ -819,7 +819,7 @@ fn validate_header<'a>(
     Ok(Some((compiled, relations)))
 }
 
-type ResolveRef<'a> = &'a (dyn Fn(&str, &str, &mut Vec<BindFinding>) -> Result<Option<(usize, ColumnType)>, BindError>
+type ResolveRef<'a> = &'a (dyn Fn(&str, &str, &mut Vec<BindFinding>) -> Result<Option<(usize, Option<ColumnType>)>, BindError>
          + 'a);
 type GroupOperands = (Vec<usize>, Vec<AggregateBinding>);
 
@@ -835,6 +835,8 @@ struct Reduced<'a> {
     donor: AggregateSource,
     declared: Option<&'a [String]>,
     schema: &'a TableSchema,
+    /// Each field's kind in `schema`, where the schema source decides it.
+    kinds: &'a [Option<ColumnType>],
 }
 
 fn bind_groups_and_operands(
@@ -849,6 +851,7 @@ fn bind_groups_and_operands(
         relation,
         declared,
         schema: donor_schema,
+        kinds: donor_kinds,
         ..
     } = *reduced;
     let (catalog, phase) = (cx.catalog, cx.scope.phase);
@@ -952,7 +955,7 @@ fn bind_groups_and_operands(
             }
         }
     }
-    let kind = |name: &str| binding_kind(name, &bindings, donor_schema, declaration);
+    let kind = |name: &str| binding_kind(name, &bindings, donor_kinds, declaration);
     findings.extend(
         types::aggregate_kinds(compiled, kind, matches!(phase, Phase::Row { .. }))?
             .into_iter()
@@ -962,31 +965,22 @@ fn bind_groups_and_operands(
 }
 
 /// The type of a name the aggregate expression binds: a relation field's
-/// captured type, or a derive binding's declared type.
+/// type, `donor_kinds`'s, or a derive binding's declared type.
 fn binding_kind(
     name: &str,
     bindings: &[AggregateBinding],
-    donor_schema: &TableSchema,
+    donor_kinds: &[Option<ColumnType>],
     declaration: &Declaration,
 ) -> Option<crate::value::ValueType> {
-    bindings
-        .iter()
-        .find(|binding| binding.name == name)
-        .and_then(|binding| {
-            donor_schema
-                .columns()
-                .get(binding.column)
-                .map(|column| column.kind.into())
-                .or_else(|| {
-                    declaration
-                        .derive
-                        .as_ref()
-                        .and_then(|derive| {
-                            derive.get(binding.column.saturating_sub(donor_schema.columns().len()))
-                        })
-                        .map(|derive| derive.kind.into())
-                })
-        })
+    let binding = bindings.iter().find(|binding| binding.name == name)?;
+    match donor_kinds.get(binding.column) {
+        Some(kind) => kind.map(Into::into),
+        None => declaration
+            .derive
+            .as_ref()
+            .and_then(|derive| derive.get(binding.column.saturating_sub(donor_kinds.len())))
+            .map(|derive| derive.kind.into()),
+    }
 }
 
 fn bind_filter(
@@ -1023,7 +1017,7 @@ fn bind_filter(
                         kinds
                             .iter()
                             .find(|(bound, _)| *bound == name)
-                            .map(|&(_, kind)| kind),
+                            .and_then(|&(_, kind)| kind),
                     )
                 });
                 Some(
@@ -1060,21 +1054,23 @@ fn record_catalog(
     catalog: &Catalog,
     driver: &str,
     output: &TableSchema,
-    secondary: &[SecondarySource],
+    donors: binder::Donors<'_>,
 ) -> Result<Option<Catalog>, BindError> {
     let Some(primary) = catalog.fields(driver) else {
         return Ok(None);
     };
-    fn field(column: &crate::table::Column) -> reference_binding::Field<'_> {
-        reference_binding::Field {
+    let secondary = donors.secondary;
+    let outputs = output
+        .columns()
+        .iter()
+        .map(|column| reference_binding::Field {
             name: &column.name,
-            column_type: column.kind,
-        }
-    }
-    let outputs = output.columns().iter().map(field).collect::<Vec<_>>();
+            column_type: Some(column.kind),
+        })
+        .collect::<Vec<_>>();
     let inputs = secondary
         .iter()
-        .map(|input| input.schema.columns().iter().map(field).collect::<Vec<_>>())
+        .map(|input| donors.inputs.fields_of(&input.name, &input.schema))
         .collect::<Vec<_>>();
     let datasets = std::iter::once(reference_binding::Dataset {
         name: driver,
@@ -1111,9 +1107,7 @@ fn bound_relation(
     let (phase, driver, row) = (cx.scope.phase, cx.scope.driver, cx.row());
     let (catalog, output, project, tree) = (cx.catalog, cx.output, cx.project, cx.tree);
     let binder::Donors {
-        named,
-        secondary,
-        items: intermediates,
+        secondary, inputs, ..
     } = cx.donors;
     let (edges, findings) = (&mut *cx.edges, &mut *cx.findings);
     Ok(Some(match phase {
@@ -1192,7 +1186,7 @@ fn bound_relation(
                 .keys
                 .is_some()
                 .then(|| format!("{}.key", declaration.path));
-            let records = record_catalog(catalog, driver, output, secondary)?;
+            let records = record_catalog(catalog, driver, output, cx.donors)?;
             let values = records.as_ref().unwrap_or(catalog);
             let mut keys = Vec::new();
             for (field, value) in pairs {
@@ -1215,10 +1209,17 @@ fn bound_relation(
                         .iter()
                         .enumerate()
                         .find(|(_, column)| column.name == *field)
-                        .map(|(index, column)| (index, column.kind)),
+                        .map(|(column, field)| {
+                            (
+                                column,
+                                inputs.kind_of(&secondary[index].name, &field.name, field.kind),
+                            )
+                        }),
                 };
                 match donor_field {
-                    Some((_, actual)) => {
+                    // A key field whose type is not decided is not compared.
+                    Some((_, None)) => {}
+                    Some((_, Some(actual))) => {
                         let expected = value.result_type(tree, values)?;
                         if !expected.comparable(actual.into()) {
                             finding(
@@ -1277,9 +1278,7 @@ fn bound_relation(
                         phase,
                         project,
                         tree,
-                        named,
-                        secondary,
-                        intermediates,
+                        donors: cx.donors,
                     },
                 )?;
                 if let Some(value) = bound {
@@ -1358,26 +1357,38 @@ pub(super) fn bind(
     } else {
         AggregateSource::Primary
     };
-    let donor_schema = match (relation, donor) {
-        (Some(_), AggregateSource::Secondary(index)) => secondary[index].schema.clone(),
-        (Some(relation), AggregateSource::Primary) => TableSchema::new(
-            catalog
-                .fields(relation)
-                .ok_or(BindError::Internal)?
-                .iter()
-                .map(|field| crate::table::Column {
-                    name: field.name.into(),
-                    kind: field.column_type,
-                })
-                .collect(),
-        )
-        .map_err(|_| BindError::Internal)?,
-        (None, _) => output.clone(),
+    let inputs = cx.donors.inputs;
+    let (donor_schema, donor_kinds) = match (relation, donor) {
+        (Some(_), AggregateSource::Secondary(index)) => (
+            secondary[index].schema.clone(),
+            inputs.kinds_of(&secondary[index].name, &secondary[index].schema),
+        ),
+        (Some(relation), AggregateSource::Primary) => {
+            let fields = catalog.fields(relation).ok_or(BindError::Internal)?;
+            (
+                TableSchema::new(
+                    fields
+                        .iter()
+                        .map(|field| crate::table::Column {
+                            name: field.name.into(),
+                            // A layout slot; its kind is `donor_kinds`'s.
+                            kind: field.column_type.unwrap_or(ColumnType::Str),
+                        })
+                        .collect(),
+                )
+                .map_err(|_| BindError::Internal)?,
+                fields.iter().map(|field| field.column_type).collect(),
+            )
+        }
+        (None, _) => (
+            output.clone(),
+            output.columns().iter().map(|column| Some(column.kind)).collect(),
+        ),
     };
     let resolve = |name: &str,
                    path: &str,
                    findings: &mut Vec<BindFinding>|
-     -> Result<Option<(usize, ColumnType)>, BindError> {
+     -> Result<Option<(usize, Option<ColumnType>)>, BindError> {
         let bound = match (relation, donor) {
             (None, _) => match catalog.bind(name) {
                 Some(reference_binding::Binding::Output {
@@ -1394,9 +1405,8 @@ pub(super) fn bind(
                         .schema
                         .columns()
                         .iter()
-                        .enumerate()
-                        .find(|(_, column)| column.name == field)
-                        .map(|(index, column)| (index, column.kind))
+                        .position(|column| column.name == field)
+                        .map(|column| (column, donor_kinds[column]))
                 }),
             (Some(_), AggregateSource::Primary) => match catalog.bind(name) {
                 Some(reference_binding::Binding::Dataset {
@@ -1436,6 +1446,7 @@ pub(super) fn bind(
         donor,
         declared: declared.as_deref(),
         schema: &donor_schema,
+        kinds: &donor_kinds,
     };
     let Some((group_columns, bindings)) = bind_groups_and_operands(cx, &reduced, &grain, &resolve)?
     else {
@@ -1482,9 +1493,8 @@ pub(super) fn bind(
     let range = bind_range(
         declaration,
         catalog,
-        &donor_schema,
-        secondary,
-        intermediates,
+        (&donor_schema, &donor_kinds),
+        cx.donors,
         cx.edges,
         cx.findings,
     )?;
@@ -1504,7 +1514,7 @@ pub(super) fn bind(
         crate::result_type::ResultType::known(binding_kind(
             name,
             &bindings,
-            &donor_schema,
+            &donor_kinds,
             declaration,
         ))
     });
@@ -1739,9 +1749,8 @@ pub(super) fn late_reads(plan: &crate::dataset::DatasetPlan) -> Vec<BindFinding>
 fn bind_range(
     declaration: &Declaration,
     catalog: &Catalog,
-    donor: &TableSchema,
-    secondary: &[SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
+    (donor, kinds): (&TableSchema, &[Option<ColumnType>]),
+    donors: binder::Donors<'_>,
     edges: &mut Vec<usize>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<crate::dataset::RelationRange>, BindError> {
@@ -1757,7 +1766,7 @@ fn bind_range(
     let bounds = range.bind_bounds(
         Owner::Unnamed,
         donor,
-        &|column| donor.columns().get(column).map(|field| field.kind),
+        &|column| kinds.get(column).copied().flatten(),
         &|_| true,
         &mut diagnostics,
     );
@@ -1775,7 +1784,15 @@ fn bind_range(
         return Ok(None);
     };
     let Some((read, kind)) =
-        range.current_value(catalog, secondary, intermediates, None, None, edges)?
+        range.current_value(
+            catalog,
+            donors.inputs,
+            donors.secondary,
+            donors.items,
+            None,
+            None,
+            edges,
+        )?
     else {
         findings.push(BindFinding::AggregateDiagnostic(
             range.unknown_value(Owner::Unnamed),
@@ -1807,14 +1824,16 @@ fn bind_derivations(
         declaration,
         relation,
         schema: donor,
+        kinds: donor_kinds,
         ..
     } = *reduced;
     let (output, tree, project) = (cx.output, cx.tree, cx.project);
+    let donors = cx.donors;
     let binder::Donors {
-        named,
         secondary,
         items: intermediates,
-    } = cx.donors;
+        ..
+    } = donors;
     let (edges, findings) = (&mut *cx.edges, &mut *cx.findings);
     let Some(derive) = &declaration.derive else {
         return Ok((Vec::new(), None));
@@ -1852,14 +1871,14 @@ fn bind_derivations(
                 } else {
                     column.name.clone()
                 },
-                column.kind,
+                Some(column.kind),
             )
         })
         .collect::<Vec<_>>();
     output_fields.extend(
         derive
             .iter()
-            .map(|binding| (binding.name.clone(), binding.kind)),
+            .map(|binding| (binding.name.clone(), Some(binding.kind))),
     );
     let output_fields = output_fields
         .iter()
@@ -1871,9 +1890,10 @@ fn bind_derivations(
     let source_fields = donor
         .columns()
         .iter()
-        .map(|column| reference_binding::Field {
+        .zip(donor_kinds)
+        .map(|(column, &kind)| reference_binding::Field {
             name: &column.name,
-            column_type: column.kind,
+            column_type: kind,
         })
         .collect::<Vec<_>>();
     let catalog = Catalog::compile(
@@ -1905,7 +1925,7 @@ fn bind_derivations(
             .map(|(column, field)| {
                 (
                     field.name.clone(),
-                    (column, item.source_kind(secondary, column)),
+                    (column, donors.kind(item, column)),
                 )
             })
             .collect();
@@ -1921,10 +1941,8 @@ fn bind_derivations(
     let catalog = catalog
         .with_selected(selected)
         .map_err(BindError::Catalog)?;
-    let derived_types = declaration.derive_types(
-        tree,
-        &types::CapturedTypes::new(named, &catalog, secondary, intermediates),
-    )?;
+    let derived_types =
+        declaration.derive_types(tree, &types::CapturedTypes::new(donors, &catalog))?;
     let mut bound = Vec::new();
     for (index, binding) in derive.iter().enumerate() {
         let available = (0..width + index).collect::<Vec<_>>();
@@ -1937,11 +1955,7 @@ fn bind_derivations(
                 driver: relation,
                 available: Some(&available),
             },
-            donors: binder::Donors {
-                named,
-                secondary,
-                items: intermediates,
-            },
+            donors,
             catalog: &catalog,
             output: &derive_output,
             project,

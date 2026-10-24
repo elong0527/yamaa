@@ -56,13 +56,7 @@ pub(super) fn bind(
                     sources
                         .iter()
                         .position(|source| source.name == dataset)
-                        .and_then(|index| {
-                            schemas[index]
-                                .columns()
-                                .iter()
-                                .position(|column| column.name == field)
-                                .map(|column| (index, column))
-                        })
+                        .and_then(|index| schemas[index].position(field).map(|column| (index, column)))
                 })
                 .map(|(index, column)| {
                     let slot = current.len();
@@ -111,8 +105,8 @@ pub(super) fn bind(
     let references_resolved = findings.len() == before;
     let kind = |name: &str| -> Option<crate::value::ValueType> {
         let binding = bindings.iter().find(|binding| binding.name == name)?;
-        let (schema, column) = match binding.read {
-            Read::Source(column) => return donor_kind(column).map(Into::into),
+        match binding.read {
+            Read::Source(column) => donor_kind(column).map(Into::into),
             Read::Column(slot) => {
                 let CurrentRead::Record { source, column } = current.get(slot)?.read else {
                     return None;
@@ -124,14 +118,10 @@ pub(super) fn bind(
                 } else {
                     source
                 };
-                (*schemas.get(index)?, column)
+                schemas.get(index)?.kind(column).map(Into::into)
             }
-            _ => return None,
-        };
-        schema
-            .columns()
-            .get(column)
-            .map(|column| column.kind.into())
+            _ => None,
+        }
     };
     let type_findings = types::predicate_kinds(plan, kind);
     if static_filter_types {

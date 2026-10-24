@@ -610,11 +610,13 @@ fn type_name(kind: ColumnType) -> &'static str {
 }
 
 impl Declaration {
+    /// A type the schema source does not decide is not compared.
     fn baseline_type_finding(
         &self,
-        date_kind: ColumnType,
-        reference_kind: ColumnType,
+        date_kind: Option<ColumnType>,
+        reference_kind: Option<ColumnType>,
     ) -> Option<crate::diagnostic::Diagnostic> {
+        let date_kind = date_kind?;
         let Kind::BaselineFlag {
             date,
             reference_date,
@@ -625,7 +627,7 @@ impl Declaration {
         };
         let invalid = if !matches!(date_kind, ColumnType::Date | ColumnType::DateTime) {
             Some(("date", date, "date or datetime", date_kind))
-        } else if date_kind != reference_kind {
+        } else if let Some(reference_kind) = reference_kind.filter(|kind| *kind != date_kind) {
             Some((
                 "reference_date",
                 reference_date,

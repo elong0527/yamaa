@@ -97,6 +97,7 @@ pub(super) fn bind(
         named: declarations,
         secondary,
         items,
+        ..
     } = cx.donors;
     let (output, catalog) = (cx.output, cx.catalog);
     let (row, available) = (cx.row(), cx.scope.available);

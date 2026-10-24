@@ -134,6 +134,7 @@ fn implicit_predicate(
         named,
         secondary,
         items,
+        ..
     } = cx.donors;
     let start = cx.findings.len();
     let mut bindings = Vec::new();

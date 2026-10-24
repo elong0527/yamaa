@@ -23,6 +23,8 @@ mod binder;
 use binder::BindContext;
 mod binding_diagnostics;
 mod checks;
+mod input_schemas;
+use input_schemas::{InputSchema, InputSchemas};
 mod intermediate_derivations;
 mod intermediate_range;
 mod intermediates;
@@ -271,6 +273,13 @@ pub enum BindFinding {
         paths: Vec<String>,
         diagnostics: Vec<column_dependencies::Diagnostic>,
     },
+    /// A finding whose wording the schema source does not decide: it depends
+    /// on whether an input stores a field no declaration states, or on a
+    /// type no declaration gives (#3805). The failure is certain, so binding
+    /// goes on as it does for the finding itself, but `check()` withholds it
+    /// and each finding the same failure causes; `run()`, whose captured
+    /// schemas decide everything, never holds one.
+    Withheld(std::boxed::Box<BindFinding>),
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceDeclaration {
@@ -1266,12 +1275,8 @@ impl PreparedSpecification {
         if schemas.len() != self.sources.len() {
             return Err(BindError::SourceCount);
         }
-        let inputs = binder::Inputs {
-            sources: &self.sources,
-            schemas,
-            driver: self.driver,
-        };
-        let plan = self.rows.bind(self, inputs)?;
+        let schemas = InputSchemas::captured(schemas);
+        let plan = self.rows.bind(self, self.inputs(&schemas))?;
         // A plan the stage split cannot schedule is refused before resolution
         // with the operation it does not support.
         let unsupported = aggregates::late_reads(&plan);
@@ -1279,6 +1284,14 @@ impl PreparedSpecification {
             return Err(BindError::Invalid(unsupported));
         }
         plan.resolve().map_err(BindError::Resolution)
+    }
+    /// This specification's inputs, with the schemas `schemas` gives them.
+    fn inputs<'a>(&'a self, schemas: &'a InputSchemas) -> binder::Inputs<'a> {
+        binder::Inputs {
+            sources: &self.sources,
+            schemas: schemas.schemas(),
+            driver: self.driver,
+        }
     }
     /// Without row templates, a key derived by a window gives each retained
     /// base record its own output row: the key table is the records

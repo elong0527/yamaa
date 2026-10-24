@@ -13,16 +13,16 @@ mod relations {
             let source = [
                 Field {
                     name: "K",
-                    column_type: Str,
+                    column_type: Some(Str),
                 },
                 Field {
                     name: "N",
-                    column_type: Int,
+                    column_type: Some(Int),
                 },
             ];
             let other = [Field {
                 name: "N",
-                column_type: Float,
+                column_type: Some(Float),
             }];
             Catalog::compile(
                 &[],

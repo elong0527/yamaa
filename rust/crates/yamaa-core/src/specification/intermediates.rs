@@ -393,10 +393,22 @@ fn bind_one(
     } = inputs;
     let mut failed = false;
     let (schema, source_name) = match item.source {
-        self_relations::Relation::Input(index) => (schemas[index], sources[index].name.as_str()),
+        self_relations::Relation::Input(index) => (schemas[index].layout(), sources[index].name.as_str()),
         self_relations::Relation::SelfRows => (output, "SELF"),
         // A pair relation binds its two sides ([`pairs::bind`]).
         self_relations::Relation::Pair => return Err(BindError::Internal),
+    };
+    let output_kinds;
+    let stored_kinds = match item.source {
+        self_relations::Relation::Input(index) => schemas[index].kinds(),
+        _ => {
+            output_kinds = output
+                .columns()
+                .iter()
+                .map(|column| Some(column.kind))
+                .collect::<Vec<_>>();
+            &output_kinds
+        }
     };
     let mut pending_schema = None;
     let derivations = intermediate_derivations::bind(
@@ -406,6 +418,7 @@ fn bind_one(
             declarations: &item.derivations,
             dataset: source_name,
             stored: schema,
+            stored_kinds,
             stored_available: matches!(item.source, self_relations::Relation::SelfRows)
                 .then_some(self_columns.unwrap_or(&[])),
         },
@@ -422,10 +435,7 @@ fn bind_one(
             derived.column_kind(column)
         } else {
             match item.source {
-                self_relations::Relation::Input(index) => schemas[index]
-                    .columns()
-                    .get(column)
-                    .map(|column| column.kind),
+                self_relations::Relation::Input(index) => schemas[index].kind(column),
                 self_relations::Relation::SelfRows => {
                     output.columns().get(column).map(|column| column.kind)
                 }
@@ -500,9 +510,12 @@ fn bind_one(
             phase: crate::reference_scope::Phase::Row { group_by: None },
             project,
             tree,
-            named,
-            secondary,
-            intermediates: result,
+            donors: binder::Donors {
+                named,
+                secondary,
+                items: result,
+                inputs,
+            },
         };
         let value = if contextual_reader {
             declaration.bind_deferred(&path, &item.name, &catalog, findings, context)?
@@ -542,9 +555,12 @@ fn bind_one(
                     phase: crate::reference_scope::Phase::Row { group_by: None },
                     project,
                     tree,
-                    named,
-                    secondary,
-                    intermediates: result,
+                    donors: binder::Donors {
+                        named,
+                        secondary,
+                        items: result,
+                        inputs,
+                    },
                 },
                 findings,
             )?;
@@ -577,8 +593,12 @@ fn bind_one(
                 &donor,
                 &catalog,
                 contextual_reader,
-                result,
-                secondary,
+                binder::Donors {
+                    named,
+                    secondary,
+                    items: result,
+                    inputs,
+                },
                 findings,
             )
         })
@@ -590,7 +610,7 @@ fn bind_one(
     let source = match item.source {
         self_relations::Relation::Input(index) if index == driver => {
             crate::dataset::IntermediateSource::Primary {
-                schema: schemas[index].clone(),
+                schema: schemas[index].layout().clone(),
                 name: sources[index].name.clone(),
             }
         }
@@ -640,7 +660,7 @@ fn current_catalog(output: &TableSchema, inputs: binder::Inputs<'_>) -> Result<C
         .iter()
         .map(|column| reference_binding::Field {
             name: &column.name,
-            column_type: column.kind,
+            column_type: Some(column.kind),
         })
         .collect::<Vec<_>>();
     let current_sources = std::iter::once(driver)
@@ -648,16 +668,7 @@ fn current_catalog(output: &TableSchema, inputs: binder::Inputs<'_>) -> Result<C
         .collect::<Vec<_>>();
     let source_fields = current_sources
         .iter()
-        .map(|&index| {
-            schemas[index]
-                .columns()
-                .iter()
-                .map(|column| reference_binding::Field {
-                    name: &column.name,
-                    column_type: column.kind,
-                })
-                .collect::<Vec<_>>()
-        })
+        .map(|&index| schemas[index].fields())
         .collect::<Vec<_>>();
     let datasets = current_sources
         .iter()
@@ -1243,14 +1254,12 @@ impl Declarations {
         let mut secondary = inputs.secondary();
         // Each pair relation's records follow the inputs once it binds, read
         // as an input's by every intermediate derived after it (LOOKUP-27).
-        let mut relations = sources.to_vec();
-        let mut relation_schemas = schemas
-            .iter()
-            .map(|&schema| schema.clone())
-            .collect::<Vec<_>>();
+        // The inputs are borrowed until the first pair relation binds.
+        let mut relations = std::borrow::Cow::Borrowed(sources);
+        let mut relation_schemas = std::borrow::Cow::Borrowed(schemas);
         let mut result = Vec::new();
         for item in self.0.iter() {
-            let schemas = relation_schemas.iter().collect::<Vec<_>>();
+            let schemas = &*relation_schemas;
             if let Some(pair) = &item.pair {
                 let (bound, fields) = pairs::bind(
                     item,
@@ -1259,7 +1268,7 @@ impl Declarations {
                         named: self,
                         relations: binder::Inputs {
                             sources: &relations,
-                            schemas: &schemas,
+                            schemas,
                             driver,
                         },
                         inputs: sources.len(),
@@ -1276,8 +1285,10 @@ impl Declarations {
                     Some(fields) => fields,
                     None => TableSchema::new(Vec::new()).map_err(|_| BindError::Internal)?,
                 };
-                relations.push(pairs::pseudo_input(&item.name));
-                relation_schemas.push(fields.clone());
+                relations.to_mut().push(pairs::pseudo_input(&item.name));
+                relation_schemas
+                    .to_mut()
+                    .push(InputSchema::exact(&fields));
                 secondary.push(SecondarySource {
                     name: item.name.clone(),
                     schema: fields,
@@ -1302,7 +1313,7 @@ impl Declarations {
                     named: self,
                     inputs: binder::Inputs {
                         sources: &relations,
-                        schemas: &schemas,
+                        schemas,
                         driver,
                     },
                     output,

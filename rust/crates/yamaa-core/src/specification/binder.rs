@@ -72,35 +72,52 @@ impl Implicit {
     }
 }
 
-/// The named intermediates a binding may read, with their bound relations.
+/// The named intermediates a binding may read, with their bound relations,
+/// and the inputs whose schemas type the fields those relations store.
 #[derive(Clone, Copy)]
 pub(super) struct Donors<'a> {
     pub named: &'a intermediates::Declarations,
     pub secondary: &'a [SecondarySource],
     pub items: &'a [Option<Intermediate>],
+    pub inputs: Inputs<'a>,
+}
+
+impl Donors<'_> {
+    /// The kind of the field `column` of the intermediate `item`'s records:
+    /// a derived field's, or a stored field's as its input's schema decides
+    /// it ([`Inputs::kind_of`]).
+    pub(super) fn kind(&self, item: &Intermediate, column: usize) -> Option<ColumnType> {
+        self.inputs.source_kind(item, self.secondary, column)
+    }
 }
 
 /// The inputs binding reads: each declared input in authored order, with
-/// the schema its decoder captured, and the input whose records drive the
-/// rows. Built once where binding starts
-/// ([`PreparedSpecification::bind_sources`]) and carried as this one value
-/// to every layer that reads an input's schema, and to the catalogs and
-/// secondary ports built from it, so another source of schemas can take
-/// the captured one's place (#3805).
+/// its schema ([`InputSchema`]), and the input whose records drive the
+/// rows. Built once where binding starts and carried as this one value to
+/// every layer that reads an input's schema, and to the catalogs and
+/// secondary ports built from it: `run()` binds the captured schemas, and
+/// `check()` the declared ones (#3805).
 #[derive(Clone, Copy)]
 pub(super) struct Inputs<'a> {
     pub sources: &'a [SourceDeclaration],
-    pub schemas: &'a [&'a TableSchema],
+    pub schemas: &'a [InputSchema],
     pub driver: usize,
 }
 
 impl<'a> Inputs<'a> {
-    /// The driver's captured schema, the primary port of the rows' plan.
-    pub(super) fn driver_schema(&self) -> &'a TableSchema {
-        self.schemas[self.driver]
+    /// The driver's schema, the primary port of the rows' plan.
+    pub(super) fn driver_schema(&self) -> &'a InputSchema {
+        &self.schemas[self.driver]
+    }
+    /// The schema of the input `name`.
+    pub(super) fn schema(&self, name: &str) -> Option<&'a InputSchema> {
+        self.sources
+            .iter()
+            .position(|source| source.name == name)
+            .map(|index| &self.schemas[index])
     }
     /// Every input but the driver, in authored order: the secondary ports
-    /// of the rows' plan.
+    /// of the rows' plan, laid out as their schemas are.
     pub(super) fn secondary(&self) -> Vec<SecondarySource> {
         self.sources
             .iter()
@@ -109,9 +126,71 @@ impl<'a> Inputs<'a> {
             .filter(|(index, _)| *index != self.driver)
             .map(|(_, (declaration, schema))| SecondarySource {
                 name: declaration.name.clone(),
-                schema: (**schema).clone(),
+                schema: schema.layout().clone(),
             })
             .collect()
+    }
+    /// The kind of the field `field` of the relation `relation`, laid out as
+    /// `layout`: an input's stored field as its schema decides it, and any
+    /// other field, of a relation no input is or one an intermediate
+    /// derives, as its layout gives it, which its binding decided.
+    pub(super) fn kind_of(&self, relation: &str, field: &str, layout: ColumnType) -> Option<ColumnType> {
+        match self.schema(relation) {
+            Some(schema) => match schema.position(field) {
+                Some(column) => schema.kind(column),
+                None => Some(layout),
+            },
+            None => Some(layout),
+        }
+    }
+    /// The kinds of the fields of `relation`, laid out as `layout`.
+    pub(super) fn kinds_of(&self, relation: &str, layout: &TableSchema) -> Vec<Option<ColumnType>> {
+        layout
+            .columns()
+            .iter()
+            .map(|column| self.kind_of(relation, &column.name, column.kind))
+            .collect()
+    }
+    /// The catalog fields of `relation`, laid out as `layout`, each with its
+    /// kind ([`Self::kind_of`]).
+    pub(super) fn fields_of<'s>(
+        &self,
+        relation: &str,
+        layout: &'s TableSchema,
+    ) -> Vec<reference_binding::Field<'s>> {
+        layout
+            .columns()
+            .iter()
+            .map(|column| reference_binding::Field {
+                name: &column.name,
+                column_type: self.kind_of(relation, &column.name, column.kind),
+            })
+            .collect()
+    }
+    /// The kind of the field `column` of the intermediate `item`'s records,
+    /// whose secondary ports are `secondary`: a derived field's, as its
+    /// donor plan types it, or a stored field's ([`Self::kind_of`]).
+    pub(super) fn source_kind(
+        &self,
+        item: &Intermediate,
+        secondary: &[SecondarySource],
+        column: usize,
+    ) -> Option<ColumnType> {
+        use crate::dataset::IntermediateSource;
+        if item.derivations.is_some() {
+            return item.source_kind(secondary, column);
+        }
+        let layout = item.source_kind(secondary, column)?;
+        let relation = match &item.source {
+            IntermediateSource::Input(index) => secondary.get(*index).map(|source| source.name.as_str()),
+            IntermediateSource::Primary { name, .. } => Some(name.as_str()),
+            IntermediateSource::SelfRows { .. } | IntermediateSource::Pairs(_) => None,
+        };
+        let field = item.source_schema(secondary)?.columns().get(column)?;
+        match relation {
+            Some(relation) => self.kind_of(relation, &field.name, layout),
+            None => Some(layout),
+        }
     }
 }
 
@@ -147,12 +226,7 @@ impl<'a> BindContext<'a, '_> {
     }
     /// The names this binding reads, typed from the captured schemas.
     pub(super) fn captured(&self) -> types::CapturedTypes<'a> {
-        types::CapturedTypes::new(
-            self.donors.named,
-            self.catalog,
-            self.donors.secondary,
-            self.donors.items,
-        )
+        types::CapturedTypes::new(self.donors, self.catalog)
     }
     /// The tree binding reads.
     pub(super) fn spec(&self) -> &'a ast::Spec {
@@ -310,7 +384,7 @@ impl<'a> BindContext<'a, '_> {
                 Typing::Bound => match &expression {
                     Expression::Intermediate { index, column } => self.donors.items[*index]
                         .as_ref()
-                        .and_then(|item| item.source_kind(self.donors.secondary, *column)),
+                        .and_then(|item| self.donors.kind(item, *column)),
                     _ => self.catalog.type_of(name),
                 },
                 Typing::Captured => self.captured_type(name),
@@ -363,7 +437,7 @@ impl<'a> BindContext<'a, '_> {
                 .and_then(Option::as_ref)
                 .and_then(|item| {
                     let column = item.source_column(self.donors.secondary, field)?;
-                    item.source_kind(self.donors.secondary, column)
+                    self.donors.kind(item, column)
                 }),
             None => self.catalog.type_of(name),
         }
@@ -567,6 +641,7 @@ impl<'a> BindContext<'a, '_> {
             named,
             secondary,
             items,
+            ..
         } = self.donors;
         if let Some((dataset, _)) = name
             .split_once('.')
@@ -577,7 +652,7 @@ impl<'a> BindContext<'a, '_> {
                 path,
                 &row_drivers::declared_key(self.spec(), dataset),
                 self.catalog,
-                secondary,
+                (self.donors.inputs, secondary),
                 self.edges,
                 self.findings,
             );
@@ -721,6 +796,7 @@ impl<'a> BindContext<'a, '_> {
             named,
             secondary,
             items,
+            ..
         } = self.donors;
         checks::declared::qualified_numeric_findings(compiled, &text_path, named, self.findings);
         let mut bindings = Vec::new();
@@ -793,6 +869,7 @@ impl<'a> BindContext<'a, '_> {
             named,
             secondary,
             items,
+            ..
         } = self.donors;
         let mut bindings = Vec::new();
         for name in compiled.identifiers() {

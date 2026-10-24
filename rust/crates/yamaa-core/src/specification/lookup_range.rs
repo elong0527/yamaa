@@ -92,6 +92,7 @@ impl Declaration {
     pub(super) fn current_value(
         &self,
         catalog: &Catalog,
+        inputs: binder::Inputs<'_>,
         secondary: &[SecondarySource],
         intermediates: &[Option<Intermediate>],
         driver: Option<&str>,
@@ -106,7 +107,7 @@ impl Declaration {
                     column_type,
                 }) if available.is_none_or(|available| available.contains(&column)) => {
                     edges.push(column);
-                    Some((CurrentRead::Output(column), Some(column_type.into())))
+                    Some((CurrentRead::Output(column), column_type.map(Into::into)))
                 }
                 _ => None,
             });
@@ -127,7 +128,9 @@ impl Declaration {
                             source: index + 1,
                             column,
                         },
-                        Some(input.schema.columns()[column].kind.into()),
+                        inputs
+                            .kind_of(&input.name, field, input.schema.columns()[column].kind)
+                            .map(Into::into),
                     )
                 }));
         }
@@ -143,14 +146,14 @@ impl Declaration {
                 return Ok(stored_record(item, column).map(|source| {
                     (
                         CurrentRead::Record { source, column },
-                        item.source_kind(secondary, column).map(Into::into),
+                        inputs.source_kind(item, secondary, column).map(Into::into),
                     )
                 }));
             }
             edges.extend(row_intermediates::dependencies(index, intermediates)?);
             return Ok(Some((
                 CurrentRead::Intermediate { index, column },
-                item.source_kind(secondary, column).map(Into::into),
+                inputs.source_kind(item, secondary, column).map(Into::into),
             )));
         }
         // The catalog's own dataset is the primary input, record port 0.
@@ -164,7 +167,7 @@ impl Declaration {
                     source: 0,
                     column: field,
                 },
-                Some(column_type.into()),
+                column_type.map(Into::into),
             )),
             _ => None,
         })
@@ -407,7 +410,7 @@ mod tests {
             .iter()
             .map(|column| reference_binding::Field {
                 name: &column.name,
-                column_type: column.kind,
+                column_type: Some(column.kind),
             })
             .collect()
     }
@@ -469,8 +472,16 @@ mod tests {
             },
             &catalog,
             false,
-            &[],
-            &secondary,
+            binder::Donors {
+                named: &intermediates::Declarations::default(),
+                secondary: &secondary,
+                items: &[],
+                inputs: binder::Inputs {
+                    sources: &[],
+                    schemas: &[],
+                    driver: 0,
+                },
+            },
             &mut findings,
         )
         .unwrap()
