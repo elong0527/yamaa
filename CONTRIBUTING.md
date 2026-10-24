@@ -474,31 +474,69 @@ document and replays authored reports against it, `support::benchmarks`
 declaring file, `support::NoFunctions` (yamaa) stands for a project that
 calls no function, and `support::Scratch` (adapters and yamaa) is a scratch
 directory removed on drop. The core and adapters
-trees hold copies of four modules by design (#2158): a change to one is
+trees hold copies of five modules by design (#2158): a change to one is
 made to both, and `make check-repository` fails while they differ
 (`tools.validation.check_test_support`).
 
 - Authored controls are files under `tests/fixtures/`, read with
   `include_str!`; assert their row count so a truncated fixture fails
   (`tests/portable_math_golden.rs` in core).
-- Core's expected diagnostics are data (#3691): each case of
-  `tests/fixtures/diagnostics/*.json` names the behaviour it proves, the
-  core operations that reach it, their input (a specification is a JSON
-  object, or a document of the file's `documents` with edits) and the
-  complete issue rows they report, in the shape `assert_issues` compares.
-  `support::diagnostic::replay` replays every case once, inside
-  `diagnostics.rs`'s registry walk, and renders each issue's message. A case
-  of an existing operation is data alone; a new operation's reader, and a
-  new fixture file, are declared in their module under
-  `support::diagnostic::operations`. A case whose source compared only part
-  of each record names the fields it compares in `compares`, and a case
-  whose source compared some keys of a context names each as
-  `context.<key>` in place of `context`, its rows' contexts holding exactly
-  those keys. A case whose source found its record by cause among several
-  issues writes `"among": true`: its rows need only be among the issues
-  reported, in any order, since the issues its source left unstated give
-  its rows no authored position. It is the one exception to comparing the
-  whole issue list.
+- A test that writes files or documents, makes one call and compares what
+  the call reports is a case of the crate's
+  `tests/fixtures/diagnostics/*.json`
+  ([Design principles in practice](#design-principles-in-practice)), in
+  one case form both crates read (#3691, #3798). A case names the
+  behaviour it proves (`case`, unique across the files, which a rule card
+  cites as `<file>::<case>`), the operations that reach it (`operation`),
+  their `input`, and the complete issue rows they report (`issues`, in the
+  shape `assert_issues` compares). Core's input holds a specification as
+  a JSON object, or a document of the file's `documents` with edits that
+  set or remove a member. The adapters' input holds the `files` its
+  operation writes to a fresh study directory, each its text or a
+  `documents` entry with edits that each replace text occurring once, and
+  an issue row's text that starts with `{study}/` names one of those files
+  as the engine spells its path. Each crate's
+  `support::diagnostic::replay` replays every case once: core's inside
+  `diagnostics.rs`'s registry walk, which renders each issue's message,
+  and the adapters' in `diagnostics.rs`. A case of an existing operation
+  is data alone; a new operation's reader, and a new fixture file, are
+  declared in their module under `support::diagnostic::operations`.
+- A positive case also states what its operation built and saved.
+  `output` is the output table, whole, written as rows: the header of its
+  column names, then one row per record holding one cell per column.
+  `report` maps each kind of run report row it compares (`run`, `input`,
+  `rows`, `handler`, `column`, `check`; CHECK-23) to that kind's rows in
+  report order, written the same way, with a header that names the report
+  columns it compares in the report's order (CHECK-24) and leaves out
+  `KIND`; a kind it does not name is not compared, and a header alone
+  states that the report has no row of that kind, so a check of the
+  handler counts or the verifications is the `handler` or `check` rows. A
+  case names every column of each kind it states; a header that names
+  fewer is for a case whose source compared just those columns, as
+  `compares` is, and an empty `report` states nothing and is refused. A
+  cell is `null` when the value is missing, its text, its integer, `true`
+  or `false`, a float in the shortest spelling that reads back as the same
+  double, as a diagnostic context spells one (`2.5`, `10.0`, `1e16`), or a
+  date or datetime as its ISO text. `saved` maps each file the save
+  created or changed, by its path in the study directory, to its text or
+  to `{"file": path}`, an authored expected file named by its path from the
+  repository root, such as a benchmark's `expected/` file; `{}` states
+  that the save wrote nothing. A case states a table only when its
+  operation reports one, and `saved` exactly when its operation saves: the
+  adapters' `build` reports the tables a built result holds, and `save`
+  builds as `build` does, then saves; core's operations report issues
+  alone. The members a case may write, and the reading and comparing of
+  the positive ones, are `support::diagnostic::form`, one file both crates'
+  support trees hold byte for byte. A case the form cannot state yet
+  extends `form`, in both copies, rather than becoming a test function.
+- A case whose source compared only part of each record names the fields
+  it compares in `compares`, and a case whose source compared some keys of
+  a context names each as `context.<key>` in place of `context`, its rows'
+  contexts holding exactly those keys. A case whose source found its
+  record by cause among several issues writes `"among": true`: its rows
+  need only be among the issues reported, in any order, since the issues
+  its source left unstated give its rows no authored position. It is the
+  one exception to comparing the whole issue list.
 - A variant of a document comes from an exact-once edit,
   `document.edit(from, to)` through the adapters' `support::Edit`, never
   from `str::replace`, which does nothing when its pattern is missing.
