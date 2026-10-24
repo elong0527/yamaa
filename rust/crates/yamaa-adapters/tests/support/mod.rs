@@ -7,6 +7,7 @@ use yamaa_core::{
 
 pub mod aggregate_syntax;
 pub mod benchmarks;
+pub mod diagnostic;
 pub mod inheritance;
 pub mod issues;
 pub mod numeric_syntax;
