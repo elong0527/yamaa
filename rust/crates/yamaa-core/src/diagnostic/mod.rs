@@ -583,6 +583,18 @@ conditions! {
     LookupNearestSourceReference => ("validation", "unknown_field", Some("LOOKUP-26")),
     LookupNearestSourceType => ("validation", "incompatible_input_type", Some("LOOKUP-26")),
     LookupNearestReferenceType => ("validation", "incompatible_input_type", Some("LOOKUP-26")),
+    // The pair relation of a named intermediate that writes `inner_join`
+    // (LOOKUP-27, D263).
+    LookupPairConstruct => ("validation", "prohibited_construct", Some("LOOKUP-27")),
+    LookupPairKeyRequired => ("validation", "missing_required_field", Some("LOOKUP-27")),
+    LookupPairDerivationsRequired => ("validation", "missing_required_field", Some("LOOKUP-27")),
+    LookupPairDerivationsEmpty => ("validation", "invalid_field_type", Some("LOOKUP-27")),
+    LookupPairSide => ("validation", "invalid_intermediate_driver", Some("LOOKUP-27")),
+    LookupPairSideRepeated => ("validation", "duplicate_identifier", Some("LOOKUP-27")),
+    LookupPairKeyReference => ("validation", "unknown_field", Some("LOOKUP-27")),
+    LookupPairKeyType => ("validation", "incompatible_input_type", Some("LOOKUP-27")),
+    LookupPairReference => ("validation", "unknown_field", Some("LOOKUP-27")),
+    LookupPairFieldType => ("validation", "unknown_intermediate_driver_type", Some("LOOKUP-27")),
     FlagMissingValueRequired => ("validation", "missing_value_required", Some("EXPR-8")),
     PredicateUnknownField => ("validation", "unknown_field", Some("FORMULA-9")),
     PredicateUnresolvableName => ("validation", "unresolvable_name", Some("FORMULA-9")),

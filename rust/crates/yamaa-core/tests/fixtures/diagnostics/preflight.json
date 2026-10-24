@@ -402,6 +402,79 @@
       "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-26", "spec_paths": ["intermediates.P.order_by", "intermediates.P.keep", "intermediates.P.nearest"], "context": {"intermediate": "P", "construct": "order_by"}}]
     },
     {
+      "case": "a_pair_relation_refuses_an_order_and_a_keep_written_beside_inner_join_naming_the_order",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "inner_join": "SECOND", "key": ["ID"], "order_by": ["SECOND.ID"], "keep": "first", "derivations": {"N": "SECOND.ID"}}]}]
+      },
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.order_by", "intermediates.P.keep", "intermediates.P.inner_join"], "context": {"intermediate": "P", "construct": "order_by"}}]
+    },
+    {
+      "case": "a_pair_relation_refuses_a_range_and_an_absence_written_beside_inner_join_in_specification_order",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "inner_join": "SECOND", "key": ["ID"], "require_match": true, "between": {"value": "ID", "lower": "LOW"}, "derivations": {"N": "SECOND.ID"}}]}]
+      },
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.between", "intermediates.P.require_match", "intermediates.P.inner_join"], "context": {"intermediate": "P", "construct": "between"}}]
+    },
+    {
+      "case": "a_pair_relation_refuses_self_as_its_right_side",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "inner_join": "SELF", "key": ["ID"], "derivations": {"N": "SRC.ID"}}]}]
+      },
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.inner_join"], "context": {"intermediate": "P", "construct": "SELF"}}]
+    },
+    {
+      "case": "a_pair_relation_pairs_two_relations",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [{"set": ["intermediates"], "to": [{"id": "P", "dataset": "SRC", "inner_join": "SRC", "key": ["ID"], "derivations": {"N": "SRC.ID"}}]}]
+      },
+      "issues": [{"phase": "validation", "condition": "duplicate_identifier", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.inner_join", "intermediates.P.dataset"], "context": {"identifier": "SRC"}}]
+    },
+    {
+      "case": "a_pair_relation_side_is_an_intermediate_a_row_template_could_drive_on",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [{"set": ["intermediates"], "to": [
+          {"id": "L", "dataset": "SRC", "key": ["ID"]},
+          {"id": "P", "dataset": "L", "inner_join": "SECOND", "key": ["ID"], "derivations": {"N": "L.ID"}}
+        ]}]
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.dataset"], "context": {"intermediate": "L", "fields": ["key"]}}]
+    },
+    {
+      "case": "a_pair_relation_is_no_side_of_another",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [{"set": ["intermediates"], "to": [
+          {"id": "P", "dataset": "SRC", "inner_join": "SECOND", "key": ["ID"], "derivations": {"ID": "SRC.ID"}},
+          {"id": "Q", "dataset": "P", "inner_join": "SECOND", "key": ["ID"], "derivations": {"N": "P.ID"}}
+        ]}]
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-27", "spec_paths": ["intermediates.Q.dataset"], "context": {"intermediate": "P", "fields": ["key", "inner_join"]}}]
+    },
+    {
+      "case": "a_pair_relation_is_no_side_of_another_through_an_intermediate_over_it",
+      "operation": "prepare",
+      "input": {
+        "base": "spec",
+        "edits": [{"set": ["intermediates"], "to": [
+          {"id": "P", "dataset": "SRC", "inner_join": "SECOND", "key": ["ID"], "derivations": {"ID": "SRC.ID"}},
+          {"id": "OVER", "dataset": "P", "filter": "P.ID > 0"},
+          {"id": "Q", "dataset": "OVER", "inner_join": "SECOND", "key": ["ID"], "derivations": {"N": "OVER.ID"}}
+        ]}]
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-27", "spec_paths": ["intermediates.Q.dataset"], "context": {"intermediate": "OVER", "fields": ["dataset"]}}]
+    },
+    {
       "case": "a_repeated_row_template_id_is_refused_at_the_path_both_share",
       "operation": "prepare",
       "input": {"base": "spec", "edits": [{"set": ["rows"], "to": [{"id": "repeated", "dataset": "SRC"}, {"id": "repeated", "dataset": "SRC"}]}]},

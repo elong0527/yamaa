@@ -1,0 +1,63 @@
+yamaa: "1.0"
+type: spec
+domain: AECM
+keys: [USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int}}
+  RELREC: input/relrec.csv
+base: AE
+
+output:
+  path: aecm.csv
+  columns: [USUBJID, AESEQ, AETERM, CMCOUNT]
+
+intermediates:
+  # The adverse event members of each relationship.
+  - id: AEMEM
+    dataset: RELREC
+    filter: "RELREC.RDOMAIN = 'AE' AND RELREC.IDVAR = 'AESEQ'"
+    derivations:
+      SEQ: {type: int, derivation: IDVARVAL}
+
+  # The medication members of each relationship.
+  - id: CMMEM
+    dataset: RELREC
+    filter: "RELREC.RDOMAIN = 'CM' AND RELREC.IDVAR = 'CMSEQ'"
+    derivations:
+      SEQ: {type: int, derivation: IDVARVAL}
+
+  # One record per event and medication of the same relationship.
+  - id: PAIRS
+    dataset: AEMEM
+    inner_join: CMMEM
+    key: [USUBJID, RELID]
+    derivations:
+      USUBJID: AEMEM.USUBJID
+      AESEQ: AEMEM.SEQ
+      CMSEQ: CMMEM.SEQ
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE.AETERM
+
+  # The event's pairs, counted over the pair relation's records whose
+  # subject and event sequence number are the row's.
+  - name: CMCOUNT
+    type: int
+    label: Number of Related Medication Pairs
+    derivation:
+      aggregate:
+        expr: "COUNT(PAIRS.*)"
+        key: [USUBJID, AESEQ]

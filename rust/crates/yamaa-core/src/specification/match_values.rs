@@ -67,6 +67,30 @@ pub(super) fn admit(
     project: Option<&functions::Prepared>,
     extra: &mut Vec<UnsupportedFeature>,
 ) -> Result<(), PrepareError> {
+    let reference = admit_value(spec, pair, value, project, extra)?;
+    if let Some((relation, _)) = reference.and_then(|name| name.split_once('.')) {
+        if spec
+            .intermediates
+            .iter()
+            .any(|item| item.id.name == relation)
+        {
+            reject(extra, "intermediate_key_expression", path.into());
+        }
+    }
+    Ok(())
+}
+
+/// Admit the match value written at `value` in the pair at `pair`, as
+/// [`admit`] does, except that it may read a named intermediate: a pair
+/// relation's key value reads its left side's record (LOOKUP-27). Gives
+/// the name its read operand reads, when it has one.
+pub(super) fn admit_value<'s>(
+    spec: &'s ast::Spec,
+    pair: ast::Meta,
+    value: ExprId,
+    project: Option<&functions::Prepared>,
+    extra: &mut Vec<UnsupportedFeature>,
+) -> Result<Option<&'s str>, PrepareError> {
     let site = checks::path(spec, value);
     let mut reference = None;
     match &spec.expr(value).kind {
@@ -122,16 +146,7 @@ pub(super) fn admit(
             }
         }
     }
-    if let Some((relation, _)) = reference.and_then(|name| name.split_once('.')) {
-        if spec
-            .intermediates
-            .iter()
-            .any(|item| item.id.name == relation)
-        {
-            reject(extra, "intermediate_key_expression", path.into());
-        }
-    }
-    Ok(())
+    Ok(reference)
 }
 
 impl Declaration {

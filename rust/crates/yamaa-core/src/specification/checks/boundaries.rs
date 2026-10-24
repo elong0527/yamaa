@@ -166,18 +166,17 @@ impl<'a> Reads<'a> {
     }
 
     /// The lookup `owner` names, whatever rows it drives.
+    /// The lookup `owner` names; a pair relation is read as an input is
+    /// (LOOKUP-27).
     fn named(&self, owner: &str) -> Option<usize> {
         self.spec
             .intermediates
             .iter()
-            .position(|item| item.id.name == owner)
+            .position(|item| item.id.name == owner && !item.pairs())
     }
 
     fn input(&self, owner: &str) -> bool {
-        self.prepared
-            .sources
-            .iter()
-            .any(|source| source.name == owner)
+        super::reads_as_input(self.prepared, owner)
     }
 
     /// Whether `owner` qualifies nothing declared: no input, lookup or

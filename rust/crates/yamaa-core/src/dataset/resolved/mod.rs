@@ -545,6 +545,9 @@ pub struct RelationNode {
     pub no_match: Option<Value>,
     /// The region evaluating the donor derivations.
     pub derivations: Option<RegionId>,
+    /// The region evaluating a pair relation's key values over its left
+    /// records (LOOKUP-27, LOOKUP-6).
+    pub pair_values: Option<RegionId>,
     /// A key value depends on a window over the completed relation.
     pub windowed: bool,
     /// Output columns read across every candidate (output aggregates).
@@ -579,6 +582,9 @@ pub enum Donor {
     Output,
     /// The records feeding the current grouped row.
     Group,
+    /// The matching pairs of a pair relation's two sides, each a joined
+    /// record, materialized before any row is built (LOOKUP-27).
+    Pairs,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -965,6 +971,19 @@ impl ResolvedPlan {
     /// A region's named intermediate `index`: named intermediates keep their
     /// plan positions as the region's first relation slots.
     /// Returns `None` when the index does not name an intermediate in that region.
+    /// How many secondary ports of the dataset follow its inputs: one for
+    /// each pair relation, which the run fills before any row is built
+    /// (LOOKUP-27).
+    pub fn pair_ports(&self) -> usize {
+        self.region_relations(RegionId::DATASET)
+            .filter(|&relation| {
+                self.relation(relation)
+                    .named
+                    .as_ref()
+                    .is_some_and(|item| item.source.pairs().is_some())
+            })
+            .count()
+    }
     pub fn named(&self, region: RegionId, index: usize) -> Option<RelationId> {
         let relations = &self.region(region).relations;
         let id = relations.start.checked_add(u32::try_from(index).ok()?)?;

@@ -1,0 +1,66 @@
+yamaa: "1.0"
+type: spec
+domain: AECM
+keys: [USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int}}
+  RELREC: input/relrec.csv
+base: AE
+
+output:
+  path: aecm.csv
+  columns: [USUBJID, AESEQ, AETERM, CMSEQ]
+
+intermediates:
+  # The adverse event members of each relationship.
+  - id: AEMEM
+    dataset: RELREC
+    filter: "RELREC.RDOMAIN = 'AE' AND RELREC.IDVAR = 'AESEQ'"
+    derivations:
+      SEQ: {type: int, derivation: IDVARVAL}
+
+  # The medication members of each relationship.
+  - id: CMMEM
+    dataset: RELREC
+    filter: "RELREC.RDOMAIN = 'CM' AND RELREC.IDVAR = 'CMSEQ'"
+    derivations:
+      SEQ: {type: int, derivation: IDVARVAL}
+
+  # One record per event and medication of the same relationship.
+  - id: PAIRS
+    dataset: AEMEM
+    inner_join: CMMEM
+    key: [USUBJID, RELID]
+    derivations:
+      USUBJID: AEMEM.USUBJID
+      AESEQ: AEMEM.SEQ
+      CMSEQ: CMMEM.SEQ
+
+  # Each event's pairs, read with a key of their own, as an input's records
+  # would be: the pair with the highest medication sequence number.
+  - id: LASTCM
+    dataset: PAIRS
+    key: [USUBJID, AESEQ]
+    order_by: [PAIRS.CMSEQ]
+    keep: last
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE.AETERM
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number of the Last Related Medication
+    derivation: LASTCM.CMSEQ

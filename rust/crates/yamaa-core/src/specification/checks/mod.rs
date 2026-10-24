@@ -432,8 +432,14 @@ pub(super) fn donor_read(spec: &Spec, index: usize) -> bool {
 /// Whether `owner` qualifies nothing declared, no input or lookup, so a
 /// field it qualifies binds nothing, whatever any input stores.
 pub(super) fn undeclared(prepared: &PreparedSpecification, owner: &str) -> bool {
-    !prepared.intermediates.contains(owner)
-        && !prepared.sources.iter().any(|input| input.name == owner)
+    !prepared.intermediates.contains(owner) && !reads_as_input(prepared, owner)
+}
+
+/// Whether `name` is read as an input is: a declared input, or a pair
+/// relation, whose records its port holds (LOOKUP-27).
+pub(super) fn reads_as_input(prepared: &PreparedSpecification, name: &str) -> bool {
+    prepared.sources.iter().any(|input| input.name == name)
+        || prepared.tree.spec().pair_relation(name).is_some()
 }
 
 /// The names the filter of the intermediate `item` qualifies by nothing
@@ -476,6 +482,6 @@ pub(super) fn unknown_match_value(
 ) -> bool {
     match name.split_once('.') {
         None => !spec.columns.iter().any(|column| column.name.name == name),
-        Some((owner, _)) => !prepared.sources.iter().any(|input| input.name == owner),
+        Some((owner, _)) => !reads_as_input(prepared, owner),
     }
 }

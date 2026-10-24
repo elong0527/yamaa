@@ -221,8 +221,9 @@ One term per concept across all rules, schema comments, and messages:
 - **path notation** -- `row.dataset`, `root.input`, `expression.source`
   (binding notation). Never `row_class.` or `root_class.`.
 - **driver** -- the source whose records drive row construction: a row
-  template's `dataset`, naming an input dataset or an eligible named
-  intermediate ([ROW-1](rows.md#row-1)), or root `base`
+  template's `dataset`, naming an input dataset, an eligible named
+  intermediate or a pair relation ([ROW-1](rows.md#row-1),
+  [LOOKUP-27](lookup.md#lookup-27)), or root `base`
   without row templates ([ROW-8](rows.md#row-8)). Either
   defaults to the single declared input when omitted. The term is allowed
   in normative text, schema descriptions, and user-facing messages.

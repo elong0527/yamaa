@@ -38,6 +38,8 @@ use crate::result_type::ResultType;
 use crate::scalar_verb::{CheckTyping, Operation, Read};
 use std::collections::BTreeSet;
 
+mod pairs;
+
 /// The rows a derivation evaluates on, as binding scopes its reads.
 #[derive(Clone, Copy, Debug)]
 struct Scope<'a> {
@@ -565,13 +567,7 @@ impl Checks<'_> {
         let Some((owner, _)) = name.split_once('.') else {
             return true;
         };
-        if scope.drivers.contains(&owner)
-            || !self
-                .prepared
-                .sources
-                .iter()
-                .any(|input| input.name == owner)
-        {
+        if scope.drivers.contains(&owner) || !reads_as_input(self.prepared, owner) {
             return true;
         }
         let refused = if keyless(self.spec, owner) {
@@ -767,12 +763,7 @@ impl Checks<'_> {
             .and_then(|between| Some((between, name(spec, between.value)?)))
             .filter(|_| {
                 variable.split_once('.').is_some_and(|(owner, _)| {
-                    !scope.drivers.contains(&owner)
-                        && self
-                            .prepared
-                            .sources
-                            .iter()
-                            .any(|input| input.name == owner)
+                    !scope.drivers.contains(&owner) && reads_as_input(self.prepared, owner)
                 })
             })
             .filter(|&(_, value)| {
@@ -792,12 +783,7 @@ impl Checks<'_> {
         }
         // A read of another input through its implicit join binds its range.
         if variable.split_once('.').is_some_and(|(owner, _)| {
-            !scope.drivers.contains(&owner)
-                && self
-                    .prepared
-                    .sources
-                    .iter()
-                    .any(|input| input.name == owner)
+            !scope.drivers.contains(&owner) && reads_as_input(self.prepared, owner)
         }) {
             findings.extend(join_range_findings(spec, self.prepared, e));
             return Ok(());
@@ -875,11 +861,7 @@ impl Checks<'_> {
             (scope, relation, &aggregate.key)
         {
             if !matches!(scope.phase, Some(Phase::Row { .. }))
-                && self
-                    .prepared
-                    .sources
-                    .iter()
-                    .any(|input| input.name == relation)
+                && reads_as_input(self.prepared, relation)
             {
                 if keyless(spec, relation) {
                     findings.push(BindFinding::AggregateDiagnostic(
@@ -1642,12 +1624,7 @@ impl Checks<'_> {
         // The relation is the rows' driver or another declared input; a
         // relation no binding's driver is either fails in every binding.
         if let Some(relation) = relation.filter(|relation| {
-            !scope.drivers.contains(relation)
-                && !self
-                    .prepared
-                    .sources
-                    .iter()
-                    .any(|input| input.name == *relation)
+            !scope.drivers.contains(relation) && !reads_as_input(self.prepared, relation)
         }) {
             let reference = derived
                 .iter()
@@ -1886,12 +1863,7 @@ impl Checks<'_> {
                 let (Some(_), true, Ok(plan)) = (
                     scope,
                     findings.len() == start
-                        && (undeclared
-                            || self
-                                .prepared
-                                .sources
-                                .iter()
-                                .any(|input| input.name == dataset)),
+                        && (undeclared || reads_as_input(self.prepared, dataset)),
                     &formula.compiled,
                 ) else {
                     return Ok(false);
@@ -2364,8 +2336,33 @@ impl Checks<'_> {
                         .map(|column| (column.name.name.clone(), ResultType::column(column.kind))),
                 );
             }
+            // A pair relation's derivations read its two sides' fields by
+            // their qualifiers and its earlier derivations by name
+            // (LOOKUP-27).
+            let right = item.inner_join.as_ref().map(|right| right.name.as_str());
+            let side = |side: &str, field: &str| match inputs.get(side) {
+                _ if spec.inputs.iter().any(|input| input.name.name == side) => stored(side, field),
+                _ if known.contains_key(&format!("{side}.{field}")) => {
+                    known.get(&format!("{side}.{field}")).copied()
+                }
+                Some(input) => stored(input, field),
+                None => None,
+            };
             for binding in &item.bindings {
                 let input = |name: &str| {
+                    if let Some(right) = right {
+                        return match name.split_once('.') {
+                            Some((owner, field)) if owner == dataset || owner == right => {
+                                side(owner, field).unwrap_or(ResultType::UNKNOWN)
+                            }
+                            Some(_) => ResultType::UNKNOWN,
+                            None => donor
+                                .fields
+                                .get(name)
+                                .copied()
+                                .unwrap_or(ResultType::UNKNOWN),
+                        };
+                    }
                     let (owner, field) = name.split_once('.').unwrap_or((dataset, name));
                     if owner == dataset {
                         donor.field(field, stored).unwrap_or(ResultType::UNKNOWN)
@@ -2879,6 +2876,14 @@ impl Checks<'_> {
         for (position, donor) in donors.iter().enumerate() {
             let (index, item) = (donor.index, donor.item);
             let identifier = item.id.name.as_str();
+            // A pair relation binds over its joined record, not a lookup's
+            // donor record (LOOKUP-27).
+            if item.pairs() {
+                if self.pair(donor, &donors, &stored, findings)? {
+                    refused.insert(index);
+                }
+                continue;
+            }
             // The derivations read the donor's records in an ungrouped row
             // phase, typed as binding's captured types type them: a field of
             // the donor record, of another lookup's, or of an input's.
@@ -3129,12 +3134,15 @@ impl Checks<'_> {
         // ROW-2: a driver must expose a single column type for every
         // derived field it keeps. UNKNOWN still needs captured input types;
         // an authored union or missing-only result already has no type.
+        // A pair relation is driven as an input is, its fields typed where
+        // it binds (LOOKUP-27).
         for template in &spec.rows.templates {
             let Some(donor) = donors.iter().find(|donor| {
-                template
-                    .driver
-                    .as_ref()
-                    .is_some_and(|driver| driver.name == donor.item.id.name)
+                !donor.item.pairs()
+                    && template
+                        .driver
+                        .as_ref()
+                        .is_some_and(|driver| driver.name == donor.item.id.name)
             }) else {
                 continue;
             };
@@ -3571,7 +3579,7 @@ impl Checks<'_> {
     /// the input itself, or the input a driver intermediate reads.
     fn driver_input<'s>(&'s self, driver: &'s str) -> Option<&'s str> {
         let prepared = self.prepared;
-        if prepared.sources.iter().any(|source| source.name == driver) {
+        if reads_as_input(prepared, driver) {
             return Some(driver);
         }
         prepared
@@ -3732,10 +3740,9 @@ impl Checks<'_> {
     fn ranges(&self, bound: &Bound, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
         let spec = self.spec;
         let named = &self.prepared.intermediates;
-        let inputs = &self.prepared.sources;
         let refused = |value: &str, drivers: &[(&str, Option<&str>)]| {
             value.split_once('.').is_some_and(|(qualifier, _)| {
-                inputs.iter().any(|input| input.name == qualifier)
+                reads_as_input(self.prepared, qualifier)
                     && drivers.iter().any(|&(driver, _)| driver != qualifier)
             })
         };
@@ -3878,11 +3885,7 @@ impl Checks<'_> {
         let Some(drivers) = phases
             .iter()
             .map(|template| {
-                if prepared
-                    .sources
-                    .iter()
-                    .any(|source| source.name == template.driver)
-                {
+                if reads_as_input(prepared, template.driver) {
                     Some((template.driver, None))
                 } else {
                     prepared
@@ -3994,12 +3997,7 @@ impl Checks<'_> {
                 ExprKind::Source(source) if scope == ast::Scope::Row => {
                     let variable = name(spec, source.variable).unwrap_or_default();
                     let join = variable.split_once('.').is_some_and(|(qualifier, _)| {
-                        own != Some(qualifier)
-                            && self
-                                .prepared
-                                .sources
-                                .iter()
-                                .any(|input| input.name == qualifier)
+                        own != Some(qualifier) && reads_as_input(self.prepared, qualifier)
                     });
                     source
                         .between
@@ -4160,7 +4158,7 @@ pub(super) fn range_types(
     let value = name(spec, between.value)?;
     let typed = match value.split_once('.') {
         None => spec.columns.iter().any(|column| column.name.name == value),
-        Some((owner, _)) => prepared.sources.iter().any(|input| input.name == owner),
+        Some((owner, _)) => reads_as_input(prepared, owner),
     };
     let value_type = typed.then(|| declared.name(value).single()).flatten()?;
     let bound = |bound: Option<ExprId>| match bound {

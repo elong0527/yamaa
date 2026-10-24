@@ -1189,6 +1189,10 @@ S1,001,PF03,SCALE,3
                 "the fields stored in the linked artifact",
             ),
             (
+                "negative-lookup-inner-join-key-type",
+                "a key value whose type the input's records decide",
+            ),
+            (
                 "negative-odm-schema-ambiguous",
                 "the fields stored in the ODM input",
             ),

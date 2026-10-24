@@ -1,5 +1,5 @@
 {
-  "about": "What binding refuses once each input's schema is known: source reads and their selections, scope and grouping, row filters, windows, named lookups and their nearest selection (LOOKUP, NAME, ROW-5, ROW-6, FORMULA-9, WINDOW, VALUE-2); then the column dependency analysis (COLUMN-5 to COLUMN-7), a column window's drivers (WINDOW-11), the verification declarations a prepared specification keeps (CHECK) and a key computed by an aggregate (COLUMN-7). In `value` the column VALUE takes each case's derivation, read from SRC, whose schema is ID and V, both int; `lookup` adds the donor DONOR through the intermediate SEL.",
+  "about": "What binding refuses once each input's schema is known: source reads and their selections, scope and grouping, row filters, windows, named lookups and their nearest selection (LOOKUP, NAME, ROW-5, ROW-6, FORMULA-9, WINDOW, VALUE-2); then the column dependency analysis (COLUMN-5 to COLUMN-7), a column window's drivers (WINDOW-11), the verification declarations a prepared specification keeps (CHECK) and a key computed by an aggregate (COLUMN-7). In `value` the column VALUE takes each case's derivation, read from SRC, whose schema is ID and V, both int; `lookup` adds the donor DONOR through the intermediate SEL. In `pairs` the pair relation P pairs the records of L and R on K and exposes ID and RID, which a row template driving on it reads (LOOKUP-27).",
   "documents": {
     "value": {
       "yamaa": "1.0",
@@ -27,6 +27,17 @@
       ],
       "intermediates": [{"id": "SEL", "dataset": "DONOR", "key": {"DID": "ID"}}],
       "output": {"path": "result.csv", "columns": ["ID", "VALUE"]}
+    },
+    "pairs": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "input": {"L": {"path": "l.csv", "types": {"ID": "int"}}, "R": {"path": "r.csv", "types": {"ID": "int"}}},
+      "keys": ["ID", "RID"],
+      "columns": [{"name": "ID", "type": "int"}, {"name": "RID", "type": "int"}],
+      "intermediates": [{"id": "P", "dataset": "L", "inner_join": "R", "key": ["K"], "derivations": {"ID": "L.ID", "RID": "R.ID"}}],
+      "rows": [{"id": "pairs", "dataset": "P", "derivations": {"ID": "P.ID", "RID": "P.RID"}}],
+      "output": {"path": "result.csv", "columns": ["ID", "RID"]}
     },
     "window_drivers": {
       "yamaa": "1.0",
@@ -60,6 +71,111 @@
     }
   },
   "cases": [
+    {
+      "case": "a_pair_relation_key_names_a_field_of_each_side",
+      "operation": "bind",
+      "input": {
+        "base": "pairs",
+        "edits": [{"set": ["intermediates", "0", "key"], "to": ["K", "X"]}],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.key"], "context": {"identifier": "R.X", "intermediate": "P"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.key"], "context": {"identifier": "L.X", "intermediate": "P"}}
+      ]
+    },
+    {
+      "case": "a_pair_relation_key_pair_compares_its_two_types",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "pairs",
+        "edits": [{"set": ["input", "L", "types", "K"], "to": "int"}],
+        "sources": {"L": [["ID", "int"], ["K", "int"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.key"], "context": {"actual": "str", "expected": "int", "intermediate": "P", "source": "R.K"}}]
+    },
+    {
+      "case": "a_pair_relation_key_value_reads_a_field_of_its_left_side",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "pairs",
+        "edits": [{"set": ["intermediates", "0", "key"], "to": {"K": "K"}}],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.key"], "context": {"identifier": "K", "intermediate": "P"}}]
+    },
+    {
+      "case": "a_pair_relation_filter_reads_its_two_sides_by_their_names",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "pairs",
+        "edits": [{"set": ["intermediates", "0", "filter"], "to": "L.ID < R.ID AND OTHER.ID = 1"}],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.filter"], "context": {"identifier": "OTHER.ID", "intermediate": "P"}}]
+    },
+    {
+      "case": "a_pair_relation_derivation_reads_its_sides_and_the_derivations_before_it",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "pairs",
+        "edits": [{"set": ["intermediates", "0", "derivations"], "to": {"ID": "L.ID", "RID": "OTHER.ID"}}],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.derivations.RID.source"], "context": {"identifier": "OTHER.ID", "intermediate": "P"}}]
+    },
+    {
+      "case": "a_pair_relation_side_reads_no_other_record",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "pairs",
+        "edits": [
+          {"set": ["intermediates"], "to": [
+            {"id": "LM", "dataset": "L", "filter": "L.K = R.K"},
+            {"id": "P", "dataset": "LM", "inner_join": "R", "key": ["K"], "derivations": {"ID": "LM.ID", "RID": "R.ID"}}
+          ]}
+        ],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_intermediate_driver", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.dataset"], "context": {"fields": ["filter"], "intermediate": "LM"}}]
+    },
+    {
+      "case": "a_pair_relation_exposes_fields_of_one_type",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "pairs",
+        "edits": [
+          {"set": ["input", "R", "types", "F"], "to": "float"},
+          {"set": ["intermediates", "0", "derivations", "N"], "to": {"greatest": {"sources": ["L.ID", "R.F"]}}}
+        ],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"], ["F", "float"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_intermediate_driver_type", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.derivations"], "context": {"columns": ["N"], "intermediate": "P"}}]
+    },
+    {
+      "case": "a_pair_relation_exposes_only_its_derivations",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "pairs",
+        "edits": [{"set": ["intermediates", "0", "columns"], "to": ["ID", "RID", "K"]}],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.P.columns"], "context": {"identifier": "K", "intermediate": "P"}}]
+    },
+    {
+      "case": "a_read_through_a_pair_relation_s_implicit_join_has_no_applicable_keys",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "pairs",
+        "edits": [
+          {"remove": ["rows"]},
+          {"set": ["base"], "to": "L"},
+          {"set": ["columns"], "to": [{"name": "ID", "type": "int", "derivation": "L.ID"}, {"name": "RID", "type": "int", "derivation": "P.RID"}]}
+        ],
+        "sources": {"L": [["ID", "int"], ["K", "str"]], "R": [["ID", "int"], ["K", "str"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "no_applicable_keys", "rule": "LOOKUP-5", "spec_paths": ["columns.RID.derivation.source"], "context": {"dataset": "P", "hint": "declare `key` on the input"}}]
+    },
     {
       "case": "a_source_keep_without_an_order_is_unpaired",
       "operation": "bind",

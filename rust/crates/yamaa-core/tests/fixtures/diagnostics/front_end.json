@@ -1,5 +1,5 @@
 {
-  "about": "The 1.0 front end's own checks on a lowered specification, the rules of the surface its schema cannot state (FUNC-6, WINDOW-5, TIME-10, LOOKUP-3, LOOKUP-17, CSV-10, SUB-3, SUB-14), and CT-13's refusal of each binding that a specification prepared without its project names. Each case takes `specification` and replaces its second column, adding the root fields it needs; the CSV-10 cases edit its input `SRC` instead, and the CT-13 case replaces all its columns.",
+  "about": "The 1.0 front end's own checks on a lowered specification, the rules of the surface its schema cannot state (FUNC-6, WINDOW-5, TIME-10, LOOKUP-3, LOOKUP-17, LOOKUP-27, CSV-10, SUB-3, SUB-14), and CT-13's refusal of each binding that a specification prepared without its project names. Each case takes `specification` and replaces its second column, adding the root fields it needs; the CSV-10 cases edit its input `SRC` instead, and the CT-13 case replaces all its columns.",
   "documents": {
     "specification": {
       "yamaa": "1.0",
@@ -53,6 +53,51 @@
         ]
       },
       "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "LOOKUP-3", "spec_paths": ["intermediates.NAMES.key"], "context": {"class": "intermediate_class", "field": "key"}}]
+    },
+    {
+      "case": "a_pair_relation_without_a_key_is_refused_while_its_sides_declare_none",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [
+          {"set": ["intermediates"], "to": [
+            {"id": "LEFT", "dataset": "SRC", "filter": "SRC.SIDE = 'L'"},
+            {"id": "RIGHT", "dataset": "SRC", "filter": "SRC.SIDE = 'R'"},
+            {"id": "PAIRS", "dataset": "LEFT", "inner_join": "RIGHT", "derivations": {"LID": "LEFT.ID", "RID": "RIGHT.ID"}}
+          ]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.PAIRS.key"], "context": {"class": "intermediate_class", "field": "key"}}]
+    },
+    {
+      "case": "a_pair_relation_without_derivations_is_refused",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [
+          {"set": ["intermediates"], "to": [
+            {"id": "LEFT", "dataset": "SRC", "filter": "SRC.SIDE = 'L'"},
+            {"id": "RIGHT", "dataset": "SRC", "filter": "SRC.SIDE = 'R'"},
+            {"id": "PAIRS", "dataset": "LEFT", "inner_join": "RIGHT", "key": ["ID"]}
+          ]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "LOOKUP-27", "spec_paths": ["intermediates.PAIRS.derivations"], "context": {"class": "intermediate_class", "field": "derivations"}}]
+    },
+    {
+      "case": "a_pair_relation_with_no_derivation_is_refused",
+      "operation": "front_end_checks",
+      "input": {
+        "base": "specification",
+        "edits": [
+          {"set": ["intermediates"], "to": [
+            {"id": "LEFT", "dataset": "SRC", "filter": "SRC.SIDE = 'L'"},
+            {"id": "RIGHT", "dataset": "SRC", "filter": "SRC.SIDE = 'R'"},
+            {"id": "PAIRS", "dataset": "LEFT", "inner_join": "RIGHT", "key": ["ID"], "derivations": {}}
+          ]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "LOOKUP-27", "spec_paths": ["intermediates.PAIRS.derivations"], "context": {"expected": "at least one derivation", "intermediate": "PAIRS"}}]
     },
     {
       "case": "a_warning_unique_without_a_selection_is_not_permitted",

@@ -1,0 +1,64 @@
+yamaa: "1.0"
+type: spec
+domain: AECM
+keys: [USUBJID, AESEQ, CMSEQ]
+input:
+  RELREC: input/relrec.csv
+
+output:
+  path: aecm.csv
+  columns: [USUBJID, AESEQ, CMSEQ, RELID]
+
+intermediates:
+  # The adverse event members of each relationship, one record each.
+  - id: AEMEM
+    dataset: RELREC
+    filter: "RELREC.RDOMAIN = 'AE' AND RELREC.IDVAR = 'AESEQ'"
+    derivations:
+      SEQ: {type: int, derivation: IDVARVAL}
+
+  # The medication members of each relationship.
+  - id: CMMEM
+    dataset: RELREC
+    filter: "RELREC.RDOMAIN = 'CM' AND RELREC.IDVAR = 'CMSEQ'"
+    derivations:
+      SEQ: {type: int, derivation: IDVARVAL}
+
+  # One record per adverse event and medication of the same relationship of
+  # one subject: every event member paired with every medication member
+  # that shares its subject and relationship.
+  - id: PAIRS
+    dataset: AEMEM
+    inner_join: CMMEM
+    key: [USUBJID, RELID]
+    derivations:
+      USUBJID: {type: str, derivation: AEMEM.USUBJID}
+      RELID: {type: str, derivation: AEMEM.RELID}
+      AESEQ: {type: int, derivation: AEMEM.SEQ}
+      CMSEQ: {type: int, derivation: CMMEM.SEQ}
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number of the Adverse Event
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number of the Medication
+
+  - name: RELID
+    type: str
+    label: Relationship Identifier
+
+rows:
+  - id: pairs
+    dataset: PAIRS
+    derivations:
+      USUBJID: PAIRS.USUBJID
+      AESEQ: PAIRS.AESEQ
+      CMSEQ: PAIRS.CMSEQ
+      RELID: PAIRS.RELID

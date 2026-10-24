@@ -1487,11 +1487,15 @@ intermediate_class:
     - dataset:
         type: identifier
         required: true
-        description: Declared input dataset, or SELF for completed derived rows (LOOKUP-7).
+        description: Declared input dataset or pair relation, SELF for completed derived rows (LOOKUP-7), or the left side of a pair relation (LOOKUP-27).
+    - inner_join:
+        type: identifier
+        required: false
+        description: Right side of a pair relation, one record per matching pair of `dataset` and this relation on `key`; it cannot be declared with between, order_by, keep, nearest, absent or require_match (LOOKUP-27).
     - key:
         type: match_key
         required: false
-        description: Match key of the lookup, required unless the intermediate drives a row template, which declares none (LOOKUP-3, ROW-2).
+        description: Match key of the lookup, required unless the intermediate drives a row template, which declares none (LOOKUP-3, ROW-2); a pair relation's key pairs its two sides (LOOKUP-27).
     - fields_from: match_range_fields
     - fields_from: match_filter_fields
     - fields_from: match_selection_fields
@@ -1514,7 +1518,7 @@ intermediate_class:
     - derivations:
         type: "dict[identifier, intermediate_derivation]"
         required: false
-        description: Per-record derivations over donor fields, the current input record and records other named intermediates select for it (LOOKUP-15).
+        description: Per-record derivations over donor fields, the current input record and records other named intermediates select for it (LOOKUP-15); a pair relation requires them, as the fields it exposes (LOOKUP-27).
     - verifications:
         type: "list[intermediate_verification]"
         required: false
@@ -3560,13 +3564,19 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
         },
         "dataset": {
           "$ref": "#/$defs/identifier",
-          "description": "Declared input dataset, or SELF for completed derived rows (LOOKUP-7).",
+          "description": "Declared input dataset or pair relation, SELF for completed derived rows (LOOKUP-7), or the left side of a pair relation (LOOKUP-27).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "identifier"
+        },
+        "inner_join": {
+          "$ref": "#/$defs/identifier",
+          "description": "Right side of a pair relation, one record per matching pair of `dataset` and this relation on `key`; it cannot be declared with between, order_by, keep, nearest, absent or require_match (LOOKUP-27).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "identifier"
         },
         "key": {
           "$ref": "#/$defs/fragment.match_key",
-          "description": "Match key of the lookup, required unless the intermediate drives a row template, which declares none (LOOKUP-3, ROW-2).",
+          "description": "Match key of the lookup, required unless the intermediate drives a row template, which declares none (LOOKUP-3, ROW-2); a pair relation's key pairs its two sides (LOOKUP-27).",
           "x-yamaa-kind": "expression",
           "x-yamaa-type": "match_key"
         },
@@ -3628,7 +3638,7 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           "additionalProperties": {
             "$ref": "#/$defs/fragment.intermediate_derivation"
           },
-          "description": "Per-record derivations over donor fields, the current input record and records other named intermediates select for it (LOOKUP-15).",
+          "description": "Per-record derivations over donor fields, the current input record and records other named intermediates select for it (LOOKUP-15); a pair relation requires them, as the fields it exposes (LOOKUP-27).",
           "x-yamaa-kind": "expression",
           "x-yamaa-type": "dict[identifier, intermediate_derivation]"
         },
@@ -5333,13 +5343,19 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
         },
         "dataset": {
           "$ref": "#/$defs/identifier",
-          "description": "Declared input dataset, or SELF for completed derived rows (LOOKUP-7).",
+          "description": "Declared input dataset or pair relation, SELF for completed derived rows (LOOKUP-7), or the left side of a pair relation (LOOKUP-27).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "identifier"
+        },
+        "inner_join": {
+          "$ref": "#/$defs/identifier",
+          "description": "Right side of a pair relation, one record per matching pair of `dataset` and this relation on `key`; it cannot be declared with between, order_by, keep, nearest, absent or require_match (LOOKUP-27).",
           "x-yamaa-kind": "identifier",
           "x-yamaa-type": "identifier"
         },
         "key": {
           "$ref": "#/$defs/match_key",
-          "description": "Match key of the lookup, required unless the intermediate drives a row template, which declares none (LOOKUP-3, ROW-2).",
+          "description": "Match key of the lookup, required unless the intermediate drives a row template, which declares none (LOOKUP-3, ROW-2); a pair relation's key pairs its two sides (LOOKUP-27).",
           "x-yamaa-kind": "expression",
           "x-yamaa-type": "match_key"
         },
@@ -5401,7 +5417,7 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           "additionalProperties": {
             "$ref": "#/$defs/intermediate_derivation"
           },
-          "description": "Per-record derivations over donor fields, the current input record and records other named intermediates select for it (LOOKUP-15).",
+          "description": "Per-record derivations over donor fields, the current input record and records other named intermediates select for it (LOOKUP-15); a pair relation requires them, as the fields it exposes (LOOKUP-27).",
           "x-yamaa-kind": "expression",
           "x-yamaa-type": "dict[identifier, intermediate_derivation]"
         },

@@ -314,6 +314,11 @@ EXPECTED = {
             values=("day", "week", "month", "year", "second", "minute", "hour"),
         ),
     ],
+    # D263: a named intermediate pairs its dataset with a second relation
+    # (LOOKUP-27).
+    "new.spec.intermediate.inner_join": [
+        Field("intermediate_class", "inner_join", "identifier")
+    ],
     "new.spec.clear": [Field("root_class", "clear", "list[spec_path]")],
     "new.spec.include": [Field("root_class", "include", "list[project_path]")],
     # D264: duration_text writes a number in a declared unit as ISO 8601

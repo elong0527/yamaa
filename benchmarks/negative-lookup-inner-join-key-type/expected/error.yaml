@@ -1,0 +1,10 @@
+phase: validation
+condition: incompatible_input_type
+spec_paths:
+  - intermediates.RESCUE.key.CMSEQ
+rule: LOOKUP-27
+context:
+  intermediate: RESCUE
+  source: CM.CMSEQ
+  expected: str
+  actual: int
