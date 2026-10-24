@@ -29,7 +29,7 @@ import tempfile
 from pathlib import Path
 
 from tools.ci.toolchain import channel
-from tools.commands import loaded, r_tests
+from tools.commands import r_tests
 from tools.commands.check_r import check
 from tools.commands.python_tests import run_installed_suites
 from tools.conformance import public_conformance
@@ -49,8 +49,6 @@ def install_python(work, uv, *, tooling=False):
     def run(*arguments):
         subprocess.run(arguments, cwd=ROOT, env=environment, check=True)
 
-    # The loaded mode's wheel links no engine (tools/commands/loaded.py).
-    arguments = f" {loaded.WHEEL_ARGUMENTS}" if loaded.loaded() else ""
     run(
         uv,
         "build",
@@ -59,7 +57,7 @@ def install_python(work, uv, *, tooling=False):
         "--out-dir",
         str(distributions),
         "--config-setting",
-        f"build-args=--profile=dev{arguments}",
+        "build-args=--profile=dev",
     )
     run(
         uv,
@@ -105,8 +103,6 @@ def install_python(work, uv, *, tooling=False):
         # Pytest's repository-tool tests need the locked tooling dependencies
         # and editable tools. The host itself remains the freshly built wheel.
         run(uv, "pip", "install", "--python", str(python), "--no-deps", "-e", str(ROOT))
-    if loaded.loaded():
-        loaded.install_beside(python, loaded.build_engine())
     return python
 
 

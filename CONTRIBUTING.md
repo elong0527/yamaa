@@ -17,8 +17,8 @@ applies.
 | `rules/`, `yaml/` | Normative contracts, diagnostics, schemas and grammar fixtures. |
 | `rust/crates/yamaa-core/` | Specification admission, expressions, dataset execution, project lifecycle, verification and submission metadata composition. |
 | `rust/crates/yamaa-adapters/` | Codecs, storage formats, physical IO and filesystem environment capture. |
-| `rust/crates/yamaa-boundary/` | The interface handshake of both host bindings, the gate every native call passes, the census of live native handles, the types of the engine's C ABI, the safe client through which both bindings call it and the test-only loaded mode's engine loader. |
-| `rust/crates/yamaa-engine/` | The engine's C ABI over the facade: its function table, handle table, callback adapters and Arrow stream export, which both bindings link, with the loading tests' fixture engines in `examples/`. |
+| `rust/crates/yamaa-boundary/` | The interface handshake of both host bindings, the gate every native call passes, the census of live native handles, the types of the engine's C ABI and the safe client through which both bindings call it. |
+| `rust/crates/yamaa-engine/` | The engine's C ABI over the facade: its function table, handle table, callback adapters and Arrow stream export, which both bindings link. |
 | `rust/crates/yamaa-python/`, `rust/crates/yamaa-r/` | Host arguments, callbacks, scalar conversion and owned result views, over the client of `yamaa-boundary`. |
 | `rust/crates/yamaa-cli/` | The `yamaa` command line: its arguments, exit statuses and printed output, over the facade alone, with the third-party notices and component inventory of its release archives. |
 | `python/`, `R/yamaa/` | Public host packages and package builds. |
@@ -43,12 +43,7 @@ handshake and the safe client, and depends on nothing else in the workspace;
 `yamaa-engine` puts the facade behind that C ABI and depends on the facade and
 the boundary alone. Each binding links `yamaa-engine` and reaches it only
 through the client, never through the facade (D225 on #3030 amends section
-2.10). In the test-only loaded mode, a binding built with its `dynamic-engine`
-feature links no engine and loads the engine library from beside its module
-instead; `YAMAA_ENGINE=loaded` runs `make setup`, `make test-python` and
-`make test-r` so (`tools/commands/loaded.py`, and
-[the shared host interface](rust/interface/README.md#the-boundary)), and a
-repository check refuses the feature in every shipped build. Core may use
+2.10). Core may use
 `std` but holds no file or format code: it keeps the formats' metadata models,
 and the adapters read and write their bytes. Portable math still uses the
 pinned libm policy. `make check-repository` holds both rules of #3030 section
@@ -717,12 +712,7 @@ shared Python dependency metadata, engine/build changes and unknown paths
 run all four lanes. Fuzzing remains a separate workflow selected by affected
 parsers. There is no separate reporting job or equivalence status to wait for.
 The main schedule and release pushes run all development checks; dispatch
-also qualifies both hosts against benchmark truth. A fifth lane, `loaded`,
-which is not required, checks both freshly installed hosts in the test-only
-loaded mode (`YAMAA_ENGINE=loaded`) when an input of that mode changes: the
-boundary, the engine's C ABI, either binding, the R build files, the
-interface suites or the tooling that builds the hosts; main's schedule and
-dispatch run it too.
+also qualifies both hosts against benchmark truth.
 
 The `Release compatibility` workflow checks the minimum Rust toolchain, the R
 source package built with it, minimal format builds, Python 3.15 and minimum

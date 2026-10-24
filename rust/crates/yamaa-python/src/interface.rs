@@ -27,21 +27,6 @@ pub(crate) fn gate() -> PyResult<Engine> {
         .map_err(|closed| PyRuntimeError::new_err(closed.to_string()))
 }
 
-#[cfg(not(any(feature = "linked-engine", feature = "dynamic-engine")))]
-compile_error!("yamaa-python links its engine, with the default linked-engine feature, or loads it, with dynamic-engine");
-
-/// Negotiate `request` with the engine this binding links, or in the
-/// test-only loaded mode with the engine library beside its own file.
-fn negotiated(request: &Value) -> Outcome {
-    #[cfg(feature = "dynamic-engine")]
-    return GATE.negotiate_loaded(request);
-    // SAFETY: the binding links the engine, whose negotiation entry this is.
-    #[cfg(not(feature = "dynamic-engine"))]
-    unsafe {
-        GATE.negotiate(request, yamaa_engine::negotiate)
-    }
-}
-
 /// Answer an interface request through the engine: the accepted record, or
 /// the refusal envelope. The first acceptance opens the gate; a later call
 /// answers its request and changes nothing.
@@ -50,7 +35,8 @@ pub fn _interface_handshake<'py>(
     py: Python<'py>,
     request: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let outcome = negotiated(&value(request, 0));
+    // SAFETY: the binding links the engine, whose negotiation entry this is.
+    let outcome = unsafe { GATE.negotiate(&value(request, 0), yamaa_engine::negotiate) };
     let record = PyDict::new(py);
     match outcome {
         Outcome::Accepted(accepted) => {
