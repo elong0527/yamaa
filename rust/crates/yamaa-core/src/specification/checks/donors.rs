@@ -53,6 +53,9 @@ pub(super) struct DonorReads<'a> {
     /// The lookups whose key types fail, which binding does not bind.
     refused: &'a BTreeSet<usize>,
     typing: &'a Typing<'a>,
+    /// A pair relation's two sides, whose fields its derivations read by
+    /// their qualifiers, over the joined record (LOOKUP-27).
+    sides: Option<(&'a str, &'a str)>,
 }
 
 impl<'a> DonorReads<'a> {
@@ -78,6 +81,32 @@ impl<'a> DonorReads<'a> {
             position,
             refused,
             typing,
+            sides: None,
+        }
+    }
+
+    /// The reads of a derivation of the pair relation `reader`, whose sides
+    /// are `left` and `right` and whose derivations before it are `derived`
+    /// (LOOKUP-27). It reads no lookup, so none is refused.
+    pub(super) fn pair(
+        spec: &'a Spec,
+        prepared: &'a PreparedSpecification,
+        sides: (&'a str, &'a str),
+        reader: &'a str,
+        derived: &'a [&'a str],
+        typing: &'a Typing<'a>,
+    ) -> Self {
+        static NONE: BTreeSet<usize> = BTreeSet::new();
+        Self {
+            spec,
+            prepared,
+            relation: sides.0,
+            reader: Some(reader),
+            derived,
+            position: derived.len(),
+            refused: &NONE,
+            typing,
+            sides: Some(sides),
         }
     }
 
@@ -101,28 +130,49 @@ impl<'a> DonorReads<'a> {
             position,
             refused,
             typing,
+            sides: None,
         }
     }
 
-    fn input(&self, owner: &str) -> bool {
-        self.prepared
-            .sources
-            .iter()
-            .any(|source| source.name == owner)
+    /// In a pair relation's derivation, whether `name` binds: a field of a
+    /// side by its qualifier, or a derivation declared before it by its bare
+    /// name (LOOKUP-27). A side's field its records may not hold, binding
+    /// decides.
+    fn pair_read(&self, (left, right): (&str, &str), name: &str) -> bool {
+        match name.split_once('.') {
+            Some((owner, _)) => owner == left || owner == right,
+            None => self.derived[..self.position].contains(&name),
+        }
     }
 
+    /// A pair relation derivation's refusal at `path` of a read of `name`.
+    fn pair_refusal(&self, path: &str, name: &str) -> BindFinding {
+        BindFinding::Lookup(LookupFinding::from_diagnostic(
+            crate::diagnostic::lookup::pair_reference(path, self.reader.unwrap_or_default(), name),
+        ))
+    }
+
+    fn input(&self, owner: &str) -> bool {
+        super::reads_as_input(self.prepared, owner)
+    }
+
+    /// The lookup `owner` names; a pair relation is read as an input is
+    /// (LOOKUP-27).
     fn named(&self, owner: &str) -> Option<usize> {
         self.spec
             .intermediates
             .iter()
-            .position(|item| item.id.name == owner)
+            .position(|item| item.id.name == owner && !item.pairs())
     }
 
     /// Whether `name` is a lookup's field, which binding reads through the
     /// lookup's selector.
     pub(super) fn lookup_field(&self, name: &str) -> bool {
-        name.split_once('.')
-            .is_some_and(|(owner, _)| self.named(owner).is_some())
+        // A pair relation's derivations read no lookup (LOOKUP-27).
+        self.sides.is_none()
+            && name
+                .split_once('.')
+                .is_some_and(|(owner, _)| self.named(owner).is_some())
     }
 
     /// Whether a lookup's derivation reads its donor's `field` before it is
@@ -149,7 +199,10 @@ impl<'a> DonorReads<'a> {
         }
         for finding in findings {
             if let BindFinding::UnknownReference { path, name } = finding {
-                *finding = self.refusal(C::IntermediateDerivationReference, path, name);
+                *finding = match self.sides {
+                    Some(_) => self.pair_refusal(path, name),
+                    None => self.refusal(C::IntermediateDerivationReference, path, name),
+                };
             }
         }
     }
@@ -169,6 +222,13 @@ impl<'a> DonorReads<'a> {
     pub(super) fn read(&self, path: &str, name: &str, findings: &mut Vec<BindFinding>) -> bool {
         if self.reader.is_none() {
             return true;
+        }
+        if let Some(sides) = self.sides {
+            let bound = self.pair_read(sides, name);
+            if !bound {
+                findings.push(self.pair_refusal(path, name));
+            }
+            return bound;
         }
         let unknown = match name.split_once('.') {
             None => self.later(name),
@@ -400,6 +460,13 @@ impl<'a> DonorReads<'a> {
         let Some((owner, field)) = name.split_once('.') else {
             return self.read(path, name, findings);
         };
+        if let Some(sides) = self.sides {
+            let bound = self.pair_read(sides, name);
+            if !bound {
+                findings.push(super::predicate_unknown(path, name));
+            }
+            return bound;
+        }
         let lookup = self.named(owner);
         if (owner == self.relation && self.later(field))
             || self.undeclared(owner)
@@ -416,6 +483,12 @@ impl<'a> DonorReads<'a> {
     /// derivation not yet derived (LOOKUP-15).
     pub(super) fn window(&self, path: &str, name: &str, findings: &mut Vec<BindFinding>) {
         if self.reader.is_none() {
+            return;
+        }
+        if let Some(sides) = self.sides {
+            if !self.pair_read(sides, name) {
+                findings.push(self.pair_refusal(path, name));
+            }
             return;
         }
         let code = match name.split_once('.') {

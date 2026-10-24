@@ -13,7 +13,9 @@ use crate::json::Value as JsonValue;
 pub(in crate::specification) fn self_findings(spec: &Spec) -> Vec<PreflightFinding> {
     let mut findings = Vec::new();
     for item in &spec.intermediates {
-        if item.dataset.name != "SELF" {
+        // A pair relation refuses either SELF side under LOOKUP-27,
+        // whether or not the specification declares row templates.
+        if item.dataset.name != "SELF" || item.pairs() {
             continue;
         }
         let path = format!("{}.dataset", spec.cite(item.meta));
@@ -105,10 +107,129 @@ fn rename_only(spec: &Spec, item: &ast::Intermediate) -> bool {
             .is_none_or(|answer| answer.value == ast::Literal::Missing)
 }
 
+/// The fields a pair relation writes beside `inner_join` that it admits none
+/// of (LOOKUP-27), in its listed order: each counts once written,
+/// whatever its value, and an absence answer even when written null.
+fn pair_prohibited(spec: &Spec, item: &ast::Intermediate) -> Vec<&'static str> {
+    let answer = item
+        .absent
+        .as_ref()
+        .map(|answer| spec.paths.segment(answer.meta.path));
+    let mut fields = ["between", "order_by", "keep", "nearest"]
+        .into_iter()
+        .filter(|&field| item.written.contains(field))
+        .collect::<Vec<_>>();
+    if let Some(ast::Segment::Field(answer)) = answer {
+        fields.push(answer);
+    }
+    fields.extend(
+        ["require_match"]
+            .into_iter()
+            .filter(|&field| item.written.contains(field)),
+    );
+    fields
+}
+
+/// The input whose records the pair relation `item` reads first: its left
+/// side's, through the intermediate the side names. It stands for the pair
+/// relation wherever a row template's driver must be an input (LOOKUP-27).
+pub(in crate::specification) fn pair_input<'a>(
+    spec: &'a Spec,
+    item: &'a ast::Intermediate,
+) -> Option<&'a str> {
+    let left = item.dataset.name.as_str();
+    if spec.inputs.iter().any(|input| input.name.name == left) {
+        return Some(left);
+    }
+    let side = spec
+        .intermediates
+        .iter()
+        .find(|other| other.id.name == left && !other.pairs())?;
+    spec.inputs
+        .iter()
+        .any(|input| input.name.name == side.dataset.name)
+        .then_some(side.dataset.name.as_str())
+}
+
+/// What a pair relation's declaration refuses before any input is read
+/// (LOOKUP-27): each field it admits none of beside `inner_join` and a side
+/// that names `SELF`, in one finding, then each side that names an
+/// intermediate a row template could not drive on (ROW-2).
+fn pair_findings(spec: &Spec, item: &ast::Intermediate, path: &str) -> Vec<PreflightFinding> {
+    let mut findings = Vec::new();
+    let Some(right) = &item.inner_join else {
+        return findings;
+    };
+    let name = item.id.name.as_str();
+    // Each side is read through its own name, so the two sides are two
+    // relations (LOOKUP-27).
+    if right.name == item.dataset.name && right.name != "SELF" {
+        findings.push(PreflightFinding::Scalar(lookup::pair_side_repeated(
+            render(spec, right.meta),
+            render(spec, item.dataset.meta),
+            &right.name,
+        )));
+    }
+    let mut refused = Vec::new();
+    refused.extend(
+        pair_prohibited(spec, item)
+            .into_iter()
+            .map(|field| (field, format!("{path}.{field}"))),
+    );
+    if item.dataset.name == "SELF" {
+        refused.push(("SELF", render(spec, item.dataset.meta)));
+    }
+    let inner_join = render(spec, right.meta);
+    if right.name == "SELF" {
+        refused.push(("SELF", inner_join.clone()));
+    }
+    if let Some(&(construct, _)) = refused.first() {
+        let mut paths = refused
+            .iter()
+            .map(|(_, path)| path.clone())
+            .collect::<Vec<_>>();
+        if paths.last() != Some(&inner_join) {
+            paths.push(inner_join);
+        }
+        findings.push(PreflightFinding::Scalar(lookup::pair_construct(
+            paths, name, construct,
+        )));
+    }
+    let inputs = |name: &str| spec.inputs.iter().any(|input| input.name.name == name);
+    for (field, side) in [("dataset", &item.dataset), ("inner_join", right)] {
+        let Some(other) = spec
+            .intermediates
+            .iter()
+            .find(|other| other.id.name == side.name)
+        else {
+            continue;
+        };
+        // A side is read as a row driver reads an intermediate: it reads an
+        // input and declares none of the fields a row driver may not, and a
+        // pair relation is no side (ROW-2).
+        let mut prohibited = driver_prohibited(spec, other);
+        if other.pairs() {
+            prohibited.push("inner_join");
+        }
+        if !inputs(&other.dataset.name) {
+            prohibited.push("dataset");
+        }
+        if !prohibited.is_empty() {
+            findings.push(PreflightFinding::Scalar(lookup::pair_side(
+                &format!("{path}.{field}"),
+                &side.name,
+                &prohibited,
+            )));
+        }
+    }
+    findings
+}
+
 /// Declaration failures that precede source access and key-type binding:
 /// identifier collisions, the dataset read, empty and repeated keys, a
 /// rename-only lookup, two absence policies, an order or a position beside
-/// a nearest selection, and an unpaired selection.
+/// a nearest selection, an unpaired selection, and a pair relation's
+/// constructs and sides.
 pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<PreflightFinding> {
     let mut findings = Vec::new();
     let mut identifiers = BTreeMap::<&str, String>::new();
@@ -132,21 +253,44 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
         } else {
             identifiers.insert(name, format!("{path}.id"));
         }
-        if !(inputs(dataset) || dataset == "SELF" && has_rows(spec)) {
+        let unknown = |field: &str, identifier: &str| {
             let mut finding =
-                LookupFinding::new(&format!("{path}.dataset"), C::IntermediateDatasetReference);
-            finding.text("identifier", dataset);
+                LookupFinding::new(&format!("{path}.{field}"), C::IntermediateDatasetReference);
+            finding.text("identifier", identifier);
             finding.text("intermediate", name);
-            findings.push(PreflightFinding::Scalar(finding.diagnostic()));
+            PreflightFinding::Scalar(finding.diagnostic())
+        };
+        // A pair relation reads its two sides, each an input or an
+        // intermediate (LOOKUP-27); any other intermediate reads an input, a
+        // pair relation, or SELF (LOOKUP-3, LOOKUP-7).
+        if let Some(right) = &item.inner_join {
+            let declared = |side: &str| {
+                side == "SELF"
+                    || inputs(side)
+                    || spec.intermediates.iter().any(|other| other.id.name == side)
+            };
+            for (field, side) in [("dataset", dataset), ("inner_join", right.name.as_str())] {
+                if !declared(side) {
+                    findings.push(unknown(field, side));
+                }
+            }
+        } else if !(inputs(dataset)
+            || spec.pair_relation(dataset).is_some()
+            || dataset == "SELF" && has_rows(spec))
+        {
+            findings.push(unknown("dataset", dataset));
         }
         // A 1.0 intermediate states its own key, unless it drives a row
-        // template, which declares none (LOOKUP-3, ROW-2; D23, D63). The 1.0
-        // front end refuses it first; this keeps every route to binding safe.
+        // template, which declares none (LOOKUP-3, ROW-2; D23, D63), and a
+        // pair relation always states it (LOOKUP-27). The 1.0 front end
+        // refuses it first; this keeps every route to binding safe.
         if spec.lacks_key(item) {
-            findings.push(PreflightFinding::Scalar(lookup::key_required(&format!(
-                "{}.key",
-                render(spec, item.meta)
-            ))));
+            let key = format!("{}.key", render(spec, item.meta));
+            findings.push(PreflightFinding::Scalar(if item.pairs() {
+                lookup::pair_required(&key, "key")
+            } else {
+                lookup::key_required(&key)
+            }));
         }
         let empty = match &item.key {
             Some(JoinKey::Pairs { pairs, .. }) => pairs.is_empty(),
@@ -178,6 +322,13 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
                     findings.push(PreflightFinding::Scalar(finding.diagnostic()));
                 }
             }
+        }
+        // A pair relation selects nothing, ranges over nothing and answers no
+        // absence, and its sides are the records a row template could drive
+        // on (LOOKUP-27); nothing else of a lookup's admission applies.
+        if item.pairs() {
+            findings.extend(pair_findings(spec, item, &path));
+            continue;
         }
         if rename_only(spec, item) {
             let mut finding =
@@ -272,6 +423,17 @@ pub(in crate::specification) fn common_driver(spec: &Spec) -> Result<&str, Prepa
                 .iter()
                 .find(|item| item.id.name == name)
                 .ok_or(PrepareError::Internal)?;
+            // A pair relation is driven as an input is (ROW-2, LOOKUP-27);
+            // the input its left side reads stands for it. A left side that
+            // reads no input is refused by the intermediates' admission, so
+            // any input stands for it until then.
+            if item.pairs() {
+                let input = pair_input(spec, item)
+                    .or_else(|| spec.inputs.first().map(|input| input.name.name.as_str()))
+                    .ok_or(PrepareError::Internal)?;
+                common.get_or_insert(input);
+                continue;
+            }
             let mut prohibited = driver_prohibited(spec, item);
             if !input(&item.dataset.name) {
                 prohibited.push("dataset");

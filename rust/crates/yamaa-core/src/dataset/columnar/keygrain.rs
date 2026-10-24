@@ -10,10 +10,10 @@ use crate::table_grouping::GroupingError;
 use crate::value::Value;
 
 /// Build the candidates of the key-grain template into `frame`.
-pub(super) fn construct<'a, E>(
+pub(super) fn construct<'a: 's, 's, E>(
     run: &mut Run<'_, 'a, E>,
     frame: &mut Frame,
-    secondary: &[Table<'a, E>],
+    secondary: &[Table<'s, E>],
 ) -> Result<(), Fail<E>> {
     let plan = run.plan;
     let region = RegionId::DATASET;
@@ -176,12 +176,12 @@ pub(super) fn construct<'a, E>(
 }
 
 /// One key binding over the probe rows of its records.
-fn complete<'a, E>(
+fn complete<'a: 's, 's, E>(
     run: &mut Run<'_, 'a, E>,
     probes: &mut Frame,
     binding: BindingId,
-    table: Table<'a, E>,
-    secondary: &[Table<'a, E>],
+    table: Table<'s, E>,
+    secondary: &[Table<'s, E>],
     rows: &[usize],
 ) -> Result<(), Fail<E>> {
     let plan = run.plan;

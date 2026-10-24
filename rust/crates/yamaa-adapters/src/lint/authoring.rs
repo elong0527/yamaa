@@ -654,7 +654,7 @@ fn declares_any(entry: &Data, fields: &[&str]) -> bool {
 
 /// The fields with which a named intermediate narrows, derives or reshapes
 /// its dataset (LOOKUP-4).
-const NARROWING: [&str; 7] = [
+const NARROWING: [&str; 8] = [
     "filter",
     "between",
     "order_by",
@@ -662,6 +662,8 @@ const NARROWING: [&str; 7] = [
     "derivations",
     "verifications",
     "columns",
+    // A pair relation pairs its dataset with another relation (LOOKUP-27).
+    "inner_join",
 ];
 
 /// `redundant_intermediate`: a named intermediate equal to the implicit join

@@ -1,0 +1,56 @@
+yamaa: "1.0"
+type: spec
+domain: AECM
+keys: [USUBJID, AESEQ]
+input:
+  AE: {path: input/ae.csv, types: {AESEQ: int}}
+  CM: input/cm.csv
+
+output:
+  path: aecm.csv
+  columns: [USUBJID, AESEQ, AETERM, CMCOUNT]
+
+intermediates:
+  # Each adverse event paired with each medication of the same subject given
+  # for its term. Its fields read the event alone: the medications are read
+  # only to pair.
+  - id: TREATED
+    dataset: AE
+    inner_join: CM
+    key:
+      USUBJID: AE.USUBJID
+      CMINDC: AE.AETERM
+    derivations:
+      USUBJID: AE.USUBJID
+      AESEQ: AE.AESEQ
+      AETERM: AE.AETERM
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+
+  - name: CMCOUNT
+    type: int
+    label: Number of Medications Given for the Event
+
+rows:
+  # One row for each event's pairs, counting them: an event with no
+  # medication given for its term has no pair and no row.
+  - id: events
+    dataset: TREATED
+    group_by: [TREATED.USUBJID, TREATED.AESEQ, TREATED.AETERM]
+    derivations:
+      USUBJID: TREATED.USUBJID
+      AESEQ: TREATED.AESEQ
+      AETERM: TREATED.AETERM
+      CMCOUNT:
+        aggregate: "COUNT(TREATED.*)"

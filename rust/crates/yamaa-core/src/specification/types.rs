@@ -106,6 +106,9 @@ enum Stored<'a> {
     Typeless(&'a [(ast::Named, ColumnType)]),
     Narrowed(&'a [(ast::Named, ColumnType)]),
     Captured,
+    /// A pair relation, read as an input is: each field is a derivation,
+    /// typed when it declares its type (LOOKUP-27).
+    Pairs(&'a [ast::Binding]),
 }
 
 impl<'a> DeclaredTypes<'a> {
@@ -132,6 +135,12 @@ impl<'a> DeclaredTypes<'a> {
                 };
                 (name, stored)
             })
+            .chain(
+                spec.intermediates
+                    .iter()
+                    .filter(|item| item.pairs())
+                    .map(|item| (item.id.name.as_str(), Stored::Pairs(&item.bindings))),
+            )
             .collect();
         let columns = spec
             .columns
@@ -175,6 +184,11 @@ impl<'a> DeclaredTypes<'a> {
             ),
             Some((_, Stored::Typeless(types))) => declared(types).unwrap_or(typeless),
             Some((_, Stored::Narrowed(types))) => declared(types).unwrap_or(ResultType::UNKNOWN),
+            Some((_, Stored::Pairs(bindings))) => bindings
+                .iter()
+                .find(|binding| binding.name.name == field)
+                .and_then(|binding| binding.declared)
+                .map_or(ResultType::UNKNOWN, ResultType::column),
             Some((_, Stored::Captured)) | None => ResultType::UNKNOWN,
         }
     }

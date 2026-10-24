@@ -12,6 +12,10 @@ pub struct Field<'a> {
     pub column_type: ColumnType,
 }
 
+/// One side of a pair relation's joined record (LOOKUP-27): its name and each
+/// `(field, position, type)` it reads, at the field's position in the record.
+pub(crate) type JoinedSide<'a> = (&'a str, &'a [(&'a str, usize, ColumnType)]);
+
 /// A relation's declared name and ordered stored fields, not its records.
 #[derive(Clone, Copy, Debug)]
 pub struct Dataset<'a> {
@@ -97,6 +101,9 @@ pub(crate) struct JoinedRelation {
     /// declared column the specification does not declare (LOOKUP-1).
     pub keys: std::vec::Vec<(String, Option<usize>)>,
     pub schema: std::sync::Arc<crate::table::TableSchema>,
+    /// A pair relation's port, which declares no input `key`
+    /// (LOOKUP-27).
+    pub pair: bool,
 }
 
 /// A kept relation used by a scalar callback, with its original key dependencies.
@@ -241,9 +248,9 @@ impl Catalog {
     /// metadata: the input's declared key, as each relation gives it.
     pub(crate) fn with_joined(
         mut self,
-        relations: &[(usize, Dataset<'_>, std::vec::Vec<&str>)],
+        relations: &[(usize, Dataset<'_>, std::vec::Vec<&str>, bool)],
     ) -> Result<Self, Error> {
-        for (source, relation, names) in relations {
+        for (source, relation, names, pair) in relations {
             let inference = crate::key_relation::declared(&self, names, relation.fields)?;
             let retained_keys = names
                 .iter()
@@ -281,6 +288,7 @@ impl Catalog {
                     inference,
                     keys: retained_keys,
                     schema,
+                    pair: *pair,
                 },
             );
         }
@@ -408,6 +416,45 @@ impl Catalog {
             joined: BTreeMap::new(),
             row_joins: None,
         })
+    }
+
+    /// The catalog of a pair relation's joined record (LOOKUP-27): `outputs`
+    /// are the record's fields, and each side's name reads its own fields of
+    /// that one record, each `(field, position, type)` at its position in
+    /// the record, so a qualified name of either side reads the record.
+    pub(crate) fn compile_joined(
+        outputs: &[Field<'_>],
+        sides: &[JoinedSide<'_>],
+    ) -> Result<Self, Error> {
+        let mut catalog = Self::compile(outputs, &[])?;
+        for &(name, fields) in sides {
+            if name.is_empty() || fields.iter().any(|(field, ..)| field.is_empty()) {
+                return Err(Error::EmptyName);
+            }
+            let mut indexed = BTreeMap::new();
+            for &(field, position, kind) in fields {
+                if indexed
+                    .insert(String::from(field), (position, kind))
+                    .is_some()
+                {
+                    return Err(Error::DuplicateField);
+                }
+            }
+            if catalog
+                .datasets
+                .insert(
+                    String::from(name),
+                    DatasetCatalog {
+                        index: 0,
+                        fields: indexed,
+                    },
+                )
+                .is_some()
+            {
+                return Err(Error::DuplicateDataset);
+            }
+        }
+        Ok(catalog)
     }
 
     /// Resolve a declared relation without inventing a stored field, including empty schemas.

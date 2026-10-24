@@ -165,19 +165,17 @@ impl<'a> Reads<'a> {
             .is_some_and(|(owner, _)| self.lookup(owner).is_some())
     }
 
-    /// The lookup `owner` names, whatever rows it drives.
+    /// The lookup `owner` names; a pair relation is read as an input is
+    /// (LOOKUP-27).
     fn named(&self, owner: &str) -> Option<usize> {
         self.spec
             .intermediates
             .iter()
-            .position(|item| item.id.name == owner)
+            .position(|item| item.id.name == owner && !item.pairs())
     }
 
     fn input(&self, owner: &str) -> bool {
-        self.prepared
-            .sources
-            .iter()
-            .any(|source| source.name == owner)
+        super::reads_as_input(self.prepared, owner)
     }
 
     /// Whether `owner` qualifies nothing declared: no input, lookup or
@@ -206,7 +204,7 @@ impl<'a> Reads<'a> {
     /// column. True when it binds, as far as the declarations decide.
     fn join(&self, path: &str, owner: &str, findings: &mut Vec<BindFinding>) -> bool {
         if super::keyless(self.spec, owner) {
-            findings.push(super::undeclared_key(path, owner));
+            findings.push(super::undeclared_key(self.spec, path, owner));
             return false;
         }
         let pairing = match (self.phase, self.row, self.drivers) {
