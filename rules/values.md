@@ -301,7 +301,7 @@ widening each `int` operand first under [VALUE-8](#value-8); there is no
 integer division. `SQRT`, `POWER`, `EXP`, `LN`, `LOG10`, `NORM_CDF`,
 `NORM_INV`, `CEIL`, `FLOOR` and `TRUNC` return `float`.
 
-Evidence: `schema-numeric-functions`, `rust/crates/yamaa-core/tests/fixtures/numeric_math.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_integral.tsv`, `rust/crates/yamaa-adapters/tests/intermediate_result_kinds.rs::nullif_widens_its_int_result_when_the_float_argument_is_missing`.
+Evidence: `schema-numeric-functions`, `rust/crates/yamaa-core/tests/fixtures/numeric_math.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_integral.tsv`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/completed_intermediates.json::nullif_of_an_int_and_a_float_column_checks_clean`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/completed_intermediates.json::nullif_widens_its_int_result_when_the_float_argument_is_missing`.
 
 The quotient is the binary64 quotient of the widened operands, including when
 both operands are `int`. Above `2^53` it need not equal the exact integer
