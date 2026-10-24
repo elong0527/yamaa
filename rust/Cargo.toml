@@ -32,6 +32,9 @@ unsafe_op_in_unsafe_fn = "deny"
 # Clippy moved both lints to pedantic.
 comparison_chain = "allow"
 format_collect = "allow"
+# The function ceiling, at the threshold rust/clippy.toml sets: CI's Clippy
+# runs with `-D warnings`, so a new function over it fails (#3806).
+too_many_lines = "warn"
 
 # Panics unwind, Cargo's default: the Parquet reader contains a panic of the
 # decoder that it calls (storage_api::contain_decode), which `panic = "abort"`

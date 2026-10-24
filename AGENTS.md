@@ -131,10 +131,11 @@ homes and their readers, and how to measure the ceilings.
   behind `include_str!`, not a generated source file of string constants.
 - **Size has a ceiling.** A source or test file splits by feature before
   3,000 lines (#2413). A function over 250 lines, or with more than seven
-  parameters, is a context struct or a split waiting to happen. An
-  `allow` for either names the issue that removes it. Generated files are
-  exempt from the file ceiling, not from being data. Growth is measured
-  per crate and recorded on the planning issue, never in committed files.
+  parameters, is a context struct or a split waiting to happen; Clippy
+  fails both. An `allow` for either names the issue that removes it.
+  Generated files are exempt from the file ceiling, not from being data.
+  Growth is measured per crate and recorded on the planning issue, never
+  in committed files.
 
 ## Pull requests
 
@@ -242,6 +243,7 @@ Run only these locally (D148 on #3030):
 - after a Rust change, `cargo fmt --all --check` and Clippy on each
   touched crate, from `rust/`:
   `cargo clippy --locked -p <crate> --all-targets --all-features -- -D warnings`,
+  which also holds the 250-line function ceiling (`rust/clippy.toml`),
   and the 3,000-line file ceiling, from the root:
   `uv run --project python --no-sync python -m tools.validation.check_source_size`;
 - `make quick`, only for a change to generated files, rule cards,

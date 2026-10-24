@@ -318,6 +318,88 @@ fn variants(dataset: &model::Dataset) -> impl Iterator<Item = (&model::Column, S
     })
 }
 
+/// Append one value-list definition per column that declares values, in
+/// dataset and column order.
+fn push_value_lists(metadata: &mut Element, study: &Study) {
+    for dataset in study.datasets() {
+        for column in dataset.columns() {
+            if column.values().is_empty() {
+                continue;
+            }
+            let identity = format!("{}.{}", dataset.id(), column.declaration().name.value);
+            let mut list = Element::new("def:ValueListDef", &format!("datasets.{identity}.values"))
+                .attr("OID", format!("VL.{identity}"));
+            for (index, value) in column.values().iter().enumerate() {
+                let identity = format!("{identity}.{}", value.id());
+                let meta = value
+                    .column()
+                    .declaration()
+                    .submission
+                    .as_ref()
+                    .expect("composed value");
+                let mut reference = Element::new("ItemRef", value.path())
+                    .attr("ItemOID", format!("IT.{identity}"))
+                    .attr("OrderNumber", index + 1)
+                    .attr("Mandatory", yes(value.column().mandatory()))
+                    .optional("Role", meta.role.as_ref().map(|v| &v.value))
+                    .optional(
+                        "MethodOID",
+                        meta.method.as_ref().map(|_| format!("MT.{identity}")),
+                    );
+                reference.push(
+                    Element::new("def:WhereClauseRef", value.path())
+                        .attr("WhereClauseOID", format!("WC.{identity}")),
+                );
+                list.push(reference);
+            }
+            metadata.push(list);
+        }
+    }
+}
+
+/// Append one where-clause definition per declared value, in dataset,
+/// column and value order.
+fn push_where_clauses(metadata: &mut Element, study: &Study) {
+    for dataset in study.datasets() {
+        for column in dataset.columns() {
+            for value in column.values() {
+                let identity = format!(
+                    "{}.{}.{}",
+                    dataset.id(),
+                    column.declaration().name.value,
+                    value.id()
+                );
+                let mut clause = Element::new("def:WhereClauseDef", value.path())
+                    .attr("OID", format!("WC.{identity}"));
+                // One range check per where column, in written order: one
+                // value is an equality and several a membership, and an
+                // exclusion is NE for one value and NOTIN for several
+                // (DEFINE-27).
+                for term in value.clause() {
+                    let target = &dataset.columns()[term.column].declaration().name.value;
+                    let comparator = match (term.excludes, term.values.len()) {
+                        (false, 1) => "EQ",
+                        (false, _) => "IN",
+                        (true, 1) => "NE",
+                        (true, _) => "NOTIN",
+                    };
+                    let mut check = Element::new("RangeCheck", value.path())
+                        .attr("Comparator", comparator)
+                        .attr("SoftHard", "Soft")
+                        .attr("def:ItemOID", format!("IT.{}.{target}", dataset.id()));
+                    for checked in &term.values {
+                        let mut code = Element::new("CheckValue", value.path());
+                        code.text = Some(checked.clone());
+                        check.push(code);
+                    }
+                    clause.push(check);
+                }
+                metadata.push(clause);
+            }
+        }
+    }
+}
+
 /// Append one item-group definition per dataset, in dataset order.
 fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
     let section = study.section();
@@ -521,78 +603,8 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
             metadata.push(parent);
         }
     }
-    for dataset in study.datasets() {
-        for column in dataset.columns() {
-            if column.values().is_empty() {
-                continue;
-            }
-            let identity = format!("{}.{}", dataset.id(), column.declaration().name.value);
-            let mut list = Element::new("def:ValueListDef", &format!("datasets.{identity}.values"))
-                .attr("OID", format!("VL.{identity}"));
-            for (index, value) in column.values().iter().enumerate() {
-                let identity = format!("{identity}.{}", value.id());
-                let meta = value
-                    .column()
-                    .declaration()
-                    .submission
-                    .as_ref()
-                    .expect("composed value");
-                let mut reference = Element::new("ItemRef", value.path())
-                    .attr("ItemOID", format!("IT.{identity}"))
-                    .attr("OrderNumber", index + 1)
-                    .attr("Mandatory", yes(value.column().mandatory()))
-                    .optional("Role", meta.role.as_ref().map(|v| &v.value))
-                    .optional(
-                        "MethodOID",
-                        meta.method.as_ref().map(|_| format!("MT.{identity}")),
-                    );
-                reference.push(
-                    Element::new("def:WhereClauseRef", value.path())
-                        .attr("WhereClauseOID", format!("WC.{identity}")),
-                );
-                list.push(reference);
-            }
-            metadata.push(list);
-        }
-    }
-    for dataset in study.datasets() {
-        for column in dataset.columns() {
-            for value in column.values() {
-                let identity = format!(
-                    "{}.{}.{}",
-                    dataset.id(),
-                    column.declaration().name.value,
-                    value.id()
-                );
-                let mut clause = Element::new("def:WhereClauseDef", value.path())
-                    .attr("OID", format!("WC.{identity}"));
-                // One range check per where column, in written order: one
-                // value is an equality and several a membership, and an
-                // exclusion is NE for one value and NOTIN for several
-                // (DEFINE-27).
-                for term in value.clause() {
-                    let target = &dataset.columns()[term.column].declaration().name.value;
-                    let comparator = match (term.excludes, term.values.len()) {
-                        (false, 1) => "EQ",
-                        (false, _) => "IN",
-                        (true, 1) => "NE",
-                        (true, _) => "NOTIN",
-                    };
-                    let mut check = Element::new("RangeCheck", value.path())
-                        .attr("Comparator", comparator)
-                        .attr("SoftHard", "Soft")
-                        .attr("def:ItemOID", format!("IT.{}.{target}", dataset.id()));
-                    for checked in &term.values {
-                        let mut code = Element::new("CheckValue", value.path());
-                        code.text = Some(checked.clone());
-                        check.push(code);
-                    }
-                    clause.push(check);
-                }
-                metadata.push(clause);
-            }
-        }
-    }
+    push_value_lists(&mut metadata, study);
+    push_where_clauses(&mut metadata, study);
     push_item_groups(&mut metadata, study, language);
     for dataset in study.datasets() {
         for (column, identity) in variants(dataset) {

@@ -1412,6 +1412,8 @@ mod execution {
 
         // A unit seam: the bound plans of six benchmarks' specifications, which
         // no benchmark's expected files pin.
+        // Over the 250-line ceiling until the follow-up of #3806 splits it.
+        #[allow(clippy::too_many_lines)]
         #[test]
         fn all_six_original_yaml_documents_compile_against_independent_model_expectations() {
             type Case<'a> = (
