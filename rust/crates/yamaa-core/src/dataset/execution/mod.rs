@@ -7,8 +7,8 @@ mod diagnostics;
 
 use crate::{
     conversion::ConversionError,
+    expression::Reducer,
     numeric_lifecycle::{HandlerCount, HandlerCountOverflow},
-    reduction::NumericReducer,
     table::{CellError, TableAccess, TableSchema, ValueRef},
     table_grouping::GroupingError,
     table_reduction::TableReductionError,
@@ -296,7 +296,7 @@ pub enum ExecutionError<E> {
     ReductionType {
         path: String,
         expression: String,
-        reducer: NumericReducer,
+        reducer: Reducer,
         source: String,
         actual: ValueType,
     },

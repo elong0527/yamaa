@@ -1,0 +1,48 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADVS
+keys: [STUDYID, USUBJID, PARAMCD, VSSEQ]
+input:
+  VS: {path: input/vs.csv, types: {VSSEQ: int, VSSTRESN: float, VSREPNUM: int}}
+
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, PARAMCD, VSSEQ, AVALC, AVALSD]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: VS.VSTESTCD
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation: VS.VSSEQ
+
+  - name: AVALC
+    type: str
+    label: Analysis Value (C)
+    derivation: VS.VSORRES
+
+  # One standard deviation per subject and parameter, repeated on each of its
+  # replicate rows. AVALC holds the results as text, and a standard deviation
+  # needs numbers, so the run is rejected before any data is read.
+  - name: AVALSD
+    type: float
+    label: Standard Deviation of Replicate Results
+    derivation:
+      aggregate:
+        group_by: [STUDYID, USUBJID, PARAMCD]
+        expr: "STDDEV(AVALC)"

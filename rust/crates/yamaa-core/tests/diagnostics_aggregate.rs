@@ -185,7 +185,7 @@ mod diagnostics {
             use yamaa_core::json::Value as V;
             use yamaa_core::{
                 diagnostic::{ConditionCode, DatasetFinding as F, ProjectionError},
-                reduction::NumericReducer,
+                expression::Reducer,
                 temporal::{Date, DateTime, Precision},
                 value::{Value, ValueType},
             };
@@ -213,7 +213,7 @@ mod diagnostics {
                     let diagnostic = F::ReductionInputType {
                         path: "aggregate",
                         expression: "SUM(A)",
-                        reducer: NumericReducer::Sum,
+                        reducer: Reducer::Sum,
                         source: "A",
                         actual,
                     }
@@ -285,7 +285,7 @@ mod diagnostics {
                     F::ReductionInputType {
                         path: "p",
                         expression: "SUM(A)",
-                        reducer: NumericReducer::Sum,
+                        reducer: Reducer::Sum,
                         source: "A",
                         actual: ValueType::Int
                     }

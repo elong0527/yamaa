@@ -84,6 +84,9 @@ pub struct BoundAggregate {
     separator: String,
     /// Whether `STR_JOIN` and `COUNT(x)` take each value once (FORMULA-18).
     distinct: bool,
+    /// The probability, from 0 to 1, at which `QUANTILE` reads its quantile
+    /// (FORMULA-18).
+    quantile: f64,
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct AggregateDerivation {
@@ -136,19 +139,23 @@ impl BoundAggregate {
             order: Vec::new(),
             separator: String::new(),
             distinct: false,
+            quantile: 0.0,
         })
     }
     /// The fields a reducer reads besides its argument (FORMULA-18): the
-    /// order and separator of `STR_JOIN`, and `distinct`.
+    /// order and separator of `STR_JOIN`, `distinct`, and the probability
+    /// of `QUANTILE`.
     pub fn with_reducer_fields(
         mut self,
         order: Vec<OrderTerm>,
         separator: String,
         distinct: bool,
+        quantile: f64,
     ) -> Self {
         self.order = order;
         self.separator = separator;
         self.distinct = distinct;
+        self.quantile = quantile;
         self
     }
     pub fn order(&self) -> &[OrderTerm] {
@@ -159,6 +166,9 @@ impl BoundAggregate {
     }
     pub fn distinct(&self) -> bool {
         self.distinct
+    }
+    pub fn quantile(&self) -> f64 {
+        self.quantile
     }
     pub fn with_record_operations(
         mut self,

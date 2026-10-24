@@ -1,0 +1,38 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  SOURCE: {path: input/adsl.csv, types: {AGE: int}}
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGE, AGEMED]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: SOURCE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: SOURCE.USUBJID
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: SOURCE.AGE
+
+  # The quantile is written beside a mean, which reads none: the run is
+  # rejected before any data is read.
+  - name: AGEMED
+    type: float
+    label: Median Age in Study
+    derivation:
+      aggregate:
+        group_by: [STUDYID]
+        quantile: 0.5
+        expr: "MEAN(AGE)"
