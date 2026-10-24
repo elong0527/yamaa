@@ -2,7 +2,8 @@
 
 This is the execution inventory and whole-table equivalence contract for
 [#2683](https://github.com/elong0527/yamaa/issues/2683), and the partitioned
-executor and the streamed runs built on it (#3697), with their end states.
+executor and the streamed runs built on it (#3697), with their end states, and
+its key-bounded partitions (#3763).
 None of them changes language behavior; existing language requirements remain
 authoritative.
 
@@ -199,7 +200,8 @@ These are implementation seams for subsequent work, not new callable APIs.
 `ResolvedPlan::execute_partitioned` runs a plan over the partitions of its
 driver input, consecutive physical subsets of one snapshot in order, and the
 facade's `EngineOptions::with_partitions` divides each build's driver input
-into partitions of a given number of records (#3697). It is an engine mode
+into partitions of a given number of records (#3697), or into key-bounded
+partitions ([below](#key-bounded-partitions), #3763). It is an engine mode
 with no host surface.
 
 - **One input.** The run reads the partitions as one table, so every record
@@ -208,8 +210,11 @@ with no host surface.
   partition's schema, and each partition within the row and cell limits on
   its own, before any record is read; every other source is admitted whole.
 - **Reading by partition.** A run whose specification reads one input, CSV
-  or Parquet, and whose plan has no step that needs the whole table reads
+  or Parquet, and whose plan is safe under consecutive partitions reads
   that input by partition (#3792), every partition before any derivation.
+  A plan that only key-bounded partitions can divide reads the input whole
+  and admits it whole before cutting its key-bounded partitions: the
+  reader's record ranges do not preserve key groups.
   The CSV reader scans every record once, then decodes and converts one
   partition of records after another, so only one partition's intermediates
   exist at a time. The Parquet reader divides the file into runs of whole row
@@ -250,10 +255,78 @@ with no host surface.
   step's spec path. With the fallback, those steps run over the whole input.
   The run's own reconciliation points are not refused, because it holds the
   state they need: admission, intermediate verification, `SELF` publication,
-  the final order and the declaration checks.
+  the final order and the declaration checks. Under key-bounded partitions a
+  window or an aggregate that groups by every partition key is not such a
+  step.
 - **Cancellation.** The token is polled at every checkpoint of the schedule,
   between the partitions of each divided unit, and before each batch of
   project-function calls. A cancelled run keeps nothing any partition built.
+
+### Key-bounded partitions
+
+`Partitions::by_keys(keys, rows)` divides each build's driver input so that no
+partition splits a group of the specification's leading `keys` declared keys
+(#3763). ADaM specifications declare `STUDYID` and `USUBJID` first, so two
+keys make each partition a run of whole subjects.
+
+- **The partition keys and their fields.** The partition keys are the
+  leading `keys` declared keys, or every declared key when there are fewer; a
+  specification that declares no key runs over consecutive partitions of
+  `rows` records. The driver input holds a key when every row template that
+  reads the driver
+  input record by record derives it as a plain read of one driver field, the
+  same field in each, whose type is the column's, so the read converts
+  nothing. A grouped template's field is one of its group fields.
+  `ResolvedPlan::partition_fields` names those fields; when the driver input
+  does not hold every partition key, it names none.
+- **The cut.** The records are grouped by the partition fields with the
+  equality key groups use (`table_grouping::Key`: missing equals missing, the
+  float zero signs are equal, an integer is not its decimal text). In the
+  order of the records, each partition holds as many whole runs of equal
+  values as fit in `rows` records, and a run longer than `rows` is a partition
+  of its own. Stored order is kept (P5): the engine never reorders records.
+  The cut is made once admission has passed, so a run refused or cancelled
+  at admission reads no record.
+- **One partition.** An input that is not grouped by its partition fields,
+  where a value recurs after its run has ended, runs as one partition, as
+  does an input whose partition fields cannot be read, or a specification
+  whose driver input does not hold every partition key. The cut never
+  selects non-contiguous records, because the first failure and the handler
+  counts must follow base-record order; one partition keeps that order and
+  lets a later reader decode the input by record range.
+- **The classes.** Each step of the schedule carries its class under
+  key-bounded partitions beside its class under consecutive ones
+  (`StepInfo::keyed`): how many leading keys every window and aggregate it
+  reads groups by, and its class when the partitions keep those keys' groups
+  whole. A window or an aggregate whose grouping includes every partition
+  key is `Safe` there; the step's class is then that of its other parts.
+  The grouping is a window's `group_by` (WINDOW-3), the `group_by` of an
+  unqualified aggregate, the group fields of the grouped row template an
+  aggregate reduces, or the key of a qualified aggregate, which over the
+  driver input must pair each partition key with the field that holds it, so
+  every record it matches has the current row's partition keys (LOOKUP-18,
+  LOOKUP-19). Each counts a key when it names the key's column or the field
+  the key copies. A row of a template that does not read the driver input
+  belongs to no partition, so a window or aggregate that reads one holds no
+  key: a column window or an unqualified aggregate, which ranges over every
+  candidate, as soon as one template does not read the driver input, and a
+  row window or a qualified aggregate evaluated for such a template's rows.
+  Every other step that needs the whole table stays `Global`: a named or
+  joined relation, `SELF` rows, a project function, and a window or
+  aggregate whose grouping omits a partition key.
+- **Running a divided window or aggregate.** A divided unit runs one
+  partition's rows at a time, as under consecutive partitions. A window step
+  prepares its window once over its whole scope, as the whole-table run
+  does, so a failure while preparing it comes before any row is evaluated,
+  then evaluates each partition's rows as a unit of its own; an aggregate
+  reads its records as the whole-table run reads them. Only key-bounded
+  partitions divide a template's window stage: consecutive partitions keep
+  it one unit, as #3697 built it.
+
+A window grouped by `[USUBJID, PARAMCD]` in a specification keyed `[STUDYID,
+USUBJID, ...]` omits the first partition key, so it is refused under two keys
+and under one: a `USUBJID` that two studies share would put one of its groups
+in two partitions. Grouping it by `[STUDYID, USUBJID, PARAMCD]` admits it.
 
 ### Streamed runs
 
@@ -295,6 +368,7 @@ of `save()`.
 | --- | --- | --- |
 | Before start, through admission | a `FailureKind::Cancelled` failure; no result, nothing staged or published | A failed result with no output, such as the `partition_global` refusal; its save writes only the report file |
 | Mid-partition, through output keys and verification | a `FailureKind::Cancelled` failure; every partition's partial state is dropped; nothing staged or published | The whole-table run's first failure, handler counts and retained records; no output; its save writes only the report file |
+| Between key-bounded partitions (#3763), through output keys and verification | a `FailureKind::Cancelled` failure, at every checkpoint and between the partitions of each divided unit, windows and aggregates included; every partition's partial state is dropped; nothing staged or published | The whole-table run's first failure, in base-record order whether the input divides or runs as one partition, with its handler counts and retained records; no output; its save writes only the report file |
 | Mid-stream, while a reader pulls the batches of a streamed run | Releasing the reader or a token found before a batch ends production; no batch is retained; no result, so nothing published | A batch that cannot be produced, at the first pull a failed run's, ends the stream with the run's issue; its save writes only the report file |
 | During publication | Polled once, after every file is staged and before the first commit (D74): every staged file removed, nothing published | Before the first commit: nothing published, staged files removed. During the commit: earlier files stay replaced whole, later staged files removed, `Failure.paths` lists the files written |
 
@@ -320,8 +394,11 @@ existing suites; this inventory alone does not establish an implementation.
 The partitioned executor's controls are `yamaa-core`'s
 `dataset/partitioned_execution.rs` and the facade's `partitioned_corpus.rs`,
 which runs every single-specification benchmark over one-record partitions
-against its expected files and reads each as a stream of one-record batches,
-and `end_states.rs`, one test per cell of the end states. The streamed run's
+and over key-bounded partitions of one key group each against its expected
+files, reads each as a stream of one-record batches, and lists the ADaM
+benchmarks key-bounded partitions must admit, and `end_states.rs`, one test
+per cell of the end states. The schedule's classes under key-bounded
+partitions are stated case by case in `dataset/resolved/tests.rs`. The streamed run's
 are the facade's `streaming.rs`, the adapters' `table_public_batches.rs`, whose
 counting source proves that a consumer that stops pulling stops production,
 and the installed `streaming` suites of both hosts.

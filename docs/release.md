@@ -928,7 +928,11 @@ and the ReadStat sources; and the crates.io crates of that lock, as
 that `tools/staging/vendor_crates.py` leaves out, described below. The
 facade crate carries the selftest cases in its `selftest/` directory: the
 files of the benchmarks that `benchmarks/selftest.yaml` names, which the
-facade's build embeds (#3030 D108), so a build from the bundle reads nothing
+facade's build embeds (#3030 D108). The adapters crate carries the schema
+files that it embeds in its `schema/` directory: the copies of the schema
+modules and JSON Schemas of `yaml/` that
+`tools/packaging/generate_shipped_schema.py` writes and
+`make check-repository` compares. A build from the bundle thus reads nothing
 outside it. It holds no tests, examples, other benchmark fixtures or
 `public-api.txt`, and no `rust-toolchain.toml` or `rust-toolchain` file
 anywhere, the vendored crates included. Cargo writes the trimmed lock from a
@@ -1341,8 +1345,9 @@ as `failed` and includes the refusal's `issues`.
 In a run divided into partitions (`docs/partition-execution.md`), the row and
 cell limits bound each materialized partition of a CSV or Parquet driver input
 that the run reads by partition, which it does when that input is the
-specification's only one, and each table it reads whole. A run that also reads
-the source of a lookup, join or named relation reads every input whole.
+specification's only one and its plan is safe under consecutive partitions,
+and each table it reads whole. A run that also reads the source of a lookup,
+join or named relation reads every input whole.
 
 A MiB is 1,048,576 bytes; a GiB is 1,073,741,824 bytes. File readers check the
 encoded size before retaining bytes and check growth during reading. A

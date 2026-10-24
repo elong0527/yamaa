@@ -27,6 +27,13 @@
 //! the stream gave before its first pull, and a negative benchmark's stream
 //! ends at its first pull with its run's issues. Either way the streamed
 //! run's issues are its run's.
+//!
+//! Each benchmark runs again on an engine with key-bounded partitions over
+//! its two leading declared keys (#3763), one key group per partition, and
+//! the same holds of that run. Every benchmark the specifications show to
+//! group its windows and aggregates by those keys is admitted: it runs with
+//! no fallback, divided where its input is grouped by those keys and as one
+//! partition where it is not.
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
@@ -44,6 +51,55 @@ const DIVIDED: [&str; 3] = [
     "adam-adsl-analysis-age",
     "schema-adsl-age-quality",
     "sdtm-dm-basic",
+];
+
+/// ADaM benchmarks that key-bounded partitions over their two leading
+/// declared keys must admit, read from their specifications: every window
+/// `group_by`, unqualified aggregate `group_by`, grouped row template and
+/// qualified aggregate key names both keys, which the driver input holds as
+/// fields the specification copies unchanged, every row comes from the
+/// driver input, and nothing else needs the whole table (no named
+/// intermediate, implicit join, structured source or project function).
+/// Each is keyed STUDYID, USUBJID and more, except adam-adlb-lymphocytes and
+/// adam-advs-locf, keyed USUBJID first, and adam-clinsite-site-level, keyed
+/// STUDYID and SITEID. adam-adlb-lymphocytes is admitted but runs as one
+/// partition: its `lb.csv` returns to LYM-001's CYCLE 1 DAY 1 records after
+/// other subjects, so the input is not grouped by USUBJID and VISIT.
+const KEY_BOUNDED: [&str; 34] = [
+    "adam-adae-occurrence-flags",
+    "adam-adae-serious-sequence",
+    "adam-adae-severity-rank",
+    "adam-adae-worst-severity",
+    "adam-adce-worst-toxicity",
+    "adam-adeg-derived-intervals",
+    "adam-adeg-time-matched-baseline",
+    "adam-adex-cumulative-dose",
+    "adam-adex-dose-reduction",
+    "adam-adex-uncollected",
+    "adam-adfa-fever",
+    "adam-adlb-closest-visit",
+    "adam-adlb-lymphocytes",
+    "adam-adlb-mean",
+    "adam-adlb-ordered-sum",
+    "adam-adlb-shift-criteria",
+    "adam-adpc-blq-imputation",
+    "adam-adpp-carryover-exclusion",
+    "adam-adqs-multi-scale-scoring",
+    "adam-adqs-subscale-score",
+    "adam-adrs-confirmed-response",
+    "adam-adsl-alive-date",
+    "adam-adsl-dose-adjustment",
+    "adam-adsl-new-therapy",
+    "adam-adsl-period-dates",
+    "adam-adtr-nadir",
+    "adam-adtr-sum",
+    "adam-advs-bsa",
+    "adam-advs-first-observed-carry",
+    "adam-advs-locf",
+    "adam-advs-map",
+    "adam-advs-orthostatic-criteria",
+    "adam-advs-prior-result",
+    "adam-clinsite-site-level",
 ];
 
 fn benchmarks() -> PathBuf {
@@ -266,12 +322,61 @@ fn stream_problems(run: &yamaa::Run, streamed: yamaa::Streamed) -> Vec<String> {
     problems
 }
 
+/// A run of `spec` on an engine with `partitions`, run again with the
+/// whole-table fallback when a step that needs the whole table refuses it:
+/// the run, the partitions it ran on, and whether the partitions admitted
+/// it, so it ran with no fallback.
+fn partitioned_run(
+    spec: &str,
+    partitions: Partitions,
+    token: &CancellationToken,
+) -> (yamaa::Run, Partitions, bool) {
+    let run = engine(Some(partitions))
+        .spec(spec)
+        .cancel_with(token)
+        .run()
+        .unwrap();
+    let refused = run.diagnostics().first().is_some_and(|issue| {
+        issue.code.as_str() == "engine_rejected"
+            && issue
+                .context
+                .to_json()
+                .contains(r#""code":"partition_global""#)
+    });
+    if !refused {
+        return (run, partitions, true);
+    }
+    let partitions = partitions.with_whole_table_fallback();
+    let run = engine(Some(partitions))
+        .spec(spec)
+        .cancel_with(token)
+        .run()
+        .unwrap();
+    (run, partitions, false)
+}
+
+/// What differs between a partitioned run and what its case states: a
+/// negative benchmark's first issue, and every issue, context included,
+/// against the whole-table run's over the same staged files; a positive
+/// benchmark's saved files.
+fn run_problems(case: &Path, run: yamaa::Run, whole: Option<&yamaa::Run>) -> Vec<String> {
+    let issues = whole.and_then(|whole| {
+        (run.diagnostics() != whole.diagnostics())
+            .then(|| "issues differ from the whole-table run's".to_owned())
+    });
+    let mut problems = problems(case, outcome(run));
+    problems.extend(issues);
+    problems
+}
+
 #[test]
 fn partitioned_and_streamed_runs_reproduce_every_single_specification_benchmark() {
     let token = CancellationToken::new();
     let one = Partitions::new(NonZeroUsize::MIN);
+    let keyed = Partitions::by_keys(NonZeroUsize::new(2).unwrap(), NonZeroUsize::MIN);
     let mut mismatched = BTreeMap::new();
     let mut divided = Vec::new();
+    let mut key_admitted = Vec::new();
     for case in cases() {
         let name = case.file_name().unwrap().to_string_lossy().into_owned();
         let scratch = Scratch::new("partitioned-corpus");
@@ -280,52 +385,34 @@ fn partitioned_and_streamed_runs_reproduce_every_single_specification_benchmark(
         }
         let spec = scratch.join("spec.yaml");
         let spec = spec.to_str().unwrap();
-        let mut run = engine(Some(one))
-            .spec(spec)
-            .cancel_with(&token)
-            .run()
-            .unwrap();
-        let refused = run.diagnostics().first().is_some_and(|issue| {
-            issue.code.as_str() == "engine_rejected"
-                && issue
-                    .context
-                    .to_json()
-                    .contains(r#""code":"partition_global""#)
-        });
-        let partitions = if refused {
-            one.with_whole_table_fallback()
-        } else {
-            one
-        };
-        if refused {
-            run = engine(Some(partitions))
-                .spec(spec)
-                .cancel_with(&token)
-                .run()
-                .unwrap();
-        } else {
+        // Every run and the stream before a save writes its files.
+        let (run, partitions, admitted) = partitioned_run(spec, one, &token);
+        let (keyed_run, _, keyed_admitted) = partitioned_run(spec, keyed, &token);
+        // One-record partitions divide every run they admit over more than
+        // one record.
+        if admitted {
             divided.push(name.clone());
         }
-        // Read as a stream before the run's save writes its files.
+        if keyed_admitted {
+            key_admitted.push(name.clone());
+        }
         let streamed = engine(Some(partitions))
             .spec(spec)
             .cancel_with(&token)
             .stream()
             .unwrap();
         let streaming = stream_problems(&run, streamed);
-        // A negative benchmark states its first issue's phase, condition,
-        // paths and rule; every issue, context included, is the whole-table
-        // run's, over the same staged files.
-        let issues = if case.join("expected/error.yaml").is_file() {
-            let whole = engine(None).spec(spec).cancel_with(&token).run().unwrap();
-            (run.diagnostics() != whole.diagnostics())
-                .then(|| "issues differ from the whole-table run's".to_owned())
-        } else {
-            None
-        };
-        let mut problems = problems(&case, outcome(run));
-        problems.extend(issues);
+        let whole = case
+            .join("expected/error.yaml")
+            .is_file()
+            .then(|| engine(None).spec(spec).cancel_with(&token).run().unwrap());
+        let mut problems = run_problems(&case, run, whole.as_ref());
         problems.extend(streaming);
+        problems.extend(
+            run_problems(&case, keyed_run, whole.as_ref())
+                .into_iter()
+                .map(|problem| format!("key-bounded partitions: {problem}")),
+        );
         if !problems.is_empty() {
             mismatched.insert(name, problems);
         }
@@ -334,4 +421,12 @@ fn partitioned_and_streamed_runs_reproduce_every_single_specification_benchmark(
     for name in DIVIDED {
         assert!(divided.iter().any(|case| case == name), "{name} divides");
     }
+    let not_admitted: Vec<&str> = KEY_BOUNDED
+        .into_iter()
+        .filter(|name| !key_admitted.iter().any(|case| case == name))
+        .collect();
+    assert!(
+        not_admitted.is_empty(),
+        "not admitted under key-bounded partitions: {not_admitted:?}"
+    );
 }

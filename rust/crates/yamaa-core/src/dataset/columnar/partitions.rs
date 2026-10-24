@@ -9,6 +9,20 @@
 //! is read (#3792): the row and cell limits bound a partition, not the
 //! input. Every other source is admitted whole.
 //!
+//! Key-bounded partitions (#3763) are cut only between two runs of records
+//! whose partition key fields differ, so no partition splits a group of the
+//! leading declared keys, and the cut is made once admission has passed, so
+//! a run refused or cancelled at admission reads no record. A window or
+//! aggregate that groups by every one of those keys, over rows that all come
+//! from the driver input, then reads only rows of its own partition, and the
+//! schedule classes it partition-safe
+//! ([`crate::dataset::resolved::StepInfo::class`]). An input that is not
+//! grouped by its partition keys is one partition, which keeps every first
+//! failure in base-record order. A divided window step prepares its window
+//! once over its whole scope, as the whole-table run does, then evaluates
+//! each partition's rows as a unit, so the window's own failures come in
+//! the whole-table run's order too.
+//!
 //! The schedule's units then run in order, as the whole-table run runs them.
 //! A unit whose steps are all partition-safe ([`PartitionClass::Safe`] or
 //! [`PartitionClass::CombineStep`]) and whose rows come from the driver
@@ -128,18 +142,26 @@ impl<T: TableAccess + ?Sized> TableAccess for RowRange<'_, T> {
 pub(super) struct Partitions {
     /// Where each partition starts in the whole input, then its size.
     starts: Vec<usize>,
+    /// How many leading declared keys no partition splits a group of, which
+    /// decides each step's class (#3763); zero for consecutive records.
+    pub keys: usize,
     /// Whether a step that needs the whole table runs over it.
     pub fallback: bool,
     /// Whether some partition's schema is not the driver's.
     pub mismatched: bool,
+    /// The partition fields and size of a key-bounded cut not yet made: the
+    /// run makes it once admission has passed (#3763).
+    cut: Option<(Vec<usize>, usize)>,
 }
 
 impl Partitions {
-    fn new<E>(input: &Concatenated<'_, E>, fallback: bool) -> Self {
+    fn new<E>(input: &Concatenated<'_, E>, keys: usize, fallback: bool) -> Self {
         Self {
             starts: input.starts.clone(),
+            keys,
             fallback,
             mismatched: input.parts.iter().any(|part| part.schema() != input.schema),
+            cut: None,
         }
     }
 
@@ -152,6 +174,57 @@ impl Partitions {
     pub(super) fn ranges(&self) -> impl Iterator<Item = Range<usize>> + '_ {
         self.starts.windows(2).map(|bounds| bounds[0]..bounds[1])
     }
+}
+
+/// Partitions of `rows` consecutive records of an input of `len` records,
+/// the last holding the rest (#3697). An empty input is one empty
+/// partition, so admission still checks its schema.
+fn consecutive(len: usize, rows: usize) -> Vec<Range<usize>> {
+    (0..len.max(1))
+        .step_by(rows)
+        .map(|start| start..start + rows.min(len.saturating_sub(start)))
+        .collect()
+}
+
+/// The key-bounded partitions of `table` (#3763): the runs of consecutive
+/// records whose `fields` hold equal values, as `table_grouping::Key`
+/// compares them, packed in order into partitions of at most `rows` records,
+/// a longer run alone. None when a value of the fields recurs after its run
+/// has ended, so the input is not grouped by them, or when a field cannot be
+/// read: the input is then one partition.
+fn key_bounded<T: TableAccess + ?Sized>(
+    table: &T,
+    fields: &[usize],
+    rows: usize,
+) -> Option<Vec<Range<usize>>> {
+    let len = table.row_count();
+    let width = fields.len();
+    let mut values: Vec<ValueRef<'_>> = Vec::new();
+    values.try_reserve_exact(len.checked_mul(width)?).ok()?;
+    for row in 0..len {
+        for &field in fields {
+            values.push(table.cell(row, field).ok()?);
+        }
+    }
+    let groups =
+        group::partition(len, width, |item, position| values[item * width + position]).ok()?;
+    let mut bounds = Vec::new();
+    let (mut start, mut size) = (0, 0);
+    // Groups come in first-occurrence order, so a grouped input's groups are
+    // its runs, in record order.
+    for members in groups.iter() {
+        let first = members[0];
+        if members[members.len() - 1] - first + 1 != members.len() {
+            return None;
+        }
+        if size > 0 && size + members.len() > rows {
+            bounds.push(start..first);
+            (start, size) = (first, 0);
+        }
+        size += members.len();
+    }
+    bounds.push(start..len);
+    Some(bounds)
 }
 
 /// `len` items split into consecutive runs of equal keys, in order. No
@@ -175,24 +248,21 @@ fn runs(len: usize, key: impl Fn(usize) -> Option<usize>) -> Vec<Range<usize>> {
 
 impl<E> Run<'_, '_, E> {
     /// Whether a partitioned run divides a unit of the dataset's `steps`:
-    /// none of them needs the whole table.
+    /// none of them needs the whole table under the run's partitions.
     pub(super) fn divides(&self, steps: impl Fn(Step) -> bool) -> bool {
-        self.partitions.is_some()
-            && self
-                .plan
+        self.partitions.as_ref().is_some_and(|partitions| {
+            self.plan
                 .region_schedule(RegionId::DATASET)
                 .iter()
                 .filter(|info| steps(info.step))
-                .all(|info| info.partition != PartitionClass::Global)
+                .all(|info| info.class(partitions.keys) != PartitionClass::Global)
+        })
     }
 
     /// Whether `template` reads the driver input record by record, so its
     /// candidates divide with the input's partitions.
     pub(super) fn reads_partitions(&self, template: TemplateId) -> bool {
-        let plan = self.plan;
-        let driver = &plan.template(template).driver;
-        driver.named.is_none()
-            && plan.region_sources(RegionId::DATASET).next() == Some(driver.source)
+        self.plan.reads_driver(template)
     }
 
     /// The records of each partition of the driver input, which a
@@ -252,6 +322,28 @@ impl<E> Run<'_, '_, E> {
                 .flatten()
                 .and_then(|record| self.partition_of(record))
         })
+    }
+
+    /// Cut a key-bounded run's driver input between its runs of equal
+    /// partition keys (#3763), once admission has passed, so a run refused
+    /// or cancelled at admission reads no record. An input that is not
+    /// grouped by its partition fields, or whose fields cannot be read,
+    /// stays one partition.
+    pub(super) fn cut_by_keys(&mut self) {
+        let primary = self.primary;
+        let Some(partitions) = self.partitions.as_mut() else {
+            return;
+        };
+        let Some((fields, rows)) = partitions.cut.take() else {
+            return;
+        };
+        if let Some(bounds) = key_bounded(primary, &fields, rows) {
+            partitions.starts = bounds
+                .iter()
+                .map(|bound| bound.start)
+                .chain(std::iter::once(primary.row_count()))
+                .collect();
+        }
     }
 
     /// Poll the cancellation probe before every partition of a unit after
@@ -364,12 +456,8 @@ impl ResolvedPlan {
         cancelled: &dyn Fn() -> bool,
         whole_table_fallback: bool,
     ) -> ExecutionAttempt<E> {
-        let driver = self
-            .region_sources(RegionId::DATASET)
-            .next()
-            .expect("a dataset has a driver source");
-        let input = Concatenated::new(partitions, &self.sources()[driver.index()].schema);
-        let divided = Partitions::new(&input, whole_table_fallback);
+        let input = Concatenated::new(partitions, self.driver_schema());
+        let divided = Partitions::new(&input, 0, whole_table_fallback);
         self.attempt(
             &input,
             Some(divided),
@@ -380,8 +468,22 @@ impl ResolvedPlan {
         )
     }
 
-    /// Execute `table` whole, or divided into consecutive partitions as
-    /// `partitioning` asks (#3697).
+    /// Execute `table` whole, or divided as `partitioning` asks: into
+    /// consecutive partitions of its `rows` records (#3697), or into
+    /// key-bounded partitions over its leading `keys` declared keys (#3763).
+    ///
+    /// Key-bounded partitions cut the driver input only between two runs of
+    /// records whose partition key fields ([`Self::partition_fields`]) hold
+    /// different values, and each holds as many whole runs as fit in `rows`
+    /// records, a longer run alone. The cut is made once admission has
+    /// passed, so a run refused or cancelled at admission reads no record.
+    /// The input stays one partition when it is not grouped by those fields,
+    /// when a field cannot be read, or when a template derives one of those
+    /// keys from anything but a field. A specification that declares no key
+    /// runs over consecutive partitions. Every partition-safe unit then runs
+    /// one partition at a time, and a window or aggregate that groups by
+    /// every partition key is partition-safe
+    /// ([`crate::dataset::resolved::StepInfo::class`]).
     pub fn execute_divided<T: TableAccess + ?Sized>(
         &self,
         partitioning: Option<Partitioning>,
@@ -396,34 +498,214 @@ impl ResolvedPlan {
         };
         let rows = table.row_count();
         let size = partitioning.rows.get();
-        // An empty table is one empty partition, so admission still checks
-        // its schema.
-        let ranges: Vec<RowRange<'_, T>> = (0..rows.max(1))
-            .step_by(size)
-            .map(|start| RowRange {
+        let fallback = partitioning.whole_table_fallback;
+        let keys = partitioning
+            .leading_keys
+            .map_or(0, |keys| keys.get().min(self.keys().len()));
+        // Until admission has passed, key-bounded partitions are one.
+        let bounds = if keys == 0 {
+            consecutive(rows, size)
+        } else {
+            std::iter::once(0..rows).collect()
+        };
+        let ranges: Vec<RowRange<'_, T>> = bounds
+            .into_iter()
+            .map(|range| RowRange {
                 table,
-                start,
-                rows: size.min(rows.saturating_sub(start)),
+                start: range.start,
+                rows: range.len(),
             })
             .collect();
         let parts: Vec<&dyn TableAccess<Error = T::Error>> = ranges
             .iter()
             .map(|range| range as &dyn TableAccess<Error = T::Error>)
             .collect();
-        self.execute_partitioned(
-            &parts,
+        let input = Concatenated::new(&parts, self.driver_schema());
+        let mut divided = Partitions::new(&input, keys, fallback);
+        if keys > 0 {
+            divided.cut = self.partition_fields(keys).map(|fields| (fields, size));
+        }
+        self.attempt(
+            &input,
+            Some(divided),
             secondary,
             functions,
             observer,
             cancelled,
-            partitioning.whole_table_fallback,
         )
+    }
+
+    /// The schema of the dataset's driver input.
+    fn driver_schema(&self) -> &TableSchema {
+        let driver = self
+            .region_sources(RegionId::DATASET)
+            .next()
+            .expect("a dataset has a driver source");
+        &self.sources()[driver.index()].schema
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::runs;
+    use super::{key_bounded, runs};
+    use crate::table::{CellError, Column, TableAccess, TableSchema, ValueRef};
+    use crate::value::{ColumnType, Value};
+    use std::convert::Infallible;
+    use std::ops::Range;
+
+    /// Records of two fields, K and J. The cut reads their cells and never
+    /// their declared types, so a field may hold a value of any type.
+    struct Records {
+        schema: TableSchema,
+        rows: Vec<[Value; 2]>,
+    }
+    impl Records {
+        fn new(rows: Vec<[Value; 2]>) -> Self {
+            let column = |name: &str, kind| Column {
+                name: name.into(),
+                kind,
+            };
+            Self {
+                schema: TableSchema::new(vec![
+                    column("K", ColumnType::Str),
+                    column("J", ColumnType::Int),
+                ])
+                .unwrap(),
+                rows,
+            }
+        }
+    }
+    impl TableAccess for Records {
+        type Error = Infallible;
+        fn schema(&self) -> &TableSchema {
+            &self.schema
+        }
+        fn row_count(&self) -> usize {
+            self.rows.len()
+        }
+        fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<Infallible>> {
+            self.rows
+                .get(row)
+                .and_then(|values| values.get(column))
+                .map(ValueRef::from)
+                .ok_or(CellError::OutOfBounds { row, column })
+        }
+    }
+    /// One partition of the records `range`.
+    fn whole(range: Range<usize>) -> Vec<Range<usize>> {
+        vec![range]
+    }
+    fn keyed(keys: &[&str]) -> Records {
+        Records::new(
+            keys.iter()
+                .map(|&key| [Value::Str(key.into()), Value::Int(0)])
+                .collect(),
+        )
+    }
+
+    /// The executor's cut of key-bounded partitions (`key_bounded`), a seam
+    /// no reader reaches: partitions hold whole runs of equal keys, as many
+    /// as fit in the partition size, and a run longer than it alone. The
+    /// runs of a, a, b, c, c, c, d are 0..2, 2..3, 3..6 and 6..7, so a size
+    /// of 3 packs a with b, then c, then d, and a size of 4 packs a with b,
+    /// then c with d.
+    #[test]
+    fn key_bounded_partitions_hold_whole_runs_as_many_as_fit() {
+        let records = keyed(&["a", "a", "b", "c", "c", "c", "d"]);
+        let cases: [(usize, Vec<Range<usize>>); 5] = [
+            (1, vec![0..2, 2..3, 3..6, 6..7]),
+            (2, vec![0..2, 2..3, 3..6, 6..7]),
+            (3, vec![0..3, 3..6, 6..7]),
+            (4, vec![0..3, 3..7]),
+            (7, whole(0..7)),
+        ];
+        for (rows, expected) in cases {
+            assert_eq!(
+                key_bounded(&records, &[0], rows),
+                Some(expected),
+                "partitions of at most {rows} records"
+            );
+        }
+        assert_eq!(
+            key_bounded(&keyed(&[]), &[0], 1),
+            Some(whole(0..0)),
+            "an empty input is one empty partition"
+        );
+    }
+
+    /// The cut's runs (`key_bounded`), a seam no reader reaches: they are
+    /// those of the key tuple, under `Key`'s equality, so missing equals
+    /// missing, the float zero signs are equal, and an integer is not its
+    /// decimal text. A value that recurs after its run has ended leaves the
+    /// input ungrouped, which keeps no partition.
+    #[test]
+    fn key_bounded_partitions_follow_runs_of_the_whole_key_tuple() {
+        let text = |value: &str| Value::Str(value.into());
+        let cases = [
+            (
+                "a value of K recurs under another J",
+                vec![
+                    [text("a"), Value::Int(1)],
+                    [text("b"), Value::Int(1)],
+                    [text("a"), Value::Int(2)],
+                ],
+                vec![0, 1],
+                Some(vec![0..1, 1..2, 2..3]),
+            ),
+            (
+                "the same records by K alone",
+                vec![
+                    [text("a"), Value::Int(1)],
+                    [text("b"), Value::Int(1)],
+                    [text("a"), Value::Int(2)],
+                ],
+                vec![0],
+                None,
+            ),
+            (
+                "missing values are one run",
+                vec![
+                    [Value::Missing, Value::Int(1)],
+                    [Value::Missing, Value::Int(2)],
+                    [text("x"), Value::Int(3)],
+                ],
+                vec![0],
+                Some(vec![0..2, 2..3]),
+            ),
+            (
+                "a missing value recurs",
+                vec![
+                    [Value::Missing, Value::Int(1)],
+                    [text("x"), Value::Int(2)],
+                    [Value::Missing, Value::Int(3)],
+                ],
+                vec![0],
+                None,
+            ),
+            (
+                "an integer and its text are two keys",
+                vec![[text("1"), Value::Int(1)], [Value::Int(1), Value::Int(1)]],
+                vec![0],
+                Some(vec![0..1, 1..2]),
+            ),
+            (
+                "the float zero signs are one key",
+                vec![
+                    [Value::float(-0.0), Value::Int(1)],
+                    [Value::float(0.0), Value::Int(2)],
+                ],
+                vec![0],
+                Some(whole(0..2)),
+            ),
+        ];
+        for (label, rows, fields, expected) in cases {
+            assert_eq!(
+                key_bounded(&Records::new(rows), &fields, 1),
+                expected,
+                "{label}"
+            );
+        }
+    }
 
     /// Consecutive equal keys form one run, an empty input one empty run.
     #[test]

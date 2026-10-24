@@ -87,15 +87,18 @@ mod service {
             Tree::map(vec![("value", Tree::text("ID + 1"))])
         }
 
-        /// A derivation that needs the whole table: a row number over every
-        /// record.
-        fn windowed() -> Tree {
+        /// A row number over every record, or within each declared group.
+        fn windowed(group_by: &[&str]) -> Tree {
+            let mut window = vec![("order_by", Tree::List(vec![Tree::text("ID")]))];
+            if !group_by.is_empty() {
+                window.push((
+                    "group_by",
+                    Tree::List(group_by.iter().map(Tree::text).collect()),
+                ));
+            }
             Tree::map(vec![(
                 "row_number",
-                Tree::map(vec![(
-                    "window",
-                    Tree::map(vec![("order_by", Tree::List(vec![Tree::text("ID")]))]),
-                )]),
+                Tree::map(vec![("window", Tree::map(window))]),
             )])
         }
 
@@ -287,9 +290,14 @@ mod service {
             (end, requests)
         }
 
-        fn partitions(rows: usize, whole_table_fallback: bool) -> Option<Partitioning> {
+        fn partitions(
+            rows: usize,
+            leading_keys: Option<usize>,
+            whole_table_fallback: bool,
+        ) -> Option<Partitioning> {
             Some(Partitioning {
                 rows: NonZeroUsize::new(rows).unwrap(),
+                leading_keys: leading_keys.map(|keys| NonZeroUsize::new(keys).unwrap()),
                 whole_table_fallback,
             })
         }
@@ -313,7 +321,7 @@ mod service {
                     &["SRC"][..],
                     row_wise(),
                     RECORDS,
-                    partitions(6_000_000, false),
+                    partitions(6_000_000, None, false),
                     End::Cancelled,
                     vec!["header", "partitioned"],
                     "partitions of 6,000,000 and 5,000,000 records, each admitted",
@@ -331,7 +339,7 @@ mod service {
                     &["SRC"],
                     row_wise(),
                     RECORDS + 1_000_000,
-                    partitions(RECORDS, false),
+                    partitions(RECORDS, None, false),
                     End::Refused {
                         source: 0,
                         error: Limits::table(RECORDS, 1).unwrap_err(),
@@ -341,27 +349,36 @@ mod service {
                 ),
                 (
                     &["SRC"],
-                    windowed(),
+                    windowed(&[]),
                     RECORDS,
-                    partitions(6_000_000, true),
+                    partitions(6_000_000, None, true),
                     refused(RECORDS),
                     vec!["header", "whole"],
                     "the whole-table fallback reads and admits the whole input",
                 ),
                 (
                     &["SRC"],
-                    windowed(),
+                    windowed(&[]),
                     RECORDS,
-                    partitions(6_000_000, false),
+                    partitions(6_000_000, None, false),
                     refused(RECORDS),
                     vec!["header", "whole"],
                     "a plan that needs the whole table admits the whole input first",
                 ),
                 (
+                    &["SRC"],
+                    windowed(&["ID"]),
+                    RECORDS,
+                    partitions(6_000_000, Some(1), false),
+                    refused(RECORDS),
+                    vec!["header", "whole"],
+                    "a key-bounded window reads and admits the whole input before cutting keys",
+                ),
+                (
                     &["SRC", "LOOKUP"],
                     row_wise(),
                     RECORDS,
-                    partitions(6_000_000, false),
+                    partitions(6_000_000, None, false),
                     refused(RECORDS),
                     vec!["whole"],
                     "a specification of two inputs reads each whole",

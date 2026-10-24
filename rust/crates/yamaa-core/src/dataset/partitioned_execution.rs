@@ -1,7 +1,13 @@
 //! Partitioned execution (#3697): a run over the partitions of its driver
 //! input against independently expected whole-table results, the refusal of
 //! a step that needs the whole table and its whole-table fallback, and the
-//! end states of a cancelled or failed partitioned run.
+//! end states of a cancelled or failed partitioned run; then the same over
+//! key-bounded partitions (#3763), which keep subject-keyed windows and
+//! aggregates inside one partition.
+//!
+//! No benchmark or host fixture reaches this seam, because the hosts run
+//! whole tables: these hand-built plans call `ResolvedPlan::execute_divided`
+//! and `ResolvedPlan::execute_partitioned` directly.
 //!
 //! Every expectation is written by hand from the plan and its input: the
 //! values, their order, the handler counts, the check records and the first
@@ -1112,5 +1118,587 @@ fn a_project_function_runs_only_under_the_fallback_and_then_once_per_record() {
             resolved.execute_partitioned(&refs, &[], &mut port, None, &|| false, fallback);
         assert_eq!(attempt, expected, "fallback {fallback}");
         assert_eq!(port.calls.get(), calls, "calls with fallback {fallback}");
+    }
+}
+
+use super::{
+    AggregateBinding, AggregatePhase, AggregateRelation, AggregateSource, BoundAggregate,
+    IntermediateKey, MatchRead, MatchValue, Partitioning,
+};
+
+/// Key-bounded partitions over the leading `keys` declared keys, of at most
+/// `rows` records each unless one group holds more (#3763).
+fn by_keys(keys: usize, rows: usize, fallback: bool) -> Option<Partitioning> {
+    Some(Partitioning {
+        rows: std::num::NonZeroUsize::new(rows).unwrap(),
+        leading_keys: std::num::NonZeroUsize::new(keys),
+        whole_table_fallback: fallback,
+    })
+}
+
+/// One run of `input` divided as `partitioning` asks.
+fn divided_run(
+    plan: &super::ResolvedPlan,
+    input: &Rows,
+    partitioning: Option<Partitioning>,
+    cancelled: &dyn Fn() -> bool,
+) -> ExecutionAttempt<Infallible> {
+    plan.execute_divided(
+        partitioning,
+        input,
+        &[],
+        &mut NoFunctions::new(),
+        None,
+        cancelled,
+    )
+}
+
+/// An aggregate `expr` of `relation`, whose `V` reads its records' column
+/// `v`.
+fn aggregate(
+    expr: &str,
+    v: Option<usize>,
+    relation: AggregateRelation,
+    phase: AggregatePhase,
+) -> Expression {
+    let path = "columns.R.derivation.aggregate";
+    Expression::Aggregate(Box::new(
+        BoundAggregate::new(
+            crate::expression::compile(
+                expr,
+                crate::expression::Context::Aggregate,
+                &format!("{path}.expr"),
+            )
+            .unwrap(),
+            relation,
+            v.map(|column| AggregateBinding {
+                name: "V".into(),
+                column,
+            })
+            .into_iter()
+            .collect(),
+            None,
+            phase,
+            None,
+            path,
+        )
+        .unwrap(),
+    ))
+}
+
+/// A window of `kind` over each subject's rows, S and U, in the order of D.
+fn by_subject(kind: WindowKind) -> Expression {
+    Expression::Window(Window {
+        kind,
+        group_by: vec![0, 1],
+        order_by: vec![OrderTerm {
+            column: 2,
+            descending: false,
+            nulls_first: false,
+        }],
+        filter: None,
+    })
+}
+
+/// Three subjects' visits: S and U name the subject, D the visit and V its
+/// value; the records of a, then of b, then of c.
+fn subjects() -> Rows {
+    let integer = ColumnType::Int;
+    Rows::new(
+        schema(&[
+            ("S", ColumnType::Str),
+            ("U", ColumnType::Str),
+            ("D", integer),
+            ("V", integer),
+        ]),
+        [
+            ("a", 2, 20),
+            ("a", 1, 10),
+            ("b", 1, 5),
+            ("b", 3, 7),
+            ("b", 2, 6),
+            ("c", 1, 1),
+        ]
+        .iter()
+        .map(|&(u, d, v)| vec![text("s"), text(u), int(d), int(v)])
+        .collect(),
+    )
+}
+
+/// One row per visit, keyed [S, U, D]: RN numbers each subject's visits in
+/// the record template's window stage, PREV reads the value of the
+/// subject's previous visit and TOT sums the subject's values, both in the
+/// column phase. Each, a row window, a column window and an unqualified
+/// aggregate, groups by S and U.
+fn visits() -> (DatasetPlan, Rows) {
+    let input = subjects();
+    let integer = ColumnType::Int;
+    let plan = DatasetPlan::new(
+        input.schema.clone(),
+        schema(&[
+            ("S", ColumnType::Str),
+            ("U", ColumnType::Str),
+            ("D", integer),
+            ("V", integer),
+            ("RN", integer),
+            ("PREV", integer),
+            ("TOT", integer),
+        ]),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![
+                assign(0, Expression::Source(0)),
+                assign(1, Expression::Source(1)),
+                assign(2, Expression::Source(2)),
+                assign(3, Expression::Source(3)),
+                assign(4, by_subject(WindowKind::RowNumber)),
+            ],
+            filter: None,
+        }],
+        vec![
+            assign(
+                5,
+                by_subject(WindowKind::RowValue {
+                    column: 3,
+                    offset: -1,
+                }),
+            ),
+            assign(
+                6,
+                aggregate(
+                    "SUM(V)",
+                    Some(3),
+                    AggregateRelation::Output {
+                        group_by: vec![0, 1],
+                    },
+                    AggregatePhase::Derivation,
+                ),
+            ),
+        ],
+        vec![0, 1, 2],
+        Vec::new(),
+    );
+    (plan, input)
+}
+
+/// The whole-table attempt of [`visits`], derived by hand: within each
+/// subject, D orders the visits a1, a2, then b1, b2, b3, then c1; RN numbers
+/// them in that order, PREV is the value of the visit before (none for the
+/// first), and TOT is 10 + 20, 5 + 6 + 7 and 1. The rows keep their records'
+/// order.
+fn visits_attempt() -> ExecutionAttempt<Infallible> {
+    let integer = ColumnType::Int;
+    let row = |u: &str, d: i64, v: i64, rn: i64, prev: Option<i64>, tot: i64| {
+        vec![
+            text("s"),
+            text(u),
+            int(d),
+            int(v),
+            int(rn),
+            prev.map_or(Value::Missing, int),
+            int(tot),
+        ]
+    };
+    ExecutionAttempt {
+        result: Ok(Execution {
+            dataset: Dataset::from_rows(
+                schema(&[
+                    ("S", ColumnType::Str),
+                    ("U", ColumnType::Str),
+                    ("D", integer),
+                    ("V", integer),
+                    ("RN", integer),
+                    ("PREV", integer),
+                    ("TOT", integer),
+                ]),
+                vec![
+                    row("a", 2, 20, 2, Some(10), 30),
+                    row("a", 1, 10, 1, None, 30),
+                    row("b", 1, 5, 1, None, 18),
+                    row("b", 3, 7, 3, Some(6), 18),
+                    row("b", 2, 6, 2, Some(5), 18),
+                    row("c", 1, 1, 1, None, 1),
+                ],
+            ),
+            verifications: Vec::new(),
+        }),
+        handler_counts: Vec::new(),
+        retained_verifications: Vec::new(),
+        template_rows: vec![TemplateRows {
+            emitted: 6,
+            read: 6,
+        }],
+    }
+}
+
+/// Over key-bounded partitions a row window, a column window and an
+/// unqualified aggregate grouped by S and U have their whole-table results.
+/// Under two keys no partition splits a subject's records: of at most one
+/// or three records, a, b and c are partitions of their own; of at most
+/// four, a, then b with c. Under one key, S, every record is one group and
+/// so one partition. Under three keys the windows, which do not group by D,
+/// need the whole table: the run is refused at RN, the first of them, before
+/// it reads a record, and with the fallback it runs over the whole input.
+#[test]
+fn subject_windows_and_aggregates_have_their_whole_table_results_over_key_bounded_partitions() {
+    let (plan, input) = visits();
+    let resolved = plan.resolve().unwrap();
+    let expected = visits_attempt();
+    let whole = resolved.execute(&input, &[], &mut NoFunctions::new(), None, &|| false);
+    assert_eq!(whole, expected, "the whole-table run");
+    for (keys, rows) in [(1, 1), (1, 6), (2, 1), (2, 3), (2, 4), (2, 6), (3, 1)] {
+        let fallback = keys == 3;
+        assert_eq!(
+            divided_run(&resolved, &input, by_keys(keys, rows, fallback), &|| false),
+            expected,
+            "{keys} keys, at most {rows} records, fallback {fallback}"
+        );
+    }
+    input.reads.set(0);
+    let refused = ExecutionAttempt {
+        result: Err(Box::new(ExecutionError::PartitionGlobal {
+            path: "columns.C4.derivation".into(),
+        })),
+        handler_counts: Vec::new(),
+        retained_verifications: Vec::new(),
+        template_rows: Vec::new(),
+    };
+    assert_eq!(
+        (
+            divided_run(&resolved, &input, by_keys(3, 1, false), &|| false),
+            input.reads.get(),
+        ),
+        (refused, 0),
+        "three keys without the fallback, and the cells it read"
+    );
+}
+
+/// A key pairing the driver field `field` with the output column `column`
+/// named `name`.
+fn pairing(field: usize, column: usize, name: &str) -> IntermediateKey {
+    IntermediateKey {
+        source_column: field,
+        path: format!("columns.TOT.derivation.aggregate.key[{column}]"),
+        value: MatchValue::Variable(MatchRead::Output {
+            column,
+            identifier: name.into(),
+        }),
+    }
+}
+
+/// One row per subject of [`subjects`], keyed [S, U]: a template grouped by
+/// S and U counts the subject's visits (N) and takes its largest value
+/// (TOP), and TOT, in the column phase, sums the values of the driver
+/// records its key pairs with the row's S and U. Two aggregates of a
+/// grouped row template and a qualified aggregate of the driver input.
+fn subject_rows() -> (DatasetPlan, Rows) {
+    let input = subjects();
+    let current = |expr: &str, v: Option<usize>| {
+        aggregate(
+            expr,
+            v,
+            AggregateRelation::CurrentGroup,
+            AggregatePhase::RowConstruction,
+        )
+    };
+    let integer = ColumnType::Int;
+    let plan = DatasetPlan::new(
+        input.schema.clone(),
+        schema(&[
+            ("S", ColumnType::Str),
+            ("U", ColumnType::Str),
+            ("N", integer),
+            ("TOP", integer),
+            ("TOT", integer),
+        ]),
+        vec![RowTemplate {
+            mode: RowMode::Groups(vec![0, 1]),
+            assignments: vec![
+                assign(0, Expression::Source(0)),
+                assign(1, Expression::Source(1)),
+                assign(2, current("COUNT(D.*)", None)),
+                assign(3, current("MAX(V)", Some(3))),
+            ],
+            filter: None,
+        }],
+        vec![assign(
+            4,
+            aggregate(
+                "SUM(V)",
+                Some(3),
+                AggregateRelation::Matched {
+                    source: AggregateSource::Primary,
+                    keys: vec![pairing(0, 0, "S"), pairing(1, 1, "U")],
+                    group_by: Vec::new(),
+                },
+                AggregatePhase::Derivation,
+            ),
+        )],
+        vec![0, 1],
+        Vec::new(),
+    );
+    (plan, input)
+}
+
+/// Grouped rows' aggregates and a qualified aggregate of the driver input
+/// keyed by S and U have their whole-table results over key-bounded
+/// partitions: a has 2 visits, largest 20, summing 30; b 3, 7 and 18; c 1, 1
+/// and 1, in the order of each subject's first record.
+#[test]
+fn grouped_and_qualified_subject_aggregates_have_their_whole_table_results_over_key_bounded_partitions(
+) {
+    let (plan, input) = subject_rows();
+    let resolved = plan.resolve().unwrap();
+    let integer = ColumnType::Int;
+    let row = |u: &str, n: i64, top: i64, total: i64| {
+        vec![text("s"), text(u), int(n), int(top), int(total)]
+    };
+    let expected = ExecutionAttempt {
+        result: Ok(Execution {
+            dataset: Dataset::from_rows(
+                schema(&[
+                    ("S", ColumnType::Str),
+                    ("U", ColumnType::Str),
+                    ("N", integer),
+                    ("TOP", integer),
+                    ("TOT", integer),
+                ]),
+                vec![row("a", 2, 20, 30), row("b", 3, 7, 18), row("c", 1, 1, 1)],
+            ),
+            verifications: Vec::new(),
+        }),
+        handler_counts: Vec::new(),
+        retained_verifications: Vec::new(),
+        template_rows: vec![TemplateRows {
+            emitted: 3,
+            read: 6,
+        }],
+    };
+    let whole = resolved.execute(&input, &[], &mut NoFunctions::new(), None, &|| false);
+    assert_eq!(whole, expected, "the whole-table run");
+    for (keys, rows) in [(1, 1), (2, 1), (2, 4), (2, 6)] {
+        assert_eq!(
+            divided_run(&resolved, &input, by_keys(keys, rows, false), &|| false),
+            expected,
+            "{keys} keys, at most {rows} records"
+        );
+    }
+}
+
+/// Records of subjects in S and U, numbered SEQ within each, keyed [S, U,
+/// SEQ]: N numbers each subject's records, then X converts A to an integer
+/// through its `unconvertible` handler and Y converts B with none, all in
+/// the column phase.
+fn conversions(records: &[(&str, i64, f64, f64)]) -> (DatasetPlan, Rows) {
+    let float = ColumnType::Float;
+    let source = schema(&[
+        ("S", ColumnType::Str),
+        ("U", ColumnType::Str),
+        ("SEQ", ColumnType::Int),
+        ("A", float),
+        ("B", float),
+    ]);
+    let plan = DatasetPlan::new(
+        source.clone(),
+        schema(&[
+            ("S", ColumnType::Str),
+            ("U", ColumnType::Str),
+            ("SEQ", ColumnType::Int),
+            ("N", ColumnType::Int),
+            ("X", ColumnType::Int),
+            ("Y", ColumnType::Int),
+        ]),
+        vec![RowTemplate {
+            mode: RowMode::Records,
+            assignments: vec![
+                assign(0, Expression::Source(0)),
+                assign(1, Expression::Source(1)),
+                assign(2, Expression::Source(2)),
+            ],
+            filter: None,
+        }],
+        vec![
+            assign(
+                3,
+                Expression::Window(Window {
+                    kind: WindowKind::RowNumber,
+                    group_by: vec![0, 1],
+                    order_by: vec![OrderTerm {
+                        column: 2,
+                        descending: false,
+                        nulls_first: false,
+                    }],
+                    filter: None,
+                }),
+            ),
+            assign(4, Expression::Source(3)),
+            assign(5, Expression::Source(4)),
+        ],
+        vec![0, 1, 2],
+        Vec::new(),
+    )
+    .with_conversion_handlers(vec![ConversionHandler {
+        assignment_path: "columns.C4.derivation".into(),
+        handler: LiteralHandler {
+            spec_path: "columns.X.unconvertible".into(),
+            value: Value::Missing,
+        },
+    }]);
+    let input = Rows::new(
+        source,
+        records
+            .iter()
+            .map(|&(u, seq, a, b)| {
+                vec![
+                    text("s"),
+                    text(u),
+                    int(seq),
+                    Value::float(a),
+                    Value::float(b),
+                ]
+            })
+            .collect(),
+    );
+    (plan, input)
+}
+
+/// A driver input whose records are not grouped by the partition keys runs
+/// as one partition (#3763, decided on the issue), and either way the run
+/// fails as the whole-table run does, in base-record order. In the order a,
+/// b, a the subject a recurs: the run divides nothing, so it polls only at
+/// the whole-table run's checkpoints. In the order a, a, b, the subjects
+/// are two partitions: the row stage and the column steps N and X each poll
+/// once between them, and Y's first partition fails. Either way X's handler
+/// fires for 0.5 and 1.5 before Y fails at the earliest record whose B is
+/// not integral, the second.
+#[test]
+fn an_input_not_grouped_by_its_keys_is_one_partition_and_fails_in_base_record_order() {
+    let failed = |b: f64, u: &str, seq: i64| ExecutionAttempt {
+        result: Err(Box::new(ExecutionError::Conversion {
+            path: "columns.Y".into(),
+            output_row: 1,
+            error: ConversionError {
+                value: crate::json::Value::from(&Value::float(b)),
+                ..not_integral()
+            },
+            identity: Some(RowIdentity {
+                position: 1,
+                values: vec![text("s"), text(u), int(seq)],
+            }),
+        })),
+        handler_counts: vec![HandlerCount {
+            spec_path: "columns.X.unconvertible".into(),
+            handler: HandlerKind::Unconvertible,
+            count: 2,
+        }],
+        retained_verifications: Vec::new(),
+        template_rows: vec![TemplateRows {
+            emitted: 3,
+            read: 3,
+        }],
+    };
+    let cases = [
+        (
+            "a, b, a: not grouped",
+            [("a", 1, 0.5, 1.0), ("b", 1, 1.0, 2.5), ("a", 2, 1.5, 3.5)],
+            failed(2.5, "b", 1),
+            0,
+        ),
+        (
+            "a, a, b: grouped",
+            [("a", 1, 0.5, 1.0), ("a", 2, 1.5, 3.5), ("b", 1, 1.0, 2.5)],
+            failed(3.5, "a", 2),
+            3,
+        ),
+    ];
+    for (label, records, expected, between) in cases {
+        let (plan, input) = conversions(&records);
+        let resolved = plan.resolve().unwrap();
+        let probe = Probe::new(None);
+        let whole = resolved.execute(&input, &[], &mut NoFunctions::new(), None, &|| {
+            probe.cancelled()
+        });
+        assert_eq!(whole, expected, "{label}: the whole-table run");
+        let whole_polls = probe.polls.get();
+        let probe = Probe::new(None);
+        let keyed = divided_run(&resolved, &input, by_keys(2, 1, false), &|| {
+            probe.cancelled()
+        });
+        assert_eq!(
+            (keyed, probe.polls.get()),
+            (expected, whole_polls + between),
+            "{label}: key-bounded partitions and their polls"
+        );
+    }
+}
+
+/// Cancellation between key-bounded partitions keeps nothing any partition
+/// built (#3763), as between consecutive ones. [`visits`] over its three
+/// subjects divides four units, its row stage, its window stage and its two
+/// column steps, so it polls twice more in each. Cancelled at any of those
+/// polls, the run keeps nothing, and its observer exits the phase it stopped
+/// in. The cut follows admission, so a run cancelled at its admission
+/// checkpoint has read no record.
+#[test]
+fn a_run_cancelled_between_key_bounded_partitions_keeps_nothing_and_names_its_phase() {
+    let (plan, input) = visits();
+    let resolved = plan.resolve().unwrap();
+    let checkpoints = resolved
+        .region_schedule(super::resolved::RegionId::DATASET)
+        .iter()
+        .filter(|info| info.checkpoint)
+        .count();
+    let total = checkpoints + 4 * 2;
+    let probe = Probe::new(None);
+    let attempt = divided_run(&resolved, &input, by_keys(2, 1, false), &|| {
+        probe.cancelled()
+    });
+    assert_eq!(attempt, visits_attempt(), "uncancelled");
+    assert_eq!(probe.polls.get(), total, "polls of an uncancelled run");
+    for from in 1..=total {
+        let probe = Probe::new(Some(from));
+        let mut events = Vec::new();
+        let mut observe = |event| events.push(event);
+        input.reads.set(0);
+        let attempt = resolved.execute_divided(
+            by_keys(2, 1, false),
+            &input,
+            &[],
+            &mut NoFunctions::new(),
+            Some(&mut observe),
+            &|| probe.cancelled(),
+        );
+        let expected = ExecutionAttempt {
+            result: Err(Box::new(ExecutionError::Cancelled)),
+            handler_counts: Vec::new(),
+            retained_verifications: Vec::new(),
+            template_rows: Vec::new(),
+        };
+        assert_eq!(attempt, expected, "cancelled at poll {from}");
+        assert_eq!(probe.polls.get(), from, "polls once cancelled at {from}");
+        if from == 1 {
+            assert_eq!(
+                input.reads.get(),
+                0,
+                "cells read when cancelled at admission"
+            );
+        }
+        let phase = match from {
+            1 => ExecutionPhase::Admission,
+            last if last == total => ExecutionPhase::Verification,
+            keys if keys == total - 1 => ExecutionPhase::OutputKeys,
+            _ => ExecutionPhase::Derivation,
+        };
+        assert_eq!(
+            events[events.len() - 2..],
+            [
+                ExecutionEvent::Exit {
+                    phase,
+                    outcome: Outcome::Failed,
+                },
+                ExecutionEvent::Phase(ExecutionPhase::Finished),
+            ],
+            "the phase cancelled at poll {from}"
+        );
     }
 }

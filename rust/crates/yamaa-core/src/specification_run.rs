@@ -538,6 +538,8 @@ fn execute_inner_into<R: Resolver, D: Decoder>(
 /// other run reads each input whole and admits it whole, so a plan with such
 /// a step, or the whole-table fallback that runs it, refuses an input beyond
 /// the row or cell limit exactly as an unpartitioned run does.
+/// The reader's ranges are consecutive, so a plan that only key-bounded
+/// partitions can divide keeps the whole read until its keys are cut.
 fn reads_by_partition<D: Decoder>(
     prepared: &PreparedSpecification,
     decoder: &mut D,
@@ -551,7 +553,7 @@ fn reads_by_partition<D: Decoder>(
             .is_some_and(|schema| {
                 prepared
                     .bind_sources(&[&schema])
-                    .is_ok_and(|plan| plan.whole_table_step().is_none())
+                    .is_ok_and(|plan| plan.whole_table_step(0).is_none())
             })
 }
 
