@@ -137,7 +137,7 @@ in one schema module per family:
 | Strings | `schema_expression_str.yaml` | `str_pad`, `str_extract`, `str_replace`, `str_template`, `str_case` |
 | Rounding | `schema_expression_numeric.yaml` | `round_half_away_from_zero` |
 | Aggregation | `schema_expression_aggregate.yaml` | `aggregate` |
-| Dates | `schema_expression_date.yaml` | `diff`, `impute`, `precision`, `imputation_flag`, `to_date`, `study_day`, `to_epoch_day`, `dtc`, `time_of_day`, `shift`, `duration_value` |
+| Dates | `schema_expression_date.yaml` | `diff`, `impute`, `precision`, `imputation_flag`, `to_date`, `study_day`, `to_epoch_day`, `dtc`, `time_of_day`, `shift`, `duration_value`, `duration_text` |
 | Windows | `schema_expression_window.yaml` | `row_number`, `rank`, `row_value`, `locf`, `baseline_flag` |
 | Collected data | `schema_expression_odm.yaml` | `odm` |
 | Extension | `schema_expression_function.yaml` | `function` |
@@ -303,6 +303,7 @@ in its short form is listed under the field it fills.
 | `dtc` | | `year`, `month`, `day`, `hour`, `minute`, `second` | | `invalid` | |
 | `shift` | | `source`, `days`, `amount` | | `type`, `unit` | |
 | `duration_value` | | `source` | | `unit`, `invalid` | |
+| `duration_text` | | `source` | | `unit` | |
 | `row_number` | | | | | `window` |
 | `rank` | | | | `method` | `window` |
 | `row_value` | | `source` | | `offset` | `window` |

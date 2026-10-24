@@ -382,6 +382,16 @@ expressions:
         - invalid:
             type: substitute_value
             description: Literal result for invalid or out-of-range duration text (TIME-17).
+    duration_text: # See TIME-21.
+        - source:
+            type: variable
+            required: true
+            description: Signed int or float amount written as ISO 8601 fixed-length duration text (TIME-21).
+        - unit:
+            type: str
+            required: true
+            values: [second, minute, hour, day]
+            description: Elapsed unit of the source amount, second, minute, hour or day, where a day is 86400 seconds (TIME-21).
 
 temporal_type:
     type: str
@@ -4445,6 +4455,30 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           },
           "additionalProperties": false
         },
+        "duration_text": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "Signed int or float amount written as ISO 8601 fixed-length duration text (TIME-21).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "second",
+                "minute",
+                "hour",
+                "day"
+              ],
+              "description": "Elapsed unit of the source amount, second, minute, hour or day, where a day is 86400 seconds (TIME-21).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "str"
+            }
+          },
+          "additionalProperties": false
+        },
         "row_number": {
           "type": "object",
           "properties": {
@@ -6522,6 +6556,34 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
               "description": "Literal result for invalid or out-of-range duration text (TIME-17).",
               "x-yamaa-kind": "value",
               "x-yamaa-type": "substitute_value"
+            }
+          },
+          "required": [
+            "source",
+            "unit"
+          ],
+          "additionalProperties": false
+        },
+        "duration_text": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/variable",
+              "description": "Signed int or float amount written as ISO 8601 fixed-length duration text (TIME-21).",
+              "x-yamaa-kind": "name",
+              "x-yamaa-type": "variable"
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "second",
+                "minute",
+                "hour",
+                "day"
+              ],
+              "description": "Elapsed unit of the source amount, second, minute, hour or day, where a day is 86400 seconds (TIME-21).",
+              "x-yamaa-kind": "value",
+              "x-yamaa-type": "str"
             }
           },
           "required": [

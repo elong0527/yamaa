@@ -1,0 +1,58 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: EX
+keys: [STUDYID, USUBJID, EXSEQ]
+input:
+  EX_RAW: {path: input/ex_raw.csv, types: {EXSEQ: int, EXDURMIN: int}}
+
+output:
+  path: ex.csv
+  columns: [DOMAIN, STUDYID, USUBJID, EXSEQ, EXTRT, EXSTDTC, EXDUR]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'EX'"
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: EX_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: EX_RAW.USUBJID
+
+  - name: EXSEQ
+    type: int
+    label: Sequence Number
+    derivation: EX_RAW.EXSEQ
+
+  - name: EXTRT
+    type: str
+    label: Name of Treatment
+    derivation: EX_RAW.EXTRT
+
+  - name: EXSTDTC
+    type: str
+    label: Start Date/Time of Treatment
+    derivation: EX_RAW.EXSTDTC
+
+  # The collected minutes as ISO 8601 duration text: days, then hours,
+  # minutes and seconds, each zero part left out; zero is PT0S, and a
+  # duration not collected stays empty.
+  - name: EXDUR
+    type: str
+    label: Duration of Treatment
+    derivation:
+      duration_text:
+        source: EX_RAW.EXDURMIN
+        unit: minute
+
+verifications:
+  - row_count:
+      min: 6
+      max: 6

@@ -45,7 +45,9 @@ impl Temporal {
                 },
                 1,
             ) => "int",
-            (TemporalKind::DateTimeShift { .. }, 1) => "numeric",
+            (TemporalKind::DateTimeShift { .. }, 1) | (TemporalKind::DurationText { .. }, _) => {
+                "numeric"
+            }
             (TemporalKind::DateTimeShift { .. } | TemporalKind::DateTimeDifference { .. }, _) => {
                 "datetime"
             }
@@ -71,6 +73,7 @@ impl Temporal {
             TemporalKind::DateTimeDifference { .. } => C::DatetimeDifferenceInput,
             TemporalKind::DateTimeShift { .. } => C::DatetimeShiftInput,
             TemporalKind::DurationValue { .. } => C::DurationValueInput,
+            TemporalKind::DurationText { .. } => C::DurationTextInput,
             TemporalKind::DateText { .. } => C::DateTextInput,
             TemporalKind::TimeOfDay => C::TimeOfDayInput,
             _ => C::TemporalOperand,
@@ -210,6 +213,12 @@ impl Temporal {
                     }
                 }
             }
+            // A float whose seconds leave the binary64 range has no text.
+            TemporalKind::DurationText { unit } => super::duration::write(&values[0], unit)
+                .map(Value::Str)
+                .ok_or_else(|| {
+                    self.failure(C::DurationTextRange, &[("to", JsonValue::from("str"))])
+                })?,
             TemporalKind::TimeOfDay => {
                 let Value::DateTime(moment) = values[0] else {
                     unreachable!()

@@ -1,0 +1,9 @@
+phase: validation
+condition: incompatible_input_type
+spec_paths:
+  - columns.EXDUR.derivation.duration_text.source
+rule: TIME-21
+context:
+  source: EX_RAW.EXDURMIN
+  expected: numeric
+  actual: str
