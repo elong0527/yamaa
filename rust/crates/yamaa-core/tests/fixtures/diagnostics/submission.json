@@ -1,0 +1,1004 @@
+{
+  "about": "The refusals of submission composition (SUB, DEFINE, OUTPUT-1, OUTPUT-2), of admitting held rows as a composed dataset's published rows (XPT-7, XPT-8, JSON-3, JSON-4, CT-11), of the findings the Define-XML and XPT encoders make (DEFINE-3, DEFINE-16, DEFINE-24, DEFINE-25, JSON-2, XPT-10), and of preparing a specification that restates a mandatory column (CHECK-5, SUB-11). A study is the `study` document, a 1.0 project whose `sdtm` section lists one specification of the SDTM model (D4, D16, D25), or `value_level`, the same with a second column its value-level entries select on, after the case's edits. The cases whose table compared only part of each issue compare those fields, or those keys of its context; the cases whose table found its issues by cause among several, or left a defect of their input without a row, say `among`.",
+  "documents": {
+    "study": {
+      "project": {
+        "yamaa": "1.0",
+        "type": "project",
+        "study": {"id": "S01", "name": "Independent study", "description": "Submission detector witness", "protocol_name": "P01"},
+        "sdtm": {
+          "standards": [{"name": "SDTMIG", "version": "3.4", "status": "Final"}],
+          "context": "Other",
+          "define": "define.xml",
+          "specs": ["d0.yaml"]
+        }
+      },
+      "specs": [
+        {
+          "yamaa": "1.0",
+          "type": "spec",
+          "model": "SDTM",
+          "domain": "D0",
+          "keys": ["VALUE"],
+          "submission": {"label": "Independent dataset", "class": "SPECIAL PURPOSE", "structure": "One record per subject", "repeating": false},
+          "columns": [
+            {"name": "VALUE", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}}
+          ],
+          "output": {"path": "d0.csv", "columns": ["VALUE"]}
+        }
+      ],
+      "others": [],
+      "terminology": [],
+      "installed": "1.0",
+      "created": "2026-09-30T00:00:00"
+    },
+    "value_level": {
+      "project": {
+        "yamaa": "1.0",
+        "type": "project",
+        "study": {"id": "S01", "name": "Independent study", "description": "Submission detector witness", "protocol_name": "P01"},
+        "sdtm": {
+          "standards": [{"name": "SDTMIG", "version": "3.4", "status": "Final"}],
+          "context": "Other",
+          "define": "define.xml",
+          "specs": ["d0.yaml"]
+        }
+      },
+      "specs": [
+        {
+          "yamaa": "1.0",
+          "type": "spec",
+          "model": "SDTM",
+          "domain": "D0",
+          "keys": ["VALUE"],
+          "submission": {"label": "Independent dataset", "class": "SPECIAL PURPOSE", "structure": "One record per subject", "repeating": false},
+          "columns": [
+            {"name": "VALUE", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}},
+            {"name": "D0TESTCD", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}}
+          ],
+          "output": {"path": "d0.csv", "columns": ["VALUE", "D0TESTCD"]}
+        }
+      ],
+      "others": [],
+      "terminology": [],
+      "installed": "1.0",
+      "created": "2026-09-30T00:00:00"
+    }
+  },
+  "cases": [
+    {
+      "case": "an_sdtm_study_of_one_complete_specification_composes",
+      "operation": "compose",
+      "input": {"base": "study"},
+      "issues": []
+    },
+    {
+      "case": "an_output_column_without_submission_metadata_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"remove": ["specs", "0", "columns", "0", "submission"]}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "submission_metadata_missing", "rule": "DEFINE-7"}]
+    },
+    {
+      "case": "a_column_submission_without_origins_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"remove": ["specs", "0", "columns", "0", "submission", "origins"]}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "origin_missing", "rule": "SUB-14"}]
+    },
+    {
+      "case": "a_domain_longer_than_eight_characters_is_refused_under_submission",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["project", "sdtm", "context"], "to": "Submission"},
+          {"set": ["specs", "0", "domain"], "to": "LONGDOMAIN"}
+        ]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "sas_name_too_long", "rule": "DEFINE-22"}]
+    },
+    {
+      "case": "a_column_submission_without_core_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"remove": ["specs", "0", "columns", "0", "submission", "core"]}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "core_mandatory_conflict", "rule": "SUB-10"}]
+    },
+    {
+      "case": "an_adam_column_role_is_not_permitted",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"remove": ["project", "sdtm"]},
+          {"set": ["project", "adam"], "to": {"standards": [{"name": "ADaMIG", "version": "3.4", "status": "Final"}], "context": "Other", "define": "define.xml", "specs": ["d0.yaml"]}},
+          {"set": ["specs", "0", "model"], "to": "ADaM"},
+          {"set": ["specs", "0", "submission", "class"], "to": "SUBJECT LEVEL ANALYSIS DATASET"},
+          {"set": ["specs", "0", "columns", "0", "submission", "mandatory"], "to": false},
+          {"set": ["specs", "0", "columns", "0", "submission", "role"], "to": "Identifier"}
+        ]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "SUB-5"}]
+    },
+    {
+      "case": "an_assigned_origin_from_the_investigator_is_not_admitted",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "origins", "0", "source"], "to": "Investigator"}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "origin_source_not_admitted", "rule": "SUB-15"}]
+    },
+    {
+      "case": "an_other_origin_without_a_description_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "origins", "0", "type"], "to": "Other"}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "origin_description_missing", "rule": "SUB-16"}]
+    },
+    {
+      "case": "a_derived_origin_without_a_method_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "origins", "0", "type"], "to": "Derived"}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "method_missing", "rule": "SUB-18"}]
+    },
+    {
+      "case": "a_literal_derivation_refutes_a_derived_origin",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["specs", "0", "columns", "0", "submission", "origins", "0", "type"], "to": "Derived"},
+          {"set": ["specs", "0", "columns", "0", "submission", "method"], "to": "Independent algorithm"}
+        ]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "origin_contradicts_derivation", "rule": "SUB-19"}]
+    },
+    {
+      "case": "a_collected_origin_without_an_annotated_crf_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["specs", "0", "columns", "0", "submission", "origins", "0", "type"], "to": "Collected"},
+          {"set": ["specs", "0", "columns", "0", "submission", "origins", "0", "source"], "to": "Investigator"}
+        ]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "origin_document_missing", "rule": "DEFINE-14"}]
+    },
+    {
+      "case": "a_collected_origin_citing_another_document_misses_the_annotated_crf",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["specs", "0", "columns", "0", "submission", "origins", "0", "type"], "to": "Collected"},
+          {"set": ["specs", "0", "columns", "0", "submission", "origins", "0", "source"], "to": "Investigator"},
+          {"set": ["project", "sdtm", "documents"], "to": [{"id": "ACRF", "kind": "annotated_crf", "link": "form.pdf", "title": "Independent form"}, {"id": "OTHER", "kind": "other", "link": "form.pdf", "title": "Independent form"}]},
+          {"set": ["specs", "0", "columns", "0", "submission", "origins", "0", "documents"], "to": ["OTHER"]}
+        ]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "origin_document_missing", "rule": "SUB-17"}]
+    },
+    {
+      "case": "an_integer_data_type_is_not_admitted_for_a_text_column",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "data_type"], "to": "integer"}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "submission_data_type_not_admitted", "rule": "SUB-6"}]
+    },
+    {
+      "case": "a_text_column_without_a_length_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"remove": ["specs", "0", "columns", "0", "submission", "length"]}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "submission_length_missing", "rule": "SUB-7"}]
+    },
+    {
+      "case": "a_date_data_type_takes_no_length",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "data_type"], "to": "date"}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "submission_length_not_applicable", "rule": "SUB-7"}]
+    },
+    {
+      "case": "a_length_of_zero_is_invalid",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "length"], "to": 0}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "submission_length_invalid", "rule": "SUB-7"}]
+    },
+    {
+      "case": "a_max_length_check_beside_a_length_conflicts",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "columns", "0", "verifications"], "to": [{"max_length": {"max": 4}}]}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "declared_length_conflict", "rule": "SUB-8"}]
+    },
+    {
+      "case": "a_key_column_declared_not_mandatory_is_not_permitted",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "mandatory"], "to": false}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "SUB-10"}]
+    },
+    {
+      "case": "an_origin_citing_an_undeclared_document_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "origins", "0", "documents"], "to": ["UNKNOWN"]}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "unknown_document", "rule": "DEFINE-8"}]
+    },
+    {
+      "case": "a_reserved_metadata_key_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "metadata"], "to": {"label": "Reserved"}}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "reserved_metadata_key", "rule": "SUB-2"}]
+    },
+    {
+      "case": "reference_data_that_repeats_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["specs", "0", "submission", "repeating"], "to": true},
+          {"set": ["specs", "0", "submission", "reference_data"], "to": true}
+        ]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "reference_data_repeating_conflict", "rule": "SUB-4"}]
+    },
+    {
+      "case": "a_dataset_without_data_needs_a_comment",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "submission", "has_no_data"], "to": true}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "submission_metadata_missing", "rule": "DEFINE-17"}]
+    },
+    {
+      "case": "a_label_beyond_forty_characters_cannot_travel_by_xpt",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["project", "sdtm", "transport"], "to": "xpt"},
+          {"set": ["specs", "0", "submission", "label"], "to": "An independent dataset label beyond forty characters"}
+        ]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "transport_label_invalid", "rule": "XPT-5"}]
+    },
+    {
+      "case": "a_column_with_submission_metadata_that_is_not_output_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "output", "columns"], "to": []}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "submission_not_output_column", "rule": "SUB-1"}]
+    },
+    {
+      "case": "a_class_outside_the_model_is_not_permitted",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "submission", "class"], "to": "BASIC DATA STRUCTURE"}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "SUB-10"}]
+    },
+    {
+      "case": "a_unique_check_restating_the_keys_is_redundant",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "verifications"], "to": [{"unique": {"columns": ["VALUE"]}}]}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "redundant_declaration", "rule": "CHECK-10"}]
+    },
+    {
+      "case": "allowed_values_restating_a_codelist_of_items_are_redundant",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["terminology"], "to": [{"codelists": [{"id": "LIST", "name": "Independent list", "items": [{"value": "X"}]}]}]},
+          {"set": ["specs", "0", "columns", "0", "submission", "codelist"], "to": "LIST"},
+          {"set": ["specs", "0", "columns", "0", "verifications"], "to": [{"allowed_values": {"values": ["X"]}}]}
+        ]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "redundant_declaration", "rule": "CT-9"}]
+    },
+    {
+      "case": "an_adam_date_with_another_display_format_is_not_permitted",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"remove": ["project", "sdtm"]},
+          {"set": ["project", "adam"], "to": {"standards": [{"name": "ADaMIG", "version": "3.4", "status": "Final"}], "context": "Other", "define": "define.xml", "specs": ["d0.yaml"]}},
+          {"set": ["specs", "0", "model"], "to": "ADaM"},
+          {"set": ["specs", "0", "submission", "class"], "to": "SUBJECT LEVEL ANALYSIS DATASET"},
+          {"set": ["specs", "0", "columns"], "to": [
+            {"name": "VALUE", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}},
+            {"name": "ADT", "type": "date", "label": "Independent column", "derivation": "SRC.ADT", "submission": {"core": "Exp", "origins": [{"type": "Assigned", "source": "Sponsor"}], "mandatory": false, "display_format": "YYMMDD10."}}
+          ]},
+          {"set": ["specs", "0", "output", "columns"], "to": ["VALUE", "ADT"]}
+        ]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "SUB-25"}]
+    },
+    {
+      "case": "a_numeric_display_format_under_xpt_must_parse_as_a_sas_format",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["project", "sdtm", "transport"], "to": "xpt"},
+          {"set": ["specs", "0", "columns"], "to": [
+            {"name": "VALUE", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}},
+            {"name": "NUMBER", "type": "int", "label": "Independent column", "derivation": 1, "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}], "display_format": "8,2"}}
+          ]},
+          {"set": ["specs", "0", "output", "columns"], "to": ["VALUE", "NUMBER"]}
+        ]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "xpt_display_format_invalid", "rule": "XPT-9"}]
+    },
+    {
+      "case": "display_decimals_are_not_applicable_under_a_transport",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["project", "sdtm", "transport"], "to": "dataset_json"},
+          {"set": ["specs", "0", "output", "decimals"], "to": 2}
+        ]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.dataset", "context.decimals", "context.specification"],
+      "issues": [{"phase": "validation", "condition": "decimals_not_applicable", "rule": "JSON-5", "spec_paths": ["sdtm.specs[0].output.decimals"], "context": {"dataset": "D0", "decimals": 2, "specification": "d0.yaml"}}]
+    },
+    {
+      "case": "an_sdtm_dataset_refuses_a_datetime_column",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["specs", "0", "columns"], "to": [
+            {"name": "VALUE", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}},
+            {"name": "DTM", "type": "datetime", "label": "Independent column", "derivation": "SRC.DTM", "submission": {"core": "Exp", "origins": [{"type": "Assigned", "source": "Sponsor"}]}}
+          ]},
+          {"set": ["specs", "0", "output", "columns"], "to": ["VALUE", "DTM"]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "SUB-27", "spec_paths": ["sdtm.specs[0].columns.DTM.type"], "context": {"class": "SPECIAL PURPOSE", "column": "DTM", "detail": "DTM", "permitted": ["str", "date"], "value": "datetime"}}]
+    },
+    {
+      "case": "a_key_that_is_not_an_output_column_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["specs", "0", "columns"], "to": [
+            {"name": "VALUE", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}},
+            {"name": "INTERNAL", "type": "str", "label": "Independent column", "derivation": "'X'"}
+          ]},
+          {"set": ["specs", "0", "keys"], "to": ["VALUE", "INTERNAL"]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "internal_column_in_keys", "rule": "OUTPUT-2", "spec_paths": ["sdtm.specs[0].keys[1]"], "context": {"column": "INTERNAL"}}]
+    },
+    {
+      "case": "an_undeclared_key_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["specs", "0", "columns"], "to": [
+            {"name": "VALUE", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}},
+            {"name": "INTERNAL", "type": "str", "label": "Independent column", "derivation": "'X'"}
+          ]},
+          {"set": ["specs", "0", "keys"], "to": ["VALUE", "MISSING"]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "undeclared_column", "rule": "OUTPUT-2", "spec_paths": ["sdtm.specs[0].keys[1]"], "context": {"column": "MISSING"}}]
+    },
+    {
+      "case": "a_repeated_key_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["specs", "0", "columns"], "to": [
+            {"name": "VALUE", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}},
+            {"name": "INTERNAL", "type": "str", "label": "Independent column", "derivation": "'X'"}
+          ]},
+          {"set": ["specs", "0", "keys"], "to": ["VALUE", "VALUE"]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "duplicate_identifier", "rule": "OUTPUT-2", "spec_paths": ["sdtm.specs[0].keys[1]"], "context": {"identifier": "VALUE"}}]
+    },
+    {
+      "case": "an_empty_key_list_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["specs", "0", "columns"], "to": [
+            {"name": "VALUE", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}},
+            {"name": "INTERNAL", "type": "str", "label": "Independent column", "derivation": "'X'"}
+          ]},
+          {"set": ["specs", "0", "keys"], "to": []}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "OUTPUT-2", "spec_paths": ["sdtm.specs[0].keys"], "context": {"actual": "empty list", "expected": "at least one key column"}}]
+    },
+    {
+      "case": "an_undeclared_output_column_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["specs", "0", "columns"], "to": [
+            {"name": "VALUE", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}},
+            {"name": "INTERNAL", "type": "str", "label": "Independent column", "derivation": "'X'"}
+          ]},
+          {"set": ["specs", "0", "output", "columns"], "to": ["VALUE", "MISSING"]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "undeclared_column", "rule": "OUTPUT-1", "spec_paths": ["sdtm.specs[0].output.columns[1]"], "context": {"column": "MISSING"}}]
+    },
+    {
+      "case": "a_repeated_output_column_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["specs", "0", "columns"], "to": [
+            {"name": "VALUE", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}},
+            {"name": "INTERNAL", "type": "str", "label": "Independent column", "derivation": "'X'"}
+          ]},
+          {"set": ["specs", "0", "output", "columns"], "to": ["VALUE", "VALUE"]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "duplicate_identifier", "rule": "OUTPUT-1", "spec_paths": ["sdtm.specs[0].output.columns[1]"], "context": {"column": "VALUE", "identifier": "VALUE"}}]
+    },
+    {
+      "case": "a_not_missing_check_restating_a_mandatory_column_is_redundant",
+      "operation": "prepare",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "model": "SDTM",
+          "domain": "D0",
+          "keys": ["VALUE"],
+          "submission": {"label": "Independent dataset", "class": "SPECIAL PURPOSE", "structure": "One record per subject", "repeating": false},
+          "columns": [
+            {"name": "VALUE", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}, "verifications": ["not_missing"]},
+            {"name": "EXTRA", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}], "mandatory": true}, "verifications": ["not_missing"]}
+          ],
+          "output": {"path": "d0.csv", "columns": ["VALUE", "EXTRA"]},
+          "input": {"SRC": {"path": "src.csv"}}
+        }
+      },
+      "among": true,
+      "issues": [
+        {"phase": "validation", "condition": "redundant_declaration", "rule": "CHECK-5", "spec_paths": ["columns.VALUE.verifications[0].not_missing"], "context": {"column": "VALUE", "stated_by": "keys[0]"}},
+        {"phase": "validation", "condition": "redundant_declaration", "rule": "SUB-11", "spec_paths": ["columns.EXTRA.verifications[0].not_missing"], "context": {"column": "EXTRA", "stated_by": "columns.EXTRA.submission.mandatory"}}
+      ]
+    },
+    {
+      "case": "a_published_item_with_its_nci_code_composes_under_submission",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["project", "sdtm", "context"], "to": "Submission"},
+          {"set": ["specs", "0", "columns", "0", "submission", "codelist"], "to": "LIST"},
+          {"set": ["terminology"], "to": [{"standard": {"name": "CDISC/NCI", "publishing_set": "SDTM", "version": "2026-09-30"}, "codelists": [{"id": "LIST", "name": "Independent list", "extensible": true, "alias": "C99079", "items": [{"value": "SCREENING", "alias": "C48262"}, {"value": "X", "extended": true}]}]}]}
+        ]
+      },
+      "issues": []
+    },
+    {
+      "case": "a_published_item_without_its_nci_code_is_refused_under_submission",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["project", "sdtm", "context"], "to": "Submission"},
+          {"set": ["specs", "0", "columns", "0", "submission", "codelist"], "to": "LIST"},
+          {"set": ["terminology"], "to": [{"standard": {"name": "CDISC/NCI", "publishing_set": "SDTM", "version": "2026-09-30"}, "codelists": [{"id": "LIST", "name": "Independent list", "extensible": true, "alias": "C99079", "items": [{"value": "SCREENING"}, {"value": "X", "extended": true}]}]}]}
+        ]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "DEFINE-4", "spec_paths": ["codelists.LIST"]}]
+    },
+    {
+      "case": "a_value_level_entry_selecting_on_a_declared_column_composes",
+      "operation": "compose",
+      "input": {
+        "base": "value_level",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "value_level"], "to": [{"id": "X", "where": {"D0TESTCD": ["X"]}}]}]
+      },
+      "issues": []
+    },
+    {
+      "case": "a_value_level_entry_selecting_on_an_undeclared_column_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "value_level",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "value_level"], "to": [{"id": "X", "where": {"BOGUS": ["X"]}}]}]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "value_level_where_invalid", "rule": "SUB-12", "spec_paths": ["sdtm.specs[0].columns.VALUE.submission.value_level.X.where.BOGUS"]}]
+    },
+    {
+      "case": "two_value_level_entries_with_one_id_are_refused",
+      "operation": "compose",
+      "input": {
+        "base": "value_level",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "value_level"], "to": [{"id": "X", "where": {"D0TESTCD": ["X"]}}, {"id": "X", "where": {"D0TESTCD": ["Y"]}}]}]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "duplicate_identifier", "rule": "SUB-12", "spec_paths": ["sdtm.specs[0].columns.VALUE.submission.value_level.X.id"]}]
+    },
+    {
+      "case": "value_level_entries_selecting_one_value_overlap",
+      "operation": "compose",
+      "input": {
+        "base": "value_level",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "value_level"], "to": [{"id": "X", "where": {"D0TESTCD": ["X", "Y"]}}, {"id": "Y", "where": {"D0TESTCD": ["Y"]}}]}]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "value_level_overlap", "rule": "SUB-12", "spec_paths": ["sdtm.specs[0].columns.VALUE.submission.value_level.Y.where"]}]
+    },
+    {
+      "case": "a_literal_refutes_the_derived_origin_of_the_rows_an_entry_selects",
+      "operation": "compose",
+      "input": {
+        "base": "value_level",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "value_level"], "to": [{"id": "X", "where": {"D0TESTCD": ["X"]}, "origins": [{"type": "Derived", "source": "Sponsor"}], "method": "Independent algorithm"}]}]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.column", "context.derivation_kind", "context.entry", "context.origin_type"],
+      "issues": [{"phase": "validation", "condition": "refuted_value_origin", "rule": "SUB-13", "spec_paths": ["sdtm.specs[0].columns.VALUE.submission.value_level.X"], "context": {"column": "VALUE", "derivation_kind": "literal", "entry": "X", "origin_type": "Derived"}}]
+    },
+    {
+      "case": "an_entry_selecting_rows_the_derivation_never_produces_refutes_nothing",
+      "operation": "compose",
+      "input": {
+        "base": "value_level",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "value_level"], "to": [{"id": "Y", "where": {"D0TESTCD": ["Y"]}, "origins": [{"type": "Derived", "source": "Sponsor"}], "method": "Independent algorithm"}]}]
+      },
+      "issues": []
+    },
+    {
+      "case": "a_predecessor_column_composes_when_no_section_declares_its_predecessor",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["specs", "0", "input"], "to": {"P0": "p0.csv"}},
+          {"set": ["specs", "0", "columns", "0", "derivation"], "to": "P0.VALUE"},
+          {"set": ["specs", "0", "columns", "0", "submission", "origins"], "to": [{"type": "Predecessor", "description": "P0.VALUE"}]}
+        ]
+      },
+      "issues": []
+    },
+    {
+      "case": "a_predecessor_column_labelled_otherwise_than_its_predecessor_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["specs", "0", "input"], "to": {"P0": "p0.csv"}},
+          {"set": ["specs", "0", "columns", "0", "derivation"], "to": "P0.VALUE"},
+          {"set": ["specs", "0", "columns", "0", "submission", "origins"], "to": [{"type": "Predecessor", "description": "P0.VALUE"}]},
+          {"set": ["others"], "to": [
+            {
+              "yamaa": "1.0",
+              "type": "spec",
+              "model": "SDTM",
+              "domain": "P0",
+              "keys": ["VALUE"],
+              "submission": {"label": "Independent dataset", "class": "SPECIAL PURPOSE", "structure": "One record per subject", "repeating": false},
+              "columns": [
+                {"name": "VALUE", "type": "str", "label": "Predecessor column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}}
+              ],
+              "output": {"path": "d0.csv", "columns": ["VALUE"]}
+            }
+          ]}
+        ]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.label", "context.predecessor", "context.predecessor_label"],
+      "issues": [{"phase": "validation", "condition": "predecessor_label_mismatch", "rule": "SUB-20", "spec_paths": ["sdtm.specs[0].columns.VALUE.label"], "context": {"label": "Independent column", "predecessor": "P0.VALUE", "predecessor_label": "Predecessor column"}}]
+    },
+    {
+      "case": "a_define_target_without_the_xml_extension_is_not_permitted",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["project", "sdtm", "define"], "to": "define.json"}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "DEFINE-2"}]
+    },
+    {
+      "case": "an_empty_generator_version_leaves_the_source_system_incomplete",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["installed"], "to": ""}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "source_system_incomplete", "rule": "DEFINE-12"}]
+    },
+    {
+      "case": "a_document_identifier_equal_to_a_dataset_identifier_collides",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["project", "sdtm", "documents"], "to": [{"id": "D0", "kind": "other", "link": "form.pdf", "title": "Independent form"}]}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "duplicate_define_identifier", "rule": "DEFINE-10"}]
+    },
+    {
+      "case": "two_annotated_crfs_are_not_permitted",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["project", "sdtm", "documents"], "to": [{"id": "A1", "kind": "annotated_crf", "link": "form.pdf", "title": "Independent form"}, {"id": "A2", "kind": "annotated_crf", "link": "form.pdf", "title": "Independent form"}]}]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "DEFINE-14"}]
+    },
+    {
+      "case": "a_section_listing_one_dataset_twice_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["project", "sdtm", "specs"], "to": ["d0.yaml", "d0.yaml"]},
+          {"set": ["specs"], "to": [
+            {
+              "yamaa": "1.0",
+              "type": "spec",
+              "model": "SDTM",
+              "domain": "D0",
+              "keys": ["VALUE"],
+              "submission": {"label": "Independent dataset", "class": "SPECIAL PURPOSE", "structure": "One record per subject", "repeating": false},
+              "columns": [
+                {"name": "VALUE", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}}
+              ],
+              "output": {"path": "d0.csv", "columns": ["VALUE"]}
+            },
+            {
+              "yamaa": "1.0",
+              "type": "spec",
+              "model": "SDTM",
+              "domain": "D0",
+              "keys": ["VALUE"],
+              "submission": {"label": "Independent dataset", "class": "SPECIAL PURPOSE", "structure": "One record per subject", "repeating": false},
+              "columns": [
+                {"name": "VALUE", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}]}}
+              ],
+              "output": {"path": "d0.csv", "columns": ["VALUE"]}
+            }
+          ]}
+        ]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "duplicate_dataset_entry", "rule": "DEFINE-5"}]
+    },
+    {
+      "case": "a_published_codelist_without_its_nci_code_is_refused_under_submission",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["project", "sdtm", "context"], "to": "Submission"},
+          {"set": ["terminology"], "to": [{"standard": {"name": "CDISC/NCI", "publishing_set": "SDTM", "version": "2026-09-30"}, "codelists": [{"id": "LIST", "name": "Independent list", "items": [{"value": "X"}]}]}]},
+          {"set": ["specs", "0", "columns", "0", "submission", "codelist"], "to": "LIST"}
+        ]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "DEFINE-4"}]
+    },
+    {
+      "case": "a_transport_needs_a_document_named_define_xml",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["project", "sdtm", "transport"], "to": "dataset_json"},
+          {"set": ["project", "sdtm", "define"], "to": "out/metadata.xml"}
+        ]
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "DEFINE-2"}]
+    },
+    {
+      "case": "generated_text_holding_a_tab_is_untransportable",
+      "operation": "xml_whitespace",
+      "input": {"path": "datasets.D0.columns.VALUE.label", "character": "\t"},
+      "issues": [{"phase": "validation", "condition": "untransportable_text", "rule": "DEFINE-24", "spec_paths": ["datasets.D0.columns.VALUE.label"], "context": {"detail": "forbidden XML whitespace", "whitespace": "tab"}}]
+    },
+    {
+      "case": "a_generated_value_breaking_a_schema_facet_is_not_permitted",
+      "operation": "xml_invalid",
+      "input": {"path": "created", "facet": "CreationDateTime", "value": "2026-09-30T00:00:00.1"},
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "DEFINE-25", "spec_paths": ["created"], "context": {"detail": "schema_violation: CreationDateTime", "value": "2026-09-30T00:00:00.1"}}]
+    },
+    {
+      "case": "a_published_boolean_in_a_text_column_is_not_permitted",
+      "operation": "transport",
+      "input": {
+        "base": "study",
+        "dataset": "D0",
+        "table": {"columns": [["VALUE", "str"]], "rows": [[true]]}
+      },
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "JSON-4"}]
+    },
+    {
+      "case": "a_published_value_outside_the_dataset_inventory_fails",
+      "operation": "transport",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "columns", "0", "submission", "inventory_vocabulary"], "to": true}],
+        "dataset": "D0",
+        "table": {"columns": [["VALUE", "str"]], "rows": [["UNKNOWN_DATASET"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.key_columns", "context.key_values", "context.row", "context.value"],
+      "issues": [{"phase": "verification", "condition": "allowed_values_failed", "rule": "CT-11", "spec_paths": ["datasets.D0.columns.VALUE.submission.inventory_vocabulary"], "context": {"key_columns": ["VALUE"], "key_values": ["UNKNOWN_DATASET"], "row": 0, "value": "UNKNOWN_DATASET"}}]
+    },
+    {
+      "case": "xpt_refuses_text_outside_printable_ascii",
+      "operation": "transport",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["project", "sdtm", "transport"], "to": "xpt"}],
+        "dataset": "D0",
+        "table": {"columns": [["VALUE", "str"]], "rows": [["caf\u00e9"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.cause", "context.row"],
+      "issues": [{"phase": "output", "condition": "transport_text_invalid", "rule": "XPT-7", "spec_paths": ["datasets.D0.columns.VALUE"], "context": {"cause": "ascii", "row": 0}}]
+    },
+    {
+      "case": "a_published_dataset_without_rows_must_declare_it",
+      "operation": "transport",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["project", "sdtm", "transport"], "to": "xpt"}],
+        "dataset": "D0",
+        "table": {"columns": [["VALUE", "str"]], "rows": []}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "output", "condition": "transport_dataset_empty", "rule": "JSON-3", "spec_paths": ["datasets.D0.artifact"]}]
+    },
+    {
+      "case": "xpt_refuses_an_integer_no_double_holds_exactly",
+      "operation": "transport",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["project", "sdtm", "transport"], "to": "xpt"},
+          {"set": ["specs", "0", "columns", "0", "type"], "to": "int"},
+          {"set": ["specs", "0", "columns", "0", "derivation"], "to": 1}
+        ],
+        "dataset": "D0",
+        "table": {"columns": [["VALUE", "int"]], "rows": [[9007199254740993]]}
+      },
+      "compares": ["phase", "condition", "rule", "context.cause"],
+      "issues": [{"phase": "output", "condition": "xpt_value_out_of_range", "rule": "XPT-8", "context": {"cause": "integer"}}]
+    },
+    {
+      "case": "xpt_refuses_a_file_whose_last_row_is_blank",
+      "operation": "xpt_last_row_blank",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["project", "sdtm", "transport"], "to": "xpt"}],
+        "dataset": "D0",
+        "row": 1
+      },
+      "issues": [{"phase": "output", "condition": "xpt_last_row_blank", "rule": "XPT-10", "spec_paths": ["datasets.D0.artifact"], "context": {"artifact": "d0.csv", "dataset": "D0", "detail": "the last row encodes to blanks only", "row": 1}}]
+    },
+    {
+      "case": "xpt_refuses_a_file_above_five_billion_bytes",
+      "operation": "xpt_file_too_large",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["project", "sdtm", "transport"], "to": "xpt"}],
+        "dataset": "D0",
+        "bytes": 5000000880
+      },
+      "issues": [{"phase": "output", "condition": "xpt_file_too_large", "rule": "XPT-10", "spec_paths": ["datasets.D0.artifact"], "context": {"artifact": "d0.csv", "bytes": 5000000880, "dataset": "D0", "detail": "transport file larger than 5000000000 bytes"}}]
+    },
+    {
+      "case": "define_requires_what_a_section_of_specifications_alone_lacks",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"remove": ["project", "study"]},
+          {"remove": ["project", "sdtm", "standards"]},
+          {"remove": ["project", "sdtm", "define"]}
+        ]
+      },
+      "issues": [
+        {"phase": "validation", "condition": "missing_required_field", "rule": "DEFINE-28", "spec_paths": ["study"], "context": {"detail": "study", "field": "study"}},
+        {"phase": "validation", "condition": "missing_required_field", "rule": "DEFINE-28", "spec_paths": ["sdtm.standards"], "context": {"detail": "standards", "field": "standards"}},
+        {"phase": "validation", "condition": "missing_required_field", "rule": "DEFINE-28", "spec_paths": ["sdtm.define"], "context": {"detail": "define", "field": "define"}}
+      ]
+    },
+    {
+      "case": "a_whole_second_creation_time_is_admitted",
+      "operation": "created_text",
+      "input": {"created": "2026-09-30T00:00:00"},
+      "issues": []
+    },
+    {
+      "case": "a_creation_time_with_a_fraction_of_a_second_is_not_permitted",
+      "operation": "created_text",
+      "input": {"created": "2026-09-30T00:00:00.1"},
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "DEFINE-3"}]
+    },
+    {
+      "case": "independent_targets_are_admitted",
+      "operation": "admit_relation",
+      "input": {"relation": "independent", "path": "sdtm.specs[0]", "target": "dm.csv", "detail": "held paths"},
+      "issues": []
+    },
+    {
+      "case": "two_listings_writing_one_artifact_collide",
+      "operation": "admit_relation",
+      "input": {"relation": "artifact_collision", "path": "sdtm.specs[0]", "target": "dm.csv", "detail": "A and B name one retained target"},
+      "issues": [{"phase": "validation", "condition": "artifact_path_collision", "rule": "JSON-2", "spec_paths": ["sdtm.specs[0]"], "context": {"detail": "A and B name one retained target", "path": "dm.csv"}}]
+    },
+    {
+      "case": "two_listings_writing_one_transport_file_collide",
+      "operation": "admit_relation",
+      "input": {"relation": "transport_collision", "path": "sdtm.specs[0]", "target": "dm.csv", "detail": "A and B name one retained target"},
+      "issues": [{"phase": "validation", "condition": "transport_path_collision", "rule": "JSON-2", "spec_paths": ["sdtm.specs[0]"], "context": {"detail": "A and B name one retained target", "path": "dm.csv"}}]
+    },
+    {
+      "case": "an_artifact_outside_the_define_directory_is_refused",
+      "operation": "artifact_outside_document",
+      "input": {"path": "adam.specs[0]", "dataset": "ADSL", "artifact": "outside/adsl.csv", "define": "package/define.xml"},
+      "issues": [{"phase": "validation", "condition": "artifact_outside_document", "rule": "DEFINE-16", "spec_paths": ["adam.specs[0]"], "context": {"artifact": "outside/adsl.csv", "dataset": "ADSL", "define": "package/define.xml", "detail": "artifact must be inside the Define package"}}]
+    },
+    {
+      "case": "a_listed_specification_without_a_model_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"remove": ["specs", "0", "model"]}]
+      },
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "SUB-3", "spec_paths": ["sdtm.specs[0].model"], "context": {"field": "model", "model": "SDTM", "section": "sdtm"}}]
+    },
+    {
+      "case": "a_listed_specification_of_another_model_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["specs", "0", "model"], "to": "ADaM"}]
+      },
+      "issues": [{"phase": "validation", "condition": "standard_model_mismatch", "rule": "SUB-3", "spec_paths": ["sdtm.specs[0].model"], "context": {"model": "SDTM", "section": "sdtm", "value": "ADaM"}}]
+    },
+    {
+      "case": "a_dataset_binds_the_section_guide_it_selects",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["project", "sdtm", "standards"], "to": [{"name": "SDTMIG", "version": "3.4", "status": "Final"}, {"name": "SDTMIG-MD", "version": "3.4", "status": "Final"}]},
+          {"set": ["specs", "0", "submission", "standard"], "to": "SDTMIG-MD"}
+        ]
+      },
+      "issues": []
+    },
+    {
+      "case": "a_dataset_selecting_no_guide_binds_the_first",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["project", "sdtm", "standards"], "to": [{"name": "SDTMIG", "version": "3.4", "status": "Final"}, {"name": "SDTMIG-MD", "version": "3.4", "status": "Final"}]}]
+      },
+      "issues": []
+    },
+    {
+      "case": "a_section_guide_of_another_model_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["project", "sdtm", "standards"], "to": [{"name": "SDTMIG", "version": "3.4", "status": "Final"}, {"name": "SENDIG", "version": "3.4", "status": "Final"}]}]
+      },
+      "issues": [{"phase": "validation", "condition": "standard_model_mismatch", "rule": "DEFINE-6", "spec_paths": ["sdtm.standards[1].name"], "context": {"model": "SDTM", "section": "sdtm", "value": "SENDIG"}}]
+    },
+    {
+      "case": "a_section_guide_listed_twice_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [{"set": ["project", "sdtm", "standards"], "to": [{"name": "SDTMIG", "version": "3.4", "status": "Final"}, {"name": "SDTMIG", "version": "3.4", "status": "Final"}]}]
+      },
+      "issues": [{"phase": "validation", "condition": "duplicate_identifier", "rule": "DEFINE-6", "spec_paths": ["sdtm.standards[1].name"], "context": {"identifier": "SDTMIG"}}]
+    },
+    {
+      "case": "a_dataset_selecting_a_guide_its_section_lacks_is_refused",
+      "operation": "compose",
+      "input": {
+        "base": "study",
+        "edits": [
+          {"set": ["project", "sdtm", "standards"], "to": [{"name": "SDTMIG", "version": "3.4", "status": "Final"}, {"name": "SDTMIG-MD", "version": "3.4", "status": "Final"}]},
+          {"set": ["specs", "0", "submission", "standard"], "to": "SDTMIG-AP"}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_standard", "rule": "DEFINE-8", "spec_paths": ["sdtm.specs[0].submission.standard"], "context": {"section": "sdtm", "standards": ["SDTMIG", "SDTMIG-MD"], "value": "SDTMIG-AP"}}]
+    }
+  ]
+}

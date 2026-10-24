@@ -1098,7 +1098,68 @@ mod diagnostics {
             }
         }
         mod submission {
-            use crate::support::diagnostic::submission::*;
+            use crate::support::{
+                document::Tree,
+                roots as rt,
+                submission::{catalogue, column, one, project, specification},
+            };
+            use std::convert::Infallible;
+            use yamaa_core::{
+                diagnostic::ConditionCode,
+                json::Value as JsonValue,
+                project_terminology as ct, submission_transport,
+                table::{CellError, Column, TableAccess, TableSchema, ValueRef},
+                value::{ColumnType, Value},
+            };
+            /// CT-11: transport admission refuses a published value outside
+            /// the study's dataset inventory with eight facts; the case
+            /// `submission.json::a_published_value_outside_the_dataset_inventory_fails`
+            /// compares its path and four of them.
+            #[test]
+            fn an_inventory_refusal_at_transport_names_eight_facts() {
+                struct Held(TableSchema, Value);
+                impl TableAccess for Held {
+                    type Error = Infallible;
+                    fn schema(&self) -> &TableSchema {
+                        &self.0
+                    }
+                    fn row_count(&self) -> usize {
+                        1
+                    }
+                    fn cell(
+                        &self,
+                        row: usize,
+                        column: usize,
+                    ) -> Result<ValueRef<'_>, CellError<Infallible>> {
+                        match (row, column) {
+                            (0, 0) => Ok((&self.1).into()),
+                            _ => Err(CellError::OutOfBounds { row, column }),
+                        }
+                    }
+                }
+                let mut spec = specification();
+                spec.set(
+                    &["columns", "0", "submission", "inventory_vocabulary"],
+                    Tree::boolean(true),
+                );
+                let study = one(project(), spec, &ct::Catalogue::admit(vec![]).unwrap()).unwrap();
+                let table = Held(
+                    TableSchema::new(vec![Column {
+                        name: "VALUE".into(),
+                        kind: ColumnType::Str,
+                    }])
+                    .unwrap(),
+                    Value::Str("UNKNOWN_DATASET".into()),
+                );
+                let finding =
+                    submission_transport::admit(&study, &study.datasets()[0], &table).unwrap_err();
+                assert_eq!(
+                    (finding.code, finding.context.len()),
+                    (ConditionCode::SubmissionInventoryFailed, 8),
+                    "{:?}",
+                    finding.context
+                );
+            }
             #[test]
             fn large_binding_values_are_retained_and_a_restating_verification_is_redundant() {
                 // Held semantic metadata has no cumulative copy allowance. File loaders
