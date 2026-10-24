@@ -116,12 +116,16 @@ pub enum Error<E> {
     /// A layer declares a header this traversal does not read: a version the
     /// engine does not read, 0.5 included, or a type other than `spec`
     /// (SCHEMA-2, LAYER-4), reported at the entry's header or at the field
-    /// `named` that names the layer.
+    /// `named` that names the layer, which the layer `declaring` writes. The
+    /// mismatch is boxed, so the error stays small.
     Header {
         source: String,
         entry: String,
-        mismatch: HeaderMismatch,
+        mismatch: Box<HeaderMismatch>,
         named: Named,
+        /// The layer that writes the field `named`; none for the entry, which
+        /// no field names.
+        declaring: Option<String>,
     },
     Layer {
         source: String,
@@ -199,25 +203,25 @@ impl<E> Error<E> {
             Self::Header {
                 source,
                 entry,
-                mismatch: HeaderMismatch::Version { version, reads },
+                mismatch,
                 named,
-            } => F::LanguageVersion {
-                source,
-                entry,
-                version,
-                reads,
-                named: *named,
-            },
-            Self::Header {
-                source,
-                entry,
-                mismatch: HeaderMismatch::FileType { file_type },
-                named,
-            } => F::FileType {
-                source,
-                entry,
-                file_type,
-                named: *named,
+                declaring,
+            } => match mismatch.as_ref() {
+                HeaderMismatch::Version { version, reads } => F::LanguageVersion {
+                    source,
+                    entry,
+                    version,
+                    reads,
+                    named: *named,
+                    declaring: declaring.as_deref(),
+                },
+                HeaderMismatch::FileType { file_type } => F::FileType {
+                    source,
+                    entry,
+                    file_type,
+                    named: *named,
+                    declaring: declaring.as_deref(),
+                },
             },
             _ => return Ok(None),
         }
@@ -309,13 +313,15 @@ pub fn declares_parent(document: &Document) -> bool {
 /// finding in the layer, as is the `schema_version` of a layer no field names,
 /// the entry or the parent a caller names; a version or type the traversal
 /// does not read, a parent's or a fragment's 0.5 included, names the layer,
-/// the entry and the field `named` that names the layer.
+/// the entry, the field `named` that names the layer and the layer
+/// `declaring` that writes that field.
 fn header_error<E>(
     fault: HeaderFault,
     entry: &str,
     source: Source,
     input: Document,
     named: Named,
+    declaring: Option<&str>,
 ) -> Error<E> {
     let unnamed = named.field().is_none();
     let mismatch = match fault {
@@ -337,8 +343,9 @@ fn header_error<E>(
     Error::Header {
         source: source.identity,
         entry: entry.into(),
-        mismatch,
+        mismatch: Box::new(mismatch),
         named,
+        declaring: declaring.map(str::to_owned),
     }
 }
 
@@ -431,16 +438,18 @@ fn caller_parent_error<R: Resolver, X>(
 /// composition already reached repeats it. A layer is located as written,
 /// then captured and decoded, and kept in `layers`: the parents from the
 /// entry up, then the fragments in contribution order. `admit` admits one
-/// layer, given the entry identity, the layer's source, its document and the
-/// field that names it, and returns the layer with what it names.
+/// layer, given the entry identity, the layer's source, its document, the
+/// field that names it and the layer that writes that field, and returns the
+/// layer with what it names.
 ///
 /// With a `parent` the caller names, the entry is a fragment checked on it
 /// (#3694): once the entry is admitted, that file is followed as the entry's
 /// parent. It is located and captured as a file the caller names, and one
 /// that cannot be read is the caller's path, named as given (FILE-1); one
-/// that is the entry itself is a cycle. The chain then continues from that
-/// file's own parent, so its layers contribute before the entry, as they do
-/// before a child that names it as its parent and includes the entry.
+/// that is the entry itself is a cycle. No layer writes the field that names
+/// it. The chain then continues from that file's own parent, so its layers
+/// contribute before the entry, as they do before a child that names it as
+/// its parent and includes the entry.
 fn walk<L, R: Resolver, D: Decoder>(
     entry: Source,
     entry_document: Document,
@@ -448,21 +457,27 @@ fn walk<L, R: Resolver, D: Decoder>(
     resolver: &mut R,
     decoder: &mut D,
     layers: &mut Vec<CapturedParent<D::Raw>>,
-    mut admit: impl FnMut(&str, Source, Document, Named) -> Result<(L, Links), Error<ReadFailure<R, D>>>,
+    mut admit: impl FnMut(
+        &str,
+        Source,
+        Document,
+        Named,
+        Option<&str>,
+    ) -> Result<(L, Links), Error<ReadFailure<R, D>>>,
 ) -> Result<Vec<L>, Error<ReadFailure<R, D>>> {
     if entry.identity.is_empty() || entry.display_path.is_empty() {
         return Err(Error::InvalidIdentity);
     }
     let entry_identity = entry.identity.clone();
-    let mut frame = |source: Source, input: Document, named: Named| {
+    let mut frame = |source: Source, input: Document, named: Named, declaring: Option<&str>| {
         let identity = source.identity.clone();
-        admit(&entry_identity, source, input, named).map(|(layer, links)| Frame {
+        admit(&entry_identity, source, input, named, declaring).map(|(layer, links)| Frame {
             identity,
             layer,
             links,
         })
     };
-    let mut chain = vec![frame(entry, entry_document, Named::Entry)?];
+    let mut chain = vec![frame(entry, entry_document, Named::Entry, None)?];
     let mut followed = 0;
     if let Some(parent) = parent {
         followed += 1;
@@ -489,7 +504,7 @@ fn walk<L, R: Resolver, D: Decoder>(
             .map(resolver::bytes)
             .map_err(|error| caller_parent_error(resolver, name, error, parent.given))?;
         let input = decoded::<R, D>(decoder, layers, &source, bytes)?;
-        chain.push(frame(source, input, Named::CallerParent)?);
+        chain.push(frame(source, input, Named::CallerParent, None)?);
     }
     loop {
         let frame_ref = chain.last_mut().expect("chain holds the entry");
@@ -555,7 +570,7 @@ fn walk<L, R: Resolver, D: Decoder>(
             },
         };
         let input = decoded::<R, D>(decoder, layers, &source, bytes)?;
-        chain.push(frame(source, input, Named::Parent)?);
+        chain.push(frame(source, input, Named::Parent, Some(&declaring))?);
     }
     // Every layer the composition has reached: the chain, then each fragment
     // as it is read.
@@ -623,7 +638,7 @@ fn walk<L, R: Resolver, D: Decoder>(
                 }
             };
             let input = decoded::<R, D>(decoder, layers, &source, bytes)?;
-            contributed.push(frame(source, input, Named::Include(index))?.layer);
+            contributed.push(frame(source, input, Named::Include(index), Some(&declaring))?.layer);
         }
         contributed.push(layer);
     }
@@ -694,8 +709,17 @@ pub fn traverse_versioned<R: Resolver, D: Decoder>(
         resolver,
         decoder,
         &mut parents,
-        |entry, source, input, named| {
-            admit_versioned(schema, reads, entry, source, input, named, given_parent)
+        |entry, source, input, named, declaring| {
+            admit_versioned(
+                schema,
+                reads,
+                entry,
+                source,
+                input,
+                named,
+                declaring,
+                given_parent,
+            )
         },
     )?;
     let version = layers
@@ -709,9 +733,9 @@ pub fn traverse_versioned<R: Resolver, D: Decoder>(
     })
 }
 
-/// Admit one layer at the version it declares; `given_parent`, the parent a
-/// caller names as the caller gave it, says the entry is a fragment checked
-/// on it.
+/// Admit one layer at the version it declares, named by the field `named` of
+/// the layer `declaring`; `given_parent`, the parent a caller names as the
+/// caller gave it, says the entry is a fragment checked on it.
 fn admit_versioned<E>(
     schema: &SchemaStructure,
     reads: LanguageVersion,
@@ -719,11 +743,12 @@ fn admit_versioned<E>(
     source: Source,
     input: Document,
     named: Named,
+    declaring: Option<&str>,
     given_parent: Option<&str>,
 ) -> Result<(VersionedLayer, Links), Error<E>> {
     let header = match language::read_header(&input, Some(reads), FileType::Spec) {
         Ok(header) => header,
-        Err(fault) => return Err(header_error(fault, entry, source, input, named)),
+        Err(fault) => return Err(header_error(fault, entry, source, input, named, declaring)),
     };
     // A fragment composes on the layer that includes it, so it names no
     // layer of its own (LAYER-4). An entry checked on a parent the caller

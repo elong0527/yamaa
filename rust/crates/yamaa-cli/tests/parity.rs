@@ -27,6 +27,9 @@
 //!   `--parent` prints the rows that its child, which names that parent and
 //!   includes the fragment, prints, and a parent given for a file that is no
 //!   fragment is refused with the rows and error text both hosts raise.
+//! - **Locations.** Each case of `issue-locations` makes its call, and its
+//!   first issue has the condition, the first spec path, and the file, line
+//!   and column that both hosts compare (P-ISSUE-1).
 //! - **Lint.** The `lint` family's partial restatement, a layer and the
 //!   parent it reads, is linted with and without `--fix`; each finding the
 //!   document prints is compared with the case's rows, all six lint columns,
@@ -581,6 +584,75 @@ fn the_include_fragments_study_prints_the_rows_and_facts_both_hosts_return() {
         assert!(
             specification.get(field).is_none(),
             "the resolved specification holds no {field}"
+        );
+    }
+}
+
+/// `issue-locations`: each case writes its files and makes its call, and the
+/// first issue the document prints has the condition, the first spec path,
+/// and the file, line and column that both hosts compare (P-ISSUE-1). The
+/// hosts' selection of a project's specification by name is the command
+/// line's check of the project with `--spec`.
+#[test]
+fn each_issue_locations_case_prints_its_first_issue_where_both_hosts_locate_it() {
+    for case in family("issue-locations")["cases"].as_array().unwrap() {
+        let name = text(case, "name");
+        let directory = Scratch::new("parity-locations");
+        for (file, contents) in case["files"].as_object().unwrap() {
+            directory.write(file, contents.as_str().unwrap());
+        }
+        let call = &case["call"];
+        let path = text(call, "path");
+        let arguments = match text(call, "operation") {
+            "check" | "project_check" => vec!["check", path],
+            "run" => vec!["run", path],
+            "select" => vec!["check", path, "--spec", text(call, "name")],
+            "submission" => vec![
+                "submission",
+                path,
+                "--section",
+                text(call, "section"),
+                "--created",
+                text(call, "created"),
+            ],
+            other => panic!("{name}: the command line has no call for the operation {other}"),
+        };
+        let rows = printed_rows(&document(&directory, &arguments, name), name);
+        let first = rows
+            .first()
+            .unwrap_or_else(|| panic!("{name}: the document holds no issue"));
+        let column = |key: &str| {
+            first
+                .iter()
+                .find(|(column, _)| *column == key)
+                .map(|(_, value)| value.clone())
+                .unwrap()
+        };
+        let issue = &case["issue"];
+        let file = match issue["file"].as_str() {
+            Some(file) => Value::String(directory.spelled(file)),
+            None => Value::Null,
+        };
+        assert_eq!(
+            (
+                column("condition"),
+                column("spec_paths")
+                    .as_array()
+                    .and_then(|paths| paths.first())
+                    .cloned()
+                    .unwrap_or(Value::Null),
+                column("file"),
+                column("line"),
+                column("column"),
+            ),
+            (
+                issue["condition"].clone(),
+                issue["spec_path"].clone(),
+                file,
+                issue["line"].clone(),
+                issue["column"].clone(),
+            ),
+            "{name}"
         );
     }
 }

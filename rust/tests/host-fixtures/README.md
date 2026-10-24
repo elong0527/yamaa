@@ -50,7 +50,7 @@ the held bytes.
 | info | The engine information's fields in order, the host vocabulary, and a shipped build's language versions and features |
 | conditions | The condition catalogue's seven columns, every condition it names in name order, and one authored row of each shape: rules in card order, a condition whose issues cite no rule, and the four renames and seven retirements of 1.0.0 |
 | printing | A study's files, and the status and printed lines of each result: a check, a failed check, a project check, a run, a failed run, a project run and each of its members, a submission, and a lazy specification and project; `{path}` stands for the path the test gave and `{root}` for its study directory, with forward slashes |
-| issue-locations | One case for each rule of P-ISSUE-1 (`docs/design/interface-1.0/api.md`, "Issue locations"): the files a case writes, its call, and its first issue's condition, first spec path, file, line and column, counted by hand in those files |
+| issue-locations | One case for each rule of P-ISSUE-1 (`docs/design/interface-1.0/api.md`, "Issue locations"), and for a refusal at the `parent` or `include` entry of a layer above the entry, which is located in that layer (D181): the files a case writes, its call, and its first issue's condition, first spec path, file, line and column, counted by hand in those files |
 | include-fragments | One study whose entries compose a parent chain and an `include` list (LAYER-1 to LAYER-4): the files it writes, each check case's entry and complete issue rows, each parent case's fragment, given parent and child, whose two checks return its rows, each refused parent's error text and rows (#3694), and the resolve case's layers, `parent` and `include` resources, resolved columns, the layer of each named value and the fields the resolved specification never holds; `{root}` stands for the study's directory, `{path}` in an error text for the path the test gave and `{parent}` for the parent it gave |
 | project-parity | Project cases with their complete expected issue rows: the files a case writes, its call (a project check, a member of a project run, a specification the project names, or a submission) and every issue row, or under `calls` each of several calls on those files with its rows; rows and files that depend on the host language are given by language, `{root}` stands for the case's directory and `{version}` for the installed yamaa version |
 | compact-yaml | A specification with a block and a flow input, the block, compact, flow and explicit-key verification forms with their one output and saved CSV, failed row-count bounds, malformed closers, and raw NULs with their `invalid_yaml` context (#2196, #3125) |
@@ -319,7 +319,11 @@ from `run.report`, and compares the report that the failed run of
 `public-contract` saves with `failed_report_csv`, byte for byte. Those rows
 and bytes hold all fourteen report columns, in order. It lints the `lint`
 family's partial restatement with and without `--fix` and compares each
-finding the document prints with the case's rows, all six lint columns.
+finding the document prints with the case's rows, all six lint columns. It
+makes the call of each `issue-locations` case, selecting a project's
+specification by name as `check` with `--spec`, and compares the first issue
+the document prints with the case's condition, first spec path, file, line
+and column.
 `cargo test` builds and runs the binary, so the leg runs in `make test-rust`,
 CI's `rust` job, and in native qualification's workspace tests on each
 platform.
