@@ -1,0 +1,57 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: RELAE
+keys: [STUDYID, USUBJID, RELID, AESEQ]
+
+input:
+  RELREC: input/relrec.csv
+  AE:
+    path: input/ae.csv
+    types:
+      AESEQ: int
+
+# One record per adverse event a relationship names. Records that tie the
+# relationship to a medication or to medical history are not events.
+base: RELREC
+filter: "RELREC.RDOMAIN = 'AE' AND RELREC.IDVAR = 'AESEQ'"
+
+output:
+  path: relae.csv
+  columns: [STUDYID, USUBJID, RELID, AESEQ, AETERM]
+  order_by: [STUDYID, USUBJID, RELID, AESEQ]
+
+# A relationship that names an adverse event the AE domain does not hold
+# is a data error, not a blank term.
+intermediates:
+  - id: AEREC
+    dataset: AE
+    key: {STUDYID: STUDYID, USUBJID: USUBJID, AESEQ: AESEQ}
+    require_match: true
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: RELREC.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: RELREC.USUBJID
+
+  - name: RELID
+    type: str
+    label: Relationship Identifier
+    derivation: RELREC.RELID
+
+  # RELREC holds the sequence number as text; the column makes it a number.
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: RELREC.IDVARVAL
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AEREC.AETERM

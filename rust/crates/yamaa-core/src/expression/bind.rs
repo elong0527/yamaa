@@ -13,7 +13,8 @@ use crate::value::Value;
 /// What a reduction reads from each record of its relation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ReductionOperand {
-    /// A bare name: its values keep their type for `MIN`, `MAX` and `ONLY`.
+    /// A bare name: its values keep their type for `MIN`, `MAX` and `ONLY`,
+    /// and `STR_JOIN` writes each as its canonical text.
     Value(String),
     /// `COUNT(D.*)` counts the records of relation `D`.
     Records(String),

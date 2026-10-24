@@ -32,6 +32,13 @@ pub(super) struct Declaration {
     derive_relations: Vec<String>,
     derive_references: Vec<String>,
     between: Option<lookup_range::Declaration>,
+    /// The order `STR_JOIN` joins in: each term's name, whether it is
+    /// descending and whether missing sorts first (LOOKUP-10, VALUE-22).
+    order: Vec<(String, bool, bool)>,
+    /// The text `STR_JOIN` writes between two values (FORMULA-18).
+    separator: Option<String>,
+    /// Whether `STR_JOIN` and `COUNT(x)` take each value once (FORMULA-18).
+    distinct: bool,
 }
 #[derive(Clone, Debug)]
 struct DeriveDeclaration {
@@ -131,6 +138,13 @@ impl Declaration {
                 .as_ref()
                 .map(|between| lookup_range::Declaration::from_tree(spec, between))
                 .transpose()?,
+            order: aggregate
+                .order_by
+                .iter()
+                .map(|term| tree_order_term(spec, term))
+                .collect::<Result<_, _>>()?,
+            separator: aggregate.separator.as_ref().map(|text| text.text.clone()),
+            distinct: aggregate.distinct == Some(true),
         })
     }
 }
@@ -379,6 +393,12 @@ pub(super) fn admit(
             Some(&checks::render(spec, formula.text.meta)),
         ));
     }
+    if let Ok(compiled) = &formula.compiled {
+        let findings = unpaired(spec, e, aggregate, compiled);
+        if !findings.is_empty() {
+            return Err(PrepareError::Invalid(findings));
+        }
+    }
     let named = admission.intermediates;
     let contains = |name: &str| named.contains(name);
     let kept = |name: &str| named.kept(name);
@@ -438,6 +458,136 @@ pub(super) fn admit(
     }
     Ok(())
 }
+/// A reduction that reads fields of the aggregate, named as FORMULA-18's
+/// field table writes it: the reducer over an expression, never `D.*`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Reader {
+    reducer: crate::expression::Reducer,
+    form: &'static str,
+}
+
+const JOIN: Reader = Reader {
+    reducer: crate::expression::Reducer::StrJoin,
+    form: "STR_JOIN(x)",
+};
+const COUNT: Reader = Reader {
+    reducer: crate::expression::Reducer::Count,
+    form: "COUNT(x)",
+};
+
+/// One row of FORMULA-18's field table: a field of the aggregate, the
+/// reductions that read it, whether each of them needs it, and whether a
+/// reduction reads it only when it is the whole expression.
+struct ReducerField {
+    field: &'static str,
+    readers: &'static [Reader],
+    needed: bool,
+    whole: bool,
+}
+
+/// FORMULA-18's field table, row for row and in its order.
+const REDUCER_FIELDS: [ReducerField; 3] = [
+    ReducerField {
+        field: "order_by",
+        readers: &[JOIN],
+        needed: true,
+        whole: false,
+    },
+    ReducerField {
+        field: "separator",
+        readers: &[JOIN],
+        needed: true,
+        whole: false,
+    },
+    ReducerField {
+        field: "distinct",
+        readers: &[JOIN, COUNT],
+        needed: false,
+        whole: true,
+    },
+];
+
+/// Each field of the aggregate written beside a reduction that reads it, as
+/// FORMULA-18's field table pairs them (LOOKUP-10). A reduction without a
+/// field it needs is unpaired, `missing` holding every such field; a field
+/// beside no reduction that reads it is unpaired, `missing` holding each of
+/// its readers, any one of which would pair it; fields of the same readers
+/// share one finding. Each list follows the table's order, and an
+/// `order_by` that lists no term orders nothing.
+fn unpaired(
+    spec: &ast::Spec,
+    e: ExprId,
+    aggregate: &ast::Aggregate,
+    compiled: &CompiledExpression,
+) -> Vec<PreflightFinding> {
+    use crate::expression::{AggregateResult, Reduction, ReductionOperand};
+    let path = checks::path(spec, e);
+    let finding = |declared: &[&str], missing: &[&str]| {
+        PreflightFinding::Scalar(crate::diagnostic::lookup::selection_unpaired(
+            &path,
+            crate::diagnostic::lookup::Owner::Unnamed,
+            declared,
+            missing,
+        ))
+    };
+    let root = match compiled.result() {
+        AggregateResult::Reduction(index) => compiled.reductions().get(index),
+        AggregateResult::Numeric => None,
+    };
+    let reads = |reader: &Reader, whole: bool| {
+        let matches = |reduction: &Reduction| {
+            reduction.reducer == reader.reducer
+                && !matches!(reduction.operand, ReductionOperand::Records(_))
+        };
+        if whole {
+            root.is_some_and(matches)
+        } else {
+            compiled.reductions().iter().any(matches)
+        }
+    };
+    let written = |field: &str| aggregate.written.contains(field);
+    let supplied = |field: &str| match field {
+        "order_by" => !aggregate.order_by.is_empty(),
+        field => written(field),
+    };
+    let mut findings = Vec::new();
+    let mut readers: Vec<&Reader> = Vec::new();
+    for reader in REDUCER_FIELDS.iter().flat_map(|row| row.readers) {
+        if !readers.contains(&reader) {
+            readers.push(reader);
+        }
+    }
+    for reader in readers {
+        let missing = REDUCER_FIELDS
+            .iter()
+            .filter(|row| row.needed && row.readers.contains(reader))
+            .filter(|row| reads(reader, row.whole) && !supplied(row.field))
+            .map(|row| row.field)
+            .collect::<Vec<_>>();
+        if !missing.is_empty() {
+            findings.push(finding(&[reader.form], &missing));
+        }
+    }
+    let mut unread: Vec<(&[Reader], Vec<&str>)> = Vec::new();
+    for row in &REDUCER_FIELDS {
+        if !written(row.field) || row.readers.iter().any(|r| reads(r, row.whole)) {
+            continue;
+        }
+        match unread
+            .iter_mut()
+            .find(|(readers, _)| *readers == row.readers)
+        {
+            Some((_, fields)) => fields.push(row.field),
+            None => unread.push((row.readers, vec![row.field])),
+        }
+    }
+    for (readers, declared) in unread {
+        let missing = readers.iter().map(|reader| reader.form).collect::<Vec<_>>();
+        findings.push(finding(&declared, &missing));
+    }
+    findings
+}
+
 fn finding(value: Finding<'_>, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
     findings.push(BindFinding::AggregateDiagnostic(
         value.diagnostic().map_err(|_| BindError::Internal)?,
@@ -1311,6 +1461,14 @@ pub(super) fn bind(
         edges,
         findings,
     )?;
+    let order = bind_order(
+        declaration,
+        &donor_schema,
+        relation,
+        &resolve,
+        edges,
+        findings,
+    )?;
     if findings.len() != before {
         return Ok(None);
     }
@@ -1336,9 +1494,55 @@ pub(super) fn bind(
         &declaration.path,
     )
     .map_err(|_| BindError::Internal)?
-    .with_record_operations(range, derivations, derived_schema);
+    .with_record_operations(range, derivations, derived_schema)
+    .with_reducer_fields(
+        order,
+        declaration.separator.clone().unwrap_or_default(),
+        declaration.distinct,
+    );
     let _ = output;
     Ok(Some(Expression::Aggregate(std::boxed::Box::new(bound))))
+}
+
+/// The columns `STR_JOIN` orders a group's records by: a binding the
+/// aggregate declares, after the relation's own columns, or a field of the
+/// relation, which an unqualified aggregate reads from completed rows
+/// (LOOKUP-10, LOOKUP-22).
+fn bind_order(
+    declaration: &Declaration,
+    donor_schema: &TableSchema,
+    relation: Option<&str>,
+    resolve: ResolveRef<'_>,
+    edges: &mut Vec<usize>,
+    findings: &mut Vec<BindFinding>,
+) -> Result<Vec<crate::dataset::OrderTerm>, BindError> {
+    let mut order = Vec::new();
+    for (index, (name, descending, nulls_first)) in declaration.order.iter().enumerate() {
+        let bound = declaration
+            .derive
+            .iter()
+            .flatten()
+            .position(|binding| binding.name == *name);
+        let column = match bound {
+            Some(position) => Some(donor_schema.columns().len() + position),
+            None => {
+                let path = format!("{}.order_by[{index}]", declaration.path);
+                let column = resolve(name, &path, findings)?.map(|(column, _)| column);
+                if let (None, Some(column)) = (relation, column) {
+                    edges.push(column);
+                }
+                column
+            }
+        };
+        if let Some(column) = column {
+            order.push(crate::dataset::OrderTerm {
+                column,
+                descending: *descending,
+                nulls_first: *nulls_first,
+            });
+        }
+    }
+    Ok(order)
 }
 
 /// Visit every qualified aggregate a row evaluates directly, through lazy and

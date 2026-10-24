@@ -3,10 +3,16 @@
 mod scalar {
     mod aggregate_reduction {
         use yamaa_core::{
-            aggregate_reduction::{reduce_values, AggregateReductionError},
+            aggregate_reduction::{reduce_values, AggregateReductionError, ReductionFields},
             expression::Reducer,
             table::ValueRef,
-            value::{Value, ValueType},
+            temporal::{Date, DateTime, Precision},
+            value::{FiniteFloat, Value, ValueType},
+        };
+
+        const PLAIN: ReductionFields<'static> = ReductionFields {
+            separator: "",
+            distinct: false,
         };
 
         #[test]
@@ -18,12 +24,12 @@ mod scalar {
             ];
             let borrowed = values.iter().map(ValueRef::from).collect::<Vec<_>>();
             assert_eq!(
-                reduce_values(&borrowed, Reducer::Max, "MAX(D.V)"),
-                Ok(ValueRef::Int(9_007_199_254_740_993))
+                reduce_values(&borrowed, Reducer::Max, PLAIN, "MAX(D.V)"),
+                Ok(Value::Int(9_007_199_254_740_993))
             );
             assert_eq!(
-                reduce_values(&borrowed, Reducer::Min, "MIN(D.V)"),
-                Ok(ValueRef::from(&values[2]))
+                reduce_values(&borrowed, Reducer::Min, PLAIN, "MIN(D.V)"),
+                Ok(values[2].clone())
             );
             let text = [
                 ValueRef::Str("é"),
@@ -32,12 +38,12 @@ mod scalar {
                 ValueRef::Str(""),
             ];
             assert_eq!(
-                reduce_values(&text, Reducer::Min, "MIN(D.V)"),
-                Ok(ValueRef::Str(""))
+                reduce_values(&text, Reducer::Min, PLAIN, "MIN(D.V)"),
+                Ok(Value::Str("".into()))
             );
             assert_eq!(
-                reduce_values(&text, Reducer::Max, "MAX(D.V)"),
-                Ok(ValueRef::Str("😀"))
+                reduce_values(&text, Reducer::Max, PLAIN, "MAX(D.V)"),
+                Ok(Value::Str("😀".into()))
             );
             let equal = [Value::Int(2), Value::float(2.0)];
             for reducer in [Reducer::Min, Reducer::Max] {
@@ -45,20 +51,25 @@ mod scalar {
                     reduce_values(
                         &equal.iter().map(ValueRef::from).collect::<Vec<_>>(),
                         reducer,
+                        PLAIN,
                         "D.V"
                     ),
-                    Ok(ValueRef::Int(2))
+                    Ok(Value::Int(2))
                 );
-                assert_eq!(reduce_values(&[], reducer, "D.V"), Ok(ValueRef::Missing));
                 assert_eq!(
-                    reduce_values(&[ValueRef::Missing; 2], reducer, "D.V"),
-                    Ok(ValueRef::Missing)
+                    reduce_values(&[], reducer, PLAIN, "D.V"),
+                    Ok(Value::Missing)
+                );
+                assert_eq!(
+                    reduce_values(&[ValueRef::Missing; 2], reducer, PLAIN, "D.V"),
+                    Ok(Value::Missing)
                 );
             }
             assert_eq!(
                 reduce_values(
                     &[ValueRef::Int(1), ValueRef::Str("1")],
                     Reducer::Min,
+                    PLAIN,
                     "MIN(D.V)"
                 ),
                 Err(AggregateReductionError::IncompatibleInputs {
@@ -72,29 +83,214 @@ mod scalar {
         #[test]
         fn only_counts_records_before_missing_handling_and_count_retains_empty_distinction() {
             assert_eq!(
-                reduce_values(&[], Reducer::Only, "ONLY(D.V)"),
-                Ok(ValueRef::Missing)
+                reduce_values(&[], Reducer::Only, PLAIN, "ONLY(D.V)"),
+                Ok(Value::Missing)
             );
             assert_eq!(
-                reduce_values(&[ValueRef::Missing], Reducer::Only, "ONLY(D.V)"),
-                Ok(ValueRef::Missing)
+                reduce_values(&[ValueRef::Missing], Reducer::Only, PLAIN, "ONLY(D.V)"),
+                Ok(Value::Missing)
             );
             assert_eq!(
-                reduce_values(&[ValueRef::Bool(false)], Reducer::Only, "ONLY(D.V)"),
-                Ok(ValueRef::Bool(false))
+                reduce_values(&[ValueRef::Bool(false)], Reducer::Only, PLAIN, "ONLY(D.V)"),
+                Ok(Value::Bool(false))
             );
             assert_eq!(
-                reduce_values(&[ValueRef::Missing; 2], Reducer::Only, "ONLY(D.V)"),
+                reduce_values(&[ValueRef::Missing; 2], Reducer::Only, PLAIN, "ONLY(D.V)"),
                 Err(AggregateReductionError::MultipleRecords { count: 2 })
             );
             assert_eq!(
-                reduce_values(&[], Reducer::Count, "COUNT(D.V)"),
-                Ok(ValueRef::Missing)
+                reduce_values(&[], Reducer::Count, PLAIN, "COUNT(D.V)"),
+                Ok(Value::Missing)
             );
             assert_eq!(
-                reduce_values(&[ValueRef::Missing; 2], Reducer::Count, "COUNT(D.V)"),
-                Ok(ValueRef::Int(0))
+                reduce_values(&[ValueRef::Missing; 2], Reducer::Count, PLAIN, "COUNT(D.V)"),
+                Ok(Value::Int(0))
             );
+        }
+
+        fn date(text: &str) -> ValueRef<'static> {
+            ValueRef::Date(text.parse().unwrap())
+        }
+
+        fn float(value: f64) -> ValueRef<'static> {
+            ValueRef::Float(FiniteFloat::new(value).unwrap())
+        }
+
+        /// FORMULA-18: each present value as the text a `str` column converts
+        /// it to (VALUE-3, VALUE-8, VALUE-17), in the order given, the
+        /// separator between two of them, each text once with `distinct`, and
+        /// missing for a group with no present value (FORMULA-24).
+        #[test]
+        fn str_join_writes_present_values_as_column_text_in_the_given_order() {
+            let datetime: DateTime = "2025-03-01T08:00:00".parse().unwrap();
+            let cases: [(&str, Vec<ValueRef<'_>>, &str, bool, Value); 12] = [
+                (
+                    "ints keep the order given, not numeric order",
+                    vec![ValueRef::Int(10), ValueRef::Int(2)],
+                    ", ",
+                    false,
+                    Value::Str("10, 2".into()),
+                ),
+                (
+                    "a float is its shortest text and an integral one drops .0",
+                    vec![float(1.5), float(2.0), float(0.1)],
+                    ", ",
+                    false,
+                    Value::Str("1.5, 2, 0.1".into()),
+                ),
+                (
+                    "dates and datetimes are their canonical text",
+                    vec![date("2025-01-08"), ValueRef::DateTime(datetime)],
+                    "; ",
+                    false,
+                    Value::Str("2025-01-08; 2025-03-01T08:00:00".into()),
+                ),
+                (
+                    "missing values are skipped",
+                    vec![ValueRef::Str("a"), ValueRef::Missing, ValueRef::Str("b")],
+                    "|",
+                    false,
+                    Value::Str("a|b".into()),
+                ),
+                (
+                    "the separator may be empty",
+                    vec![ValueRef::Str("A"), ValueRef::Str("B")],
+                    "",
+                    false,
+                    Value::Str("AB".into()),
+                ),
+                (
+                    "empty text is a present value",
+                    vec![ValueRef::Str(""), ValueRef::Str("x")],
+                    ", ",
+                    false,
+                    Value::Str(", x".into()),
+                ),
+                (
+                    "one value is written alone",
+                    vec![ValueRef::Missing, ValueRef::Int(3)],
+                    ", ",
+                    false,
+                    Value::Str("3".into()),
+                ),
+                (
+                    "every value missing joins to missing, never empty text",
+                    vec![ValueRef::Missing, ValueRef::Missing],
+                    ", ",
+                    false,
+                    Value::Missing,
+                ),
+                (
+                    "no record joins to missing",
+                    vec![],
+                    ", ",
+                    true,
+                    Value::Missing,
+                ),
+                (
+                    "distinct keeps each text where it first occurs",
+                    vec![
+                        ValueRef::Str("HEADACHE"),
+                        ValueRef::Str("HEADACHE"),
+                        ValueRef::Str("FEVER"),
+                        ValueRef::Str("HEADACHE"),
+                    ],
+                    ", ",
+                    true,
+                    Value::Str("HEADACHE, FEVER".into()),
+                ),
+                (
+                    "distinct compares the written text, so 2 and 2.0 are one",
+                    vec![ValueRef::Int(2), float(2.0), ValueRef::Int(3)],
+                    ", ",
+                    true,
+                    Value::Str("2, 3".into()),
+                ),
+                (
+                    "distinct text is case-sensitive",
+                    vec![ValueRef::Str("a"), ValueRef::Str("A"), ValueRef::Str("a")],
+                    ", ",
+                    true,
+                    Value::Str("a, A".into()),
+                ),
+            ];
+            for (label, values, separator, distinct, expected) in cases {
+                assert_eq!(
+                    reduce_values(
+                        &values,
+                        Reducer::StrJoin,
+                        ReductionFields {
+                            separator,
+                            distinct
+                        },
+                        "STR_JOIN(D.V)"
+                    ),
+                    Ok(expected),
+                    "{label}"
+                );
+            }
+        }
+
+        /// FORMULA-18 and FORMULA-24: `COUNT(x)` with `distinct` counts the
+        /// different present values, text scalar for scalar (VALUE-12),
+        /// numbers by exact value (VALUE-19), dates on the day they name
+        /// (VALUE-21); zero when every value is missing, missing for no record.
+        #[test]
+        fn count_with_distinct_counts_each_different_present_value_once() {
+            let month = Date::new(2025, 1, 1, Precision::Month).unwrap();
+            let day = Date::new(2025, 1, 1, Precision::Day).unwrap();
+            let cases: [(&str, Vec<ValueRef<'_>>, Value); 7] = [
+                (
+                    "repeated text counts once and missing is skipped",
+                    vec![
+                        ValueRef::Str("a"),
+                        ValueRef::Missing,
+                        ValueRef::Str("b"),
+                        ValueRef::Str("a"),
+                    ],
+                    Value::Int(2),
+                ),
+                (
+                    "text is case-sensitive",
+                    vec![ValueRef::Str("a"), ValueRef::Str("A")],
+                    Value::Int(2),
+                ),
+                (
+                    "an int and an equal float are one value",
+                    vec![ValueRef::Int(2), float(2.0), ValueRef::Int(3)],
+                    Value::Int(2),
+                ),
+                (
+                    "an int and the nearest float of another value differ",
+                    vec![
+                        ValueRef::Int(9_007_199_254_740_993),
+                        float(9_007_199_254_740_992.0),
+                    ],
+                    Value::Int(2),
+                ),
+                (
+                    "two dates naming one day are one value whatever their precision",
+                    vec![ValueRef::Date(month), ValueRef::Date(day)],
+                    Value::Int(1),
+                ),
+                (
+                    "every value missing counts zero",
+                    vec![ValueRef::Missing, ValueRef::Missing],
+                    Value::Int(0),
+                ),
+                ("no record is missing", vec![], Value::Missing),
+            ];
+            let fields = ReductionFields {
+                separator: "",
+                distinct: true,
+            };
+            for (label, values, expected) in cases {
+                assert_eq!(
+                    reduce_values(&values, Reducer::Count, fields, "COUNT(D.V)"),
+                    Ok(expected),
+                    "{label}"
+                );
+            }
         }
     }
     mod arithmetic {

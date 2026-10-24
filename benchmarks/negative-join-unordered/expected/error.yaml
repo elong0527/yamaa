@@ -1,0 +1,10 @@
+phase: validation
+condition: unpaired_fields
+spec_paths:
+  - columns.AETERMS.derivation.aggregate
+rule: LOOKUP-10
+context:
+  declared:
+    - STR_JOIN(x)
+  missing:
+    - order_by

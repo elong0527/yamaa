@@ -1015,6 +1015,13 @@ impl Lower<'_> {
                 }
             }
         }
+        // The fields `STR_JOIN` and `COUNT(x)` read besides their argument
+        // (FORMULA-18); a shorthand writes none.
+        let order_by = self.order_by(p, "order_by", site);
+        let separator = self.text_field(site, p, "separator");
+        let distinct = self
+            .field(p, "distinct")
+            .map(|node| matches!(self.node(node), N::Boolean(true)));
         // A written long form never holds only `expr` (SCHEMA-15), so such
         // a payload is the expanded shorthand and its text is the site.
         let text_meta = if shorthand {
@@ -1048,8 +1055,11 @@ impl Lower<'_> {
                 filter,
                 group_by,
                 bindings,
+                order_by,
+                separator,
+                distinct,
                 expr,
-                written: self.written(p, &["derivations"]),
+                written: self.written(p, &["derivations", "order_by", "separator", "distinct"]),
             }),
         ))
     }

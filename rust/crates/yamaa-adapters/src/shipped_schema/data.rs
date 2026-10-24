@@ -84,6 +84,18 @@ aggregate_class:
         type: "dict[identifier, derive_binding_class]"
         required: false
         description: Per-record intermediate variables, by the name the reducer expression reads, evaluated in order before reduction (LOOKUP-22).
+    - order_by:
+        type: "list[order_by_term]"
+        required: false
+        description: Terms ordering the records whose values STR_JOIN joins, over the relation's fields and the derivations' variables, ties keeping stored order; required beside STR_JOIN and refused beside any other expression (FORMULA-18, LOOKUP-10).
+    - separator:
+        type: str
+        required: false
+        description: Text STR_JOIN writes between two joined values, the empty string included; required beside STR_JOIN and refused beside any other expression (FORMULA-18).
+    - distinct:
+        type: bool
+        required: false
+        description: When true, STR_JOIN writes each text once and COUNT(x) counts each value once; omitted, every value counts. Admitted only beside a bare STR_JOIN(x) or COUNT(x) (FORMULA-18).
     - expr:
         type: aggregate_expression
         required: true
@@ -2051,6 +2063,27 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           "x-yamaa-kind": "structure",
           "x-yamaa-type": "dict[identifier, derive_binding_class]"
         },
+        "order_by": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/order_by_term"
+          },
+          "description": "Terms ordering the records whose values STR_JOIN joins, over the relation's fields and the derivations' variables, ties keeping stored order; required beside STR_JOIN and refused beside any other expression (FORMULA-18, LOOKUP-10).",
+          "x-yamaa-kind": "name",
+          "x-yamaa-type": "list[order_by_term]"
+        },
+        "separator": {
+          "type": "string",
+          "description": "Text STR_JOIN writes between two joined values, the empty string included; required beside STR_JOIN and refused beside any other expression (FORMULA-18).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "distinct": {
+          "type": "boolean",
+          "description": "When true, STR_JOIN writes each text once and COUNT(x) counts each value once; omitted, every value counts. Admitted only beside a bare STR_JOIN(x) or COUNT(x) (FORMULA-18).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
+        },
         "expr": {
           "$ref": "#/$defs/aggregate_expression",
           "description": "Closed reducer expression over the records of one relation (FORMULA-17).",
@@ -2970,6 +3003,27 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           "description": "Per-record intermediate variables, by the name the reducer expression reads, evaluated in order before reduction (LOOKUP-22).",
           "x-yamaa-kind": "structure",
           "x-yamaa-type": "dict[identifier, derive_binding_class]"
+        },
+        "order_by": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fragment.order_by_term"
+          },
+          "description": "Terms ordering the records whose values STR_JOIN joins, over the relation's fields and the derivations' variables, ties keeping stored order; required beside STR_JOIN and refused beside any other expression (FORMULA-18, LOOKUP-10).",
+          "x-yamaa-kind": "name",
+          "x-yamaa-type": "list[order_by_term]"
+        },
+        "separator": {
+          "type": "string",
+          "description": "Text STR_JOIN writes between two joined values, the empty string included; required beside STR_JOIN and refused beside any other expression (FORMULA-18).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "distinct": {
+          "type": "boolean",
+          "description": "When true, STR_JOIN writes each text once and COUNT(x) counts each value once; omitted, every value counts. Admitted only beside a bare STR_JOIN(x) or COUNT(x) (FORMULA-18).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
         },
         "expr": {
           "$ref": "#/$defs/aggregate_expression",

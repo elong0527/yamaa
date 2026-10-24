@@ -63,6 +63,55 @@ pub fn count_values(values: &[ValueRef<'_>]) -> Result<Number, ReductionError> {
         .map_err(|_| ReductionError::CountOverflow)
 }
 
+/// Count the distinct present values of any type, as `COUNT(x)` with
+/// `distinct` does (FORMULA-18): text equal scalar for scalar (VALUE-12),
+/// numbers equal by exact value across `int` and `float` (VALUE-19), dates
+/// and datetimes equal on the day or second they name (VALUE-21). Values of
+/// types that never compare are different values. Like [`count_values`], a
+/// group with no record yields missing and an all-missing group zero.
+pub fn count_distinct(values: &[ValueRef<'_>]) -> Result<Number, ReductionError> {
+    if values.is_empty() {
+        return Ok(Number::Missing);
+    }
+    // Sorted within each family of mutually comparable types, equal values
+    // are adjacent, so each run of them is one distinct value.
+    fn family(value: ValueRef<'_>) -> u8 {
+        match value {
+            ValueRef::Missing => 0,
+            ValueRef::Str(_) => 1,
+            ValueRef::Int(_) | ValueRef::Float(_) => 2,
+            ValueRef::Date(_) => 3,
+            ValueRef::DateTime(_) => 4,
+            ValueRef::Bool(_) => 5,
+        }
+    }
+    fn order(left: ValueRef<'_>, right: ValueRef<'_>) -> std::cmp::Ordering {
+        family(left)
+            .cmp(&family(right))
+            .then_with(|| match (left, right) {
+                (ValueRef::Bool(left), ValueRef::Bool(right)) => left.cmp(&right),
+                _ => crate::value::compare_present_refs(left, right)
+                    .expect("values of one family compare"),
+            })
+    }
+    let mut present = values
+        .iter()
+        .copied()
+        .filter(|value| !matches!(value, ValueRef::Missing))
+        .collect::<Vec<_>>();
+    present.sort_by(|left, right| order(*left, *right));
+    let count = present
+        .iter()
+        .enumerate()
+        .filter(|&(index, value)| {
+            index == 0 || order(present[index - 1], *value) != std::cmp::Ordering::Equal
+        })
+        .count();
+    i64::try_from(count)
+        .map(Number::Int)
+        .map_err(|_| ReductionError::CountOverflow)
+}
+
 /// Collect arguments before calling this function: a later resolution failure
 /// precedes an earlier potential fold failure in the reference evaluator.
 /// Missing arguments are excluded; types are checked during the ordered fold.

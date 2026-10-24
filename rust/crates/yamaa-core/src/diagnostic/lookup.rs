@@ -139,16 +139,18 @@ pub(crate) fn range_reference(path: &str, owner: Owner<'_>, identifier: &str) ->
     finding(C::LookupRangeReference, vec![path.into()], context)
 }
 
-/// `order_by` without `keep`, or `keep` without `order_by` (LOOKUP-10).
+/// `order_by` without `keep`, or `keep` without `order_by`; or an
+/// aggregate's reducer field beside an expression that does not read it,
+/// or `STR_JOIN` without the fields it needs (LOOKUP-10).
 pub(crate) fn selection_unpaired(
     path: &str,
     owner: Owner<'_>,
-    declared: &str,
-    missing: &str,
+    declared: &[&str],
+    missing: &[&str],
 ) -> Diagnostic {
     let mut context: Context = [
-        ("declared".into(), texts(&[declared])),
-        ("missing".into(), texts(&[missing])),
+        ("declared".into(), texts(declared)),
+        ("missing".into(), texts(missing)),
     ]
     .into();
     match owner {

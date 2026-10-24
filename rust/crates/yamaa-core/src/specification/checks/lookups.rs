@@ -245,8 +245,8 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
                 findings.push(PreflightFinding::Scalar(lookup::selection_unpaired(
                     &path,
                     Owner::Intermediate(name),
-                    declared,
-                    missing,
+                    &[declared],
+                    &[missing],
                 )));
             }
         }

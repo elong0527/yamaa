@@ -1493,8 +1493,9 @@ impl<'p> Builder<'p> {
                     });
                     relation_node.scan.push(id);
                 }
-                for binding in bound.bindings() {
-                    let id = cx.column(binding.column)?;
+                let order = bound.order().iter().map(|term| term.column);
+                for column in bound.bindings().iter().map(|b| b.column).chain(order) {
+                    let id = cx.column(column)?;
                     if !relation_node.scan.contains(&id) {
                         relation_node.scan.push(id);
                     }
@@ -1549,6 +1550,13 @@ impl<'p> Builder<'p> {
         for binding in bound.bindings() {
             node.reads
                 .push(Read::Relation(relation_id, field(binding.column)?));
+        }
+        // The fields `STR_JOIN` orders the records by.
+        for term in bound.order() {
+            let read = Read::Relation(relation_id, field(term.column)?);
+            if !node.reads.contains(&read) {
+                node.reads.push(read);
+            }
         }
         Ok(())
     }

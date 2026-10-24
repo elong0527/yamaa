@@ -128,6 +128,7 @@ vocabulary:
     MAX: {argument: [expression]}
     MEAN: {argument: [expression]}
     ONLY: {argument: [expression]}
+    STR_JOIN: {argument: [expression]}
 # A reserved word is case-insensitive and cannot be a bare identifier. A
 # qualified field may still use one of these spellings after its qualifier.
 # `DATE` and `DATETIME` begin a temporal literal only before a string, and
@@ -1273,6 +1274,46 @@ cases:
     text: "SUM(A) SUM(B)"
     parse: reject
     condition: invalid_expression
+  # Aggregate: STR_JOIN joins a group's values. Its order, separator and
+  # distinct are fields of the aggregate, never arguments or keywords.
+  - id: str-join-reduces-one-expression
+    context: aggregate
+    covers: [reduction, vocabulary]
+    text: "STR_JOIN(SEQN)"
+    parse: accept
+    identifiers: [SEQN]
+    shape: (reduce STR_JOIN (id SEQN))
+  - id: str-join-is-case-insensitive
+    context: aggregate
+    covers: [reduction, keyword-case]
+    text: "str_join(AE.AETERM)"
+    parse: accept
+    identifiers: [AE.AETERM]
+    shape: (reduce STR_JOIN (id AE.AETERM))
+  - id: a-separator-is-not-a-str-join-argument
+    context: aggregate
+    covers: [reduction, rejection]
+    text: "STR_JOIN(SEQN, ', ')"
+    parse: reject
+    condition: invalid_expression
+  - id: str-join-takes-no-record-star
+    context: aggregate
+    covers: [star, rejection]
+    text: "STR_JOIN(AE.*)"
+    parse: reject
+    condition: invalid_expression
+  - id: distinct-is-not-a-keyword-inside-a-reducer
+    context: aggregate
+    covers: [reduction, rejection]
+    text: "COUNT(DISTINCT AETERM)"
+    parse: reject
+    condition: invalid_expression
+  - id: string-agg-is-not-the-join-name
+    context: aggregate
+    covers: [vocabulary, rejection]
+    text: "STRING_AGG(SEQN)"
+    parse: reject
+    condition: prohibited_function
   # Predicates: the remaining refusals.
   - id: an-empty-predicate-is-rejected
     context: predicate

@@ -1,5 +1,5 @@
 {
-  "about": "The findings of a qualified or row aggregate: its keys and key types (LOOKUP-5, LOOKUP-9), its context and relations (LOOKUP-18, LOOKUP-19), a reduction that reads several records (FORMULA-20), an identifier outside a reduction (FORMULA-22) and operands of no common or numeric type (FORMULA-23), then the derive bindings that preparation refuses (LOOKUP-22). All but the static type findings compare the fields their table compared, and each derive binding's case finds its issue among those preparation reports (among). The specification `aggregate` derives RESULT from an aggregate whose derive bindings each case writes.",
+  "about": "The findings of a qualified or row aggregate: its keys and key types (LOOKUP-5, LOOKUP-9), its context and relations (LOOKUP-18, LOOKUP-19), a reduction that reads several records (FORMULA-20), an identifier outside a reduction (FORMULA-22) and operands of no common or numeric type (FORMULA-23), then the derive bindings that preparation refuses (LOOKUP-22), and the fields of the aggregate that preparation finds unpaired from the reductions that read them (FORMULA-18, LOOKUP-10). All but the static type findings compare the fields their table compared, and each derive binding's case finds its issue among those preparation reports (among). The specification `aggregate` derives RESULT from an aggregate whose derive bindings each case writes.",
   "documents": {
     "aggregate": {
       "yamaa": "1.0",
@@ -156,6 +156,36 @@
       "compares": ["phase", "condition", "rule", "context.intermediate"],
       "among": true,
       "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "context": {"intermediate": "CAP"}}]
+    },
+    {
+      "case": "a_separator_beside_another_reduction_is_unpaired_from_str_join",
+      "operation": "prepare",
+      "input": {"base": "aggregate", "edits": [{"remove": ["columns", "1", "derivation", "value", "aggregate", "derivations"]}, {"set": ["columns", "1", "derivation", "value", "aggregate", "expr"], "to": "SUM(SRC.V)"}, {"set": ["columns", "1", "derivation", "value", "aggregate", "separator"], "to": ", "}]},
+      "issues": [{"phase": "validation", "condition": "unpaired_fields", "rule": "LOOKUP-10", "spec_paths": ["columns.RESULT.derivation.aggregate"], "context": {"declared": ["separator"], "missing": ["STR_JOIN(x)"]}}]
+    },
+    {
+      "case": "an_order_by_listing_no_term_leaves_str_join_without_its_order",
+      "operation": "prepare",
+      "input": {"base": "aggregate", "edits": [{"set": ["columns", "1", "type"], "to": "str"}, {"remove": ["columns", "1", "derivation", "value", "aggregate", "derivations"]}, {"set": ["columns", "1", "derivation", "value", "aggregate", "expr"], "to": "STR_JOIN(SRC.V)"}, {"set": ["columns", "1", "derivation", "value", "aggregate", "order_by"], "to": []}, {"set": ["columns", "1", "derivation", "value", "aggregate", "separator"], "to": ", "}]},
+      "issues": [{"phase": "validation", "condition": "unpaired_fields", "rule": "LOOKUP-10", "spec_paths": ["columns.RESULT.derivation.aggregate"], "context": {"declared": ["STR_JOIN(x)"], "missing": ["order_by"]}}]
+    },
+    {
+      "case": "a_str_join_without_its_fields_misses_each_in_the_tables_order",
+      "operation": "prepare",
+      "input": {"base": "aggregate", "edits": [{"set": ["columns", "1", "type"], "to": "str"}, {"set": ["columns", "1", "derivation", "value"], "to": {"aggregate": "STR_JOIN(SRC.V)"}}]},
+      "issues": [{"phase": "validation", "condition": "unpaired_fields", "rule": "LOOKUP-10", "spec_paths": ["columns.RESULT.derivation.aggregate"], "context": {"declared": ["STR_JOIN(x)"], "missing": ["order_by", "separator"]}}]
+    },
+    {
+      "case": "fields_beside_a_reduction_that_reads_neither_share_one_finding_in_the_tables_order",
+      "operation": "prepare",
+      "input": {"base": "aggregate", "edits": [{"remove": ["columns", "1", "derivation", "value", "aggregate", "derivations"]}, {"set": ["columns", "1", "derivation", "value", "aggregate", "expr"], "to": "SUM(SRC.V)"}, {"set": ["columns", "1", "derivation", "value", "aggregate", "separator"], "to": ", "}, {"set": ["columns", "1", "derivation", "value", "aggregate", "order_by"], "to": ["SRC.V"]}]},
+      "issues": [{"phase": "validation", "condition": "unpaired_fields", "rule": "LOOKUP-10", "spec_paths": ["columns.RESULT.derivation.aggregate"], "context": {"declared": ["order_by", "separator"], "missing": ["STR_JOIN(x)"]}}]
+    },
+    {
+      "case": "distinct_beside_arithmetic_over_a_count_names_each_reduction_that_reads_it",
+      "operation": "prepare",
+      "input": {"base": "aggregate", "edits": [{"remove": ["columns", "1", "derivation", "value", "aggregate", "derivations"]}, {"set": ["columns", "1", "derivation", "value", "aggregate", "expr"], "to": "COUNT(SRC.V) + 1"}, {"set": ["columns", "1", "derivation", "value", "aggregate", "distinct"], "to": true}]},
+      "issues": [{"phase": "validation", "condition": "unpaired_fields", "rule": "LOOKUP-10", "spec_paths": ["columns.RESULT.derivation.aggregate"], "context": {"declared": ["distinct"], "missing": ["STR_JOIN(x)", "COUNT(x)"]}}]
     }
   ]
 }

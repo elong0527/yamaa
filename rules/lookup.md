@@ -52,7 +52,8 @@ Each kind adds only what it needs. An implicit join declares no `key` of its
 own and matches on its input's ([LOOKUP-1](#lookup-1)). A named intermediate is
 read through its id, and every column reading it for a row shares one selection
 ([LOOKUP-12](#lookup-12)). An aggregate reduces every candidate instead of
-selecting one, so it declares no `order_by` or `keep`. An unqualified aggregate
+selecting one, so it declares no `keep`, and an `order_by` only to order the
+values `STR_JOIN` joins ([LOOKUP-10](#lookup-10)). An unqualified aggregate
 and a grouped-row aggregate are not lookups: they reduce the constructed output
 rows of a partition or the current input group, which their `filter` narrows
 ([LOOKUP-8](#lookup-8)), and declare no `between` ([LOOKUP-19](#lookup-19)).
@@ -248,10 +249,11 @@ candidate that sorts first and `keep: last` the one that sorts last, a tie
 going to the earlier stored record for `first` and the later for `last`. More
 than one candidate with nothing to choose by is an unhandled multiple match
 and fails. An aggregate declares no selection and reduces every candidate, in
-stored order.
+stored order, except that `STR_JOIN` joins them in the aggregate's `order_by`
+order.
 
 Fails: `unpaired_fields`, `multiple_matches`.
-Evidence: `negative-lookup-unordered`, `negative-lookup-empty-order`, `negative-lookup-unchosen`, `negative-source-duplicate-key`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
+Evidence: `negative-lookup-unordered`, `negative-lookup-empty-order`, `negative-lookup-unchosen`, `negative-source-duplicate-key`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::fields_beside_a_reduction_that_reads_neither_share_one_finding_in_the_tables_order`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
 
 Declaring one of `order_by` and `keep` without the other fails as
 `unpaired_fields`, on a named intermediate and a source binding alike, and an
@@ -266,9 +268,24 @@ The `order_by` terms sort under [VALUE-22](values.md#value-22) and name fields
 of the lookup's relation, in the scopes of [LOOKUP-8](#lookup-8). A lookup
 whose key is verified unique at `error` severity needs neither `order_by` nor
 `keep`, and one whose uniqueness check only warns declares both, or
-`nearest` ([LOOKUP-17](#lookup-17)). An aggregate reduces its candidates in stored order
-([FORMULA-19](formulas.md#formula-19)). A named intermediate may select by
-distance instead, with `nearest` ([LOOKUP-26](#lookup-26)).
+`nearest` ([LOOKUP-17](#lookup-17)). Every reducer but `STR_JOIN` reads an
+aggregate's candidates in stored order ([FORMULA-19](formulas.md#formula-19)).
+A named intermediate may select by distance instead, with `nearest`
+([LOOKUP-26](#lookup-26)).
+
+An aggregate's `order_by` orders only the candidates `STR_JOIN` joins
+([FORMULA-18](formulas.md#formula-18)), and an aggregate declares no `keep`.
+Its terms sort under [VALUE-22](values.md#value-22) and name fields of the
+aggregate's relation, in the scopes of [LOOKUP-8](#lookup-8), or a variable
+its `derivations` bind ([LOOKUP-22](#lookup-22)). Candidates equal on every
+term keep stored order ([VALUE-23](values.md#value-23)), so the joined text is
+the same on every run. A field of the aggregate and a reducer that reads it
+are declared together, as the field table of
+[FORMULA-18](formulas.md#formula-18) pairs them: a field beside no reducer
+that reads it, and a reducer without a field it needs, fail as
+`unpaired_fields` at the aggregate, before any input is read. An aggregate's
+`order_by` that lists no term orders nothing either, so `STR_JOIN` beside it
+reports `order_by` missing.
 
 <a id="lookup-26"></a>
 
@@ -1412,12 +1429,12 @@ intermediate variables before reduction. Each entry, keyed by the variable's
 name, declares its `type` and `derivation`; entries evaluate once per record
 of the aggregate's relation, in declaration order, and each derivation reads
 the record's fields and the values bound by earlier entries. The reducer
-expression names each bound variable by its unqualified name. An entry cannot
-use a window operation, and `derivations` is not available on unqualified or
-grouped-input aggregates.
+expression and the aggregate's `order_by` name each bound variable by its
+unqualified name. An entry cannot use a window operation, and `derivations` is
+not available on unqualified or grouped-input aggregates.
 
 Fails: `invalid_derive_step`, `unknown_derive_variable`.
-Evidence: `schema-derive-text-score`, `schema-derive-date-epoch`, `schema-aggregate-derive-intermediate`, `negative-donor-function-unkept`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::a_donor_function_argument_reads_only_intermediates_that_select_one_record`.
+Evidence: `schema-derive-text-score`, `schema-derive-date-epoch`, `schema-aggregate-derive-intermediate`, `negative-donor-function-unkept`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::a_donor_function_argument_reads_only_intermediates_that_select_one_record`.
 
 An aggregate derivation is not an expression function. Text becomes a number
 only through the entry's declared `type`, and a date becomes an integer only
@@ -1431,6 +1448,12 @@ declared numeric type fails as a conversion failure under
 [VALUE-3](values.md#value-3), answered by a declared `unconvertible`
 handler and fatal otherwise. A missing value stays missing without attempting
 conversion.
+
+An `order_by` term that names a bound variable sorts the record by the
+variable's converted value ([LOOKUP-10](#lookup-10)). A sequence number stored
+as text therefore joins in numeric order once an `int` entry binds it:
+`SEQN: {type: int, derivation: RELREC.IDVARVAL}` with `order_by: [SEQN]`
+joins `2, 10`, where the text itself sorts `10` before `2`.
 
 The window operations are `row_number`, `rank`, `row_value`, `locf` and
 `baseline_flag`, including inside `case`; validation reports
