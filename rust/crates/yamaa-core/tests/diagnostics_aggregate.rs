@@ -87,7 +87,7 @@ mod diagnostics {
             }
         }
         mod binding {
-            use crate::support::diagnostic::binding::*;
+            use yamaa_core::column_dependencies;
             #[test]
 
             fn malformed_dependency_metadata_has_no_projection_or_panic() {

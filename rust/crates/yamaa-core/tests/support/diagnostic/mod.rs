@@ -12,9 +12,6 @@ pub mod replay;
 pub mod front_end;
 pub mod submission;
 
-pub mod binding;
-pub mod preflight;
-
 pub mod copy_entry;
 pub mod declarative_flags;
 pub mod intermediate_ranges;

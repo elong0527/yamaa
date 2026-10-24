@@ -1,0 +1,528 @@
+{
+  "about": "What binding refuses once each input's schema is known: source reads and their selections, scope and grouping, row filters, windows, named lookups and their nearest selection (LOOKUP, NAME, ROW-5, ROW-6, FORMULA-9, WINDOW, VALUE-2); then the column dependency analysis (COLUMN-5 to COLUMN-7), a column window's drivers (WINDOW-11), the verification declarations a prepared specification keeps (CHECK) and a key computed by an aggregate (COLUMN-7). In `value` the column VALUE takes each case's derivation, read from SRC, whose schema is ID and V, both int; `lookup` adds the donor DONOR through the intermediate SEL.",
+  "documents": {
+    "value": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "base": "SRC",
+      "input": {"SRC": {"path": "source.csv"}},
+      "keys": ["ID"],
+      "columns": [
+        {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+        {"name": "VALUE", "type": "int"}
+      ],
+      "output": {"path": "result.csv", "columns": ["ID", "VALUE"]}
+    },
+    "lookup": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "base": "SRC",
+      "input": {"SRC": {"path": "source.csv"}, "DONOR": {"path": "donor.csv"}},
+      "keys": ["ID"],
+      "columns": [
+        {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+        {"name": "VALUE", "type": "int", "derivation": {"value": "SEL.V"}}
+      ],
+      "intermediates": [{"id": "SEL", "dataset": "DONOR", "key": {"DID": "ID"}}],
+      "output": {"path": "result.csv", "columns": ["ID", "VALUE"]}
+    },
+    "window_drivers": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "input": {"DM": {"path": "dm.csv"}, "AE": {"path": "ae.csv"}},
+      "keys": ["ID"],
+      "columns": [
+        {"name": "ID", "type": "int"},
+        {"name": "VALUE", "type": "int", "derivation": {"value": {"row_number": {"window": {"order_by": ["DM.AGE"]}}}}}
+      ],
+      "output": {"path": "result.csv", "columns": ["ID", "VALUE"]},
+      "rows": [
+        {"id": "subjects", "dataset": "DM", "derivations": {"ID": {"value": "DM.ID"}}},
+        {"id": "events", "dataset": "AE", "derivations": {"ID": {"value": "AE.ID"}}}
+      ]
+    },
+    "verified": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "base": "SRC",
+      "input": {"SRC": {"path": "source.csv"}},
+      "keys": ["ID"],
+      "columns": [
+        {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+        {"name": "V", "type": "int", "derivation": {"value": "SRC.V"}, "verifications": []}
+      ],
+      "output": {"path": "result.csv", "columns": ["ID", "V"]},
+      "verifications": []
+    }
+  },
+  "cases": [
+    {
+      "case": "a_source_keep_without_an_order_is_unpaired",
+      "operation": "bind",
+      "input": {
+        "base": "value",
+        "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": {"source": {"variable": "SRC.V", "keep": "first"}}}}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "unpaired_fields", "rule": "LOOKUP-10", "spec_paths": ["columns.VALUE.derivation.source"], "context": {"operation": "source", "declared": ["keep"], "missing": ["order_by"]}}]
+    },
+    {
+      "case": "a_source_order_without_keep_is_unpaired",
+      "operation": "bind",
+      "input": {
+        "base": "value",
+        "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": {"source": {"variable": "SRC.V", "order_by": ["SRC.V"]}}}}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "unpaired_fields", "rule": "LOOKUP-10", "spec_paths": ["columns.VALUE.derivation.source"], "context": {"operation": "source", "declared": ["order_by"], "missing": ["keep"]}}]
+    },
+    {
+      "case": "a_grouped_row_reads_a_driver_field_outside_its_group_by_only_through_an_aggregate",
+      "operation": "qualified_reference",
+      "input": {
+        "source": {"name": "SRC", "path": "source.csv"},
+        "datasets": {"SRC": [["ID", "int"], ["V", "int"]]},
+        "name": "SRC.V",
+        "scope": {"drivers": ["SRC"], "current_driver": true, "reach": "scalar", "joined": false, "phase": {"row": {"group_by": ["SRC.ID"]}}},
+        "path": "columns.VALUE.derivation.source.variable",
+        "row": "first"
+      },
+      "issues": [{"phase": "validation", "condition": "ungrouped_driver_field", "rule": "ROW-5", "spec_paths": ["columns.VALUE.derivation.source.variable"], "context": {"identifier": "SRC.V", "dataset": "SRC", "row": "first"}}]
+    },
+    {
+      "case": "a_column_reads_a_driver_field_its_grouped_templates_leave_out_only_through_an_aggregate",
+      "operation": "qualified_reference",
+      "input": {
+        "source": {"name": "SRC", "path": "source.csv"},
+        "datasets": {"SRC": [["ID", "int"], ["V", "int"]]},
+        "name": "SRC.V",
+        "scope": {"drivers": ["SRC"], "current_driver": true, "reach": "scalar", "joined": false, "phase": {"column": {"groups": [["SRC", ["SRC.ID"]]]}}},
+        "path": "columns.VALUE.derivation.source.variable",
+        "row": null
+      },
+      "issues": [{"phase": "validation", "condition": "ungrouped_driver_field", "rule": "NAME-4", "spec_paths": ["columns.VALUE.derivation.source.variable"], "context": {"identifier": "SRC.V", "dataset": "SRC"}}]
+    },
+    {
+      "case": "a_qualified_read_names_a_stored_field_of_its_input",
+      "operation": "bind",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": "SRC.MISSING"}}], "sources": {"SRC": [["ID", "int"], ["V", "int"]]}},
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.VALUE.derivation.source"], "context": {"identifier": "SRC.MISSING"}}]
+    },
+    {
+      "case": "a_name_alone_reads_a_declared_column_or_a_stored_field",
+      "operation": "bind",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": "MISSING"}}], "sources": {"SRC": [["ID", "int"], ["V", "int"]]}},
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.VALUE.derivation.source"], "context": {"identifier": "MISSING"}}]
+    },
+    {
+      "case": "a_bare_driver_field_is_unresolvable_and_suggests_its_qualified_name",
+      "operation": "bind",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": "V"}}], "sources": {"SRC": [["ID", "int"], ["V", "int"]]}},
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unresolvable_name", "rule": "NAME-3", "spec_paths": ["columns.VALUE.derivation.source"], "context": {"identifier": "V", "suggestion": "SRC.V"}}]
+    },
+    {
+      "case": "a_formula_reads_no_qualified_name_and_reports_at_its_derivation",
+      "operation": "bind",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": "SRC.ID + 1"}}], "sources": {"SRC": [["ID", "int"], ["V", "int"]]}},
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "qualified_identifier", "rule": "FORMULA-9", "spec_paths": ["columns.VALUE.derivation"], "context": {"expr": "SRC.ID + 1", "identifier": "SRC.ID"}}]
+    },
+    {
+      "case": "a_grouped_row_aggregate_reads_its_row_driver_not_a_bare_name",
+      "operation": "bind",
+      "input": {
+        "base": "value",
+        "edits": [
+          {"remove": ["columns", "0", "derivation"]},
+          {"set": ["rows"], "to": [{"id": "first", "dataset": "SRC", "group_by": ["SRC.ID"], "derivations": {"ID": {"value": "SRC.ID"}, "VALUE": {"value": {"aggregate": {"expr": "SUM(ID)"}}}}}]}
+        ],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "invalid_aggregate_context", "rule": "LOOKUP-18", "spec_paths": ["rows.first.derivations.VALUE.aggregate"], "context": {"expr": "SUM(ID)", "reason": "a grouped row aggregate reads its row driver"}}]
+    },
+    {
+      "case": "a_grouped_row_aggregate_reads_its_row_driver_not_another_dataset",
+      "operation": "bind",
+      "input": {
+        "base": "value",
+        "edits": [
+          {"remove": ["columns", "0", "derivation"]},
+          {"set": ["rows"], "to": [{"id": "first", "dataset": "SRC", "group_by": ["SRC.ID"], "derivations": {"ID": {"value": "SRC.ID"}, "VALUE": {"value": {"aggregate": {"expr": "SUM(SECOND.ID)"}}}}}]}
+        ],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "invalid_aggregate_context", "rule": "LOOKUP-18", "spec_paths": ["rows.first.derivations.VALUE.aggregate"], "context": {"expr": "SUM(SECOND.ID)", "reason": "a grouped row aggregate reads 'SRC', not 'SECOND'"}}]
+    },
+    {
+      "case": "a_row_filter_reads_no_column_left_to_column_derivation",
+      "operation": "bind",
+      "input": {
+        "base": "value",
+        "edits": [
+          {"remove": ["columns", "0", "derivation"]},
+          {"set": ["rows"], "to": [{"id": "first", "filter": "UNKNOWN > 1", "derivations": {"ID": {"value": "SRC.ID"}, "VALUE": {"value": "SRC.V"}}}]}
+        ],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "phase_boundary", "rule": "ROW-6", "spec_paths": ["rows.first.filter"], "context": {"identifier": "UNKNOWN", "row": "first", "available_phase": "column_derivation", "required_phase": "row_filter"}}]
+    },
+    {
+      "case": "a_grouped_row_filter_reads_no_qualified_field",
+      "operation": "bind",
+      "input": {
+        "base": "value",
+        "edits": [
+          {"remove": ["columns", "0", "derivation"]},
+          {"set": ["rows"], "to": [{"id": "first", "filter": "SRC.V > 1", "derivations": {"ID": {"value": "SRC.ID"}, "VALUE": {"value": {"aggregate": {"expr": "COUNT(SRC.V)"}}}}, "group_by": ["SRC.ID"]}]}
+        ],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "phase_boundary", "rule": "ROW-6", "spec_paths": ["rows.first.filter"], "context": {"identifier": "SRC.V", "row": "first", "available_phase": "row_construction", "required_phase": "grouped_row_filter"}}]
+    },
+    {
+      "case": "a_grouped_row_filter_reads_no_column_left_to_column_derivation",
+      "operation": "bind",
+      "input": {
+        "base": "value",
+        "edits": [
+          {"remove": ["columns", "0", "derivation"]},
+          {"set": ["rows"], "to": [{"id": "first", "filter": "UNKNOWN > 1", "derivations": {"ID": {"value": "SRC.ID"}, "VALUE": {"value": {"aggregate": {"expr": "COUNT(SRC.V)"}}}}, "group_by": ["SRC.ID"]}]}
+        ],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "phase_boundary", "rule": "ROW-6", "spec_paths": ["rows.first.filter"], "context": {"identifier": "UNKNOWN", "row": "first", "available_phase": "column_derivation", "required_phase": "grouped_row_filter"}}]
+    },
+    {
+      "case": "two_columns_that_read_each_other_are_one_dependency_cycle",
+      "operation": "column_dependencies",
+      "input": {"dependencies": [[1], [0]], "keys": [], "rows": false, "columns": ["ID", "VALUE"], "paths": ["columns.ID.derivation.compute", "columns.VALUE.derivation.compute"]},
+      "issues": [{"phase": "validation", "condition": "dependency_cycle", "rule": "COLUMN-6", "spec_paths": ["columns.ID.derivation.compute", "columns.VALUE.derivation.compute"], "context": {"cycle": ["ID", "VALUE", "ID"]}}]
+    },
+    {
+      "case": "a_key_reading_a_later_non_key_column_is_a_forward_reference_and_then_a_key_dependency",
+      "operation": "column_dependencies",
+      "input": {"dependencies": [[1], []], "keys": [0], "rows": false, "columns": ["ID", "VALUE"], "paths": ["columns.ID.derivation.compute", "columns.VALUE.derivation.compute"]},
+      "issues": [
+        {"phase": "validation", "condition": "forward_reference", "rule": "COLUMN-5", "spec_paths": ["columns.ID.derivation.compute"], "context": {"column": "ID", "dependency": "VALUE"}},
+        {"phase": "validation", "condition": "key_dependency", "rule": "COLUMN-7", "spec_paths": ["columns.ID.derivation"], "context": {"column": "ID", "dependency": "VALUE"}}
+      ]
+    },
+    {
+      "case": "without_row_templates_an_underived_key_is_a_key_dependency",
+      "operation": "column_dependencies",
+      "input": {"dependencies": [null, []], "keys": [0], "rows": false, "columns": ["ID", "VALUE"], "paths": ["columns.ID.derivation.compute", "columns.VALUE.derivation.compute"]},
+      "issues": [{"phase": "validation", "condition": "key_dependency", "rule": "COLUMN-7", "spec_paths": ["columns.ID.derivation"], "context": {"column": "ID"}}]
+    },
+    {
+      "case": "a_row_value_offset_is_not_zero",
+      "operation": "bind",
+      "input": {
+        "base": "value",
+        "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": {"row_value": {"source": "ID", "offset": 0, "window": {"order_by": ["ID"]}}}}}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "zero_offset", "rule": "WINDOW-7", "spec_paths": ["columns.VALUE.derivation.row_value.offset"], "context": {"offset": 0}}]
+    },
+    {
+      "case": "a_rank_orders_its_window",
+      "operation": "bind",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": {"rank": {}}}}], "sources": {"SRC": [["ID", "int"], ["V", "int"]]}},
+      "issues": [{"phase": "validation", "condition": "window_order_by_required", "rule": "WINDOW-5", "spec_paths": ["columns.VALUE.derivation.rank.window"], "context": {"operation": "rank"}}]
+    },
+    {
+      "case": "a_window_partitions_by_each_variable_once",
+      "operation": "bind",
+      "input": {
+        "base": "value",
+        "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": {"row_number": {"window": {"group_by": ["ID", "ID"], "order_by": ["ID"]}}}}}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "WINDOW-3", "spec_paths": ["columns.VALUE.derivation.row_number.window.group_by[1]"], "context": {"identifier": "ID", "expected": "each variable once"}}]
+    },
+    {
+      "case": "baseline_flag_refuses_a_date_that_is_neither_a_date_nor_a_datetime",
+      "operation": "bind",
+      "input": {
+        "base": "value",
+        "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": {"baseline_flag": {"date": "ID", "reference": "ID", "source": "ID"}}}}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "VALUE-2", "spec_paths": ["columns.VALUE.derivation.baseline_flag.date"], "context": {"operation": "baseline_flag", "source": "ID", "expected": "date or datetime", "actual": "int"}}]
+    },
+    {
+      "case": "a_column_window_may_read_the_driver_every_row_template_shares",
+      "operation": "prepare",
+      "input": {
+        "base": "window_drivers",
+        "edits": [
+          {"set": ["rows", "1", "dataset"], "to": "DM"},
+          {"set": ["rows", "1", "derivations", "ID", "value"], "to": "DM.ID"}
+        ]
+      },
+      "issues": []
+    },
+    {
+      "case": "a_column_window_reads_no_field_of_a_driver_one_row_template_lacks",
+      "operation": "prepare",
+      "input": {"base": "window_drivers"},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "WINDOW-11", "spec_paths": ["columns.VALUE.derivation.row_number.window.order_by[0]"], "context": {"identifier": "DM.AGE", "drivers": ["DM", "AE"], "operation": "row_number"}}]
+    },
+    {
+      "case": "an_intermediate_filter_reads_donor_fields_qualified",
+      "operation": "bind",
+      "input": {
+        "base": "lookup",
+        "edits": [{"set": ["intermediates", "0", "filter"], "to": "V > 0"}],
+        "sources": {"SRC": [["ID", "int"]], "DONOR": [["DID", "int"], ["V", "int"]]}
+      },
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-7", "spec_paths": ["intermediates.SEL.filter"], "context": {"identifier": "V", "intermediate": "SEL", "suggestion": "DONOR.V"}}]
+    },
+    {
+      "case": "an_intermediate_key_names_a_field_of_its_donor",
+      "operation": "bind",
+      "input": {
+        "base": "lookup",
+        "edits": [{"set": ["intermediates", "0", "key"], "to": {"BAD": "ID"}}],
+        "sources": {"SRC": [["ID", "int"]], "DONOR": [["DID", "int"], ["V", "int"]]}
+      },
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["intermediates.SEL.key"], "context": {"identifier": "DONOR.BAD", "intermediate": "SEL"}}]
+    },
+    {
+      "case": "an_intermediate_key_matches_a_field_of_the_current_row",
+      "operation": "bind",
+      "input": {
+        "base": "lookup",
+        "edits": [{"set": ["intermediates", "0", "key"], "to": {"DID": "BAD"}}],
+        "sources": {"SRC": [["ID", "int"]], "DONOR": [["DID", "int"], ["V", "int"]]}
+      },
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["intermediates.SEL.key"], "context": {"identifier": "BAD", "intermediate": "SEL"}}]
+    },
+    {
+      "case": "a_read_of_an_intermediate_names_a_field_of_its_donor",
+      "operation": "bind",
+      "input": {
+        "base": "lookup",
+        "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": "SEL.BAD"}}],
+        "sources": {"SRC": [["ID", "int"]], "DONOR": [["DID", "int"], ["V", "int"]]}
+      },
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-11", "spec_paths": ["columns.VALUE.derivation.source"], "context": {"identifier": "SEL.BAD"}}]
+    },
+    {
+      "case": "an_intermediate_key_pairs_fields_of_one_type",
+      "operation": "bind",
+      "input": {"base": "lookup", "sources": {"SRC": [["ID", "int"]], "DONOR": [["DID", "str"], ["V", "int"]]}},
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-9", "spec_paths": ["intermediates.SEL.key"], "context": {"intermediate": "SEL", "source": "ID", "expected": "int", "actual": "str"}}]
+    },
+    {
+      "case": "a_nearest_source_names_a_field_of_the_donor",
+      "operation": "bind",
+      "input": {
+        "base": "lookup",
+        "edits": [{"set": ["intermediates", "0", "nearest"], "to": {"source": "BAD", "to": "SRC.AT", "unit": "hour"}}],
+        "sources": {"SRC": [["ID", "int"], ["D", "date"], ["AT", "datetime"]], "DONOR": [["DID", "int"], ["V", "int"], ["DT", "datetime"], ["TXT", "str"]]}
+      },
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-26", "spec_paths": ["intermediates.SEL.nearest.source"], "context": {"identifier": "BAD", "intermediate": "SEL"}}]
+    },
+    {
+      "case": "a_nearest_source_is_a_date_or_a_datetime",
+      "operation": "bind",
+      "input": {
+        "base": "lookup",
+        "edits": [{"set": ["intermediates", "0", "nearest"], "to": {"source": "TXT", "to": "SRC.AT", "unit": "hour"}}],
+        "sources": {"SRC": [["ID", "int"], ["D", "date"], ["AT", "datetime"]], "DONOR": [["DID", "int"], ["V", "int"], ["DT", "datetime"], ["TXT", "str"]]}
+      },
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-26", "spec_paths": ["intermediates.SEL.nearest.source"], "context": {"identifier": "TXT", "intermediate": "SEL", "actual": "str", "permitted": ["date", "datetime"]}}]
+    },
+    {
+      "case": "a_nearest_reference_has_the_type_of_its_source",
+      "operation": "bind",
+      "input": {
+        "base": "lookup",
+        "edits": [{"set": ["intermediates", "0", "nearest"], "to": {"source": "DT", "to": "SRC.D", "unit": "hour"}}],
+        "sources": {"SRC": [["ID", "int"], ["D", "date"], ["AT", "datetime"]], "DONOR": [["DID", "int"], ["V", "int"], ["DT", "datetime"], ["TXT", "str"]]}
+      },
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "LOOKUP-26", "spec_paths": ["intermediates.SEL.nearest.to"], "context": {"intermediate": "SEL", "expected": "datetime", "actual": "date"}}]
+    },
+    {
+      "case": "a_source_filter_reads_driver_fields_qualified",
+      "operation": "bind",
+      "input": {
+        "base": "value",
+        "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": {"source": {"variable": "SRC.V", "filter": "ID = 1"}}}}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-8", "spec_paths": ["columns.VALUE.derivation.source.filter"], "context": {"identifier": "ID", "dataset": "SRC"}}]
+    },
+    {
+      "case": "a_source_read_of_a_column_takes_no_filter",
+      "operation": "bind",
+      "input": {
+        "base": "value",
+        "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": {"source": {"variable": "ID", "filter": "SRC.V ="}}}}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-8", "spec_paths": ["columns.VALUE.derivation.source.filter"], "context": {"identifier": "ID", "construct": "filter"}}]
+    },
+    {
+      "case": "a_source_may_not_answer_its_absence_and_require_a_match",
+      "operation": "bind",
+      "input": {
+        "base": "value",
+        "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": {"source": {"variable": "SRC.V", "absent": null, "require_match": true}}}}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "conflicting_absence_policy", "rule": "LOOKUP-24", "spec_paths": ["columns.VALUE.derivation.source.absent", "columns.VALUE.derivation.source.require_match"], "context": {"variable": "SRC.V", "dataset": "SRC"}}]
+    },
+    {
+      "case": "a_source_read_without_an_implicit_join_has_no_match_to_require",
+      "operation": "bind",
+      "input": {
+        "base": "value",
+        "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": {"source": {"variable": "SRC.V", "require_match": true}}}}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-24", "spec_paths": ["columns.VALUE.derivation.source.require_match"], "context": {"identifier": "SRC.V", "construct": "require_match"}}]
+    },
+    {
+      "case": "a_source_read_without_an_implicit_join_has_no_range_to_narrow",
+      "operation": "bind",
+      "input": {
+        "base": "value",
+        "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": {"source": {"variable": "SRC.V", "between": {"value": "ID", "lower": "V"}}}}}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LOOKUP-9", "spec_paths": ["columns.VALUE.derivation.source.between"], "context": {"identifier": "SRC.V", "construct": "between"}}]
+    },
+    {
+      "case": "a_source_range_states_a_bound",
+      "operation": "bind",
+      "input": {
+        "base": "value",
+        "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": {"source": {"variable": "SRC.V", "between": {"value": "ID"}}}}}],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "LOOKUP-9", "spec_paths": ["columns.VALUE.derivation.source.between"], "context": {"expected": "at least one of lower, upper", "variable": "SRC.V"}}]
+    },
+    {
+      "case": "an_assertion_keeps_its_unknown_field_until_verification",
+      "operation": "verification_declarations",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "base": "SRC",
+          "input": {"SRC": {"path": "source.csv"}},
+          "keys": ["ID"],
+          "columns": [{"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}}],
+          "output": {"path": "result.csv", "columns": ["ID"]},
+          "verifications": [{"assert": {"when": "FALSE", "require": "Z > 0 OR A > 0"}}]
+        }
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "CHECK-4", "spec_paths": ["verifications[0].assert.require"], "context": {"identifier": "A"}}]
+    },
+    {
+      "case": "a_verification_id_is_nonempty_text",
+      "operation": "verification_declarations",
+      "input": {"base": "verified", "edits": [{"set": ["verifications"], "to": [{"unique": {"id": "", "columns": ["V"]}}]}]},
+      "issues": [{"phase": "validation", "condition": "invalid_declaration", "rule": "CHECK-3", "spec_paths": ["verifications[0].unique"], "context": {"reason": "a verification id is text"}}]
+    },
+    {
+      "case": "allowed_values_lists_values",
+      "operation": "verification_declarations",
+      "input": {"base": "verified", "edits": [{"set": ["columns", "1", "verifications"], "to": [{"allowed_values": {"values": []}}]}]},
+      "issues": [{"phase": "validation", "condition": "invalid_declaration", "rule": "CHECK-4", "spec_paths": ["columns.V.verifications[0].allowed_values"], "context": {"reason": "allowed_values requires values"}}]
+    },
+    {
+      "case": "a_verification_id_is_unique_and_names_the_verification_it_repeats",
+      "operation": "verification_declarations",
+      "input": {
+        "base": "verified",
+        "edits": [{"set": ["verifications"], "to": [{"unique": {"id": "same", "columns": ["V"]}}, {"unique": {"id": "same", "columns": ["V"]}}]}]
+      },
+      "issues": [{"phase": "validation", "condition": "duplicate_identifier", "rule": "CHECK-3", "spec_paths": ["verifications[1].unique"], "context": {"reason": "verification id 'same' repeats verifications[0].unique", "identifier": "same"}}]
+    },
+    {
+      "case": "a_range_minimum_does_not_exceed_its_maximum",
+      "operation": "verification_declarations",
+      "input": {"base": "verified", "edits": [{"set": ["columns", "1", "verifications"], "to": [{"range": {"min": 2, "max": 1}}]}]},
+      "issues": [{"phase": "validation", "condition": "invalid_declaration", "rule": "CHECK-4", "spec_paths": ["columns.V.verifications[0].range"], "context": {"reason": "range min exceeds max"}}]
+    },
+    {
+      "case": "a_row_count_group_by_names_each_column_once",
+      "operation": "verification_declarations",
+      "input": {"base": "verified", "edits": [{"set": ["verifications"], "to": [{"row_count": {"min": 1, "group_by": ["ID", "ID"]}}]}]},
+      "issues": [{"phase": "validation", "condition": "invalid_declaration", "rule": "CHECK-14", "spec_paths": ["verifications[0].row_count"], "context": {"reason": "row_count group_by repeats a column"}}]
+    },
+    {
+      "case": "a_written_row_count_group_by_names_a_column",
+      "operation": "verification_declarations",
+      "input": {"base": "verified", "edits": [{"set": ["verifications"], "to": [{"row_count": {"min": 1, "group_by": []}}]}]},
+      "issues": [{"phase": "validation", "condition": "invalid_declaration", "rule": "CHECK-14", "spec_paths": ["verifications[0].row_count"], "context": {"reason": "group_by names at least one column"}}]
+    },
+    {
+      "case": "a_max_length_is_at_least_one",
+      "operation": "verification_declarations",
+      "input": {
+        "base": "verified",
+        "edits": [
+          {"set": ["columns", "1", "type"], "to": "str"},
+          {"set": ["columns", "1", "verifications"], "to": [{"max_length": {"max": 0}}]}
+        ]
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_declaration", "rule": "CHECK-8", "spec_paths": ["columns.V.verifications[0].max_length"], "context": {"reason": "max_length max is at least one"}}]
+    },
+    {
+      "case": "all_or_none_names_two_distinct_columns",
+      "operation": "verification_declarations",
+      "input": {"base": "verified", "edits": [{"set": ["verifications"], "to": [{"all_or_none": {"columns": ["ID"]}}]}]},
+      "issues": [{"phase": "validation", "condition": "invalid_declaration", "rule": "CHECK-11", "spec_paths": ["verifications[0].all_or_none"], "context": {"reason": "all_or_none names two distinct columns"}}]
+    },
+    {
+      "case": "an_int_column_admits_no_max_length",
+      "operation": "verification_declarations",
+      "input": {"base": "verified", "edits": [{"set": ["columns", "1", "verifications"], "to": [{"max_length": {"max": 1}}]}]},
+      "issues": [{"phase": "validation", "condition": "invalid_declaration", "rule": "CHECK-4", "spec_paths": ["columns.V.verifications[0].max_length"], "context": {"reason": "a int column does not admit this verification"}}]
+    },
+    {
+      "case": "all_or_none_names_declared_columns",
+      "operation": "verification_declarations",
+      "input": {"base": "verified", "edits": [{"set": ["verifications"], "to": [{"all_or_none": {"columns": ["ID", "UNKNOWN"]}}]}]},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "CHECK-4", "spec_paths": ["verifications[0].all_or_none.columns"], "context": {"reason": "unknown column 'UNKNOWN'", "identifier": "UNKNOWN"}}]
+    },
+    {
+      "case": "without_row_templates_a_key_computed_by_an_aggregate_is_a_key_dependency",
+      "operation": ["check", "bind"],
+      "input": {
+        "base": "value",
+        "edits": [
+          {"set": ["keys"], "to": ["ID", "TOP"]},
+          {"set": ["columns", "1"], "to": {"name": "TOP", "type": "int", "derivation": {"value": {"aggregate": {"expr": "MAX(SRC.V)"}}}}},
+          {"set": ["output", "columns"], "to": ["ID", "TOP"]}
+        ],
+        "sources": {"SRC": [["ID", "int"], ["V", "int"]]}
+      },
+      "issues": [{"phase": "validation", "condition": "key_dependency", "rule": "COLUMN-7", "spec_paths": ["columns.TOP.derivation.aggregate"], "context": {"column": "TOP", "operation": "aggregate"}}]
+    }
+  ]
+}

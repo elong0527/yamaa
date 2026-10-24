@@ -45,7 +45,7 @@ completed derivation result, at the conversion stage of the
 [Execution lifecycle](columns.md#column-8).
 
 Fails: `incompatible_input_type`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::baseline_flag_refuses_a_date_that_is_neither_a_date_nor_a_datetime`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`.
 
 <a id="value-3"></a>
 

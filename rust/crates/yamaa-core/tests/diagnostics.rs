@@ -229,25 +229,6 @@ mod diagnostics {
             reached.extend(front_end::reached());
             reached.extend(front_end::project_binding_reached());
 
-            // Preflight and binding (A2).
-            reached.extend(preflight::reached());
-            reached.extend(preflight::self_reached());
-            reached.extend(preflight::intermediate_reached());
-            reached.extend(preflight::namespace_reached());
-            reached.extend(preflight::output_reached());
-            reached.extend(preflight::temporal_reached());
-            reached.extend(binding::reached());
-            reached.extend(binding::key_record_reached());
-            reached.extend(binding::window_reached());
-            reached.extend(binding::window_driver_reached());
-            reached.extend(binding::lookup_reached());
-            reached.extend(binding::nearest_reached());
-            reached.extend(binding::source_filter_reached());
-            reached.extend(binding::source_match_reached());
-            reached.extend(binding::source_range_reached());
-            reached.extend(binding::verification_reached());
-            reached.extend(binding::verification_declarations_reached());
-
             // The other declarations (B1).
             reached.extend(intermediate_scopes::reached());
             reached.extend(intermediate_ranges::reached());
