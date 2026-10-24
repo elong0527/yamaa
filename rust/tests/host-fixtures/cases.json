@@ -6414,6 +6414,39 @@
           }
         },
         {
+          "name": "a_grandparent_of_another_type_at_the_parent_that_names_it",
+          "files": {
+            "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\n",
+            "parent.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nparent: grandparent.yaml\n",
+            "grandparent.yaml": "yamaa: \"1.0\"\ntype: codelists\n"
+          },
+          "call": {"operation": "check", "path": "child.yaml"},
+          "issue": {
+            "condition": "unexpected_file_type",
+            "spec_path": "parent",
+            "file": "parent.yaml",
+            "line": 4,
+            "column": 1
+          }
+        },
+        {
+          "name": "a_fragment_of_another_type_at_the_ancestor_that_includes_it",
+          "files": {
+            "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\ninclude: [fragment.yaml]\n",
+            "parent.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\ninclude:\n  - codelists.yaml\n",
+            "fragment.yaml": "yamaa: \"1.0\"\ntype: spec\n",
+            "codelists.yaml": "yamaa: \"1.0\"\ntype: codelists\n"
+          },
+          "call": {"operation": "check", "path": "child.yaml"},
+          "issue": {
+            "condition": "unexpected_file_type",
+            "spec_path": "include[0]",
+            "file": "parent.yaml",
+            "line": 5,
+            "column": 5
+          }
+        },
+        {
           "name": "a_project_path_in_the_project_file",
           "files": {
             "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\noutput: {path: dm.csv, columns: [USUBJID]}\n",
