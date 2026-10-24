@@ -2,6 +2,12 @@
 //! File contracts: file workflow.
 mod file {
     mod file_workflow {
+        //! What a selection keeps: the files it read and how many times, its
+        //! typed owner, and the findings it projects after its study
+        //! directory is gone. Each test proves such a unit seam, which no
+        //! operation of the adapters' replay reports; the issue rows, output
+        //! rows and saved files the same inputs report are cases of
+        //! `tests/fixtures/diagnostics/workflow.json` (#3798).
         use crate::support::ports::NoFunctions;
         use crate::support::Edit as _;
         use std::fs;
@@ -14,6 +20,8 @@ mod file {
         use yamaa_core::application_observer::Scope;
         use yamaa_core::project_function::Language;
 
+        // A unit seam: the typed owner a refused selection keeps, its retained
+        // sources and its reads, which no operation of the replay reports.
         #[test]
         fn unavailable_environment_precedes_bad_entry_and_valid_environment_is_retained_before_missing_entry(
         ) {
@@ -126,6 +134,8 @@ mod file {
             format!("yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: {base}\ninput: {input}\ncolumns:\n  - {{name: ID, type: int, label: Identifier, derivation: {base}.ID}}\n  - name: VALUE\n    type: str\n    label: Reported value\n    derivation: {base}.VALUE{checks}\noutput: {{path: {output}, columns: [ID, VALUE]}}\n")
         }
 
+        // A unit seam: the compiled specification's verification identities and
+        // checks, read without a run, which no operation of the replay reports.
         #[test]
         fn seventeen_column_verifications_keep_their_identities_without_reading_data() {
             let study = Study::new();
@@ -160,6 +170,9 @@ mod file {
             assert!(!study.0.join("result.csv").exists());
         }
 
+        // A unit seam: the owner's whole projection (`preparation_issues`) beside
+        // the public check's first ten thousand rows, over ten thousand and one
+        // generated fields, which no fixture spells out.
         #[test]
         fn raw_schema_checks_keep_all_findings_and_public_checks_take_the_first_ten_thousand() {
             let study = Study::new();
@@ -202,35 +215,32 @@ mod file {
             assert!(!study.0.join("result.csv").exists());
         }
 
+        // A unit seam: the owner's findings are the public check's and outlive
+        // the study directory, which no operation of the replay removes.
         #[test]
         fn original_decode_diagnostics_remain_bounded_and_owned() {
             let study = Study::new();
             study.write("root.yaml", "\u{e9}\n");
             let owner = study.rejected();
-            let expected = vec![
-                yamaa_adapters::json!({"phase": "validation", "condition": "non_ascii_source", "rule": "SPEC-8", "spec_paths": ["$"], "context": {"line":1, "column":1, "path":study.path("root.yaml")}}),
-            ];
+            // The non-ASCII entry fails at its first byte (`workflow.json`), as
+            // do an entry and a project file that are not YAML, at their root;
+            // the held findings outlive the study.
+            let rows = preparation_issues(&owner).unwrap();
             assert_eq!(
-                crate::support::rows(&preparation_issues(&owner).unwrap()),
-                expected
-            );
-            assert_eq!(
-                crate::support::rows(&yamaa_adapters::project_application::check(
+                rows,
+                yamaa_adapters::project_application::check(
                     &study.path("root.yaml"),
                     &study.path("project.yaml"),
                     Language::Python
-                )),
-                expected
+                )
             );
-            // An entry and a project file that are not YAML fail at their
-            // root (`workflow.json`); the held findings outlive the study.
             fs::remove_dir_all(&study.0).unwrap();
-            assert_eq!(
-                crate::support::rows(&preparation_issues(&owner).unwrap()),
-                expected
-            );
+            assert_eq!(preparation_issues(&owner).unwrap(), rows);
         }
 
+        // A unit seam: a refused project's owner has read the project file
+        // alone and projects the public check's rows, which no operation of
+        // the replay reports.
         #[test]
         fn metadata_failures_name_each_written_dependency_and_cause_before_study_reads() {
             let study = Study::new();
@@ -251,20 +261,10 @@ mod file {
             };
             // A file the project names that does not exist fails at the
             // field that names it, naming the path as written, as any file a
-            // run reads does (FUNC-2, FILE-7, FILE-11, #3030 D107).
-            let expected = [
-                ("environments.python.lock", "missing.lock"),
-                ("functions[0]", "absent-function.yaml"),
-                ("codelists[0]", "absent-codelists.yaml"),
-            ]
-            .map(|(declaration, path)| {
-                yamaa_adapters::json!({"phase": "validation", "condition": "resource_path_missing",
-                    "rule": "FILE-7", "spec_paths": [declaration], "context": {"path": path}})
-            });
-            let rows = preparation_issues(&error).unwrap();
-            assert_eq!(crate::support::rows(&rows), expected);
+            // run reads does (FUNC-2, FILE-7, FILE-11, #3030 D107;
+            // `workflow.json`).
             assert_eq!(
-                rows,
+                preparation_issues(&error).unwrap(),
                 yamaa_adapters::project_application::check(&entry, &project, Language::Python),
             );
             let Error::Environment(owner) = &error else {
@@ -276,6 +276,9 @@ mod file {
             // their causes (`workflow.json`).
         }
 
+        // A unit seam: the typed limit refusal and the owned source failures,
+        // held without a read after the study is gone, over a codelist file past
+        // the eight-megabyte limit, which no fixture holds.
         #[test]
         fn per_source_resource_and_decoder_limits_keep_original_facts_without_partial_diagnostics()
         {
@@ -429,6 +432,9 @@ mod file {
             }
         }
 
+        // A unit seam: the owned decoder cause and its held bytes, projected
+        // alike by every public view after the study directory is removed,
+        // which no operation of the replay does.
         #[test]
         fn root_decoder_failures_keep_native_facts_across_public_views_without_rereads() {
             use yamaa_adapters::{
@@ -467,26 +473,14 @@ mod file {
                     panic!("native decoder cause remains owned")
                 };
                 assert_eq!(identity, &project);
-                let expected = match error {
-                    DecodeFailure::Limit(bound) if limited => {
-                        assert_eq!(
-                            bound,
-                            &Limits::yaml_depth(Limits::YAML_DEPTH + 1).unwrap_err()
-                        );
-                        yamaa_adapters::json!({"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["$"], "context": {
-                            "step":"environment", "code":"resource_limit",
-                            "resource":"yaml_depth", "limit":Limits::YAML_DEPTH,
-                            "actual":Limits::YAML_DEPTH + 1,
-                        }})
-                    }
-                    DecodeFailure::InvalidYaml { position, reason } if !limited => {
-                        yamaa_adapters::json!({"phase": "validation", "condition": "invalid_yaml", "rule": "SCHEMA-3", "spec_paths": ["$"], "context": {
-                            "line":position.line, "column":position.column, "reason":reason,
-                            "path":project, "entry":project, "environment_path":"$",
-                        }})
-                    }
+                match error {
+                    DecodeFailure::Limit(bound) if limited => assert_eq!(
+                        bound,
+                        &Limits::yaml_depth(Limits::YAML_DEPTH + 1).unwrap_err()
+                    ),
+                    DecodeFailure::InvalidYaml { .. } if !limited => {}
                     cause => panic!("expected retained decoder cause: {cause:?}"),
-                };
+                }
                 assert_eq!(owner.capture_reads(), 1);
                 let (_, bytes) = owner.captured_sources().next().unwrap();
                 assert_eq!(bytes, raw.as_bytes());
@@ -495,25 +489,14 @@ mod file {
                     project_application::prepare(&entry, &project, Language::Python)
                         .err()
                         .unwrap();
-                assert_eq!(
-                    crate::support::rows(&project_application::check(
-                        &entry,
-                        &project,
-                        Language::Python
-                    )),
-                    std::slice::from_ref(&expected)
-                );
+                // The check's row, an engine refusal past the depth limit or
+                // the file's YAML finding at its root, is `workflow.json`'s.
+                let rows = project_application::check(&entry, &project, Language::Python);
                 assert!(!study.0.join("root.yaml").exists());
                 fs::remove_dir_all(&study.0).unwrap();
                 for _ in 0..2 {
-                    assert_eq!(
-                        crate::support::rows(&project_application::selection_failure(&selection)),
-                        std::slice::from_ref(&expected)
-                    );
-                    assert_eq!(
-                        crate::support::rows(&project_application::failure(&application_error)),
-                        std::slice::from_ref(&expected)
-                    );
+                    assert_eq!(project_application::selection_failure(&selection), rows);
+                    assert_eq!(project_application::failure(&application_error), rows);
                     assert_eq!(owner.capture_reads(), 1);
                     let (_, bytes) = owner.captured_sources().next().unwrap();
                     assert_eq!(bytes.as_ptr(), held_bytes);
@@ -522,6 +505,9 @@ mod file {
             }
         }
 
+        // A unit seam: the selection reads the project, the entry and each
+        // distinct producer once, and its finding outlives the study, which no
+        // operation of the replay counts or removes.
         #[test]
         fn linked_diamond_checks_only_the_entry_and_reads_each_producer_once_without_data() {
             let study = Study::new();
@@ -557,26 +543,20 @@ mod file {
             // The project, the entry and its two distinct producers. The
             // producers are neither compiled nor followed to leaf.yaml.
             assert_eq!(project.capture_reads(), 4);
-            let expected = vec![yamaa_adapters::json!({
-                "phase": "validation", "condition": "invalid_regex", "rule": "TEXT-6",
-                "spec_paths": ["columns.VALUE.verifications[0].matches.pattern"],
-                "context": {"pattern": "é("},
-            })];
-            assert_eq!(
-                crate::support::rows(&specification_check::issues(project.run())),
-                expected
-            );
+            // Only the entry's own finding is reported (`workflow.json`), and it
+            // outlives the study.
+            let rows = specification_check::issues(project.run());
             fs::remove_dir_all(&study.0).unwrap();
-            assert_eq!(
-                crate::support::rows(&specification_check::issues(project.run())),
-                expected
-            );
+            assert_eq!(specification_check::issues(project.run()), rows);
             assert_eq!(
                 project.run().captured_environment().root().source().bytes,
                 b"yamaa: \"1.0\"\ntype: project\n"
             );
         }
 
+        // A unit seam: the configured preparation (`project_application::prepare`),
+        // which no operation of the replay calls, reports what the public check
+        // reports, beside a `yamaa-project.yaml` that neither reads.
         #[test]
         fn ordinary_check_rows_remain_identical_and_public_environment_paths_work() {
             let study = Study::new();
@@ -605,6 +585,8 @@ mod file {
             assert!(!study.0.join("never-written.csv").exists());
         }
 
+        // A unit seam: the refused compilation's rows, reads and retained
+        // sources outlive the study, which no operation of the replay removes.
         #[test]
         fn linked_type_rejection_keeps_complete_authored_rows_and_original_owners() {
             let study = Study::new();
@@ -631,9 +613,12 @@ mod file {
             assert_eq!(error.retained_sources().len(), 3);
         }
 
+        // A unit seam: the compiled source reads the consumer's own path and the
+        // producer is read once, which no operation of the replay reports.
         #[test]
-        fn a_linked_artifact_path_may_differ_from_the_producer_output_path() {
-            // A link supplies types only; the consumer reads its own path.
+        fn a_link_compiles_the_consumers_own_path_and_reads_its_producer_once() {
+            // A link supplies types only, so its path may differ from the
+            // producer's output path (`workflow.json`).
             let study = Study::new();
             study.write(
                 "leaf.yaml",
@@ -649,7 +634,6 @@ mod file {
                 ),
             );
             let project = study.prepare();
-            assert!(specification_check::issues(project.run()).is_empty());
             assert_eq!(
                 project.run().compiled().sources()[0].path,
                 "copy/stored.csv"
@@ -657,8 +641,10 @@ mod file {
             assert_eq!(project.capture_reads(), 3);
         }
 
+        // A unit seam: the document attributes the refused field to the parent
+        // that declares it (`declaring_source`), which no issue row carries.
         #[test]
-        fn inherited_producer_types_rejection_names_the_declaring_parent_on_check_and_domain() {
+        fn inherited_producer_types_rejection_is_declared_by_the_parent_layer() {
             let study = Study::new();
             study.write(
                 "parent.yaml",
@@ -672,8 +658,8 @@ mod file {
                 "root.yaml",
                 "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\ninput:\n  DM: {schema: producer/dm.yaml}\n",
             );
-            // The parent declares the restated type (`workflow.json`), and a
-            // check and a build report the same rows.
+            // The parent declares the restated type, which a check and a build
+            // refuse with the same rows (`workflow.json`).
             let error = study.compile_rejection();
             let rows = specification_check::rejected(error.run()).unwrap();
             assert_eq!(
@@ -683,51 +669,13 @@ mod file {
                     .declaring_source(&rows[0].spec_paths[0]),
                 Some(study.path("parent.yaml").as_str())
             );
-            assert_eq!(
-                yamaa_adapters::project_application::check(
-                    &study.path("root.yaml"),
-                    &study.path("project.yaml"),
-                    Language::Python
-                ),
-                rows
-            );
-            let entry = study.path("root.yaml");
-            let identity = || yamaa_adapters::specification_report::Identity {
-                runtime: "test",
-                runtime_version: "1",
-                engine_version: "0.1.0",
-                example: "test",
-                specification: &entry,
-                base_directory: ".",
-            };
-            assert_eq!(
-                yamaa_adapters::file_application::check(
-                    yamaa_core::project_function::Language::Python,
-                    yamaa_core::domain_entry::Request {
-                        specification: &entry,
-                        environment: None,
-                    },
-                    identity(),
-                ),
-                rows
-            );
-            assert_eq!(
-                crate::support::study::domain(
-                    yamaa_core::project_function::Language::Python,
-                    yamaa_core::domain_entry::Request {
-                        specification: &entry,
-                        environment: None,
-                    },
-                    identity(),
-                )
-                .err()
-                .unwrap(),
-                rows
-            );
         }
 
+        // A unit seam: a linked producer is read once and neither compiled nor
+        // followed, and a self link is refused after two reads, counts that no
+        // operation of the replay reports.
         #[test]
-        fn producer_compilation_and_back_links_are_not_consumer_failures_but_self_links_are() {
+        fn a_linked_producer_is_read_once_and_neither_compiled_nor_followed() {
             for back_link in [false, true] {
                 let study = Study::new();
                 study.write(
@@ -751,9 +699,9 @@ mod file {
                         .edit("RAW.VALUE", "{function: {name: missing, args: {x: 1}}}")
                 };
                 study.write("leaf.yaml", &leaf);
-                // The producer is never compiled and its links are never followed.
+                // Neither fails the consumer (`workflow.json`): the producer is
+                // never compiled and its links are never followed.
                 let project = study.prepare();
-                assert!(specification_check::issues(project.run()).is_empty());
                 assert_eq!(project.capture_reads(), 3);
             }
             let study = Study::new();
@@ -772,6 +720,9 @@ mod file {
             assert_eq!(error.capture_reads(), 2);
         }
 
+        // A unit seam: the environment owner has read the project alone and
+        // keeps its bytes after the study is gone, which no operation of the
+        // replay reports.
         #[test]
         fn raw_environment_rejection_precedes_the_first_entry_read() {
             let study = Study::new();
@@ -798,6 +749,9 @@ mod file {
             );
         }
 
+        // A unit seam: the environment owner has read the project and the lock,
+        // and an inherited entry's findings outlive the study, which no
+        // operation of the replay reports.
         #[test]
         fn supported_environment_and_original_inherited_schema_causes_are_complete() {
             let study = Study::new();
@@ -837,6 +791,9 @@ mod file {
             assert_eq!(preparation_issues(&error).unwrap(), rows);
         }
 
+        // A unit seam: the reads, each linked input's declaring layer and the one
+        // producer contract both inputs share, which no operation of the replay
+        // reports.
         #[test]
         fn inherited_links_retain_the_declaring_layer_and_one_producer_document() {
             let study = Study::new();
@@ -859,9 +816,9 @@ mod file {
             );
             let project = study.prepare();
             // The project, the entry, its parent and the one linked producer
-            // with its own parent. The producer's invalid regex is never compiled.
+            // with its own parent. The producer's invalid regex is never
+            // compiled (`workflow.json`).
             assert_eq!(project.capture_reads(), 5);
-            assert!(specification_check::issues(project.run()).is_empty());
             let document = project.run().document();
             for dataset in ["P", "Q"] {
                 assert_eq!(
@@ -877,6 +834,9 @@ mod file {
             assert!(compiled.source_contract(0).is_some());
         }
 
+        // A unit seam: the entry owner's typed cause, its origin and its held
+        // document, which the projection reads in place
+        // (`IssueError::Original`) and no operation of the replay reports.
         #[test]
         fn missing_linked_producer_keeps_exact_authored_finding_and_declaring_request() {
             let study = Study::new();
@@ -914,6 +874,9 @@ mod file {
             assert_eq!(entry.captured_sources().count(), 2);
         }
 
+        // A unit seam: the sources a refused compilation and a refused
+        // environment retain after the study is gone, which no operation of the
+        // replay reports.
         #[test]
         fn invalid_producer_contract_and_environment_child_failures_keep_original_metadata() {
             let study = Study::new();
@@ -973,6 +936,9 @@ mod file {
             );
         }
 
+        // A unit seam: a study root whose name holds a literal backslash, which
+        // the replay's scratch directory never has, kept in the resolved
+        // artifact's resource location.
         #[cfg(unix)]
         #[test]
         fn shared_native_workflow_keeps_literal_backslash_in_canonical_roots() {
@@ -1011,6 +977,9 @@ mod file {
             assert_eq!(project.capture_reads(), 3);
         }
 
+        // A unit seam: an ordinary input has no link origin and no contract, and
+        // the document's bytes and check outlive the study, which no operation
+        // of the replay reports.
         #[test]
         fn ordinary_original_input_facts_survive_files_without_study_authority() {
             let study = Study::new();
@@ -1029,6 +998,9 @@ mod file {
             assert!(specification_check::issues(project.run()).is_empty());
         }
 
+        // A unit seam: the reads, an inherited link's declaring layer and its
+        // contract, and the check after the study is gone, which no operation of
+        // the replay reports.
         #[test]
         fn inherited_original_producer_facts_use_the_contributing_input_layer() {
             let study = Study::new();
@@ -1069,6 +1041,9 @@ mod file {
             assert!(specification_check::issues(project.run()).is_empty());
         }
 
+        // A unit seam: the entry owner's raw entry and reads, unchanged by
+        // projecting its findings again after the study is gone, which no
+        // operation of the replay reports.
         #[test]
         fn rejected_mistyped_schema_keeps_the_original_shipped_schema_cause_and_raw_entry() {
             let study = Study::new();
@@ -1127,6 +1102,9 @@ mod file {
             }
         }
 
+        // A unit seam: the selected and the ordinary preparation build one
+        // result, which holds the bytes it saves after the study is gone, which
+        // no operation of the replay reports.
         #[test]
         fn selected_ordinary_keeps_complete_report_and_explicit_held_byte_save() {
             let study = Study::new();
@@ -1171,29 +1149,8 @@ mod file {
                 &[],
             )
             .unwrap();
+            // The rows the build reads and the save writes are `workflow.json`'s.
             assert_eq!(selected_result.output(), ordinary_result.output());
-            assert_eq!(
-                selected_attempt
-                    .dataset
-                    .result
-                    .as_ref()
-                    .unwrap()
-                    .result
-                    .as_ref()
-                    .unwrap()
-                    .dataset
-                    .rows(),
-                &[
-                    vec![
-                        yamaa_core::value::Value::Int(1),
-                        yamaa_core::value::Value::Str("alpha".into())
-                    ],
-                    vec![
-                        yamaa_core::value::Value::Int(2),
-                        yamaa_core::value::Value::Str("beta".into())
-                    ]
-                ]
-            );
             assert_eq!(
                 selected_result.observations(),
                 ordinary_result.observations()
@@ -1219,6 +1176,9 @@ mod file {
             );
         }
 
+        // A unit seam: the reads, the entry's held bytes and the declaring layer
+        // of its one finding after the study is gone, which no operation of the
+        // replay reports.
         #[test]
         fn selected_inherited_links_read_each_producer_once_with_shared_aliases() {
             let study = Study::new();
@@ -1273,6 +1233,9 @@ mod file {
             assert_eq!(project.capture_reads(), 5);
         }
 
+        // A unit seam: the refused compilation's entry, reads, retained sources
+        // and captured project after the study is gone, which no operation of
+        // the replay reports.
         #[test]
         fn selected_ordinary_compile_failure_keeps_original_run_environment_and_raw_resources() {
             use file_workflow::SelectionError;
@@ -1305,6 +1268,9 @@ mod file {
             );
         }
 
+        // A unit seam: the typed owners of two refused links, their reads and
+        // their findings after the study is gone, which no operation of the
+        // replay reports.
         #[test]
         fn selected_invalid_link_declarations_keep_their_typed_owners() {
             use file_workflow::SelectionError;
@@ -1358,6 +1324,8 @@ mod file {
             assert_eq!(specification_check::rejected(rejected.run()).unwrap(), rows);
         }
 
+        // A unit seam: the reads and retained sources of a raw project's and a
+        // raw entry's refusals, which no operation of the replay reports.
         #[test]
         fn selected_raw_environment_and_root_failures_keep_exact_capture_prefixes() {
             use file_workflow::SelectionError;
@@ -1390,10 +1358,13 @@ mod file {
             assert_eq!(preparation_issues(&root).unwrap(), rows);
         }
 
+        // A unit seam: a producer that links back to its consumer, or whose
+        // columns have no label, is read once, and the refusal's rows outlive
+        // the study, which no operation of the replay reports.
         #[test]
-        fn selected_missing_labels_refuse_while_producer_links_and_compiler_failures_do_not() {
+        fn selected_back_links_and_unlabelled_producers_are_read_once() {
             use file_workflow::SelectionError;
-            for mode in 0..3 {
+            for unlabelled in [false, true] {
                 let study = Study::new();
                 study.write(
                     "root.yaml",
@@ -1404,53 +1375,40 @@ mod file {
                         false,
                     ),
                 );
-                let leaf = match mode {
-                    0 => yaml(
+                let leaf = if unlabelled {
+                    yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false)
+                        .edit("label: Identifier, ", "")
+                        .edit("    label: Reported value\n", "")
+                } else {
+                    yaml(
                         "{P: {path: root.csv, schema: root.yaml}}",
                         "P",
                         "leaf.csv",
                         false,
-                    ),
-                    1 => yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false)
-                        .edit("label: Identifier, ", "")
-                        .edit("    label: Reported value\n", ""),
-                    _ => yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false)
-                        .edit("RAW.VALUE", "{function: {name: missing, args: {x: 1}}}"),
+                    )
                 };
                 study.write("leaf.yaml", &leaf);
-                if mode != 1 {
-                    // A link back to the consumer and a producer compiler failure
-                    // are producer facts the consumer never compiles or follows.
+                if !unlabelled {
+                    // A link back to the consumer is a producer fact the consumer
+                    // never compiles or follows, so it fails nothing
+                    // (`workflow.json`).
                     let project = study.prepare();
-                    assert!(specification_check::issues(project.run()).is_empty());
                     assert_eq!(project.capture_reads(), 3);
                     continue;
                 }
+                // Each unlabelled column refuses the link (`workflow.json`).
                 let SelectionError::Compile(rejected) = study.selection_rejection() else {
                     panic!("whole contract rejection");
                 };
                 let rows = specification_check::rejected(rejected.run()).unwrap();
-                assert_eq!(
-                    rows.iter()
-                        .map(|r| (r.condition(), r.spec_paths[0].as_str()))
-                        .collect::<Vec<_>>(),
-                    [
-                        (
-                            "invalid_producer_contract",
-                            "input.P.schema.columns.ID.label"
-                        ),
-                        (
-                            "invalid_producer_contract",
-                            "input.P.schema.columns.VALUE.label"
-                        ),
-                    ]
-                );
                 assert_eq!(rejected.capture_reads(), 3);
                 fs::remove_dir_all(&study.0).unwrap();
                 assert_eq!(specification_check::rejected(rejected.run()).unwrap(), rows);
             }
         }
 
+        // A unit seam: an empty project path, which a case's input cannot spell,
+        // refused as the caller's own path before anything is read.
         #[test]
         fn selected_entry_paths_keep_absolute_environment_policy_and_early_owned_refusal() {
             use file_workflow::SelectionError;
@@ -1485,12 +1443,16 @@ mod file {
             );
         }
 
+        // A unit seam: the plain route's reads and producer contract, and its
+        // check after the study is gone, which no operation of the replay
+        // reports.
         #[test]
         fn absent_environment_selects_plain_route_without_capturing_or_inventing_metadata() {
             let study = Study::new();
             // Nearby project and environment files are deliberately unreadable as
             // YAML. Absence must neither discover them nor convert either into an
-            // empty captured document.
+            // empty captured document, so a check reports nothing
+            // (`workflow.json`).
             study.write("project.yaml", "[");
             study.write("environment.yaml", "[");
             study.write(
@@ -1529,6 +1491,9 @@ mod file {
             assert!(yamaa_adapters::specification_check::issues(prepared.run()).is_empty());
         }
 
+        // A unit seam: what the plain route's refused compilation read and
+        // retained for each physical kind of input, which no operation of the
+        // replay reports, and a symbolic link input, which a case cannot write.
         #[test]
         fn plain_workflow_profile_inspection_keeps_physical_kind_before_study_capture() {
             use yamaa_core::diagnostic::ConditionCode as C;
@@ -1544,12 +1509,9 @@ mod file {
                 "yamaa: \"1.0\"\ntype: spec\nparent: ../parent/base.yaml\n",
             );
             fs::create_dir_all(study.0.join("parent/input")).unwrap();
-            for (kind, expected) in [
-                (0, C::ResourceNotRegularFile),
-                (1, C::SourceUnknownProfile),
-                (2, C::SourceUnknownProfile),
-                (3, C::ResourceSymlink),
-            ] {
+            // A directory, a file and no file at the input's path are
+            // `workflow.json`'s findings; the symbolic link's is checked here.
+            for kind in 0..4 {
                 let input = study.0.join("parent/input/unknown");
                 match kind {
                     0 => fs::create_dir(&input).unwrap(),
@@ -1582,10 +1544,11 @@ mod file {
                 let PrepareError::Invalid(findings) = &owner.run().rejection.error else {
                     panic!("original compiler finding remains owned");
                 };
-                let issue = findings[0].diagnostic();
-                assert_eq!(issue.code, expected);
-                assert_eq!(issue.spec_paths, ["input.SRC.path"]);
-                if matches!(kind, 0 | 3) {
+                if kind == 3 {
+                    // A symbolic link at the input's path is refused at it (FILE-8).
+                    let issue = findings[0].diagnostic();
+                    assert_eq!(issue.code, C::ResourceSymlink);
+                    assert_eq!(issue.spec_paths, ["input.SRC.path"]);
                     assert_eq!(
                         issue.context["path"],
                         JsonValue::String("input/unknown".into())
