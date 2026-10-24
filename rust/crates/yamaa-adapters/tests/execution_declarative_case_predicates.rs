@@ -70,6 +70,34 @@ mod execution {
                 case.label
             );
         }
+        /// A seam the replay cannot express: `saved` compares file changes,
+        /// not the save's return value. These original refused domains must
+        /// return FailedBuild, including each incomplete predicate position.
+        #[test]
+        fn refused_case_predicate_saves_return_failed_build() {
+            use crate::support::diagnostic::{operations, replay};
+
+            let cases = replay::cases();
+            for name in [
+                "case_predicate_multiplicity_retains_its_complete_report_and_blocks_publication",
+                "an_incomplete_verification_predicate_refuses_a_column_case",
+                "an_incomplete_verification_predicate_refuses_a_record_row",
+                "an_incomplete_verification_predicate_refuses_a_grouped_row",
+            ] {
+                let label = format!("declarative_case_predicates.json::{name}");
+                let case = cases
+                    .iter()
+                    .find(|case| case.label == label)
+                    .expect("the original refused case fixture");
+                let fixture = Fixture(operations::study(&case.input));
+                let body = fs::read_to_string(fixture.0.join("spec.yaml")).unwrap();
+                let mut result = fixture.run(&body).unwrap();
+                assert!(
+                    matches!(result.save(), Err(file_application::FailedBuild)),
+                    "{label}: a refused save returns FailedBuild"
+                );
+            }
+        }
         /// A seam the replay cannot reach: these benchmarks' own files, run
         /// by `support::benchmarks::reproduce`. They pin case predicates and
         /// filtered sources in the bytes they save.
