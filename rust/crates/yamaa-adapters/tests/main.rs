@@ -57,7 +57,6 @@ mod file_project;
 mod file_resources;
 mod file_workflow;
 mod host_resources;
-mod intermediate_result_kinds;
 mod network_shares;
 mod odm_xml;
 mod project_diagnostics;
