@@ -16,9 +16,7 @@ mod diagnostics;
 
 mod arrow_host_bridge;
 mod ast_lowering;
-mod check_row_phase_boundaries;
 mod check_row_scopes;
-mod check_unknown_reads;
 mod check_variable_forms;
 mod declaration_contract_vectors;
 mod declaration_language_header;
