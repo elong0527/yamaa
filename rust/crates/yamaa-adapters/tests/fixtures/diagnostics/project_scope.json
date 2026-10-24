@@ -1,0 +1,218 @@
+{
+  "about": "A project's scope (project_scope::Project): the specifications its sections list, their names, the order a run builds them in and what refuses that run before any is built, and a saved link's artifact read at its path. DM is listed in SDTM, ADSL and ADAE in ADaM, both linked to DM, and ADAE to ADSL. Moved from project_scope.rs, whose tests compared the fields each case's compares names.",
+  "documents": {
+    "raw": "ID\n1\n2\n",
+    "dm": "yamaa: \"1.0\"\ntype: spec\ndomain: DM\nkeys: [ID]\ninput: {SRC: {path: ../raw.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/dm.csv, columns: [ID], report: ../out/dm.csv.report.csv}\n",
+    "adsl": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [ID]\ninput: {SRC: {path: ../out/dm.csv, schema: ../sdtm/dm.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adsl.csv, columns: [ID], report: ../out/adsl.csv.report.csv}\n",
+    "adae": "yamaa: \"1.0\"\ntype: spec\ndomain: ADAE\nkeys: [ID]\ninput: {SRC: {path: ../out/adsl.csv, schema: adsl.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adae.csv, columns: [ID], report: ../out/adae.csv.report.csv}\n",
+    "project": "yamaa: \"1.0\"\ntype: project\nadam:\n  specs: [adam/adae.yaml, adam/adsl.yaml]\nsdtm:\n  specs: [sdtm/dm.yaml]\n"
+  },
+  "cases": [
+    {
+      "case": "an_unknown_specification_name_names_the_listed_ones",
+      "operation": "find_specification",
+      "input": {
+        "files": {
+          "raw.csv": {"base": "raw"},
+          "sdtm/dm.yaml": {"base": "dm"},
+          "adam/adsl.yaml": {"base": "adsl"},
+          "adam/adae.yaml": {"base": "adae"},
+          "project.yaml": {"base": "project"}
+        },
+        "directories": ["out"],
+        "project": "project.yaml",
+        "name": "AE"
+      },
+      "compares": ["condition", "context.available", "context.source"],
+      "issues": [{"condition": "unknown_specification_name", "context": {"available": ["ADAE", "ADSL", "DM"], "source": "{study}/project.yaml"}}]
+    },
+    {
+      "case": "one_file_listed_twice_shares_its_name_with_itself",
+      "operation": "duplicate_names",
+      "input": {
+        "files": {
+          "raw.csv": {"base": "raw"},
+          "sdtm/dm.yaml": {"base": "dm"},
+          "adam/adsl.yaml": {"base": "adsl"},
+          "adam/adae.yaml": {"base": "adae"},
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [sdtm/dm.yaml]\nsend:\n  specs: [sdtm/../sdtm/dm.yaml]\n"
+        },
+        "directories": ["out"],
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context.specifications"],
+      "issues": [{"condition": "duplicate_specification_name", "spec_paths": ["sdtm.specs[0]", "send.specs[0]"], "context": {"specifications": ["{study}/sdtm/dm.yaml", "{study}/sdtm/dm.yaml"]}}]
+    },
+    {
+      "case": "a_project_file_that_is_absent_fails_at_the_callers_path",
+      "operation": "read_project",
+      "input": {"files": {}, "directories": ["out"], "project": "project.yaml"},
+      "compares": ["condition", "spec_paths", "context.path"],
+      "issues": [{"condition": "resource_path_missing", "spec_paths": [], "context": {"path": "{study}/project.yaml"}}]
+    },
+    {
+      "case": "a_consumer_is_blocked_by_the_producer_that_failed",
+      "operation": "blocked_consumer",
+      "input": {
+        "files": {
+          "raw.csv": {"base": "raw"},
+          "sdtm/dm.yaml": {"base": "dm"},
+          "adam/adsl.yaml": {"base": "adsl"},
+          "adam/adae.yaml": {"base": "adae"},
+          "project.yaml": {"base": "project"}
+        },
+        "directories": ["out"],
+        "project": "project.yaml",
+        "name": "ADAE"
+      },
+      "compares": ["condition", "spec_paths", "context.producer", "context.entry"],
+      "issues": [{"condition": "producer_not_completed", "spec_paths": ["input.SRC.schema"], "context": {"producer": "{study}/adam/adsl.yaml", "entry": "{study}/adam/adae.yaml"}}]
+    },
+    {
+      "case": "a_run_scope_artifact_read_without_a_link_is_an_unlinked_producer",
+      "operation": "refused_step",
+      "input": {
+        "files": {
+          "raw.csv": {"base": "raw"},
+          "sdtm/dm.yaml": {"base": "dm"},
+          "adam/adsl.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [ID]\ninput: {SRC: {path: ../out/dm.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adsl.csv, columns: [ID], report: ../out/adsl.csv.report.csv}\n",
+          "adam/adae.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADAE\nkeys: [ID]\ninput: {SRC: {path: ../out/adxx.csv, schema: adxx.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adae.csv, columns: [ID], report: ../out/adae.csv.report.csv}\n",
+          "adam/adxx.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADXX\nkeys: [ID]\ninput: {SRC: {path: ../out/adae.csv, schema: adae.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adxx.csv, columns: [ID], report: ../out/adxx.csv.report.csv}\n",
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [sdtm/dm.yaml]\nadam:\n  specs: [adam/adsl.yaml, adam/adae.yaml, adam/adxx.yaml]\n"
+        },
+        "directories": ["out"],
+        "project": "project.yaml",
+        "name": "ADSL"
+      },
+      "compares": ["condition", "spec_paths", "context.path"],
+      "issues": [{"condition": "unlinked_producer", "spec_paths": ["input.SRC.path"], "context": {"path": "../out/dm.csv"}}]
+    },
+    {
+      "case": "a_link_cycle_refuses_the_first_specification_in_it",
+      "operation": "refused_step",
+      "input": {
+        "files": {
+          "raw.csv": {"base": "raw"},
+          "sdtm/dm.yaml": {"base": "dm"},
+          "adam/adsl.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [ID]\ninput: {SRC: {path: ../out/dm.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adsl.csv, columns: [ID], report: ../out/adsl.csv.report.csv}\n",
+          "adam/adae.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADAE\nkeys: [ID]\ninput: {SRC: {path: ../out/adxx.csv, schema: adxx.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adae.csv, columns: [ID], report: ../out/adae.csv.report.csv}\n",
+          "adam/adxx.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADXX\nkeys: [ID]\ninput: {SRC: {path: ../out/adae.csv, schema: adae.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adxx.csv, columns: [ID], report: ../out/adxx.csv.report.csv}\n",
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [sdtm/dm.yaml]\nadam:\n  specs: [adam/adsl.yaml, adam/adae.yaml, adam/adxx.yaml]\n"
+        },
+        "directories": ["out"],
+        "project": "project.yaml",
+        "name": "ADAE"
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "producer_workflow_cycle", "spec_paths": ["input.SRC.schema"]}]
+    },
+    {
+      "case": "a_link_cycle_refuses_the_second_specification_in_it",
+      "operation": "refused_step",
+      "input": {
+        "files": {
+          "raw.csv": {"base": "raw"},
+          "sdtm/dm.yaml": {"base": "dm"},
+          "adam/adsl.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [ID]\ninput: {SRC: {path: ../out/dm.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adsl.csv, columns: [ID], report: ../out/adsl.csv.report.csv}\n",
+          "adam/adae.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADAE\nkeys: [ID]\ninput: {SRC: {path: ../out/adxx.csv, schema: adxx.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adae.csv, columns: [ID], report: ../out/adae.csv.report.csv}\n",
+          "adam/adxx.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADXX\nkeys: [ID]\ninput: {SRC: {path: ../out/adae.csv, schema: adae.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adxx.csv, columns: [ID], report: ../out/adxx.csv.report.csv}\n",
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [sdtm/dm.yaml]\nadam:\n  specs: [adam/adsl.yaml, adam/adae.yaml, adam/adxx.yaml]\n"
+        },
+        "directories": ["out"],
+        "project": "project.yaml",
+        "name": "ADXX"
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "producer_workflow_cycle", "spec_paths": ["input.SRC.schema"]}]
+    },
+    {
+      "case": "a_project_check_reports_an_unlinked_input_with_every_listing",
+      "operation": "check_findings",
+      "input": {
+        "files": {
+          "raw.csv": {"base": "raw"},
+          "sdtm/dm.yaml": {"base": "dm"},
+          "adam/adsl.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [ID]\ninput: {SRC: {path: ../out/dm.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adsl.csv, columns: [ID], report: ../out/adsl.csv.report.csv}\n",
+          "adam/adae.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADAE\nkeys: [ID]\ninput: {SRC: {path: ../out/adxx.csv, schema: adxx.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adae.csv, columns: [ID], report: ../out/adae.csv.report.csv}\n",
+          "adam/adxx.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADXX\nkeys: [ID]\ninput: {SRC: {path: ../out/adae.csv, schema: adae.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adxx.csv, columns: [ID], report: ../out/adxx.csv.report.csv}\n",
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [sdtm/dm.yaml]\nadam:\n  specs: [adam/adsl.yaml, adam/adae.yaml, adam/adxx.yaml]\n"
+        },
+        "directories": ["out"],
+        "project": "project.yaml"
+      },
+      "compares": ["condition"],
+      "issues": [{"condition": "unlinked_producer"}]
+    },
+    {
+      "case": "two_run_scope_files_at_one_location_refuse_the_whole_run",
+      "operation": "plan_refusal",
+      "input": {
+        "files": {
+          "raw.csv": {"base": "raw"},
+          "sdtm/dm.yaml": {"base": "dm"},
+          "adam/adsl.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [ID]\ninput: {SRC: {path: ../raw.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/dm.csv.report.csv, columns: [ID], report: ../out/dm.csv.report.csv.report.csv}\n",
+          "adam/adae.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADAE\nkeys: [ID]\ninput: {SRC: {path: ../out/adxx.csv, schema: adxx.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adae.csv, columns: [ID], report: ../out/adae.csv.report.csv}\n",
+          "adam/adxx.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADXX\nkeys: [ID]\ninput: {SRC: {path: ../out/adae.csv, schema: adae.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adxx.csv, columns: [ID], report: ../out/adxx.csv.report.csv}\n",
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [sdtm/dm.yaml]\nadam:\n  specs: [adam/adsl.yaml, adam/adae.yaml, adam/adxx.yaml]\n"
+        },
+        "directories": ["out"],
+        "project": "project.yaml"
+      },
+      "compares": ["condition", "spec_paths", "context.specifications"],
+      "issues": [{"condition": "artifact_path_collision", "spec_paths": ["output.report", "output.path"], "context": {"specifications": ["{study}/sdtm/dm.yaml", "{study}/adam/adsl.yaml"]}}]
+    },
+    {
+      "case": "a_project_check_reports_two_files_at_one_location",
+      "operation": "check_findings",
+      "input": {
+        "files": {
+          "raw.csv": {"base": "raw"},
+          "sdtm/dm.yaml": {"base": "dm"},
+          "adam/adsl.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [ID]\ninput: {SRC: {path: ../raw.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/dm.csv.report.csv, columns: [ID], report: ../out/dm.csv.report.csv.report.csv}\n",
+          "adam/adae.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADAE\nkeys: [ID]\ninput: {SRC: {path: ../out/adxx.csv, schema: adxx.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adae.csv, columns: [ID], report: ../out/adae.csv.report.csv}\n",
+          "adam/adxx.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADXX\nkeys: [ID]\ninput: {SRC: {path: ../out/adae.csv, schema: adae.yaml}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\noutput: {path: ../out/adxx.csv, columns: [ID], report: ../out/adxx.csv.report.csv}\n",
+          "project.yaml": "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [sdtm/dm.yaml]\nadam:\n  specs: [adam/adsl.yaml, adam/adae.yaml, adam/adxx.yaml]\n"
+        },
+        "directories": ["out"],
+        "project": "project.yaml"
+      },
+      "compares": ["condition"],
+      "issues": [{"condition": "artifact_path_collision"}]
+    },
+    {
+      "case": "a_linked_artifact_neither_held_nor_saved_is_a_missing_file",
+      "operation": "build",
+      "input": {
+        "files": {
+          "raw.csv": {"base": "raw"},
+          "sdtm/dm.yaml": {"base": "dm"},
+          "adam/adsl.yaml": {"base": "adsl"},
+          "adam/adae.yaml": {"base": "adae"},
+          "project.yaml": {"base": "project"}
+        },
+        "directories": ["out"],
+        "specification": "adam/adsl.yaml"
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "resource_path_missing", "spec_paths": ["input.SRC.path"]}]
+    },
+    {
+      "case": "a_saved_artifact_with_another_header_mismatches_the_producer_contract",
+      "operation": "build",
+      "input": {
+        "files": {
+          "raw.csv": {"base": "raw"},
+          "sdtm/dm.yaml": {"base": "dm"},
+          "adam/adsl.yaml": {"base": "adsl"},
+          "adam/adae.yaml": {"base": "adae"},
+          "project.yaml": {"base": "project"},
+          "out/dm.csv": "ID,EXTRA\n1,x\n"
+        },
+        "directories": ["out"],
+        "specification": "adam/adsl.yaml"
+      },
+      "compares": ["condition"],
+      "issues": [{"condition": "producer_contract_mismatch"}]
+    }
+  ]
+}

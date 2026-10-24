@@ -204,7 +204,9 @@ fn compared_fields(fields: &Value, label: &str) -> Vec<String> {
         "{label}: compares names the context whole or by key, not both: {fields:?}"
     );
     assert!(
-        !FIELDS.iter().all(|field| fields.iter().any(|named| named == field)),
+        !FIELDS
+            .iter()
+            .all(|field| fields.iter().any(|named| named == field)),
         "{label}: a case that compares every field writes no compares"
     );
     fields
@@ -322,7 +324,10 @@ fn edited(documents: Option<&Value>, document: &Value, label: &str) -> String {
         .unwrap_or_else(|| panic!("{label}: no document {base:?}"));
     for edit in document.get("edits").map_or(&[][..], items) {
         closed(edit, &["from", "to"]);
-        let (from, to) = (self::text(field(edit, "from")), self::text(field(edit, "to")));
+        let (from, to) = (
+            self::text(field(edit, "from")),
+            self::text(field(edit, "to")),
+        );
         assert_eq!(
             text.matches(from).count(),
             1,

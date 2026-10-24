@@ -14,9 +14,7 @@ use yamaa_adapters::{
     specification_report::Identity,
 };
 use yamaa_core::diagnostic::Diagnostic;
-use yamaa_core::{
-    json::Value, project_environment::Submission, project_function::Language, resolver::Origin,
-};
+use yamaa_core::{project_environment::Submission, project_function::Language, resolver::Origin};
 
 struct Study(crate::support::Scratch);
 impl Study {
@@ -93,10 +91,6 @@ fn names(project: &Project, steps: impl IntoIterator<Item = usize>) -> Vec<Strin
         .collect()
 }
 
-fn condition(issues: &[Diagnostic]) -> Vec<&str> {
-    issues.iter().map(|issue| issue.condition()).collect()
-}
-
 #[test]
 fn listings_follow_section_run_order_and_names_are_their_domains() {
     let study = study();
@@ -113,43 +107,21 @@ fn listings_follow_section_run_order_and_names_are_their_domains() {
     );
     assert_eq!(project.define_sections().count(), 0);
     assert_eq!(project.find("ADSL").unwrap().name(), Some("ADSL"));
-    let unknown = project.find("AE").unwrap_err();
-    assert_eq!(condition(&unknown), ["unknown_specification_name"]);
-    assert_eq!(
-        unknown[0].context["available"],
-        yamaa_adapters::json!(["ADAE", "ADSL", "DM"])
-    );
-    assert_eq!(
-        unknown[0].context["source"],
-        Value::String(study.path("project.yaml"))
-    );
+    // An unknown name, and the same file listed twice, which shares its name
+    // with itself, are refused as `project_scope.json` records.
+    assert!(project.find("AE").is_err());
     assert!(project.duplicates().is_empty());
-
-    // The same file listed twice shares its name with itself.
-    study.write(
-        "project.yaml",
-        "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [sdtm/dm.yaml]\nsend:\n  specs: [sdtm/../sdtm/dm.yaml]\n",
-    );
-    let duplicates = read(&study).duplicates();
-    assert_eq!(condition(&duplicates), ["duplicate_specification_name"]);
-    assert_eq!(duplicates[0].spec_paths, ["sdtm.specs[0]", "send.specs[0]"]);
-    assert_eq!(
-        duplicates[0].context["specifications"],
-        yamaa_adapters::json!([study.path("sdtm/dm.yaml"), study.path("sdtm/dm.yaml")])
-    );
 }
 
 #[test]
 fn an_unreadable_project_fails_as_a_check_reports_it() {
     let study = Study::new();
     let project = study.path("project.yaml");
+    // The caller's own path, named as given (FILE-7, #3321), as
+    // `project_scope.json` records; a check reports the same issues.
     let issues = Project::read(&project, Some(Language::Python), None)
         .err()
         .unwrap();
-    // The caller's own path, named as given (FILE-7, #3321).
-    assert_eq!(condition(&issues), ["resource_path_missing"]);
-    assert!(issues[0].spec_paths.is_empty());
-    assert_eq!(issues[0].context["path"], Value::String(project.clone()));
     let checked = yamaa_adapters::project_application::check(
         &study.path("spec.yaml"),
         &project,
@@ -183,19 +155,10 @@ fn blocked_consumers_name_each_failed_producer() {
     let project = read(&study);
     let plan = project.plan(None);
     let adae = &plan.steps()[2];
+    // A failed producer ADAE does not read blocks nothing; the failed ADSL
+    // blocks it, as `project_scope.json` records.
     let dm = 0;
     assert!(adae.blocked(&project, |producer| producer == dm).is_empty());
-    let blocked = adae.blocked(&project, |_| true);
-    assert_eq!(condition(&blocked), ["producer_not_completed"]);
-    assert_eq!(blocked[0].spec_paths, ["input.SRC.schema"]);
-    assert_eq!(
-        blocked[0].context["producer"],
-        Value::String(study.path("adam/adsl.yaml"))
-    );
-    assert_eq!(
-        blocked[0].context["entry"],
-        Value::String(study.path("adam/adae.yaml"))
-    );
 }
 
 #[test]
@@ -241,47 +204,24 @@ fn unlinked_inputs_cycles_and_collisions_are_project_findings() {
             .unwrap();
         step.refused().to_vec()
     };
+    // ADSL reads DM's artifact without a link and ADAE and ADXX link each
+    // other: their refusals, and a project check's, are `project_scope.json`'s.
     assert!(refused("DM").is_empty());
-    let adsl = refused("ADSL");
-    assert_eq!(condition(&adsl), ["unlinked_producer"]);
-    assert_eq!(adsl[0].spec_paths, ["input.SRC.path"]);
-    assert_eq!(
-        adsl[0].context["path"],
-        Value::String("../out/dm.csv".into())
-    );
-    for name in ["ADAE", "ADXX"] {
-        let cycle = refused(name);
-        assert_eq!(condition(&cycle), ["producer_workflow_cycle"], "{name}");
-        assert_eq!(cycle[0].spec_paths, ["input.SRC.schema"]);
-    }
     // In the ADaM scope alone, DM's file is an ordinary source.
     let adam = project.plan(Some(Submission::Adam));
     assert!(adam.steps().iter().any(|step| {
         project.listed()[step.listed()].name() == Some("ADSL") && step.refused().is_empty()
     }));
-    // A project check reports the same unlinked input with every listing.
-    let check = project.check_findings();
-    assert_eq!(condition(&check), ["unlinked_producer"]);
 
-    // Two run-scope files at one location refuse the whole run.
+    // Two run-scope files at one location refuse the whole run
+    // (`project_scope.json`), but outside the SDTM scope the collision is not
+    // part of the run.
     study.write(
         "adam/adsl.yaml",
         spec("ADSL", RAW, "../out/dm.csv.report.csv"),
     );
     let project = read(&study);
-    let refusal = project.plan(None).refusal().to_vec();
-    assert_eq!(condition(&refusal), ["artifact_path_collision"]);
-    assert_eq!(refusal[0].spec_paths, ["output.report", "output.path"]);
-    assert_eq!(
-        refusal[0].context["specifications"],
-        yamaa_adapters::json!([study.path("sdtm/dm.yaml"), study.path("adam/adsl.yaml")])
-    );
-    // Outside the SDTM scope the collision is not part of the run.
     assert!(project.plan(Some(Submission::Sdtm)).refusal().is_empty());
-    assert_eq!(
-        condition(&project.check_findings()),
-        ["artifact_path_collision"]
-    );
 }
 
 /// Build ADSL alone, offering `held` artifacts for its DM link. A link
@@ -343,11 +283,10 @@ fn saved_links_read_held_or_saved_artifacts_under_the_producer_contract() {
     let (accepted, origin, issues) = saved_build(&study, Some(held));
     assert!(accepted, "{issues:?}");
     assert_eq!(origin, Some(Origin::Generated));
-    // Without one, the missing saved file is a clear failure.
-    let (accepted, _, issues) = saved_build(&study, None);
+    // Without one, the missing saved file is a clear failure
+    // (`project_scope.json`).
+    let (accepted, _, _) = saved_build(&study, None);
     assert!(!accepted);
-    assert_eq!(condition(&issues), ["resource_path_missing"]);
-    assert_eq!(issues[0].spec_paths, ["input.SRC.path"]);
     // A held artifact built for another location is not this link's.
     let mut elsewhere = HeldArtifacts::new();
     elsewhere.insert(dm, study.path("out/other.csv"), Arc::from(&b"ID\n1\n"[..]));
@@ -358,10 +297,10 @@ fn saved_links_read_held_or_saved_artifacts_under_the_producer_contract() {
     let (accepted, origin, issues) = saved_build(&study, None);
     assert!(accepted, "{issues:?}");
     assert_eq!(origin, Some(Origin::Resource));
+    // Another header mismatches the contract (`project_scope.json`).
     study.write("out/dm.csv", "ID,EXTRA\n1,x\n");
-    let (accepted, _, issues) = saved_build(&study, None);
+    let (accepted, _, _) = saved_build(&study, None);
     assert!(!accepted);
-    assert_eq!(condition(&issues), ["producer_contract_mismatch"]);
 }
 
 fn domain(study: &Study, name: &str) -> Domain {

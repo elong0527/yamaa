@@ -11,15 +11,11 @@
 //! `directories` (empty ones), the `specification` and the optional
 //! `project` a request names, and the `host` it runs for, `python` unless
 //! written.
-use super::{File, Reported};
-use crate::support::diagnostic::replay::{closed, field, items, object, text};
-use crate::support::Scratch;
-use yamaa_core::{domain_entry::Request, json::Value, project_function::Language};
+use super::{host, path, study, File, Reported};
+use crate::support::diagnostic::replay::{closed, field, items, text};
+use yamaa_core::{domain_entry::Request, json::Value};
 
-pub(super) const FILES: &[File] = &[
-    fixture!("producer_links.json"),
-    fixture!("submission.json"),
-];
+pub(super) const FILES: &[File] = &[fixture!("producer_links.json"), fixture!("submission.json")];
 
 pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
     let members = match operation {
@@ -36,11 +32,7 @@ pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
     };
     closed(input, members);
     let study = study(input);
-    let host = match input.get("host").map(text) {
-        None | Some("python") => Language::Python,
-        Some("r") => Language::R,
-        Some(other) => panic!("no host {other:?}"),
-    };
+    let host = host(input);
     let project = input.get("project").map(|name| path(&study, text(name)));
     let specification = path(&study, text(field(input, "specification")));
     let identity = crate::support::study::identity("diagnostics", &specification);
@@ -85,23 +77,4 @@ pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
         issues,
         study: Some(study),
     })
-}
-
-/// A fresh study directory holding the input's `files` and `directories`,
-/// named canonically, as the engine spells the paths it reports.
-fn study(input: &Value) -> Scratch {
-    let study = Scratch::canonical("diagnostics");
-    for (name, file) in object(field(input, "files")) {
-        study.write(name, text(file));
-    }
-    for name in input.get("directories").map_or(&[][..], items) {
-        std::fs::create_dir_all(study.join(text(name))).unwrap();
-    }
-    study
-}
-
-/// The path of `name` in `study`, as a caller passes it, with forward
-/// slashes.
-fn path(study: &Scratch, name: &str) -> String {
-    study.join(name).to_str().unwrap().replace('\\', "/")
 }
