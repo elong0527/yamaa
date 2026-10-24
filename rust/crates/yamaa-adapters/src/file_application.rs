@@ -1436,4 +1436,89 @@ mod tests {
             }
         }
     }
+
+    /// A save that stops between two partitions of a run's output (D264), a
+    /// seam no facade input reaches: an I/O failure there, as a full disk
+    /// would give, publishes nothing. The output's partial staged file and
+    /// the staged report are removed, so the directory holds only what it
+    /// held, and the save's one issue is the publication failure at the
+    /// output, in the output step, after entering both files and completing
+    /// neither. Its three records are three one-record partitions, so the
+    /// failure comes before the third. The same result then saves whole.
+    #[test]
+    fn a_failure_between_two_partitions_of_the_output_publishes_nothing() {
+        let root = std::env::temp_dir().join(format!(
+            "yamaa-partitioned-save-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let study = Study(crate::canonical_path::canonicalize(root).unwrap());
+        fs::write(study.0.join("input.csv"), "ID,NAME\n1,a\n2,b\n3,c\n").unwrap();
+        fs::write(
+            study.0.join("spec.yaml"),
+            "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID, NAME], report: report.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: NAME, type: str, derivation: SRC.NAME}\n",
+        )
+        .unwrap();
+        let entry = study.0.join("spec.yaml").to_str().unwrap().to_owned();
+        let partitions = yamaa_core::dataset::Partitioning {
+            rows: std::num::NonZeroUsize::MIN,
+            leading_keys: None,
+            whole_table_fallback: false,
+        };
+        let mut result = domain_observed(
+            Request {
+                specification: &entry,
+                environment: None,
+            },
+            Identity::new("test", "test", "partitioned", &entry),
+            Scope::default().partitioned(Some(partitions)),
+        )
+        .unwrap();
+        let saved = result.save_with(
+            false,
+            |file, partition| match (file, partition) {
+                (1, 2) => Err(crate::publication::Interruption::Failed(
+                    crate::file_publication::Error::Io(std::io::Error::other("disk full")),
+                )),
+                _ => Ok(()),
+            },
+            |_| Ok(()),
+        );
+        let mut entries = fs::read_dir(&study.0)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .collect::<Vec<_>>();
+        entries.sort();
+        let issues = result
+            .issues()
+            .iter()
+            .map(|issue| {
+                (
+                    issue.definition().condition,
+                    issue.spec_paths.clone(),
+                    crate::json_wire::encode_object(&issue.context),
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            (saved.ok(), issues, entries),
+            (
+                Some(false),
+                vec![(
+                    "engine_rejected",
+                    vec!["output.path".to_owned()],
+                    r#"{"code":"publication_failed","completed":0,"entered":2,"path":"out.csv","step":"output"}"#.to_owned(),
+                )],
+                vec!["input.csv".to_owned(), "spec.yaml".to_owned()],
+            ),
+            "the save stopped before the output's third partition"
+        );
+        assert!(result.save().unwrap(), "the later save");
+        assert_eq!(
+            fs::read_to_string(study.0.join("out.csv")).unwrap(),
+            "ID,NAME\n1,a\n2,b\n3,c\n",
+            "the output saved whole"
+        );
+    }
 }
