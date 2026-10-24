@@ -34,7 +34,7 @@ mod service {
 
         /// A specification of the inputs `inputs`, all CSV files, keyed by
         /// `ID` from the first, whose `VALUE` derives `value`.
-        fn document(inputs: &[&str], value: Tree) -> Document {
+        fn document_tree(inputs: &[&str], value: Tree) -> Tree {
             let column = |name, derivation| {
                 Tree::map(vec![
                     ("name", Tree::text(name)),
@@ -79,7 +79,61 @@ mod service {
                     ]),
                 ),
             ]);
-            Tree::map(fields).document()
+            Tree::map(fields)
+        }
+
+        fn document(inputs: &[&str], value: Tree) -> Document {
+            document_tree(inputs, value).document()
+        }
+
+        /// Two intermediate sides of one physical input still form a
+        /// global pair relation (LOOKUP-27).
+        fn paired() -> Document {
+            let mut tree = document_tree(&["SRC"], row_wise());
+            tree.remove(&["columns", "0", "derivation"]);
+            tree.remove(&["columns", "1", "derivation"]);
+            let side = |name| {
+                Tree::map(vec![
+                    ("id", Tree::text(name)),
+                    ("dataset", Tree::text("SRC")),
+                    ("filter", Tree::text("SRC.ID > 0")),
+                ])
+            };
+            tree.set(
+                &["intermediates"],
+                Tree::list(vec![
+                    side("L"),
+                    side("R"),
+                    Tree::map(vec![
+                        ("id", Tree::text("P")),
+                        ("dataset", Tree::text("L")),
+                        ("inner_join", Tree::text("R")),
+                        ("key", Tree::list(vec![Tree::text("ID")])),
+                        (
+                            "derivations",
+                            Tree::map(vec![
+                                ("ID", Tree::text("L.ID")),
+                                ("VALUE", Tree::text("R.ID")),
+                            ]),
+                        ),
+                    ]),
+                ]),
+            );
+            tree.set(
+                &["rows"],
+                Tree::list(vec![Tree::map(vec![
+                    ("id", Tree::text("pairs")),
+                    ("dataset", Tree::text("P")),
+                    (
+                        "derivations",
+                        Tree::map(vec![
+                            ("ID", Tree::text("P.ID")),
+                            ("VALUE", Tree::text("P.VALUE")),
+                        ]),
+                    ),
+                ])]),
+            );
+            tree.document()
         }
 
         /// A derivation every partition can run alone.
@@ -240,6 +294,7 @@ mod service {
         enum End {
             Cancelled,
             Refused { source: usize, error: LimitExceeded },
+            Global { path: String },
         }
 
         /// Run `document` over inputs of `records` records each, divided as
@@ -279,6 +334,7 @@ mod service {
             let end = match attempt.result {
                 Ok(execution) => match execution.result.map(|_| ()).map_err(|error| *error) {
                     Err(ExecutionError::Cancelled) => End::Cancelled,
+                    Err(ExecutionError::PartitionGlobal { path }) => End::Global { path },
                     other => panic!("an attempt that passed admission ended {other:?}"),
                 },
                 Err(PortError::Run(RunError::Boundary { source, error })) => {
@@ -388,6 +444,33 @@ mod service {
                     attempt(&document(inputs, value), records, partitioning),
                     (expected, requests),
                     "{case}"
+                );
+            }
+        }
+
+        #[test]
+        fn a_pair_relation_refuses_strict_partitions_and_admits_its_input_whole() {
+            // The service's read/admission seam uses geometry, not cells:
+            // a fixture cannot hold an input beyond the row limit.
+            let document = paired();
+            for leading in [None, Some(1)] {
+                assert_eq!(
+                    attempt(&document, 1, partitions(1, leading, false)),
+                    (
+                        End::Global {
+                            path: "intermediates.P".into()
+                        },
+                        vec!["header", "whole"]
+                    ),
+                    "a global pair under {leading:?} partition keys"
+                );
+            }
+            let records = Limits::TABLE_ROWS + 1;
+            for fallback in [false, true] {
+                assert_eq!(
+                    attempt(&document, records, partitions(1, None, fallback)),
+                    (refused(records), vec!["header", "whole"]),
+                    "the whole input limit with fallback {fallback}"
                 );
             }
         }
