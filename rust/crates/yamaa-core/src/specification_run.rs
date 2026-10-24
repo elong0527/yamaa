@@ -400,6 +400,8 @@ pub fn execute_into<R: Resolver, D: Decoder>(
     }
 }
 
+// Over the 250-line ceiling until #3830's second part (one partition at a time) restructures it.
+#[allow(clippy::too_many_lines)]
 fn execute_inner_into<R: Resolver, D: Decoder>(
     prepared: &PreparedSpecification,
     resolver: &mut R,
