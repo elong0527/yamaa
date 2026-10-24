@@ -50,7 +50,7 @@ A `float` enters this profile as the binary64 value its derivation produced.
 `output.decimals` does not apply, and no rounding happens on output, so a
 consumer that reads the artifact receives the value the calculation used.
 
-Evidence: `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::retired_python_double_operands_round_trip_without_display_rounding`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs::output_reached`, `python/tests/installed/installed_original_specifications.py::test_original_build_saves_parquet_with_independent_logical_readback`.
+Evidence: `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::retired_python_double_operands_round_trip_without_display_rounding`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::output_decimals_do_not_apply_to_a_parquet_output`, `python/tests/installed/installed_original_specifications.py::test_original_build_saves_parquet_with_independent_logical_readback`.
 
 Storing native double values is not display. Display rounding happens once, in
 the `csv` profile under [CSV-8](csv.md#csv-8), and an `output.decimals`

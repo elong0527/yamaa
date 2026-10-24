@@ -1,0 +1,88 @@
+{
+  "about": "The refusals of an expression's text, which an expression field, an aggregate and a predicate share: a syntax error (FORMULA-1), a refused construct (FORMULA-27), a refused or misused function (FORMULA-13), a nested reduction (FORMULA-21), a predicate's escape and pattern refusals (FORMULA-7, FORMULA-8) and an integer literal outside the 64-bit range (VALUE-5). A refused predicate also names its text as the predicate and its position; five of its cases compare the fields their table compared.",
+  "cases": [
+    {
+      "case": "an_incomplete_derivation_is_an_invalid_expression",
+      "operation": "expression_refusal",
+      "input": {"field": "derivation", "expression": "1 +", "path": "columns.VALUE.derivation.expr"},
+      "issues": [{"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["columns.VALUE.derivation.expr"], "context": {"expr": "1 +"}}]
+    },
+    {
+      "case": "a_comparison_in_a_derivation_is_a_prohibited_construct",
+      "operation": "expression_refusal",
+      "input": {"field": "derivation", "expression": "1 < 2", "path": "columns.VALUE.derivation.expr"},
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "FORMULA-27", "spec_paths": ["columns.VALUE.derivation.expr"], "context": {"expr": "1 < 2", "construct": "comparison"}}]
+    },
+    {
+      "case": "a_numeric_function_given_too_many_arguments_names_their_count",
+      "operation": "expression_refusal",
+      "input": {"field": "derivation", "expression": "abs(1, 2)", "path": "columns.VALUE.derivation.expr"},
+      "issues": [{"phase": "validation", "condition": "prohibited_function", "rule": "FORMULA-13", "spec_paths": ["columns.VALUE.derivation.expr"], "context": {"expr": "abs(1, 2)", "function": "abs", "argument_count": 2}}]
+    },
+    {
+      "case": "an_incomplete_aggregate_is_an_invalid_expression",
+      "operation": "expression_refusal",
+      "input": {"field": "aggregate", "expression": "SUM(SRC.ID) +", "path": "columns.VALUE.derivation.expr"},
+      "issues": [{"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["columns.VALUE.derivation.expr"], "context": {"expr": "SUM(SRC.ID) +"}}]
+    },
+    {
+      "case": "a_comparison_in_an_aggregate_is_a_prohibited_construct",
+      "operation": "expression_refusal",
+      "input": {"field": "aggregate", "expression": "SUM(SRC.ID) < 2", "path": "columns.VALUE.derivation.expr"},
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "FORMULA-27", "spec_paths": ["columns.VALUE.derivation.expr"], "context": {"expr": "SUM(SRC.ID) < 2", "construct": "comparison"}}]
+    },
+    {
+      "case": "an_unknown_reducer_in_an_aggregate_is_a_prohibited_function",
+      "operation": "expression_refusal",
+      "input": {"field": "aggregate", "expression": "sumx(SRC.ID)", "path": "columns.VALUE.derivation.expr"},
+      "issues": [{"phase": "validation", "condition": "prohibited_function", "rule": "FORMULA-13", "spec_paths": ["columns.VALUE.derivation.expr"], "context": {"expr": "sumx(SRC.ID)", "function": "sumx"}}]
+    },
+    {
+      "case": "a_reduction_inside_a_reduction_names_both_reducers",
+      "operation": "expression_refusal",
+      "input": {"field": "aggregate", "expression": "SUM(SUM(SRC.ID))", "path": "columns.VALUE.derivation.expr"},
+      "issues": [{"phase": "validation", "condition": "nested_reduction", "rule": "FORMULA-21", "spec_paths": ["columns.VALUE.derivation.expr"], "context": {"expr": "SUM(SUM(SRC.ID))", "outer": "SUM", "inner": "SUM"}}]
+    },
+    {
+      "case": "an_incomplete_predicate_is_an_invalid_expression",
+      "operation": "expression_refusal",
+      "input": {"field": "predicate", "expression": "A >", "path": "columns.VALUE.window.filter"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.predicate", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["columns.VALUE.window.filter"], "context": {"predicate": "A >"}}]
+    },
+    {
+      "case": "an_escape_of_two_characters_is_an_invalid_predicate",
+      "operation": "expression_refusal",
+      "input": {"field": "predicate", "expression": "A LIKE 'a' ESCAPE 'ab'", "path": "columns.VALUE.window.filter"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.predicate", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-7", "spec_paths": ["columns.VALUE.window.filter"], "context": {"predicate": "A LIKE 'a' ESCAPE 'ab'"}}]
+    },
+    {
+      "case": "a_contains_pattern_that_is_no_regular_expression_is_an_invalid_predicate",
+      "operation": "expression_refusal",
+      "input": {"field": "predicate", "expression": "STR_CONTAINS(A, '(')", "path": "columns.VALUE.window.filter"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.predicate", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-8", "spec_paths": ["columns.VALUE.window.filter"], "context": {"predicate": "STR_CONTAINS(A, '(')"}}]
+    },
+    {
+      "case": "a_contains_pattern_that_is_no_literal_is_an_invalid_predicate",
+      "operation": "expression_refusal",
+      "input": {"field": "predicate", "expression": "STR_CONTAINS(A, B)", "path": "columns.VALUE.window.filter"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.predicate", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-8", "spec_paths": ["columns.VALUE.window.filter"], "context": {"predicate": "STR_CONTAINS(A, B)"}}]
+    },
+    {
+      "case": "a_date_literal_of_no_calendar_day_is_an_invalid_predicate",
+      "operation": "expression_refusal",
+      "input": {"field": "predicate", "expression": "A = DATE '2026-02-30'", "path": "columns.VALUE.window.filter"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.predicate", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["columns.VALUE.window.filter"], "context": {"predicate": "A = DATE '2026-02-30'"}}]
+    },
+    {
+      "case": "an_integer_literal_past_the_64_bit_range_fails_before_data",
+      "operation": "expression_refusal",
+      "input": {"field": "predicate", "expression": "A = 9223372036854775808", "path": "filter"},
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["filter"], "context": {"expr": "A = 9223372036854775808", "predicate": "A = 9223372036854775808", "position": 4, "value": "9223372036854775808", "actual": 9223372036854775808, "minimum": -9223372036854775808, "maximum": 9223372036854775807}}]
+    }
+  ]
+}

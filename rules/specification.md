@@ -42,7 +42,7 @@ duplicate within one layer remains an error, and the resolved specification
 holds one declaration for each identifier.
 
 Fails: `duplicate_identifier`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_column_name_is_declared_once`.
 
 A duplicate within one layer also fails under [LAYER-4](inheritance.md#layer-4).
 [Schema language](reference/schema-language.md) owns the corresponding

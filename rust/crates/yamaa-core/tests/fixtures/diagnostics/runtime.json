@@ -1,0 +1,178 @@
+{
+  "about": "What a project's functions and a run report: a project function's invocation failures (FUNC-5, FUNC-8, FUNC-9), a callable its host cannot bind (FUNC-2), a conformance case that fails (FUNC-12), the host's packages measured against the declared lock (FUNC-3), and a run's failed output keys and verifications (OUTPUT-3, CHECK-10 to CHECK-13). The lock reasons and a unique check of warning severity are whole issue lists; the other cases compare the fields their table compared, which for a unique check of error severity is only that it reports one issue. The function `id` is the integer identity of the support's project functions, and the specification `checks` declares a unique check of warning severity, an all_or_none, an assert and a row_count.",
+  "documents": {
+    "checks": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "input": {"SRC": {"path": "input.csv"}},
+      "keys": ["ID"],
+      "columns": [
+        {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+        {"name": "VAL", "type": "int", "derivation": {"value": "SRC.VAL"}}
+      ],
+      "output": {"path": "output.csv", "columns": ["ID", "VAL"], "report": "warnings.csv"},
+      "verifications": [
+        {"unique": {"columns": ["VAL", "ID"], "id": "u", "severity": "warning"}},
+        {"all_or_none": {"columns": ["VAL", "ID"], "id": "a"}},
+        {"assert": {"require": "VAL > 0", "id": "b"}},
+        {"row_count": {"min": 1, "id": "r"}}
+      ]
+    }
+  },
+  "cases": [
+    {
+      "case": "an_unknown_argument_to_a_project_function_is_invalid",
+      "operation": "function_invocation",
+      "input": {"path": "columns.X.derivation", "function": {"name": "id", "call": "pkg.id"}, "failure": {"unknown_arguments": ["unknown"]}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.function"],
+      "issues": [{"phase": "derivation", "condition": "invalid_function_argument", "rule": "FUNC-5", "spec_paths": ["columns.X.derivation"], "context": {"function": "id"}}]
+    },
+    {
+      "case": "a_required_argument_not_supplied_to_a_project_function_is_invalid",
+      "operation": "function_invocation",
+      "input": {"path": "columns.X.derivation", "function": {"name": "id", "call": "pkg.id"}, "failure": {"missing_required": {"parameter": "x"}}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.function"],
+      "issues": [{"phase": "derivation", "condition": "invalid_function_argument", "rule": "FUNC-5", "spec_paths": ["columns.X.derivation"], "context": {"function": "id"}}]
+    },
+    {
+      "case": "an_argument_of_another_type_than_its_parameter_is_invalid",
+      "operation": "function_invocation",
+      "input": {"path": "columns.X.derivation", "function": {"name": "id", "call": "pkg.id"}, "failure": {"argument_type": {"parameter": "x", "expected": "int", "actual": "str"}}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.function"],
+      "issues": [{"phase": "derivation", "condition": "invalid_function_argument", "rule": "FUNC-5", "spec_paths": ["columns.X.derivation"], "context": {"function": "id"}}]
+    },
+    {
+      "case": "a_project_function_call_the_host_raises_in_fails",
+      "operation": "function_invocation",
+      "input": {"path": "columns.X.derivation", "function": {"name": "id", "call": "pkg.id"}, "failure": "call_failed", "host": {"exception": {"class": "ValueError", "message": "unchanged"}}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.function"],
+      "issues": [{"phase": "derivation", "condition": "function_call_failed", "rule": "FUNC-8", "spec_paths": ["columns.X.derivation"], "context": {"function": "id"}}]
+    },
+    {
+      "case": "a_result_the_host_cannot_convert_is_an_invalid_function_result",
+      "operation": "function_invocation",
+      "input": {"path": "columns.X.derivation", "function": {"name": "id", "call": "pkg.id"}, "failure": "invalid_host_result", "host": {"exception": {"class": "ValueError", "message": "unchanged"}}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.function"],
+      "issues": [{"phase": "derivation", "condition": "invalid_function_result", "rule": "FUNC-9", "spec_paths": ["columns.X.derivation"], "context": {"function": "id"}}]
+    },
+    {
+      "case": "a_boolean_result_is_an_invalid_function_result",
+      "operation": "function_invocation",
+      "input": {"path": "columns.X.derivation", "function": {"name": "id", "call": "pkg.id"}, "failure": "boolean_result"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.function"],
+      "issues": [{"phase": "derivation", "condition": "invalid_function_result", "rule": "FUNC-9", "spec_paths": ["columns.X.derivation"], "context": {"function": "id"}}]
+    },
+    {
+      "case": "a_missing_result_the_function_does_not_declare_is_an_invalid_function_result",
+      "operation": "function_invocation",
+      "input": {"path": "columns.X.derivation", "function": {"name": "id", "call": "pkg.id"}, "failure": "undeclared_missing"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.function"],
+      "issues": [{"phase": "derivation", "condition": "invalid_function_result", "rule": "FUNC-9", "spec_paths": ["columns.X.derivation"], "context": {"function": "id"}}]
+    },
+    {
+      "case": "a_result_of_another_type_than_declared_is_an_invalid_function_result",
+      "operation": "function_invocation",
+      "input": {"path": "columns.X.derivation", "function": {"name": "id", "call": "pkg.id"}, "failure": {"result_type": {"expected": "int", "actual": "str"}}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.function"],
+      "issues": [{"phase": "derivation", "condition": "invalid_function_result", "rule": "FUNC-9", "spec_paths": ["columns.X.derivation"], "context": {"function": "id"}}]
+    },
+    {
+      "case": "a_callable_its_host_cannot_bind_fails_as_its_function_file",
+      "operation": "function_binding",
+      "input": {"function": "id", "path": "functions[0]", "host": {"exception": {"class": "ValueError", "message": "unchanged"}}},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["functions[0].implementations.python"]}]
+    },
+    {
+      "case": "a_conformance_case_whose_result_differs_names_the_result_produced",
+      "operation": "function_conformance",
+      "input": {"function": "id", "path": "functions[0]", "case": 0, "actual": 8},
+      "compares": ["spec_paths", "context.reason", "context.actual"],
+      "issues": [{"spec_paths": ["functions[0].tests[0]"], "context": {"reason": "the case produced a different result", "actual": 8}}]
+    },
+    {
+      "case": "each_classified_lock_reason_is_a_mismatch_at_the_lock_field",
+      "operation": "lock_mismatch",
+      "input": {
+        "origins": {"source": "study/environment.yaml", "entry": "study/project.yaml", "field": "lock", "lock_source": "held/uv.lock", "written": "../uv.lock"},
+        "findings": [
+          {"package": "program", "reason": "distribution_not_identified", "expected": [], "actual": null},
+          {"package": "program", "reason": "version_not_locked", "expected": [], "actual": null},
+          {"package": "program", "reason": "ambiguous_lock_version", "expected": ["2.0", "1.0", "2.0"], "actual": null},
+          {"package": "program", "reason": "invalid_locked_version", "expected": ["invalid\u0000é"], "actual": null},
+          {"package": "program", "reason": "package_not_installed", "expected": ["1.0"], "actual": null},
+          {"package": "program", "reason": "invalid_installed_version", "expected": ["1.0"], "actual": "bad\u0000🙂"},
+          {"package": "program", "reason": "version_mismatch", "expected": ["1.0"], "actual": "1.0.0"}
+        ]
+      },
+      "issues": [
+        {"phase": "validation", "condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["lock"], "context": {"source": "study/environment.yaml", "entry": "study/project.yaml", "lock_source": "held/uv.lock", "lock": "../uv.lock", "package": "program", "reason": "distribution_not_identified", "expected": [], "actual": null}},
+        {"phase": "validation", "condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["lock"], "context": {"source": "study/environment.yaml", "entry": "study/project.yaml", "lock_source": "held/uv.lock", "lock": "../uv.lock", "package": "program", "reason": "version_not_locked", "expected": [], "actual": null}},
+        {"phase": "validation", "condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["lock"], "context": {"source": "study/environment.yaml", "entry": "study/project.yaml", "lock_source": "held/uv.lock", "lock": "../uv.lock", "package": "program", "reason": "ambiguous_lock_version", "expected": ["2.0", "1.0", "2.0"], "actual": null}},
+        {"phase": "validation", "condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["lock"], "context": {"source": "study/environment.yaml", "entry": "study/project.yaml", "lock_source": "held/uv.lock", "lock": "../uv.lock", "package": "program", "reason": "invalid_locked_version", "expected": ["invalid\u0000é"], "actual": null}},
+        {"phase": "validation", "condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["lock"], "context": {"source": "study/environment.yaml", "entry": "study/project.yaml", "lock_source": "held/uv.lock", "lock": "../uv.lock", "package": "program", "reason": "package_not_installed", "expected": ["1.0"], "actual": null}},
+        {"phase": "validation", "condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["lock"], "context": {"source": "study/environment.yaml", "entry": "study/project.yaml", "lock_source": "held/uv.lock", "lock": "../uv.lock", "package": "program", "reason": "invalid_installed_version", "expected": ["1.0"], "actual": "bad\u0000🙂"}},
+        {"phase": "validation", "condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["lock"], "context": {"source": "study/environment.yaml", "entry": "study/project.yaml", "lock_source": "held/uv.lock", "lock": "../uv.lock", "package": "program", "reason": "version_mismatch", "expected": ["1.0"], "actual": "1.0.0"}}
+      ]
+    },
+    {
+      "case": "a_lock_a_project_file_declares_is_reported_at_its_host_environment",
+      "operation": "lock_mismatch",
+      "input": {
+        "origins": {"source": "study/project.yaml", "entry": "study/project.yaml", "field": "environments.python.lock", "lock_source": "held/uv.lock", "written": "uv.lock"},
+        "findings": [{"package": "program", "reason": "version_mismatch", "expected": ["1.0"], "actual": "1.0.0"}]
+      },
+      "compares": ["condition", "spec_paths", "context.source", "context.entry", "context.lock"],
+      "issues": [{"condition": "runtime_artifact_mismatch", "spec_paths": ["environments.python.lock"], "context": {"source": "study/project.yaml", "entry": "study/project.yaml", "lock": "uv.lock"}}]
+    },
+    {
+      "case": "a_missing_output_key_fails_in_the_output_phase",
+      "operation": "verification_projection",
+      "input": {"base": "checks", "phase": "output", "specification": "test.yaml", "records": [{"check": "missing_key", "path": "keys[0]", "evaluated_count": 9, "failed_count": 1, "output_rows": 9, "offending_rows": [[9223372036854775807]]}]},
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "output", "condition": "missing_key", "rule": "OUTPUT-3"}]
+    },
+    {
+      "case": "a_repeated_output_key_fails_in_the_output_phase",
+      "operation": "verification_projection",
+      "input": {"base": "checks", "phase": "output", "specification": "test.yaml", "records": [{"check": "duplicate_key", "path": "keys", "evaluated_count": 9, "failed_count": 1, "output_rows": 9, "offending_rows": [[9223372036854775807]]}]},
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "output", "condition": "duplicate_key", "rule": "OUTPUT-3"}]
+    },
+    {
+      "case": "a_failed_unique_check_of_warning_severity_is_no_issue",
+      "operation": "verification_projection",
+      "input": {"base": "checks", "phase": "verification", "specification": "test.yaml", "records": [{"check": "unique", "path": "verifications[0].unique", "evaluated_count": 9, "failed_count": 1, "output_rows": 9, "offending_rows": [[9223372036854775807]]}]},
+      "issues": []
+    },
+    {
+      "case": "a_failed_unique_check_of_error_severity_is_one_issue",
+      "operation": "verification_projection",
+      "input": {"base": "checks", "edits": [{"set": ["verifications", "0", "unique", "severity"], "to": "error"}], "phase": "verification", "specification": "test.yaml", "records": [{"check": "unique", "path": "verifications[0].unique", "evaluated_count": 9, "failed_count": 1, "output_rows": 9, "offending_rows": [[9223372036854775807]]}]},
+      "compares": [],
+      "issues": [{}]
+    },
+    {
+      "case": "a_failed_all_or_none_check_is_an_issue",
+      "operation": "verification_projection",
+      "input": {"base": "checks", "phase": "verification", "specification": "test.yaml", "records": [{"check": "all_or_none", "path": "verifications[1].all_or_none", "evaluated_count": 9, "failed_count": 1, "output_rows": 9, "offending_rows": [[9223372036854775807]]}]},
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "verification", "condition": "all_or_none_failed", "rule": "CHECK-11"}]
+    },
+    {
+      "case": "a_failed_assert_is_an_issue",
+      "operation": "verification_projection",
+      "input": {"base": "checks", "phase": "verification", "specification": "test.yaml", "records": [{"check": "assert", "path": "verifications[2].assert", "evaluated_count": 9, "failed_count": 1, "output_rows": 9, "offending_rows": [[9223372036854775807]]}]},
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "verification", "condition": "assert_failed", "rule": "CHECK-12"}]
+    },
+    {
+      "case": "a_failed_row_count_is_an_issue",
+      "operation": "verification_projection",
+      "input": {"base": "checks", "phase": "verification", "specification": "test.yaml", "records": [{"check": "row_count", "path": "verifications[3].row_count", "evaluated_count": 9, "failed_count": 1, "output_rows": 9, "offending_rows": [[9223372036854775807]]}]},
+      "compares": ["phase", "condition", "rule"],
+      "issues": [{"phase": "verification", "condition": "row_count_failed", "rule": "CHECK-13"}]
+    }
+  ]
+}

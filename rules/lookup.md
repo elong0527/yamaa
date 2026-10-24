@@ -283,7 +283,7 @@ chosen, a tie going to the earlier `source` and then to the earlier stored
 record; a candidate whose distance is missing is never chosen.
 
 Fails: `prohibited_construct`, `incompatible_input_type`, `unknown_field`.
-Evidence: `schema-lookup-nearest-datetime`, `schema-lookup-nearest-date`, `schema-lookup-nearest-missing`, `negative-lookup-nearest-keep`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`.
+Evidence: `schema-lookup-nearest-datetime`, `schema-lookup-nearest-date`, `schema-lookup-nearest-missing`, `negative-lookup-nearest-keep`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_nearest_selection_refuses_a_keep_written_beside_it`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_nearest_selection_refuses_an_order_and_a_keep_written_beside_it_naming_the_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_nearest_source_names_a_field_of_the_donor`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_nearest_source_is_a_date_or_a_datetime`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_nearest_reference_has_the_type_of_its_source`.
 
 `nearest` declares `source`, `to` and `unit`, each required. It is the
 select step of a named intermediate ([LOOKUP-25](#lookup-25)) and replaces

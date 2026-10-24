@@ -1,0 +1,62 @@
+{
+  "about": "The inheritance refusals of a layered specification, each reported at the field of the declaring layer that names the refused one: a remote or missing parent (LAYER-2), a parent on another share (LAYER-10), a cycle and a repeated layer (LAYER-3) and a fragment that declares a parent (LAYER-4); a parent a caller gives for a file that is no fragment, at the argument that names it (LAYER-4); then a composed column that reads a name no layer declares (COLUMN-5). Three cases compare the fields their table compared.",
+  "cases": [
+    {
+      "case": "a_remote_parent_is_an_invalid_parent_path",
+      "operation": "inheritance_finding",
+      "input": {"finding": "invalid_parent", "declaring": "child", "path": "https://remote/base"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason", "context.source", "context.parent", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "invalid_parent_path", "rule": "LAYER-2", "spec_paths": ["parent"], "context": {"reason": "remote_reference", "source": "child", "parent": "https://remote/base"}}]
+    },
+    {
+      "case": "a_parent_the_resolver_cannot_reach_is_not_found",
+      "operation": "inheritance_finding",
+      "input": {"finding": "parent_unavailable", "declaring": "child", "path": "../missing.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.path", "context.source", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "parent_not_found", "rule": "LAYER-2", "spec_paths": ["parent"], "context": {"path": "../missing.yaml", "source": "child"}}]
+    },
+    {
+      "case": "a_parent_on_another_share_than_the_entry_names_both_roots",
+      "operation": "inheritance_finding",
+      "input": {"finding": "parent_on_another_share", "source": "//server/share/std/base.yaml", "path": "input/dm.csv", "parent_root": "//server/share", "entry_root": "C:"},
+      "issues": [{"phase": "validation", "condition": "parent_on_another_share", "rule": "LAYER-10", "spec_paths": ["parent"], "context": {"source": "//server/share/std/base.yaml", "path": "input/dm.csv", "parent_root": "//server/share", "entry_root": "C:"}}]
+    },
+    {
+      "case": "a_parent_chain_back_to_the_entry_is_a_cycle_at_the_parent",
+      "operation": "inheritance_finding",
+      "input": {"finding": "cycle", "path": ["entry", "base", "entry"], "returns_to_entry": true, "named": "parent"},
+      "issues": [{"phase": "validation", "condition": "inheritance_cycle", "rule": "LAYER-3", "spec_paths": ["parent"], "context": {"reason": "parent_chain_returns_to_entry", "source": "base", "cycle": ["entry", "base", "entry"]}}]
+    },
+    {
+      "case": "an_include_entry_that_closes_a_cycle_is_the_field_reported",
+      "operation": "inheritance_finding",
+      "input": {"finding": "cycle", "path": ["entry", "base", "entry"], "returns_to_entry": true, "named": {"include": 2}},
+      "issues": [{"phase": "validation", "condition": "inheritance_cycle", "rule": "LAYER-3", "spec_paths": ["include[2]"], "context": {"reason": "parent_chain_returns_to_entry", "source": "base", "cycle": ["entry", "base", "entry"]}}]
+    },
+    {
+      "case": "an_include_of_a_layer_already_composed_is_a_duplicate_layer",
+      "operation": "inheritance_finding",
+      "input": {"finding": "repeated", "declaring": "child", "index": 1, "path": "shared/duration.yaml", "layer": "/study/shared/duration.yaml"},
+      "issues": [{"phase": "validation", "condition": "duplicate_layer", "rule": "LAYER-3", "spec_paths": ["include[1]"], "context": {"source": "child", "path": "shared/duration.yaml", "layer": "/study/shared/duration.yaml"}}]
+    },
+    {
+      "case": "a_fragment_that_declares_a_parent_is_a_prohibited_construct",
+      "operation": "inheritance_finding",
+      "input": {"finding": "fragment", "source": "fragment", "entry": "entry", "field": "parent"},
+      "issues": [{"phase": "validation", "condition": "prohibited_construct", "rule": "LAYER-4", "spec_paths": ["parent"], "context": {"construct": "parent", "source": "fragment", "entry": "entry"}}]
+    },
+    {
+      "case": "a_parent_given_for_a_file_that_is_no_fragment_is_refused_at_that_argument",
+      "operation": "inheritance_finding",
+      "input": {"finding": "not_fragment", "field": "include", "value": "templates/adae.yaml"},
+      "issues": [{"phase": "validation", "condition": "value_not_permitted", "rule": "LAYER-4", "spec_paths": ["parent"], "context": {"construct": "include", "value": "templates/adae.yaml"}}]
+    },
+    {
+      "case": "a_composed_column_reading_an_undeclared_name_is_an_unknown_reference",
+      "operation": "inherited_dependencies",
+      "input": {"issues": [{"unknown": {"column": "VALUE", "dependency": "MISSING"}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unknown_reference", "rule": "COLUMN-5", "spec_paths": ["columns.VALUE.derivation"], "context": {"column": "VALUE", "dependency": "MISSING"}}]
+    }
+  ]
+}

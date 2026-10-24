@@ -10,9 +10,6 @@ pub mod replay;
 // front end (A1), preflight and binding (A2), the other declarations (B1)
 // and the other findings (B2).
 
-pub mod binding;
-pub mod preflight;
-
 pub mod copy_entry;
 pub mod declarative_flags;
 pub mod intermediate_ranges;
@@ -23,16 +20,6 @@ pub mod project_functions;
 pub mod project_scope;
 pub mod record_operations;
 pub mod schema;
-
-pub mod aggregate;
-pub mod grammar;
-pub mod inheritance;
-pub mod odm;
-pub mod odm_read;
-pub mod project_activation;
-pub mod project_codelist_binding;
-pub mod project_lock;
-pub mod verification;
 
 use std::{cell::RefCell, collections::BTreeSet};
 use yamaa_core::{
