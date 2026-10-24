@@ -1969,20 +1969,22 @@ mod scalar {
                             format!("{actual:?}").to_lowercase()
                         )
                     }
+                    // An arithmetic failure names the position of the value
+                    // whose step failed, after `@`.
                     Err(AggregateReductionError::Numeric(ReductionError::Arithmetic {
                         argument,
                         error,
                     })) => {
-                        // The failure points at a present value it read.
-                        assert!(borrowed[argument].value_type().is_some(), "{id}");
                         assert_eq!(error.expression, expression);
                         assert_eq!(error.phase(), "derivation");
                         match error.kind {
-                            ArithmeticErrorKind::IntegerOverflow { value } => {
-                                format!("error:{}:{}:{value}", error.condition(), error.rule())
-                            }
+                            ArithmeticErrorKind::IntegerOverflow { value } => format!(
+                                "error:{}:{}:{value}@{argument}",
+                                error.condition(),
+                                error.rule()
+                            ),
                             ArithmeticErrorKind::LnOfNonpositive => {
-                                format!("error:{}:{}", error.condition(), error.rule())
+                                format!("error:{}:{}@{argument}", error.condition(), error.rule())
                             }
                             other => panic!("unexpected failure {other:?}"),
                         }

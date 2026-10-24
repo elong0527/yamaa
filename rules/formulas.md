@@ -901,7 +901,8 @@ Evidence: `adam-adex-uncollected`, `adam-adcm-related-events`, `adam-adsl-bmi-qu
 | Every value missing -- `MEDIAN`, `Q1`, `Q3`, `QUANTILE`, `STDDEV`, `VARIANCE`, `GEOMEAN` | missing |
 | Every value missing -- `COUNT(x)`, with or without `distinct` | `0` |
 | One non-missing value -- `STDDEV(x)`, `VARIANCE(x)` | missing: a sample deviation needs two values |
-| One non-missing value -- `MEDIAN`, `Q1`, `Q3`, `QUANTILE`, `GEOMEAN` | that value, as a `float` |
+| One non-missing value -- `MEDIAN`, `Q1`, `Q3`, `QUANTILE` | that value, as a `float` |
+| One non-missing value -- `GEOMEAN(x)` | `EXP(LN(x))`, which can differ from the value in the last place |
 | No record in the group -- `COUNT(x)`, `COUNT(D.*)`, `STR_JOIN(x)` | missing |
 | No record in the group -- `ONLY(x)` | missing |
 | One record whose value is missing -- `ONLY(x)` | missing |
