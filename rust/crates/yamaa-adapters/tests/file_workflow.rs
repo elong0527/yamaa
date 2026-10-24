@@ -34,18 +34,10 @@ mod file {
                 else {
                     panic!("original unavailable project path")
                 };
+                // Its issue names the path as given (`workflow.json`).
                 assert_eq!(path, &project);
                 assert_eq!(*error, yamaa_adapters::file_resources::Error::Missing);
                 assert_eq!(rejection.retained_sources().len(), 0);
-                let rows = yamaa_adapters::project_application::selection_failure(&rejection);
-                assert_eq!(rows.len(), 1);
-                assert_eq!(rows[0].condition(), "resource_path_missing");
-                assert_eq!(rows[0].rule(), Some("FILE-7"));
-                assert!(rows[0].spec_paths.is_empty());
-                assert_eq!(
-                    yamaa_core::json::Value::Object(rows[0].context.clone()),
-                    yamaa_adapters::json!({"path": project})
-                );
             }
             fs::remove_file(study.0.join("root.yaml")).unwrap();
             // A valid project whose only environment entry names another host's
@@ -230,35 +222,8 @@ mod file {
                 )),
                 expected
             );
-            study.write("root.yaml", "[");
-            let malformed = yamaa_adapters::project_application::check(
-                &study.path("root.yaml"),
-                &study.path("project.yaml"),
-                Language::Python,
-            );
-            assert_eq!(malformed.len(), 1);
-            assert_eq!(
-                (
-                    malformed[0].phase(),
-                    malformed[0].condition(),
-                    &malformed[0].spec_paths
-                ),
-                ("validation", "invalid_yaml", &vec!["$".to_owned()])
-            );
-            study.write("project.yaml", "[");
-            let project = yamaa_adapters::project_application::check(
-                &study.path("root.yaml"),
-                &study.path("project.yaml"),
-                Language::Python,
-            );
-            assert_eq!(project.len(), 1);
-            assert_eq!(project[0].condition(), "invalid_yaml");
-            let context = yamaa_core::json::Value::Object(project[0].context.clone());
-            assert_eq!(context["path"], study.path("project.yaml"));
-            assert_eq!(context["environment_path"], "$");
-            assert!(context["line"].as_u64().is_some());
-            assert!(context["column"].as_u64().is_some());
-            assert!(context["reason"].as_str().is_some());
+            // An entry and a project file that are not YAML fail at their
+            // root (`workflow.json`); the held findings outlive the study.
             fs::remove_dir_all(&study.0).unwrap();
             assert_eq!(
                 crate::support::rows(&preparation_issues(&owner).unwrap()),
@@ -307,25 +272,8 @@ mod file {
             };
             assert_eq!(owner.capture_reads(), 1); // the project alone
             assert!(!study.0.join("root.yaml").exists());
-
-            study.write("missing.lock", "invalid packaging lock");
-            study.write("absent-function.yaml", "[");
-            study.write("absent-codelists.yaml", "[");
-            let rows =
-                yamaa_adapters::project_application::check(&entry, &project, Language::Python);
-            assert_eq!(rows.len(), 3);
-            let context = yamaa_core::json::Value::Object(rows[0].context.clone());
-            assert_eq!(context["cause"], "invalid_packaging_lock");
-            for (row, path) in rows[1..]
-                .iter()
-                .zip(["absent-function.yaml", "absent-codelists.yaml"])
-            {
-                assert_eq!(row.condition(), "invalid_yaml");
-                let context = yamaa_core::json::Value::Object(row.context.clone());
-                assert_eq!(context["path"], path);
-                assert!(context["reason"].as_str().is_some());
-                assert!(context["line"].as_u64().is_some());
-            }
+            // Files that exist but cannot be read as a lock or as YAML name
+            // their causes (`workflow.json`).
         }
 
         #[test]
@@ -575,28 +523,6 @@ mod file {
         }
 
         #[test]
-        fn supplied_environment_directory_names_its_path_and_file_kind_before_entry_reads() {
-            let study = Study::new();
-            fs::create_dir(study.0.join("directory.yaml")).unwrap();
-            let path = study.path("directory.yaml");
-            let rows = yamaa_adapters::project_application::check(
-                &study.path("absent-spec.yaml"),
-                &path,
-                Language::Python,
-            );
-            // A project path is the caller's own: FILE-7 at no field, named as
-            // given (#3321).
-            assert_eq!(rows.len(), 1);
-            assert_eq!(rows[0].condition(), "resource_path_not_regular_file");
-            assert_eq!(rows[0].rule(), Some("FILE-7"));
-            assert!(rows[0].spec_paths.is_empty());
-            assert_eq!(
-                yamaa_core::json::Value::Object(rows[0].context.clone()),
-                yamaa_adapters::json!({"path": path})
-            );
-        }
-
-        #[test]
         fn linked_diamond_checks_only_the_entry_and_reads_each_producer_once_without_data() {
             let study = Study::new();
             study.write(
@@ -695,16 +621,10 @@ mod file {
                     false,
                 ),
             );
+            // The restated type is refused (`workflow.json`), and the rows
+            // outlive the study.
             let error = study.compile_rejection();
             let rows = specification_check::rejected(error.run()).unwrap();
-            assert_eq!(rows.len(), 1);
-            assert_eq!(rows[0].condition(), "redundant_field_type");
-            assert_eq!(rows[0].rule(), Some("INPUT-6"));
-            assert_eq!(rows[0].spec_paths, ["input.P.types.ID"]);
-            assert_eq!(
-                yamaa_core::json::Value::Object(rows[0].context.clone()),
-                yamaa_adapters::json!({"dataset":"P", "field":"ID", "type":"int"})
-            );
             fs::remove_dir_all(&study.0).unwrap();
             assert_eq!(specification_check::rejected(error.run()).unwrap(), rows);
             assert_eq!(error.capture_reads(), 3);
@@ -752,16 +672,10 @@ mod file {
                 "root.yaml",
                 "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\ninput:\n  DM: {schema: producer/dm.yaml}\n",
             );
+            // The parent declares the restated type (`workflow.json`), and a
+            // check and a build report the same rows.
             let error = study.compile_rejection();
             let rows = specification_check::rejected(error.run()).unwrap();
-            assert_eq!(rows.len(), 1);
-            assert_eq!(rows[0].condition(), "redundant_field_type");
-            assert_eq!(rows[0].rule(), Some("INPUT-6"));
-            assert_eq!(rows[0].spec_paths, ["input.DM.types.RANDDT"]);
-            assert_eq!(
-                yamaa_core::json::Value::Object(rows[0].context.clone()),
-                yamaa_adapters::json!({"dataset":"DM", "field":"RANDDT", "type":"date"})
-            );
             assert_eq!(
                 error
                     .run()
@@ -852,16 +766,9 @@ mod file {
                     false,
                 ),
             );
+            // A self link is refused (`workflow.json`) after the project and
+            // the entry are read.
             let error = study.compile_rejection();
-            let rows = specification_check::rejected(error.run()).unwrap();
-            assert_eq!(rows.len(), 1);
-            assert_eq!(rows[0].condition(), "invalid_producer_contract");
-            assert_eq!(rows[0].rule(), Some("INPUT-10"));
-            assert_eq!(rows[0].spec_paths, ["input.R.schema"]);
-            assert_eq!(
-                yamaa_core::json::Value::Object(rows[0].context.clone()),
-                yamaa_adapters::json!({"dataset":"R", "reason":"self_reference"})
-            );
             assert_eq!(error.capture_reads(), 2);
         }
 
@@ -883,11 +790,7 @@ mod file {
                 environment.captured_sources().next().unwrap().1,
                 raw.as_bytes()
             );
-            let rows = preparation_issues(&error).unwrap();
-            assert_eq!(rows.len(), 1);
-            assert_eq!(rows[0].condition(), "invalid_yaml");
-            let context = yamaa_core::json::Value::Object(rows[0].context.clone());
-            assert_eq!(context["path"], "project.yaml");
+            // Its issue names the path as written (`workflow.json`).
             fs::remove_dir_all(&study.0).unwrap();
             assert_eq!(
                 environment.captured_sources().next().unwrap().1,
@@ -909,23 +812,9 @@ mod file {
                 "root.yaml",
                 &yaml("{RAW: never-read.csv}", "RAW", "root.csv", false),
             );
-            let error = study.rejected();
-            let rows = preparation_issues(&error).unwrap();
             // The project file holds the lock at `environments.python.lock`,
-            // where its finding is reported (FUNC-3).
-            assert_eq!(rows.len(), 1);
-            assert_eq!(rows[0].condition(), "function_file_invalid");
-            assert_eq!(rows[0].rule(), Some("FUNC-2"));
-            assert_eq!(rows[0].spec_paths, ["environments.python.lock"]);
-            assert_eq!(
-                yamaa_core::json::Value::Object(rows[0].context.clone()),
-                yamaa_adapters::json!({
-                    "reason": "lock_kind_mismatch", "language": "python",
-                    "actual_lock_kind": "renv", "source": study.path("project.yaml"),
-                    "entry": study.path("project.yaml"),
-                    "environment_path": "environments.python.lock",
-                })
-            );
+            // where its finding is reported (FUNC-3, `workflow.json`).
+            let error = study.rejected();
             let Error::Environment(environment) = &error else {
                 panic!("environment");
             };
@@ -940,12 +829,10 @@ mod file {
                 "root.yaml",
                 "yamaa: \"1.0\"\ntype: spec\nparent: parent/base.yaml\ndomain: CHILD\n",
             );
+            // The parent's schema finding names the parent (`workflow.json`),
+            // and the findings outlive the study.
             let error = study.rejected();
             let rows = preparation_issues(&error).unwrap();
-            assert!(!rows.is_empty());
-            assert!(rows
-                .iter()
-                .any(|r| r.context.clone()["source"] == study.path("parent/base.yaml")));
             fs::remove_dir_all(&study.0).unwrap();
             assert_eq!(preparation_issues(&error).unwrap(), rows);
         }
@@ -1017,20 +904,10 @@ mod file {
             ));
             assert_eq!(entry.capture_reads(), 2);
             assert_eq!(entry.origin().unwrap().dataset, "P");
+            // A check reports the missing schema at its field
+            // (`workflow.json`); the entry stays held.
             assert!(
                 matches!(preparation_issues(&error), Err(IssueError::Original(original)) if std::ptr::eq(original, &error))
-            );
-            let rows = yamaa_adapters::project_application::check(
-                &study.path("root.yaml"),
-                &study.path("project.yaml"),
-                Language::Python,
-            );
-            assert_eq!(rows.len(), 1);
-            assert_eq!(rows[0].condition(), "resource_path_missing");
-            assert_eq!(rows[0].spec_paths, ["input.P.schema"]);
-            assert_eq!(
-                yamaa_core::json::Value::Object(rows[0].context.clone()),
-                yamaa_adapters::json!({"path":"missing.yaml"})
             );
             fs::remove_dir_all(&study.0).unwrap();
             assert!(entry.document().is_some());
@@ -1052,11 +929,10 @@ mod file {
             let original = yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false)
                 .edit("    label: Reported value\n", "");
             study.write("leaf.yaml", &original);
+            // A producer column without a label is refused at the link
+            // (`workflow.json`).
             let error = study.compile_rejection();
             let rows = specification_check::rejected(error.run()).unwrap();
-            assert!(rows.iter().any(|row| row.rule() == Some("INPUT-10")
-                && row.condition() == "invalid_producer_contract"
-                && row.spec_paths == ["input.P.schema.columns.VALUE.label"]));
             // The project's lock and function file resolve beside it (D8).
             study.write(
                 "project.yaml",
@@ -1079,13 +955,8 @@ mod file {
                     .1,
                 malformed.as_bytes()
             );
-            let failures = preparation_issues(&failure).unwrap();
-            assert_eq!(failures.len(), 1);
-            assert_eq!(failures[0].condition(), "invalid_yaml");
-            let context = yamaa_core::json::Value::Object(failures[0].context.clone());
-            assert_eq!(context["entry"], study.path("project.yaml"));
-            assert_eq!(context["path"], "python/broken.yaml");
-            assert_eq!(context["environment_path"], "functions[0]");
+            // The broken function file names its listing and the project
+            // (`workflow.json`).
             fs::remove_dir_all(&study.0).unwrap();
             assert!(error
                 .retained_sources()
@@ -1221,11 +1092,9 @@ mod file {
                 .iter()
                 .any(|(name, bytes)| name.ends_with("/root.yaml")
                     && bytes.as_ref() == original.as_bytes()));
-            let findings = preparation_issues(&rejection).unwrap();
-            assert_eq!(findings.len(), 1);
-            assert_eq!(findings[0].condition(), "invalid_field_type");
-            assert_eq!(findings[0].rule(), Some("SCHEMA-12"));
-            assert_eq!(findings[0].spec_paths, ["input.RAW.schema"]);
+            // The shipped schema's finding is `workflow.json`'s; projecting it
+            // reads nothing more.
+            preparation_issues(&rejection).unwrap();
             assert_eq!(entry.capture_reads(), 2);
         }
 
@@ -1416,19 +1285,8 @@ mod file {
             assert_eq!(rejected.capture_reads(), 2);
             assert_eq!(rejected.entry(), "root.yaml");
             // The default project lists no function file, so the call names an
-            // unknown function (FUNC-4, #3030 D8).
+            // unknown function (FUNC-4, #3030 D8, `workflow.json`).
             let rows = yamaa_adapters::specification_check::rejected(rejected.run()).unwrap();
-            assert_eq!(rows.len(), 1);
-            assert_eq!(rows[0].condition(), "unknown_project_function");
-            assert_eq!(rows[0].rule(), Some("FUNC-4"));
-            assert_eq!(
-                rows[0].spec_paths,
-                ["columns.VALUE.derivation.function.name"]
-            );
-            assert_eq!(
-                yamaa_core::json::Value::Object(rows[0].context.clone()),
-                yamaa_adapters::json!({"function": "missing"})
-            );
             fs::remove_dir_all(&study.0).unwrap();
             let held = rejected.retained_sources();
             assert_eq!(held.len(), 2);
@@ -1461,12 +1319,13 @@ mod file {
                     false,
                 ),
             );
+            // The shipped schema refuses the link (`workflow.json`), and so
+            // does the restated type below.
             let SelectionError::Preparation(error @ Error::Entry(_)) = study.selection_rejection()
             else {
                 panic!("owned original metadata rejection");
             };
             let rows = preparation_issues(&error).unwrap();
-            assert!(rows.iter().any(|r| r.rule() == Some("SCHEMA-12")));
             let Error::Entry(owner) = &error else {
                 unreachable!()
             };
@@ -1493,7 +1352,6 @@ mod file {
                 panic!("owned compilation rejection");
             };
             let rows = specification_check::rejected(rejected.run()).unwrap();
-            assert!(rows.iter().any(|r| r.rule() == Some("INPUT-6")));
             assert_eq!(rejected.capture_reads(), 3);
             fs::remove_dir_all(&study.0).unwrap();
             assert_eq!(specification_check::rejected(rejected.run()).unwrap(), rows);
@@ -1519,12 +1377,13 @@ mod file {
             assert_eq!(environment.capture_reads(), 1);
             study.write("project.yaml", "yamaa: \"1.0\"\ntype: project\n");
             study.write("root.yaml", "[");
+            // The raw root is refused as `workflow.json` records; its findings
+            // outlive the study.
             let SelectionError::Preparation(root @ Error::Entry(_)) = study.selection_rejection()
             else {
                 panic!("raw root rejection");
             };
             let rows = preparation_issues(&root).unwrap();
-            assert_eq!(rows[0].condition(), "invalid_yaml");
             fs::remove_dir_all(&study.0).unwrap();
             assert_eq!(environment.retained_sources().len(), 1);
             assert_eq!(preparation_issues(&root).unwrap(), rows);

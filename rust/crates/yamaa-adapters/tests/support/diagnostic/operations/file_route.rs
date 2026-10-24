@@ -4,22 +4,34 @@
 //!
 //! `check` is the static check of a request (`file_application::check`):
 //! what a refused preparation reports, or the compiled specification's own
-//! findings, with no study input read. `build` prepares and runs the request
-//! (`support::study::domain`) and returns the issues of its result or of its
-//! refusal; each specification its `built` names is built and saved first,
-//! in order. Either takes `files` (each relative path and its text),
-//! `directories` (empty ones), the `specification` and the optional
+//! findings, with no study input read. Each projection a refusal has, of a
+//! refused capture or of a refused compilation, is one of these: the rows
+//! `project_application::selection_failure` gives it.
+//! `check_resources` is the same check of names relative to the study
+//! directory, which the resources take as their root
+//! (`file_workflow::select_with_resources`), so the paths a refusal names
+//! keep that spelling; it needs the `project`. `build` prepares and runs the
+//! request (`support::study::domain`) and returns the issues of its result
+//! or of its refusal; each specification its `built` names is built and
+//! saved first, in order. Each takes `files` (each relative path and its
+//! text), `directories` (empty ones), the `specification` and the optional
 //! `project` a request names, and the `host` it runs for, `python` unless
 //! written.
 use super::{host, path, study, File, Reported};
 use crate::support::diagnostic::replay::{closed, field, items, text};
 use yamaa_core::{domain_entry::Request, json::Value};
 
-pub(super) const FILES: &[File] = &[fixture!("producer_links.json"), fixture!("submission.json")];
+pub(super) const FILES: &[File] = &[
+    fixture!("producer_links.json"),
+    fixture!("submission.json"),
+    fixture!("workflow.json"),
+];
 
 pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
     let members = match operation {
-        "check" => &["files", "directories", "specification", "project", "host"][..],
+        "check" | "check_resources" => {
+            &["files", "directories", "specification", "project", "host"][..]
+        }
         "build" => &[
             "files",
             "directories",
@@ -45,6 +57,20 @@ pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
             },
             identity,
         ),
+        "check_resources" => {
+            let root = path(&study, "");
+            let selected = yamaa_adapters::file_workflow::select_with_resources(
+                yamaa_adapters::file_resources::Resources::new(&root, &root, &[]).unwrap(),
+                text(field(input, "specification")),
+                text(field(input, "project")),
+                host,
+                yamaa_adapters::document::Closures::shipped().unwrap(),
+            );
+            match selected {
+                Ok(prepared) => yamaa_adapters::specification_check::issues(prepared.run()),
+                Err(error) => yamaa_adapters::project_application::selection_failure(&error),
+            }
+        }
         _ => {
             for name in input.get("built").map_or(&[][..], items) {
                 let built = path(&study, text(name));
