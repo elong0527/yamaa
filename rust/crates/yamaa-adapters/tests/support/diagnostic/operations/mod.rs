@@ -93,20 +93,41 @@ fn path(study: &Scratch, name: &str) -> String {
 /// Every file of `study` and its bytes, by its path there with forward
 /// slashes.
 fn contents(study: &Scratch) -> Files {
-    fn walk(root: &std::path::Path, directory: &std::path::Path, files: &mut Files) {
+    state(study).files
+}
+
+/// A staged study's files and directories, including empty ones, so API
+/// seams retain the original path-existence assertions too.
+#[derive(Debug, PartialEq, Eq)]
+pub struct StudyState {
+    files: Files,
+    directories: std::collections::BTreeSet<String>,
+}
+
+pub fn state(study: &Scratch) -> StudyState {
+    fn walk(root: &std::path::Path, directory: &std::path::Path, state: &mut StudyState) {
         for entry in std::fs::read_dir(directory).unwrap() {
             let path = entry.unwrap().path();
+            let name = path
+                .strip_prefix(root)
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .replace('\\', "/");
             if path.is_dir() {
-                walk(root, &path, files);
+                state.directories.insert(name);
+                walk(root, &path, state);
             } else {
-                let name = path.strip_prefix(root).unwrap().to_str().unwrap();
-                files.insert(name.replace('\\', "/"), std::fs::read(&path).unwrap());
+                state.files.insert(name, std::fs::read(&path).unwrap());
             }
         }
     }
-    let mut files = Files::new();
-    walk(study, study, &mut files);
-    files
+    let mut state = StudyState {
+        files: Files::new(),
+        directories: Default::default(),
+    };
+    walk(study, study, &mut state);
+    state
 }
 
 /// The rows of a public table as a case writes them.
