@@ -10,8 +10,10 @@ from unittest import mock
 
 import yaml
 from tools.packaging import generate_selftest_cases as selftest_cases
+from tools.packaging import generate_shipped_schema as shipped_schema
 from tools.paths import ROOT, WORKSPACE
 from tools.staging import engine_bundle as bundle
+from tools.tests import support
 
 REGISTRY = "registry+https://github.com/rust-lang/crates.io-index"
 # Where each bundle stages the selftest cases that the facade embeds.
@@ -174,6 +176,27 @@ class SourceTests(unittest.TestCase):
                     staged,
                 )
 
+    def test_each_bundle_carries_the_schema_files_that_the_adapters_embed(self):
+        # The adapters' table names each copy with include_str!
+        # (tools/packaging/generate_shipped_schema.py), so every bundle carries
+        # the copies, with the bytes of yaml/, and no build reads yaml/ itself.
+        expected = {
+            f"crates/yamaa-adapters/schema/{relative}": (
+                ROOT / "yaml" / relative
+            ).read_bytes()
+            for relative in shipped_schema.copied()
+        }
+        for host in ("cli", "python", "r"):
+            with self.subTest(host=host):
+                self.assertEqual(
+                    {
+                        relative: path.read_bytes()
+                        for relative, path in bundle.sources(host)
+                        if relative.startswith("crates/yamaa-adapters/schema/")
+                    },
+                    expected,
+                )
+
     def test_each_manifest_names_its_crates_and_keeps_its_hosts_profiles(self):
         for host in ("python", "r"):
             with self.subTest(host=host):
@@ -301,6 +324,55 @@ class SourceTests(unittest.TestCase):
             (other / "vendor").unlink()
             with self.assertRaisesRegex(ValueError, "must not be symlinks"):
                 list(bundle.member_sources(other))
+
+    def test_member_sources_carry_the_adapters_schema_copies_and_refuse_others(self):
+        # The walk of one member's directory, on a scratch crate.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            adapter = root / "crates/yamaa-adapters"
+            for name, payload in {
+                "Cargo.toml": b'[package]\nname = "yamaa-adapters"\n',
+                "src/lib.rs": b"pub fn f() {}\n",
+                "schema/schema_spec.yaml": b'version: "1.0"\n',
+                "schema/json/spec.schema.json": b"{}\n",
+            }.items():
+                support.write(adapter, name, payload)
+            self.assertEqual(
+                [
+                    path.relative_to(adapter).as_posix()
+                    for path in bundle.member_sources(adapter)
+                ],
+                [
+                    "Cargo.toml",
+                    "src/lib.rs",
+                    "schema/json/spec.schema.json",
+                    "schema/schema_spec.yaml",
+                ],
+            )
+            # Only the YAML modules and JSON Schemas that the table embeds.
+            backup = support.write(adapter, "schema/schema_spec.yaml~", b"old\n")
+            with self.assertRaisesRegex(ValueError, "unreviewed embedded schema file"):
+                list(bundle.member_sources(adapter))
+            backup.unlink()
+            other = root / "crates/yamaa-core"
+            shutil.copytree(adapter, other)
+            with self.assertRaisesRegex(
+                ValueError, "unreviewed embedded schema directory"
+            ):
+                list(bundle.member_sources(other))
+            copy = adapter / "schema/schema_spec.yaml"
+            copy.unlink()
+            try:
+                copy.symlink_to(other / "schema/schema_spec.yaml")
+            except OSError as error:
+                self.skipTest(f"symlinks are unavailable: {error}")
+            with self.assertRaisesRegex(ValueError, "must not be symlinks"):
+                list(bundle.member_sources(adapter))
+            copy.unlink()
+            shutil.rmtree(adapter / "schema")
+            (adapter / "schema").symlink_to(other / "schema", target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "must not be symlinks"):
+                list(bundle.member_sources(adapter))
 
 
 class VendoredSourceTests(unittest.TestCase):

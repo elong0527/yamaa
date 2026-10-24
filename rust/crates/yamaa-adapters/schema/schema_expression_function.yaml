@@ -1,0 +1,17 @@
+version: "1.0"
+
+expressions:
+    function: # See FUNC-4.
+        - name:
+            type: identifier
+            required: true
+            description: Logical function, defined in a function file the project lists, that the call selects (FUNC-4).
+        - args:
+            type: "dict[identifier, function_arg]"
+            default: {}
+            description: Named argument leaves of the call (FUNC-6).
+
+function_arg:
+    type: [str, int, float, bool, "null"]
+    kind: expression
+    description: One expression leaf, which is a bare name for a variable, quoted text, a YAML number or Boolean, YAML null for missing, or a DATE or DATETIME literal; arbitrary nesting is not allowed (FUNC-6).
