@@ -22,19 +22,23 @@ struct Calls {
     built: Result<file_application::Domain, Vec<Diagnostic>>,
 }
 
+/// The static check of a case's input, with the project it names if any,
+/// which leaves the staged study as it was.
 fn check_call(
     input: &Value,
     host: Language,
     label: &str,
 ) -> (crate::support::Scratch, Vec<Diagnostic>) {
-    assert!(input.get("project").is_none());
     assert!(input.get("built").is_none());
     let study = operations::study(input);
     let staged = operations::state(&study);
     let specification = study.identity(replay::text(replay::field(input, "specification")));
+    let project = input
+        .get("project")
+        .map(|name| study.identity(replay::text(name)));
     let request = || Request {
         specification: &specification,
-        environment: None,
+        environment: project.as_deref(),
     };
     let identity = || crate::support::study::identity("diagnostics", &specification);
     let checked = file_application::check(host, request(), identity());
@@ -47,6 +51,8 @@ fn check_call(
 }
 
 fn calls(input: &Value, host: Language, label: &str) -> Calls {
+    // The build below names no project, so neither call does.
+    assert!(input.get("project").is_none());
     let (study, checked) = check_call(input, host, label);
     let staged = operations::state(&study);
     let specification = study.identity(replay::text(replay::field(input, "specification")));
@@ -261,7 +267,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
     let contracts = replay::object(replay::field(&routes, "cases"));
     assert_eq!(
         contracts.len(),
-        236,
+        288,
         "every original API contract is authored"
     );
     let mut seen = BTreeSet::new();
@@ -390,8 +396,8 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         contracts.keys().cloned().collect::<BTreeSet<_>>(),
         "every authored API case still exists"
     );
-    assert_eq!((domains, preparation, either, checks), (178, 1, 4, 53));
-    assert_eq!((accepted_saves, refused_saves, no_save), (113, 30, 93));
+    assert_eq!((domains, preparation, either, checks), (178, 1, 4, 105));
+    assert_eq!((accepted_saves, refused_saves, no_save), (113, 30, 145));
 }
 
 /// Seam: the composition's save return, held artifact set and capture counter
