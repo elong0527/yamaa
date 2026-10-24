@@ -428,7 +428,7 @@ fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
         if let Some(empty) = expected.get("empty_artifacts") {
             artifact_contracts += 1;
             assert_eq!(
-                &Value::Bool(define.artifacts().is_empty()),
+                &Value::Bool(define.artifacts().len() == 0),
                 empty,
                 "{}: the authored held-artifact contract",
                 case.label
