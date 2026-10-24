@@ -262,9 +262,10 @@ check_fixtures <- function() {
   native_name <- paste0("yamaa", .Platform$dynlib.ext)
   quote <- function(path) shQuote(path, type = if (windows) "cmd" else "sh")
   rscript <- file.path(R.home("bin"), if (windows) "Rscript.exe" else "Rscript")
-  for (fixture in truth$fixtures) {
+  for (fixture in truth$fixtures) local({
     work <- tempfile("yamaa-fixture-")
     dir.create(work)
+    on.exit(unlink(work, recursive = TRUE), add = TRUE)
     file.copy(file.path(libs, native_name), file.path(work, native_name))
     engine <- normalizePath(file.path(fixtures, fixture$library), mustWork = TRUE)
     if (windows) file.copy(engine, file.path(work, engine_name)) else file.symlink(engine, file.path(work, engine_name))
@@ -278,13 +279,12 @@ check_fixtures <- function() {
       "saveRDS(.Call(routines[[\"wrap__interface_handshake\"]], readRDS(arguments[[2L]])), arguments[[3L]])"), child)
     tests <- Sys.getenv("R_TESTS", unset = NA)
     Sys.setenv(R_TESTS = "")
+    on.exit(if (is.na(tests)) Sys.unsetenv("R_TESTS") else Sys.setenv(R_TESTS = tests), add = TRUE)
     status <- system2(rscript, c("--vanilla", quote(child), quote(file.path(work, native_name)), quote(input),
       quote(output)))
-    if (is.na(tests)) Sys.unsetenv("R_TESTS") else Sys.setenv(R_TESTS = tests)
-    stopifnot("the child process succeeds" = identical(status, 0L))
+    stopifnot_case(fixture$fixture, "the child process succeeds" = identical(status, 0L))
     expect_identical(yamaa:::.reply(readRDS(output)), outcome_of(resolved(fixture$outcome)), fixture$fixture)
-    unlink(work, recursive = TRUE)
-  }
+  })
   cat("each fixture engine gets its authored outcome\n")
 }
 check_fixtures()
