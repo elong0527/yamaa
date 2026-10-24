@@ -12,6 +12,7 @@ mod support;
 
 // The replay of the expected outcomes written as data (#3691, #3798), apart
 // from the families below.
+mod check_operation_contracts;
 mod diagnostics;
 
 mod arrow_host_bridge;
