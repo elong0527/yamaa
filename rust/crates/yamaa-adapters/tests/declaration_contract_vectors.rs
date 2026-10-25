@@ -1,6 +1,10 @@
 #![cfg(feature = "yaml")]
-//! Declaration contracts: contract vectors, ODM declaration fixture and
-//! original intermediate verifications.
+//! Declaration contracts read from their authored truth: the grammar, regex
+//! and rounding vectors and the syntax controls, the ODM declaration
+//! projection's catalog and the original invalid intermediate verifications.
+//! The ODM declaration refusals and the other original intermediate
+//! verifications are cases of `fixtures/diagnostics/declaration_vectors.json`,
+//! which the replay reads.
 mod declaration {
     mod contract_vectors {
         //! Direct native checks of unchanged authored grammar, regex and rounding truth.
@@ -424,6 +428,9 @@ mod declaration {
 
         #[test]
         fn shared_grammars_have_exact_shapes_dependencies_decisions_and_vocabularies() {
+            // Seam: a loop over authored truth, each case of the shared grammar
+            // documents (`yaml/grammar/`) and the expansion of their closed
+            // vocabularies, observed through the compiled parse's shape.
             let documents = [("expression", "formulas"), ("string-template", "text")].map(
                 |(contract, rule)| {
                     let document = yaml(&format!("yaml/grammar/{contract}.yaml"));
@@ -485,6 +492,9 @@ mod declaration {
 
         #[test]
         fn unchanged_regex_documents_and_authored_capture_controls_run_directly() {
+            // Seam: a loop over authored truth, `yaml/conformance/regex.yaml` and
+            // `fixtures/regex_contract.tsv`, observed through the regex kernel and
+            // the replacement operation themselves.
             let document = yaml("yaml/conformance/regex.yaml");
             assert_eq!(document["contract"], "regex");
             assert_eq!(document["contract_version"], "3.0.0");
@@ -612,6 +622,8 @@ mod declaration {
 
         #[test]
         fn regex_scalar_membership_and_greedy_lazy_counts_keep_independent_set_truth() {
+            // Seam: the regex kernel over every code point of each class and
+            // every counted repetition, generated here from independent sets.
             let whitespace = BTreeSet::from([
                 0x9, 0xa, 0xb, 0xc, 0xd, 0x20, 0xa0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003,
                 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200a, 0x2028, 0x2029, 0x202f,
@@ -677,6 +689,8 @@ mod declaration {
 
         #[test]
         fn unchanged_independent_rational_rounding_corpus_matches_the_rounding_operation() {
+            // Seam: a loop over authored truth, `fixtures/rounding_rational.tsv`,
+            // observed through the rounding operation's float bits.
             use yamaa_core::{dataset::Rounding, table::ValueRef, value::Value};
             // Original cb34f38a3:rust/tools/assess_rounding.py, using
             // Fraction(abs(value)) and the exact FORMULA-16 half-minus-2^-26 threshold.
@@ -722,6 +736,8 @@ mod declaration {
 
         #[test]
         fn original_authored_syntax_controls_retain_complete_ast_metadata_and_diagnostics() {
+            // Seam: a loop over authored truth, `fixtures/syntax_controls.json`,
+            // observed through the syntax projections of `support::*_syntax`.
             // Literal controls from cb34f38a3:rust/tools/native_syntax_checks.py.
             let cases: Vec<Json> = yamaa_adapters::json_wire::decode_array(include_str!(
                 "fixtures/syntax_controls.json"
@@ -741,6 +757,9 @@ mod declaration {
 
         #[test]
         fn original_robustness_inputs_keep_complete_native_outcomes_and_unicode_positions() {
+            // Seam: a loop over authored truth, `fixtures/syntax_robustness.tsv`,
+            // whose outcomes this test checks for their shape and Unicode
+            // positions.
             let mut counts = std::collections::BTreeMap::new();
             for line in include_str!("fixtures/syntax_robustness.tsv")
                 .lines()
@@ -810,6 +829,8 @@ mod declaration {
 
         #[test]
         fn original_numeric_and_aggregate_ast_spans_keep_the_authored_expression_sites() {
+            // Seam: the spans of a parsed expression's syntax tree, which the
+            // syntax projections return and no case states.
             for (expression, observe) in [
                 (
                     "A + POWER(B, 2) / -3",
@@ -834,6 +855,9 @@ mod declaration {
 
         #[test]
         fn closed_keywords_and_refused_constructs_keep_their_names() {
+            // Seam: the closed keywords and comparison operators of
+            // `yaml/grammar/expression.yaml`, and the construct the aggregate
+            // and derivation parsers each name in a refusal.
             let document = yaml("yaml/grammar/expression.yaml");
             assert!(document.get("prohibited").is_none());
             let reserved = document["reserved"]
@@ -915,6 +939,8 @@ mod declaration {
         }
     }
     mod odm_declaration_fixture {
+        //! The ODM declaration projection's catalog. Its refusals are cases of
+        //! `fixtures/diagnostics/declaration_vectors.json`.
         use crate::support::odm_declaration as fixture;
         use yamaa_adapters::json;
         use yamaa_core::json::Value;
@@ -949,6 +975,9 @@ mod declaration {
 
         #[test]
         fn canonical_catalog_excludes_vendor_fields_and_header_case_is_native_owned() {
+            // Seam: the catalog and field list the ODM declaration projection
+            // (`support::odm_declaration`) observes, which no public call
+            // returns.
             let mut names = header()
                 .iter()
                 .map(|name| name.to_uppercase())
@@ -966,118 +995,14 @@ mod declaration {
                     .collect::<Vec<_>>())
             );
         }
-
-        #[test]
-        fn overridden_partial_column_preserves_scope_fact_and_unrelated_binding_refusal() {
-            let mut source = spec(json!({"odm":"ODM.IT.DM.AGE"}));
-            source["input"]["DM"] = json!("never-read-other.csv");
-            source["rows"] =
-                json!([{"id":"other_source", "dataset":"DM", "derivations":{"AGE":0}}]);
-            // yamaa_core::json's authored fixture text orders input DM before ODM.
-            let observed = observe(source.clone(), &[vec!["USUBJID".into()], header()]);
-            assert_eq!(observed["status"], "prepared");
-            assert_eq!(
-                observed["binding"]["issues"][0]["condition"],
-                "no_applicable_keys"
-            );
-            source["rows"][0]["derivations"] = json!({});
-            let observed = observe(source, &[vec!["USUBJID".into()], header()]);
-            assert_eq!(observed["issues"][0]["condition"], "invalid_odm_context");
-            assert_eq!(
-                observed["issues"][0]["context"],
-                json!({"dataset":"ODM","location":"column"})
-            );
-            assert_eq!(
-                observed["issues"][0]["spec_paths"],
-                json!(["columns.AGE.derivation.odm"])
-            );
-        }
-
-        #[test]
-        fn intrinsic_vendor_filter_and_intermediate_derive_contexts_precede_metadata() {
-            let observed = observe(
-                spec(json!({"odm":{"item":"ODM.IT.DM.AGE","filter":"ODM.SITEID = '9'"}})),
-                &[],
-            );
-            assert_eq!(observed["issues"][0]["condition"], "unknown_field");
-            assert_eq!(
-                observed["issues"][0]["context"],
-                json!({"identifier":"ODM.SITEID","dataset":"ODM"})
-            );
-            assert_eq!(
-                observed["issues"][0]["spec_paths"],
-                json!(["columns.AGE.derivation.odm.filter"])
-            );
-            let mut source = spec(json!(1));
-            source["intermediates"] = json!([{"id":"AGES","dataset":"ODM","key":["USUBJID"],"derivations":{"AGE":{"odm":"ODM.IT.DM.AGE"}}}]);
-            // AGE reads AGES so pruning (LAYER-11) keeps the intermediate
-            // live and its ODM context is still refused.
-            source["columns"][1]["derivation"] = json!("AGES.AGE");
-            let observed = observe(source, &[]);
-            assert_eq!(observed["issues"][0]["condition"], "invalid_odm_context");
-            assert_eq!(
-                observed["issues"][0]["context"],
-                json!({"dataset":"ODM","location":"intermediate"})
-            );
-            assert_eq!(
-                observed["issues"][0]["spec_paths"],
-                json!(["intermediates.AGES.derivations.AGE.odm"])
-            );
-            let observed = observe(
-                spec(
-                    json!({"aggregate":{"derivations":{"VALUE":{"type":"int","derivation":{"odm":"ODM.IT.DM.AGE"}}},"expr":"SUM(VALUE)"}}),
-                ),
-                &[],
-            );
-            assert_eq!(observed["issues"][0]["condition"], "invalid_odm_context");
-            assert_eq!(
-                observed["issues"][0]["context"],
-                json!({"dataset":"ODM","location":"derive"})
-            );
-            assert_eq!(
-                observed["issues"][0]["spec_paths"],
-                json!(["columns.AGE.derivation.aggregate.derivations.VALUE.derivation.odm"])
-            );
-        }
-
-        #[test]
-        fn missing_fixed_fields_and_declared_types_ordinal_preserve_exact_causes() {
-            let missing = header()
-                .into_iter()
-                .filter(|name| name != "FormOID" && name != "FormRepeatKey")
-                .collect::<Vec<_>>();
-            let observed = observe(spec(json!({"odm":"ODM.IT.DM.AGE"})), &[missing]);
-            assert_eq!(
-                observed["issues"][0]["condition"],
-                "odm_schema_field_missing"
-            );
-            assert_eq!(
-                observed["issues"][0]["context"],
-                json!({"dataset":"ODM","fields":["FormOID","FormRepeatKey"]})
-            );
-            for (field, value) in [
-                ("types", json!({"Value":"int"})),
-                ("ordinal", json!("SourceOrdinal")),
-            ] {
-                let mut source = spec(json!({"odm":"ODM.IT.DM.AGE"}));
-                source["input"]["ODM"] = json!({"path":"never-read.csv",field:value});
-                let observed = observe(source, &[]);
-                assert_eq!(observed["issues"][0]["condition"], "odm_schema_field_type");
-                assert_eq!(
-                    observed["issues"][0]["context"],
-                    json!({"dataset":"ODM","declared":field})
-                );
-                assert_eq!(
-                    observed["issues"][0]["spec_paths"],
-                    json!([format!("input.ODM.{field}")])
-                );
-            }
-        }
     }
     mod original_intermediate_verifications {
         //! Shipped-schema successors for specification/test_intermediate_verification.py
-        //! retired in #2110. Original valid and invalid verification payloads are kept;
-        //! private Python model instances are replaced by the native check boundary.
+        //! retired in #2110. The admitted and absent verifications, the restated
+        //! list and the singular field are cases of
+        //! `fixtures/diagnostics/declaration_vectors.json`;
+        //! the invalid payloads stay here, private Python model instances replaced
+        //! by the native check boundary.
         use std::fs;
         use yamaa_adapters::file_application;
         use yamaa_adapters::json;
@@ -1125,35 +1050,10 @@ mod declaration {
         }
 
         #[test]
-        fn original_short_and_named_intermediate_unique_checks_are_admitted() {
-            let study = Study::new();
-            let intermediate = json!({
-                "id":"DS_EOS", "dataset":"DS", "key":["STUDYID","USUBJID"],
-                "verifications":[
-                    {"unique":["STUDYID","USUBJID"]},
-                    {"unique":{"id":"one-row-per-subject","columns":["USUBJID"]}}
-                ]
-            });
-            assert_eq!(study.check(intermediate), []);
-            // A mapping holding only the columns restates the list (SCHEMA-15).
-            let issues = study.check(json!({
-                "id":"DS_EOS", "dataset":"DS", "key":["STUDYID","USUBJID"],
-                "verifications":[{"unique":{"columns":["STUDYID"]}}]
-            }));
-            assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(issues[0].condition(), "redundant_long_form");
-            assert_eq!(
-                issues[0].spec_paths,
-                ["intermediates.DS_EOS.verifications[0].unique"]
-            );
-            assert_eq!(
-                crate::support::benchmarks::without_layer(issues[0].context.clone()),
-                json!({"field":"columns","shorthand":"[\"STUDYID\"]"})
-            );
-        }
-
-        #[test]
         fn all_original_invalid_intermediate_unique_payloads_are_refused() {
+            // Seam: a property of every issue each refusal reports (the
+            // validation phase, no missing resource, spec paths under
+            // `intermediates`), which the case form's rows do not state.
             let study = Study::new();
             for verification in [
                 json!({"unique":[]}),
@@ -1180,29 +1080,6 @@ mod declaration {
                     yamaa_adapters::json_wire::encode(&verification)
                 );
             }
-        }
-
-        #[test]
-        fn original_singular_intermediate_verification_field_stays_unknown() {
-            let study = Study::new();
-            let issues = study.check(json!({
-                "id":"DS_EOS", "dataset":"DS", "verification":{"unique":["USUBJID"]}
-            }));
-            assert_eq!(issues.len(), 1);
-            assert_eq!(issues[0].condition(), "unknown_field");
-            assert_eq!(issues[0].spec_paths, ["intermediates.DS_EOS.verification"]);
-        }
-
-        #[test]
-        fn original_absent_intermediate_verifications_remain_optional() {
-            // `require_match` keeps the lookup from restating the implicit
-            // join; a lookup declares its key (LOOKUP-3).
-            assert_eq!(
-                Study::new().check(json!({
-                    "id":"DS_EOS","dataset":"DS","key":["STUDYID","USUBJID"],"require_match":true
-                })),
-                []
-            );
         }
     }
 }

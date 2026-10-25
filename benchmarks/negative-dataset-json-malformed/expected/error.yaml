@@ -1,0 +1,9 @@
+phase: ingest
+condition: source_dataset_json_invalid
+spec_paths:
+  - input.DM.path
+rule: DSJSON-5
+context:
+  dataset: DM
+  path: input/dm.json
+  cause: malformed
