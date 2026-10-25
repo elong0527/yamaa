@@ -183,7 +183,7 @@ relation, whichever it reduces. A filter on a construct with no records to
 select among fails.
 
 Fails: `unknown_field`, `prohibited_construct`.
-Evidence: `schema-lookup-filters`, `negative-source-missing-field`, `negative-source-trivial-filter`, `negative-row-filter-lookup-scope`, `schema-aggregation`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-adapters/tests/fixtures/row_reductions.json`.
+Evidence: `schema-lookup-filters`, `negative-source-missing-field`, `negative-source-trivial-filter`, `negative-row-filter-lookup-scope`, `schema-aggregation`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json`.
 
 For an input dataset, `order_by` names qualified fields of that dataset only,
 `columns` lists bare field names, and every `filter` field is qualified. The
