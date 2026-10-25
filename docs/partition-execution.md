@@ -211,7 +211,17 @@ runs it over the partitions of an input it holds whole. The facade's
 `EngineOptions::with_partitions` divides each build's driver input into
 partitions of a given number of records (#3697), or into key-bounded
 partitions ([below](#key-bounded-partitions), #3763). It is an engine mode
-with no host surface.
+with no host surface, which every client sets (#3794, D264): the Python and R
+bindings and the command line run every build over
+`Partitions::by_keys(2, 624_640)` with the whole-table fallback, key-bounded
+partitions of at most `Limits::PARTITION_ROWS` records over
+`Limits::PARTITION_KEYS` leading keys, so that a run whose steps group by
+subject divides and every other run runs whole as it would without
+partitions. A run's measured observations name how it divided its driver
+input: `whole_table`, `consecutive` or `key_bounded`, the leading keys its
+partitions keep whole, the most records each holds and how many partitions
+it ran. The saved run report does not carry it (P10). An embedder's engine
+that sets no partitions runs every build whole.
 
 - **One partition at a time.** The run decodes a partition, runs it through
   every derivation step as a whole-table run over its own records (its row
@@ -266,6 +276,11 @@ with no host surface.
   read the driver input, driven by a secondary input or by a named
   intermediate over one, belong to no partition: the first partition's run
   builds them, and every later run passes their marks without building any.
+  An output admitted whole, as a SAS or ODM driver input's is (D264), is
+  checked as the whole-table run checks it: each partition's run records the
+  rows its capacity checks see, and the run adds every partition's up at
+  each check, so it refuses at the template, and with the count, the
+  whole-table run refuses at.
 - **Combine state.** Only the state this inventory marks combinable crosses
   partitions: the candidate rows the output is built from, appended
   partition after partition; the handler counts (`columnar/handlers.rs`),
@@ -433,10 +448,15 @@ A partitioned run whose driver input is CSV or Parquet, and whose plan has no
 step that needs the whole table under its partitions, admits, encodes and
 stages its output a partition at a time (#3793, D264): consecutive output
 rows, in output order, each holding at most as many rows as the run's largest
-driver partition (`Execution::partition_rows`). The run still holds its whole
-output: the dataset, its encoded bytes, the host view and the observations'
-copies. Only the admission, the encoding and the staging go a partition at a
-time, so the run's memory still follows the whole output. Wherever the output
+driver partition (`Execution::partition_rows`). The run holds its output once
+(#3870): the dataset keeps it a column at a time in the executor's typed
+buffers, every present value of a column in one closed type and text in one
+arena, and its encoders and its observations read that one copy. The
+observations encode the output only when they are serialized. The host view,
+the Arrow table a host reads, is built from it, and the encoded bytes stay
+whole, since a later specification of a project reads them and a resolver's
+`Stage` takes complete bytes, so the run's memory follows the output's values
+in the dataset and the host view, and its encoded bytes. Wherever the output
 is admitted, each partition is admitted on its own rather than the whole
 output: the executor's row capacity, the output keys and the dataset checks'
 groupings, the encoders, the host view, a stream's batches and the run's
@@ -521,4 +541,10 @@ partitions, and its confinement gate, are stated case by case in
 the gate's refusals, their fallbacks and the plans it admits. The streamed run's
 are the facade's `streaming.rs`, the adapters' `table_public_batches.rs`, whose
 counting source proves that a consumer that stops pulling stops production,
-and the installed `streaming` suites of both hosts.
+and the installed `streaming` suites of both hosts. The clients' default
+partitions are the facade's `client_partitions.rs`, which reads each client's
+values against core's, `partitioned_confinement.rs`, which reads how each run
+divided its input from its measured observations, the hosts'
+`longitudinal_capacity` suites, which read it for their default, and their
+`partitioned_default` suites, which run 10,000,001 records under it in native
+qualification.

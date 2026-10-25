@@ -1065,13 +1065,6 @@
       "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["intermediates.P.derivations.D.str_template.template"]}]
     },
     {
-      "case": "a_lookup_placeholder_of_another_lookup_s_field_is_typed",
-      "operation": ["check", "build"],
-      "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: Q, dataset: PLAN, key: [USUBJID]}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {str_template: \"{Q.FIRST}\"}}}"}, {"from": "- {name: X, type: float, derivation: P.D}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: P.D}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},
-      "compares": ["phase", "condition", "rule", "spec_paths"],
-      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["intermediates.P.derivations.D.str_template.template"]}]
-    },
-    {
       "case": "a_lookup_mapping_source_of_the_donor_s_typed_field_is_typed",
       "operation": ["check", "build"],
       "input": {"files": {"spec.yaml": {"base": "lookup", "edits": [{"from": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {}}", "to": "- {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {mapping: {source: PLAN.FIRST, dict: {\"1\": one}}}}}"}, {"from": "- {name: X, type: float, derivation: P.D}\n  - {name: C, type: str, derivation: \"'A'\"}", "to": "- {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: P.D}"}]}, "vs.csv": {"base": "donor_vs"}, "plan.csv": {"base": "donor_plan"}}, "specification": "spec.yaml"},

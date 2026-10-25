@@ -973,7 +973,20 @@
           "inputs": {
             "input/source.csv": "X,DTHFL2\none,Y\ntwo,N\n"
           },
-          "check_issues": [],
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "unresolvable_name",
+              "rule": "FORMULA-9",
+              "spec_paths": [
+                "columns.DTHFL.derivation.case[0].when"
+              ],
+              "context": {
+                "identifier": "DTHFL2",
+                "suggestion": "SRC.DTHFL2"
+              }
+            }
+          ],
           "issues": [
             {
               "phase": "validation",
@@ -996,7 +1009,20 @@
           "inputs": {
             "input/source.csv": "X,DTHFL2\none,Y\ntwo,N\n"
           },
-          "check_issues": [],
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "unresolvable_name",
+              "rule": "FORMULA-9",
+              "spec_paths": [
+                "rows.row.derivations.DTHFL.case[0].when"
+              ],
+              "context": {
+                "identifier": "DTHFL2",
+                "suggestion": "SRC.DTHFL2"
+              }
+            }
+          ],
           "issues": [
             {
               "phase": "validation",
@@ -1139,7 +1165,20 @@
             "input/source.csv": "X,DTHFL2\none,Y\ntwo,N\n",
             "input/other.csv": "K,DTHFL2\none,Y\ntwo,N\n"
           },
-          "check_issues": [],
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "unresolvable_name",
+              "rule": "FORMULA-9",
+              "spec_paths": [
+                "columns.DTHFL.derivation.case[0].when"
+              ],
+              "context": {
+                "identifier": "DTHFL2",
+                "suggestion": "SRC.DTHFL2"
+              }
+            }
+          ],
           "issues": [
             {
               "phase": "validation",
@@ -1222,7 +1261,32 @@
             "input/source.csv": "X\none\ntwo\n",
             "input/right.csv": "X,V\none,1.0\n"
           },
-          "check_issues": [],
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "rule": "LOOKUP-7",
+              "spec_paths": [
+                "intermediates.LOOK.filter"
+              ],
+              "context": {
+                "identifier": "V",
+                "intermediate": "LOOK",
+                "suggestion": "RIGHT.V"
+              }
+            },
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "rule": "NAME-3",
+              "spec_paths": [
+                "columns.V.derivation.source"
+              ],
+              "context": {
+                "identifier": "LOOK.V"
+              }
+            }
+          ],
           "issues": [
             {
               "phase": "validation",
@@ -2364,7 +2428,22 @@
           "inputs": {
             "input.csv": "ID,AVAL\n1,5\n"
           },
-          "check_issues": [],
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "rule": "VALUE-2",
+              "spec_paths": [
+                "columns.RESULT.derivation.baseline_flag.date"
+              ],
+              "context": {
+                "actual": "int",
+                "expected": "date or datetime",
+                "operation": "baseline_flag",
+                "source": "SRC.AVAL"
+              }
+            }
+          ],
           "issues": [
             {
               "phase": "validation",
@@ -2389,7 +2468,22 @@
           "inputs": {
             "input.csv": "ID,AVAL,REF\n1,5,2025-01-10\n"
           },
-          "check_issues": [],
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "rule": "VALUE-2",
+              "spec_paths": [
+                "rows.driver.derivations.RESULT.baseline_flag.date"
+              ],
+              "context": {
+                "actual": "int",
+                "expected": "date or datetime",
+                "operation": "baseline_flag",
+                "source": "AVAL"
+              }
+            }
+          ],
           "issues": [
             {
               "phase": "validation",
@@ -3428,7 +3522,22 @@
             "right.csv": "ID,RAW\n1,1\n2,2\n",
             "matches.csv": "M,VALUE\nONE,hit1\nTWO,hit2\n"
           },
-          "check_issues": [],
+          "check_after_capture": true,
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "rule": "TEXT-1",
+              "spec_paths": [
+                "intermediates.LOOK.key.M.str_case.source"
+              ],
+              "context": {
+                "actual": "int",
+                "expected": "str",
+                "source": "A"
+              }
+            }
+          ],
           "issues": [
             {
               "phase": "validation",
@@ -7907,7 +8016,29 @@
           "output": "parquet"
         }
       ],
-      "saves_after_change": 2
+      "saves_after_change": 2,
+      "partitions": {
+        "count": 1,
+        "keys": 1,
+        "rows": 624640,
+        "strategy": "key_bounded"
+      }
+    },
+    "partitioned-default": {
+      "records": 10000001,
+      "subject_records": 10,
+      "header": "STUDYID,USUBJID,SEQ",
+      "specification": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [STUDYID, USUBJID, SEQ]\ninput: {SRC: {path: input.csv, types: {SEQ: int}}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, SEQ, RN]}\ncolumns:\n  - {name: STUDYID, type: str, derivation: SRC.STUDYID}\n  - {name: USUBJID, type: str, derivation: SRC.USUBJID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: RN, type: int, derivation: {row_number: {window: {group_by: [STUDYID, USUBJID], order_by: [SEQ]}}}}\n",
+      "saved_lines": 10000002,
+      "first_lines": [
+        "STUDYID,USUBJID,SEQ,RN",
+        "S1,00000000,1,1",
+        "S1,00000000,2,2"
+      ],
+      "last_lines": [
+        "S1,00999999,10,10",
+        "S1,01000000,1,1"
+      ]
     },
     "column-ceilings": {
       "admitted": 1024,

@@ -236,7 +236,9 @@ impl EngineOptions {
     }
 
     /// Run every build divided into `partitions` (#3697, #3763), an engine
-    /// mode with no host surface.
+    /// mode with no host surface. The Python and R bindings and the command
+    /// line run every build over key-bounded partitions with the whole-table
+    /// fallback (#3794); an engine that sets none runs every build whole.
     ///
     /// # Example
     ///

@@ -18,7 +18,9 @@ mod project {
             rc::Rc,
             sync::Arc,
         };
-        use support::{call, environment as with_functions, function, specification, Tree};
+        use support::{
+            call, environment as with_functions, function, specification, typed_specification, Tree,
+        };
         use yamaa_core::{
             dataset::ExecutionError,
             decoder,
@@ -51,6 +53,7 @@ mod project {
                 yamaa_core::application_observer::Phase,
                 yamaa_core::application_observer::Refusal,
             ),
+            Divided(yamaa_core::dataset::Division),
         }
         #[derive(Default)]
         struct Stages(RefCell<Vec<Stage>>);
@@ -64,6 +67,7 @@ mod project {
                     Event::FunctionReturn { stage, outcome } => Stage::Return(stage, outcome),
                     Event::Refusal { phase, refusal } => Stage::Refusal(phase, refusal),
                     Event::Partition { .. } => unreachable!("a whole-table run has no partition"),
+                    Event::Divided { division, .. } => Stage::Divided(division),
                 });
             }
         }
@@ -196,7 +200,7 @@ mod project {
         }
 
         fn model(name: &str) -> yamaa_core::schema::Document {
-            specification(vec![(
+            typed_specification(vec![(
                 "VALUE",
                 "int",
                 call(name, vec![("x", Tree::text("SRC.ID"))]),

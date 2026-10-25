@@ -467,9 +467,10 @@ impl Observer for Observed<'_> {
                 Some(number),
                 Some(records),
             ),
-            Event::FunctionCall { .. } | Event::FunctionReturn { .. } | Event::Refusal { .. } => {
-                return
-            }
+            Event::FunctionCall { .. }
+            | Event::FunctionReturn { .. }
+            | Event::Refusal { .. }
+            | Event::Divided { .. } => return,
         };
         let Some(phase) = ProgressPhase::of(phase) else {
             return;

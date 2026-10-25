@@ -84,11 +84,12 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::io::Write;
+use std::num::NonZeroUsize;
 
 use yamaa::{
     CancellationToken, Condition, ContextValue, Diagnostic, Engine, EngineOptions, Failure,
-    FileType, Host, Info, LintFinding, OdmOptions, ProgressEvent, ProgressKind, ProjectRequest,
-    ProjectRun, Run, Status, SubmissionOptions, Summary, Timings,
+    FileType, Host, Info, LintFinding, OdmOptions, Partitions, ProgressEvent, ProgressKind,
+    ProjectRequest, ProjectRun, Run, Status, SubmissionOptions, Summary, Timings,
 };
 
 use crate::arguments::{Call, Format, Usage};
@@ -389,23 +390,35 @@ fn not_taken(call: &Call, path: &str, file_type: FileType, how: Option<&str>) ->
     )))
 }
 
-/// The command line's engine: the local file resolver, and no host language
-/// (#3030 section 2.10, D123). It reads no project's `environments.<host>`
-/// entry, so it verifies no lock and activates nothing: a build that calls a
-/// project function is refused before it reads data, and every other build
-/// runs as a host runs it (section 2.3, D110).
+/// The partitions every build runs over (#3794, D264): key-bounded over the
+/// specification's two leading declared keys, of at most 624,640 driver
+/// records each, with the whole-table fallback. The command line depends on
+/// the facade alone, so it spells core's `Limits::PARTITION_KEYS` and
+/// `Limits::PARTITION_ROWS`, which the facade's `client_partitions.rs` checks.
+const PARTITIONS: [usize; 2] = [2, 624_640];
+
+/// The command line's engine: the local file resolver, no host language
+/// (#3030 section 2.10, D123) and [`PARTITIONS`]. It reads no project's
+/// `environments.<host>` entry, so it verifies no lock and activates
+/// nothing: a build that calls a project function is refused before it
+/// reads data, and every other build runs as a host runs it (section 2.3,
+/// D110).
 fn engine() -> Engine {
-    Engine::new(EngineOptions::neutral(
-        Host::Cli.as_str().to_owned(),
-        String::new(),
-    ))
+    Engine::new(options())
+}
+
+/// The options of every engine the command line builds.
+fn options() -> EngineOptions {
+    let [keys, rows] = PARTITIONS.map(|count| NonZeroUsize::new(count).expect("nonzero"));
+    EngineOptions::neutral(Host::Cli.as_str().to_owned(), String::new())
+        .with_partitions(Partitions::by_keys(keys, rows).with_whole_table_fallback())
 }
 
 /// The command line's [`engine`], which under `--verbose` writes each
 /// progress event to standard error as it happens (#3762). A line that cannot
 /// be written is lost, and the command goes on.
 fn reporting(verbose: &Verbose) -> Engine {
-    let options = EngineOptions::neutral(Host::Cli.as_str().to_owned(), String::new());
+    let options = options();
     Engine::new(match verbose.on {
         true => options.with_progress(|event: &ProgressEvent| {
             let _ = writeln!(std::io::stderr(), "{}", progress_line(event));

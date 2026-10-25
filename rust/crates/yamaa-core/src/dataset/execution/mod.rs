@@ -46,6 +46,18 @@ pub enum ExecutionEvent {
         number: usize,
         records: usize,
     },
+    /// How the run divides its driver input, once admission has passed
+    /// (#3794).
+    Divided(Division),
+}
+
+/// How a run divided its driver input (#3794): whole, or into `count`
+/// partitions, key-bounded over the leading `keys` declared keys or, with no
+/// keys, consecutive.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Division {
+    Whole,
+    Partitions { keys: usize, count: usize },
 }
 
 /// How a run divides its driver input. Without `leading_keys` (#3697), into
@@ -95,20 +107,93 @@ pub enum Resource {
 }
 
 /// Complete owned rows are exposed only after output identity and checks succeed.
-#[derive(Debug, PartialEq)]
+///
+/// The rows are held a column at a time in the executor's typed buffers
+/// (#3870): every present value of a column in one closed type, text in one
+/// arena, so the dataset takes about what its values do. A clone shares
+/// them, so one output's encoders and observations, and the build of its
+/// host view, read one copy.
+#[derive(Clone)]
 pub struct Dataset {
+    inner: std::sync::Arc<Columns>,
+}
+
+struct Columns {
     schema: TableSchema,
-    rows: Vec<Vec<Value>>,
+    columns: Vec<super::columnar::buffer::Values>,
+    rows: usize,
 }
 
 impl Dataset {
-    /// Inspect accepted rows in template/group/source order and declared column order.
-    pub fn rows(&self) -> &[Vec<Value>] {
-        &self.rows
+    /// Every accepted row in template/group/source order and declared column
+    /// order, each an owned copy.
+    pub fn rows(&self) -> Vec<Vec<Value>> {
+        (0..self.inner.rows)
+            .map(|row| {
+                self.inner
+                    .columns
+                    .iter()
+                    .map(|column| column.value(row))
+                    .collect()
+            })
+            .collect()
     }
     /// Complete owned rows in their final order.
+    #[cfg(test)]
     pub(crate) fn from_rows(schema: TableSchema, rows: Vec<Vec<Value>>) -> Self {
-        Self { schema, rows }
+        let width = schema.columns().len();
+        let columns = (0..width)
+            .map(|column| {
+                let mut values = super::columnar::buffer::Values::missing(0);
+                for row in &rows {
+                    values.push(ValueRef::from(&row[column]));
+                }
+                values
+            })
+            .collect();
+        Self::from_columns(schema, columns, rows.len())
+    }
+    /// The columns `columns`, each holding `rows` values in output order.
+    pub(crate) fn from_columns(
+        schema: TableSchema,
+        columns: Vec<super::columnar::buffer::Values>,
+        rows: usize,
+    ) -> Self {
+        debug_assert!(columns.iter().all(|column| column.len() == rows));
+        Self {
+            inner: std::sync::Arc::new(Columns {
+                schema,
+                columns,
+                rows,
+            }),
+        }
+    }
+}
+
+impl PartialEq for Dataset {
+    /// Two datasets are equal when their schemas and every cell are.
+    fn eq(&self, other: &Self) -> bool {
+        let (left, right) = (&*self.inner, &*other.inner);
+        left.schema == right.schema
+            && left.rows == right.rows
+            && left.columns.len() == right.columns.len()
+            && left
+                .columns
+                .iter()
+                .zip(&right.columns)
+                .all(|(left, right)| {
+                    (0..self.inner.rows).all(|row| left.get(row) == right.get(row))
+                })
+    }
+}
+
+impl std::fmt::Debug for Dataset {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("Dataset")
+            .field("schema", &self.inner.schema)
+            .field("rows", &self.rows())
+            .finish()
     }
 }
 
@@ -116,18 +201,19 @@ impl TableAccess for Dataset {
     type Error = Infallible;
     /// Retain declared schema even when every template produces zero rows.
     fn schema(&self) -> &TableSchema {
-        &self.schema
+        &self.inner.schema
     }
     /// Count completed rows independently of missing cells.
     fn row_count(&self) -> usize {
-        self.rows.len()
+        self.inner.rows
     }
     /// Borrow a checked owned cell; missing is never an out-of-bounds substitute.
     fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<Self::Error>> {
-        self.rows
-            .get(row)
-            .and_then(|values| values.get(column))
-            .map(ValueRef::from)
+        self.inner
+            .columns
+            .get(column)
+            .filter(|_| row < self.inner.rows)
+            .map(|values| values.get(row))
             .ok_or(CellError::OutOfBounds { row, column })
     }
 }

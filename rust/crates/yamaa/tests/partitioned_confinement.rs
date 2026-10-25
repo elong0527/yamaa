@@ -4,7 +4,8 @@
 //! them together is refused before derivation as `partition_global`, and its
 //! whole-table fallback runs it whole. Consecutive partitions end only
 //! between runs of the input fields the plan's grouped row templates share,
-//! so a plan they confine divides.
+//! so a plan they confine divides. A run's measured observations name how it
+//! divided its driver input (#3794).
 //!
 //! Each case states the whole-table output by hand: a plan the gate refuses
 //! builds it under the fallback, and a plan it admits builds it divided. The
@@ -160,5 +161,62 @@ fn a_step_whose_records_no_partition_keeps_together_is_refused_unless_it_falls_b
                 "{label}, with the fallback"
             );
         }
+    }
+}
+
+/// A run's measured observations name how it divided its driver input
+/// (#3794): the strategy, the leading keys its partitions keep whole, the
+/// most records each holds and how many partitions it ran. Two subjects'
+/// records, a, a and b, run whole on an engine without partitions; in two
+/// partitions, cut between the runs of ID, under consecutive partitions of
+/// one record and key-bounded ones over the key ID; and whole again under the
+/// fallback when key-bounded partitions over ID and N refuse the template
+/// grouped by ID.
+#[test]
+fn a_run_names_how_it_divided_its_driver_input_in_its_measured_observations() {
+    let one = NonZeroUsize::MIN;
+    let two = NonZeroUsize::new(2).unwrap();
+    let subjects_only = SUBJECTS.replace("  - id: records\n    derivations: {N: SRC.N}\n", "");
+    let whole = r#"{"count":1,"keys":0,"rows":null,"strategy":"whole_table"}"#;
+    let cases: [(&str, &str, Option<Partitions>, &str); 4] = [
+        ("without partitions", SUBJECTS, None, whole),
+        (
+            "consecutive partitions",
+            &subjects_only,
+            Some(Partitions::new(one)),
+            r#"{"count":2,"keys":0,"rows":1,"strategy":"consecutive"}"#,
+        ),
+        (
+            "key-bounded partitions",
+            SUBJECTS,
+            Some(Partitions::by_keys(one, one)),
+            r#"{"count":2,"keys":1,"rows":1,"strategy":"key_bounded"}"#,
+        ),
+        (
+            "the fallback",
+            SUBJECTS,
+            Some(Partitions::by_keys(two, one).with_whole_table_fallback()),
+            whole,
+        ),
+    ];
+    for (label, spec, partitions, division) in cases {
+        let scratch = Scratch::new("partitioned-division");
+        scratch.write("spec.yaml", spec);
+        scratch.write("input.csv", VISITS);
+        let options = EngineOptions::new(HostLanguage::Python, "yamaa".into(), "0".into());
+        let engine = Engine::new(match partitions {
+            Some(partitions) => options.with_partitions(partitions),
+            None => options,
+        });
+        let run = engine
+            .spec(scratch.join("spec.yaml").to_str().unwrap())
+            .run()
+            .unwrap();
+        // The measurements close the observations, so their record is the
+        // last one named.
+        let observed = run.measured_observations();
+        let start = observed.rfind("\"partitions\":").unwrap() + "\"partitions\":".len();
+        let record = &observed[start..];
+        assert_eq!(&record[..=record.find('}').unwrap()], division, "{label}");
     }
 }

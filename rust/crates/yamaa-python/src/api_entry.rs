@@ -7,11 +7,12 @@
 //! the Python host, the running interpreter's version and, for a call that
 //! may run project functions, the installed functions' port.
 use pyo3::{exceptions::PyException, exceptions::PyRuntimeError, prelude::*, types::PyDict};
+use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex, MutexGuard};
 use yamaa::host::functions::FunctionError;
 use yamaa::{
-    CancellationToken, EngineOptions, Failure, FailureKind, HostLanguage, ProjectRequest,
-    SpecRequest, SubmissionOptions,
+    CancellationToken, EngineOptions, Failure, FailureKind, HostLanguage, Partitions,
+    ProjectRequest, SpecRequest, SubmissionOptions,
 };
 use yamaa_boundary::{HandleKind, Live};
 
@@ -80,12 +81,21 @@ fn runtime(py: Python<'_>) -> String {
     py.version().to_owned()
 }
 
+/// The partitions every build runs over (#3794, D264): key-bounded over the
+/// specification's two leading declared keys, of at most 624,640 driver
+/// records each, with the whole-table fallback. The binding depends on the
+/// facade alone, so it spells core's `Limits::PARTITION_KEYS` and
+/// `Limits::PARTITION_ROWS`, which the facade's `client_partitions.rs` checks.
+const PARTITIONS: [usize; 2] = [2, 624_640];
+
 /// The facade engine of one call: the Python host on the interpreter of
-/// `version`, with the installed project functions when `functions`, and
-/// reporting to `progress` when one is given (#3762). Every call builds its
-/// engine here.
+/// `version`, over [`PARTITIONS`], with the installed project functions when
+/// `functions`, and reporting to `progress` when one is given (#3762). Every
+/// call builds its engine here.
 fn engine(version: &str, functions: bool, progress: Option<&Progress>) -> yamaa::Engine {
-    let options = EngineOptions::new(HostLanguage::Python, "python".into(), version.into());
+    let [keys, rows] = PARTITIONS.map(|count| NonZeroUsize::new(count).expect("nonzero"));
+    let options = EngineOptions::new(HostLanguage::Python, "python".into(), version.into())
+        .with_partitions(Partitions::by_keys(keys, rows).with_whole_table_fallback());
     let options = match functions {
         true => options.with_functions(Arc::new(Port)),
         false => options,
