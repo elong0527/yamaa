@@ -8,7 +8,7 @@ input:
 
 output:
   path: adqs.csv
-  columns: [STUDYID, USUBJID, VISIT, PARAMCD, PARAM, AVAL]
+  columns: [STUDYID, USUBJID, VISIT, PARAMCD, PARAM, AVAL, AREASND]
 
 columns:
   - name: STUDYID
@@ -43,6 +43,12 @@ columns:
     type: float
     label: Numeric Item Response
 
+  # The reason recorded for an unanswered item, empty on the score row. It is
+  # not in the output.
+  - name: ITEMRSND
+    type: str
+    label: Item Reason Not Done
+
   # Sum and count of the answered items at the subject's visit, repeated on
   # every row of it. The score row's empty ITEMRESN adds nothing to either.
   - name: ITEMSUM
@@ -59,6 +65,25 @@ columns:
     derivation:
       aggregate:
         expr: "COUNT(ITEMRESN)"
+        group_by: [STUDYID, USUBJID, VISIT]
+
+  # How many different reasons the visit's items record, and the greatest of
+  # them, which is the only one when they record one.
+  - name: ITEMRSNN
+    type: int
+    label: Number of Different Item Reasons
+    derivation:
+      aggregate:
+        expr: "COUNT(ITEMRSND)"
+        distinct: true
+        group_by: [STUDYID, USUBJID, VISIT]
+
+  - name: ITEMRSN
+    type: str
+    label: Item Reason Not Done for the Visit
+    derivation:
+      aggregate:
+        expr: "MAX(ITEMRSND)"
         group_by: [STUDYID, USUBJID, VISIT]
 
   # The score is the mean answered response times 25 (a 0 to 100 scale),
@@ -79,6 +104,22 @@ columns:
           min: 0
           max: 100
 
+  # Why the value is missing. An item row keeps its recorded reason. A score
+  # with too few answers takes the one reason its items record when none was
+  # answered, and reads NOT CALCULABLE otherwise.
+  - name: AREASND
+    type: str
+    label: Analysis Reason Not Done
+    derivation:
+      case:
+        - when: "PARAMCD = 'PFSCORE' AND ITEMANS >= 3"
+          then: null
+        - when: "PARAMCD = 'PFSCORE' AND ITEMANS = 0 AND ITEMRSNN = 1"
+          then: ITEMRSN
+        - when: "PARAMCD = 'PFSCORE'"
+          then: "'NOT CALCULABLE'"
+        - otherwise: ITEMRSND
+
 rows:
   # Every physical functioning item record, answered or not.
   - id: item
@@ -87,6 +128,7 @@ rows:
       PARAMCD: QS.QSTESTCD
       PARAM: QS.QSTEST
       ITEMRESN: QS.QSSTRESN
+      ITEMRSND: QS.QSREASND
 
   # One score row per subject and visit, built from the visit's PF01 record
   # whether or not it was answered; a visit with no PF01 record gets none.
@@ -96,6 +138,7 @@ rows:
       PARAMCD: "'PFSCORE'"
       PARAM: "'Physical Functioning Subscale Score'"
       ITEMRESN: null
+      ITEMRSND: null
 
 verifications:
   - row_count:
@@ -109,3 +152,7 @@ verifications:
       id: an-item-response-stays-within-the-answer-range
       when: "PARAMCD IN ('PF01', 'PF02', 'PF03', 'PF04')"
       require: "AVAL IS NULL OR AVAL BETWEEN 0 AND 4"
+  - assert:
+      id: a-missing-score-says-why
+      when: "PARAMCD = 'PFSCORE' AND AVAL IS NULL"
+      require: "AREASND IS NOT NULL"
