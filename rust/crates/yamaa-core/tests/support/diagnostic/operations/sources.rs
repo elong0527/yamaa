@@ -1,13 +1,14 @@
-//! The source readers' refusals as core classifies them (CSV, PARQUET, SAS
-//! and the YAML source of SPEC-8, SCHEMA-3 and VALUE-11); the adapters' own
-//! suites pin which bytes give which refusal.
+//! The source readers' refusals as core classifies them (CSV, PARQUET, SAS,
+//! Dataset-JSON and the YAML source of SPEC-8, SCHEMA-3 and VALUE-11); the
+//! adapters' own suites pin which bytes give which refusal.
 use super::{column_type, text, File};
 use crate::support::diagnostic::{json::Json, Record};
 use yamaa_core::{
     csv_source::{CsvSource, Error as CsvError, Field as CsvField, ProfileCause},
-    diagnostic::{Diagnostic, SourceFinding},
-    parquet_source::{self as parquet, Converted, Field, Logical, Physical, Representation},
+    diagnostic::{DatasetJsonCause, Diagnostic, SourceFinding},
+    parquet_source::{self as parquet, Field},
     typed_csv::PreparedTypes,
+    value::ColumnType,
     yaml_diagnostics::{diagnostics, Failure, UnicodeIssue},
 };
 
@@ -17,6 +18,8 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
     Some(match operation {
         "csv_profile" => csv_profile(input),
         "csv_types" => csv_types(input),
+        "dataset_json_source" => dataset_json_source(input),
+        "dataset_json_value" => dataset_json_value(input),
         "parquet_columns" => parquet_columns(input),
         "parquet_value" => parquet_value(input),
         "sas_source" => sas_source(input),
@@ -124,15 +127,12 @@ fn parquet_columns(input: &Json) -> Vec<Diagnostic> {
         .iter()
         .map(|field| {
             let field = field.closed(&["name", "leaves", "stored_type"]);
+            // A field of several leaves is nested, and no column row admits
+            // it; a field of one is an admitted int64.
+            let leaves = field.get("leaves").map_or(1, Json::integer);
             Field {
                 name: text(field, "name").into(),
-                leaves: field.get("leaves").map_or(1, Json::integer),
-                path: text(field, "name").into(),
-                repetition: 0,
-                physical: Physical::Int64,
-                logical: Logical::None,
-                converted: Converted::None,
-                representation: Representation::Int64,
+                kind: (leaves == 1).then_some(ColumnType::Int),
                 stored_type: field.get("stored_type").map_or("int64", Json::text).into(),
             }
         })
@@ -174,6 +174,84 @@ fn sas_source(input: &Json) -> Vec<Diagnostic> {
         dataset: text(input, "dataset"),
         path: text(input, "path"),
         cause: text(input, "cause"),
+    }
+    .diagnostic()]
+}
+
+/// A Dataset-JSON reader's classified refusal, `{dataset, path, cause}` and
+/// the facts its cause locates it by: `member` and an optional `field`
+/// position, a `field` name or position, `data_type` and the declared
+/// `type`, and a `record`.
+fn dataset_json_source(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&[
+        "dataset",
+        "path",
+        "cause",
+        "member",
+        "field",
+        "data_type",
+        "type",
+        "record",
+    ]);
+    let field = input.get("field").map(|field| match field {
+        Json::String(name) => CsvField::Name(name.clone()),
+        index => CsvField::Index(index.integer()),
+    });
+    let name = || match &field {
+        Some(CsvField::Name(name)) => name.as_str(),
+        other => panic!("the cause names its field: {other:?}"),
+    };
+    let record = || input.field("record").integer();
+    let cause = match text(input, "cause") {
+        "malformed" => DatasetJsonCause::Malformed,
+        "version" => DatasetJsonCause::Version,
+        "member" => DatasetJsonCause::Member {
+            member: text(input, "member"),
+            field: match &field {
+                Some(CsvField::Index(index)) => Some(*index),
+                None => None,
+                Some(CsvField::Name(name)) => panic!("a member's field is a position: {name}"),
+            },
+        },
+        "field_name" => DatasetJsonCause::FieldName {
+            field: field.as_ref().expect("the cause names its field"),
+        },
+        "data_type" => DatasetJsonCause::DataType {
+            field: name(),
+            data_type: text(input, "data_type"),
+        },
+        "field_type" => DatasetJsonCause::FieldType {
+            field: name(),
+            data_type: text(input, "data_type"),
+            declared: column_type(input.field("type")),
+        },
+        "records" => DatasetJsonCause::Records,
+        "row_width" => DatasetJsonCause::RowWidth { record: record() },
+        "cell" => DatasetJsonCause::Cell {
+            record: record(),
+            field: name(),
+        },
+        other => panic!("no Dataset-JSON cause {other:?}"),
+    };
+    vec![SourceFinding::DatasetJson {
+        dataset: text(input, "dataset"),
+        path: text(input, "path"),
+        cause,
+    }
+    .diagnostic()]
+}
+
+/// A Dataset-JSON value that does not parse as its field's type,
+/// `{dataset, field, type, value, record, declared}`.
+fn dataset_json_value(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&["dataset", "field", "type", "value", "record", "declared"]);
+    vec![SourceFinding::DatasetJsonValue {
+        dataset: text(input, "dataset"),
+        field: text(input, "field"),
+        target: column_type(input.field("type")),
+        value: text(input, "value"),
+        record: input.field("record").integer(),
+        declared: input.field("declared").boolean(),
     }
     .diagnostic()]
 }

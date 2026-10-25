@@ -63,10 +63,11 @@ pub fn declared(
         let Some(&actual) = right.get(name) else {
             return Ok(Inference::UnknownColumn { key });
         };
-        if catalog.output_type(name).is_none() {
+        if !catalog.has_output(name) {
             return Ok(Inference::UnknownValue { key });
         }
-        if let Some(expected) = catalog.type_of(name) {
+        // A pair whose either type is not decided is not compared.
+        if let Some((expected, actual)) = catalog.type_of(name).zip(actual) {
             if !ResultType::from(expected).comparable(actual.into()) {
                 return Ok(Inference::Incompatible {
                     key,
@@ -116,15 +117,15 @@ mod tests {
             &[
                 Field {
                     name: "A",
-                    column_type: Int,
+                    column_type: Some(Int),
                 },
                 Field {
                     name: "B",
-                    column_type: Str,
+                    column_type: Some(Str),
                 },
                 Field {
                     name: "D",
-                    column_type: Date,
+                    column_type: Some(Date),
                 },
             ],
             &[],
@@ -142,15 +143,15 @@ mod tests {
         let fields = [
             Field {
                 name: "B",
-                column_type: Str,
+                column_type: Some(Str),
             },
             Field {
                 name: "A",
-                column_type: Float,
+                column_type: Some(Float),
             },
             Field {
                 name: "E",
-                column_type: Str,
+                column_type: Some(Str),
             },
         ];
         assert_eq!(
@@ -169,7 +170,7 @@ mod tests {
         );
         let mismatched = [Field {
             name: "D",
-            column_type: Str,
+            column_type: Some(Str),
         }];
         assert_eq!(
             declared(&catalog, &["D"], &mismatched),
@@ -190,7 +191,7 @@ mod tests {
         let catalog = catalog();
         let field = Field {
             name: "A",
-            column_type: Int,
+            column_type: Some(Int),
         };
         assert_eq!(
             declared(&catalog, &["A"], &[field, field]),
@@ -202,7 +203,7 @@ mod tests {
                 &["A"],
                 &[Field {
                     name: "",
-                    column_type: Str
+                    column_type: Some(Str)
                 }]
             ),
             Err(Error::EmptyName)

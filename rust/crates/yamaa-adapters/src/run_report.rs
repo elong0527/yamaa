@@ -228,6 +228,8 @@ fn profile(profile: SourceProfile) -> &'static str {
         SourceProfile::Xport => "xpt",
         SourceProfile::Sas7bdat => "sas7bdat",
         SourceProfile::OdmXml => "odm",
+        SourceProfile::DatasetJson => "dataset_json",
+        SourceProfile::DatasetNdjson => "dataset_ndjson",
     }
 }
 

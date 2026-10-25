@@ -6,7 +6,6 @@
 use super::*;
 use crate::{
     ast::{self, ExprId, Read, Scope, TypeEnv},
-    dataset::{Intermediate, SecondarySource},
     diagnostic::{ConditionCode, Diagnostic},
     producer_contract::Contract,
     result_type::ResultType,
@@ -127,9 +126,14 @@ impl<'a> DeclaredTypes<'a> {
                     Some(&(_, contract)) => Stored::Linked(contract),
                     None => match input.source.profile {
                         Some(ast::Profile::Csv) => Stored::Typeless(&input.source.types),
-                        Some(ast::Profile::Xport | ast::Profile::Sas7bdat) => {
-                            Stored::Narrowed(&input.source.types)
-                        }
+                        // A SAS or Dataset-JSON container supplies each
+                        // type, which `types` may narrow (SAS-3, DSJSON-2).
+                        Some(
+                            ast::Profile::Xport
+                            | ast::Profile::Sas7bdat
+                            | ast::Profile::DatasetJson
+                            | ast::Profile::DatasetNdjson,
+                        ) => Stored::Narrowed(&input.source.types),
                         _ => Stored::Captured,
                     },
                 };
@@ -214,40 +218,29 @@ impl PreparedSpecification {
     }
 }
 
-/// Names typed from captured schemas at a bound site: a field of a named
-/// intermediate by its donor's captured type, anything else by the
-/// binding catalog. No cells are read and no resolver is called.
+/// Names typed from the input schemas at a bound site: a field of a named
+/// intermediate by its donor's type, anything else by the binding catalog.
+/// No cells are read and no resolver is called.
 #[derive(Clone, Copy)]
 pub(super) struct CapturedTypes<'a> {
-    named: &'a intermediates::Declarations,
+    donors: binder::Donors<'a>,
     catalog: &'a Catalog,
-    secondary: &'a [SecondarySource],
-    intermediates: &'a [Option<Intermediate>],
 }
 
 impl<'a> CapturedTypes<'a> {
-    pub(super) fn new(
-        named: &'a intermediates::Declarations,
-        catalog: &'a Catalog,
-        secondary: &'a [SecondarySource],
-        intermediates: &'a [Option<Intermediate>],
-    ) -> Self {
-        Self {
-            named,
-            catalog,
-            secondary,
-            intermediates,
-        }
+    pub(super) fn new(donors: binder::Donors<'a>, catalog: &'a Catalog) -> Self {
+        Self { donors, catalog }
     }
     pub(super) fn kind(&self, name: &str) -> Option<ValueType> {
-        if let Some((index, field)) = self.named.reference(name) {
+        if let Some((index, field)) = self.donors.named.reference(name) {
             return self
-                .intermediates
+                .donors
+                .items
                 .get(index)
                 .and_then(Option::as_ref)
                 .and_then(|item| {
-                    let column = item.source_column(self.secondary, field)?;
-                    item.source_kind(self.secondary, column).map(Into::into)
+                    let column = item.source_column(self.donors.secondary, field)?;
+                    self.donors.kind(item, column).map(Into::into)
                 });
         }
         self.catalog.type_of(name).map(Into::into)

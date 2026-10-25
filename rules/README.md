@@ -125,6 +125,7 @@ profiles in `rules/profiles/`.
 | [Parquet profile](reference/parquet.md) | PARQUET | Read and write the closed Parquet field and value mapping. |
 | [SAS source profiles](reference/sas.md) | SAS | Read SAS datasets and Transport v5/v8 through declared encoding and explicit numeric narrowing. |
 | [ODM source profile](reference/odm.md) | ODM | Read an ODM 1.3 or 2.0 snapshot into the item table, refusing transactional content and documents without clinical data, and skip audit records. |
+| [Dataset-JSON source profiles](reference/dataset-json.md) | DSJSON | Read a Dataset-JSON 1.1 file in either representation, typing each field by its column's dataType and narrowing only by declaration. |
 | [Schema language](reference/schema-language.md) | SCHEMA | Define schema notation, registries, constraints, canonical shorthand expansion, and the one spelling of a written value. |
 | [Submission metadata](profiles/submission.md) | SUB | Govern dataset and column metadata, origin, methods, and document references. |
 | [Controlled terminology](profiles/terminology.md) | CT | Declare codelists once and enforce the items each binding lists. |

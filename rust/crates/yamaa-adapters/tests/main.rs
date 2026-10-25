@@ -17,6 +17,7 @@ mod diagnostics;
 
 mod arrow_host_bridge;
 mod ast_lowering;
+mod check_oracle;
 mod declaration_contract_vectors;
 mod declaration_language_header;
 mod declaration_layer_composition;
@@ -87,6 +88,7 @@ mod submission_staleness;
 mod submission_transport;
 mod table_arrow_table;
 mod table_csv_source;
+mod table_dataset_json_source;
 mod table_parquet_bytes;
 mod table_parquet_source;
 mod table_partitioned_sources;

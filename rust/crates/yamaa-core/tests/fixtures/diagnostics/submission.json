@@ -1,5 +1,5 @@
 {
-  "about": "The refusals of submission composition (SUB, DEFINE, OUTPUT-1, OUTPUT-2), of admitting held rows as a composed dataset's published rows (XPT-7, XPT-8, JSON-3, JSON-4, CT-11), of the findings the Define-XML and XPT encoders make (DEFINE-3, DEFINE-16, DEFINE-24, DEFINE-25, JSON-2, XPT-10), and of preparing a specification that restates a mandatory column (CHECK-5, SUB-11). A study is the `study` document, a 1.0 project whose `sdtm` section lists one specification of the SDTM model (D4, D16, D25), or `value_level`, the same with a second column its value-level entries select on, after the case's edits. The cases whose table compared only part of each issue compare those fields, or those keys of its context; the cases whose table found its issues by cause among several, or left a defect of their input without a row, say `among`.",
+  "about": "The refusals of submission composition (SUB, DEFINE, OUTPUT-1, OUTPUT-2), of admitting held rows as a composed dataset's published rows (XPT-7, XPT-8, JSON-3, JSON-4, CT-11), of the findings the Define-XML and XPT encoders make (DEFINE-3, DEFINE-16, DEFINE-24, DEFINE-25, JSON-2, XPT-10), and of preparing a specification that restates a mandatory column (CHECK-5, SUB-11). A study is the `study` document, a 1.0 project whose `sdtm` section lists one specification of the SDTM model (D4, D16, D25), or `value_level`, the same with a second column its value-level entries select on, or `cited_terminology`, the same with two columns bound to the codelists FIRST and SECOND of three codelist sources, the first and third citing one release of the CDISC/NCI SDTM terminology and the second a later one, after the case's edits. The cases whose table compared only part of each issue compare those fields, or those keys of its context; the cases whose table found its issues by cause among several, or left a defect of their input without a row, say `among`.",
   "documents": {
     "study": {
       "project": {
@@ -61,6 +61,42 @@
       ],
       "others": [],
       "terminology": [],
+      "installed": "1.0",
+      "created": "2026-09-30T00:00:00"
+    },
+    "cited_terminology": {
+      "project": {
+        "yamaa": "1.0",
+        "type": "project",
+        "study": {"id": "S01", "name": "Independent study", "description": "Submission detector witness", "protocol_name": "P01"},
+        "sdtm": {
+          "standards": [{"name": "SDTMIG", "version": "3.4", "status": "Final"}],
+          "context": "Other",
+          "define": "define.xml",
+          "specs": ["d0.yaml"]
+        }
+      },
+      "specs": [
+        {
+          "yamaa": "1.0",
+          "type": "spec",
+          "model": "SDTM",
+          "domain": "D0",
+          "keys": ["VALUE"],
+          "submission": {"label": "Independent dataset", "class": "SPECIAL PURPOSE", "structure": "One record per subject", "repeating": false},
+          "columns": [
+            {"name": "VALUE", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}], "codelist": "FIRST"}},
+            {"name": "OTHER", "type": "str", "label": "Independent column", "derivation": "'X'", "submission": {"core": "Exp", "length": 8, "origins": [{"type": "Assigned", "source": "Sponsor"}], "codelist": "SECOND"}}
+          ],
+          "output": {"path": "d0.csv", "columns": ["VALUE", "OTHER"]}
+        }
+      ],
+      "others": [],
+      "terminology": [
+        {"standard": {"name": "CDISC/NCI", "publishing_set": "SDTM", "version": "2026-03-27"}, "codelists": [{"id": "FIRST", "name": "Independent list FIRST", "items": [{"value": "X"}]}]},
+        {"standard": {"name": "CDISC/NCI", "publishing_set": "SDTM", "version": "2026-06-26"}, "codelists": [{"id": "UNBOUND", "name": "Independent list UNBOUND", "items": [{"value": "X"}]}]},
+        {"standard": {"name": "CDISC/NCI", "publishing_set": "SDTM", "version": "2026-03-27"}, "codelists": [{"id": "SECOND", "name": "Independent list SECOND", "items": [{"value": "X"}]}]}
+      ],
       "installed": "1.0",
       "created": "2026-09-30T00:00:00"
     },
@@ -744,6 +780,24 @@
       },
       "compares": ["phase", "condition", "rule"],
       "issues": [{"phase": "validation", "condition": "duplicate_define_identifier", "rule": "DEFINE-10"}]
+    },
+    {
+      "case": "a_later_release_of_a_cited_terminology_standard_is_refused_at_its_publishing_set",
+      "operation": "compose",
+      "input": {
+        "base": "cited_terminology",
+        "edits": [{"set": ["terminology", "2", "standard", "version"], "to": "2026-06-26"}]
+      },
+      "issues": [{"phase": "validation", "condition": "duplicate_define_identifier", "rule": "DEFINE-10", "spec_paths": ["codelists[2].standard.publishing_set"], "context": {"detail": "STD.CT_SDTM", "identifier": "STD.CT_SDTM"}}]
+    },
+    {
+      "case": "another_standard_name_under_a_cited_publishing_set_is_refused_at_its_publishing_set",
+      "operation": "compose",
+      "input": {
+        "base": "cited_terminology",
+        "edits": [{"set": ["terminology", "2", "standard", "name"], "to": "BIMO"}]
+      },
+      "issues": [{"phase": "validation", "condition": "duplicate_define_identifier", "rule": "DEFINE-10", "spec_paths": ["codelists[2].standard.publishing_set"], "context": {"detail": "STD.CT_SDTM", "identifier": "STD.CT_SDTM"}}]
     },
     {
       "case": "two_annotated_crfs_are_not_permitted",

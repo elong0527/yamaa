@@ -104,15 +104,15 @@ fn output_binding(
 ) -> Result<Option<FlagRead>, BindError> {
     let (catalog, driver, available, row) =
         (cx.catalog, cx.scope.driver, cx.scope.available, cx.row());
-    let (edges, findings) = (&mut *cx.edges, &mut *cx.findings);
     if let Some(cause) = catalog
         .validate_output(name, None, available, &[0])
         .map_err(BindError::Catalog)?
     {
-        match cause {
-            reference_binding::Diagnostic::UnknownField => findings.push(unknown(path, name)),
-            reference_binding::Diagnostic::UnresolvableName { .. } => {
-                findings.push(BindFinding::Predicate(finding(
+        let finding = match cause {
+            reference_binding::Diagnostic::UnknownField => cx.bare_name(name, unknown(path, name)),
+            reference_binding::Diagnostic::UnresolvableName { .. } => cx.bare_name(
+                name,
+                BindFinding::Predicate(finding(
                     C::PredicateUnresolvableName,
                     path,
                     [
@@ -120,21 +120,22 @@ fn output_binding(
                         ("suggestion".into(), value_text(&format!("{driver}.{name}"))),
                     ]
                     .into(),
-                )))
-            }
-            _ => findings.push(BindFinding::OutputReference {
+                )),
+            ),
+            _ => BindFinding::OutputReference {
                 path: path.into(),
                 name: name.into(),
                 row: row.map(String::from),
                 finding: cause,
-            }),
-        }
+            },
+        };
+        cx.findings.push(finding);
         return Ok(None);
     }
     let Some(reference_binding::Binding::Output { column, .. }) = catalog.bind(name) else {
         return Err(BindError::Internal);
     };
-    edges.push(column);
+    cx.edges.push(column);
     Ok(Some(FlagRead::Read(Read::Column(column))))
 }
 /// The bound flag over its condition as the site types it (EXPR-14).

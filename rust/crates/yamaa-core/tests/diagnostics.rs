@@ -582,10 +582,269 @@ mod diagnostics {
     /// reports (#3691).
     mod replay {
         use crate::support::diagnostic::{
-            form::Order,
+            form::{Order, Outcome, Stated},
             replay::{among, compared},
         };
         use yamaa_core::json::Value;
+
+        #[test]
+        fn table_column_subsets_keep_every_row_and_require_ordered_known_columns() {
+            // The table-comparison seam must reject false expectations; an
+            // ordinary replay fixture cannot expect its own comparison to fail.
+            let decode = |text| crate::support::diagnostic::json::read(text, "table form").value();
+            let rows = |text| decode(text).as_array().unwrap().clone();
+            let reported = Outcome {
+                output: Some(rows(
+                    r#"[["ID","FLAG","VALUE"],["001",true,12.0],["002",false,null]]"#,
+                )),
+                report: Some(rows(
+                    r#"[["KIND","ID","COUNT"],["run","owner",3],["rows","001",2],["rows","002",4]]"#,
+                )),
+                ..Outcome::default()
+            };
+            for (written, accepted, label) in [
+                (
+                    r#"{"output_subset":false,"output":[["ID"],["001"],["002"]]}"#,
+                    false,
+                    "the subset marker is written only as true",
+                ),
+                (
+                    r#"{"output_subset":true}"#,
+                    false,
+                    "the subset marker requires an output table",
+                ),
+                (
+                    r#"{"output":[["ID","VALUE"],["001",12.0],["002",null]]}"#,
+                    false,
+                    "an unmarked whole-table expectation rejects extra columns",
+                ),
+                (
+                    r#"{"output_subset":true,"output":[["ID","VALUE"],["001",12.0],["002",null]]}"#,
+                    true,
+                    "ordered nonadjacent output columns",
+                ),
+                (
+                    r#"{"output_subset":true,"output":[["FLAG"],[true],[false]]}"#,
+                    true,
+                    "one typed output column",
+                ),
+                (
+                    r#"{"output":[["ID","FLAG","VALUE"],["001",true,12.0],["002",false,null]]}"#,
+                    true,
+                    "the complete output table",
+                ),
+                (
+                    r#"{"output_subset":true,"output":[["ID"]]}"#,
+                    false,
+                    "all output rows are missing",
+                ),
+                (
+                    r#"{"output_subset":true,"output":[["ID"],["001"]]}"#,
+                    false,
+                    "one output row is missing",
+                ),
+                (
+                    r#"{"output_subset":true,"output":[["ID"],["001"],["002"],["003"]]}"#,
+                    false,
+                    "an extra output row",
+                ),
+                (
+                    r#"{"output_subset":true,"output":[["ID"],["002"],["001"]]}"#,
+                    false,
+                    "reordered output rows",
+                ),
+                (
+                    r#"{"output_subset":true,"output":[["VALUE"],["12.0"],[null]]}"#,
+                    false,
+                    "a selected cell's type changes",
+                ),
+                (
+                    r#"{"output_subset":true,"output":[["VALUE"],[13.0],[null]]}"#,
+                    false,
+                    "a selected cell's value changes",
+                ),
+                (
+                    r#"{"output_subset":true,"output":[["MISSING"],[null],[null]]}"#,
+                    false,
+                    "an unknown output column",
+                ),
+                (
+                    r#"{"output_subset":true,"output":[["VALUE","ID"],[12.0,"001"],[null,"002"]]}"#,
+                    false,
+                    "reordered output columns",
+                ),
+                (
+                    r#"{"output_subset":true,"output":[["ID","ID"],["001","001"],["002","002"]]}"#,
+                    false,
+                    "a repeated output column",
+                ),
+                (
+                    r#"{"output_subset":true,"output":[[]]}"#,
+                    false,
+                    "an empty output header",
+                ),
+                (
+                    r#"{"output_subset":true,"output":[["ID","VALUE"],["001"],["002",null]]}"#,
+                    false,
+                    "a ragged output row",
+                ),
+                (
+                    r#"{"report":{"rows":[["ID","COUNT"],["001",2],["002",4]]}}"#,
+                    true,
+                    "report columns retain only their named kind",
+                ),
+                (
+                    r#"{"report":{"rows":[["COUNT"],[2],[4]]}}"#,
+                    true,
+                    "one report column",
+                ),
+                (
+                    r#"{"report":{"rows":[["MISSING"],[null],[null]]}}"#,
+                    false,
+                    "an unknown report column",
+                ),
+                (
+                    r#"{"report":{"rows":[["COUNT","ID"],[2,"001"],[4,"002"]]}}"#,
+                    false,
+                    "reordered report columns",
+                ),
+                (
+                    r#"{"report":{"rows":[["ID"],["001"]]}}"#,
+                    false,
+                    "a missing report row",
+                ),
+                (
+                    r#"{"report":{"rows":[["ID"],["002"],["001"]]}}"#,
+                    false,
+                    "reordered report rows",
+                ),
+            ] {
+                let compared = std::panic::catch_unwind(|| {
+                    Stated::read(&decode(written), label).compare(&reported, "build", label);
+                });
+                assert_eq!(compared.is_ok(), accepted, "{label}");
+            }
+            let empty = Outcome {
+                output: Some(rows(r#"[["ID","FLAG","VALUE"]]"#)),
+                ..Outcome::default()
+            };
+            let compared = std::panic::catch_unwind(|| {
+                Stated::read(
+                    &decode(r#"{"output_subset":true,"output":[["VALUE"]]}"#),
+                    "empty table",
+                )
+                .compare(&empty, "build", "empty table");
+            });
+            assert!(compared.is_ok(), "a header-only subset of an empty table");
+        }
+
+        fn stated_selection(name: &str, path: &str, texts: Vec<Value>, label: &str) -> Stated {
+            let case = Value::Object(
+                [(
+                    "saved".into(),
+                    Value::Object(
+                        [(
+                            name.into(),
+                            Value::Object(
+                                [(
+                                    "select".into(),
+                                    Value::Object([(path.into(), Value::Array(texts))].into()),
+                                )]
+                                .into(),
+                            ),
+                        )]
+                        .into(),
+                    ),
+                )]
+                .into(),
+            );
+            Stated::read(&case, label)
+        }
+
+        #[test]
+        fn json_pointer_matches_decoded_member_names_and_retains_value_text() {
+            // The saved-selection comparator is the seam under test: a replay
+            // fixture cannot assert that its own false absence must fail.
+            for (document, path, expected, label) in [
+                (r#"{"\u0061":1.0}"#, "/a", Some("1.0"), "Unicode escape"),
+                (
+                    r#"{"a\"b":"v\u0061lue"}"#,
+                    "/a\"b",
+                    Some(r#""v\u0061lue""#),
+                    "escaped quote and unchanged value text",
+                ),
+                (
+                    r#"{"a\\b":true}"#,
+                    r"/a\b",
+                    Some("true"),
+                    "escaped backslash",
+                ),
+                (
+                    r#"{"\uD83D\uDE00":null}"#,
+                    "/😀",
+                    Some("null"),
+                    "surrogate pair",
+                ),
+                (
+                    r#"{"\u0061":[{"b\/c\u007e":"x"}]}"#,
+                    "/a/0/b~1c~0",
+                    Some(r#""x""#),
+                    "nested decoded names and pointer escapes",
+                ),
+                (
+                    r#"{"\u0061":1}"#,
+                    r"/\u0061",
+                    None,
+                    "the raw escape is not the member name",
+                ),
+                (r#"{"\u0061":1}"#, "/b", None, "absent member"),
+            ] {
+                let reported = Outcome {
+                    saved: Some([("data.json".into(), Some(document.as_bytes().to_vec()))].into()),
+                    ..Outcome::default()
+                };
+                let compare = |texts: Vec<Value>| {
+                    std::panic::catch_unwind(|| {
+                        stated_selection("data.json", path, texts, label)
+                            .compare(&reported, "save", label);
+                    })
+                    .is_ok()
+                };
+                let texts = expected
+                    .into_iter()
+                    .map(|text| Value::String(text.into()))
+                    .collect();
+                assert_eq!(
+                    (compare(texts), compare(vec![])),
+                    (true, expected.is_none()),
+                    "{label}: authored selection and stated absence"
+                );
+            }
+        }
+
+        #[test]
+        fn xml_selections_refuse_xpath_syntax_outside_literal_qualified_names() {
+            // The selector admission seam must refuse unsupported XPath;
+            // replay fixtures cannot expect their own admission to fail.
+            for (path, accepted) in [
+                ("/ODM/Item-1[@xml:id='x']/@def:Origin", true),
+                ("/ODM/étude.1", true),
+                ("/ODM/*", false),
+                ("/ODM/Item()", false),
+                ("/ODM/.", false),
+                ("/ODM/..", false),
+                ("/ODM/1Item", false),
+                ("/ODM/:Item", false),
+                ("/ODM/def:Item:Other", false),
+                ("/ODM/@*", false),
+                ("/ODM/Item[@*='x']", false),
+                ("/ODM/Item/@count()", false),
+            ] {
+                let read =
+                    std::panic::catch_unwind(|| stated_selection("define.xml", path, vec![], path));
+                assert_eq!(read.is_ok(), accepted, "{path}: selector admission");
+            }
+        }
 
         /// A case that compares some keys of the context reads a reported
         /// context at those keys alone: another reported key is ignored, and

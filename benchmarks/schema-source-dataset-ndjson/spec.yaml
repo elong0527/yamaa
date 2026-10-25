@@ -1,0 +1,54 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADVS
+keys: [STUDYID, USUBJID, PARAMCD, AVISITN]
+input:
+  # A Dataset-JSON 1.1 file in its newline-delimited form. Each column's
+  # dataType types its field, and a types entry may only narrow it: VISITNUM,
+  # stored as a double, is narrowed to int, and VSORRES, a decimal, is read
+  # as the text the file stores.
+  VS:
+    path: input/vs.ndjson
+    types: {VISITNUM: int, VSORRES: str}
+
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, PARAMCD, AVISITN, AVAL, AVALC, ADTM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: VS.VSTESTCD
+
+  - name: AVISITN
+    type: int
+    label: Analysis Visit (N)
+    derivation: VS.VISITNUM
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: VS.VSSTRESN
+
+  # The collected result keeps its trailing zeros.
+  - name: AVALC
+    type: str
+    label: Analysis Value (C)
+    derivation: VS.VSORRES
+
+  - name: ADTM
+    type: datetime
+    label: Analysis Datetime
+    derivation: VS.VSDTC

@@ -94,7 +94,7 @@ verifies the installed version of yamaa and of every called function package
 against the captured lock.
 
 Fails: `runtime_artifact_mismatch`, `function_file_invalid`.
-Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::each_function_file_finding_and_a_lock_of_another_host_fail_where_they_are_written`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::a_lock_that_is_no_packaging_lock_fails_at_its_field_naming_the_project_file`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::lock_kind_and_function_findings_are_core_owned_after_capture_without_code_authority`, `rust/crates/yamaa-adapters/tests/project_run.rs::lock_and_actual_conformance_mismatches_keep_complete_zero_read_reports`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_lock_that_is_no_packaging_lock_fails_as_the_function_files_do`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::activation_reports_a_function_file_s_findings_in_that_file_and_its_lock_in_the_project`.
+Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::each_function_file_finding_and_a_lock_of_another_host_fail_where_they_are_written`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/environment.json::a_lock_that_is_no_packaging_lock_fails_at_its_field_naming_the_project_file`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::lock_kind_and_function_findings_are_core_owned_after_capture_without_code_authority`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/project_functions.json::lock_findings_report_against_the_project_file_that_holds_the_lock`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_lock_that_is_no_packaging_lock_fails_as_the_function_files_do`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::activation_reports_a_function_file_s_findings_in_that_file_and_its_lock_in_the_project`.
 
 Parallel bindings and per-function language choices are invalid:
 `implementations` names one callable per host language. A lock is optional,
@@ -133,7 +133,7 @@ is one scalar for one logical row. A call naming no function the project lists
 fails.
 
 Fails: `unknown_project_function`.
-Evidence: `schema-functions`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_function_file_names_its_function_and_types_its_values_by_declaration`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`, `rust/crates/yamaa-core/tests/project_execution.rs::retired_fields_and_malformed_literals_are_complete_static_findings`.
+Evidence: `schema-functions`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_function_file_names_its_function_and_types_its_values_by_declaration`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::retired_fields_and_malformed_literals_are_complete_static_findings`.
 
 A call contains no implementation language, callable name or contract version.
 A `function` call's exact argument and result types are those its definition
@@ -161,7 +161,7 @@ and a required parameter declares no `default`. Parameter types are the
 matches its declared exact type, with no implicit conversion.
 
 Fails: `invalid_function_argument`.
-Evidence: `negative-function-contract`, `rust/crates/yamaa-core/tests/project_function_invocation.rs::shared_function_invocation_vectors`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`.
+Evidence: `negative-function-contract`, `rust/crates/yamaa-core/tests/project_function_invocation.rs::shared_function_invocation_vectors`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`.
 
 The function-only `bool` introduces neither Boolean columns nor Boolean
 derivation results. There is no `int`-to-`float` widening, and
@@ -189,7 +189,7 @@ may contain an operator, a function call or another expression, and a name
 resolves under [FORMULA-9](../formulas.md#formula-9).
 
 Fails: `invalid_function_argument`.
-Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_function_argument_is_one_leaf_and_any_other_text_fails`, `schema-functions`, `schema-non-finite`, `rust/crates/yamaa-core/tests/project_execution.rs::retired_fields_and_malformed_literals_are_complete_static_findings`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_function_argument_is_one_leaf_and_any_other_text_fails`, `schema-functions`, `schema-non-finite`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::retired_fields_and_malformed_literals_are_complete_static_findings`.
 
 An argument is an expression field ([EXPR-5](../expressions.md#expr-5)):
 `weight: WEIGHTKG` passes a variable, `unit: "'kg'"` text,

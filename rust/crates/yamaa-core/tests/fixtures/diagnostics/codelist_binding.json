@@ -1,5 +1,21 @@
 {
-  "about": "Binding a specification's codelists to the project's catalogue: a codelist the catalogue does not hold (CT-1), one whose data type the column's type does not admit (CT-8), and an allowed_values verification that restates a bound codelist's items (CT-9), every fault reported in order. The case compares the fields its table compared.",
+  "about": "Binding a specification's codelists to the project's catalogue: a codelist the catalogue does not hold (CT-1), one whose data type the column's type does not admit (CT-8), and an allowed_values verification that restates a bound codelist's items (CT-9), every fault reported in order. `codelist_binding` binds directly against a catalogue of one source, where a codelist names an external dictionary in place of its items; `prepare_in` prepares `coded`, whose CODE column binds the codelist SEX beside its submission origins under the ADaM model (SUB-3, SUB-15), in a 1.0 project run by the Python host whose one codelist file declares SEX, holding the value F, and reports what preparation refuses, the reserved metadata a coded specification cannot declare (SUB-2) among it. A case compares the fields its table compared.",
+  "documents": {
+    "coded": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "model": "ADaM",
+      "domain": "TEST",
+      "input": {"SRC": {"path": "input.csv"}},
+      "keys": ["ID"],
+      "columns": [
+        {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+        {"name": "CODE", "type": "str", "derivation": {"value": "SRC.CODE"}, "submission": {"codelist": "SEX", "origins": [{"type": "Assigned"}]}},
+        {"name": "LATE", "type": "int", "derivation": {"value": "SRC.LATE"}}
+      ],
+      "output": {"path": "output.csv", "columns": ["ID", "CODE", "LATE"]}
+    }
+  },
   "cases": [
     {
       "case": "every_codelist_binding_fault_is_reported_in_binding_order",
@@ -17,6 +33,142 @@
         {"phase": "validation", "condition": "codelist_type_mismatch", "rule": "CT-8"},
         {"phase": "validation", "condition": "redundant_declaration", "rule": "CT-9"}
       ]
+    },
+    {
+      "case": "complete_static_findings_preserve_all_bindings_and_name_the_redundant_verification",
+      "operation": "codelist_binding",
+      "input": {
+        "codelists": [{"id": "CODE", "name": "Codes", "data_type": "text", "extensible": false, "items": ["F", "M\u0000\ud83d\ude42"]}],
+        "bindings": [
+          {"column": 1, "name": "VALUE", "kind": "str", "path": "columns.VALUE.submission.codelist", "codelist": "UNKNOWN", "allowed_values": []},
+          {"column": 1, "name": "VALUE", "kind": "int", "path": "columns.VALUE.submission.codelist", "codelist": "CODE", "allowed_values": ["columns.VALUE.verifications[0].allowed_values"]}
+        ]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_codelist", "rule": "CT-1", "spec_paths": ["columns.VALUE.submission.codelist"], "context": {"column": "VALUE", "codelist": "UNKNOWN"}},
+        {"phase": "validation", "condition": "codelist_type_mismatch", "rule": "CT-8", "spec_paths": ["columns.VALUE.submission.codelist"], "context": {"column": "VALUE", "codelist": "CODE", "codelist_data_type": "text", "column_type": "int"}},
+        {"phase": "validation", "condition": "redundant_declaration", "rule": "CT-9", "spec_paths": ["columns.VALUE.verifications[0].allowed_values"], "context": {"column": "VALUE", "codelist": "CODE", "stated_by": "columns.VALUE.submission.codelist"}}
+      ]
+    },
+    {
+      "case": "a_fixed_binding_rejects_every_verification_that_restates_its_value_set",
+      "operation": "codelist_binding",
+      "input": {
+        "codelists": [{"id": "CODE", "name": "Codes", "data_type": "float", "extensible": false, "items": [9007199254740993, -0.0]}],
+        "bindings": [{"column": 1, "name": "VALUE", "kind": "float", "path": "columns.VALUE.submission.codelist", "codelist": "CODE", "allowed_values": ["first", "second"]}]
+      },
+      "compares": ["spec_paths"],
+      "issues": [{"spec_paths": ["first"]}, {"spec_paths": ["second"]}]
+    },
+    {
+      "case": "an_extensible_list_of_items_makes_an_allowed_values_verification_redundant",
+      "operation": "codelist_binding",
+      "input": {
+        "codelists": [{"id": "CODE", "name": "Codes", "data_type": "text", "extensible": true, "items": ["F"]}],
+        "bindings": [{"column": 1, "name": "VALUE", "kind": "str", "path": "columns.VALUE.submission.codelist", "codelist": "CODE", "allowed_values": ["allowed"]}]
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "redundant_declaration", "spec_paths": ["allowed"]}]
+    },
+    {
+      "case": "an_allowed_values_verification_beside_an_external_dictionary_stands_alone",
+      "operation": "codelist_binding",
+      "input": {
+        "codelists": [{"id": "CODE", "name": "Codes", "data_type": "text", "extensible": false, "external": {"dictionary": "dictionary", "version": "1", "href": "relative/path"}}],
+        "bindings": [{"column": 1, "name": "VALUE", "kind": "str", "path": "columns.VALUE.submission.codelist", "codelist": "CODE", "allowed_values": ["allowed"]}]
+      },
+      "issues": []
+    },
+    {
+      "case": "an_external_dictionary_binds_only_a_column_whose_type_admits_its_data_type",
+      "operation": "codelist_binding",
+      "input": {
+        "codelists": [{"id": "CODE", "name": "Codes", "data_type": "text", "extensible": false, "external": {"dictionary": "dictionary", "version": "1", "href": "relative/path"}}],
+        "bindings": [{"column": 1, "name": "VALUE", "kind": "int", "path": "columns.VALUE.submission.codelist", "codelist": "CODE", "allowed_values": ["allowed"]}]
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "codelist_type_mismatch", "spec_paths": ["columns.VALUE.submission.codelist"]}]
+    },
+    {
+      "case": "a_binding_of_a_codelist_the_project_does_not_declare_is_unknown_when_prepared",
+      "operation": "prepare_in",
+      "input": {
+        "base": "coded",
+        "edits": [{"set": ["columns", "1", "submission", "codelist"], "to": "UNKNOWN"}],
+        "project": {"language": "python", "codelists": [{"codelists": [{"id": "SEX", "name": "Sex", "items": [{"value": "F"}]}]}]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "unknown_codelist", "rule": "CT-1", "spec_paths": ["columns.CODE.submission.codelist"]}]
+    },
+    {
+      "case": "a_codelist_whose_data_type_its_column_does_not_admit_is_refused_when_prepared",
+      "operation": "prepare_in",
+      "input": {
+        "base": "coded",
+        "edits": [{"set": ["columns", "1", "type"], "to": "int"}],
+        "project": {"language": "python", "codelists": [{"codelists": [{"id": "SEX", "name": "Sex", "items": [{"value": "F"}]}]}]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "codelist_type_mismatch", "rule": "CT-8", "spec_paths": ["columns.CODE.submission.codelist"]}]
+    },
+    {
+      "case": "an_allowed_values_verification_beside_a_bound_codelist_is_redundant_when_prepared",
+      "operation": "prepare_in",
+      "input": {
+        "base": "coded",
+        "edits": [{"set": ["columns", "1", "verifications"], "to": [{"allowed_values": {"values": ["F"]}}]}],
+        "project": {"language": "python", "codelists": [{"codelists": [{"id": "SEX", "name": "Sex", "items": [{"value": "F"}]}]}]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "redundant_declaration", "rule": "CT-9", "spec_paths": ["columns.CODE.verifications[0].allowed_values"]}]
+    },
+    {
+      "case": "an_extensible_catalogue_states_the_value_set_once",
+      "operation": "prepare_in",
+      "input": {
+        "base": "coded",
+        "edits": [{"set": ["columns", "1", "verifications"], "to": [{"allowed_values": {"values": ["M"]}}]}],
+        "project": {"language": "python", "codelists": [{"codelists": [{"id": "SEX", "name": "Sex", "extensible": true, "items": [{"value": "F"}]}]}]}
+      },
+      "compares": ["condition", "spec_paths", "context.stated_by"],
+      "issues": [{"condition": "redundant_declaration", "spec_paths": ["columns.CODE.verifications[0].allowed_values"], "context": {"stated_by": "columns.CODE.submission.codelist"}}]
+    },
+    {
+      "case": "submission_claims_are_admitted_and_reserved_metadata_has_a_registered_cause",
+      "operation": "prepare_in",
+      "input": {
+        "base": "coded",
+        "edits": [{"set": ["columns", "1", "metadata"], "to": {"codelist": "SEX"}}],
+        "project": {"language": "python", "codelists": [{"codelists": [{"id": "SEX", "name": "Sex", "items": [{"value": "F"}]}]}]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "reserved_metadata_key", "rule": "SUB-2", "spec_paths": ["columns.CODE.metadata.codelist"]}]
+    },
+    {
+      "case": "submission_claims_are_admitted_and_reserved_metadata_has_a_registered_cause_beside_row_templates",
+      "operation": "prepare_in",
+      "input": {
+        "base": "coded",
+        "edits": [
+          {"set": ["columns", "1", "metadata"], "to": {"codelist": "SEX"}},
+          {"set": ["rows"], "to": [{"id": "all", "derivations": {"ID": {"value": "SRC.ID"}}}]}
+        ],
+        "project": {"language": "python", "codelists": [{"codelists": [{"id": "SEX", "name": "Sex", "items": [{"value": "F"}]}]}]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "reserved_metadata_key", "rule": "SUB-2", "spec_paths": ["columns.CODE.metadata.codelist"]}]
+    },
+    {
+      "case": "root_metadata_rejects_the_governed_has_no_data_key",
+      "operation": "prepare_in",
+      "input": {
+        "base": "coded",
+        "edits": [{"set": ["metadata"], "to": {"has_no_data": "true"}}],
+        "project": {"language": "python", "codelists": [{"codelists": [{"id": "SEX", "name": "Sex", "items": [{"value": "F"}]}]}]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "reserved_metadata_key", "rule": "SUB-2", "spec_paths": ["metadata.has_no_data"]}]
     }
   ]
 }

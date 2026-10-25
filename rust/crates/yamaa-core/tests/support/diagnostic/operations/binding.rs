@@ -89,7 +89,7 @@ fn qualified_reference(input: &Json) -> Vec<Diagnostic> {
                 .map(|field| match field.items() {
                     [name, kind] => Field {
                         name: name.text(),
-                        column_type: column_type(kind),
+                        column_type: Some(column_type(kind)),
                     },
                     other => panic!("a field is a [name, type] pair: {other:?}"),
                 })
