@@ -19,30 +19,17 @@ fn value(value: V<'_>) -> Value {
     }
 }
 
-#[derive(serde::Deserialize)]
-#[serde(untagged)]
-pub enum SchemaInput {
-    Text(String),
-    /// The entry module is first; all include identities retain authored spelling.
-    Modules(Vec<(String, String)>),
-}
-
-#[cfg(test)]
-pub fn observe(schema: &str, document: &str) -> Value {
-    observe_input(SchemaInput::Text(schema.into()), document, None)
-}
-
-pub fn observe_input(input: SchemaInput, document: &str, root: Option<&str>) -> Value {
-    let sources = match input {
-        SchemaInput::Text(text) => vec![("authored-schema.yaml".into(), text)],
-        SchemaInput::Modules(modules) => modules,
-    }
-    .into_iter()
-    .map(|(identity, text)| Source {
-        identity,
-        bytes: text.into_bytes(),
-    })
-    .collect();
+/// The issues of validating `document` against the class `root` names, or
+/// the entry's root class, of the schema closure `modules`: the entry module
+/// first, each include identity spelt as authored.
+pub fn observe(modules: Vec<(String, String)>, document: &str, root: Option<&str>) -> Value {
+    let sources = modules
+        .into_iter()
+        .map(|(identity, text)| Source {
+            identity,
+            bytes: text.into_bytes(),
+        })
+        .collect();
     let captured = match root {
         Some(root) => CapturedSchema::admit_root(sources, 0, root),
         None => CapturedSchema::admit(sources, 0),

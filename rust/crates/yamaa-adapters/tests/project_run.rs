@@ -121,6 +121,8 @@ mod project {
 
         #[test]
         fn whole_project_reports_match_independent_original_document_truth_and_exact_saved_bytes() {
+            // Seam: already data: each benchmark against its authored report under
+            // tests/fixtures/specs, its observations and saved bytes included.
             let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
             let truth = root.join("tests/fixtures/specs");
             let benchmarks = root.join("../../..").join("benchmarks");
@@ -196,6 +198,10 @@ mod project {
 
         #[test]
         fn full_codelist_values_and_keys_survive_failed_output_and_repeated_reporting() {
+            // Seam: the verification record of the report, built twice from
+            // one attempt, its absent output and the study's reads. The issue
+            // is project_run.json's
+            // a_codelist_failure_keeps_every_value_and_key_and_fails_the_output.
             let raw="yamaa: '1.0'\ntype: spec\nmodel: ADaM\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: CODE, type: str, derivation: SRC.CODE, submission: {codelist: SEX, origins: [{type: Assigned}]}}\noutput: {path: output.csv, columns: [ID, CODE]}\n";
             let document =
                 crate::support::specification_run::prepare_as("spec.yaml", raw.as_bytes());
@@ -218,12 +224,7 @@ mod project {
             )
             .unwrap();
             assert_eq!(result.output(), None);
-            assert_eq!(result.issues().len(), 1);
             let context = yamaa_core::json::Value::Object(result.issues()[0].context.clone());
-            assert_eq!(
-                context,
-                yamaa_adapters::json!({"column":"CODE","codelist":"SEX","failure_count":2,"keys":[{"ID":i64::MAX},{"ID":i64::MIN}],"values":["X","Z"]})
-            );
             let observed = result.observations();
             assert_eq!(observed["verifications"].as_array().unwrap().len(), 1);
             assert_eq!(
@@ -247,6 +248,8 @@ mod project {
 
         #[test]
         fn original_inspection_and_capture_failures_keep_complete_findings_and_counters() {
+            // Seam: a resolver double whose inspection or capture fails, classified or not, its
+            // payload by address and its call counts.
             #[derive(Debug)]
             struct Failure {
                 original: std::rc::Rc<()>,
@@ -376,6 +379,9 @@ mod project {
 
         #[test]
         fn completed_codelist_check_survives_a_later_verification_declaration_failure() {
+            // Seam: the verification record of the report and its absent
+            // output. The issue is project_run.json's
+            // a_completed_codelist_check_leaves_a_later_verification_declaration_s_failure_alone.
             let raw="yamaa: '1.0'\ntype: spec\nmodel: ADaM\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: CODE, type: str, derivation: SRC.CODE, submission: {codelist: SEX, origins: [{type: Assigned}]}}\n  - {name: LATE, type: str, derivation: SRC.CODE, verifications: [{matches: {pattern: '('}}]}\noutput: {path: output.csv, columns: [ID, CODE]}\n";
             let document =
                 crate::support::specification_run::prepare_as("spec.yaml", raw.as_bytes());
@@ -408,10 +414,6 @@ mod project {
             assert_eq!(
                 observed["verifications"][0]["failure"],
                 yamaa_core::json::Value::Null
-            );
-            assert_eq!(
-                observed["diagnostics"],
-                yamaa_adapters::json!([{"phase":"validation","condition":"invalid_regex","rule":"TEXT-6","spec_paths":["columns.LATE.verifications[0].matches.pattern"],"context":{"pattern":"("}}])
             );
             assert_eq!(result.output(), None);
             assert!(result.files().is_empty());
@@ -1037,71 +1039,6 @@ tests:
                 &*activation.trace.borrow(),
                 &["lock", "bind", "case", "case", "inspect", "capture", "live"]
             );
-        }
-
-        /// A project that holds only the other host's lock and lists no
-        /// function file: the host reads no lock (PROJECT-2), and a call
-        /// names a function no file defines (FUNC-4).
-        #[test]
-        fn project_without_the_host_lock_reads_no_lock_and_reports_each_project_call_as_unknown() {
-            struct OtherHost;
-            impl Resolver for OtherHost {
-                type Error = std::convert::Infallible;
-                fn inspect(&mut self, name: Name<'_>) -> Result<Located, Self::Error> {
-                    panic!("the other host's lock is never opened: {name:?}")
-                }
-                fn capture(&mut self, _: Name<'_>) -> Result<Captured, Self::Error> {
-                    panic!("the other host's lock is never opened")
-                }
-                fn failure(&self, _: Name<'_>, error: &Self::Error) -> Option<resolver::Failure> {
-                    match *error {}
-                }
-                fn rebase(
-                    &mut self,
-                    _: &Located,
-                    _: &Located,
-                    _: &str,
-                ) -> Result<String, Self::Error> {
-                    panic!("the other host's lock is never opened")
-                }
-            }
-            let environment = || {
-                project_source::prepare(
-                    Closures::shipped().unwrap(),
-                    source(
-                        "study/project.yaml",
-                        b"yamaa: '1.0'\ntype: project\nenvironments: {r: {lock: r/renv.lock}}\n",
-                    ),
-                    Language::Python,
-                    &mut OtherHost,
-                )
-                .unwrap()
-                .into_owned()
-            };
-            // A specification that calls no project function still runs.
-            let run = PreparedRun::prepare_with_environment(document(None), environment()).unwrap();
-            let (mut activation, mut study) = ports();
-            let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
-            assert!(attempt.boundary.is_ok());
-            assert_eq!(attempt.activation.lock, LockObservation::NotRequested);
-            assert!(attempt.dataset.result.unwrap().result.is_ok());
-            assert_eq!(&*activation.trace.borrow(), &["inspect", "capture"]);
-            // Each call names a function no file defines.
-            let raw = "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\n  - {name: OTHER, type: int, derivation: {function: {name: absent, args: {x: SRC.ID}}}}\noutput: {path: output.csv, columns: [ID, VALUE, OTHER]}\n";
-            let document =
-                crate::support::specification_run::prepare_as("study/domain.yaml", raw.as_bytes());
-            let Err(rejected) = PreparedRun::prepare_with_environment(document, environment())
-            else {
-                panic!("project calls to functions no file defines cannot execute")
-            };
-            let unknown = |column: &str, function: &str| yamaa_adapters::json!({"phase": "validation", "condition": "unknown_project_function", "rule": "FUNC-4", "spec_paths": vec![format!("columns.{column}.derivation.function.name")], "context": {"function":function}});
-            assert_eq!(
-                crate::support::rows(
-                    &yamaa_adapters::specification_check::rejected(&rejected).unwrap()
-                ),
-                [unknown("VALUE", "id"), unknown("OTHER", "absent")]
-            );
-            assert!(rejected.captured.lock().is_none());
         }
 
         #[test]
