@@ -518,4 +518,144 @@ mod declaration {
             );
         }
     }
+    mod validator_r_declarations {
+        //! Original R authoring declarations remain typed witnesses when R is absent.
+        //! This proves metadata admission only. The mandatory installed R replay owns
+        //! lock verification, activation, source binding, values and publication.
+        use crate::support::Edit as _;
+        use std::{convert::Infallible, path::PathBuf};
+        use yamaa_adapters::{
+            document::Closures,
+            project_source::{self, Kind},
+            specification_run::PreparedRun,
+            specification_source::Source,
+        };
+        use yamaa_core::project_function::Language;
+        use yamaa_core::resolver::{Captured, Failure, File, Located, Name, Resolver};
+
+        /// Serves the function files and the R lock the benchmark project
+        /// names (D8); every path resolves from the project file.
+        struct DeclaredProject {
+            case: PathBuf,
+            project: String,
+            functions: usize,
+            locks: usize,
+            /// The bytes of the file last located.
+            held: Vec<u8>,
+        }
+        impl DeclaredProject {
+            /// The held source the double serves for the file a project names.
+            fn answer(
+                &mut self,
+                kind: Kind,
+                declaring: &str,
+                written: &str,
+            ) -> Result<Source, Infallible> {
+                assert_eq!(declaring, self.project);
+                match kind {
+                    Kind::Function => {
+                        self.functions += 1;
+                        Ok(Source {
+                            identity: self.project.edit("project.yaml", written),
+                            bytes: std::fs::read(self.case.join(written)).unwrap(),
+                        })
+                    }
+                    // The R host reads only its own lock; the Python lock stays unopened.
+                    Kind::Lock => {
+                        assert_eq!(written, "r/renv.lock");
+                        self.locks += 1;
+                        // Static admission borrows only the declared lock format. This authored
+                        // codec fixture grants no installed-package or verification evidence.
+                        Ok(Source {
+                            identity: "typed-fixture/renv.lock".into(),
+                            bytes: crate::support::ports::RENV_LOCK.as_bytes().to_vec(),
+                        })
+                    }
+                    kind => panic!("unexpected {kind:?} capture"),
+                }
+            }
+        }
+        /// A file is served when it is located; its capture reads the bytes served.
+        impl Resolver for DeclaredProject {
+            type Error = Infallible;
+            fn inspect(&mut self, name: Name<'_>) -> Result<Located, Self::Error> {
+                let Name::Written {
+                    file: File::Project(kind),
+                    declaring,
+                    written,
+                } = name
+                else {
+                    panic!("unexpected request {name:?}")
+                };
+                let source = self.answer(kind, declaring, written)?;
+                self.held = source.bytes;
+                Ok(Located {
+                    display_path: source.identity.clone(),
+                    identity: source.identity,
+                })
+            }
+            fn capture(&mut self, _: Name<'_>) -> Result<Captured, Self::Error> {
+                Ok(Captured::resource(
+                    std::mem::take(&mut self.held).into(),
+                    true,
+                ))
+            }
+            fn failure(&self, _: Name<'_>, _: &Self::Error) -> Option<Failure> {
+                None
+            }
+            fn rebase(&mut self, _: &Located, _: &Located, _: &str) -> Result<String, Self::Error> {
+                panic!("a project file is never rebased")
+            }
+        }
+
+        /// Check the resolver and environment metadata while admitting a specification.
+        fn observe(name: &str, spec: &str) {
+            let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks");
+            let case = root.join(name);
+            let mut port = DeclaredProject {
+                case: case.clone(),
+                project: format!("benchmarks/{name}/project.yaml"),
+                functions: 0,
+                locks: 0,
+                held: vec![],
+            };
+            let environment = project_source::prepare(
+                Closures::shipped().unwrap(),
+                Source {
+                    identity: port.project.clone(),
+                    bytes: std::fs::read(case.join("project.yaml")).unwrap(),
+                },
+                Language::R,
+                &mut port,
+            )
+            .unwrap()
+            .into_owned();
+            // The project's one function file and its R lock.
+            assert_eq!((port.functions, port.locks), (1, 1));
+            assert_eq!(environment.environment().host(), Some(Language::R));
+            assert_eq!(environment.environment().language(), Some(Language::R));
+            let document = crate::support::specification_run::prepare(
+                &std::fs::read(case.join(spec)).unwrap(),
+            );
+            let _prepared = PreparedRun::prepare_with_environment(document, environment);
+            // No activation, source-data or publication port exists in this replay.
+            assert_eq!((port.functions, port.locks), (1, 1));
+        }
+
+        /// Seam: the R environment's retained host and language, its single
+        /// function and R-lock captures, and no further captures on admission.
+        /// The public static_declarations cases own the resulting issue rows.
+        #[test]
+        fn r_declarations_keep_their_environment_and_capture_only_their_own_resources() {
+            for (name, spec) in [
+                ("schema-functions", "spec.yaml"),
+                ("schema-non-finite", "spec.yaml"),
+                ("adam-adsl-bmi", "spec.yaml"),
+                ("adam-advs-percentiles", "spec_function.yaml"),
+                ("negative-function-contract", "spec.yaml"),
+            ] {
+                observe(name, spec);
+            }
+        }
+    }
 }
