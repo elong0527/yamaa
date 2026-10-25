@@ -93,11 +93,13 @@ pub(super) fn bind(
     reference: &str,
     path: &str,
 ) -> Result<Option<Expression>, BindError> {
+    let donors = cx.donors;
     let binder::Donors {
         named: declarations,
         secondary,
         items,
-    } = cx.donors;
+        ..
+    } = donors;
     let (output, catalog) = (cx.output, cx.catalog);
     let (row, available) = (cx.row(), cx.scope.available);
     let (edges, findings) = (&mut *cx.edges, &mut *cx.findings);
@@ -159,9 +161,37 @@ pub(super) fn bind(
     // The reference of a nearest selection is read as a key's match value
     // is (LOOKUP-26).
     let reference = item.nearest.iter().map(|nearest| &nearest.reference);
+    // A key value the reading donor's record lacks, written bare or qualified
+    // by the donor's input, is a field that input may store where its schema
+    // leaves it open; the refusal is then withheld from `check()` (#3805).
+    let unanswered = |identifier: &str, key_path: &str| {
+        let finding = missing_dependency(identifier, key_path);
+        let open = declarations
+            .reader()
+            .and_then(|reader| declarations.input(reader))
+            .and_then(|index| {
+                let dataset = &donors.inputs.sources.get(index)?.name;
+                let field = identifier
+                    .strip_prefix(&format!("{dataset}."))
+                    .or_else(|| (!identifier.contains('.')).then_some(identifier))?;
+                donors
+                    .inputs
+                    .schemas
+                    .get(index)?
+                    .stores(field)
+                    .is_none()
+                    .then_some(())
+            })
+            .is_some();
+        if open {
+            BindFinding::Withheld(std::boxed::Box::new(finding))
+        } else {
+            finding
+        }
+    };
     for key in item.keys.iter().chain(reference) {
         if let crate::dataset::MatchValue::Contextual(declaration) = &key.value {
-            findings.push(missing_dependency(declaration.identifier(), &key.path));
+            findings.push(unanswered(declaration.identifier(), &key.path));
             continue;
         }
         for read in key.value.reads() {
@@ -178,7 +208,7 @@ pub(super) fn bind(
                             }
                             phase_refused = true;
                         }
-                        None => findings.push(missing_dependency(identifier, &key.path)),
+                        None => findings.push(unanswered(identifier, &key.path)),
                     }
                     continue;
                 }
@@ -189,7 +219,7 @@ pub(super) fn bind(
                 }) {
                     continue;
                 }
-                findings.push(missing_dependency(identifier, &key.path));
+                findings.push(unanswered(identifier, &key.path));
             }
         }
     }
@@ -220,7 +250,7 @@ pub(super) fn bind(
             .get(key.source_column)
             .ok_or(BindError::Internal)?;
         let kind = key.value.result_type(read_kind);
-        if let Some(donor_kind) = item.source_kind(secondary, key.source_column) {
+        if let Some(donor_kind) = donors.kind(item, key.source_column) {
             if !kind.comparable(donor_kind.into()) {
                 let name = if key.value.is_expression() {
                     format!("key[{}]", field.name)

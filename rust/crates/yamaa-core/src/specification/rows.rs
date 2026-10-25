@@ -109,9 +109,9 @@ struct Context<'a> {
 }
 
 impl<'a> Context<'a> {
-    /// The base driver's captured schema.
+    /// The base driver's layout.
     fn source(&self) -> &'a TableSchema {
-        self.inputs.driver_schema()
+        self.inputs.driver_schema().layout()
     }
     /// The base driver's name.
     fn name(&self) -> &'a str {
@@ -134,7 +134,11 @@ impl Rows {
             Rows::Implicit(_) => None,
             Rows::Templates(templates) => Some(templates.self_columns()),
         };
-        let (secondary, intermediates) = prepared.intermediates.bind(
+        let intermediates::Bound {
+            secondary,
+            items: intermediates,
+            withheld,
+        } = prepared.intermediates.bind(
             inputs,
             &prepared.output,
             self_columns.as_deref(),
@@ -144,7 +148,7 @@ impl Rows {
         )?;
         let plan = match self {
             Rows::Implicit(implicit) => {
-                implicit.bind(prepared, inputs, secondary, intermediates, findings)?
+                implicit.bind(prepared, inputs, secondary, intermediates, findings)
             }
             Rows::Templates(templates) => {
                 let verifications =
@@ -158,9 +162,17 @@ impl Rows {
                     secondary,
                     intermediates,
                     findings,
-                )?
+                )
             }
-        };
+        }
+        .map_err(|error| match error {
+            // Every read of a lookup withheld from `check()` is withheld too.
+            BindError::Invalid(mut findings) => {
+                intermediates::withhold_reads(&mut findings, &withheld);
+                BindError::Invalid(findings)
+            }
+            error => error,
+        })?;
         Ok(plan
             .with_column_verifications(prepared.column_verification_groups())
             .with_warning_verifications(prepared.warning_verification_paths())
@@ -245,15 +257,21 @@ impl Implicit {
         intermediates: Vec<Option<crate::dataset::Intermediate>>,
         mut findings: Vec<BindFinding>,
     ) -> Result<DatasetPlan, BindError> {
-        let source = inputs.driver_schema();
+        let source = inputs.driver_schema().layout();
         let base = prepared.source().name.as_str();
         let keys = &prepared.keys;
+        let donors = binder::Donors {
+            named: &prepared.intermediates,
+            secondary: &secondary,
+            items: &intermediates,
+            inputs,
+        };
         let catalog = row_drivers::joined_catalog(
             prepared.tree.spec(),
             &prepared.output,
             source,
             base,
-            &secondary,
+            donors,
         )?;
         let mut assignments = BTreeMap::new();
         let mut dependencies = Vec::new();
@@ -272,11 +290,7 @@ impl Implicit {
             let start = findings.len();
             let expression = BindContext {
                 scope: self.scope(keys, base, column),
-                donors: binder::Donors {
-                    named: &prepared.intermediates,
-                    secondary: &secondary,
-                    items: &intermediates,
-                },
+                donors,
                 catalog: &catalog,
                 output: &prepared.output,
                 project: prepared.project_calls.as_ref(),
@@ -287,12 +301,7 @@ impl Implicit {
             }
             .bind(declaration.expr, column)?;
             if expression.is_some() && findings.len() == start && declaration.handler.is_none() {
-                let captured = types::CapturedTypes::new(
-                    &prepared.intermediates,
-                    &catalog,
-                    &secondary,
-                    &intermediates,
-                );
+                let captured = types::CapturedTypes::new(donors, &catalog);
                 let result =
                     prepared
                         .tree
@@ -334,7 +343,13 @@ impl Implicit {
         let filter = self
             .filter
             .map(|filter| {
-                root_filter::bind(prepared.tree.spec(), filter, base, source, &mut findings)
+                root_filter::bind(
+                    prepared.tree.spec(),
+                    filter,
+                    base,
+                    inputs.driver_schema(),
+                    &mut findings,
+                )
             })
             .transpose()?
             .flatten();
@@ -688,8 +703,8 @@ fn bind_template_filter(
 ) -> Result<Option<BoundPredicate>, BindError> {
     let binder::Donors {
         named,
-        secondary,
         items: intermediates,
+        ..
     } = cx.donors;
     let (row_catalog, output) = (cx.catalog, cx.output);
     let mut bindings = Vec::new();
@@ -779,8 +794,7 @@ fn bind_template_filter(
         predicate
             .map(|plan| {
                 BoundPredicate::new_contextual(
-                    types::CapturedTypes::new(named, row_catalog, secondary, intermediates)
-                        .typed(plan),
+                    types::CapturedTypes::new(cx.donors, row_catalog).typed(plan),
                     bindings,
                     Vec::new(),
                 )
@@ -861,6 +875,7 @@ fn bind_template(
         named,
         secondary,
         items: intermediates,
+        ..
     } = cx.donors;
     let filter_path = format!("{}.filter", template.path);
     if named
@@ -894,13 +909,14 @@ fn bind_template(
         row_source,
         &template.driver,
         named_driver.and_then(|index| intermediates[index].as_ref()),
+        cx.donors,
     )?;
     let row_catalog = row_drivers::extend_catalog(
         tree.spec(),
         row_catalog,
         source,
         name,
-        secondary,
+        cx.donors,
         &template.driver,
     )?;
     let row_catalog = row_catalog.with_row_joins(&template.driver, template.groups.as_deref());
@@ -990,11 +1006,7 @@ fn bind_template(
         }
     }
     let scope = declared.scope();
-    let donors = binder::Donors {
-        named,
-        secondary,
-        items: intermediates,
-    };
+    let donors = cx.donors;
     for declaration in &template.declarations {
         let mut cx = BindContext {
             scope,
@@ -1467,13 +1479,14 @@ impl Templates {
                 named: &prepared.intermediates,
                 secondary: &secondary,
                 items: &intermediates,
+                inputs,
             },
         };
         let (source, name, output) = (cx.source(), cx.name(), &prepared.output);
         // The whole-dataset catalog binds a column holding a qualified
         // aggregate; every other column binds against each driver's own.
         let spec = prepared.tree.spec();
-        let mut catalog = row_drivers::joined_catalog(spec, output, source, name, &secondary)?;
+        let mut catalog = row_drivers::joined_catalog(spec, output, source, name, cx.donors)?;
         if self
             .templates
             .iter()
@@ -1481,7 +1494,7 @@ impl Templates {
         {
             // The rows have no record owner shared by every template. Every
             // stored source uses its captured port and its implicit join's key.
-            catalog = row_drivers::extend_catalog(spec, catalog, source, name, &secondary, "")?;
+            catalog = row_drivers::extend_catalog(spec, catalog, source, name, cx.donors, "")?;
         }
         // Each template's scope and the column phase's grouping come from the
         // declarations alone, as `check()` reads them: the column phase checks
@@ -1604,6 +1617,7 @@ impl Templates {
             named,
             secondary,
             items: intermediates,
+            ..
         } = cx.donors;
         let column_groups = phases
             .iter()
@@ -1675,10 +1689,11 @@ impl Templates {
                                 driver_source,
                                 driver,
                                 named_driver.and_then(|index| intermediates[index].as_ref()),
+                                cx.donors,
                             )?,
                             source,
                             name,
-                            secondary,
+                            cx.donors,
                             driver,
                         )?;
                         (&column_catalog, driver, port)
@@ -1694,11 +1709,7 @@ impl Templates {
                         driver: column_driver,
                         available: None,
                     },
-                    donors: binder::Donors {
-                        named,
-                        secondary,
-                        items: intermediates,
-                    },
+                    donors: cx.donors,
                     catalog: catalog_ref,
                     output,
                     project,

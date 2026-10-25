@@ -71,7 +71,7 @@ impl JoinedFinding {
         })
     }
 }
-type JoinedReadValue = (Read, ColumnType, Vec<usize>);
+type JoinedReadValue = (Read, Option<ColumnType>, Vec<usize>);
 type JoinedResolution = Result<Option<Result<JoinedReadValue, JoinedFinding>>, Error>;
 impl Catalog {
     pub(crate) fn joined_read(&self, name: &str, available: Option<&[usize]>) -> JoinedResolution {
@@ -134,12 +134,18 @@ impl Catalog {
                 let Some(Binding::Dataset { field, .. }) = self.bind(&identifier) else {
                     return Err(Error::InvalidAvailableOutput);
                 };
-                if let Some(column_type) = self.type_of(&identifier).filter(|kind| {
-                    !crate::result_type::ResultType::from(*kind).comparable(actual.into())
-                }) {
+                // A pair whose either type is not decided is not compared.
+                if let Some((expected, actual)) =
+                    self.type_of(&identifier)
+                        .zip(actual)
+                        .filter(|(expected, actual)| {
+                            !crate::result_type::ResultType::from(*expected)
+                                .comparable((*actual).into())
+                        })
+                {
                     return Ok(Some(Err(JoinedFinding::KeyType {
                         source: name.clone(),
-                        expected: column_type,
+                        expected,
                         actual,
                     })));
                 }

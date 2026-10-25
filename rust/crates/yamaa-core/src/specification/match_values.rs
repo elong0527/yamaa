@@ -14,9 +14,8 @@ pub(super) struct Context<'a> {
     pub phase: crate::reference_scope::Phase<'a>,
     pub project: Option<&'a crate::project_calls::ProjectCalls>,
     pub tree: &'a types::Tree,
-    pub named: &'a intermediates::Declarations,
-    pub secondary: &'a [crate::dataset::SecondarySource],
-    pub intermediates: &'a [Option<crate::dataset::Intermediate>],
+    /// The lookups a value may read, and the inputs that type their fields.
+    pub donors: binder::Donors<'a>,
 }
 /// A key's current-row value. A written value other than a name keeps its
 /// node, which the tree types.
@@ -331,7 +330,8 @@ impl Declaration {
                     reads.push(read);
                     fields.push(Column {
                         name: name.clone(),
-                        kind,
+                        // A layout slot; the expression's own binding types it.
+                        kind: kind.unwrap_or(ColumnType::Str),
                     });
                 }
             }
@@ -348,11 +348,7 @@ impl Declaration {
                     driver: context.driver,
                     available: None,
                 },
-                donors: binder::Donors {
-                    named: context.named,
-                    secondary: context.secondary,
-                    items: context.intermediates,
-                },
+                donors: context.donors,
                 catalog,
                 output: context.output,
                 project: context.project,

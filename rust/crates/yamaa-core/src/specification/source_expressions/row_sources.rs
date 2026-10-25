@@ -37,37 +37,46 @@ pub(in crate::specification) fn bind(
     } else {
         let dataset = name.split_once('.').map(|(dataset, _)| dataset);
         let donor = dataset.and_then(|dataset| catalog.joined(dataset));
+        // The relation's layout, with each field's kind.
         let schema = if let Some(donor) = donor {
-            Some(donor.schema.clone())
+            Some((donor.schema.clone(), donor.kinds()))
         } else if let Some(dataset) = dataset {
             catalog
                 .fields(dataset)
                 .map(|fields| {
+                    let kinds = fields.iter().map(|field| field.column_type).collect();
                     TableSchema::new(
                         fields
                             .into_iter()
                             .map(|field| crate::table::Column {
                                 name: field.name.into(),
-                                kind: field.column_type,
+                                // A layout slot; its kind is `kinds`'s.
+                                kind: field.column_type.unwrap_or(ColumnType::Str),
                             })
                             .collect(),
                     )
-                    .map(std::sync::Arc::new)
+                    .map(|schema| (std::sync::Arc::new(schema), kinds))
                 })
                 .transpose()
                 .map_err(|_| BindError::Internal)?
         } else {
             None
         };
-        let filter = if let (Some(dataset), Some(schema)) = (dataset, schema.as_deref()) {
-            declaration.bind_filter_named(path, dataset, schema, named, cx.findings)?
+        let filter = if let (Some(dataset), Some((schema, kinds))) = (dataset, schema.as_ref()) {
+            declaration.bind_filter_named(
+                path,
+                dataset,
+                (schema, &kinds[..]),
+                named,
+                cx.findings,
+            )?
         } else {
             declaration.bind_row_filter(path, driver, catalog, named, cx.findings)?
         };
         let selection = if declaration.is_group_key(driver, phase) {
             // NAME-4: the key is already scalar; keep/order cannot choose a new record.
             None
-        } else if let (Some(dataset), Some(schema)) = (dataset, schema.as_deref()) {
+        } else if let (Some(dataset), Some((schema, _))) = (dataset, schema.as_ref()) {
             declaration.bind_selection(path, dataset, schema, cx.findings)
         } else {
             None
@@ -108,8 +117,12 @@ pub(in crate::specification) fn bind(
                         }),
                     );
                 }
+                let kinds = catalog
+                    .joined(&read.name)
+                    .map(reference_binding::JoinedRelation::kinds)
+                    .unwrap_or_default();
                 declaration
-                    .bind_range(cx, &read.schema, Some(driver))?
+                    .bind_range(cx, (&read.schema, &kinds), Some(driver))?
                     .map(|range| Expression::JoinedSource {
                         read,
                         range,
