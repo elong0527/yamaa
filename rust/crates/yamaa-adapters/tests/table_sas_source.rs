@@ -1,7 +1,8 @@
 //! Table contracts: SAS source, source diagnostics and typed CSV.
 //!
 //! Each module names the seam its tests prove. What a build reads from a
-//! typed CSV input is a case of `fixtures/diagnostics/typed_csv_sources.json`
+//! typed CSV input is a case of the application suite's
+//! `fixtures/diagnostics/typed_csv_sources.json`
 //! (#3798, #3778 group 3).
 mod table {
     #[cfg(feature = "readstat")]
@@ -2270,10 +2271,10 @@ mod table {
     }
     mod typed_csv {
         // What a build reads from a typed CSV input, refused or not, is a case
-        // of `fixtures/diagnostics/typed_csv_sources.json`. The tests left here
-        // compare what no case states: a float's bits, a temporal value's
-        // collected precision, the typed table's schema, and inputs generated
-        // in the test.
+        // of the application suite's `fixtures/diagnostics/typed_csv_sources.json`.
+        // The tests left here compare what no case states: a float's bits, a
+        // temporal value's collected precision, the typed table's schema, and
+        // inputs generated in the test.
         use yamaa_adapters::typed_csv;
         use yamaa_core::{
             table::{TableAccess, ValueRef},

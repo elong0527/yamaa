@@ -2,7 +2,7 @@
 //! engine (`yamaa_adapters::scalar_bytes`), with its checked operations and
 //! its host epochs. Every test calls the codec itself, a seam that no
 //! specification run reaches, so they stay functions rather than cases of
-//! `tests/fixtures/diagnostics/` (#3798).
+//! the application suite's `tests/fixtures/diagnostics/` (#3798).
 use yamaa_adapters::scalar_bytes::{decode, encode, exact_float, operate};
 use yamaa_core::value::Value;
 

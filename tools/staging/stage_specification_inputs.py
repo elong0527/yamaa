@@ -100,7 +100,10 @@ TEMPLATE_DIRECTORY_NAMES = {
     "type-before-later-invalid-declaration": "type-before-invalid",
     "unknown-before-later-invalid-declaration": "unknown-before-invalid",
 }
-FIXTURES = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures"
+# The authored fixtures of the application suite, and of the adapters suite,
+# which keeps those its codec tests read (#3761).
+FIXTURES = REPOSITORY / "rust/crates/yamaa-application/tests/fixtures"
+ADAPTER_FIXTURES = REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures"
 
 
 def fixture_rows(name):
@@ -155,15 +158,16 @@ def write_host_truth(truth, destination):
 
 def stage_json_fixtures(destination: Path):
     """Copy authored JSON directly; installed readers own no intermediate format."""
-    for source in FIXTURES.glob("*.json"):
-        shutil.copy2(source, destination / source.name)
+    for directory in (FIXTURES, ADAPTER_FIXTURES):
+        for source in directory.glob("*.json"):
+            shutil.copy2(source, destination / source.name)
 
 
 def stage_text_extract_truth(destination: Path):
     """Stage originals and separately captured complete reference extraction cases."""
     source = (
         REPOSITORY
-        / "rust/crates/yamaa-adapters/tests/fixtures/text_extract_reference.json"
+        / "rust/crates/yamaa-application/tests/fixtures/text_extract_reference.json"
     )
     shutil.copy2(source, destination / "text-extract-reference.json")
     capture = json.loads(source.read_text())
@@ -239,7 +243,7 @@ def stage_text_template_truth(destination: Path):
     """Stage originals and separately captured complete reference template cases."""
     source = (
         REPOSITORY
-        / "rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json"
+        / "rust/crates/yamaa-application/tests/fixtures/text_template_reference.json"
     )
     shutil.copy2(source, destination / "text-template-reference.json")
     capture = json.loads(source.read_text())
@@ -374,7 +378,7 @@ def stage_temporal_imputation_truth(destination: Path):
     capture = json.loads(
         (
             REPOSITORY
-            / "rust/crates/yamaa-adapters/tests/fixtures/temporal_imputation_reference.json"
+            / "rust/crates/yamaa-application/tests/fixtures/temporal_imputation_reference.json"
         ).read_text()
     )
     for name, findings in capture.items():
@@ -423,7 +427,7 @@ def stage_text_case_truth(destination: Path):
     """Keep complete legacy captures and stage their shared normative facts."""
     original = (
         REPOSITORY
-        / "rust/crates/yamaa-adapters/tests/fixtures/text_case_reference.json"
+        / "rust/crates/yamaa-application/tests/fixtures/text_case_reference.json"
     )
     shutil.copy2(original, destination / "text-case-reference.json")
     capture = json.loads(original.read_text())
@@ -465,7 +469,8 @@ def stage_text_case_truth(destination: Path):
 def stage_text_pad_truth(destination: Path):
     """Stage untouched independent captures and complete shared normative findings."""
     original = (
-        REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/text_pad_reference.json"
+        REPOSITORY
+        / "rust/crates/yamaa-application/tests/fixtures/text_pad_reference.json"
     )
     shutil.copy2(original, destination / "text-pad-reference.json")
     capture = json.loads(original.read_text(encoding="utf-8"))
@@ -553,7 +558,7 @@ def stage_text_pad_truth(destination: Path):
 def stage_flag_truth(destination: Path):
     """Retain complete independent captures and emit literal installed R truth."""
     original = (
-        REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json"
+        REPOSITORY / "rust/crates/yamaa-application/tests/fixtures/flag_reference.json"
     )
     shutil.copy2(original, destination / "flag-reference.json")
     capture = json.loads(original.read_text(encoding="utf-8"))
@@ -670,7 +675,7 @@ def stage_intermediate_key_truth(destination: Path):
     """Stage all unchanged scalar-key captures without evaluating the candidate."""
     original = (
         REPOSITORY
-        / "rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json"
+        / "rust/crates/yamaa-application/tests/fixtures/intermediate_key_reference.json"
     )
     shutil.copy2(original, destination / "key-reference.json")
     capture = json.loads(original.read_text(encoding="utf-8"))
@@ -739,7 +744,7 @@ def stage_row_intermediate_truth(destination: Path):
     """Materialize unchanged originals and complete independently captured row truth."""
     original = (
         REPOSITORY
-        / "rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json"
+        / "rust/crates/yamaa-application/tests/fixtures/row_intermediate_reference.json"
     )
     shutil.copy2(original, destination / "row-intermediate-reference.json")
     reference = json.loads(original.read_text(encoding="ascii"))
@@ -999,7 +1004,7 @@ def stage_source_selection_truth(
 ):
     """Project authored typed cells into both installed hosts without executing them."""
     source = REPOSITORY / (
-        "rust/crates/yamaa-adapters/tests/fixtures/" + fixture + ".json"
+        "rust/crates/yamaa-application/tests/fixtures/" + fixture + ".json"
     )
     truth = host_truth(source)
     write_host_truth(truth, destination / (label + "-truth.json"))
@@ -1091,7 +1096,7 @@ def stage_completed_lookup_assertion_truth(destination: Path):
     """Project authored typed cells into both installed hosts without executing them."""
     fixture, label = "completed_lookup_assertions", "completed-lookup-assertions"
     source = REPOSITORY / (
-        "rust/crates/yamaa-adapters/tests/fixtures/" + fixture + ".json"
+        "rust/crates/yamaa-application/tests/fixtures/" + fixture + ".json"
     )
     truth = host_truth(source)
     write_host_truth(truth, destination / (label + "-truth.json"))
@@ -1201,49 +1206,52 @@ def stage(destination: Path):
         destination, "source_filter_mixed", "source-filter-mixed"
     )
     shutil.copy2(
-        REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv",
+        REPOSITORY / "rust/crates/yamaa-application/tests/fixtures/preflight.tsv",
         destination / "preflight.tsv",
     )
     shutil.copy2(
         REPOSITORY
-        / "rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv",
+        / "rust/crates/yamaa-application/tests/fixtures/output_declarations.tsv",
         destination / "output-declarations.tsv",
     )
     shutil.copy2(
         REPOSITORY
-        / "rust/crates/yamaa-adapters/tests/fixtures/grammar_diagnostics.tsv",
+        / "rust/crates/yamaa-application/tests/fixtures/grammar_diagnostics.tsv",
         destination / "grammar-diagnostics.tsv",
     )
     shutil.copy2(
         REPOSITORY
-        / "rust/crates/yamaa-adapters/tests/fixtures/binding_diagnostics.tsv",
+        / "rust/crates/yamaa-application/tests/fixtures/binding_diagnostics.tsv",
         destination / "binding-diagnostics.tsv",
     )
     shutil.copy2(
-        REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/window_diagnostics.tsv",
+        REPOSITORY
+        / "rust/crates/yamaa-application/tests/fixtures/window_diagnostics.tsv",
         destination / "window-diagnostics.tsv",
     )
     shutil.copy2(
         REPOSITORY
-        / "rust/crates/yamaa-adapters/tests/fixtures/predicate_diagnostics.tsv",
+        / "rust/crates/yamaa-application/tests/fixtures/predicate_diagnostics.tsv",
         destination / "predicate-diagnostics.tsv",
     )
     shutil.copy2(
-        REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/source_capture.tsv",
+        REPOSITORY / "rust/crates/yamaa-application/tests/fixtures/source_capture.tsv",
         destination / "source-capture.tsv",
     )
     shutil.copy2(
-        REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/source_inspection.tsv",
+        REPOSITORY
+        / "rust/crates/yamaa-application/tests/fixtures/source_inspection.tsv",
         destination / "source-inspection.tsv",
     )
     shutil.copy2(
-        REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/case_predicates.json",
+        REPOSITORY
+        / "rust/crates/yamaa-application/tests/fixtures/case_predicates.json",
         destination / "case-predicate-truth.json",
     )
     truth = json.loads((destination / "case-predicate-truth.json").read_text())
     dispositions_path = (
         REPOSITORY
-        / "rust/crates/yamaa-adapters/tests/fixtures/case_predicate_dispositions.json"
+        / "rust/crates/yamaa-application/tests/fixtures/case_predicate_dispositions.json"
     )
     shutil.copy2(dispositions_path, destination / "case-predicate-dispositions.json")
     dispositions = json.loads(dispositions_path.read_text())["cases"]
@@ -1339,7 +1347,7 @@ def stage(destination: Path):
             destination / "cases" / CASE_DIRECTORY_NAMES.get(name, name),
         )
     shutil.copytree(
-        REPOSITORY / "rust/crates/yamaa-adapters/tests/fixtures/specs",
+        REPOSITORY / "rust/crates/yamaa-application/tests/fixtures/specs",
         destination / "expected",
     )
     build_parquet_source_inputs.build(destination / "pq")

@@ -25,7 +25,7 @@ one candidate, or an aggregate reduces them ([LOOKUP-10](#lookup-10)). With no
 candidate, absence is answered ([LOOKUP-24](#lookup-24)). Candidates keep
 stored record order. The kinds differ only in the steps they enable.
 
-Evidence: `schema-lookup-source-range`, `schema-lookup-filters`, `schema-aggregation`, `schema-lookup-inner-join-pairs`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json`.
+Evidence: `schema-lookup-source-range`, `schema-lookup-filters`, `schema-aggregation`, `schema-lookup-inner-join-pairs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`.
 
 | Step | Implicit join | Named intermediate | Qualified aggregate | Pair relation |
 | --- | --- | --- | --- | --- |
@@ -78,7 +78,7 @@ no record, and a record missing a key or a stated bound does not match.
 `between` names a current-row value and at least one bound field.
 
 Fails: `incompatible_input_type`, `incomparable_range_types`, `invalid_field_type`, `prohibited_construct`, `unknown_field`.
-Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-lookup-range-bare-field`, `negative-source-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_variable_forms.json`, `rust/tests/host-fixtures/cases.json`.
+Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-lookup-range-bare-field`, `negative-source-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_variable_forms.json`, `rust/tests/host-fixtures/cases.json`.
 
 The key pairs are those of [LOOKUP-5](#lookup-5). Every pair is compared on
 every record offered, so a record value whose type cannot compare with its
@@ -183,7 +183,7 @@ relation, whichever it reduces. A filter on a construct with no records to
 select among fails.
 
 Fails: `unknown_field`, `prohibited_construct`.
-Evidence: `schema-lookup-filters`, `negative-source-missing-field`, `negative-source-trivial-filter`, `negative-row-filter-lookup-scope`, `schema-aggregation`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json`.
+Evidence: `schema-lookup-filters`, `negative-source-missing-field`, `negative-source-trivial-filter`, `negative-row-filter-lookup-scope`, `schema-aggregation`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`.
 
 For an input dataset, `order_by` names qualified fields of that dataset only,
 `columns` lists bare field names, and every `filter` field is qualified. The
@@ -260,7 +260,7 @@ stored order, except that `STR_JOIN` joins them in the aggregate's `order_by`
 order.
 
 Fails: `unpaired_fields`, `multiple_matches`.
-Evidence: `negative-lookup-unordered`, `negative-lookup-empty-order`, `negative-lookup-unchosen`, `negative-source-duplicate-key`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::fields_beside_a_reduction_that_reads_neither_share_one_finding_in_the_tables_order`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json`.
+Evidence: `negative-lookup-unordered`, `negative-lookup-empty-order`, `negative-lookup-unchosen`, `negative-source-duplicate-key`, `negative-join-unordered`, `negative-sum-order-by`, `negative-sum-distinct`, `adam-adcm-related-events`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/aggregates.json::fields_beside_a_reduction_that_reads_neither_share_one_finding_in_the_tables_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`.
 
 A lookup never multiplies rows: of several matching partners, `order_by` with
 `keep` reads one, which is a choice, not a join, and the other partners take no
@@ -312,7 +312,7 @@ chosen, a tie going to the earlier `source` and then to the earlier stored
 record; a candidate whose distance is missing is never chosen.
 
 Fails: `prohibited_construct`, `incompatible_input_type`, `unknown_field`.
-Evidence: `schema-lookup-nearest-datetime`, `schema-lookup-nearest-date`, `schema-lookup-nearest-missing`, `negative-lookup-nearest-keep`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_nearest_selection_refuses_a_keep_written_beside_it`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_nearest_selection_refuses_an_order_and_a_keep_written_beside_it_naming_the_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_nearest_source_names_a_field_of_the_donor`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_nearest_source_is_a_date_or_a_datetime`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_nearest_reference_has_the_type_of_its_source`.
+Evidence: `schema-lookup-nearest-datetime`, `schema-lookup-nearest-date`, `schema-lookup-nearest-missing`, `negative-lookup-nearest-keep`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_nearest_selection_refuses_a_keep_written_beside_it`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_nearest_selection_refuses_an_order_and_a_keep_written_beside_it_naming_the_order`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_nearest_source_names_a_field_of_the_donor`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_nearest_source_is_a_date_or_a_datetime`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_nearest_reference_has_the_type_of_its_source`.
 
 `nearest` declares `source`, `to` and `unit`, each required. It is the
 select step of a named intermediate ([LOOKUP-25](#lookup-25)) and replaces
@@ -411,7 +411,7 @@ lookup cannot declare both. An aggregate's empty match yields missing
 ([FORMULA-24](formulas.md#formula-24)).
 
 Fails: `unmatched_key`, `conflicting_absence_policy`, `prohibited_construct`.
-Evidence: `schema-lookup-absent-default`, `negative-source-require-match`, `negative-input-require-match`, `negative-lookup-unmatched-key`, `negative-lookup-missing-sex`, `negative-lookup-require-match-no-match`, `schema-handlers`, `adam-adae-death`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`.
+Evidence: `schema-lookup-absent-default`, `negative-source-require-match`, `negative-input-require-match`, `negative-lookup-unmatched-key`, `negative-lookup-missing-sex`, `negative-lookup-require-match-no-match`, `schema-handlers`, `adam-adae-death`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/original_source_bindings.json`.
 
 ```yaml
 input:
@@ -495,7 +495,7 @@ the source/key pairs of every lookup and implicit join: the match performed,
 the type each side declares, whether the lookup or its input declares the
 pairs, and the absence policy that answers a miss.
 
-Evidence: `negative-lookup-unmatched-key`, `rust/crates/yamaa-adapters/tests/fixtures/specs/lookup-failures.json`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json::a_named_intermediate_s_absence_counts_under_the_handler_its_surface_names`.
+Evidence: `negative-lookup-unmatched-key`, `rust/crates/yamaa-application/tests/fixtures/specs/lookup-failures.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::a_named_intermediate_s_absence_counts_under_the_handler_its_surface_names`.
 
 Neither failure renames the other's fields. Handler accounting follows
 [COLUMN-14](columns.md#column-14), whose counts are `handler` rows of the run
@@ -523,7 +523,7 @@ input's declared `key`. A lookup names at least one pair, every column must
 exist, and every match value must read a known current-row value.
 
 Fails: `invalid_field_type`, `no_applicable_keys`, `unknown_field`, `invalid_aggregate_context`.
-Evidence: `negative-lookup-mismatched`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-lookup-key-lookup-qualified`, `negative-aggregate-key-other-template`, `negative-aggregate-key-bare-field`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/aggregate_key_reads.json`, `rust/crates/yamaa-core/src/specification/declared_keys.rs`, `rust/crates/yamaa-core/src/key_relation.rs::a_declared_key_pairs_every_column_it_names`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_variable_forms.json`.
+Evidence: `negative-lookup-mismatched`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-lookup-key-lookup-qualified`, `negative-aggregate-key-other-template`, `negative-aggregate-key-bare-field`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-application/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-application/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_key_reads.json`, `rust/crates/yamaa-core/src/specification/declared_keys.rs`, `rust/crates/yamaa-core/src/key_relation.rs::a_declared_key_pairs_every_column_it_names`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_variable_forms.json`.
 
 ```yaml
 intermediates:
@@ -706,7 +706,7 @@ template. A match value must be available during row construction; one
 available only during column derivation fails.
 
 Fails: `ungrouped_driver_field`, `unknown_field`, `phase_boundary`.
-Evidence: `negative-grouped-lookup-ungrouped-key`, `negative-grouped-range-ungrouped-value`, `negative-lookup-key-column-phase`, `negative-lookup-match-column-phase`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`, `schema-lookup-source-range-driver`, `schema-lookup-source-range-default`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_row_phase_boundaries.json`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_template_s_join_matches_the_driver_on_the_declared_key`.
+Evidence: `negative-grouped-lookup-ungrouped-key`, `negative-grouped-range-ungrouped-value`, `negative-lookup-key-column-phase`, `negative-lookup-match-column-phase`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`, `schema-lookup-source-range-driver`, `schema-lookup-source-range-default`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_row_phase_boundaries.json`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_template_s_join_matches_the_driver_on_the_declared_key`.
 
 In ungrouped row construction each retained input record builds one candidate
 row ([ROW-3](rows.md#row-3)). The input record's fields are
@@ -771,7 +771,7 @@ collision fails. An intermediate read as a lookup without `key` fails as
 `missing_required_field`.
 
 Fails: `duplicate_identifier`, `missing_required_field`.
-Evidence: `negative-lookup-id-collision`, `negative-lookup-unknown-key`, `schema-lookup`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::an_intermediate_read_as_a_lookup_requires_its_key`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_driver_read_as_a_lookup_is_refused_at_its_key`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::an_intermediate_without_key_is_refused_unless_it_drives_rows`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/one_spelling.json::an_intermediate_read_as_a_lookup_without_key_is_refused_at_its_key`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/one_spelling.json::an_intermediate_nothing_reads_without_key_is_refused_at_its_key`, `rust/tests/host-fixtures/cases.json::ordinary_lookup_without_keys`.
+Evidence: `negative-lookup-id-collision`, `negative-lookup-unknown-key`, `schema-lookup`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::an_intermediate_read_as_a_lookup_requires_its_key`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_driver_read_as_a_lookup_is_refused_at_its_key`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::an_intermediate_without_key_is_refused_unless_it_drives_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::an_intermediate_read_as_a_lookup_without_key_is_refused_at_its_key`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::an_intermediate_nothing_reads_without_key_is_refused_at_its_key`, `rust/tests/host-fixtures/cases.json::ordinary_lookup_without_keys`.
 
 For a named intermediate, `dataset: SELF` instead reads the specification's
 completed derived rows ([LOOKUP-7](#lookup-7)). The current row is the output
@@ -870,7 +870,7 @@ unfinished rows are never eligible, and a read from the first template fails.
 only through a named intermediate, never as a directly qualified source.
 
 Fails: `phase_boundary`, `unknown_field`.
-Evidence: `adam-adae-prior-serious-event`, `adam-advs-windows`, `negative-self-window-first-template`, `negative-self-filter-first-template`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::completed_templates_are_borrowed_and_republished_in_construction_order`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::empty_completed_template_uses_literal_absence_in_later_templates`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::later_templates_read_completed_rows_through_between_values`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::a_later_template_s_mapping_reads_a_completed_self_donor_type`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::a_later_template_s_cut_reads_a_completed_self_donor_type`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::first_template_read_preserves_full_phase_context_before_study_access`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::hidden_first_template_alternative_preserves_its_authored_phase_path`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::hidden_first_template_first_available_source_preserves_its_authored_phase_path`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::a_first_template_aggregate_keeps_the_self_field_it_reads`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::a_first_template_aggregate_keeps_the_self_record_star`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::a_first_template_aggregate_in_a_case_result_keeps_the_self_record_star`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::a_first_template_mapping_of_a_self_field_fails_before_study_access`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::a_first_template_cut_of_a_self_field_fails_before_study_access`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::a_first_template_read_through_a_between_value_fails_before_study_access`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::a_first_template_read_through_two_between_values_names_each_in_order`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::a_first_template_case_predicate_read_through_a_between_value_fails_before_study_access`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::a_first_template_filter_read_of_self_fails_before_study_access`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::a_first_template_filter_read_through_a_between_value_fails_before_study_access`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::a_first_template_filter_read_through_two_between_values_names_each_in_order`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::a_grouped_first_template_filter_reads_no_qualified_name`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::column_only_donor_is_unavailable_to_later_templates`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::an_input_named_self_is_refused_before_study_access`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_self.json::self_intermediates_without_row_templates_are_refused_before_study_access`.
+Evidence: `adam-adae-prior-serious-event`, `adam-advs-windows`, `negative-self-window-first-template`, `negative-self-filter-first-template`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::completed_templates_are_borrowed_and_republished_in_construction_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::empty_completed_template_uses_literal_absence_in_later_templates`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::later_templates_read_completed_rows_through_between_values`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::a_later_template_s_mapping_reads_a_completed_self_donor_type`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::a_later_template_s_cut_reads_a_completed_self_donor_type`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::first_template_read_preserves_full_phase_context_before_study_access`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::hidden_first_template_alternative_preserves_its_authored_phase_path`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::hidden_first_template_first_available_source_preserves_its_authored_phase_path`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::a_first_template_aggregate_keeps_the_self_field_it_reads`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::a_first_template_aggregate_keeps_the_self_record_star`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::a_first_template_aggregate_in_a_case_result_keeps_the_self_record_star`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::a_first_template_mapping_of_a_self_field_fails_before_study_access`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::a_first_template_cut_of_a_self_field_fails_before_study_access`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::a_first_template_read_through_a_between_value_fails_before_study_access`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::a_first_template_read_through_two_between_values_names_each_in_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::a_first_template_case_predicate_read_through_a_between_value_fails_before_study_access`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::a_first_template_filter_read_of_self_fails_before_study_access`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::a_first_template_filter_read_through_a_between_value_fails_before_study_access`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::a_first_template_filter_read_through_two_between_values_names_each_in_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::a_grouped_first_template_filter_reads_no_qualified_name`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::column_only_donor_is_unavailable_to_later_templates`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::an_input_named_self_is_refused_before_study_access`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/declarative_self.json::self_intermediates_without_row_templates_are_refused_before_study_access`.
 
 A read from the first template fails as `phase_boundary`. So does a
 first-template read of another named intermediate whose `between` value reads
@@ -927,7 +927,7 @@ stored and derived column is available. A column the lookup's dataset does not
 have, or one outside a declared `columns` list, fails.
 
 Fails: `unknown_field`.
-Evidence: `adam-adae-death`, `negative-lookup-key-lookup-qualified`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_variable_forms.json`.
+Evidence: `adam-adae-death`, `negative-lookup-key-lookup-qualified`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_variable_forms.json`.
 
 Naming in `columns` a column the dataset does not have fails as
 `unknown_field`, and so does a lookup-qualified read of a missing or
@@ -948,7 +948,7 @@ lookup answers one value per current row, the selected record's column, its
 absence answer or an `unmatched_key` failure under `require_match`, and never
 changes the row count. An input lookup's dataset is read once per run.
 
-Evidence: `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/suppressed_lookup_reads.json`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/suppressed_lookup_reads.json`.
 
 The per-row match selects among records already read and never re-reads the
 dataset. An intermediate declaring `require_match: true` never fails as
@@ -973,7 +973,7 @@ for matching, `filter`, `order_by` selection and `columns` projection, and
 behave there like stored fields.
 
 Fails: `unknown_field`, `duplicate_derivation`.
-Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-lookup-intermediate-closest-datetime`, `schema-window-intermediate-rank`, `negative-lookup-derivation-scope`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json::a_lookup_derivation_reading_the_source_record_is_unknown_to_the_donor_template`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_model.json::a_lookup_derivation_read_by_the_source_template_alone_reads_its_record`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_record_no_row_matches_is_never_augmented`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_matched_record_that_fails_still_stops_the_run`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_derived_key_augments_every_record`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_derived_bound_augments_every_record`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_window_among_the_derivations_augments_every_record`.
+Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-lookup-intermediate-closest-datetime`, `schema-window-intermediate-rank`, `negative-lookup-derivation-scope`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::a_lookup_derivation_reading_the_source_record_is_unknown_to_the_donor_template`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::a_lookup_derivation_read_by_the_source_template_alone_reads_its_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_record_no_row_matches_is_never_augmented`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_matched_record_that_fails_still_stops_the_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_derived_key_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_derived_bound_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_window_among_the_derivations_augments_every_record`.
 
 Each entry is either an untyped expression or a typed binding
 `{type: <column_type>, derivation: <expression>, unconvertible: <literal>?}`.
@@ -1221,7 +1221,7 @@ absence policy apply as for any other read ([LOOKUP-25](#lookup-25)), once per
 donor record.
 
 Fails: `unknown_field`, `phase_boundary`, `dependency_cycle`.
-Evidence: `adam-adlb-end-of-treatment`, `adam-adsl-crossover-sequence`, `schema-lookup-donor-range`, `negative-lookup-donor-range-driver`, `rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_variable_forms.json`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/project_functions.json::an_intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field`.
+Evidence: `adam-adlb-end-of-treatment`, `adam-adsl-crossover-sequence`, `schema-lookup-donor-range`, `negative-lookup-donor-range-driver`, `rust/crates/yamaa-application/tests/execution_aggregate_record_operations.rs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_variable_forms.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/project_functions.json::an_intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field`.
 
 Either form of a donor-record name names a stored field or a derivation
 declared before the reading one, and a name the donor record cannot supply
@@ -1302,7 +1302,7 @@ are reported and the selection chooses. A lookup whose key is verified unique
 at `error` needs no selection.
 
 Fails: `duplicate_intermediate_records`, `unknown_field`, `correlated_filter_with_unique_verification`, `correlated_derivation_with_unique_verification`, `value_not_permitted`.
-Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-intermediate`, `negative-lookup-inner-join-duplicate-pairs`, `schema-lookup-intermediate-unique-warning`, `negative-lookup-unique-warning-unordered`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_without_a_selection_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_keep_alone_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_an_order_of_no_term_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_an_order_and_keep_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_nearest_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::an_error_unique_without_a_selection_is_admitted`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/run_report.json::a_warning_unique_beside_a_nearest_selection_reports_and_reads_take_the_nearest`.
+Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-intermediate`, `negative-lookup-inner-join-duplicate-pairs`, `schema-lookup-intermediate-unique-warning`, `negative-lookup-unique-warning-unordered`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_without_a_selection_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_keep_alone_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_an_order_of_no_term_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_an_order_and_keep_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::a_warning_unique_beside_nearest_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::an_error_unique_without_a_selection_is_admitted`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/run_report.json::a_warning_unique_beside_a_nearest_selection_reports_and_reads_take_the_nearest`.
 
 ```yaml
 - id: DS_EOS
@@ -1385,7 +1385,7 @@ one candidate-row value. Every other context fails, and the forms must not be
 mixed.
 
 Fails: `invalid_aggregate_context`, `mixed_relations`.
-Evidence: `schema-aggregation`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-adapters/tests/fixtures/row_reductions.json`.
+Evidence: `schema-aggregation`, `rust/crates/yamaa-application/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-application/tests/fixtures/row_reductions.json`.
 
 An identifier is `NAME` or `DATASET.NAME`, which
 [Name binding](names.md) resolves in the same phase; a
@@ -1441,7 +1441,7 @@ local `group_by`: the enclosing `row.group_by` already fixes its current
 relation and keys.
 
 Fails: `invalid_aggregate_context`.
-Evidence: `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/compiler.json::a_qualified_aggregate_group_by_column_must_be_an_output_key`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/compiler.json::a_qualified_aggregate_grouped_by_the_output_key_binds`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/compiler.json::a_qualified_aggregate_group_by_column_must_be_an_output_key`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/compiler.json::a_qualified_aggregate_grouped_by_the_output_key_binds`.
 
 A qualified `group_by` column that is not an output key fails, as does an
 unqualified expression with no `group_by` or with a `between`. A grouped-row

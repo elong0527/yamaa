@@ -5,7 +5,8 @@
 //! A root that declares `yamaa` is a 1.x document, and one that declares
 //! `schema_version` is written in language 0.5. The engine reads language
 //! version 1.0 (#3030 D76). What a public call reports for each file's header
-//! is in `fixtures/diagnostics/language_header.json`, which the replay reads.
+//! is in the application suite's `fixtures/diagnostics/language_header.json`,
+//! which its replay reads.
 //! These tests prove what no public call returns: the 1.0 path reads the
 //! header before choosing a closure, admits each document at the version it
 //! declares and each specification layer at its own, under closures built

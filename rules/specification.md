@@ -83,7 +83,7 @@ intentionally absent is still derived: it is written `derivation: null` rather
 than left without a derivation.
 
 Fails: `missing_derivation`.
-Evidence: `schema-structure`, `rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv::declaration-order`.
+Evidence: `schema-structure`, `rust/crates/yamaa-application/tests/fixtures/preflight.tsv::declaration-order`.
 
 <a id="spec-5"></a>
 
@@ -97,7 +97,7 @@ entry must derive every column at column level. A `rows` derivation must
 target a declared column.
 
 Fails: `missing_derivation`, `undeclared_column`.
-Evidence: `schema-structure`, `rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv::ordered-missing-rows`.
+Evidence: `schema-structure`, `rust/crates/yamaa-application/tests/fixtures/preflight.tsv::ordered-missing-rows`.
 
 Without `rows` entries the every-entry requirement is vacuous, and
 [SPEC-4](#spec-4) requires a column-level derivation. A key in `derivations`
@@ -119,7 +119,7 @@ Any other keeps its column-derivation meaning; a `rows` entry naming its column
 fails.
 
 Fails: `duplicate_derivation`.
-Evidence: `schema-rows-override`, `schema-lookup-source-range-default`, `rust/crates/yamaa-core/tests/project_specification.rs`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/rows.json::transitive_nonlocal_defaults_report_one_issue_per_column_with_all_overriding_rows`, `rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_row_phase_boundaries.json::a_lookup_ranged_on_a_row_local_column_promotes_its_default`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_row_phase_boundaries.json::a_chained_lookup_promotes_the_default_its_range_values_read`, `rust/crates/yamaa-core/src/specification/phases.rs::a_template_cannot_replace_a_default_that_is_not_row_local`, `rust/crates/yamaa-core/src/specification/phases.rs::an_aggregate_in_a_case_result_is_not_row_local`, `rust/crates/yamaa-core/src/specification/phases.rs::a_row_phase_leaves_an_aggregate_in_a_case_result_to_the_column_phase`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_row_phase_boundaries.json::a_template_naming_a_default_with_an_aggregate_in_a_case_result_duplicates_it`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_row_phase_boundaries.json::a_template_naming_a_default_that_reads_a_self_intermediate_duplicates_it`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_row_phase_boundaries.json::an_ungrouped_template_reading_a_case_result_aggregate_default_is_a_phase_boundary`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_row_phase_boundaries.json::a_grouped_template_reading_a_case_result_aggregate_default_is_a_phase_boundary`, `rust/crates/yamaa-core/src/specification/phases.rs::a_structured_source_s_range_value_brings_its_default_into_the_row_phase`, `rust/crates/yamaa-core/src/specification/phases.rs::a_structured_source_whose_range_value_reads_a_window_is_not_row_local`.
+Evidence: `schema-rows-override`, `schema-lookup-source-range-default`, `rust/crates/yamaa-core/tests/project_specification.rs`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/rows.json::transitive_nonlocal_defaults_report_one_issue_per_column_with_all_overriding_rows`, `rust/crates/yamaa-application/tests/fixtures/row_intermediate_reference.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_row_phase_boundaries.json::a_lookup_ranged_on_a_row_local_column_promotes_its_default`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_row_phase_boundaries.json::a_chained_lookup_promotes_the_default_its_range_values_read`, `rust/crates/yamaa-core/src/specification/phases.rs::a_template_cannot_replace_a_default_that_is_not_row_local`, `rust/crates/yamaa-core/src/specification/phases.rs::an_aggregate_in_a_case_result_is_not_row_local`, `rust/crates/yamaa-core/src/specification/phases.rs::a_row_phase_leaves_an_aggregate_in_a_case_result_to_the_column_phase`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_row_phase_boundaries.json::a_template_naming_a_default_with_an_aggregate_in_a_case_result_duplicates_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_row_phase_boundaries.json::a_template_naming_a_default_that_reads_a_self_intermediate_duplicates_it`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_row_phase_boundaries.json::an_ungrouped_template_reading_a_case_result_aggregate_default_is_a_phase_boundary`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_row_phase_boundaries.json::a_grouped_template_reading_a_case_result_aggregate_default_is_a_phase_boundary`, `rust/crates/yamaa-core/src/specification/phases.rs::a_structured_source_s_range_value_brings_its_default_into_the_row_phase`, `rust/crates/yamaa-core/src/specification/phases.rs::a_structured_source_whose_range_value_reads_a_window_is_not_row_local`.
 
 The rule applies to output and internal columns alike. A row-construction
 context is one of these:
@@ -269,7 +269,7 @@ validation, reporting its file and position. A format's ASCII escape notation
 may denote a non-ASCII value; the decoded value is then an ordinary string.
 
 Fails: `non_ascii_source`.
-Evidence: `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/workflow.json::a_yaml_entry_byte_outside_ascii_names_the_entry_and_its_position`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::a_yaml_source_byte_outside_ascii_names_the_file_and_its_position`, `rust/crates/yamaa/tests/issue_locations.rs::a_parent_the_reader_refuses_locates_its_issue_in_that_parent`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/workflow.json::a_yaml_entry_byte_outside_ascii_names_the_entry_and_its_position`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/sources.json::a_yaml_source_byte_outside_ascii_names_the_file_and_its_position`, `rust/crates/yamaa/tests/issue_locations.rs::a_parent_the_reader_refuses_locates_its_issue_in_that_parent`.
 
 For example, the YAML double-quoted escape `"\u00E9"` denotes the
 one-character string U+00E9.

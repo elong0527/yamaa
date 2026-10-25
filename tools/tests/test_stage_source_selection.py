@@ -25,7 +25,7 @@ class PortableSourceSelectionStage(unittest.TestCase):
                 destination = Path(temporary)
                 original = (
                     ROOT
-                    / "rust/crates/yamaa-adapters/tests/fixtures"
+                    / "rust/crates/yamaa-application/tests/fixtures"
                     / (fixture + ".json")
                 )
                 truth = json.loads(original.read_text())

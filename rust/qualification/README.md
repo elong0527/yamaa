@@ -11,7 +11,7 @@ plain fixtures are discovered by glob.
 ## Public reports
 
 `python -m tools.conformance.public_conformance complete-reports` compares every
-complete authored report under `crates/yamaa-adapters/tests/fixtures/specs/`
+complete authored report under `crates/yamaa-application/tests/fixtures/specs/`
 with retained actual installed Python and R file runs. Complete-report objects
 are discovered from their files; malformed report objects fail, while
 array-shaped partial diagnostic fixtures belong to their direct native tests.

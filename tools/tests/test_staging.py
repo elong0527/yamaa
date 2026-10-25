@@ -318,7 +318,7 @@ class StagingTests(unittest.TestCase):
                     )
                 truth = (
                     staging.WORKSPACE
-                    / "crates/yamaa-adapters/tests/fixtures/specs"
+                    / "crates/yamaa-application/tests/fixtures/specs"
                     / (name + ".json")
                 )
                 self.assertEqual(
