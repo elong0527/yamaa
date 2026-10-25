@@ -339,7 +339,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
     let contracts = replay::object(replay::field(&routes, "cases"));
     assert_eq!(
         contracts.len(),
-        442,
+        448,
         "every original API contract is authored"
     );
     let mut seen = BTreeSet::new();
@@ -504,8 +504,8 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         contracts.keys().cloned().collect::<BTreeSet<_>>(),
         "every authored API case still exists"
     );
-    assert_eq!((domains, preparation, either, checks), (275, 22, 39, 106));
-    assert_eq!((accepted_saves, refused_saves, no_save), (160, 47, 235));
+    assert_eq!((domains, preparation, either, checks), (281, 22, 39, 106));
+    assert_eq!((accepted_saves, refused_saves, no_save), (165, 47, 236));
 }
 
 /// Seam: the composition's save return, held artifact set and capture counter
