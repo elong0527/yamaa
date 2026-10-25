@@ -49,6 +49,21 @@ const DIFFERENCES: &[Difference] = &[
         domain: "out",
         class: Class::Q3,
     },
+    // A project function's integer parameter reads an undeclared CSV
+    // field, which INPUT-5 types as `str`. Binding decides FUNC-5 while
+    // the old pass leaves it to run(). The second case also reads a
+    // relation the specification never declares (NAME-3), which binding
+    // decides beside the type fault. Recorded on #3805 from #3920.
+    Difference {
+        case: "projects.json::a_stored_field_of_another_type_than_its_parameter_is_refused_at_binding",
+        domain: "output",
+        class: Class::Q3,
+    },
+    Difference {
+        case: "projects.json::missing_stored_fields_and_unknown_relations_keep_authored_argument_diagnostics",
+        domain: "output",
+        class: Class::Q3,
+    },
 ];
 
 #[test]
