@@ -32,6 +32,8 @@ pub fn source(
         SourceProfile::Xport => "raw.xpt",
         SourceProfile::Sas7bdat => "raw.sas7bdat",
         SourceProfile::OdmXml => "raw.xml",
+        SourceProfile::DatasetJson => "raw.json",
+        SourceProfile::DatasetNdjson => "raw.ndjson",
     };
     SourceDeclaration {
         name: "RAW".into(),
@@ -46,7 +48,8 @@ pub fn source(
 }
 
 /// Decode held bytes through the source decode that both host routes call:
-/// the profile selects the CSV, Parquet, ReadStat or ODM XML reader, and the
+/// the profile selects the CSV, Parquet, ReadStat, ODM XML or Dataset-JSON
+/// reader, and the
 /// declared types and interpretation apply as they do for a specification
 /// input.
 pub fn decode(

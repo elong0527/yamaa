@@ -27,6 +27,56 @@ pub enum ParquetFinding<'a> {
     },
 }
 
+/// A Dataset-JSON input's closed cause (DSJSON-5) with the facts that
+/// locate it. A field is named by its `columns` entry, except an empty name,
+/// which only its one-based position names.
+#[derive(Clone, Copy, Debug)]
+pub enum DatasetJsonCause<'a> {
+    /// The bytes are not the representation's JSON text.
+    Malformed,
+    /// `datasetJSONVersion` is not a 1.1 release.
+    Version,
+    /// A member the profile reads is absent, repeated or of another JSON
+    /// kind; `field` is the position of the `columns` entry that holds it.
+    Member {
+        member: &'a str,
+        field: Option<usize>,
+    },
+    /// An empty or repeated column name.
+    FieldName { field: &'a Field },
+    /// A `dataType` that names no column type.
+    DataType { field: &'a str, data_type: &'a str },
+    /// A `types` entry the field's `dataType` does not admit.
+    FieldType {
+        field: &'a str,
+        data_type: &'a str,
+        declared: ColumnType,
+    },
+    /// The rows are not as many as `records` counts.
+    Records,
+    /// A row that is not an array of one value per column.
+    RowWidth { record: usize },
+    /// A value of another JSON kind than its column's `dataType` spells.
+    Cell { record: usize, field: &'a str },
+}
+
+impl DatasetJsonCause<'_> {
+    /// The cause's closed spelling.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Malformed => "malformed",
+            Self::Version => "version",
+            Self::Member { .. } => "member",
+            Self::FieldName { .. } => "field_name",
+            Self::DataType { .. } => "data_type",
+            Self::FieldType { .. } => "field_type",
+            Self::Records => "records",
+            Self::RowWidth { .. } => "row_width",
+            Self::Cell { .. } => "cell",
+        }
+    }
+}
+
 /// A classified failure borrows the original error, declaration and codec spelling.
 #[derive(Clone, Copy, Debug)]
 pub enum SourceFinding<'a> {
@@ -34,6 +84,22 @@ pub enum SourceFinding<'a> {
         dataset: &'a str,
         path: &'a str,
         cause: &'a str,
+    },
+    /// A Dataset-JSON input the profile cannot read (DSJSON-5).
+    DatasetJson {
+        dataset: &'a str,
+        path: &'a str,
+        cause: DatasetJsonCause<'a>,
+    },
+    /// A Dataset-JSON value that does not parse as its field's type, which
+    /// its `dataType` supplies or a `types` entry `declared` (DSJSON-3).
+    DatasetJsonValue {
+        dataset: &'a str,
+        field: &'a str,
+        target: ColumnType,
+        value: &'a str,
+        record: usize,
+        declared: bool,
     },
     Odm {
         dataset: &'a str,
@@ -89,6 +155,8 @@ impl SourceFinding<'_> {
     fn code(self) -> C {
         match self {
             Self::Sas { .. } => C::SasInvalid,
+            Self::DatasetJson { .. } => C::DatasetJsonInvalid,
+            Self::DatasetJsonValue { .. } => C::DatasetJsonFieldParse,
             Self::Odm { dataset, finding } => finding.finding(dataset).code(),
             Self::OdmValues { dataset, finding } => finding.finding(dataset).code(),
             Self::Csv { cause, .. } => cause.code(),
@@ -119,7 +187,9 @@ impl SourceFinding<'_> {
             | Self::UnknownField { dataset, .. }
             | Self::FieldParse { dataset, .. }
             | Self::Parquet { dataset, .. } => dataset,
-            Self::Sas { dataset, .. } => dataset,
+            Self::Sas { dataset, .. }
+            | Self::DatasetJson { dataset, .. }
+            | Self::DatasetJsonValue { dataset, .. } => dataset,
             Self::OrdinalCollision { dataset, .. } => dataset,
         };
         let mut context = Context::from([("dataset".into(), text(dataset))]);
@@ -131,6 +201,79 @@ impl SourceFinding<'_> {
                     context.insert("hint".into(), text(SAS_DELETED_RECORDS_HINT));
                 }
                 format!("input.{dataset}.path")
+            }
+            Self::DatasetJson { path, cause, .. } => {
+                context.insert("path".into(), text(path));
+                context.insert("cause".into(), text(cause.name()));
+                match cause {
+                    DatasetJsonCause::Malformed
+                    | DatasetJsonCause::Version
+                    | DatasetJsonCause::Records => {}
+                    DatasetJsonCause::Member { member, field } => {
+                        context.insert("member".into(), text(member));
+                        if let Some(field) = field {
+                            context.insert("field".into(), V::from(field));
+                        }
+                    }
+                    DatasetJsonCause::FieldName { field } => {
+                        context.insert(
+                            "field".into(),
+                            match field {
+                                Field::Index(index) => V::from(*index),
+                                Field::Name(name) => text(name),
+                            },
+                        );
+                    }
+                    DatasetJsonCause::DataType { field, data_type } => {
+                        context.insert("field".into(), text(field));
+                        context.insert("data_type".into(), text(data_type));
+                    }
+                    // The `types` entry the field's `dataType` does not admit.
+                    DatasetJsonCause::FieldType {
+                        field,
+                        data_type,
+                        declared,
+                    } => {
+                        context.insert("field".into(), text(field));
+                        context.insert("data_type".into(), text(data_type));
+                        context.insert("type".into(), text(kind(declared)));
+                        return Diagnostic {
+                            code: self.code(),
+                            spec_paths: vec![format!("input.{dataset}.types.{field}")],
+                            context,
+                            source_span: None,
+                            operand_route: None,
+                        };
+                    }
+                    DatasetJsonCause::RowWidth { record } => {
+                        context.insert("record".into(), V::from(record));
+                    }
+                    DatasetJsonCause::Cell { record, field } => {
+                        context.insert("record".into(), V::from(record));
+                        context.insert("field".into(), text(field));
+                    }
+                }
+                format!("input.{dataset}.path")
+            }
+            // A field its `dataType` types fails at the input's path, and one
+            // a `types` entry narrows at that entry.
+            Self::DatasetJsonValue {
+                field,
+                target,
+                value,
+                record,
+                declared,
+                ..
+            } => {
+                context.insert("field".into(), text(field));
+                context.insert("type".into(), text(kind(target)));
+                context.insert("value".into(), text(value));
+                context.insert("record".into(), V::from(record));
+                if declared {
+                    format!("input.{dataset}.types.{field}")
+                } else {
+                    format!("input.{dataset}.path")
+                }
             }
             Self::OrdinalCollision { field, .. } => {
                 context.insert("field".into(), text(field));

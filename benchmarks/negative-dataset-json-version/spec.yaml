@@ -1,0 +1,28 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  # Demographics received as a Dataset-JSON file of version 1.0.0.
+  DM: input/dm.json
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, SITEID]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: SITEID
+    type: str
+    label: Study Site Identifier
+    derivation: DM.SITEID

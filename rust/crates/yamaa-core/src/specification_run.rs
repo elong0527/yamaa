@@ -808,10 +808,7 @@ fn reads_by_partition<D: Decoder>(
     if plan.whole_table_step(keys).is_some() {
         return None;
     }
-    let fields = match keys {
-        0 => Vec::new(),
-        keys => plan.partition_fields(keys)?,
-    };
+    let fields = plan.cut_fields(keys)?;
     Some(ByPartition {
         partitioning,
         keys,

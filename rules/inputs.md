@@ -14,14 +14,15 @@ file's contents.
 `dataset_class.path` names the file a specification reads, and its
 case-insensitive extension selects the source profile that reads it,
 including for an input linked to its producing specification: `.csv`,
-`.parquet`, `.sas7bdat`, `.xpt`, or `.xml` for an ODM 1.3 or 2.0 document
+`.parquet`, `.sas7bdat`, `.xpt`, `.json` or `.ndjson` for a Dataset-JSON 1.1
+file, or `.xml` for an ODM 1.3 or 2.0 document
 read into the item table of [NAME-8](names.md#name-8). No reader inspects a
 file's contents to choose a profile, a delimiter or a quote character, and no
 unknown extension falls back to a default: it fails during validation, before
 any byte is read.
 
 Fails: `source_profile_unknown`.
-Evidence: `negative-source-unknown-format`, `schema-parquet`, `sdtm-dm-odm-snapshot`, `negative-odm-transactional`, `negative-odm-no-clinical-data`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`, `rust/crates/yamaa/tests/odm_input.rs::nothing_is_sniffed_so_an_archive_named_xml_is_refused_as_xml`.
+Evidence: `negative-source-unknown-format`, `schema-parquet`, `sdtm-dm-odm-snapshot`, `negative-odm-transactional`, `negative-odm-no-clinical-data`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`, `rust/crates/yamaa/tests/odm_input.rs::nothing_is_sniffed_so_an_archive_named_xml_is_refused_as_xml`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/dataset_json_sources.json::a_single_object_file_reads_each_data_type_as_the_type_its_table_gives`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/dataset_json_sources.json::a_single_object_written_over_several_lines_is_no_newline_delimited_file`.
 
 The extension selects the profile under
 [OUTPUT-5](output.md#output-5); a study that stores `DM.CSV`
@@ -34,12 +35,19 @@ names the same container as one that stores `dm.csv`.
 | `.sas7bdat` | `sas7bdat` | SAS dataset (read-only) | [SAS source profiles](reference/sas.md) |
 | `.xpt` | `xpt` | SAS Transport v5/v8 (read-only) | [SAS source profiles](reference/sas.md) |
 | `.xml` | `odm` | ODM 1.3 or 2.0 XML (read-only) | [ODM source profile](reference/odm.md) |
+| `.json` | `dataset_json` | Dataset-JSON 1.1, single-object (read-only) | [Dataset-JSON source profiles](reference/dataset-json.md) |
+| `.ndjson` | `dataset_ndjson` | Dataset-JSON 1.1, newline-delimited (read-only) | [Dataset-JSON source profiles](reference/dataset-json.md) |
 
 A source profile follows the artifact profile: a file
 [Output](output.md) writes and these rules read has
 one profile name in both directions. The read-only SAS and Transport profiles
 of [SAS-1](reference/sas.md#sas-1) and the read-only ODM profile of
 [ODM-1](reference/odm.md#odm-1) are the exceptions; no artifact publication
+profile corresponds to them.
+The read-only Dataset-JSON profiles of
+[DSJSON-1](reference/dataset-json.md#dsjson-1) are exceptions too: they carry
+the names a submission's `transport` writes them under
+([JSON-1](profiles/dataset-json.md#json-1)), but no artifact publication
 profile corresponds to them.
 
 An `.xml` input is one ODM document, never an archive: its bytes are read as
@@ -88,13 +96,13 @@ result.
 ### INPUT-3. An input may declare a generated field holding each record's one-based stored position
 
 `dataset_class.ordinal` optionally names a generated `int` field of a CSV,
-Parquet, SAS, Transport or ODM XML input dataset, appended after the stored
+Parquet, SAS, Transport, Dataset-JSON or ODM XML input dataset, appended after the stored
 fields, whose names, order and types are unchanged. Its value is the one-based
 position of the data record in stored record order, assigned before any
 filter, join, grouping or window reads the input dataset; filtering keeps the
 original positions. Without the declaration, ingestion adds no field.
 
-Evidence: `schema-source-ordinal`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_case_predicates.json::source_ordinals_precede_filtering_and_count_multiline_records_once`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_case_predicates.json::an_ordinal_input_with_no_record_saves_its_header_alone`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_linked_ordinal_is_local_to_the_consumer_and_never_part_of_the_contract`, `rust/crates/yamaa/tests/odm_input.rs::an_xml_input_no_odm_read_names_may_declare_an_ordinal`.
+Evidence: `schema-source-ordinal`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_case_predicates.json::source_ordinals_precede_filtering_and_count_multiline_records_once`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_case_predicates.json::an_ordinal_input_with_no_record_saves_its_header_alone`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/producer_links.json::a_linked_ordinal_is_local_to_the_consumer_and_never_part_of_the_contract`, `rust/crates/yamaa/tests/odm_input.rs::an_xml_input_no_odm_read_names_may_declare_an_ordinal`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/dataset_json_sources.json::a_generated_ordinal_counts_the_rows_from_one`.
 
 ```yaml
 input:
@@ -160,6 +168,9 @@ the type comes from depends on the container:
 - A **SAS or Transport source** supplies character or numeric storage, with
   defaults and explicit numeric narrowing under
   [SAS source profiles](reference/sas.md).
+- A **Dataset-JSON source** supplies each column's `dataType`, through the
+  closed table and the explicit narrowing of
+  [DSJSON-2](reference/dataset-json.md#dsjson-2).
 - A **self-describing source** supplies it. The fixed item table of the ODM
   source profile ([ODM-1](reference/odm.md#odm-1)), a Parquet schema and an
   artifact's producing specification are each the field's type authority;
@@ -193,10 +204,11 @@ is a defect in the data, not a reason to retype the field, and fails under
 A `types` entry naming a field the stored dataset does not have, including the
 generated ordinal, fails. A `types` entry for a field whose container or
 producing specification already supplies a type fails rather than overriding
-the source contract, including every field of a Parquet source; the one
-exception is explicit SAS numeric narrowing under
-[SAS-3](reference/sas.md#sas-3). `types` must be absent whenever `schema`
-is present, even when an entry agrees with the producer.
+the source contract, including every field of a Parquet source; the
+exceptions are explicit SAS numeric narrowing under
+[SAS-3](reference/sas.md#sas-3) and Dataset-JSON narrowing under
+[DSJSON-2](reference/dataset-json.md#dsjson-2). `types` must be absent
+whenever `schema` is present, even when an entry agrees with the producer.
 
 Fails: `unknown_field`, `redundant_field_type`.
 Evidence: `negative-types-unknown-field`, `negative-redefined-date`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/producers.json::a_linked_input_types_no_field_its_producer_already_types`, `rust/crates/yamaa/tests/odm_input.rs::an_xml_input_declares_no_types`.
@@ -250,8 +262,9 @@ Evidence: `negative-source-na-age`, `rust/crates/yamaa-adapters/tests/table_csv_
 
 An empty field holds no text to parse. In a delimited source, no collected
 empty value is distinct from a missing one. A typed container supplies missing
-as its own null: a Parquet null ([PARQUET-8](reference/parquet.md#parquet-8))
-and a SAS missing value ([SAS-5](reference/sas.md#sas-5)).
+as its own null: a Parquet null ([PARQUET-8](reference/parquet.md#parquet-8)),
+a SAS missing value ([SAS-5](reference/sas.md#sas-5)) and a Dataset-JSON
+`null` ([DSJSON-3](reference/dataset-json.md#dsjson-3)).
 
 <a id="input-9"></a>
 
@@ -271,8 +284,9 @@ Evidence: `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_cas
 Handlers answer for a collected empty string like any other string. The
 container profiles keep their own distinction -- a Parquet null and a
 zero-length string remain distinct under
-[PARQUET-8](reference/parquet.md#parquet-8) -- and the convention applies at
-ingestion, after the profile decodes. An empty field of any other declared type
+[PARQUET-8](reference/parquet.md#parquet-8), as a Dataset-JSON `null` and
+`""` do under [DSJSON-3](reference/dataset-json.md#dsjson-3) -- and the
+convention applies at ingestion, after the profile decodes. An empty field of any other declared type
 is missing under [INPUT-8](#input-8); a typed container admits no zero-length
 string outside `str`. The delimited profile admits no empty string
 ([INPUT-8](#input-8)), so `present` fails with

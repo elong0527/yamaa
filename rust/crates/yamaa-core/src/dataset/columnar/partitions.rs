@@ -154,8 +154,8 @@ pub(super) struct Partitions {
     pub whole_output: bool,
     /// Whether some partition's schema is not the driver's.
     pub mismatched: bool,
-    /// The partition fields and size of a key-bounded cut not yet made: the
-    /// run makes it once admission has passed (#3763).
+    /// The fields and size of a cut between runs not yet made: the run makes
+    /// it once admission has passed (#3763, #3830).
     cut: Option<(Vec<usize>, NonZeroUsize)>,
 }
 
@@ -306,11 +306,11 @@ impl<E> Run<'_, '_, E> {
         })
     }
 
-    /// Cut a key-bounded run's driver input between its runs of equal
-    /// partition keys (#3763), once admission has passed, so a run refused
-    /// or cancelled at admission reads no record. An input that is not
-    /// grouped by its partition fields, or whose fields cannot be read,
-    /// stays one partition.
+    /// Cut a run's driver input between its runs of equal partition keys
+    /// (#3763), or of the fields its cross-record reads share (#3830), once
+    /// admission has passed, so a run refused or cancelled at admission
+    /// reads no record. An input that is not grouped by those fields, or
+    /// whose fields cannot be read, stays one partition.
     pub(super) fn cut_by_keys(&mut self) {
         let primary = self.primary;
         let Some(partitions) = self.partitions.as_mut() else {
@@ -461,11 +461,14 @@ impl ResolvedPlan {
     /// consecutive partitions of its `rows` records (#3697), or into
     /// key-bounded partitions over its leading `keys` declared keys (#3763).
     ///
-    /// Key-bounded partitions cut the driver input only between two runs of
-    /// records whose partition key fields ([`Self::partition_fields`]) hold
-    /// different values, and each holds as many whole runs as fit in `rows`
-    /// records, a longer run alone. The cut is made once admission has
-    /// passed, so a run refused or cancelled at admission reads no record.
+    /// The partitions cut the driver input only between two runs of records
+    /// whose cut fields ([`Self::cut_fields`]) hold different values: the
+    /// partition key fields of key-bounded partitions, and for consecutive
+    /// ones the fields the plan's cross-record reads share (#3830), none
+    /// when it has none. Each partition then holds as many whole runs as fit
+    /// in `rows` records, a longer run alone. The cut is made once admission
+    /// has passed, so a run refused or cancelled at admission reads no
+    /// record.
     /// The input stays one partition when it is not grouped by those fields,
     /// when a field cannot be read, or when a template derives one of those
     /// keys from anything but a field. A specification that declares no key
@@ -493,11 +496,12 @@ impl ResolvedPlan {
         let keys = partitioning
             .leading_keys
             .map_or(0, |keys| keys.get().min(self.keys().len()));
-        // Until admission has passed, key-bounded partitions are one.
-        let bounds = if keys == 0 {
-            consecutive(rows, size.get())
-        } else {
-            std::iter::once(0..rows).collect()
+        // Until admission has passed, partitions cut between runs of fields
+        // are one.
+        let fields = self.cut_fields(keys);
+        let bounds = match &fields {
+            Some(fields) if fields.is_empty() => consecutive(rows, size.get()),
+            _ => std::iter::once(0..rows).collect(),
         };
         let ranges: Vec<RowRange<'_, T>> = bounds
             .into_iter()
@@ -514,9 +518,9 @@ impl ResolvedPlan {
         let input = Concatenated::new(&parts, self.driver_schema());
         let mut divided = Partitions::new(&input, keys, fallback);
         divided.whole_output = partitioning.whole_output;
-        if keys > 0 {
-            divided.cut = self.partition_fields(keys).map(|fields| (fields, size));
-        }
+        divided.cut = fields
+            .filter(|fields| !fields.is_empty())
+            .map(|fields| (fields, size));
         self.attempt(
             &input,
             Some(divided),
