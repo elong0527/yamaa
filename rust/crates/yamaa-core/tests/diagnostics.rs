@@ -582,10 +582,118 @@ mod diagnostics {
     /// reports (#3691).
     mod replay {
         use crate::support::diagnostic::{
-            form::Order,
+            form::{Order, Outcome, Stated},
             replay::{among, compared},
         };
         use yamaa_core::json::Value;
+
+        fn stated_selection(name: &str, path: &str, texts: Vec<Value>, label: &str) -> Stated {
+            let case = Value::Object(
+                [(
+                    "saved".into(),
+                    Value::Object(
+                        [(
+                            name.into(),
+                            Value::Object(
+                                [(
+                                    "select".into(),
+                                    Value::Object([(path.into(), Value::Array(texts))].into()),
+                                )]
+                                .into(),
+                            ),
+                        )]
+                        .into(),
+                    ),
+                )]
+                .into(),
+            );
+            Stated::read(&case, label)
+        }
+
+        #[test]
+        fn json_pointer_matches_decoded_member_names_and_retains_value_text() {
+            // The saved-selection comparator is the seam under test: a replay
+            // fixture cannot assert that its own false absence must fail.
+            for (document, path, expected, label) in [
+                (r#"{"\u0061":1.0}"#, "/a", Some("1.0"), "Unicode escape"),
+                (
+                    r#"{"a\"b":"v\u0061lue"}"#,
+                    "/a\"b",
+                    Some(r#""v\u0061lue""#),
+                    "escaped quote and unchanged value text",
+                ),
+                (
+                    r#"{"a\\b":true}"#,
+                    r"/a\b",
+                    Some("true"),
+                    "escaped backslash",
+                ),
+                (
+                    r#"{"\uD83D\uDE00":null}"#,
+                    "/😀",
+                    Some("null"),
+                    "surrogate pair",
+                ),
+                (
+                    r#"{"\u0061":[{"b\/c\u007e":"x"}]}"#,
+                    "/a/0/b~1c~0",
+                    Some(r#""x""#),
+                    "nested decoded names and pointer escapes",
+                ),
+                (
+                    r#"{"\u0061":1}"#,
+                    r"/\u0061",
+                    None,
+                    "the raw escape is not the member name",
+                ),
+                (r#"{"\u0061":1}"#, "/b", None, "absent member"),
+            ] {
+                let reported = Outcome {
+                    saved: Some([("data.json".into(), Some(document.as_bytes().to_vec()))].into()),
+                    ..Outcome::default()
+                };
+                let compare = |texts: Vec<Value>| {
+                    std::panic::catch_unwind(|| {
+                        stated_selection("data.json", path, texts, label)
+                            .compare(&reported, "save", label);
+                    })
+                    .is_ok()
+                };
+                let texts = expected
+                    .into_iter()
+                    .map(|text| Value::String(text.into()))
+                    .collect();
+                assert_eq!(
+                    (compare(texts), compare(vec![])),
+                    (true, expected.is_none()),
+                    "{label}: authored selection and stated absence"
+                );
+            }
+        }
+
+        #[test]
+        fn xml_selections_refuse_xpath_syntax_outside_literal_qualified_names() {
+            // The selector admission seam must refuse unsupported XPath;
+            // replay fixtures cannot expect their own admission to fail.
+            for (path, accepted) in [
+                ("/ODM/Item-1[@xml:id='x']/@def:Origin", true),
+                ("/ODM/étude.1", true),
+                ("/ODM/*", false),
+                ("/ODM/Item()", false),
+                ("/ODM/.", false),
+                ("/ODM/..", false),
+                ("/ODM/1Item", false),
+                ("/ODM/:Item", false),
+                ("/ODM/def:Item:Other", false),
+                ("/ODM/@*", false),
+                ("/ODM/Item[@*='x']", false),
+                ("/ODM/Item/@count()", false),
+            ] {
+                let read =
+                    std::panic::catch_unwind(|| stated_selection("define.xml", path, vec![], path));
+                assert_eq!(read.is_ok(), accepted, "{path}: selector admission");
+            }
+        }
 
         /// A case that compares some keys of the context reads a reported
         /// context at those keys alone: another reported key is ignored, and
