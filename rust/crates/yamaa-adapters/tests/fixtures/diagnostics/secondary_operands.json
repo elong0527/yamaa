@@ -1,0 +1,120 @@
+{
+  "about": "Secondary scalar operands, moved from the secondary_scalar_operands module of scalar_language.rs at a47519f5d, whose tests saved result.csv and compared its bytes. A row filter reads another input joined on the keys, from the base driver or another one, and a donor holding two records for the key fails the filter eagerly as multiple_matches (LOOKUP-10), publishing nothing. Nested text and date operands in a row template read the donor at the completed key and skip the donors of unselected rows; a foreign driver's scalar operands join the primary records, as column predicates share the keys; and global columns read their operands after mixed driver rows and a window. A case for its test's second save of one study stages the result.csv the first save wrote, as that study held it, unless both saves write the same bytes. No engine output supplied these values.",
+  "documents": {
+    "filtered_rows": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: a.csv, key: [ID], types: {ID: int, N: int}}\n  B: {path: b.csv, key: [ID], types: {ID: int, N: int}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int}\nrows:\n  - id: selected\n    dataset: SRC\n    filter: 'ID = 3 OR B.N = 40'\n    derivations:\n      VALUE: 0\noutput: {path: result.csv, columns: [ID, VALUE]}\n",
+    "nested_operands": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {A: {path: a.csv, types: {D: date}}, B: {path: b.csv, key: [ID], types: {D: date}}}\nbase: A\noutput: {path: result.csv, columns: [ID, TEXT, DAYS]}\ncolumns:\n  - {name: ID, type: str, derivation: A.ID}\n  - {name: TEXT, type: str}\n  - {name: DAYS, type: int}\nrows:\n  - id: records\n    dataset: A\n    derivations:\n      TEXT: {case: [{when: \"A.USE = 'Y'\", then: {str_case: {source: B.TEXT, to: upper}}}, {otherwise: \"'SKIP'\"}]}\n      DAYS: {case: [{when: \"A.USE = 'Y'\", then: {diff: {type: date, start: B.D, end: A.D, unit: day}}}, {otherwise: 0}]}\n",
+    "foreign_driver": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {A: {path: a.csv, key: [ID]}, B: {path: b.csv, types: {N: int}}}\nbase: A\noutput: {path: result.csv, columns: [ID, TEXT, FLAG]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: TEXT, type: str}\n  - {name: FLAG, type: str, derivation: {flag: \"A.USE = 'Y'\"}}\nrows:\n  - id: beta\n    dataset: B\n    derivations:\n      ID: B.ID\n      TEXT: {str_case: {source: A.TEXT, to: upper}}\n",
+    "global_columns": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\nbase: A\ninput: {A: {path: a.csv, key: [ID]}, B: {path: b.csv, key: [ID]}}\noutput: {path: result.csv, columns: [ID, RN, PRIMARY, SECONDARY]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: ORD, type: int}\n  - {name: RN, type: int, derivation: {row_number: {window: {order_by: [ORD, ID]}}}}\n  - name: PRIMARY\n    type: str\n    derivation:\n      case:\n        - when: 'RN > 0'\n          then: A.TEXT\n        - otherwise: \"'SKIP'\"\n  - name: SECONDARY\n    type: str\n    derivation:\n      case:\n        - when: 'RN > 0'\n          then: B.TEXT\n        - otherwise: \"'SKIP'\"\nrows:\n  - {id: alpha, dataset: A, derivations: {ID: A.ID, ORD: 1}}\n  - {id: beta, dataset: B, derivations: {ID: B.ID, ORD: 2}}\n"
+  },
+  "cases": [
+    {
+      "case": "row_filters_join_other_inputs_after_keys_from_the_base_driver",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "filtered_rows"}, "a.csv": "ID,N\n1,10\n2,20\n3,30\n", "b.csv": "ID,N\n2,40\n1,50\n3,60\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "result.csv": "ID,VALUE\n2,0\n3,0\n"
+      }
+    },
+    {
+      "case": "row_filters_join_other_inputs_after_keys_from_another_driver",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "filtered_rows", "edits": [{"from": "derivation: SRC.ID", "to": "derivation: B.ID"}, {"from": "dataset: SRC", "to": "dataset: B"}, {"from": "filter: 'ID = 3 OR B.N = 40'", "to": "filter: 'SRC.N >= 20'"}]}, "a.csv": "ID,N\n1,10\n2,20\n3,30\n", "b.csv": "ID,N\n2,40\n1,50\n3,60\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "result.csv": "ID,VALUE\n2,0\n3,0\n"
+      }
+    },
+    {
+      "case": "row_filters_preserve_eager_predicate_failures",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: a.csv, types: {ID: int}}\n  B: {path: b.csv, key: [ID], types: {ID: int, N: int}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\nrows:\n  - id: selected\n    dataset: SRC\n    filter: 'ID = 3 OR B.N = 40'\noutput: {path: result.csv, columns: [ID]}\n", "a.csv": "ID\n3\n", "b.csv": "ID,N\n3,60\n3,70\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["condition", "rule", "spec_paths", "context.match_count"],
+      "issues": [
+        {"condition": "multiple_matches", "rule": "LOOKUP-10", "spec_paths": ["rows.selected.filter"], "context": {"match_count": 2}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "nested_row_text_and_date_operands_match_completed_keys_and_skip_unselected_donors",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "nested_operands"}, "a.csv": "ID,D,USE\na,2020-01-03,Y\nb,2020-01-04,N\nc,2020-01-05,Y\n", "b.csv": "ID,D,TEXT\nb,2020-01-01,poison1\nb,2020-01-01,poison2\na,2020-01-01,Lower\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "result.csv": "ID,TEXT,DAYS\na,LOWER,2\nb,SKIP,0\nc,,\n"
+      }
+    },
+    {
+      "case": "nested_row_text_and_date_operands_match_completed_keys_and_skip_unselected_donors_through_first_available",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "nested_operands", "edits": [{"from": "{str_case: {source: B.TEXT, to: upper}}", "to": "{first_available: {sources: [B.TEXT], missing: NONE}}"}]}, "a.csv": "ID,D,USE\na,2020-01-03,Y\nb,2020-01-04,N\nc,2020-01-05,Y\n", "b.csv": "ID,D,TEXT\nb,2020-01-01,poison1\nb,2020-01-01,poison2\na,2020-01-01,Lower\n", "result.csv": "ID,TEXT,DAYS\na,LOWER,2\nb,SKIP,0\nc,,\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "result.csv": "ID,TEXT,DAYS\na,Lower,2\nb,SKIP,0\nc,NONE,\n"
+      }
+    },
+    {
+      "case": "foreign_driver_scalar_operands_join_primary_records_and_column_predicates_share_keys",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "foreign_driver"}, "a.csv": "ID,TEXT,USE\na,lower,Y\nb,mixed,N\n", "b.csv": "ID,N\nb,2\na,1\nc,3\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "result.csv": "ID,TEXT,FLAG\nb,MIXED,\na,LOWER,Y\nc,,\n"
+      }
+    },
+    {
+      "case": "foreign_driver_scalar_operands_join_primary_records_and_column_predicates_share_keys_through_a_filtered_source",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "foreign_driver", "edits": [{"from": "TEXT: {str_case: {source: A.TEXT, to: upper}}", "to": "TEXT: {source: {variable: A.TEXT, filter: \"A.USE = 'Y'\", order_by: [A.ID], keep: first}}"}]}, "a.csv": "ID,TEXT,USE\na,lower,Y\nb,mixed,N\n", "b.csv": "ID,N\nb,2\na,1\nc,3\n", "result.csv": "ID,TEXT,FLAG\nb,MIXED,\na,LOWER,Y\nc,,\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "result.csv": "ID,TEXT,FLAG\nb,,\na,lower,Y\nc,,\n"
+      }
+    },
+    {
+      "case": "global_columns_join_captured_ports_after_mixed_driver_rows_and_windows",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "global_columns"}, "a.csv": "ID,TEXT\na,primary\n", "b.csv": "ID,EXTRA,TEXT\nb,ignored,beta\nc,ignored,gamma\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "result.csv": "ID,RN,PRIMARY,SECONDARY\na,1,primary,\nb,2,,beta\nc,3,,gamma\n"
+      }
+    },
+    {
+      "case": "global_columns_join_captured_ports_after_mixed_driver_rows_and_windows_through_a_filtered_source",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "global_columns", "edits": [{"from": "then: A.TEXT", "to": "then: {source: {variable: A.TEXT, filter: \"A.ID = 'a'\", order_by: [A.ID], keep: first}}"}]}, "a.csv": "ID,TEXT\na,primary\n", "b.csv": "ID,EXTRA,TEXT\nb,ignored,beta\nc,ignored,gamma\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {
+        "result.csv": "ID,RN,PRIMARY,SECONDARY\na,1,primary,\nb,2,,beta\nc,3,,gamma\n"
+      }
+    }
+  ]
+}

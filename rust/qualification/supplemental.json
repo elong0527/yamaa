@@ -73,6 +73,7 @@
       "level": "component",
       "consumers": [
         "rust/crates/yamaa-adapters/tests/odm_xml.rs",
+        "rust/crates/yamaa-adapters/tests/fixtures/diagnostics/odm_reads_xml.json",
         "python/tests/installed/installed_read_odm.py",
         "R/yamaa/tests/read_odm.R"
       ]
@@ -83,6 +84,7 @@
       "level": "component",
       "consumers": [
         "rust/crates/yamaa-adapters/tests/odm_xml.rs",
+        "rust/crates/yamaa-adapters/tests/fixtures/diagnostics/odm_reads_xml.json",
         "python/tests/installed/installed_read_odm.py",
         "R/yamaa/tests/read_odm.R"
       ]

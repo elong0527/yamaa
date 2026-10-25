@@ -4,7 +4,8 @@
 //! sources, the installed version and the creation time. Its operations
 //! compose the study's Define-XML metadata, admit held rows as a composed
 //! dataset's published rows, and make the findings the adapters' Define-XML
-//! and XPT encoders report. `front_end_checks` runs the 1.0 front end's own
+//! and XPT encoders report, and project the Define service's resource and
+//! publication refusals. `front_end_checks` runs the 1.0 front end's own
 //! checks on a lowered specification.
 use super::{codelist_source, column_type, document::tree, text, value, File};
 use crate::support::{
@@ -13,9 +14,12 @@ use crate::support::{
 };
 use std::convert::Infallible;
 use yamaa_core::{
+    application_issue::Fault,
+    define,
     define_diagnostics::{self, TargetRelation},
     diagnostic::Diagnostic,
     front_end::v1::spec as front_end,
+    limits::LimitExceeded,
     project_terminology as ct,
     submission_composition::{Dataset, Finding, Study},
     submission_transport,
@@ -31,6 +35,8 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
         "artifact_outside_document" => artifact_outside_document(input),
         "compose" => compose(input),
         "created_text" => created_text(input),
+        "define_publication" => define_publication(input),
+        "define_resource" => define_resource(input),
         "front_end_checks" => front_end_checks(input),
         "transport" => transport(input),
         "xml_invalid" => xml_invalid(input),
@@ -132,6 +138,80 @@ fn xpt_file_too_large(input: &Json) -> Vec<Diagnostic> {
 fn created_text(input: &Json) -> Vec<Diagnostic> {
     let input = input.closed(&["created"]);
     issues(&define_diagnostics::created_text(text(input, "created")).err())
+}
+
+/// The Define service's issue for the resource at the section's field
+/// `path`, written `written`, that it observed as `observation`, `{path,
+/// written, observation}`: `missing`, `unreadable`, `not_regular_file`,
+/// `invalid_root`, `invalid_base`, `invalid_path`, `outside_roots`,
+/// `symlink` or `changed`, or `{"limit": {resource, limit, actual}}`.
+fn define_resource(input: &Json) -> Vec<Diagnostic> {
+    use define::ResourceObservation as R;
+    let input = input.closed(&["path", "written", "observation"]);
+    let observation = match input.field("observation") {
+        Json::Object(_) => {
+            let limit = input
+                .field("observation")
+                .closed(&["limit"])
+                .field("limit")
+                .closed(&["resource", "limit", "actual"]);
+            R::Limit(LimitExceeded {
+                resource: text(limit, "resource").to_owned().leak(),
+                limit: limit.field("limit").integer(),
+                actual: Some(limit.field("actual").integer()),
+            })
+        }
+        named => match named.text() {
+            "missing" => R::Missing,
+            "unreadable" => R::Unreadable,
+            "not_regular_file" => R::NotRegularFile,
+            "invalid_root" => R::InvalidRoot,
+            "invalid_base" => R::InvalidBase,
+            "invalid_path" => R::InvalidPath,
+            "outside_roots" => R::OutsideRoots,
+            "symlink" => R::Symlink,
+            "changed" => R::Changed,
+            other => panic!("no resource observation {other:?}"),
+        },
+    };
+    vec![define::resource_diagnostic(
+        text(input, "path"),
+        text(input, "written"),
+        observation,
+    )]
+}
+
+/// The Define service's issue for the failed publication of artifact
+/// `artifact`, written `written`, at `stage`, `{artifact, written, stage,
+/// cause}`: `publication`, or `{"target_admission": <fault>}`, the engine
+/// fault by its spelling.
+fn define_publication(input: &Json) -> Vec<Diagnostic> {
+    use define::PublicationFailure as P;
+    let input = input.closed(&["artifact", "written", "stage", "cause"]);
+    let stage = match input.field("stage") {
+        Json::Object(_) => {
+            let code = text(
+                input.field("stage").closed(&["target_admission"]),
+                "target_admission",
+            );
+            P::TargetAdmission(
+                *Fault::ALL
+                    .iter()
+                    .find(|known| known.as_str() == code)
+                    .unwrap_or_else(|| panic!("no engine fault {code:?}")),
+            )
+        }
+        named => match named.text() {
+            "publication" => P::Publication,
+            other => panic!("no publication stage {other:?}"),
+        },
+    };
+    vec![define::publication_diagnostic(
+        input.field("artifact").integer(),
+        text(input, "written"),
+        stage,
+        text(input, "cause").into(),
+    )]
 }
 
 /// JSON-2's refusal of the listing at `path` whose file `target` has the
