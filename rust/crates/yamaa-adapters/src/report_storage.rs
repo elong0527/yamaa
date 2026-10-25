@@ -309,7 +309,16 @@ impl PartialEq for StoredReport {
     }
 }
 impl StoredReport {
-    pub fn with_tables(mut metadata: Value, tables: Vec<StoredTable>) -> Self {
+    /// Attach tables to metadata whose first node can record diagnostics.
+    /// Reject metadata without an object containing a nonempty `nodes` array
+    /// whose first entry is an object.
+    pub fn with_tables(mut metadata: Value, tables: Vec<StoredTable>) -> Result<Self, Error> {
+        metadata
+            .get("nodes")
+            .and_then(Value::as_array)
+            .and_then(|nodes| nodes.first())
+            .and_then(Value::as_object)
+            .ok_or(Error::InvalidObservation)?;
         let mut rows = Vec::with_capacity(tables.len());
         metadata["tables"] = Value::Array(
             tables
@@ -320,12 +329,12 @@ impl StoredReport {
                 })
                 .collect(),
         );
-        Self {
+        Ok(Self {
             metadata,
             rows,
             diagnostics: Vec::new(),
             contents: Vec::new(),
-        }
+        })
     }
     /// Encode the `records` and the `content` of the artifact `content` names
     /// only when the report is serialized (#3870).
@@ -621,18 +630,6 @@ mod tests {
     }
 
     #[test]
-    fn diagnostics_render_into_the_report_and_its_node() {
-        let mut report = StoredReport::with_tables(
-            crate::json!({"diagnostics":[],"nodes":[{"diagnostics":[]}]}),
-            Vec::new(),
-        );
-        report.set_diagnostics(vec![record()]);
-        assert_eq!(report.diagnostics(), [record()]);
-        let rendered = crate::json!([diagnostic_value(&record())]);
-        assert_eq!(report["diagnostics"], rendered);
-        assert_eq!(report["nodes"][0]["diagnostics"], rendered);
-    }
-    #[test]
     fn encoded_cells_preserve_all_scalar_tags_exact_bits_and_civil_values() {
         use yamaa_core::value::FiniteFloat;
         let cases = [
@@ -721,12 +718,13 @@ mod tests {
             r#"[[{"type":"float","value":"8000000000000000"},{"type":"missing","value":null}]]"#;
         let rows: Arc<RawValue> = Arc::from(RawValue::from_string(raw.to_owned()).unwrap());
         let first = StoredReport::with_tables(
-            crate::json!({"tables":[],"artifacts":[{"path":"out.csv"}]}),
+            crate::json!({"nodes":[{}],"tables":[],"artifacts":[{"path":"out.csv"}]}),
             vec![StoredTable {
                 metadata: crate::json!({"name":"ROOT","rows":null}),
                 rows: Rows::Encoded(Arc::clone(&rows)),
             }],
-        );
+        )
+        .unwrap();
         let clone = first.clone();
         match (&first.rows[0], &clone.rows[0]) {
             (Rows::Encoded(first_rows), Rows::Encoded(clone_rows)) => {

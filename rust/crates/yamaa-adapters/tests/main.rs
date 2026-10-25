@@ -16,6 +16,7 @@ mod declaration_migration_hints;
 mod declaration_v1_lowering;
 mod declaration_v1_schema;
 mod odm_xml;
+mod report_storage;
 mod scalar_bytes;
 // The file wraps its tests in a module of its own name, which kept their
 // paths when each file was its own binary.

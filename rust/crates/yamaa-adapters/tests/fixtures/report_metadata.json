@@ -1,0 +1,52 @@
+[
+  {"name":"null metadata","metadata":null,"expected":{"error":"InvalidObservation"}},
+  {"name":"boolean metadata","metadata":true,"expected":{"error":"InvalidObservation"}},
+  {"name":"number metadata","metadata":17,"expected":{"error":"InvalidObservation"}},
+  {"name":"string metadata","metadata":"report","expected":{"error":"InvalidObservation"}},
+  {"name":"array metadata","metadata":[],"expected":{"error":"InvalidObservation"}},
+  {"name":"missing nodes","metadata":{},"expected":{"error":"InvalidObservation"}},
+  {"name":"null nodes","metadata":{"nodes":null},"expected":{"error":"InvalidObservation"}},
+  {"name":"boolean nodes","metadata":{"nodes":false},"expected":{"error":"InvalidObservation"}},
+  {"name":"number nodes","metadata":{"nodes":17},"expected":{"error":"InvalidObservation"}},
+  {"name":"string nodes","metadata":{"nodes":"ROOT"},"expected":{"error":"InvalidObservation"}},
+  {"name":"object nodes","metadata":{"nodes":{}},"expected":{"error":"InvalidObservation"}},
+  {"name":"empty nodes","metadata":{"nodes":[]},"expected":{"error":"InvalidObservation"}},
+  {"name":"null first node","metadata":{"nodes":[null]},"expected":{"error":"InvalidObservation"}},
+  {"name":"boolean first node","metadata":{"nodes":[true]},"expected":{"error":"InvalidObservation"}},
+  {"name":"number first node","metadata":{"nodes":[17]},"expected":{"error":"InvalidObservation"}},
+  {"name":"string first node","metadata":{"nodes":["ROOT"]},"expected":{"error":"InvalidObservation"}},
+  {"name":"array first node","metadata":{"nodes":[[]]},"expected":{"error":"InvalidObservation"}},
+  {
+    "name":"minimal node receives diagnostics",
+    "metadata":{"nodes":[{}]},
+    "expected":{
+      "report":{
+        "nodes":[{"diagnostics":[{"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["input.SRC"],"context":{}}]}],
+        "tables":[],
+        "diagnostics":[{"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["input.SRC"],"context":{}}]
+      },
+      "diagnostics":[{"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["input.SRC"],"context":{}}]
+    }
+  },
+  {
+    "name":"diagnostics replace stale values and preserve other metadata",
+    "metadata":{
+      "outcome":"failure",
+      "nodes":[{"specification":"root.yaml","diagnostics":["stale"]},{"specification":"other.yaml","diagnostics":[]}],
+      "diagnostics":["stale"],
+      "tables":["stale"]
+    },
+    "expected":{
+      "report":{
+        "outcome":"failure",
+        "nodes":[
+          {"specification":"root.yaml","diagnostics":[{"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["input.SRC"],"context":{}}]},
+          {"specification":"other.yaml","diagnostics":[]}
+        ],
+        "tables":[],
+        "diagnostics":[{"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["input.SRC"],"context":{}}]
+      },
+      "diagnostics":[{"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["input.SRC"],"context":{}}]
+    }
+  }
+]
