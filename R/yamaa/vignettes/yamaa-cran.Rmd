@@ -1,0 +1,40 @@
+---
+title: "A minimal yamaa example"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{A minimal yamaa example}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+See the [full documentation](https://elong0527.github.io/yamaa/) for the
+specification language and the R API. This example checks a specification,
+builds a small clinical dataset and saves it. Every file stays in R's temporary
+directory. The `yamaa: "1.0"` header selects the specification language,
+independently of the package version.
+
+```{r, eval = FALSE}
+library(yamaa)
+
+study <- tempfile("yamaa-")
+dir.create(study)
+writeLines(c("USUBJID,AGE", "01,35", "02,42"), file.path(study, "input.csv"))
+writeLines('yamaa: "1.0"
+type: spec
+domain: DM
+keys: [USUBJID]
+input: {RAW: {path: input.csv, types: {USUBJID: str, AGE: int}}}
+columns:
+  - {name: USUBJID, type: str, derivation: RAW.USUBJID}
+  - {name: AGE, type: int, derivation: RAW.AGE}
+output: {path: dm.csv, columns: [USUBJID, AGE]}
+', file.path(study, "dm.yaml"))
+
+spec <- yamaa_spec(file.path(study, "dm.yaml"))
+stopifnot(nrow(spec$check()$issues) == 0L)
+run <- spec$run()
+run$output
+run$save()
+
+unlink(study, recursive = TRUE)
+```

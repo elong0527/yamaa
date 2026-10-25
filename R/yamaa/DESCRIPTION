@@ -24,7 +24,9 @@ Copyright: The yamaa contributors; for the bundled and linked third-party
 Encoding: UTF-8
 Depends: R (>= 4.2.0)
 Imports: utils
-Suggests: arrow (>= 23.0.1), jsonlite (>= 2.0.0)
+Suggests: arrow (>= 23.0.1), jsonlite (>= 2.0.0),
+    knitr (>= 1.42), rmarkdown (>= 2.20)
+VignetteBuilder: knitr
 SystemRequirements: Cargo (Rust's package manager) (>= 1.82.0),
     rustc (>= 1.82.0)
 NeedsCompilation: yes

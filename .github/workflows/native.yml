@@ -553,10 +553,14 @@ jobs:
         run: python -m pip install py-yaml12==0.2.0 pyyaml==6.0.3
       - name: Stage standalone R package
         run: python -m tools.staging.stage_r_package "${RUNNER_TEMP}/native-stage/yamaa"
+      - uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          working-directory: R/yamaa
       - name: Build R source package
         working-directory: ${{ runner.temp }}
         run: |
-          R CMD build --no-build-vignettes --no-manual native-stage/yamaa
+          R CMD build --no-manual native-stage/yamaa
           python -m tools.packaging.check_cargo_lock yamaa_0.6.0.tar.gz
       - name: Preserve source archive
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5

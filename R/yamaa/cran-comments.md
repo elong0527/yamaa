@@ -10,6 +10,11 @@ It needs no suggested packages. The full unit, regression and conformance
 suites remain CI release gates against the installed package; their scripts
 and large fixture trees are not shipped for CRAN to run.
 
+The short introductory vignette links the full documentation and presents
+one self-contained example using temporary files. Its example is not
+evaluated during rendering; it is checked separately against the installed
+package. `R CMD build` builds and includes its HTML.
+
 ## Test environments
 
 `R CMD check --as-cran` on the package's source tarball, with the settings of
@@ -65,6 +70,12 @@ The package follows "Using Rust in CRAN packages":
   the package carries. A crate that no supported platform compiles keeps
   only its manifest, which Cargo reads to resolve the lock. Nothing is
   downloaded at installation.
+- `tools/vendor_exclusions.toml` names the audited development directories
+  left out of specific crate versions: tests, benchmarks, standalone examples
+  and CI files. Production/build inputs, embedded documentation and license
+  files remain, and unaudited compiled crate versions keep their development files.
+  The omitted files are listed in `inst/AUTHORS`; their entries alone are
+  removed from Cargo's file-checksum records, preserving the package checksums.
 - `src/rust` holds only the crates that the package builds, with a
   `Cargo.lock` trimmed from the project's. The package has no
   `rust-toolchain.toml` or `rust-toolchain` file anywhere, the bundled crates

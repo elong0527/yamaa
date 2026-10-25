@@ -34,6 +34,11 @@ class StagingTests(unittest.TestCase):
             for name in ("configure", "configure.win", "cleanup", "cleanup.win"):
                 self.assertTrue(os.access(destination / name, os.X_OK), name)
             self.assertTrue((destination / "tools/configure.R").is_file())
+            self.assertEqual(
+                (destination / staging.VENDOR_POLICY).read_bytes(),
+                vendor_crates.POLICY.read_bytes(),
+            )
+            self.assertTrue((destination / "vignettes/yamaa-cran.Rmd").is_file())
             for name in ("Makevars", "Makevars.win"):
                 self.assertFalse((destination / "src" / name).exists(), name)
                 self.assertTrue((destination / "src" / f"{name}.in").is_file(), name)

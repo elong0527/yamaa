@@ -92,7 +92,7 @@ jobs:
       - name: Stage and build the standalone R package
         run: |
           python -m tools.staging.stage_r_package minimum-rust/yamaa
-          (cd minimum-rust && R CMD build --no-build-vignettes --no-manual yamaa)
+          (cd minimum-rust && R CMD build --no-manual yamaa)
       # Later steps run Cargo and rustc at the workspace rust-version.
       - name: Activate the workspace rust-version toolchain
         run: python -m tools.ci.toolchain --minimum --install

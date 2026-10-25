@@ -48,7 +48,7 @@ def install(work):
     )
     stage(work / "yamaa")
     subprocess.run(
-        ["R", "CMD", "build", "--no-build-vignettes", "--no-manual", "yamaa"],
+        ["R", "CMD", "build", "--no-manual", "yamaa"],
         cwd=work,
         env=environment,
         check=True,

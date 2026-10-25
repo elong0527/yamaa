@@ -1050,6 +1050,20 @@ CRAN smoke checks. Each third-party SAS fixture keeps its license beside
 it. `tools/staging/stage_r_package.py` lists the staged inputs that no full
 R suite reads, which that staging leaves out.
 
+The package also carries a short introductory vignette,
+`vignette("yamaa-cran", package = "yamaa")`, linking the full site and
+showing one self-contained public R example. Source-package builds render
+it with knitr, rmarkdown and Pandoc; its example is not evaluated while
+rendering. These build tools are not runtime requirements.
+
+`tools/staging/vendor_exclusions.toml` records the audited development
+directories that source bundles omit from specific crate versions. The
+vendoring helper preserves license files and declared production inputs,
+and the policy keeps embedded documentation sources such as winnow's
+examples. An upgraded or new crate keeps its development files until reviewed.
+`inst/AUTHORS` records the omissions, and the R source package carries the
+helper and its policy together under `tools/`.
+
 Every package carries the project license and the third-party notices: each
 wheel in its `.dist-info/licenses/` directory, the Python source archive at its
 root, the R source package in `inst/`, which R installs at the package
