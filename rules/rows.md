@@ -95,7 +95,7 @@ then the `filter`, when present, reads the candidate's completed unqualified
 columns, and the candidate is appended only when the result is `TRUE`.
 
 Fails: `invalid_field_type`, `unknown_field`.
-Evidence: `schema-row-templates`, `schema-lifecycle`, `rust/crates/yamaa-adapters/tests/specification_sources.rs::row_group_declarations_and_shared_scope_keep_authored_diagnostics`.
+Evidence: `schema-row-templates`, `schema-lifecycle`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/specification_runs.json::row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_an_empty_group`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/specification_runs.json::row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_a_repeated_variable`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/specification_runs.json::row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_an_unqualified_variable`.
 
 [Values](values.md) defines equality for strings. Groups follow the
 position of their first driver record, and driver order is kept within each

@@ -116,10 +116,14 @@ class Target:
 
 TARGETS = {
     "csv": Target(("*.csv",), (*SOURCE_DECODE, *CSV), 65536),
+    # The Dataset-JSON writer over a CSV artifact, and the source decode of
+    # each file it writes.
     "dataset_json": Target(
         ("*.csv",),
         (
+            *SOURCE_DECODE,
             *CSV,
+            "rust/crates/yamaa-adapters/src/dataset_json_source.rs",
             "rust/crates/yamaa-adapters/src/submission_json.rs",
         ),
         65536,
@@ -141,6 +145,7 @@ TARGETS = {
         ("*.parquet",),
         (
             *SOURCE_DECODE,
+            "rust/crates/yamaa-adapters/profile/",
             "rust/crates/yamaa-adapters/src/parquet_source/",
             "rust/crates/yamaa-adapters/src/storage_api.rs",
             "rust/crates/yamaa-core/src/parquet_source.rs",

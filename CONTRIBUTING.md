@@ -17,7 +17,7 @@ applies.
 | `rules/`, `yaml/` | Normative contracts, diagnostics, schemas and grammar fixtures. |
 | `rust/crates/yamaa-core/` | Specification admission, expressions, dataset execution, project lifecycle, verification and submission metadata composition. |
 | `rust/crates/yamaa-adapters/` | Codecs, storage formats, physical IO and filesystem environment capture. |
-| `rust/crates/yamaa-boundary/` | The interface handshake of both host bindings, the gate every native call passes, the census of live native handles, and until they leave (#3877) the unused types of the retired C ABI and its client. |
+| `rust/crates/yamaa-boundary/` | The interface handshake of both host bindings, the gate every native call passes and the census of live native handles. |
 | `rust/crates/yamaa-python/`, `rust/crates/yamaa-r/` | Host arguments, callbacks, scalar conversion and owned result views, over the facade. |
 | `rust/crates/yamaa-cli/` | The `yamaa` command line: its arguments, exit statuses and printed output, over the facade alone, with the third-party notices and component inventory of its release archives. |
 | `python/`, `R/yamaa/` | Public host packages and package builds. |
@@ -202,6 +202,7 @@ Rust consumer reads it.
 | The expression grammar, its closed function and reducer lists, its parse cases | `yaml/grammar/*.yaml` | `tools.packaging.generate_expression_table`, `tools.validation.check_expression_conformance` and the core replay of its cases |
 | A condition, its phases and its message | `yaml/conditions.yaml` | `tools.packaging.generate_message_templates`, `tools.validation.check_diagnostics` |
 | A CDISC closed list | `yaml/vocabulary/cdisc.yaml` | `tools.packaging.generate_cdisc_vocabulary` and the vocabulary checks |
+| What a Parquet source must hold to be read: its column types, physical types and encodings, pages and codecs | `rust/crates/yamaa-adapters/profile/parquet.toml` | the Parquet reader, which includes it, and `tools.validation.check_parquet_profile`, which keeps PARQUET-7's table on it |
 | What an expression evaluates to | `yaml/conformance/expressions.yaml`, `yaml/conformance/regex.yaml` | `tools.validation.check_expression_conformance` |
 | What a specification produces or refuses | a benchmark under `benchmarks/` | the corpus walk, public conformance, `support::benchmarks::reproduce` |
 | What both hosts return for one case | a `rust/tests/host-fixtures/` family | the readers beside `cases.json`, in both installed suites |
@@ -510,10 +511,16 @@ made to both, and `make check-repository` fails while they differ
   declared in their module under `support::diagnostic::operations`.
 - A positive case also states what its operation built and saved.
   `output` is the output table, whole, written as rows: the header of its
-  column names, then one row per record holding one cell per column.
-  `report` maps each kind of run report row it compares (`run`, `input`,
-  `rows`, `handler`, `column`, `check`; CHECK-23) to that kind's rows in
-  report order, written the same way, with a header that names the report
+  column names, then one row per record holding one cell per column. A
+  case moved from a test whose assertion named just some columns may write
+  `"output_subset": true`: its header names those columns in the table's
+  order, and it still states every row in order. Without that marker,
+  the whole table must match, including its complete header. As with
+  `compares` for issue rows, the subset is only for migrated assertions;
+  a new case always states the whole table. `report` maps each kind of
+  run report row it compares (`run`, `input`, `rows`, `handler`, `column`,
+  `check`; CHECK-23) to that kind's rows in report order, written the same
+  way, with a header that names the report
   columns it compares in the report's order (CHECK-24) and leaves out
   `KIND`; a kind it does not name is not compared, and a header alone
   states that the report has no row of that kind, so a check of the
@@ -530,8 +537,25 @@ made to both, and `make check-repository` fails while they differ
   directory, to its text or to `{"file": path}`, an authored expected file
   named by its path from the repository root, such as a benchmark's
   `expected/` file, and each file removed to `null`; `{}` states that
-  nothing was created, changed or removed. A case states a table only when its
-  operation reports one, and `saved` exactly when its operation saves: the
+  nothing was created, changed or removed. A file the operation generated
+  whose whole text no authored file holds, such as a composed Define-XML
+  document, is instead `{"select": {path: [text, ...]}}`, for a case whose
+  source compared parts of it; a document an authored file holds is stated
+  whole with `{"file": path}`. Each path selects nodes of the document, and
+  its list holds the text of every node it selects, each node whole and
+  spelt as the file spells it, in document order, so a count or an absence
+  is a list too, `[]` selecting nothing. In an `.xml` file a path is an
+  absolute XPath location path of child steps, such as
+  `/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.DM.AGE']/def:Origin`: each
+  step names an element as the document spells it, prefix included, with at
+  most one `[@name='value']` predicate, and the last may be `@name`. An
+  element's text runs from its start tag through its end tag, and an
+  attribute's is its value between the quotes. In a `.json` file a path is
+  a JSON Pointer (RFC 6901), such as `/columns/5/dataType`, and a value's
+  text is its JSON text, a string's quotes included. A selected node is
+  never matched by a substring, and `select` names at least one path. A
+  case states a table only when its operation reports one, and `saved`
+  exactly when its operation saves: the
   adapters' `build` reports the tables a built result holds, `save`
   builds as `build` does, then saves, and `define` composes a project's
   submission section, then saves it, each reporting its issues after the

@@ -1,5 +1,5 @@
 {
-  "about": "The refusals of a specification's named intermediates: a lookup's range and projection (LOOKUP-2, LOOKUP-9, LOOKUP-11), what its derivations and unique verifications read (LOOKUP-15 to LOOKUP-17), and a driver of row templates (ROW-2). `range` is a lookup P of the donor D, `lookup` one of D beside the base SRC, `driver` an intermediate of D that drives the row template `selected`, and `reads` a lookup P whose derivation reads the lookup EARLIER declared before it.",
+  "about": "The refusals of a specification's named intermediates: a lookup's range and projection (LOOKUP-2, LOOKUP-9, LOOKUP-11), its key's match values, each compared by its one result type with its donor column before any record is matched (LOOKUP-5, LOOKUP-6, LOOKUP-9, TEXT-2), what its derivations and unique verifications read (LOOKUP-15 to LOOKUP-17), and a driver of row templates (ROW-2). `range` is a lookup P of the donor D, `match` a lookup LOOK of the donor TAB, whose key each case writes, read by the column V, `lookup` one of D beside the base SRC, `driver` an intermediate of D that drives the row template `selected`, and `reads` a lookup P whose derivation reads the lookup EARLIER declared before it. A key whose first refusal was read by position pins it as a prefix.",
   "documents": {
     "range": {
       "yamaa": "1.0",
@@ -11,6 +11,21 @@
       "intermediates": [{"id": "P", "dataset": "D", "key": ["ID"]}],
       "columns": [{"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}}],
       "output": {"path": "out.csv", "columns": ["ID"]}
+    },
+    "match": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "OUT",
+      "base": "SRC",
+      "input": {"SRC": {"path": "src.csv", "types": {"N": "int"}}, "TAB": {"path": "tab.csv"}},
+      "keys": ["ID"],
+      "intermediates": [{"id": "LOOK", "dataset": "TAB", "key": null, "absent": null}],
+      "columns": [
+        {"name": "ID", "type": "str", "derivation": {"value": "SRC.ID"}},
+        {"name": "N", "type": "int", "derivation": {"value": "SRC.N"}},
+        {"name": "V", "type": "str", "derivation": {"value": "LOOK.VAL"}}
+      ],
+      "output": {"path": "out.csv", "columns": ["ID", "N", "V"]}
     },
     "lookup": {
       "yamaa": "1.0",
@@ -48,6 +63,25 @@
       ],
       "output": {"path": "out.csv", "columns": ["ID"]},
       "columns": [{"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}}]
+    },
+    "row_context": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "input": {"SRC": {"path": "src.csv", "key": ["ID"]}, "DONOR": {"path": "donor.csv"}},
+      "keys": ["ID"],
+      "intermediates": [{"id": "P", "dataset": "DONOR", "key": {"K": "KEY"}, "absent": null}],
+      "columns": [
+        {"name": "ID", "type": "str", "derivation": {"value": "SRC.ID"}},
+        {"name": "KEY", "type": "str", "derivation": {"value": "SRC.K"}},
+        {"name": "ROWV", "type": "str"},
+        {"name": "COLV", "type": "str", "derivation": {"value": "P.V"}}
+      ],
+      "rows": [
+        {"id": "first", "derivations": {"ROWV": {"value": "P.V"}}, "dataset": "SRC"},
+        {"id": "second", "derivations": {"ROWV": {"value": "P.V"}}, "dataset": "SRC"}
+      ],
+      "output": {"path": "out.csv", "columns": ["ID", "KEY", "ROWV", "COLV"]}
     }
   },
   "cases": [
@@ -103,6 +137,176 @@
         "sources": {"SRC": [["ID", "int"]], "D": [["ID", "int"], ["LOW", "int"], ["HIGH", "float"], ["V", "str"]]}
       },
       "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-11", "spec_paths": ["intermediates.P.columns"], "context": {"intermediate": "P", "identifier": "D.ABSENT"}}]
+    },
+    {
+      "case": "a_padded_key_reports_its_width_then_its_unknown_source_then_the_read_that_depends_on_it",
+      "operation": "bind",
+      "input": {
+        "base": "match",
+        "edits": [{"set": ["intermediates", "0", "key"], "to": {"K": {"str_pad": {"source": "SRC.ABSENT", "width": 0}}}}],
+        "sources": {"SRC": [["ID", "str"], ["N", "int"]], "TAB": [["K", "str"], ["KINT", "int"], ["KNUM", "float"], ["VAL", "str"]]}
+      },
+      "compares": ["rule", "spec_paths"],
+      "issues": [
+        {"rule": "TEXT-2", "spec_paths": ["intermediates.LOOK.key.K.str_pad.width"]},
+        {"rule": "LOOKUP-5", "spec_paths": ["intermediates.LOOK.key.K"]},
+        {"rule": "NAME-3", "spec_paths": ["columns.V.derivation.source"]}
+      ]
+    },
+    {
+      "case": "a_padded_key_of_an_int_donor_column_reports_its_authored_type_first",
+      "operation": "bind",
+      "input": {
+        "base": "match",
+        "edits": [{"set": ["intermediates", "0", "key"], "to": {"KINT": {"str_pad": {"source": "SRC.ABSENT", "width": 0}}}}],
+        "sources": {"SRC": [["ID", "str"], ["N", "int"]], "TAB": [["K", "str"], ["KINT", "int"], ["KNUM", "float"], ["VAL", "str"]]}
+      },
+      "compares": ["rule", "spec_paths"],
+      "issues": [
+        {"rule": "LOOKUP-9", "spec_paths": ["intermediates.LOOK.key"]},
+        {"rule": "TEXT-2", "spec_paths": ["intermediates.LOOK.key.KINT.str_pad.width"]},
+        {"rule": "LOOKUP-5", "spec_paths": ["intermediates.LOOK.key.KINT"]},
+        {"rule": "NAME-3", "spec_paths": ["columns.V.derivation.source"]}
+      ]
+    },
+    {
+      "case": "a_padded_key_of_a_column_its_donor_lacks_reports_the_donor_column_first",
+      "operation": "bind",
+      "input": {
+        "base": "match",
+        "edits": [{"set": ["intermediates", "0", "key"], "to": {"ABSENT": {"str_pad": {"source": "SRC.ABSENT", "width": 0}}}}],
+        "sources": {"SRC": [["ID", "str"], ["N", "int"]], "TAB": [["K", "str"], ["KINT", "int"], ["KNUM", "float"], ["VAL", "str"]]}
+      },
+      "compares": ["rule", "spec_paths"],
+      "issues": [
+        {"rule": "LOOKUP-5", "spec_paths": ["intermediates.LOOK.key"]},
+        {"rule": "TEXT-2", "spec_paths": ["intermediates.LOOK.key.ABSENT.str_pad.width"]},
+        {"rule": "LOOKUP-5", "spec_paths": ["intermediates.LOOK.key.ABSENT"]},
+        {"rule": "NAME-3", "spec_paths": ["columns.V.derivation.source"]}
+      ]
+    },
+    {
+      "case": "a_padded_key_of_a_known_source_reports_only_its_width",
+      "operation": "bind",
+      "input": {
+        "base": "match",
+        "edits": [{"set": ["intermediates", "0", "key"], "to": {"K": {"str_pad": {"source": "SRC.N", "width": 0}}}}],
+        "sources": {"SRC": [["ID", "str"], ["N", "int"]], "TAB": [["K", "str"], ["KINT", "int"], ["KNUM", "float"], ["VAL", "str"]]}
+      },
+      "compares": ["rule", "spec_paths"],
+      "issues": [{"rule": "TEXT-2", "spec_paths": ["intermediates.LOOK.key.K.str_pad.width"]}]
+    },
+    {
+      "case": "a_computed_int_key_of_a_text_donor_column_is_refused_before_matching",
+      "operation": "bind",
+      "input": {
+        "base": "match",
+        "edits": [{"set": ["intermediates", "0", "key"], "to": {"K": "N + 1"}}],
+        "sources": {"SRC": [["ID", "str"], ["N", "int"]], "TAB": [["K", "str"], ["KINT", "int"], ["KNUM", "float"], ["VAL", "str"]]}
+      },
+      "compares": ["condition", "spec_paths", "context.expected", "context.actual"],
+      "prefix": true,
+      "issues": [{"condition": "incompatible_input_type", "spec_paths": ["intermediates.LOOK.key"], "context": {"expected": "int", "actual": "str"}}]
+    },
+    {
+      "case": "a_computed_float_key_of_a_text_donor_column_is_refused_before_matching",
+      "operation": "bind",
+      "input": {
+        "base": "match",
+        "edits": [{"set": ["intermediates", "0", "key"], "to": {"K": "N / 2"}}],
+        "sources": {"SRC": [["ID", "str"], ["N", "int"]], "TAB": [["K", "str"], ["KINT", "int"], ["KNUM", "float"], ["VAL", "str"]]}
+      },
+      "compares": ["condition", "spec_paths", "context.expected", "context.actual"],
+      "prefix": true,
+      "issues": [{"condition": "incompatible_input_type", "spec_paths": ["intermediates.LOOK.key"], "context": {"expected": "float", "actual": "str"}}]
+    },
+    {
+      "case": "a_mapping_key_of_int_values_on_a_text_donor_column_is_refused_before_matching",
+      "operation": "bind",
+      "input": {
+        "base": "match",
+        "edits": [{"set": ["intermediates", "0", "key"], "to": {"K": {"mapping": {"source": "SRC.ID", "dict": {"one": 1}}}}}],
+        "sources": {"SRC": [["ID", "str"], ["N", "int"]], "TAB": [["K", "str"], ["KINT", "int"], ["KNUM", "float"], ["VAL", "str"]]}
+      },
+      "compares": ["condition", "spec_paths", "context.expected", "context.actual"],
+      "prefix": true,
+      "issues": [{"condition": "incompatible_input_type", "spec_paths": ["intermediates.LOOK.key"], "context": {"expected": "int", "actual": "str"}}]
+    },
+    {
+      "case": "a_greatest_key_of_int_sources_on_a_text_donor_column_is_refused_before_matching",
+      "operation": "bind",
+      "input": {
+        "base": "match",
+        "edits": [{"set": ["intermediates", "0", "key"], "to": {"K": {"greatest": {"sources": ["N", "SRC.N"]}}}}],
+        "sources": {"SRC": [["ID", "str"], ["N", "int"]], "TAB": [["K", "str"], ["KINT", "int"], ["KNUM", "float"], ["VAL", "str"]]}
+      },
+      "compares": ["condition", "spec_paths", "context.expected", "context.actual"],
+      "prefix": true,
+      "issues": [{"condition": "incompatible_input_type", "spec_paths": ["intermediates.LOOK.key"], "context": {"expected": "int", "actual": "str"}}]
+    },
+    {
+      "case": "a_mapping_key_of_text_values_on_an_int_donor_column_is_refused_before_matching",
+      "operation": "bind",
+      "input": {
+        "base": "match",
+        "edits": [{"set": ["intermediates", "0", "key"], "to": {"KINT": {"mapping": {"source": "SRC.ID", "dict": {"one": "1"}}}}}],
+        "sources": {"SRC": [["ID", "str"], ["N", "int"]], "TAB": [["K", "str"], ["KINT", "int"], ["KNUM", "float"], ["VAL", "str"]]}
+      },
+      "compares": ["condition", "spec_paths", "context.expected", "context.actual"],
+      "prefix": true,
+      "issues": [{"condition": "incompatible_input_type", "spec_paths": ["intermediates.LOOK.key"], "context": {"expected": "str", "actual": "int"}}]
+    },
+    {
+      "case": "a_computed_int_key_of_an_int_donor_column_binds",
+      "operation": "bind",
+      "input": {
+        "base": "match",
+        "edits": [{"set": ["intermediates", "0", "key"], "to": {"KINT": "N + 1"}}],
+        "sources": {"SRC": [["ID", "str"], ["N", "int"]], "TAB": [["K", "str"], ["KINT", "int"], ["KNUM", "float"], ["VAL", "str"]]}
+      },
+      "issues": []
+    },
+    {
+      "case": "a_computed_int_key_of_a_float_donor_column_binds",
+      "operation": "bind",
+      "input": {
+        "base": "match",
+        "edits": [{"set": ["intermediates", "0", "key"], "to": {"KNUM": "N + 1"}}],
+        "sources": {"SRC": [["ID", "str"], ["N", "int"]], "TAB": [["K", "str"], ["KINT", "int"], ["KNUM", "float"], ["VAL", "str"]]}
+      },
+      "issues": []
+    },
+    {
+      "case": "a_greatest_key_of_int_sources_on_a_float_donor_column_binds",
+      "operation": "bind",
+      "input": {
+        "base": "match",
+        "edits": [{"set": ["intermediates", "0", "key"], "to": {"KNUM": {"greatest": {"sources": ["N", "SRC.N"]}}}}],
+        "sources": {"SRC": [["ID", "str"], ["N", "int"]], "TAB": [["K", "str"], ["KINT", "int"], ["KNUM", "float"], ["VAL", "str"]]}
+      },
+      "issues": []
+    },
+    {
+      "case": "a_key_whose_type_is_decided_per_value_binds_and_is_compared_when_matched",
+      "operation": "bind",
+      "input": {
+        "base": "match",
+        "edits": [{"set": ["intermediates", "0", "key"], "to": {"KINT": {"mapping": {"source": "SRC.ID", "dict": {"one": 1, "two": "2"}}}}}],
+        "sources": {"SRC": [["ID", "str"], ["N", "int"]], "TAB": [["K", "str"], ["KINT", "int"], ["KNUM", "float"], ["VAL", "str"]]}
+      },
+      "issues": []
+    },
+    {
+      "case": "a_boolean_key_of_an_int_donor_column_is_not_coerced",
+      "operation": "bind",
+      "input": {
+        "base": "match",
+        "edits": [{"set": ["intermediates", "0", "key"], "to": {"KINT": true}}],
+        "sources": {"SRC": [["ID", "str"], ["N", "int"]], "TAB": [["K", "str"], ["KINT", "int"], ["KNUM", "float"], ["VAL", "str"]]}
+      },
+      "compares": ["rule"],
+      "prefix": true,
+      "issues": [{"rule": "LOOKUP-9"}]
     },
     {
       "case": "a_row_template_cannot_read_a_lookup_whose_range_value_only_the_column_phase_completes",
@@ -260,6 +464,51 @@
         "duplicate_count": 1
       },
       "issues": [{"phase": "verification", "condition": "duplicate_intermediate_records", "rule": "LOOKUP-17", "spec_paths": ["intermediates.P.verifications[0].unique"], "context": {"intermediate": "P", "dataset": "D", "columns": ["ID"], "duplicate_count": 1}}]
+    },
+    {
+      "case": "an_unknown_driver_of_a_row_template_beside_an_intermediate_is_unavailable_by_its_name",
+      "operation": "prepare",
+      "input": {"base": "row_context", "edits": [{"set": ["rows", "1", "dataset"], "to": "ABSENT"}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "driver_unavailable", "rule": "ROW-1", "spec_paths": ["rows.second.dataset"], "context": {"row": "second", "dataset": "ABSENT"}}]
+    },
+    {
+      "case": "an_omitted_driver_of_a_row_template_beside_an_intermediate_is_unavailable_as_missing",
+      "operation": "prepare",
+      "input": {"base": "row_context", "edits": [{"remove": ["rows", "1", "dataset"]}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "driver_unavailable", "rule": "ROW-1", "spec_paths": ["rows.second.dataset"], "context": {"row": "second", "dataset": null}}]
+    },
+    {
+      "case": "a_template_a_foreign_input_drives_needs_the_raw_key_its_column_defaults_read",
+      "operation": "bind",
+      "input": {
+        "base": "row_context",
+        "edits": [{"set": ["rows", "1", "dataset"], "to": "DONOR"}],
+        "sources": {"SRC": [["ID", "str"], ["K", "str"]], "DONOR": [["K", "str"], ["V", "str"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.ID.derivation.source"], "context": {"identifier": "DONOR.ID"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.KEY.derivation.source"], "context": {"identifier": "DONOR.ID"}}
+      ]
+    },
+    {
+      "case": "unknown_named_field_retains_full_lookup_cause_at_authored_read_boundary",
+      "operation": "bind",
+      "input": {
+        "base": "row_context",
+        "edits": [
+          {"set": ["rows", "0", "derivations", "ROWV"], "to": {"value": "P.ABSENT"}},
+          {"set": ["rows", "1", "derivations", "ROWV"], "to": {"value": "P.ABSENT"}}
+        ],
+        "sources": {"SRC": [["ID", "str"], ["K", "str"]], "DONOR": [["K", "str"], ["V", "str"]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-11", "spec_paths": ["rows.first.derivations.ROWV.source"], "context": {"identifier": "P.ABSENT"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-11", "spec_paths": ["rows.second.derivations.ROWV.source"], "context": {"identifier": "P.ABSENT"}}
+      ]
     }
   ]
 }

@@ -368,6 +368,64 @@ fn bind_nearest(
     }))
 }
 
+/// The field of the lookup's relation that `name` selects in its order:
+/// one the relation admits, qualified by its dataset, or written bare for
+/// SELF (`self_rows`). Any other name refuses the lookup (LOOKUP-7), with
+/// the qualified field a bare name names as its suggestion, which is
+/// withheld unless the donor's schema decides whether it stores the name,
+/// or the lookup derives it.
+fn select_field(
+    relation: &Donor<'_>,
+    self_rows: bool,
+    inputs: binder::Inputs<'_>,
+    name: &str,
+    path: &str,
+    findings: &mut Vec<BindFinding>,
+) -> Option<usize> {
+    let Donor {
+        lookup,
+        dataset,
+        schema,
+        admits,
+        ..
+    } = *relation;
+    let bare = name
+        .strip_prefix(&format!("{dataset}."))
+        .or_else(|| self_rows.then_some(name));
+    let field = bare
+        .and_then(|name| {
+            schema
+                .columns()
+                .iter()
+                .position(|column| column.name == name)
+        })
+        .filter(|&column| admits(column));
+    if field.is_none() {
+        let suggestion = (!name.contains('.')
+            && schema.columns().iter().any(|column| column.name == name))
+        .then(|| format!("{dataset}.{name}"));
+        let derived = suggestion.is_some()
+            && inputs
+                .schema(dataset)
+                .is_some_and(|stored| stored.position(name).is_none());
+        let finding = BindFinding::Lookup(LookupFinding::reference(
+            path,
+            name,
+            Some(lookup),
+            ReferenceCause::Selection,
+            suggestion,
+        ));
+        findings.push(
+            if name.contains('.') || derived || inputs.decides(dataset, name) {
+                finding
+            } else {
+                BindFinding::Withheld(std::boxed::Box::new(finding))
+            },
+        );
+    }
+    field
+}
+
 /// Bind one lookup over its relation: its derivations, its keys' types and
 /// fields, its key values and nearest reference in the current row, then
 /// its filter, order, projection, range and `unique` checks.
@@ -393,10 +451,24 @@ fn bind_one(
     } = inputs;
     let mut failed = false;
     let (schema, source_name) = match item.source {
-        self_relations::Relation::Input(index) => (schemas[index], sources[index].name.as_str()),
+        self_relations::Relation::Input(index) => {
+            (schemas[index].layout(), sources[index].name.as_str())
+        }
         self_relations::Relation::SelfRows => (output, "SELF"),
         // A pair relation binds its two sides ([`pairs::bind`]).
         self_relations::Relation::Pair => return Err(BindError::Internal),
+    };
+    let output_kinds;
+    let stored_kinds = match item.source {
+        self_relations::Relation::Input(index) => schemas[index].kinds(),
+        _ => {
+            output_kinds = output
+                .columns()
+                .iter()
+                .map(|column| Some(column.kind))
+                .collect::<Vec<_>>();
+            &output_kinds
+        }
     };
     let mut pending_schema = None;
     let derivations = intermediate_derivations::bind(
@@ -406,6 +478,7 @@ fn bind_one(
             declarations: &item.derivations,
             dataset: source_name,
             stored: schema,
+            stored_kinds,
             stored_available: matches!(item.source, self_relations::Relation::SelfRows)
                 .then_some(self_columns.unwrap_or(&[])),
         },
@@ -422,10 +495,7 @@ fn bind_one(
             derived.column_kind(column)
         } else {
             match item.source {
-                self_relations::Relation::Input(index) => schemas[index]
-                    .columns()
-                    .get(column)
-                    .map(|column| column.kind),
+                self_relations::Relation::Input(index) => schemas[index].kind(column),
                 self_relations::Relation::SelfRows => {
                     output.columns().get(column).map(|column| column.kind)
                 }
@@ -438,37 +508,16 @@ fn bind_one(
             || column >= output.columns().len()
             || self_columns.is_some_and(|columns| columns.contains(&column))
     };
-    let resolve = |name: &str, path: &str, findings: &mut Vec<BindFinding>| {
-        let bare = name
-            .strip_prefix(&format!("{source_name}."))
-            .or_else(|| matches!(item.source, self_relations::Relation::SelfRows).then_some(name));
-        let field = bare.and_then(|name| {
-            schema
-                .columns()
-                .iter()
-                .position(|column| column.name == name)
-        });
-        let field = field.filter(|&column| admits(column));
-        if field.is_none() {
-            let suggestion = (!name.contains('.')
-                && schema.columns().iter().any(|c| c.name == name))
-            .then(|| format!("{source_name}.{name}"));
-            findings.push(BindFinding::Lookup(LookupFinding::reference(
-                path,
-                name,
-                Some(&item.name),
-                ReferenceCause::Selection,
-                suggestion,
-            )));
-        }
-        field
-    };
     let donor = Donor {
         lookup: &item.name,
         dataset: source_name,
         schema,
         kind: &donor_kind,
         admits: &admits,
+    };
+    let self_rows = matches!(item.source, self_relations::Relation::SelfRows);
+    let resolve = |name: &str, path: &str, findings: &mut Vec<BindFinding>| {
+        select_field(&donor, self_rows, inputs, name, path, findings)
     };
     let catalog = current_catalog(output, inputs)?;
     // An intermediate without `key` drives rows and is never a keyed lookup
@@ -500,9 +549,12 @@ fn bind_one(
             phase: crate::reference_scope::Phase::Row { group_by: None },
             project,
             tree,
-            named,
-            secondary,
-            intermediates: result,
+            donors: binder::Donors {
+                named,
+                secondary,
+                items: result,
+                inputs,
+            },
         };
         let value = if contextual_reader {
             declaration.bind_deferred(&path, &item.name, &catalog, findings, context)?
@@ -542,9 +594,12 @@ fn bind_one(
                     phase: crate::reference_scope::Phase::Row { group_by: None },
                     project,
                     tree,
-                    named,
-                    secondary,
-                    intermediates: result,
+                    donors: binder::Donors {
+                        named,
+                        secondary,
+                        items: result,
+                        inputs,
+                    },
                 },
                 findings,
             )?;
@@ -577,8 +632,12 @@ fn bind_one(
                 &donor,
                 &catalog,
                 contextual_reader,
-                result,
-                secondary,
+                binder::Donors {
+                    named,
+                    secondary,
+                    items: result,
+                    inputs,
+                },
                 findings,
             )
         })
@@ -590,7 +649,7 @@ fn bind_one(
     let source = match item.source {
         self_relations::Relation::Input(index) if index == driver => {
             crate::dataset::IntermediateSource::Primary {
-                schema: schemas[index].clone(),
+                schema: schemas[index].layout().clone(),
                 name: sources[index].name.clone(),
             }
         }
@@ -640,7 +699,7 @@ fn current_catalog(output: &TableSchema, inputs: binder::Inputs<'_>) -> Result<C
         .iter()
         .map(|column| reference_binding::Field {
             name: &column.name,
-            column_type: column.kind,
+            column_type: Some(column.kind),
         })
         .collect::<Vec<_>>();
     let current_sources = std::iter::once(driver)
@@ -648,16 +707,7 @@ fn current_catalog(output: &TableSchema, inputs: binder::Inputs<'_>) -> Result<C
         .collect::<Vec<_>>();
     let source_fields = current_sources
         .iter()
-        .map(|&index| {
-            schemas[index]
-                .columns()
-                .iter()
-                .map(|column| reference_binding::Field {
-                    name: &column.name,
-                    column_type: column.kind,
-                })
-                .collect::<Vec<_>>()
-        })
+        .map(|&index| schemas[index].fields())
         .collect::<Vec<_>>();
     let datasets = current_sources
         .iter()
@@ -795,6 +845,16 @@ impl Declarations {
             self_relations::Relation::Input(index) if index < self.2 => Some(index),
             _ => None,
         }
+    }
+    /// Whether the named intermediate `name` derives the field `field`.
+    pub(super) fn derives(&self, name: &str, field: &str) -> bool {
+        self.0.iter().any(|item| {
+            item.name == name
+                && item
+                    .derivations
+                    .iter()
+                    .any(|derivation| derivation.name == field)
+        })
     }
     /// Whether `name` selects one record for each row: it declares `keep`
     /// or `nearest` (LOOKUP-22).
@@ -1234,23 +1294,22 @@ impl Declarations {
         project: Option<&crate::project_calls::ProjectCalls>,
         tree: &types::Tree,
         findings: &mut Vec<BindFinding>,
-    ) -> Result<(Vec<SecondarySource>, Vec<Option<Intermediate>>), BindError> {
+    ) -> Result<Bound, BindError> {
         let binder::Inputs {
             sources,
             schemas,
             driver,
         } = inputs;
         let mut secondary = inputs.secondary();
+        let mut withheld = Vec::new();
         // Each pair relation's records follow the inputs once it binds, read
         // as an input's by every intermediate derived after it (LOOKUP-27).
-        let mut relations = sources.to_vec();
-        let mut relation_schemas = schemas
-            .iter()
-            .map(|&schema| schema.clone())
-            .collect::<Vec<_>>();
+        // The inputs are borrowed until the first pair relation binds.
+        let mut relations = std::borrow::Cow::Borrowed(sources);
+        let mut relation_schemas = std::borrow::Cow::Borrowed(schemas);
         let mut result = Vec::new();
         for item in self.0.iter() {
-            let schemas = relation_schemas.iter().collect::<Vec<_>>();
+            let schemas = &*relation_schemas;
             if let Some(pair) = &item.pair {
                 let (bound, fields) = pairs::bind(
                     item,
@@ -1259,7 +1318,7 @@ impl Declarations {
                         named: self,
                         relations: binder::Inputs {
                             sources: &relations,
-                            schemas: &schemas,
+                            schemas,
                             driver,
                         },
                         inputs: sources.len(),
@@ -1276,8 +1335,8 @@ impl Declarations {
                     Some(fields) => fields,
                     None => TableSchema::new(Vec::new()).map_err(|_| BindError::Internal)?,
                 };
-                relations.push(pairs::pseudo_input(&item.name));
-                relation_schemas.push(fields.clone());
+                relations.to_mut().push(pairs::pseudo_input(&item.name));
+                relation_schemas.to_mut().push(InputSchema::exact(&fields));
                 secondary.push(SecondarySource {
                     name: item.name.clone(),
                     schema: fields,
@@ -1297,12 +1356,13 @@ impl Declarations {
                     continue;
                 }
             }
+            let before = findings.len();
             let bound = bind_one(
                 Context {
                     named: self,
                     inputs: binder::Inputs {
                         sources: &relations,
-                        schemas: &schemas,
+                        schemas,
                         driver,
                     },
                     output,
@@ -1315,13 +1375,53 @@ impl Declarations {
                 item,
                 findings,
             )?;
+            withhold_reads(&mut findings[before..], &withheld);
+            let failed = &findings[before..];
+            if bound.is_none()
+                && !failed.is_empty()
+                && failed
+                    .iter()
+                    .all(|finding| matches!(finding, BindFinding::Withheld(_)))
+            {
+                withheld.push(item.name.clone());
+            }
             result.push(bound);
         }
-        Ok((secondary, result))
+        Ok(Bound {
+            secondary,
+            items: result,
+            withheld,
+        })
     }
     /// The position of the intermediate `name`, a pair relation included.
     pub(super) fn position(&self, name: &str) -> Option<usize> {
         self.0.iter().position(|item| item.name == name)
+    }
+}
+
+/// The named intermediates as binding bound them ([`Declarations::bind`]):
+/// the secondary ports, with each pair relation's records after the inputs;
+/// each intermediate, or `None` where it did not bind; and the names of those
+/// that did not bind only because of findings `check()` withholds.
+pub(super) struct Bound {
+    pub secondary: Vec<SecondarySource>,
+    pub items: Vec<Option<Intermediate>>,
+    pub withheld: Vec<String>,
+}
+
+/// Withhold each read of an intermediate in `withheld` that binding refuses
+/// as unbound: the failure follows from an answer the schemas do not decide,
+/// so `check()` withholds it with the finding that caused it (#3805).
+pub(super) fn withhold_reads(findings: &mut [BindFinding], withheld: &[String]) {
+    for finding in findings {
+        let caused = matches!(finding, BindFinding::UnknownReference { name, .. }
+            if name
+                .split_once('.')
+                .is_some_and(|(owner, _)| withheld.iter().any(|name| name == owner)));
+        if caused {
+            let read = finding.take();
+            *finding = BindFinding::Withheld(std::boxed::Box::new(read));
+        }
     }
 }
 

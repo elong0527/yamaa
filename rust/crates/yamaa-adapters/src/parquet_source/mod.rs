@@ -4,11 +4,21 @@
 //! memory guarantees. This codec performs no filesystem
 //! access, resource lookup, host callbacks, semantic fallback, or publication.
 #[cfg(feature = "parquet")]
+mod closed_profile;
+#[cfg(feature = "parquet")]
 mod compact;
 #[cfg(feature = "parquet")]
 mod compression;
 #[cfg(feature = "parquet")]
 mod delta;
+/// The differential harness against parquet 55 (#3878).
+#[cfg(all(test, feature = "parquet"))]
+mod differential;
+/// The native footer model, which the next pull request of #3878 reads by.
+#[cfg(all(test, feature = "parquet"))]
+mod footer;
+#[cfg(feature = "parquet")]
+pub(crate) mod format;
 #[cfg(feature = "parquet")]
 mod framing;
 #[cfg(feature = "parquet")]

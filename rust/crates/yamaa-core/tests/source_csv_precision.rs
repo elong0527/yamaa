@@ -1,9 +1,13 @@
 //! Source contracts: CSV precision, mapping cut, mapping dictionary resources,
-//! ODM source, resource scheme, source diagnostics, table and typed CSV.
+//! ODM source, resource scheme, source diagnostics, table and typed CSV. The
+//! refusals a source reader classifies are cases of
+//! `fixtures/diagnostics/sources.json`; each test here proves a seam the
+//! replay cannot reach, which its first comment names (#3798).
 mod source {
     mod csv_precision {
         use yamaa_core::{csv_precision::fixed_point, value::FiniteFloat};
 
+        /// Seam: the text the `fixed_point` kernel writes, and its width refusal.
         #[test]
         fn ties_and_near_ties_round_away_from_zero_with_independent_text() {
             // Scaled distances below the tie are from the exact binary64 value;
@@ -47,6 +51,8 @@ mod source {
             }
         }
 
+        /// Seam: the text the `fixed_point` kernel writes at a precision of 5,000
+        /// digits.
         #[test]
         fn large_precision_uses_the_exact_fraction_and_retains_all_declared_zeros() {
             // Exact powers of two give independently known finite decimal expansions.
@@ -64,6 +70,7 @@ mod source {
             }
         }
 
+        /// Seam: the `fixed_point` kernel's refusal of widths it cannot write.
         #[test]
         fn impossible_width_refuses_without_constructing_large_powers_or_text() {
             for digits in [usize::MAX, usize::MAX - 2, 1_000_000_000] {
@@ -72,6 +79,8 @@ mod source {
             assert!(fixed_point(FiniteFloat::new(1e308).unwrap(), 0, 308).is_err());
         }
 
+        /// Seam: the text the `fixed_point` kernel writes for subnormal and large
+        /// values.
         #[test]
         fn subnormal_values_and_large_integral_values_preserve_fixed_width() {
             let smallest = FiniteFloat::new(f64::from_bits(1)).unwrap();
@@ -97,6 +106,8 @@ mod source {
             value::Value,
         };
 
+        /// Seam: the value and handler a mapping selects, which core's readers cannot
+        /// return.
         #[test]
         fn dictionary_results_retain_literal_types_and_missing_is_not_unmapped() {
             let mapping = Mapping::new(
@@ -132,6 +143,7 @@ mod source {
             assert_eq!(unmapped.value, SelectedValue::Literal(&Value::Bool(true)));
             assert_eq!(unmapped.handler, Some("unmapped"));
         }
+        /// Seam: the value a mapping selects for folded keys.
         #[test]
         fn folding_is_ascii_only_and_includes_empty_and_nul_keys() {
             let map = Mapping::new(
@@ -176,6 +188,7 @@ mod source {
                 SelectedValue::Literal(&Value::Int(2))
             );
         }
+        /// Seam: the label a cut selects at each boundary.
         #[test]
         fn interval_closure_and_unbounded_tails_follow_numeric_order() {
             for right in [false, true] {
@@ -233,6 +246,7 @@ mod source {
                 ));
             }
         }
+        /// Seam: the label a cut selects for an integer beside a binary64 boundary.
         #[test]
         fn interval_comparison_does_not_round_an_integer_into_a_binary64_boundary() {
             let cut = Cut::new(
@@ -257,6 +271,7 @@ mod source {
                 SelectedValue::Label("after")
             );
         }
+        /// Seam: the `AdmissionError` kind `Cut::new` refuses with.
         #[test]
         fn invalid_boundaries_and_label_counts_are_planning_findings() {
             for (breaks, labels) in [
@@ -279,6 +294,7 @@ mod source {
             }
         }
 
+        /// Seam: the `AdmissionError::Shape` both constructors refuse with.
         #[test]
         fn empty_source_or_path_is_a_shape_error_for_both_declarations() {
             for (source, path) in [("", "mapping"), ("SRC.V", ""), ("", "")] {
@@ -303,6 +319,7 @@ mod source {
         /// An omitted `missing` answers a missing source with missing, counted
         /// under `missing` (COLUMN-10); the refusals are cases of
         /// `tests/fixtures/diagnostics/values.json`.
+        /// Seam: the value and handler count a mapping gives a missing source.
         #[test]
         fn an_omitted_missing_handler_answers_a_missing_source_with_missing() {
             let mapping = Mapping::new(
@@ -335,6 +352,7 @@ mod source {
             }
         }
 
+        /// Seam: selected values of generated megabyte sizes.
         #[test]
         fn large_mapping_results_and_cut_labels_preserve_the_declared_text() {
             let size = 8 * 1024 * 1024;
@@ -521,6 +539,8 @@ mod source {
             ])
         }
 
+        /// Seam: the schema references a dictionary walk requests, with their nodes,
+        /// and the document it leaves unchanged.
         #[test]
         fn schema_requests_cover_nested_rows_in_schema_order_and_ignore_inline_and_metadata_values()
         {
@@ -591,6 +611,7 @@ mod source {
             assert_eq!(raw, original);
         }
 
+        /// Seam: the admission report's borrowed document and use sites.
         #[test]
         fn dictionary_admission_retains_use_site_and_original_input_arena_for_schema_findings() {
             let schema = schema();
@@ -647,6 +668,8 @@ mod source {
             }
         }
 
+        /// Seam: the content the compiler materializes and the held model it leaves
+        /// unchanged.
         #[test]
         fn compiler_materialization_copies_typed_held_content_and_keeps_original_model_immutable() {
             let schema = schema();
@@ -719,6 +742,7 @@ mod source {
             value::ColumnType,
         };
 
+        /// Seam: the coordinates `odm_source` binds and the field names it folds.
         #[test]
         fn fixed_coordinates_ignore_untyped_vendor_fields_and_fold_only_ascii() {
             let names = [
@@ -754,6 +778,7 @@ mod source {
             assert_eq!(odm_source::canonical("ItemOID.extra"), None);
         }
 
+        /// Seam: the internal `SchemaError` values `odm_source::bind_fields` returns.
         #[test]
         fn metadata_findings_keep_missing_schema_order_and_stored_ambiguity_type_order() {
             let fields = [
@@ -822,6 +847,7 @@ mod source {
             );
         }
 
+        /// Seam: the coordinates `odm_source` binds beside vendor fields.
         #[test]
         fn vendor_metadata_does_not_change_the_eleven_exposed_coordinates() {
             let large = "v".repeat(1_048_577);
@@ -905,6 +931,8 @@ mod source {
             }
         }
 
+        /// Seam: the `MissingValues` records `odm_source` returns and the cells it
+        /// read.
         #[test]
         fn required_identifiers_report_all_fields_in_fixed_order_and_storage_record_coordinates() {
             use yamaa_core::value::Value;
@@ -961,6 +989,7 @@ mod source {
             );
         }
 
+        /// Seam: the original read failure, by identity, and the reads before it.
         #[test]
         fn a_later_original_ingestion_read_failure_suppresses_partial_findings_without_retry() {
             let mut records = Records::new();
@@ -981,6 +1010,7 @@ mod source {
     mod resource_scheme {
         use yamaa_core::resource::{has_uri_scheme, written_path_failure, ResourceFailure};
 
+        /// Seam: the `has_uri_scheme` predicate.
         #[test]
         fn uri_grammar_preserves_local_absolute_parent_and_windows_drive_paths() {
             for path in [
@@ -1006,6 +1036,7 @@ mod source {
             }
         }
 
+        /// Seam: the cause `written_path_failure` returns for each written form.
         #[test]
         fn written_form_checks_keep_normative_order_and_allow_root_dot_and_parent_paths() {
             for (path, expected) in [
@@ -1037,18 +1068,15 @@ mod source {
         }
     }
     mod source_diagnostics {
-        //! Independent complete outcomes over actual profile/type/physical-schema failures.
-        use crate::support::text_table;
+        //! Independent complete outcomes over actual profile/type/physical-schema
+        //! failures. The refusals a source reader classifies are cases of
+        //! `fixtures/diagnostics/sources.json`; these tests keep the seams around
+        //! them.
         use yamaa_core::json::Value as V;
         use yamaa_core::{
             csv_source::{self, Field as CsvField},
-            diagnostic::{
-                source_diagnostics, ConditionCode as C, Diagnostic, ParquetFinding, SourceFinding,
-            },
-            parquet_source::{
-                self as parquet, Converted, Field, Logical, Physical, Representation,
-            },
-            typed_csv::PreparedTypes,
+            diagnostic::{source_diagnostics, ConditionCode as C, Diagnostic, SourceFinding},
+            parquet_source::{self as parquet, Field},
             value::ColumnType,
         };
 
@@ -1068,62 +1096,9 @@ mod source {
             }
         }
 
+        /// Seam: a value of 6,000 generated characters.
         #[test]
-        fn source_types_keep_declaration_then_stored_row_field_precedence_and_all_value_text() {
-            let declarations = vec![
-                ("X".into(), ColumnType::Int),
-                ("Z".into(), ColumnType::Float),
-                ("A".into(), ColumnType::Int),
-            ];
-            let absent = PreparedTypes::new(&declarations)
-                .unwrap()
-                .convert(text_table(&["X"], &[&[Some("not-an-int")]]))
-                .unwrap_err();
-            let declarations = vec![("B".into(), ColumnType::Int), ("A".into(), ColumnType::Int)];
-            let first = PreparedTypes::new(&declarations)
-                .unwrap()
-                .convert(text_table(
-                    &["A", "B"],
-                    &[&[Some("1"), Some("bad")], &[Some("worse"), Some("2")]],
-                ))
-                .unwrap_err();
-            let findings = [
-                absent.finding("SRC").unwrap(),
-                first.finding("SRC").unwrap(),
-            ];
-            let actual: Vec<_> = source_diagnostics(&findings).collect();
-            assert_eq!(
-                actual,
-                vec![
-                    expected(
-                        C::SourceTypeUnknownField,
-                        "input.SRC.types.Z",
-                        vec![
-                            ("dataset", text("SRC")),
-                            ("field", text("Z")),
-                            ("identifier", text("Z")),
-                        ]
-                    ),
-                    expected(
-                        C::SourceTypeFieldParse,
-                        "input.SRC.types.B",
-                        vec![
-                            ("dataset", text("SRC")),
-                            ("field", text("B")),
-                            ("type", text("int")),
-                            ("value", text("bad"))
-                        ]
-                    ),
-                ]
-            );
-            assert_eq!(
-                (actual[0].definition().phase, actual[0].definition().rule),
-                ("validation", Some("INPUT-6"))
-            );
-            assert_eq!(
-                (actual[1].definition().phase, actual[1].definition().rule),
-                ("ingest", Some("INPUT-7"))
-            );
+        fn a_field_parse_finding_keeps_a_value_of_thousands_of_characters_whole() {
             let long = format!("{}β\0\"\\", "9".repeat(6000));
             let error = yamaa_core::typed_csv::Error::FieldParse {
                 field: "I".into(),
@@ -1137,174 +1112,13 @@ mod source {
         fn field(name: &str) -> Field {
             Field {
                 name: name.into(),
-                leaves: 1,
-                path: name.into(),
-                repetition: 0,
-                physical: Physical::Int64,
-                logical: Logical::None,
-                converted: Converted::None,
-                representation: Representation::Int64,
+                kind: Some(ColumnType::Int),
                 stored_type: "int64".into(),
             }
         }
+        /// Seam: how many fields the iterator yields before the refusal.
         #[test]
-        fn signed_integer_fields_that_fit_their_physical_type_read_as_int() {
-            let signed = |bits| Logical::Integer { bits, signed: true };
-            let legacy = |bits| Converted::Integer { bits, signed: true };
-            // An unannotated INT32 or INT64 is a signed integer of its width.
-            for (physical, representation) in [
-                (Physical::Int32, Representation::Int32),
-                (Physical::Int64, Representation::Int64),
-            ] {
-                assert_eq!(
-                    parquet::column_type(physical, Logical::None, Converted::None, representation),
-                    Some(ColumnType::Int),
-                    "{physical:?}"
-                );
-            }
-            for (physical, bits, representation) in [
-                (Physical::Int64, 64, Representation::Int64),
-                (Physical::Int32, 32, Representation::Int32),
-                (Physical::Int32, 16, Representation::Int16),
-                (Physical::Int32, 8, Representation::Int8),
-            ] {
-                // The logical type alone, both annotations, and the converted
-                // type alone, as DuckDB writes it.
-                for (logical, converted) in [
-                    (signed(bits), Converted::None),
-                    (signed(bits), legacy(bits)),
-                    (Logical::None, legacy(bits)),
-                ] {
-                    assert_eq!(
-                        parquet::column_type(physical, logical, converted, representation),
-                        Some(ColumnType::Int),
-                        "{bits}: {logical:?} {converted:?}"
-                    );
-                }
-                let unsigned = Logical::Integer {
-                    bits,
-                    signed: false,
-                };
-                let legacy_unsigned = Converted::Integer {
-                    bits,
-                    signed: false,
-                };
-                for (logical, converted) in [
-                    (unsigned, Converted::None),
-                    (unsigned, legacy_unsigned),
-                    (Logical::None, legacy_unsigned),
-                ] {
-                    assert_eq!(
-                        parquet::column_type(physical, logical, converted, representation),
-                        None,
-                        "{bits}: {logical:?} {converted:?}"
-                    );
-                }
-            }
-            // A width the physical type does not hold, and a layout of another
-            // width or type, stay refused.
-            let microseconds = Representation::Timestamp {
-                unit: parquet::Unit::Microsecond,
-                timezone: false,
-            };
-            for (physical, logical, converted, representation) in [
-                (
-                    Physical::Int32,
-                    signed(64),
-                    legacy(64),
-                    Representation::Int64,
-                ),
-                (
-                    Physical::Int64,
-                    signed(32),
-                    legacy(32),
-                    Representation::Int32,
-                ),
-                (Physical::Int32, signed(8), legacy(8), Representation::Int16),
-                (Physical::Int64, signed(64), legacy(64), microseconds),
-                (
-                    Physical::Int32,
-                    Logical::None,
-                    legacy(16),
-                    Representation::Int8,
-                ),
-                (
-                    Physical::Int32,
-                    Logical::None,
-                    Converted::None,
-                    Representation::Int16,
-                ),
-            ] {
-                assert_eq!(
-                    parquet::column_type(physical, logical, converted, representation),
-                    None,
-                    "{physical:?} {logical:?} {converted:?} {representation:?}"
-                );
-            }
-        }
-        #[test]
-        fn physical_schema_and_raw_temporal_findings_keep_all_original_facts() {
-            let mut nested = field("S");
-            nested.leaves = 2;
-            nested.stored_type = "struct<left: int64, right: string>".into();
-            let errors = [
-                parquet::columns(vec![], 0).unwrap_err(),
-                parquet::columns(vec![field(""), field("I")], 2).unwrap_err(),
-                parquet::columns(vec![field("I"), field("I")], 2).unwrap_err(),
-                parquet::columns(vec![field("I"), nested], 2).unwrap_err(),
-                parquet::temporal(ColumnType::DateTime, i64::MAX, "DT", 2).unwrap_err(),
-            ];
-            let borrowed: Vec<_> = errors
-                .iter()
-                .map(|error| error.finding("SRC", "data.parquet"))
-                .collect();
-            let wanted = [
-                (C::ParquetInvalid, "PARQUET-5", vec![]),
-                (
-                    C::ParquetFieldNameEmpty,
-                    "PARQUET-6",
-                    vec![(
-                        "field",
-                        V::Number(("1").parse().expect("canonical integer")),
-                    )],
-                ),
-                (
-                    C::ParquetFieldNameDuplicate,
-                    "PARQUET-6",
-                    vec![("field", text("I"))],
-                ),
-                (
-                    C::ParquetFieldTypeUnsupported,
-                    "PARQUET-7",
-                    vec![
-                        ("field", text("S")),
-                        ("stored_type", text("struct<left: int64, right: string>")),
-                    ],
-                ),
-                (
-                    C::ParquetFieldValueInvalid,
-                    "PARQUET-9",
-                    vec![
-                        ("field", text("DT")),
-                        (
-                            "record",
-                            V::Number(("2").parse().expect("canonical integer")),
-                        ),
-                        ("value", V::from(i64::MAX)),
-                    ],
-                ),
-            ];
-            for (actual, (code, rule, extra)) in source_diagnostics(&borrowed).zip(wanted) {
-                let fields = vec![("dataset", text("SRC")), ("path", text("data.parquet"))]
-                    .into_iter()
-                    .chain(extra)
-                    .collect();
-                assert_eq!(actual, expected(code, "input.SRC.path", fields));
-                assert_eq!(
-                    (actual.definition().phase, actual.definition().rule),
-                    ("ingest", Some(rule))
-                );
-            }
+        fn parquet_columns_read_no_field_after_the_first_refusal() {
             let mut inspected = 0;
             let fields = ["", "LATER"].into_iter().map(|name| {
                 inspected += 1;
@@ -1317,6 +1131,8 @@ mod source {
             assert_eq!(inspected, 1);
         }
 
+        /// Seam: the borrowed facts' pointer identity, and values thousands of
+        /// characters long.
         #[test]
         fn whole_ordered_report_preserves_borrowed_facts_and_full_late_values() {
             let error = csv_source::Error::Profile {
@@ -1371,31 +1187,9 @@ mod source {
             assert_eq!(source_diagnostics(&[]).len(), 0);
         }
 
+        /// Seam: errors that make no finding, which no reader can report.
         #[test]
-        fn diagnostic_positions_stay_mathematical_and_boundary_errors_have_no_condition() {
-            let field = CsvField::Index(usize::MAX);
-            let finding = SourceFinding::Csv {
-                cause: csv_source::ProfileCause::RecordWidth,
-                record: usize::MAX,
-                field: &field,
-                dataset: "SRC",
-                path: "source.csv",
-            };
-            let actual = finding.diagnostic();
-            assert_eq!(actual.context["record"], V::from(usize::MAX));
-            assert_eq!(actual.context["field"], V::from(usize::MAX));
-            let actual = SourceFinding::Parquet {
-                finding: ParquetFinding::Value {
-                    field: "DT",
-                    row: usize::MAX,
-                    value: i64::MIN,
-                },
-                dataset: "SRC",
-                path: "data.parquet",
-            }
-            .diagnostic();
-            assert_eq!(actual.context["record"], V::from(usize::MAX));
-            assert_eq!(actual.context["value"], V::from(i64::MIN));
+        fn limit_and_malformed_carrier_errors_have_no_condition() {
             let limit = csv_source::Error::Limit {
                 resource: "source_bytes",
                 limit: 0,
@@ -1418,6 +1212,8 @@ mod source {
             value::{ColumnType, Value},
         };
 
+        /// Seam: the `TableSchema` and borrowed cells, values no reader returns.
+        ///
         #[test]
         /// Preserve empty-table schema identity and reject ambiguous column names.
         fn schema_retains_order_and_all_closed_column_types() {
@@ -1452,6 +1248,8 @@ mod source {
             );
         }
 
+        /// Seam: the `TableSchema` and borrowed cells, values no reader returns.
+        ///
         #[test]
         /// Prove borrowed text ownership and exact scalar/temporal metadata.
         fn borrowing_retains_text_backing_exact_values_and_temporal_precision() {
@@ -1501,6 +1299,8 @@ mod source {
             value::ColumnType,
         };
 
+        /// Seam: `InvalidSource` and `InvalidDeclarations`, errors that make no
+        /// finding.
         #[test]
         fn malformed_external_carriers_have_no_language_projection_or_index_panic() {
             for source in [
@@ -1545,6 +1345,7 @@ mod source {
             }
         }
 
+        /// Seam: the column limit over generated declarations.
         #[test]
         fn fixed_declaration_width_admits_the_edge_and_keeps_the_observed_refusal() {
             let maximum = yamaa_core::limits::Limits::COLUMNS;
@@ -1567,6 +1368,7 @@ mod source {
             }
         }
 
+        /// Seam: the converted cells and their bounds.
         #[test]
         fn converted_core_values_outlive_all_input_authority_and_reject_invalid_cell_indexes() {
             let rows = {

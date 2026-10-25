@@ -29,7 +29,7 @@ pub(super) fn bind(
     spec: &ast::Spec,
     filter: ExprId,
     driver: &str,
-    source: &TableSchema,
+    source: &InputSchema,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<BoundPredicate>, BindError> {
     {
@@ -77,12 +77,7 @@ pub(super) fn bind(
                 continue;
             };
             let selected = (dataset == driver)
-                .then(|| {
-                    source
-                        .columns()
-                        .iter()
-                        .position(|column| column.name == field)
-                })
+                .then(|| source.position(field))
                 .flatten();
             if let Some(column) = selected {
                 bindings.push(Binding {
@@ -103,10 +98,7 @@ pub(super) fn bind(
             crate::result_type::ResultType::declared(
                 name.split_once('.')
                     .filter(|(dataset, _)| *dataset == driver)
-                    .and_then(|(_, field)| {
-                        source.columns().iter().find(|column| column.name == field)
-                    })
-                    .map(|column| column.kind),
+                    .and_then(|(_, field)| source.kind(source.position(field)?)),
             )
         });
         BoundPredicate::new(typed, bindings)
