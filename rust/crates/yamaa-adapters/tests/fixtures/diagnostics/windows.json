@@ -1,5 +1,5 @@
 {
-  "about": "Window operations nested in case results, and named windows (WINDOW-1 to WINDOW-9). A window in a column's case result reads the whole completed context: row 3's previous row in group A by O is row 1 (a2), and the row_number in its branch numbers it third among all of A's rows. A window in a row template's case result stays local to its template and sees the rows that template's filter keeps, so the second template numbers rows 2 and 3 as 1 and 2. A baseline_flag in a case branch no row reaches fails nothing; one a row reaches keeps its ambiguous_baseline, at the branch's path, since both rows share the date; and a grouped one in a selected branch judges only the selected partition, so B's tied rows fail nothing. A row_value offset beyond 64 bits selects no neighbour. A named window is expanded into each filtered row template that reads it (WINDOW-2), so each template's rows have their own previous value; a child that replaces the named reference, with another name or an inline window, replaces it whole, losing VISITS's group_by, so its VAL order runs 10, 20, 30, 40 across both groups; a child that clears the definitions a surviving reference names is refused as unknown_window before any input is read (WINDOW-1); and a named window keeps each operation's restrictions, so a row_number over one without order_by fails as window_order_by_required (WINDOW-5). No benchmark nests a window operation in a case result, offsets row_value beyond 64 bits, reads a named window in a row template, or replaces or clears one through a child; negative-unknown-window and negative-locf-no-order refuse a misspelt name and an inline window without order_by. The named-window cases come from the retired Python evaluator's schema/test_named_windows.py at c7b88a4f (#2110), and their documents, which the tests built as JSON, are written here as YAML with the same members. Moved from execution_declarative_self.rs, whose tests compared the saved artifact, the issue's condition and spec path, or the first issue's condition, rule and spec paths.",
+  "about": "Window operations nested in case results, and named windows (WINDOW-1 to WINDOW-9). A window in a column's case result reads the whole completed context: row 3's previous row in group A by O is row 1 (a2), and the row_number in its branch numbers it third among all of A's rows. A window in a row template's case result stays local to its template and sees the rows that template's filter keeps, so the second template numbers rows 2 and 3 as 1 and 2. A baseline_flag in a case branch no row reaches fails nothing; one a row reaches keeps its ambiguous_baseline, at the branch's path, since both rows share the date; and a grouped one in a selected branch judges only the selected partition, so B's tied rows fail nothing. A row_value offset beyond 64 bits selects no neighbour. A named window is expanded into each filtered row template that reads it (WINDOW-2), so each template's rows have their own previous value; a child that replaces the named reference, with another name or an inline window, replaces it whole, losing VISITS's group_by, so its VAL order runs 10, 20, 30, 40 across both groups; a child that clears the definitions a surviving reference names is refused as unknown_window before any input is read (WINDOW-1); and a named window keeps each operation's restrictions, so a row_number over one without order_by fails as window_order_by_required (WINDOW-5). No benchmark nests a window operation in a case result, offsets row_value beyond 64 bits, reads a named window in a row template, or replaces or clears one through a child; negative-unknown-window and negative-locf-no-order refuse a misspelt name and an inline window without order_by. The named-window cases come from the retired Python evaluator's schema/test_named_windows.py at c7b88a4f (#2110), and their documents, which the tests built as JSON, are written here as YAML with the same members. Moved from execution_declarative_self.rs, whose tests compared the saved artifact, the issue's condition and spec path, or the first issue's condition, rule and spec paths. Numbering and rank order exact values within each partition and give tied rows one rank (WINDOW-6): integers above 2^53 compare exactly, floats numerically, so -0.0 and 0.0 tie in rank, a missing G forms one partition, two missing values tie, and nulls places missing values first or last whatever the direction (WINDOW-3, VALUE-22). A window filter evaluates both operands of AND, so a FALSE left operand does not spare an int and a text that do not compare (FORMULA-5); the run publishes nothing. baseline_flag judges each row against its own reference: a row is eligible only when its date is present and at or before its own reference, a missing reference leaves it ineligible, and a window filter removes a later row or a same-date twin from the search, the row it removes keeping a missing flag (WINDOW-9, WINDOW-4). Eligible rows sharing the latest date are ordered by the tie-break terms, each with its own direction and missing placement, and the last is the baseline; rows still equal on every term fail, reporting the date, the number of tied rows and the partition, and the run publishes nothing (WINDOW-9, VALUE-22). numbering numbers within G by V, eligibility flags the baseline of ADT bounded by TRTSDT, and tie_break the baseline within G ordered by ADT then a tie-break term; in tie_rows, rows 1 to 3 of partition a share January 3 with descending SEQ and row 4 is earlier. schema-window-functions pins missing values last and two missing values tying, adam-adae-worsening-emergence a filtered search and a missing reference, and schema-baseline-tie-break and negative-baseline-unresolved-tie a tie-break and an unresolved tie's first issue; no benchmark pins the rest. These come from execution_window_semantics.rs at 144fc5559, whose tests compared the saved out.csv of a clean build, or the one issue of a build that published nothing through the five fields of study::issue_row, the unresolved tie's context at date, match_count and keys.",
   "documents": {
     "nested_case": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [I]\ninput: {SRC: {path: input.csv, types: {I: int, O: int}}}\ncolumns:\n  - {name: I, type: int, derivation: SRC.I}\n  - name: N\n    type: int\n    derivation:\n      case:\n        - when: 'I > 1'\n          then: {row_number: {window: {group_by: [SRC.G], order_by: [SRC.O]}}}\n        - otherwise: -1\n  - name: P\n    type: str\n    derivation:\n      case:\n        - when: 'I = 3'\n          then: {row_value: {source: SRC.V, offset: -1, window: {group_by: [SRC.G], order_by: [SRC.O]}}}\n        - otherwise: \"'skip'\"\n  - name: C\n    type: str\n    derivation: {str_template: 'prior={P}'}\noutput: {path: out.csv, columns: [I, N, C]}\n",
     "template_local": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [T, I]\ninput: {SRC: {path: input.csv, types: {I: int, O: int}}}\ncolumns:\n  - {name: T, type: str}\n  - {name: I, type: int, derivation: SRC.I}\n  - {name: N, type: int}\nrows:\n  - id: first\n    dataset: SRC\n    derivations:\n      T: \"'A'\"\n      N: {case: [{when: 'I > 0', then: {row_number: {window: {order_by: [SRC.O]}}}}]}\n  - id: second\n    dataset: SRC\n    filter: 'SRC.I > 1'\n    derivations:\n      T: \"'B'\"\n      N: {case: [{when: 'I > 0', then: {row_number: {window: {order_by: [SRC.O]}}}}]}\noutput: {path: out.csv, columns: [T, I, N]}\n",
@@ -8,7 +8,12 @@
     "grouped_baseline": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [I]\ninput: {SRC: {path: input.csv, types: {I: int, D: date}}}\ncolumns:\n  - {name: I, type: int, derivation: SRC.I}\n  - {name: G, type: str, derivation: SRC.G}\n  - {name: D, type: date, derivation: SRC.D}\n  - name: B\n    type: str\n    derivation:\n      case:\n        - when: \"G = 'A'\"\n          then: {baseline_flag: {date: D, reference: D, source: I, window: {group_by: [G]}}}\n        - otherwise: \"'skipped'\"\noutput: {path: out.csv, columns: [I, B]}\n",
     "named": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nbase: SRC\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {SEQ: int, VAL: int}}}\noutput: {path: out.csv, columns: [ID, PREV]}\nwindows:\n  VISITS: {group_by: [G], order_by: [SEQ]}\ncolumns:\n  - {name: ID, type: str, label: ID, derivation: SRC.ID}\n  - {name: G, type: str, label: G, derivation: SRC.G}\n  - {name: SEQ, type: int, label: SEQ, derivation: SRC.SEQ}\n  - {name: VAL, type: int, label: VAL, derivation: SRC.VAL}\n  - {name: PREV, type: int, label: 'Previous value', derivation: {row_value: {source: VAL, offset: -1, window: VISITS}}}\n",
     "named_rows": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nbase: SRC\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {SEQ: int, VAL: int}}}\noutput: {path: out.csv, columns: [ID, PREV]}\nwindows:\n  VISITS: {order_by: [SEQ]}\ncolumns:\n  - {name: ID, type: str, label: ID}\n  - {name: G, type: str, label: G}\n  - {name: SEQ, type: int, label: SEQ}\n  - {name: VAL, type: int, label: VAL}\n  - {name: PREV, type: int, label: 'Previous value'}\nrows:\n  - id: a\n    dataset: SRC\n    filter: \"SRC.G = 'a'\"\n    derivations: {ID: SRC.ID, G: SRC.G, SEQ: SRC.SEQ, VAL: SRC.VAL, PREV: {row_value: {source: VAL, offset: -1, window: VISITS}}}\n  - id: b\n    dataset: SRC\n    filter: \"SRC.G = 'b'\"\n    derivations: {ID: SRC.ID, G: SRC.G, SEQ: SRC.SEQ, VAL: SRC.VAL, PREV: {row_value: {source: VAL, offset: -1, window: VISITS}}}\n",
-    "visits": "ID,G,SEQ,VAL\n01,a,1,10\n02,a,2,20\n03,b,1,30\n04,b,2,40\n"
+    "visits": "ID,G,SEQ,VAL\n01,a,1,10\n02,a,2,20\n03,b,1,30\n04,b,2,40\n",
+    "numbering": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, V: int}}}\nwindows:\n  ORDER: {group_by: [G], order_by: [{variable: V, direction: desc, nulls: last}]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: G, type: str, derivation: SRC.G}\n  - {name: V, type: int, derivation: SRC.V}\n  - {name: SEQ, type: int, derivation: {row_number: {window: ORDER}}}\n  - {name: RANK, type: int, derivation: {rank: {window: ORDER}}}\n  - {name: DENSE, type: int, derivation: {rank: {method: dense, window: ORDER}}}\noutput: {path: out.csv, columns: [ID, G, V, SEQ, RANK, DENSE]}\n",
+    "filter_and": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, V: int}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: V, type: int, derivation: SRC.V}\n  - name: SEQ\n    type: int\n    derivation: {row_number: {window: {order_by: [V], filter: \"FALSE AND V > 'x'\"}}}\noutput: {path: out.csv, columns: [ID, V, SEQ]}\n",
+    "eligibility": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, ELIGIBLE: int, ADT: date, TRTSDT: date}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: G, type: str, derivation: SRC.G}\n  - {name: ELIGIBLE, type: int, derivation: SRC.ELIGIBLE}\n  - {name: ADT, type: date, derivation: SRC.ADT}\n  - {name: TRTSDT, type: date, derivation: SRC.TRTSDT}\n  - name: BLFL\n    type: str\n    derivation:\n      baseline_flag: {date: ADT, reference: TRTSDT, source: ID, window: {filter: 'ELIGIBLE > 0'}}\noutput: {path: out.csv, columns: [ID, BLFL]}\n",
+    "tie_break": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, ADT: date, TRTSDT: date, TM: int, SEQ: int}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: G, type: str, derivation: SRC.G}\n  - {name: ADT, type: date, derivation: SRC.ADT}\n  - {name: TRTSDT, type: date, derivation: SRC.TRTSDT}\n  - {name: TM, type: int, derivation: SRC.TM}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - name: BLFL\n    type: str\n    derivation:\n      baseline_flag: {date: ADT, reference: TRTSDT, source: ID, window: {group_by: [G], order_by: [ADT, {variable: TM, direction: desc}]}}\noutput: {path: out.csv, columns: [ID, BLFL]}\n",
+    "tie_rows": "ID,G,ADT,TRTSDT,TM,SEQ\n1,a,2025-01-03,2025-01-05,900,3\n2,a,2025-01-03,2025-01-05,800,2\n3,a,2025-01-03,2025-01-05,,1\n4,a,2025-01-01,2025-01-05,2300,9\n"
   },
   "cases": [
     {
@@ -114,6 +119,127 @@
       },
       "compares": ["condition"],
       "issues": [{"condition": "window_order_by_required"}],
+      "saved": {}
+    },
+    {
+      "case": "numbering_and_rank_order_integers_above_2_53_exactly_with_missing_values_last_in_one_missing_partition",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "numbering"}, "input.csv": "ID,G,V\n1,a,9007199254740992\n2,,\n3,a,9007199254740993\n4,a,\n5,,\n6,a,9007199254740993\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,G,V,SEQ,RANK,DENSE\n1,a,9007199254740992,3,3,2\n2,,,1,1,1\n3,a,9007199254740993,1,1,1\n4,a,,4,4,3\n5,,,2,1,1\n6,a,9007199254740993,2,1,1\n"}
+    },
+    {
+      "case": "numbering_and_rank_place_missing_values_first_under_a_descending_order_that_declares_it",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "numbering", "edits": [{"from": "nulls: last", "to": "nulls: first"}]}, "input.csv": "ID,G,V\n1,a,9007199254740992\n2,,\n3,a,9007199254740993\n4,a,\n5,,\n6,a,9007199254740993\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,G,V,SEQ,RANK,DENSE\n1,a,9007199254740992,4,4,3\n2,,,1,1,1\n3,a,9007199254740993,2,2,2\n4,a,,1,1,1\n5,,,2,1,1\n6,a,9007199254740993,3,2,2\n"}
+    },
+    {
+      "case": "rank_orders_floats_numerically_so_negative_and_positive_zero_tie",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "numbering", "edits": [{"from": "V: int}", "to": "V: float}"}, {"from": "{name: V, type: int,", "to": "{name: V, type: float,"}, {"from": "order_by: [{variable: V, direction: desc, nulls: last}]", "to": "order_by: [V]"}]}, "input.csv": "ID,G,V\n0,x,-0.0\n1,x,-3.0\n2,x,0.0\n3,x,2.0\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,G,V,SEQ,RANK,DENSE\n0,x,-0,2,2,2\n1,x,-3,1,1,1\n2,x,0,3,2,2\n3,x,2,4,4,3\n"}
+    },
+    {
+      "case": "a_window_filter_evaluates_the_right_operand_of_and_after_a_false_left_one",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "filter_and"}, "input.csv": "ID,V\n1,1\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5", "spec_paths": ["columns.SEQ.derivation.row_number.window.filter"], "context": {"actual": "str", "left_type": "int", "right_type": "str"}}],
+      "saved": {}
+    },
+    {
+      "case": "baseline_flag_judges_each_row_by_its_own_reference_within_its_partition",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "eligibility", "edits": [{"from": "window: {filter: 'ELIGIBLE > 0'}", "to": "window: {group_by: [G]}"}]}, "input.csv": "ID,G,ELIGIBLE,ADT,TRTSDT\n1,,1,2025-01-01,2025-01-03\n2,,1,2025-01-03,2025-01-02\n3,,1,,2025-01-03\n4,b,1,2025-01-02,\n5,b,1,2025-01-02,2025-01-02\n6,b,1,2025-01-03,2025-01-03\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,BLFL\n1,Y\n2,\n3,\n4,\n5,\n6,Y\n"}
+    },
+    {
+      "case": "a_baseline_flag_s_filtered_later_row_takes_no_baseline_from_an_earlier_date",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "eligibility"}, "input.csv": "ID,G,ELIGIBLE,ADT,TRTSDT\n1,,1,2025-01-02,2025-01-10\n2,,0,2025-01-06,2025-01-10\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,BLFL\n1,Y\n2,\n"}
+    },
+    {
+      "case": "a_baseline_flag_s_filtered_same_date_twin_does_not_tie",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "eligibility"}, "input.csv": "ID,G,ELIGIBLE,ADT,TRTSDT\n1,,1,2025-01-06,2025-01-10\n2,,0,2025-01-06,2025-01-10\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,BLFL\n1,Y\n2,\n"}
+    },
+    {
+      "case": "a_date_after_its_reference_and_a_missing_date_are_never_eligible_for_baseline_flag",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "eligibility"}, "input.csv": "ID,G,ELIGIBLE,ADT,TRTSDT\n1,,1,2025-01-20,2025-01-10\n2,,1,,2025-01-10\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,BLFL\n1,\n2,\n"}
+    },
+    {
+      "case": "the_latest_eligible_date_is_the_baseline",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "eligibility"}, "input.csv": "ID,G,ELIGIBLE,ADT,TRTSDT\n1,,1,2025-01-06,2025-01-10\n2,,1,2025-01-02,2025-01-10\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,BLFL\n1,Y\n2,\n"}
+    },
+    {
+      "case": "a_same_date_row_after_its_own_reference_is_not_eligible_for_baseline_flag",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "eligibility"}, "input.csv": "ID,G,ELIGIBLE,ADT,TRTSDT\n1,,1,2025-01-06,2025-01-10\n2,,1,2025-01-06,2025-01-02\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,BLFL\n1,Y\n2,\n"}
+    },
+    {
+      "case": "ineligible_rows_do_not_end_the_baseline_search",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "eligibility"}, "input.csv": "ID,G,ELIGIBLE,ADT,TRTSDT\n1,,1,2025-01-20,2025-01-10\n2,,1,,2025-01-10\n3,,1,2025-01-06,2025-01-10\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,BLFL\n1,\n2,\n3,Y\n"}
+    },
+    {
+      "case": "filtered_and_ineligible_rows_do_not_end_the_baseline_search",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "eligibility"}, "input.csv": "ID,G,ELIGIBLE,ADT,TRTSDT\n1,,0,2025-01-20,2025-01-10\n2,,1,,2025-01-10\n3,,1,2025-01-06,2025-01-10\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,BLFL\n1,\n2,\n3,Y\n"}
+    },
+    {
+      "case": "a_date_equal_to_its_own_reference_is_eligible_for_baseline_flag",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "eligibility"}, "input.csv": "ID,G,ELIGIBLE,ADT,TRTSDT\n1,,1,2025-01-06,2025-01-06\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,BLFL\n1,Y\n"}
+    },
+    {
+      "case": "a_descending_time_tie_break_prefers_the_smallest_time_and_keeps_a_missing_time_lowest",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "tie_break"}, "input.csv": {"base": "tie_rows"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,BLFL\n1,\n2,\n3,Y\n4,\n"}
+    },
+    {
+      "case": "a_tie_break_declaring_nulls_last_places_a_missing_time_last",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "tie_break", "edits": [{"from": "{variable: TM, direction: desc}", "to": "{variable: TM, nulls: last}"}]}, "input.csv": {"base": "tie_rows"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,BLFL\n1,\n2,\n3,Y\n4,\n"}
+    },
+    {
+      "case": "a_descending_sequence_tie_break_picks_the_lowest_sequence_number",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "tie_break", "edits": [{"from": "{variable: TM, direction: desc}", "to": "{variable: SEQ, direction: desc}"}]}, "input.csv": {"base": "tie_rows"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,BLFL\n1,\n2,\n3,Y\n4,\n"}
+    },
+    {
+      "case": "same_date_rows_still_tied_on_every_tie_break_term_fail_naming_the_date_the_count_and_the_partition",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "tie_break", "edits": [{"from": "{variable: TM, direction: desc}", "to": "TM"}]}, "input.csv": "ID,G,ADT,TRTSDT,TM,SEQ\n1,a,2025-01-03,2025-01-05,900,3\n2,a,2025-01-03,2025-01-05,900,2\n3,a,2025-01-03,2025-01-05,800,1\n4,a,2025-01-01,2025-01-05,2300,9\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.date", "context.match_count", "context.keys"],
+      "issues": [{"phase": "derivation", "condition": "ambiguous_baseline", "rule": "WINDOW-9", "spec_paths": ["columns.BLFL.derivation.baseline_flag"], "context": {"date": "2025-01-03", "match_count": 2, "keys": [{"G": "a"}]}}],
       "saved": {}
     }
   ]

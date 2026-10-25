@@ -70,6 +70,7 @@ pub(super) const FILES: &[File] = &[
     fixture!("text_extract.json"),
     fixture!("text_pad.json"),
     fixture!("verification.json"),
+    fixture!("window_drivers.json"),
     fixture!("windows.json"),
     fixture!("workflow.json"),
 ];
