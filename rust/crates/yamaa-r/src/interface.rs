@@ -22,21 +22,6 @@ pub(crate) fn gate() -> std::result::Result<Engine, String> {
     GATE.pass().map_err(|closed| closed.to_string())
 }
 
-#[cfg(not(any(feature = "linked-engine", feature = "dynamic-engine")))]
-compile_error!("yamaa-r links its engine, with the default linked-engine feature, or loads it, with dynamic-engine");
-
-/// Negotiate `request` with the engine this binding links, or in the
-/// test-only loaded mode with the engine library beside its own file.
-fn negotiated(request: &Value) -> Outcome {
-    #[cfg(feature = "dynamic-engine")]
-    return GATE.negotiate_loaded(request);
-    // SAFETY: the binding links the engine, whose negotiation entry this is.
-    #[cfg(not(feature = "dynamic-engine"))]
-    unsafe {
-        GATE.negotiate(request, yamaa_engine::negotiate)
-    }
-}
-
 /// A boundary version as R holds it: an integer, or a double beyond R's
 /// integers, as R reads such a number.
 fn version(version: u32) -> Robj {
@@ -50,7 +35,9 @@ fn version(version: u32) -> Robj {
 fn interface_handshake(request: Robj) -> List {
     answer(None, || {
         let absent = |value: Option<u32>| value.map_or_else(|| NULL.into_robj(), version);
-        let outcome = negotiated(&value(&request, 0));
+        // SAFETY: the binding links the engine, whose negotiation entry this
+        // is.
+        let outcome = unsafe { GATE.negotiate(&value(&request, 0), yamaa_engine::negotiate) };
         let record = match outcome {
             Outcome::Accepted(accepted) => list!(
                 accepted = true,

@@ -581,7 +581,10 @@ mod diagnostics {
     /// How the replay compares an authored case with what its operation
     /// reports (#3691).
     mod replay {
-        use crate::support::diagnostic::replay::{among, compared};
+        use crate::support::diagnostic::{
+            form::Order,
+            replay::{among, compared},
+        };
         use yamaa_core::json::Value;
 
         /// A case that compares some keys of the context reads a reported
@@ -647,6 +650,40 @@ mod diagnostics {
             }
         }
 
+        /// The replay runs its cases on several threads and returns what
+        /// each returned, in the cases' order; a case that fails stops no
+        /// other, and the replay then fails naming each failed case, in
+        /// order, with its own message.
+        #[test]
+        fn in_parallel_returns_each_case_in_order_or_names_each_failed_case() {
+            use crate::support::diagnostic::form::in_parallel;
+            let cases = (0..64).map(|n| format!("case {n}")).collect::<Vec<_>>();
+            for (failing, expected, label) in [
+                (&[][..], Ok(cases.clone()), "every case passes"),
+                (
+                    &["case 40", "case 3"][..],
+                    Err(
+                        "2 of 64 cases failed:\n\ncase 3:\ncase 3 fails\n\ncase 40:\ncase 40 fails",
+                    ),
+                    "two cases fail",
+                ),
+            ] {
+                let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    in_parallel(&cases, String::as_str, |case| {
+                        assert!(!failing.contains(&case.as_str()), "{case} fails");
+                        case.clone()
+                    })
+                }));
+                let ran = ran.map_err(|payload| {
+                    payload
+                        .downcast_ref::<String>()
+                        .cloned()
+                        .unwrap_or_else(|| "a failure with no message".into())
+                });
+                assert_eq!(ran, expected.map_err(str::to_owned), "{label}");
+            }
+        }
+
         /// An `among` case's rows are some of the issues its operation
         /// reports: each matches a distinct reported row, in any order, and
         /// a row that matches none is named.
@@ -675,6 +712,24 @@ mod diagnostics {
                 ),
             ] {
                 assert_eq!(among(&authored, &reported), expected, "{label}");
+            }
+        }
+
+        /// A `prefix` case's rows are compared with the first rows its
+        /// operation reports, in order, and the rows after them are not
+        /// compared; when fewer are reported than it writes, every reported
+        /// row is compared, so the case fails, as a complete case's rows are
+        /// compared with every reported row.
+        #[test]
+        fn prefix_rows_are_compared_with_the_first_reported_rows_in_order() {
+            let reported = ["a", "b", "c"];
+            for (order, written, expected, label) in [
+                (Order::Prefix, 1, &["a"][..], "the first of three rows"),
+                (Order::Prefix, 2, &["a", "b"][..], "the first two, in order"),
+                (Order::Prefix, 4, &["a", "b", "c"][..], "more than reported"),
+                (Order::Complete, 1, &["a", "b", "c"][..], "a complete case"),
+            ] {
+                assert_eq!(order.compared(&reported, written), expected, "{label}");
             }
         }
     }
