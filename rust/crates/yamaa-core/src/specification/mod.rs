@@ -22,8 +22,6 @@ pub use compiler_limits::CompilerLimit;
 mod binder;
 use binder::BindContext;
 mod binding_diagnostics;
-#[doc(hidden)]
-pub mod check_oracle;
 mod checks;
 mod input_schemas;
 use input_schemas::{InputSchema, InputSchemas};
@@ -943,25 +941,38 @@ impl PreparedSpecification {
         }
         .finish()
     }
-    /// Keep the declaration findings `check()` reports.
+    /// Keep the declaration findings `check()` reports: what binding decides
+    /// over the declared input schemas, in binding's order, without what it
+    /// withholds (#3805), and the filter type faults it decides over the
+    /// written ones.
     fn finish(mut self) -> Result<Self, PrepareError> {
         let refusal = |error| match error {
             BindError::ExpressionPolicy(error) => PrepareError::expression(error, None),
             _ => PrepareError::Internal,
         };
-        let findings = checks::declared::findings(&self).map_err(refusal)?;
-        self.written_filter_types =
-            checks::declared::written_filter_types(&self).map_err(refusal)?;
-        for finding in findings {
-            let diagnostics = finding
-                .diagnostics(self.source())
-                .ok_or(PrepareError::Internal)?;
-            self.check_expressions.extend(diagnostics);
-        }
-        if check_oracle::active() {
-            self.compare();
-        }
+        let declared = InputSchemas::declared(&self).map_err(refusal)?;
+        self.check_expressions = self.decided(&declared).map_err(refusal)?;
+        let written = InputSchemas::written(&self).map_err(refusal)?;
+        self.written_filter_types = self.decided(&written).map_err(refusal)?;
         Ok(self)
+    }
+    /// The rows of every finding binding decides over `schemas`, in its
+    /// order.
+    fn decided(
+        &self,
+        schemas: &InputSchemas,
+    ) -> Result<Vec<crate::diagnostic::Diagnostic>, BindError> {
+        let mut diagnostics = Vec::new();
+        for finding in self.bind_findings(schemas)? {
+            if !matches!(finding, BindFinding::Withheld(_)) {
+                diagnostics.extend(
+                    finding
+                        .diagnostics(self.source())
+                        .ok_or(BindError::Internal)?,
+                );
+            }
+        }
+        Ok(diagnostics)
     }
     /// Every finding binding reports over the input schemas `schemas`, in
     /// binding's order. A plan it builds still holds the filter type faults

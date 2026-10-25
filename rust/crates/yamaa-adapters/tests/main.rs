@@ -17,7 +17,6 @@ mod diagnostics;
 
 mod arrow_host_bridge;
 mod ast_lowering;
-mod check_oracle;
 mod declaration_contract_vectors;
 mod declaration_language_header;
 mod declaration_layer_composition;

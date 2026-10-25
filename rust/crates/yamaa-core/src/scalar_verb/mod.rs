@@ -176,21 +176,6 @@ impl ScalarOp {
         })
     }
 
-    /// Which declared operand types `check()` refuses, as binding refuses
-    /// their captured types.
-    pub(crate) fn check_typing(&self) -> CheckTyping {
-        match self {
-            Self::Mapping { .. } | Self::Cut { .. } => CheckTyping::Always,
-            Self::StrTemplate { .. }
-            | Self::StrExtract { .. }
-            | Self::StrReplace { .. }
-            | Self::StrSubstr { .. }
-            | Self::StrLength
-            | Self::StrDecimal { .. } => CheckTyping::LeftToBinding,
-            _ => CheckTyping::Never,
-        }
-    }
-
     /// Whether a first row template's SELF read through one of the verb's
     /// operands is reported at that operand, as `greatest` and `least`
     /// report it, or at the verb (LOOKUP-7).
@@ -295,19 +280,6 @@ pub(crate) enum Sites {
     /// and intermediate derivation, and below each the case results,
     /// aggregate key values and aggregate derive bindings.
     Everywhere,
-}
-
-/// Which declared operand types `check()` refuses for a verb.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum CheckTyping {
-    /// None: preflight types them, or only binding can.
-    Never,
-    /// Those preflight leaves to binding: a template's placeholders, and the
-    /// source of an extraction, a replacement, a positional verb or a
-    /// decimal text, in row templates and in a lookup's own derivations.
-    LeftToBinding,
-    /// Every operand it reads: a `mapping`'s or a `cut`'s source.
-    Always,
 }
 
 /// SUB-19's row for a derivation holding a verb.

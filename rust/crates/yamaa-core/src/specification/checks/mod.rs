@@ -1,32 +1,23 @@
-//! Preflight and `check()` over the typed tree (#2844, design section 3).
+//! Preflight over the typed tree (#2844, design section 3).
 //!
 //! The root checks read the tree's typed fields ([`root`]). Every other
 //! check runs once per node kind: [`ast::Spec::sites`] names the roots, each
 //! check keeps the site filter it has always had (rounding, for example,
 //! skips a spec with row templates), a walk from each root finds the nodes
-//! of its kind, and [`DeclaredTypes`] types what they read before any schema
-//! is captured.
+//! of its kind, and [`types::DeclaredTypes`] types what they read before any
+//! schema is captured.
 //!
-//! `check()` and `run()` run the same checks. A check that refuses a spec
-//! before binding ([`verbs`], [`odm`], [`lookups`]) refuses it in both. The
-//! declaration findings ([`declared`]) are what `check()` reports; `run()`
-//! reports each of them from binding, in binding's order, together with
-//! what only the captured schemas decide. Among them are what binding
-//! decides of each read of a row template or the column phase
-//! ([`boundaries`]), of each read of a lookup's own derivations or an
-//! aggregate's derive bindings ([`donors`]), and the scopes it admits once
-//! the rows are bound ([`scopes`]).
+//! `check()` and `run()` run the same checks: one that refuses a spec before
+//! binding ([`verbs`], [`odm`], [`lookups`]) refuses it in both. What binding
+//! decides comes after, from binding itself: `run()` binds the captured
+//! schemas, and `check()` the declared ones (#3805).
 //!
 //! A check that needs an operation's executor type constructs it from the
 //! tree, as binding does.
 
-pub(super) mod boundaries;
-pub(super) mod declared;
-pub(super) mod donors;
 pub(super) mod lookups;
 pub(super) mod odm;
 pub(super) mod root;
-pub(super) mod scopes;
 pub(super) mod verbs;
 
 use super::*;
@@ -171,223 +162,6 @@ pub(super) fn template_driver<'a>(spec: &'a Spec, template: &'a ast::Template) -
     }
 }
 
-/// Whether the input `owner` declares no `key`, which an implicit join of it,
-/// and a qualified aggregate over it without `key` of its own, match on (D23,
-/// D63): such a read has nothing to match on, whatever the input stores
-/// (D111).
-pub(super) fn keyless(spec: &Spec, owner: &str) -> bool {
-    spec.input_key(owner).is_none_or(<[_]>::is_empty)
-}
-
-/// The refusal at `path` of a read of the keyless input `dataset` through
-/// its implicit join (`no_applicable_keys`, LOOKUP-5, D111), as binding
-/// reports it ([`crate::reference_binding::JoinedFinding::key_diagnostic`]).
-pub(super) fn undeclared_key(spec: &Spec, path: &str, dataset: &str) -> BindFinding {
-    BindFinding::Source(source_expressions::SourceFinding::from_diagnostic(
-        crate::diagnostic::lookup::undeclared_input_key(
-            path,
-            dataset,
-            false,
-            spec.pair_relation(dataset).is_some(),
-        ),
-    ))
-}
-
-/// A name a flag or `case` predicate cannot read there (`unknown_field`,
-/// FORMULA-9).
-pub(super) fn predicate_unknown(path: &str, name: &str) -> BindFinding {
-    BindFinding::Predicate(crate::diagnostic::Diagnostic {
-        code: crate::diagnostic::ConditionCode::PredicateUnknownField,
-        spec_paths: vec![path.into()],
-        context: [("identifier".into(), crate::json::Value::String(name.into()))].into(),
-        source_span: None,
-        operand_route: None,
-    })
-}
-
-/// The refusal of the value of the range at `between`, owned by `owner`,
-/// which reads `value`, a field of a lookup binding does not bind
-/// (`unknown_field`, LOOKUP-9), as `lookup_range::Declaration::unknown_value`
-/// reports it.
-pub(super) fn unknown_range_value(
-    spec: &Spec,
-    between: &ast::Between,
-    owner: crate::diagnostic::lookup::Owner<'_>,
-    value: &str,
-) -> BindFinding {
-    BindFinding::Scalar(crate::diagnostic::lookup::range_reference(
-        &format!("{}.value", render(spec, between.meta)),
-        owner,
-        value,
-    ))
-}
-
-/// What an implicit join pairs each column of its input's declared `key`
-/// with (LOOKUP-1, LOOKUP-2).
-#[derive(Clone, Copy)]
-pub(super) enum Pairing<'a> {
-    /// During row construction, the same-named field of the driver's record,
-    /// read in the row template's scope.
-    Row {
-        driver: &'a str,
-        row: &'a str,
-        group_by: Option<&'a [&'a str]>,
-    },
-    /// Otherwise, the current row's same-named column.
-    Column,
-}
-
-/// Whether the input `owner` stores `field`, as far as the declarations
-/// decide: a linked artifact stores exactly its producer's output columns
-/// (INPUT-10, INPUT-11) and a generated ordinal (INPUT-3). No declaration
-/// lists another input's fields, so each named one counts as stored.
-pub(super) fn stores(prepared: &PreparedSpecification, owner: &str, field: &str) -> bool {
-    let Some(index) = prepared
-        .sources
-        .iter()
-        .position(|source| source.name == owner)
-    else {
-        return true;
-    };
-    prepared.sources[index].ordinal.as_deref() == Some(field)
-        || prepared
-            .source_contract(index)
-            .is_none_or(|contract| contract.fields().iter().any(|stored| stored.name == field))
-}
-
-/// The declared type of the input `owner`'s field `field`: a generated
-/// ordinal's `int` (INPUT-3), or as `declared` types any other.
-pub(super) fn stored_type(
-    prepared: &PreparedSpecification,
-    declared: &types::DeclaredTypes<'_>,
-    owner: &str,
-    field: &str,
-) -> crate::result_type::ResultType {
-    if prepared
-        .sources
-        .iter()
-        .any(|source| source.name == owner && source.ordinal.as_deref() == Some(field))
-    {
-        return crate::result_type::ResultType::column(ColumnType::Int);
-    }
-    declared.name(&format!("{owner}.{field}"))
-}
-
-/// What binding decides at `path` of the declared `key` of the input
-/// `owner` that an implicit join there matches on (D111 item 2), for each
-/// column in declared order (`key_relation::declared`,
-/// `Catalog::joined_read`): the input does not store it, as far as
-/// [`stores`] decides (`unknown_field`, LOOKUP-5, identifier
-/// `<input>.<column>`); the specification declares no column of it
-/// (LOOKUP-5, identifier `<column>`); during row construction, the driver
-/// does not store its same-named field, or a grouped template does not
-/// group by it (ROW-5); and the pair's declared types cannot compare
-/// (`incompatible_input_type`, LOOKUP-9). The first such finding, at which
-/// binding stops.
-pub(super) fn declared_key(
-    spec: &Spec,
-    prepared: &PreparedSpecification,
-    declared: &types::DeclaredTypes<'_>,
-    path: &str,
-    owner: &str,
-    pairing: Pairing<'_>,
-) -> Option<BindFinding> {
-    use crate::diagnostic::lookup::{self, Owner};
-    use crate::result_type::ResultType;
-    let source = |diagnostic| {
-        Some(BindFinding::Source(
-            source_expressions::SourceFinding::from_diagnostic(diagnostic),
-        ))
-    };
-    for column in spec.input_key(owner)? {
-        let field = column.name.as_str();
-        if !stores(prepared, owner, field) {
-            return source(lookup::donor_key_reference(
-                path,
-                Owner::Unnamed,
-                &format!("{owner}.{field}"),
-            ));
-        }
-        let Some(output) = spec.columns.iter().find(|column| column.name.name == field) else {
-            return source(lookup::match_value_reference(path, Owner::Unnamed, field));
-        };
-        let expected = match pairing {
-            Pairing::Row {
-                driver,
-                row,
-                group_by,
-            } => {
-                let identifier = format!("{driver}.{field}");
-                let finding = if !stores(prepared, driver, field) {
-                    Some(crate::reference_scope::Finding::UnknownField)
-                } else {
-                    crate::reference_scope::group_finding(
-                        &identifier,
-                        crate::reference_scope::Phase::Row { group_by },
-                    )
-                };
-                if let Some(finding) = finding {
-                    return Some(BindFinding::QualifiedReference {
-                        path: path.into(),
-                        name: identifier,
-                        row: Some(row.into()),
-                        finding,
-                    });
-                }
-                driver_type(spec, prepared, declared, driver, field)
-            }
-            Pairing::Column => ResultType::column(output.kind),
-        };
-        let (Some(expected), Some(actual)) = (
-            expected.column_type(),
-            stored_type(prepared, declared, owner, field).column_type(),
-        ) else {
-            continue;
-        };
-        if !ResultType::column(expected).comparable(actual.into()) {
-            return source(lookup::key_type(
-                path,
-                Owner::Unnamed,
-                field,
-                ResultType::column(expected),
-                ResultType::column(actual),
-            ));
-        }
-    }
-    None
-}
-
-/// The declared type of the field `field` of a row template's driver: an
-/// input's stored field, or that of the input a driver lookup reads, unless
-/// the lookup derives it or leaves it out.
-fn driver_type(
-    spec: &Spec,
-    prepared: &PreparedSpecification,
-    declared: &types::DeclaredTypes<'_>,
-    driver: &str,
-    field: &str,
-) -> crate::result_type::ResultType {
-    let Some(item) = spec
-        .intermediates
-        .iter()
-        .find(|item| item.id.name == driver)
-    else {
-        return stored_type(prepared, declared, driver, field);
-    };
-    let derived = item
-        .bindings
-        .iter()
-        .any(|binding| binding.name.name == field);
-    let listed = item
-        .columns
-        .as_ref()
-        .is_none_or(|columns| columns.iter().any(|column| column.name == field));
-    if derived || !listed {
-        return crate::result_type::ResultType::UNKNOWN;
-    }
-    stored_type(prepared, declared, &item.dataset.name, field)
-}
-
 /// The name a reference reads.
 pub(super) fn name(spec: &Spec, e: ExprId) -> Option<&str> {
     match &spec.expr(e).kind {
@@ -403,90 +177,5 @@ pub(super) fn variable(spec: &Spec, e: ExprId) -> Option<&str> {
         ExprKind::Ref(name) => Some(name.as_str()),
         ExprKind::Source(source) => name(spec, source.variable),
         _ => None,
-    }
-}
-
-/// A written type's name.
-pub(super) fn type_name(kind: ColumnType) -> &'static str {
-    match kind {
-        ColumnType::Str => "str",
-        ColumnType::Int => "int",
-        ColumnType::Float => "float",
-        ColumnType::Date => "date",
-        ColumnType::DateTime => "datetime",
-    }
-}
-
-/// Whether another lookup's derivations read the lookup at `index`: binding
-/// then binds its match per reading context, for each row and for each donor
-/// record that reads it (LOOKUP-16).
-pub(super) fn donor_read(spec: &Spec, index: usize) -> bool {
-    let item = &spec.intermediates[index];
-    spec.intermediates
-        .iter()
-        .enumerate()
-        .any(|(reader, other)| {
-            other.bindings.iter().any(|binding| {
-                spec.reads(binding.derivation.expr, ast::Scope::Donor(reader))
-                    .iter()
-                    .any(|read| read.name.owner() == Some(item.id.name.as_str()))
-            })
-        })
-}
-
-/// Whether `owner` qualifies nothing declared, no input or lookup, so a
-/// field it qualifies binds nothing, whatever any input stores.
-pub(super) fn undeclared(prepared: &PreparedSpecification, owner: &str) -> bool {
-    !prepared.intermediates.contains(owner) && !reads_as_input(prepared, owner)
-}
-
-/// Whether `name` is read as an input is: a declared input, or a pair
-/// relation, whose records its port holds (LOOKUP-27).
-pub(super) fn reads_as_input(prepared: &PreparedSpecification, name: &str) -> bool {
-    prepared.sources.iter().any(|input| input.name == name)
-        || prepared.tree.spec().pair_relation(name).is_some()
-}
-
-/// The names the filter of the intermediate `item` qualifies by nothing
-/// declared, no input, lookup or its own dataset, each once in written
-/// order with the field it names, and the filter's path. Binding refuses
-/// each (LOOKUP-7, `relation_predicates::bind`) and binds nothing of the
-/// intermediate.
-pub(super) fn unknown_filter_qualifiers<'s>(
-    spec: &'s Spec,
-    prepared: &PreparedSpecification,
-    item: &'s ast::Intermediate,
-) -> (Vec<(&'s str, &'s str)>, &'s str) {
-    let Some(ExprKind::Formula(ast::Formula {
-        compiled: Ok(plan), ..
-    })) = item.filter.map(|filter| &spec.expr(filter).kind)
-    else {
-        return (Vec::new(), "");
-    };
-    let dataset = item.dataset.name.as_str();
-    let mut seen = std::collections::BTreeSet::new();
-    let names = plan
-        .identifiers()
-        .filter(|&name| seen.insert(name))
-        .filter_map(|name| {
-            let (owner, field) = name.split_once('.')?;
-            (owner != dataset && undeclared(prepared, owner)).then_some((name, field))
-        })
-        .collect();
-    (names, plan.spec_path())
-}
-
-/// Whether a match value's reference `name` reads no value of the current
-/// row whatever an input stores (LOOKUP-5): a bare name that no column takes
-/// (NAME-3), or a name qualified by a lookup, by `SELF` or by nothing
-/// declared. Only an input's field is left for its records to decide.
-pub(super) fn unknown_match_value(
-    spec: &Spec,
-    prepared: &PreparedSpecification,
-    name: &str,
-) -> bool {
-    match name.split_once('.') {
-        None => !spec.columns.iter().any(|column| column.name.name == name),
-        Some((owner, _)) => !reads_as_input(prepared, owner),
     }
 }

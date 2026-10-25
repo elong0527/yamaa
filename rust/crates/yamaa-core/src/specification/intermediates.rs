@@ -801,10 +801,6 @@ impl Declarations {
         self.0.iter().any(|declaration| declaration.path == path)
     }
 
-    /// Each intermediate's name, in the order the intermediates are derived.
-    pub(super) fn names(&self) -> impl Iterator<Item = &str> {
-        self.0.iter().map(|item| item.name.as_str())
-    }
     pub(super) fn for_reader(&self, reader: &str) -> Self {
         Self(std::sync::Arc::clone(&self.0), Some(reader.into()), self.2)
     }
@@ -820,11 +816,6 @@ impl Declarations {
         let item = self.0.get(index)?;
         let range = item.range.as_ref()?;
         Some((range.value.as_str(), format!("{}.between.value", item.path)))
-    }
-    /// The range of the selector at `index`, with the selector's id.
-    pub(super) fn range(&self, index: usize) -> Option<(&str, &lookup_range::Declaration)> {
-        let item = self.0.get(index)?;
-        Some((item.name.as_str(), item.range.as_ref()?))
     }
 
     pub fn is_self(&self, index: usize) -> bool {

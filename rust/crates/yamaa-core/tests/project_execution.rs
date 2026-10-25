@@ -12,7 +12,9 @@ mod project {
             rc::Rc,
             sync::Arc,
         };
-        use support::{call, environment as with_functions, function, specification, Tree};
+        use support::{
+            call, environment as with_functions, function, specification, typed_specification, Tree,
+        };
         use yamaa_core::{
             dataset::ExecutionError,
             decoder,
@@ -189,7 +191,7 @@ mod project {
         }
 
         fn model(name: &str) -> yamaa_core::schema::Document {
-            specification(vec![(
+            typed_specification(vec![(
                 "VALUE",
                 "int",
                 call(name, vec![("x", Tree::text("SRC.ID"))]),
