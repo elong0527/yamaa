@@ -9,7 +9,8 @@
 use extendr_api::prelude::*;
 use std::ffi::c_void;
 use std::os::raw::{c_char, c_int};
-use yamaa_boundary::client::{self, ColumnType, Scalar, ScalarRef};
+use yamaa::host::functions::ColumnType;
+use yamaa::scalar::{Date, DateTime, Scalar, ScalarRef};
 
 /// The largest magnitude up to which binary64 holds every integer exactly.
 const EXACT_DOUBLE_MAGNITUDE: f64 = 9_007_199_254_740_992.0;
@@ -46,7 +47,7 @@ pub(super) fn detail(value: &Robj, fallback: &str) -> std::result::Result<String
 pub(crate) fn argument(value: ScalarRef<'_>) -> std::result::Result<Robj, String> {
     Ok(match value {
         ScalarRef::Missing => Robj::from(Rbool::na()),
-        ScalarRef::Text(text) => {
+        ScalarRef::Str(text) => {
             if text.contains('\0') {
                 return Err("text containing NUL cannot be held by an R character vector".into());
             }
@@ -58,15 +59,14 @@ pub(crate) fn argument(value: ScalarRef<'_>) -> std::result::Result<Robj, String
         ScalarRef::Int(value) => Robj::from(crate::public_table::exact_double(value)?),
         ScalarRef::Float(value) => Robj::from(value),
         ScalarRef::Bool(value) => Robj::from(value),
-        ScalarRef::Date(days) => {
-            // Whole days of the civil years 1 to 9999 are exact in binary64.
-            let mut value = Robj::from(days as f64);
+        ScalarRef::Date(date) => {
+            let mut value = Robj::from(f64::from(date.epoch_days()));
             value.set_class(["Date"]).map_err(|_| "date class")?;
             value
         }
-        ScalarRef::DateTime(seconds) => {
+        ScalarRef::DateTime(datetime) => {
             // Whole seconds of the civil years 1 to 9999 are exact in binary64.
-            let mut value = Robj::from(seconds as f64);
+            let mut value = Robj::from(datetime.epoch_seconds() as f64);
             value
                 .set_class(["POSIXct", "POSIXt"])
                 .map_err(|_| "datetime class")?;
@@ -75,6 +75,9 @@ pub(crate) fn argument(value: ScalarRef<'_>) -> std::result::Result<Robj, String
                 .map_err(|_| "datetime timezone")?;
             value
         }
+        // The facade enum is non-exhaustive; a new variant must not reach R
+        // as some other value.
+        _ => return Err("unsupported argument value".into()),
     })
 }
 
@@ -99,7 +102,7 @@ pub(crate) fn result(value: &Robj, returns: ColumnType) -> std::result::Result<S
             if text.contains('\0') {
                 return Err("a str result cannot contain NUL".into());
             }
-            Ok(Scalar::Text(text))
+            Ok(Scalar::Str(text))
         }
         ColumnType::Int => {
             let number = plain_number(value, class.as_deref()).ok_or_else(|| {
@@ -117,8 +120,7 @@ pub(crate) fn result(value: &Robj, returns: ColumnType) -> std::result::Result<S
             Ok(Scalar::Int(number as i64))
         }
         ColumnType::Float => plain_number(value, class.as_deref())
-            // The engine turns a value that is not finite into a missing one.
-            .map(Scalar::Float)
+            .map(Scalar::float)
             .ok_or_else(|| {
                 format!(
                     "a float result must be one number, not {}",
@@ -140,8 +142,8 @@ pub(crate) fn result(value: &Robj, returns: ColumnType) -> std::result::Result<S
                     shown(days)
                 ));
             }
-            client::civil_date(days as i64)
-                .map(|_| Scalar::Date(days as i64))
+            Date::from_epoch_days(days as i64)
+                .map(Scalar::Date)
                 .ok_or_else(|| {
                     format!(
                         "a date result must lie within the years 1 to 9999, not {} days from 1970-01-01",
@@ -178,8 +180,8 @@ pub(crate) fn result(value: &Robj, returns: ColumnType) -> std::result::Result<S
                     shown(seconds)
                 ));
             }
-            client::civil_datetime(seconds as i64)
-                .map(|_| Scalar::DateTime(seconds as i64))
+            DateTime::from_epoch_seconds(seconds as i64)
+                .map(Scalar::DateTime)
                 .ok_or_else(|| {
                     format!(
                         "a datetime result must lie within the years 1 to 9999, not {} seconds from 1970-01-01T00:00:00",
@@ -187,6 +189,8 @@ pub(crate) fn result(value: &Robj, returns: ColumnType) -> std::result::Result<S
                     )
                 })
         }
+        // The facade enum is non-exhaustive; no other declared type exists.
+        _ => Err("unsupported declared result type".into()),
     }
 }
 

@@ -6,6 +6,7 @@ use std::{
     rc::Rc,
     sync::{Arc, Mutex, PoisonError},
 };
+use yamaa::CancellationToken;
 
 /// The interrupt one call kept, if any.
 pub(super) type State = Arc<Mutex<Option<PyErr>>>;
@@ -44,7 +45,7 @@ pub(super) fn remember(py: Python<'_>, error: &PyErr) {
 /// Whether the call `state` belongs to is cancelled: an interrupt it kept,
 /// or a signal pending now, which it keeps. The engine asks this probe at
 /// its cancellation points and once more as the call returns.
-pub(super) fn cancelled(state: &State) -> bool {
+fn cancelled(state: &State) -> bool {
     if state
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
@@ -70,8 +71,8 @@ pub(super) fn run<T>(_py: Python<'_>, run: impl FnOnce(&State) -> PyResult<T>) -
         _thread: std::marker::PhantomData,
     };
     let result = run(&state);
-    // Streamed accessors do not pass through the engine's cancellable call
-    // wrapper. Also deliver a signal first observed as any native call returns.
+    // Streamed accessors pass no token of their own. Also deliver a signal
+    // first observed as any native call returns.
     let _ = cancelled(&state);
     let error = state.lock().unwrap_or_else(PoisonError::into_inner).take();
     match error {
@@ -80,11 +81,30 @@ pub(super) fn run<T>(_py: Python<'_>, run: impl FnOnce(&State) -> PyResult<T>) -
     }
 }
 
-/// A retained stream's probe polls the current native call when there is one,
-/// and otherwise the interpreter (an external Arrow consumer may be pulling).
-pub(super) fn stream_cancelled() -> bool {
-    match ACTIVE.with(|active| active.borrow().clone()) {
-        Some(state) => cancelled(&state),
-        None => Python::attach(|py| py.check_signals().is_err()),
-    }
+/// The token of the call that keeps `state`. On the thread that made the
+/// call its probe asks [`cancelled`]; on any other thread it never touches
+/// the interpreter.
+pub(super) fn token(state: &State) -> CancellationToken {
+    let owner = std::thread::current().id();
+    let state = Arc::clone(state);
+    CancellationToken::with_probe(move || std::thread::current().id() == owner && cancelled(&state))
+}
+
+/// The token of a streamed run (#3697), which outlives the call that started
+/// it. On the thread that started the run, its probe polls the native call
+/// that is running, which keeps the interrupt and raises it again; with no
+/// native call running, as when another library pulls the run's Arrow
+/// stream, it checks the pending signals, whose interrupt ends the stream as
+/// cancelled. On any other thread it never touches the interpreter.
+pub(super) fn stream_token() -> CancellationToken {
+    let owner = std::thread::current().id();
+    CancellationToken::with_probe(move || {
+        if std::thread::current().id() != owner {
+            return false;
+        }
+        match ACTIVE.with(|active| active.borrow().clone()) {
+            Some(state) => cancelled(&state),
+            None => Python::attach(|py| py.check_signals().is_err()),
+        }
+    })
 }
