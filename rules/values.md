@@ -675,7 +675,7 @@ order. A term is a bare variable or a mapping declaring `variable`,
 `desc`. A declared `nulls: first` or `nulls: last` places missing values there
 under either direction.
 
-Evidence: `schema-ordering`, `adam-adae-review-order`, `adam-adae-serious-sequence`, `schema-baseline-tie-break`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/missing_order.json::windows_and_presentation_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/missing_order.json::a_descending_presentation_sorts_an_undeclared_missing_value_last`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/missing_order.json::source_and_lookup_selection_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-application/tests/execution_value_semantics.rs::output_order_sorts_every_type_places_missing_by_nulls_and_keeps_ties_in_construction_order`.
+Evidence: `schema-ordering`, `adam-adae-review-order`, `adam-adae-serious-sequence`, `schema-baseline-tie-break`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/missing_order.json::windows_and_presentation_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/missing_order.json::a_descending_presentation_sorts_an_undeclared_missing_value_last`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/missing_order.json::source_and_lookup_selection_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_integers_ascending_and_places_missing_first_without_nulls`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_integers_descending_and_places_missing_last_without_nulls`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_integers_ascending_and_places_missing_last_by_nulls`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_integers_descending_and_places_missing_first_by_nulls`.
 
 The bare form is a [Schema language](reference/schema-language.md) shorthand
 union, whichever operation declares the list, and a mapping holding only
@@ -719,4 +719,4 @@ ordering uses the same tie-break. Ties are valid and must not change between
 runs over the same input. A specification may declare an additional term to
 break a tie.
 
-Evidence: `schema-ordering`, `rust/crates/yamaa-application/tests/execution_value_semantics.rs::output_order_sorts_every_type_places_missing_by_nulls_and_keeps_ties_in_construction_order`.
+Evidence: `schema-ordering`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_floats_ascending_and_places_missing_first_without_nulls`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/value_semantics.json::output_order_sorts_dates_descending_and_places_missing_last_without_nulls`.

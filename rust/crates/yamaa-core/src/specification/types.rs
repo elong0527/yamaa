@@ -84,11 +84,11 @@ impl TypeEnv for Env<'_> {
     }
 }
 
-/// Names typed before capture, in preflight and in `check()`: an output
-/// column by its declared type, and a stored field by its input's type
-/// authority. A schema link's producer types every field of the artifact
-/// (INPUT-10), whatever its storage profile. Otherwise `types` declares a
-/// field of a delimited file, every field it leaves undeclared is `str`
+/// Names typed before capture, in preflight: an output column by its
+/// declared type, and a stored field by its input's type authority. A
+/// schema link's producer types every field of the artifact (INPUT-10),
+/// whatever its storage profile. Otherwise `types` declares a field of a
+/// delimited file, every field it leaves undeclared is `str`
 /// (INPUT-5), and `types` narrows a field of a SAS or Transport file. Any
 /// other name is not known until binding: an undeclared field of a
 /// self-describing or SAS file has the type its captured schema gives
@@ -155,15 +155,6 @@ impl<'a> DeclaredTypes<'a> {
     }
     /// The type of `name`, a column or a qualified stored field.
     pub(super) fn name(&self, name: &str) -> ResultType {
-        self.typed(name, ResultType::STR)
-    }
-    /// The type a declaration writes for `name`: as [`Self::name`], except
-    /// that a delimited input's field no `types` entry names is not known.
-    pub(super) fn written(&self, name: &str) -> ResultType {
-        self.typed(name, ResultType::UNKNOWN)
-    }
-    /// `typeless` types a field of a delimited input no `types` entry names.
-    fn typed(&self, name: &str, typeless: ResultType) -> ResultType {
         let Some((owner, field)) = name.split_once('.') else {
             return ResultType::declared(
                 self.columns
@@ -186,7 +177,7 @@ impl<'a> DeclaredTypes<'a> {
                     .find(|stored| stored.name == field)
                     .map(|stored| stored.kind),
             ),
-            Some((_, Stored::Typeless(types))) => declared(types).unwrap_or(typeless),
+            Some((_, Stored::Typeless(types))) => declared(types).unwrap_or(ResultType::STR),
             Some((_, Stored::Narrowed(types))) => declared(types).unwrap_or(ResultType::UNKNOWN),
             Some((_, Stored::Pairs(bindings))) => bindings
                 .iter()

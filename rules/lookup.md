@@ -183,7 +183,7 @@ relation, whichever it reduces. A filter on a construct with no records to
 select among fails.
 
 Fails: `unknown_field`, `prohibited_construct`.
-Evidence: `schema-lookup-filters`, `negative-source-missing-field`, `negative-source-trivial-filter`, `negative-row-filter-lookup-scope`, `schema-aggregation`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-application/tests/fixtures/row_reductions.json`.
+Evidence: `schema-lookup-filters`, `negative-source-missing-field`, `negative-source-trivial-filter`, `negative-row-filter-lookup-scope`, `schema-aggregation`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`.
 
 For an input dataset, `order_by` names qualified fields of that dataset only,
 `columns` lists bare field names, and every `filter` field is qualified. The
@@ -411,7 +411,7 @@ lookup cannot declare both. An aggregate's empty match yields missing
 ([FORMULA-24](formulas.md#formula-24)).
 
 Fails: `unmatched_key`, `conflicting_absence_policy`, `prohibited_construct`.
-Evidence: `schema-lookup-absent-default`, `negative-source-require-match`, `negative-input-require-match`, `negative-lookup-unmatched-key`, `negative-lookup-missing-sex`, `negative-lookup-require-match-no-match`, `schema-handlers`, `adam-adae-death`, `rust/crates/yamaa-application/tests/execution_implicit_join_absence.rs`, `rust/crates/yamaa-application/tests/fixtures/original_source_bindings.json`.
+Evidence: `schema-lookup-absent-default`, `negative-source-require-match`, `negative-input-require-match`, `negative-lookup-unmatched-key`, `negative-lookup-missing-sex`, `negative-lookup-require-match-no-match`, `schema-handlers`, `adam-adae-death`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/original_source_bindings.json`.
 
 ```yaml
 input:
@@ -495,7 +495,7 @@ the source/key pairs of every lookup and implicit join: the match performed,
 the type each side declares, whether the lookup or its input declares the
 pairs, and the absence policy that answers a miss.
 
-Evidence: `negative-lookup-unmatched-key`, `rust/crates/yamaa-application/tests/fixtures/specs/lookup-failures.json`, `rust/crates/yamaa-application/tests/execution_implicit_join_absence.rs::a_named_intermediate_s_absence_counts_under_the_handler_its_surface_names`.
+Evidence: `negative-lookup-unmatched-key`, `rust/crates/yamaa-application/tests/fixtures/specs/lookup-failures.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::a_named_intermediate_s_absence_counts_under_the_handler_its_surface_names`.
 
 Neither failure renames the other's fields. Handler accounting follows
 [COLUMN-14](columns.md#column-14), whose counts are `handler` rows of the run
@@ -523,7 +523,7 @@ input's declared `key`. A lookup names at least one pair, every column must
 exist, and every match value must read a known current-row value.
 
 Fails: `invalid_field_type`, `no_applicable_keys`, `unknown_field`, `invalid_aggregate_context`.
-Evidence: `negative-lookup-mismatched`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-lookup-key-lookup-qualified`, `negative-aggregate-key-other-template`, `negative-aggregate-key-bare-field`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-application/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-application/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-application/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-application/tests/execution_aggregate_key_reads.rs`, `rust/crates/yamaa-core/src/specification/declared_keys.rs`, `rust/crates/yamaa-core/src/key_relation.rs::a_declared_key_pairs_every_column_it_names`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_variable_forms.json`.
+Evidence: `negative-lookup-mismatched`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-lookup-key-lookup-qualified`, `negative-aggregate-key-other-template`, `negative-aggregate-key-bare-field`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-application/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-application/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/aggregate_key_reads.json`, `rust/crates/yamaa-core/src/specification/declared_keys.rs`, `rust/crates/yamaa-core/src/key_relation.rs::a_declared_key_pairs_every_column_it_names`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_variable_forms.json`.
 
 ```yaml
 intermediates:
@@ -706,7 +706,7 @@ template. A match value must be available during row construction; one
 available only during column derivation fails.
 
 Fails: `ungrouped_driver_field`, `unknown_field`, `phase_boundary`.
-Evidence: `negative-grouped-lookup-ungrouped-key`, `negative-grouped-range-ungrouped-value`, `negative-lookup-key-column-phase`, `negative-lookup-match-column-phase`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`, `schema-lookup-source-range-driver`, `schema-lookup-source-range-default`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-application/tests/execution_row_phase_reads.rs`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_template_s_join_matches_the_driver_on_the_declared_key`.
+Evidence: `negative-grouped-lookup-ungrouped-key`, `negative-grouped-range-ungrouped-value`, `negative-lookup-key-column-phase`, `negative-lookup-match-column-phase`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`, `schema-lookup-source-range-driver`, `schema-lookup-source-range-default`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_row_phase_boundaries.json`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_template_s_join_matches_the_driver_on_the_declared_key`.
 
 In ungrouped row construction each retained input record builds one candidate
 row ([ROW-3](rows.md#row-3)). The input record's fields are
@@ -771,7 +771,7 @@ collision fails. An intermediate read as a lookup without `key` fails as
 `missing_required_field`.
 
 Fails: `duplicate_identifier`, `missing_required_field`.
-Evidence: `negative-lookup-id-collision`, `negative-lookup-unknown-key`, `schema-lookup`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::an_intermediate_read_as_a_lookup_requires_its_key`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_driver_read_as_a_lookup_is_refused_at_its_key`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::an_intermediate_without_key_is_refused_unless_it_drives_rows`, `rust/tests/host-fixtures/cases.json::ordinary_lookup_without_keys`.
+Evidence: `negative-lookup-id-collision`, `negative-lookup-unknown-key`, `schema-lookup`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::an_intermediate_read_as_a_lookup_requires_its_key`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_driver_read_as_a_lookup_is_refused_at_its_key`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::an_intermediate_without_key_is_refused_unless_it_drives_rows`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::an_intermediate_read_as_a_lookup_without_key_is_refused_at_its_key`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::an_intermediate_nothing_reads_without_key_is_refused_at_its_key`, `rust/tests/host-fixtures/cases.json::ordinary_lookup_without_keys`.
 
 For a named intermediate, `dataset: SELF` instead reads the specification's
 completed derived rows ([LOOKUP-7](#lookup-7)). The current row is the output
@@ -948,7 +948,7 @@ lookup answers one value per current row, the selected record's column, its
 absence answer or an `unmatched_key` failure under `require_match`, and never
 changes the row count. An input lookup's dataset is read once per run.
 
-Evidence: `rust/crates/yamaa-application/tests/execution_key_lookup_reads.rs`, `rust/crates/yamaa-application/tests/execution_per_template_defaults.rs`.
+Evidence: `rust/crates/yamaa-application/tests/fixtures/diagnostics/suppressed_lookup_reads.json`.
 
 The per-row match selects among records already read and never re-reads the
 dataset. An intermediate declaring `require_match: true` never fails as
@@ -973,7 +973,7 @@ for matching, `filter`, `order_by` selection and `columns` projection, and
 behave there like stored fields.
 
 Fails: `unknown_field`, `duplicate_derivation`.
-Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-lookup-intermediate-closest-datetime`, `schema-window-intermediate-rank`, `negative-lookup-derivation-scope`, `rust/crates/yamaa-application/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_record_no_row_matches_is_never_augmented`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_matched_record_that_fails_still_stops_the_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_derived_key_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_derived_bound_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_window_among_the_derivations_augments_every_record`.
+Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-lookup-intermediate-closest-datetime`, `schema-window-intermediate-rank`, `negative-lookup-derivation-scope`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::a_lookup_derivation_reading_the_source_record_is_unknown_to_the_donor_template`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_model.json::a_lookup_derivation_read_by_the_source_template_alone_reads_its_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_record_no_row_matches_is_never_augmented`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_matched_record_that_fails_still_stops_the_run`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_derived_key_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_derived_bound_augments_every_record`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/lookup_matched_derivations.json::a_window_among_the_derivations_augments_every_record`.
 
 Each entry is either an untyped expression or a typed binding
 `{type: <column_type>, derivation: <expression>, unconvertible: <literal>?}`.

@@ -16,6 +16,9 @@ use yamaa_core::{
     value::ColumnType,
 };
 
+/// Seam: the bytes `Resources` holds for one reference, reused by pointer
+/// across its aliases and counted by its capture counter, and its typed
+/// refusal of a changed object, through an in-memory resolver.
 #[test]
 fn explicit_reference_reuses_held_bytes_across_aliases_and_refuses_changes() {
     let backend = Arc::new(MemoryResolver::default());
@@ -50,6 +53,8 @@ fn explicit_reference_reuses_held_bytes_across_aliases_and_refuses_changes() {
     assert!(fresh_attempt.capture("one.csv").unwrap().1);
 }
 
+/// Seam: a cancelled in-memory resolver, the resources' typed `Error` and
+/// their capture counter, which no issue row states.
 #[test]
 fn absent_and_cancelled_resources_remain_explicit_without_captures() {
     let backend = Arc::new(MemoryResolver::default());
@@ -93,6 +98,9 @@ fn frame(
     Arc::new(ColumnTable::new(logical, columns, 1).unwrap())
 }
 
+/// Seam: the freshness of in-memory frames served under one reference
+/// (-0.0 against 0.0, and collected temporal precision), with no file a case
+/// could stage.
 #[test]
 fn frame_freshness_compares_signed_zero_and_collected_temporal_precision() {
     for changed in [
@@ -130,6 +138,8 @@ impl Resolver for InterruptStage {
     }
 }
 
+/// Seam: a caller's resolver scripted to cancel its Stage operation, and
+/// the staged and published objects it holds afterwards.
 #[cfg(feature = "yaml")]
 #[test]
 fn interrupted_stage_leaves_no_provisional_output() {
@@ -170,6 +180,8 @@ fn interrupted_stage_leaves_no_provisional_output() {
     assert!(backend.0.published("memory:/out.csv").is_none());
 }
 
+/// Seam: the Stage and Abort protocol of the in-memory resolver, asked
+/// directly, and the staged objects it holds.
 #[cfg(feature = "yaml")]
 #[test]
 fn abort_removes_only_the_staging_token_not_the_target() {
@@ -303,6 +315,8 @@ fn parent_elsewhere(entry: &str, parent: &str) -> Located {
     resolver
 }
 
+/// Seam: a resolver serving Windows locations on any host, and the log of
+/// the captures it served, which no issue row, table or saved file states.
 #[cfg(feature = "yaml")]
 #[test]
 fn a_parent_on_another_drive_reads_its_input_beside_itself() {
@@ -338,6 +352,9 @@ fn a_parent_on_another_drive_reads_its_input_beside_itself() {
     }
 }
 
+/// Seam: a resolver serving Windows locations on any host, and the log of
+/// the captures it served, so the refusal is shown to read nothing from the
+/// entry's root.
 #[cfg(feature = "yaml")]
 #[test]
 fn a_parent_on_another_share_is_refused_rather_than_read_from_the_entry_root() {
@@ -455,12 +472,16 @@ impl<R: Resolver> Resolver for Asked<R> {
     }
 }
 
-/// FILE-5 and LAYER-2: a `parent` spelled with an empty segment, a trailing
-/// separator, a network share's root or a backslash fails validation with
-/// the written-form condition at `parent`, naming the path as written and the
-/// layer that writes it, never with the engine's own refusal. The spelling is
-/// judged before any resolver is asked for the parent: the local file
-/// resolver or a caller's, which here would serve the name.
+/// Seam: the routes no operation reads, the local resolved artifact and file
+/// preparation and every route through a caller's resolver, with the names
+/// that resolver was asked for; the local file route's check and build are
+/// `fixtures/diagnostics/local_paths.json`'s `a_parent_..._is_refused_as_written`
+/// cases. FILE-5 and LAYER-2: a `parent` spelled with an empty segment, a
+/// trailing separator, a network share's root or a backslash fails validation
+/// with the written-form condition at `parent`, naming the path as written
+/// and the layer that writes it, never with the engine's own refusal. The
+/// spelling is judged before any resolver is asked for the parent: the local
+/// file resolver or a caller's, which here would serve the name.
 #[cfg(feature = "yaml")]
 #[test]
 fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
@@ -508,25 +529,6 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
         };
         // Through the local file resolver.
         std::fs::write(child, &entry).unwrap();
-        let request = || yamaa_core::build::Request {
-            specification: child,
-            environment: None,
-        };
-        let Err(error) =
-            yamaa_application::file_workflow::select_request(request(), Some(Language::Python))
-        else {
-            panic!("{parent}: a malformed parent was selected");
-        };
-        refused(
-            &yamaa_application::project_application::selection_failure(&error),
-            "select",
-            &local,
-        );
-        refused(
-            &yamaa_application::file_application::check(Language::Python, request(), identity()),
-            "check",
-            &local,
-        );
         let Err(issues) = yamaa_application::resolved_artifact::resolve(
             child,
             None,
@@ -615,13 +617,14 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
     }
 }
 
-/// FILE-8 and LAYER-2: a `parent` that reaches a symbolic link, as the
-/// layer's own name or as a directory on its way, fails validation with
-/// `resource_path_symlink` at `parent`, naming the path as written and the
-/// layer that writes it, as every other declared file a run reads does, never
-/// with the engine's own refusal (#3030 D73). A caller's resolver that
-/// reports a link, a junction or another reparse point for the parent is
-/// refused from that report alone (FILE-7).
+/// Seam: symbolic links made on a Unix host and the link kinds a caller's
+/// resolver reports, which no case can stage. FILE-8 and LAYER-2: a `parent`
+/// that reaches a symbolic link, as the layer's own name or as a directory on
+/// its way, fails validation with `resource_path_symlink` at `parent`, naming
+/// the path as written and the layer that writes it, as every other declared
+/// file a run reads does, never with the engine's own refusal (#3030 D73). A
+/// caller's resolver that reports a link, a junction or another reparse point
+/// for the parent is refused from that report alone (FILE-7).
 #[cfg(feature = "yaml")]
 #[test]
 fn a_linked_parent_is_refused_at_parent_on_every_route() {

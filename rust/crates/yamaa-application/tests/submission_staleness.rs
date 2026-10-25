@@ -4,6 +4,9 @@
 //! artifact and the inputs its saved run report records. Each study here is
 //! built and saved by a real run first, so a report that matches is the one
 //! the engine wrote; each mismatch then changes one file after that save.
+//! The compositions of a study as its build saved it, or of files staged as a
+//! build leaves them, are define cases of
+//! `tests/fixtures/diagnostics/shared_define.json` (#3798).
 mod staleness {
     use crate::support::Edit as _;
     use std::fs;
@@ -191,19 +194,18 @@ submission:
         facts
     }
 
+    /// Seam: the bytes the build of a composed study saves. The define cases
+    /// `a_matching_report_composes` and
+    /// `an_inherited_output_report_compares_the_entry_relative_output_path`
+    /// of `shared_define.json` build `dm.yaml` first (`built`) and compose
+    /// what it saved, and a `save` case states every file its save writes,
+    /// but the run report saved beside the artifact is a CSV no authored file
+    /// holds, which `select` does not read. The inherited build's run row is
+    /// the case `an_inherited_output_s_run_report_names_its_entry_relative_path`.
     #[test]
-    fn a_matching_report_composes() {
+    fn a_composed_study_s_build_saves_its_artifact() {
         let study = Study::built(SPEC);
         assert_eq!(study.read("dm.csv"), DM.as_bytes());
-        let mut define = study.compose();
-        assert!(define.issues().is_empty(), "{:?}", define.issues());
-        assert!(define.save().unwrap());
-        let document = String::from_utf8(study.read("define.xml")).unwrap();
-        assert!(document.contains("xlink:href=\"dm.csv\""), "{document}");
-    }
-
-    #[test]
-    fn an_inherited_output_report_compares_the_entry_relative_output_path() {
         let study = Study::new("yamaa: \"1.0\"\ntype: spec\nparent: base/parent.yaml\n");
         fs::create_dir(study.0.join("base")).unwrap();
         study.write("base/parent.yaml", SPEC);
@@ -212,17 +214,12 @@ submission:
         assert!(result.issues().is_empty(), "{:?}", result.issues());
         assert!(result.save().unwrap());
         assert_eq!(study.read("base/dm.csv"), DM.as_bytes());
-        let report = String::from_utf8(study.read("base/dm-report.csv")).unwrap();
-        assert!(report
-            .lines()
-            .nth(1)
-            .unwrap()
-            .starts_with("base/dm.csv,run,"));
-        let mut define = study.compose();
-        assert!(define.issues().is_empty(), "{:?}", define.issues());
-        assert!(define.save().unwrap());
     }
 
+    /// Seam: a file changed after the build that saved its report. A define
+    /// case of `shared_define.json` builds its `built` specifications or
+    /// stages its files, and a report no authored file holds is only built,
+    /// so no case changes a file between that build and the composition.
     #[test]
     fn renaming_an_inherited_output_still_makes_its_report_stale() {
         let study = Study::new("yamaa: \"1.0\"\ntype: spec\nparent: base/parent.yaml\n");
@@ -246,18 +243,10 @@ submission:
         );
     }
 
-    #[test]
-    fn a_specification_without_a_report_is_not_compared() {
-        let spec = SPEC.edit("  report: dm-report.csv\n", "");
-        let study = Study::built(&spec);
-        // Neither the artifact's rows nor the input are compared with
-        // anything: the saved files compose as they stand.
-        study.write("dm.csv", "DOMAIN,STUDYID,USUBJID\nDM,CATH,CATH-0009\n");
-        study.write("raw.csv", "STUDYID,USUBJID\nCATH,CATH-0009\n");
-        let define = study.compose();
-        assert!(define.issues().is_empty(), "{:?}", define.issues());
-    }
-
+    /// Seam: a file changed after the build that saved its report. A define
+    /// case of `shared_define.json` builds its `built` specifications or
+    /// stages its files, and a report no authored file holds is only built,
+    /// so no case changes a file between that build and the composition.
     #[test]
     fn a_report_that_names_another_output_path_is_stale() {
         let study = Study::built(SPEC);
@@ -270,6 +259,10 @@ submission:
         );
     }
 
+    /// Seam: a file changed after the build that saved its report. A define
+    /// case of `shared_define.json` builds its `built` specifications or
+    /// stages its files, and a report no authored file holds is only built,
+    /// so no case changes a file between that build and the composition.
     #[test]
     fn a_report_of_a_failed_run_is_stale() {
         let study = Study::built(SPEC);
@@ -287,6 +280,10 @@ submission:
         );
     }
 
+    /// Seam: a file changed after the build that saved its report. A define
+    /// case of `shared_define.json` builds its `built` specifications or
+    /// stages its files, and a report no authored file holds is only built,
+    /// so no case changes a file between that build and the composition.
     #[test]
     fn an_artifact_with_other_rows_than_its_report_records_is_stale() {
         let study = Study::built(SPEC);
@@ -297,36 +294,10 @@ submission:
         );
     }
 
-    #[test]
-    fn has_no_data_must_agree_with_the_rows_of_the_artifact() {
-        // Declared without data, the run still saves rows.
-        let spec = SPEC.edit(
-            "  repeating: false\n",
-            "  repeating: false\n  has_no_data: true\n  comment: No subject was enrolled.\n",
-        );
-        let study = Study::built(&spec);
-        assert_eq!(
-            stale(&study.compose(), "has_no_data"),
-            facts(&[
-                ("has_no_data", Value::Bool(true)),
-                ("actual", Value::from(2))
-            ])
-        );
-        // Not declared, the run saves no rows.
-        let study = Study::new(SPEC);
-        study.write("raw.csv", "STUDYID,USUBJID\n");
-        let mut result = study.run();
-        assert!(result.issues().is_empty(), "{:?}", result.issues());
-        assert!(result.save().unwrap());
-        assert_eq!(
-            stale(&study.compose(), "has_no_data"),
-            facts(&[
-                ("has_no_data", Value::Bool(false)),
-                ("actual", Value::from(0))
-            ])
-        );
-    }
-
+    /// Seam: a file changed after the build that saved its report. A define
+    /// case of `shared_define.json` builds its `built` specifications or
+    /// stages its files, and a report no authored file holds is only built,
+    /// so no case changes a file between that build and the composition.
     #[test]
     fn an_input_the_report_does_not_record_is_stale() {
         let study = Study::built(SPEC);
@@ -338,6 +309,10 @@ submission:
         );
     }
 
+    /// Seam: a file changed after the build that saved its report. A define
+    /// case of `shared_define.json` builds its `built` specifications or
+    /// stages its files, and a report no authored file holds is only built,
+    /// so no case changes a file between that build and the composition.
     #[test]
     fn an_input_with_another_byte_length_is_stale() {
         let study = Study::built(SPEC);
@@ -352,6 +327,10 @@ submission:
         );
     }
 
+    /// Seam: a file changed after the build that saved its report. A define
+    /// case of `shared_define.json` builds its `built` specifications or
+    /// stages its files, and a report no authored file holds is only built,
+    /// so no case changes a file between that build and the composition.
     #[test]
     fn an_input_with_other_records_in_as_many_bytes_is_stale() {
         let study = Study::built(SPEC);
@@ -384,23 +363,9 @@ submission:
         );
     }
 
-    #[test]
-    fn a_file_that_is_not_a_run_report_is_stale() {
-        let study = Study::built(SPEC);
-        study.write("dm-report.csv", "ARTIFACT,KIND\ndm.csv,run\n");
-        assert_eq!(stale(&study.compose(), "report_invalid"), facts(&[]));
-    }
-
-    #[test]
-    fn a_declared_report_that_is_absent_fails_as_a_missing_file() {
-        let study = Study::built(SPEC);
-        fs::remove_file(study.0.join("dm-report.csv")).unwrap();
-        let issue = issue(&study.compose());
-        assert_eq!(issue.code, ConditionCode::ResourceMissing, "{issue:?}");
-        assert_eq!(issue.spec_paths, ["sdtm.specs[0].output.report"]);
-        assert_eq!(issue.context["path"], text("dm-report.csv"));
-    }
-
+    /// Seam: a Parquet report read back after the build that saved it, and an
+    /// artifact changed after that build; a Parquet report no authored file
+    /// holds is only built.
     #[cfg(feature = "parquet")]
     #[test]
     fn a_parquet_report_is_read_back_as_it_was_written() {
@@ -414,6 +379,7 @@ submission:
         assert_eq!(issue.context["reason"], text("row_count"));
     }
 
+    /// Seam: an ODM XML input changed after the build that saved its report.
     /// An ODM XML input's records are the clinical items its profile
     /// decodes, as its run counted them (CHECK-24, ODM-1).
     #[cfg(feature = "odm")]

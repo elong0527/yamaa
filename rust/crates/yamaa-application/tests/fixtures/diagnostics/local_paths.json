@@ -1,5 +1,5 @@
 {
-  "about": "Local paths on the file route (FILE, LAYER): an inherited output that an entry's output replaces whole, a written input path refused in its written form before any source profile is read, and a URI source refused where its layer is read. Moved from file_resources.rs's local_paths module, whose remaining tests prove the resources' captures and resolved locations, which no operation reports. The written-path cases compared each issue's phase, condition, rule, spec paths and context; the inherited-output cases compared the count, the condition and the spec paths, whose order is the output class's field order in the schema (path, then columns; SCHEMA-13).",
+  "about": "Local paths on the file route (FILE, LAYER): an inherited output that an entry's output replaces whole, a written input path refused in its written form before any source profile is read, and a URI source refused where its layer is read. Moved from file_resources.rs's local_paths module, whose remaining tests prove the resources' captures and resolved locations, which no operation reports. The written-path cases compared each issue's phase, condition, rule, spec paths and context; the inherited-output cases compared the count, the condition and the spec paths, whose order is the output class's field order in the schema (path, then columns; SCHEMA-13). A parent spelled with an empty segment, a trailing separator, a network share's root or a backslash is refused as resource_path_not_normalized at parent (FILE-5, LAYER-2), naming the path as written and the layer that writes it, by check and build alike, before any parent is resolved. Moved from the local file half of host_resources.rs::a_malformed_parent_spelling_is_refused_as_written_on_every_route, which compared the one issue's phase, condition, spec paths and context on each route; that test keeps the local resolve and prepare routes and every route through a caller's resolver.",
   "documents": {
     "base_output": "yamaa: \"1.0\"\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: data.csv}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: result.csv, relative_to: entry, columns: [ID], report: report.csv}\n",
     "written_path": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: SOURCE}\ncolumns: [{name: ID, type: int, derivation: SRC.ID}]\noutput: {path: output.csv, columns: [ID]}\n"
@@ -143,6 +143,42 @@
         {"phase": "validation", "condition": "resource_path_uri_scheme", "rule": "FILE-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "entry": "{study}/entry/spec.yaml", "path": "https://example.invalid/source.csv", "source": "{study}/entry/spec.yaml"}}
       ],
       "saved": {}
+    },
+    {
+      "case": "a_parent_with_an_empty_segment_is_refused_as_written",
+      "operation": ["check", "build"],
+      "input": {"files": {"std/base.yaml": "yamaa: '1.0'\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n", "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: 'std//base.yaml'\ndomain: CHILD\n"}, "specification": "child.yaml"},
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "resource_path_not_normalized", "spec_paths": ["parent"], "context": {"path": "std//base.yaml", "source": "{study}/child.yaml"}}
+      ]
+    },
+    {
+      "case": "a_parent_with_a_trailing_slash_is_refused_as_written",
+      "operation": ["check", "build"],
+      "input": {"files": {"std/base.yaml": "yamaa: '1.0'\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n", "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: 'std/base.yaml/'\ndomain: CHILD\n"}, "specification": "child.yaml"},
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "resource_path_not_normalized", "spec_paths": ["parent"], "context": {"path": "std/base.yaml/", "source": "{study}/child.yaml"}}
+      ]
+    },
+    {
+      "case": "a_parent_on_a_network_share_root_is_refused_as_written",
+      "operation": ["check", "build"],
+      "input": {"files": {"std/base.yaml": "yamaa: '1.0'\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n", "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: '//server/share/std/base.yaml'\ndomain: CHILD\n"}, "specification": "child.yaml"},
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "resource_path_not_normalized", "spec_paths": ["parent"], "context": {"path": "//server/share/std/base.yaml", "source": "{study}/child.yaml"}}
+      ]
+    },
+    {
+      "case": "a_parent_with_a_backslash_is_refused_as_written",
+      "operation": ["check", "build"],
+      "input": {"files": {"std/base.yaml": "yamaa: '1.0'\ntype: spec\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n", "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: 'std\\base.yaml'\ndomain: CHILD\n"}, "specification": "child.yaml"},
+      "compares": ["phase", "condition", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "resource_path_not_normalized", "spec_paths": ["parent"], "context": {"path": "std\\base.yaml", "source": "{study}/child.yaml"}}
+      ]
     }
   ]
 }

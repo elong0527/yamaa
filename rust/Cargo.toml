@@ -36,9 +36,9 @@ format_collect = "allow"
 # runs with `-D warnings`, so a new function over it fails (#3806).
 too_many_lines = "warn"
 
-# Panics unwind, Cargo's default: the Parquet reader contains a panic of the
-# decoder that it calls (storage_api::contain_decode), which `panic = "abort"`
-# would turn into the end of the host process.
+# Panics unwind, Cargo's default: the facade's batch streams and the R
+# binding's entry points contain a panic as a refusal (yamaa and yamaa-r),
+# which `panic = "abort"` would turn into the end of the host process.
 [profile.release]
 lto = "thin"
 

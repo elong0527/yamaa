@@ -1,9 +1,9 @@
 #![cfg(feature = "yaml")]
-//! Execution contracts for completed intermediates that read files the
-//! replay's input cannot name: the benchmarks of named intermediates and
-//! their refusals, a benchmark's case-branch handlers, and the completed
-//! lookup assertions both installed hosts read. The family's cases that write
-//! their own files are `fixtures/diagnostics/completed_intermediates.json`.
+//! Execution contracts for completed intermediates that read authored truth:
+//! the benchmarks of named intermediates and their refusals, and the
+//! completed lookup assertions both installed hosts read. The family's other
+//! cases, including the handlers of `adam-adtte-first-ae`'s case branch, are
+//! `fixtures/diagnostics/completed_intermediates.json`.
 mod execution {
     mod completed_intermediate_scopes {
         //! Original committed YAML and independent expected artifacts remain the oracle.
@@ -31,13 +31,12 @@ mod execution {
             crate::support::study::issue_row(issue)
         }
 
-        /// Seam: a benchmark's own files, which the replay's input cannot name.
-        ///
-        /// Each benchmark reads named intermediates and states the CSV it
-        /// saves, which `reproduce` compares byte for byte.
+        /// Already data: each benchmark reads named intermediates and states
+        /// the CSV it saves, which `reproduce` compares byte for byte.
         #[test]
         fn completed_intermediate_benchmarks_reproduce_their_expected_files() {
             for name in [
+                "adam-adtte-first-ae",
                 "schema-lookup-intermediate-unique",
                 "sdtm-ae-meddra-hierarchy",
                 "sdtm-cm-whodrug-coding",
@@ -57,11 +56,9 @@ mod execution {
             }
         }
 
-        /// Seam: a benchmark's own files, which the replay's input cannot name.
-        ///
-        /// Each benchmark's refusal holds exactly what its `error.yaml` states
-        /// and is the run's only issue, which that file, a partial assertion
-        /// about the first issue, leaves out.
+        /// Already data: each benchmark's refusal holds exactly what its
+        /// `error.yaml` states and is the run's only issue, which that file,
+        /// a partial assertion about the first issue, leaves out.
         #[test]
         fn completed_intermediate_refusals_are_their_runs_only_issue() {
             for name in [
@@ -196,69 +193,6 @@ mod execution {
                     }
                 }
             }
-        }
-    }
-
-    mod declarative_case_intermediates {
-        //! Complete case observations use the shared scalar source binder.
-        use std::fs;
-        use yamaa_application::file_application;
-        use yamaa_core::domain_entry::Request;
-        struct Fixture(crate::support::Scratch);
-        impl Fixture {
-            fn new() -> Self {
-                let path = crate::support::Scratch::new("case-intermediate");
-                Self(path)
-            }
-            fn run(
-                &self,
-                body: &str,
-            ) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>>
-            {
-                let specification = self.0.join("spec.yaml");
-                fs::write(&specification, body).unwrap();
-                let specification = specification.to_str().unwrap();
-                crate::support::study::domain(
-                    yamaa_core::project_function::Language::Python,
-                    Request {
-                        specification,
-                        environment: None,
-                    },
-                    crate::support::study::identity("independent-case-intermediate", specification),
-                )
-            }
-        }
-        /// Seam: a benchmark's own specification and inputs, which the replay's
-        /// input cannot name.
-        ///
-        /// `adam-adtte-first-ae` states the CSV it saves, which `reproduce`
-        /// compares. No benchmark counts the handlers of a read in a case
-        /// branch, which this run's report pins.
-        #[test]
-        fn unchanged_first_ae_capture_matches_full_csv_and_complete_reached_handlers() {
-            crate::support::benchmarks::reproduce("adam-adtte-first-ae");
-            let fixture = Fixture::new();
-            let original = crate::support::benchmarks::path("adam-adtte-first-ae");
-            fs::create_dir(fixture.0.join("input")).unwrap();
-            for name in ["adsl.csv", "adae.csv"] {
-                fs::copy(
-                    original.join("input").join(name),
-                    fixture.0.join("input").join(name),
-                )
-                .unwrap();
-            }
-            let written = fs::read_to_string(original.join("spec.yaml")).unwrap();
-            let result = fixture.run(&written).unwrap();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert_eq!(
-                result.observations()["handler_counts"],
-                yamaa_adapters::json!([
-                    {"spec_path":"columns.AEDT.derivation.source.multiple_matches","handler":"multiple_matches","count":2},
-                    {"spec_path":"columns.AEDT.derivation.source.absent","handler":"absent","count":3},
-                    {"spec_path":"columns.SRCSEQ.derivation.case[0].then.source.multiple_matches","handler":"multiple_matches","count":2},
-                    {"spec_path":"columns.SRCSEQ.derivation.case[0].then.source.absent","handler":"absent","count":0}
-                ])
-            );
         }
     }
 }

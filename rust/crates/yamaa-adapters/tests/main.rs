@@ -13,7 +13,6 @@ mod support;
 mod arrow_host_bridge;
 mod declaration_language_header;
 mod declaration_migration_hints;
-mod declaration_one_spelling;
 mod declaration_v1_lowering;
 mod declaration_v1_schema;
 mod odm_xml;

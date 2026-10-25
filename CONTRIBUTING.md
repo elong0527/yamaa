@@ -15,7 +15,7 @@ applies.
 | Area | Responsibility |
 | --- | --- |
 | `rules/`, `yaml/` | Normative contracts, diagnostics, schemas and grammar fixtures. |
-| `rust/crates/yamaa-core/` | Specification admission, expressions, dataset execution, project lifecycle, verification and submission metadata composition. |
+| `rust/crates/yamaa-core/` | Specification admission, expressions, binding (one walk, which `run()` takes over the captured input schemas and `check()` over the declared ones), dataset execution, project lifecycle, verification and submission metadata composition. |
 | `rust/crates/yamaa-adapters/` | Codecs, storage formats, physical IO, the resolver and publisher ports' implementations and filesystem environment capture. |
 | `rust/crates/yamaa-application/` | The application layer: the use cases that prepare, bind, execute, report and save over core's ports, through the adapters, and the integration suite that runs them on the file route. |
 | `rust/crates/yamaa-boundary/` | The interface handshake of both host bindings, the gate every native call passes and the census of live native handles. |

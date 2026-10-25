@@ -22,23 +22,37 @@ data relrec;
         RELID : $char40.;
 run;
 
+/* The medications and the adverse events each relationship names, with
+   their numeric sequence numbers. Function calls in join predicates were
+   rejected by the release, so the keys are calculated before joining. */
+data relcm;
+  set relrec;
+  if RDOMAIN = 'CM' and IDVAR = 'CMSEQ';
+  CMSEQ = input(IDVARVAL, best32.);
+  keep STUDYID USUBJID RELID CMSEQ;
+run;
+
+data relaeseq;
+  set relrec;
+  if RDOMAIN = 'AE' and IDVAR = 'AESEQ';
+  AESEQ = input(IDVARVAL, best32.);
+  keep STUDYID USUBJID RELID AESEQ;
+run;
+
 proc sql;
   /* Each adverse event a relationship names, with its reported term. */
   create table relae as
-    select r.STUDYID, r.USUBJID, r.RELID,
-           input(r.IDVARVAL, best32.) as AESEQ, a.AETERM
-    from relrec as r left join ae as a
+    select r.STUDYID, r.USUBJID, r.RELID, r.AESEQ, a.AETERM
+    from relaeseq as r left join ae as a
       on a.STUDYID = r.STUDYID and a.USUBJID = r.USUBJID
-         and a.AESEQ = input(r.IDVARVAL, best32.)
-    where r.RDOMAIN = 'AE' and r.IDVAR = 'AESEQ'
-    order by 1, 2, 3, 4;
+         and a.AESEQ = r.AESEQ
+    order by r.STUDYID, r.USUBJID, r.RELID, r.AESEQ;
   /* The relationship each medication belongs to. */
   create table cmrel as
     select c.STUDYID, c.USUBJID, c.CMSEQ, c.CMTRT, r.RELID
-    from cm as c left join relrec as r
+    from cm as c left join relcm as r
       on r.STUDYID = c.STUDYID and r.USUBJID = c.USUBJID
-         and r.RDOMAIN = 'CM' and r.IDVAR = 'CMSEQ'
-         and input(r.IDVARVAL, best32.) = c.CMSEQ;
+         and r.CMSEQ = c.CMSEQ;
   create table pairs as
     select m.STUDYID, m.USUBJID, m.CMSEQ, e.AESEQ, e.AETERM
     from cmrel as m inner join relae as e
@@ -63,7 +77,12 @@ data seqs;
 run;
 
 /* The different related terms in alphabetical order, and their number. */
-proc sort data=pairs(keep=STUDYID USUBJID CMSEQ AETERM) out=byterm nodupkey;
+data termpairs;
+  set pairs;
+  keep STUDYID USUBJID CMSEQ AETERM;
+run;
+
+proc sort data=termpairs out=byterm nodupkey;
   by STUDYID USUBJID CMSEQ AETERM;
 run;
 

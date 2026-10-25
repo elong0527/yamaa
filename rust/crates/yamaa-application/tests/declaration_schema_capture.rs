@@ -1,7 +1,10 @@
 #![cfg(feature = "yaml")]
-//! Declaration contracts: schema capture, schema declaration fixture, schema
-//! diagnostic projection, the shipped schema route, static declarations,
-//! string template syntax fixture and validator R declarations.
+//! Declaration contracts: schema capture, a captured schema's named root
+//! class, schema diagnostic projection, the shipped schema route and the
+//! string template parser. The static declarations and the R declarations of
+//! benchmark projects are `fixtures/diagnostics/static_declarations.json`'s
+//! cases, and the custom class findings core `schema.json`'s `schema_types`
+//! cases.
 mod declaration {
     mod schema_capture {
         use std::sync::Arc;
@@ -40,6 +43,9 @@ mod declaration {
         fn closure() -> Vec<Source> {
             vec![source("schema_s.yaml", SHARED), source("r", ROOT)]
         }
+        /// Seam: the captured sources held by pointer, their source locations
+        /// and the origin of a default the normalized document took, which no
+        /// issue row states.
         #[test]
         fn original_sources_locations_reused_defaults_and_fresh_normalization_are_retained() {
             for _ in 0..2 {
@@ -102,6 +108,8 @@ mod declaration {
             }
         }
 
+        /// Seam: the typed `Error::Decode` and `BundleError` a schema closure's
+        /// admission returns.
         #[test]
         fn physical_decode_precedes_invalid_entry_and_earlier_bundle_semantics() {
             for entry in [0, usize::MAX] {
@@ -121,6 +129,8 @@ mod declaration {
                 matches!(error,Error::Bundle(BundleError::Invalid(ref issues)) if issues==&[BundleIssue{module:usize::MAX,path:"$".into(),kind:BundleIssueKind::ModuleName}])
             );
         }
+        /// Already data: the invalid transports of `fixtures/yaml_transport.json`,
+        /// admitted as a schema closure.
         #[test]
         fn complete_original_codec_reports_survive_schema_closure_admission() {
             let mut count = 0;
@@ -173,6 +183,8 @@ mod declaration {
             }
             assert_eq!(count, 8);
         }
+        /// Seam: the typed `BundleError`, the `Rejection` its capture failure
+        /// projects and the `NormalizationError` of an invalid default.
         #[test]
         fn complete_bundle_issue_order_and_later_invalid_default_gate_are_unchanged() {
             let error=CapturedSchema::admit(vec![source("r","version: '1.0'\nincludes: []\nroot_class:\n  - first: {type: unknown_one}\n  - second: {type: unknown_two}\n")],0).unwrap_err();
@@ -208,6 +220,8 @@ mod declaration {
             ));
         }
 
+        /// Seam: the SPEC_BYTES boundary, on schema bytes generated one byte
+        /// either side of it.
         #[test]
         fn fixed_yaml_file_size_boundary_precedes_physical_decoding() {
             use yamaa_adapters::yaml_decode::DecodeFailure;
@@ -245,43 +259,9 @@ mod declaration {
         use crate::support::schema_declaration as fixture;
         use yamaa_adapters::json;
 
-        const SCHEMA: &str = "version: '1.0'\nroot_class:\n  - needed: {type: str, required: true}\n  - count: {type: int}\n  - items: {type: 'list[int]'}\n";
-
-        #[test]
-        fn custom_versionless_class_preserves_ordered_required_type_and_unknown_findings() {
-            assert_eq!(
-                fixture::observe(SCHEMA, "count: true\nextra: null\n"),
-                json!({"issues": [
-                    {"phase":"validation", "condition":"missing_required_field", "rule":"SCHEMA-13",
-                        "spec_paths":["needed"], "context":{"field":"needed", "class":"root_class"}},
-                    {"phase":"validation", "condition":"invalid_field_type", "rule":"SCHEMA-12",
-                        "spec_paths":["count"], "context":{"expected":"int", "actual":"bool"}},
-                    {"phase":"validation", "condition":"unknown_field", "rule":"SCHEMA-13",
-                        "spec_paths":["extra"], "context":{"field":"extra", "class":"root_class", "identifier":"extra"}}
-                ]})
-            );
-        }
-
-        #[test]
-        fn custom_list_member_path_and_integer_identity_are_native_owned() {
-            assert_eq!(
-                fixture::observe(
-                    SCHEMA,
-                    "needed: kept\nitems: [1, false, 9223372036854775808]\n"
-                ),
-                json!({"issues": [{"phase":"validation", "condition":"invalid_field_type",
-            "rule":"SCHEMA-12", "spec_paths":["items[1]"],
-            "context":{"expected":"int", "actual":"bool"}}]})
-            );
-            assert_eq!(
-                fixture::observe(
-                    SCHEMA,
-                    "needed: kept\ncount: 9223372036854775808\nitems: [1, 2]\n"
-                ),
-                json!({"issues": []})
-            );
-        }
-
+        /// Seam: a schema closure of two modules whose entry names its own
+        /// root class, which core's `schema_types` reader, one module whose
+        /// entry class is `root_class`, cannot state.
         #[test]
         fn a_named_root_class_uses_the_complete_authored_include_closure() {
             let sources = vec![
@@ -294,8 +274,8 @@ mod declaration {
             "version: '1.0'\nproject_path: {type: str, min_length: 1}\n".into(),
         ),
     ];
-            let observed = fixture::observe_input(
-                fixture::SchemaInput::Modules(sources),
+            let observed = fixture::observe(
+                sources,
                 "language: false\nlock: owned.lock\n",
                 Some("entry_class"),
             );
@@ -337,6 +317,8 @@ mod declaration {
                 .unwrap_err()
         }
 
+        /// Seam: the held report's bytes, nodes and findings, by pointer,
+        /// after the schema that admitted it is dropped.
         #[test]
         fn captured_structural_projection_preserves_complete_ordered_constraint_outcome_and_authority(
         ) {
@@ -372,6 +354,8 @@ mod declaration {
             }
         }
 
+        /// Seam: generated values of 1.4 million characters, and the held
+        /// document by pointer.
         #[test]
         fn large_ordered_findings_retain_complete_values_and_original_authority() {
             let schema = CapturedSchema::admit_root(vec![source("schema.yaml",
@@ -433,6 +417,9 @@ mod declaration {
             }
         }
 
+        /// Already data: the invalid transports of `fixtures/yaml_transport.json`,
+        /// prepared on the shipped route through a resolver that refuses to
+        /// be asked for any parent.
         #[test]
         fn source_failures_preserve_independent_decoder_findings_before_any_host_effect() {
             use yamaa_adapters::json;
@@ -490,76 +477,12 @@ mod declaration {
             assert_eq!(count, 8);
         }
     }
-    mod static_declarations {
-        use yamaa_application::{specification_check, specification_run::PreparedRun};
-
-        #[test]
-        fn arithmetic_predicates_are_admitted_at_every_predicate_site() {
-            // The three predicate sites from #2204: a case `when`, a root `filter`
-            // and an `assert.require`. Arithmetic over numeric operands belongs to
-            // the one expression language, so none of them is refused.
-            let head = "yamaa: '1.0'\ntype: spec\ndomain: ADVS\nkeys: [USUBJID]\ninput: {VS: {path: never-read.csv, types: {SBPSUP: float, SBPSTD: float}}}\noutput: {path: advs.csv, columns: [USUBJID, OHYPO]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: VS.USUBJID}\n  - {name: SBPSUP, type: float, derivation: VS.SBPSUP}\n  - {name: SBPSTD, type: float, derivation: VS.SBPSTD}\n";
-            let rows = |extra: &str| {
-                let document =
-                    crate::support::specification_run::prepare(format!("{head}{extra}").as_bytes());
-                specification_check::issues(&PreparedRun::prepare(document).unwrap())
-            };
-            for (extra, path) in [
-                (
-                    "  - name: OHYPO\n    type: str\n    derivation:\n      case:\n        - {when: 'SBPSTD - SBPSUP <= -20', then: \"'Y'\"}\n        - {otherwise: \"'N'\"}\n",
-                    "columns.OHYPO.derivation.case[0].when",
-                ),
-                (
-                    "  - {name: OHYPO, type: str, derivation: \"'N'\"}\nfilter: 'VS.SBPSTD - VS.SBPSUP < 0'\n",
-                    "filter",
-                ),
-                (
-                    "  - {name: OHYPO, type: str, derivation: \"'N'\"}\nverifications:\n  - {assert: {when: \"OHYPO = 'Y'\", require: 'SBPSTD - SBPSUP <= -20'}}\n",
-                    "verifications[0].assert.require",
-                ),
-            ] {
-                let rows = rows(extra);
-                assert!(rows.is_empty(), "{path}: {rows:?}");
-            }
-        }
-
-        #[test]
-        fn flag_missing_value_findings_preserve_original_scalar_kind_and_nul_bytes() {
-            // The retired repository validator's flag assertion used these exact
-            // false values. Observe native findings directly instead of replaying
-            // them through the former JSON-line semantic fixture executable.
-            for false_value in [
-                yamaa_adapters::json!("N"),
-                yamaa_adapters::json!(i64::MIN),
-                yamaa_adapters::json!(i64::MAX),
-                yamaa_adapters::json!(false),
-                yamaa_adapters::json!(true),
-                yamaa_adapters::json!("N\0U"),
-            ] {
-                let text = format!(
-            "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {{DM: never-read.csv}}\noutput: {{path: result.csv, columns: [ID, B, F]}}\ncolumns:\n  - {{name: ID, type: str, derivation: DM.ID}}\n  - {{name: B, type: int, derivation: 2}}\n  - {{name: F, type: str, derivation: {{flag: {{condition: 'B > 1', false_value: {}}}}}}}\n"
-        , yamaa_adapters::json_wire::encode(&false_value));
-                let document = crate::support::specification_run::prepare(text.as_bytes());
-                let run = PreparedRun::prepare(document).unwrap();
-                let rows = specification_check::issues(&run);
-                assert_eq!(
-                    rows.len(),
-                    1,
-                    "{}: {rows:?}",
-                    yamaa_adapters::json_wire::encode(&false_value)
-                );
-                assert_eq!(rows[0].condition(), "missing_value_required");
-                assert_eq!(rows[0].rule(), Some("EXPR-8"));
-                assert_eq!(rows[0].spec_paths, ["columns.F.derivation.flag.missing"]);
-                let context = yamaa_core::json::Value::Object(rows[0].context.clone());
-                assert_eq!(context, yamaa_adapters::json!({"false_value": false_value}));
-            }
-        }
-    }
     mod string_template_syntax_fixture {
         use crate::support::string_template_syntax as fixture;
         use yamaa_adapters::json;
 
+        /// Seam: the string template parser's parts, spans and identifiers,
+        /// which no issue row states.
         #[test]
         fn typed_occurrences_preserve_escaped_text_spans_and_repeated_bindings() {
             let observed = fixture::observe("é{{{A}}}:{A}/{B}");
@@ -578,6 +501,8 @@ mod declaration {
             assert_eq!(fixture::observe("")["outcome"]["parts"], json!([]));
         }
 
+        /// Seam: the string template parser's refusal with its byte and
+        /// character positions, read without a specification.
         #[test]
         fn typed_refusals_preserve_grammar_reason_placeholder_and_unicode_position() {
             let observed = fixture::observe("é{A + B}");
@@ -604,7 +529,7 @@ mod declaration {
             project_source::{self, Kind},
             specification_source::Source,
         };
-        use yamaa_application::{specification_check, specification_run::PreparedRun};
+        use yamaa_application::specification_run::PreparedRun;
         use yamaa_core::project_function::Language;
         use yamaa_core::resolver::{Captured, Failure, File, Located, Name, Resolver};
 
@@ -683,8 +608,8 @@ mod declaration {
             }
         }
 
-        /// Replay one specification of a case, `spec`, against its project.
-        fn replay(name: &str, spec: &str, expected: Option<(&str, &str, &str)>) {
+        /// Check the resolver and environment metadata while admitting a specification.
+        fn observe(name: &str, spec: &str) {
             let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks");
             let case = root.join(name);
             let mut port = DeclaredProject {
@@ -712,56 +637,25 @@ mod declaration {
             let document = crate::support::specification_run::prepare(
                 &std::fs::read(case.join(spec)).unwrap(),
             );
-            let rows = match PreparedRun::prepare_with_environment(document, environment) {
-                Ok(run) => specification_check::issues(&run),
-                Err(run) => specification_check::rejected(&run).unwrap(),
-            };
-            match expected {
-                None => assert!(rows.is_empty(), "{name}: {rows:?}"),
-                Some((condition, rule, path)) => {
-                    assert_eq!(rows.len(), 1, "{name}: {rows:?}");
-                    let issue = &rows[0];
-                    assert_eq!(issue.phase(), "validation");
-                    assert_eq!(issue.condition(), condition);
-                    assert_eq!(issue.rule(), Some(rule));
-                    assert_eq!(issue.spec_paths, [path]);
-                    assert_eq!(
-                        yamaa_core::json::Value::Object(issue.context.clone()),
-                        yamaa_adapters::json!({"argument":"x", "cause":"missing_required_argument", "function":"project_value"})
-                    );
-                }
-            }
+            let _prepared = PreparedRun::prepare_with_environment(document, environment);
             // No activation, source-data or publication port exists in this replay.
             assert_eq!((port.functions, port.locks), (1, 1));
         }
 
+        /// Seam: the R environment's retained host and language, its single
+        /// function and R-lock captures, and no further captures on admission.
+        /// The public static_declarations cases own the resulting issue rows.
         #[test]
-        fn schema_functions_r_declared_calls_are_statically_admitted() {
-            replay("schema-functions", "spec.yaml", None);
-        }
-        #[test]
-        fn schema_non_finite_r_declared_calls_are_statically_admitted() {
-            replay("schema-non-finite", "spec.yaml", None);
-        }
-        #[test]
-        fn adam_adsl_bmi_r_declared_calls_are_statically_admitted() {
-            replay("adam-adsl-bmi", "spec.yaml", None);
-        }
-        #[test]
-        fn adam_advs_percentiles_r_declared_calls_are_statically_admitted() {
-            replay("adam-advs-percentiles", "spec_function.yaml", None);
-        }
-        #[test]
-        fn negative_function_contract_r_preserves_the_exact_static_issue() {
-            replay(
-                "negative-function-contract",
-                "spec.yaml",
-                Some((
-                    "invalid_function_argument",
-                    "FUNC-5",
-                    "columns.RESULT.derivation.function.args",
-                )),
-            );
+        fn r_declarations_keep_their_environment_and_capture_only_their_own_resources() {
+            for (name, spec) in [
+                ("schema-functions", "spec.yaml"),
+                ("schema-non-finite", "spec.yaml"),
+                ("adam-adsl-bmi", "spec.yaml"),
+                ("adam-advs-percentiles", "spec_function.yaml"),
+                ("negative-function-contract", "spec.yaml"),
+            ] {
+                observe(name, spec);
+            }
         }
     }
 }

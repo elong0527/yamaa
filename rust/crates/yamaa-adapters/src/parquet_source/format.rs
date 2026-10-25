@@ -18,6 +18,22 @@ pub(crate) enum Physical {
     FixedLenByteArray,
 }
 
+impl Physical {
+    /// The type as the format names it, such as `BYTE_ARRAY`.
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Boolean => "BOOLEAN",
+            Self::Int32 => "INT32",
+            Self::Int64 => "INT64",
+            Self::Int96 => "INT96",
+            Self::Float => "FLOAT",
+            Self::Double => "DOUBLE",
+            Self::ByteArray => "BYTE_ARRAY",
+            Self::FixedLenByteArray => "FIXED_LEN_BYTE_ARRAY",
+        }
+    }
+}
+
 /// A value encoding, or a level encoding.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -122,6 +138,34 @@ impl Logical {
             Self::Bson => "Bson".into(),
             Self::Uuid => "Uuid".into(),
             Self::Float16 => "Float16".into(),
+        }
+    }
+
+    /// The annotation as a column's signature spells it, as parquet 55
+    /// named its logical types, such as `Integer { bit_width: 8,
+    /// is_signed: true }` (`parquet_source::ColumnSignature`).
+    pub(crate) fn debug(self) -> String {
+        let unit = |unit: TimeUnit| match unit {
+            TimeUnit::Millis => "MILLIS(MilliSeconds)",
+            TimeUnit::Micros => "MICROS(MicroSeconds)",
+            TimeUnit::Nanos => "NANOS(NanoSeconds)",
+        };
+        match self {
+            Self::Decimal { scale, precision } => {
+                format!("Decimal {{ scale: {scale}, precision: {precision} }}")
+            }
+            Self::Time { utc, unit: time } => format!(
+                "Time {{ is_adjusted_to_u_t_c: {utc}, unit: {} }}",
+                unit(time)
+            ),
+            Self::Timestamp { utc, unit: time } => format!(
+                "Timestamp {{ is_adjusted_to_u_t_c: {utc}, unit: {} }}",
+                unit(time)
+            ),
+            Self::Integer { bits, signed } => {
+                format!("Integer {{ bit_width: {bits}, is_signed: {signed} }}")
+            }
+            other => format!("{other:?}"),
         }
     }
 }

@@ -271,29 +271,31 @@ fn zstd(input: &[u8], expected: usize) -> Result<Vec<u8>, Error> {
 /// Legacy LZ4 retains the library's Hadoop → framed → raw compatibility order.
 /// A recognized codec without an implementation stays explicit, not malformed.
 #[cfg(test)]
-fn verify(page: &Page<'_>) -> Result<(), Error> {
-    decode(page).map(|_| ())
+fn verify((page, file): &(Page, &[u8])) -> Result<(), Error> {
+    decode(page, file).map(|_| ())
 }
 
-/// Decode the exact page size before validating its encoded values.
-pub(super) fn decode(page: &Page<'_>) -> Result<Vec<u8>, Error> {
+/// Decode the exact page size before validating its encoded values: the
+/// body of `page`, a page of the held file `file`.
+pub(super) fn decode(page: &Page, file: &[u8]) -> Result<Vec<u8>, Error> {
+    let body = file.get(page.body.clone()).ok_or(Error::Malformed)?;
     // Parquet PageHeader.uncompressed_page_size is a signed 32-bit field.
     // The compact scanner retains i64 integers, so enforce that physical
     // representation before any codec allocates or constructs its decoder.
     i32::try_from(page.decoded_bytes).map_err(|_| Error::Malformed)?;
     let prefix = page.uncompressed_prefix;
-    if prefix > page.decoded_bytes || prefix > page.body.len() {
+    if prefix > page.decoded_bytes || prefix > body.len() {
         return Err(Error::Malformed);
     }
     let codec = closed_profile::codec(page.codec);
     if !page.compressed || matches!(codec, Some((Codec::Uncompressed, _))) {
-        return if page.body.len() == page.decoded_bytes {
-            Ok(page.body.to_vec())
+        return if body.len() == page.decoded_bytes {
+            Ok(body.to_vec())
         } else {
             Err(Error::Malformed)
         };
     }
-    let input = &page.body[prefix..];
+    let input = &body[prefix..];
     let expected = page.decoded_bytes - prefix;
     let mut decoded = match codec {
         None => Err(Error::Malformed),
@@ -321,7 +323,7 @@ pub(super) fn decode(page: &Page<'_>) -> Result<Vec<u8>, Error> {
         with_prefix
             .try_reserve_exact(page.decoded_bytes)
             .map_err(|_| Error::Malformed)?;
-        with_prefix.extend_from_slice(&page.body[..prefix]);
+        with_prefix.extend_from_slice(&body[..prefix]);
         with_prefix.append(&mut decoded);
         return Ok(with_prefix);
     }
@@ -333,9 +335,11 @@ mod tests {
     use super::*;
     use std::io::Write;
 
-    fn page(body: &[u8], codec: i64, decoded_bytes: usize) -> Page<'_> {
-        Page {
-            body,
+    /// A page whose body is all of `body`, and that body as its file.
+    fn page(body: &[u8], codec: i64, decoded_bytes: usize) -> (Page, &[u8]) {
+        let page = Page {
+            header: 0..0,
+            body: 0..body.len(),
             codec,
             decoded_bytes,
             uncompressed_prefix: 0,
@@ -343,7 +347,12 @@ mod tests {
             column: 0,
             row_group: 0,
             payload: Default::default(),
-        }
+        };
+        (page, body)
+    }
+
+    fn decoded((page, file): &(Page, &[u8])) -> Result<Vec<u8>, Error> {
+        decode(page, file)
     }
     #[test]
     fn stream_expansion_is_capped_even_when_the_header_lies() {
@@ -368,14 +377,14 @@ mod tests {
         assert_eq!(verify(&page(&zstd, 6, plain.len())), Ok(()));
         assert_eq!(verify(&page(&zstd, 6, 1)), Err(Error::Malformed));
         for (bytes, codec) in [(&gzip, 2), (&brotli, 4), (&zstd, 6)] {
-            assert_eq!(decode(&page(bytes, codec, plain.len())).unwrap(), plain);
+            assert_eq!(decoded(&page(bytes, codec, plain.len())).unwrap(), plain);
         }
     }
     #[test]
     fn advertised_page_sizes_do_not_allocate_before_actual_expansion_is_checked() {
         for codec in 0..=7 {
             assert_eq!(
-                decode(&page(&[], codec, i32::MAX as usize + 1)),
+                decoded(&page(&[], codec, i32::MAX as usize + 1)),
                 Err(Error::Malformed)
             );
         }
@@ -383,16 +392,16 @@ mod tests {
         // and short streaming output must be rejected without allocating it.
         for codec in [1, 2, 4, 5, 6, 7] {
             assert_eq!(
-                decode(&page(&[0], codec, i32::MAX as usize)),
+                decoded(&page(&[0], codec, i32::MAX as usize)),
                 Err(Error::Malformed)
             );
         }
         assert_eq!(
-            decode(&page(&[255, 255, 255, 255, 7], 1, i32::MAX as usize)),
+            decoded(&page(&[255, 255, 255, 255, 7], 1, i32::MAX as usize)),
             Err(Error::Malformed)
         );
         assert_eq!(
-            decode(&page(
+            decoded(&page(
                 &[127, 255, 255, 255, 0, 0, 0, 0],
                 5,
                 i32::MAX as usize
@@ -405,7 +414,7 @@ mod tests {
         let empty_zstd = zstd::stream::encode_all(&[][..], 1).unwrap();
         for (body, codec) in [(empty_gzip, 2), (empty_zstd, 6)] {
             assert_eq!(
-                decode(&page(&body, codec, i32::MAX as usize)),
+                decoded(&page(&body, codec, i32::MAX as usize)),
                 Err(Error::Malformed)
             );
         }
@@ -418,7 +427,7 @@ mod tests {
         // but invalid magic still must not allocate the claimed 2 GiB page.
         let stored = vec![0; 49_152];
         assert_eq!(
-            decode(&page(&stored, 6, i32::MAX as usize)),
+            decoded(&page(&stored, 6, i32::MAX as usize)),
             Err(Error::Malformed)
         );
 
@@ -428,9 +437,9 @@ mod tests {
         empty_and_skippable.extend([0x50, 0x2a, 0x4d, 0x18]);
         empty_and_skippable.extend((stored.len() as u32).to_le_bytes());
         empty_and_skippable.extend(&stored);
-        assert_eq!(decode(&page(&empty_and_skippable, 6, 0)), Ok(Vec::new()));
+        assert_eq!(decoded(&page(&empty_and_skippable, 6, 0)), Ok(Vec::new()));
         assert_eq!(
-            decode(&page(&empty_and_skippable, 6, i32::MAX as usize)),
+            decoded(&page(&empty_and_skippable, 6, i32::MAX as usize)),
             Err(Error::Malformed)
         );
 
@@ -440,7 +449,7 @@ mod tests {
             0x28, 0xb5, 0x2f, 0xfd, 0xa0, 0xff, 0xff, 0xff, 0x7f, 1, 0, 0,
         ];
         assert_eq!(
-            decode(&page(&frame_size_lie, 6, i32::MAX as usize)),
+            decoded(&page(&frame_size_lie, 6, i32::MAX as usize)),
             Err(Error::Malformed)
         );
 
@@ -448,7 +457,7 @@ mod tests {
         let raw = [
             0x28, 0xb5, 0x2f, 0xfd, 0, 0xa8, 33, 0, 0, b'd', b'a', b't', b'a',
         ];
-        assert_eq!(decode(&page(&raw, 6, 4)).unwrap(), b"data");
+        assert_eq!(decoded(&page(&raw, 6, 4)).unwrap(), b"data");
     }
 
     #[test]
@@ -556,7 +565,7 @@ mod tests {
         assert!(lz4.len() * 200 < plain.len());
         let zstd = zstd::stream::encode_all(&plain[..], 1).unwrap();
         for (bytes, codec) in [(&snappy, 1), (&lz4, 7), (&lz4, 5), (&zstd, 6)] {
-            assert_eq!(decode(&page(bytes, codec, plain.len())).unwrap(), plain);
+            assert_eq!(decoded(&page(bytes, codec, plain.len())).unwrap(), plain);
         }
     }
     #[test]
@@ -570,18 +579,18 @@ mod tests {
         hadoop.extend(&raw);
         for (bytes, id) in [(snappy, 1), (hadoop, 5), (raw, 7)] {
             assert_eq!(verify(&page(&bytes, id, plain.len())), Ok(()));
-            assert_eq!(decode(&page(&bytes, id, plain.len())).unwrap(), plain);
+            assert_eq!(decoded(&page(&bytes, id, plain.len())).unwrap(), plain);
             assert_eq!(verify(&page(&bytes, id, 1)), Err(Error::Malformed));
         }
         let mut frame = lz4_flex::frame::FrameEncoder::new(Vec::new());
         frame.write_all(plain).unwrap();
         let frame = frame.finish().unwrap();
         assert_eq!(verify(&page(&frame, 5, plain.len())), Ok(()));
-        assert_eq!(decode(&page(&frame, 5, plain.len())).unwrap(), plain);
+        assert_eq!(decoded(&page(&frame, 5, plain.len())).unwrap(), plain);
         assert_eq!(verify(&page(&frame, 5, 1)), Err(Error::Malformed));
         let raw = lz4_flex::block::compress(plain);
         assert_eq!(verify(&page(&raw, 5, plain.len())), Ok(()));
-        assert_eq!(decode(&page(&raw, 5, plain.len())).unwrap(), plain);
+        assert_eq!(decoded(&page(&raw, 5, plain.len())).unwrap(), plain);
     }
     #[test]
     fn v2_levels_stay_outside_compressed_bytes() {
@@ -592,13 +601,13 @@ mod tests {
         let mut bytes = vec![1, 2, 3];
         bytes.extend(gzip);
         let mut data = page(&bytes, 2, 7);
-        data.uncompressed_prefix = 3;
+        data.0.uncompressed_prefix = 3;
         assert_eq!(verify(&data), Ok(()));
-        assert_eq!(decode(&data).unwrap(), b"\x01\x02\x03body");
-        data.uncompressed_prefix = 8;
+        assert_eq!(decoded(&data).unwrap(), b"\x01\x02\x03body");
+        data.0.uncompressed_prefix = 8;
         assert_eq!(verify(&data), Err(Error::Malformed));
         let mut data = page(plain, 2, 4);
-        data.compressed = false;
+        data.0.compressed = false;
         assert_eq!(verify(&data), Ok(()));
     }
 }

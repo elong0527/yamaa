@@ -236,6 +236,8 @@ mod project {
         #[test]
         fn complete_static_report_keeps_semantics_alongside_original_opaque_capture_and_authored_holes(
         ) {
+            // Seam: a resolver double's held copies, one under the project file's own identity, and
+            // the opaque capture failure the rejection keeps by address beside the findings.
             for same_identity in [false, true] {
                 let (rejected, port, allocation, pointer) = rejected(false, same_identity);
                 assert_eq!(rejected.origins.codelists, [1, 2]);
@@ -266,6 +268,8 @@ mod project {
         }
         #[test]
         fn complete_external_scalar_reports_preserve_unbounded_integers_and_non_debug_originals() {
+            // Seam: the opaque capture failure the rejection keeps by address beside the scalar
+            // findings, which a case's files cannot raise.
             let (rejected, port, allocation, pointer) = rejected(true, false);
             assert_eq!(diagnostic::admission(&rejected).unwrap(), []);
             let wide: Value =
@@ -298,6 +302,7 @@ mod project {
         }
         #[test]
         fn complete_static_report_matches_all_independent_single_finding_projections() {
+            // Seam: each finding of a held rejection projected alone, against the whole.
             let (mut rejected, port, allocation, pointer) = rejected(false, false);
             let all = rejected.admission.take().unwrap();
             let mut independent = vec![];
@@ -316,6 +321,8 @@ mod project {
         #[test]
         fn wrong_origin_shape_duplicate_origins_and_equal_text_wrong_schema_refuse_without_replacement_errors(
         ) {
+            // Seam: forged origins and swapped captures of a held rejection, which no preparation
+            // produces.
             let (mut rejected, port, allocation, pointer) = rejected(false, false);
             rejected.origins.codelists[1] = 1;
             assert_eq!(
@@ -381,6 +388,7 @@ mod project {
         }
         #[test]
         fn invalid_origins_refuse_without_replacing_original_capture_errors() {
+            // Seam: forged origins of a held rejection, which no preparation produces.
             let (mut rejected, port, allocation, pointer) = rejected(false, false);
             rejected.origins.functions.clear();
             assert_eq!(
@@ -401,6 +409,7 @@ mod project {
 
         #[test]
         fn retained_structural_limit_keeps_exact_facts_and_refuses_earlier_missing_rows() {
+            // Seam: injected limits, which no case can set.
             use yamaa_adapters::{
                 file_resources::Error as ResourceError, specification_source::Error as SourceError,
             };
@@ -495,83 +504,9 @@ mod project {
         }
 
         #[test]
-        fn original_root_wide_codelist_scalars_report_against_the_project_without_capture_effects()
-        {
-            let allocation = Rc::new(Cell::new(19));
-            let mut port = Port::new(Opaque {
-                allocation,
-                text: "never consumed".into(),
-            });
-            let body = format!("{LISTING}codelists:\n  - {{codelists: [{{id: WIDE, name: Wide, data_type: integer, items: [{{value: 123456789012345678901234567890, rank: -123456789012345678901234567890}}, {{value: 9223372036854775808}}]}}]}}\n");
-            let (root, findings) = match prepare(&mut port, &body) {
-                Err(Failure::RootScalar { root, findings }) => (root, findings),
-                _ => panic!("retained original root scalars"),
-            };
-            // An inline codelist source's integer outside the `int` range fails
-            // as any runtime literal does (VALUE-5).
-            let project = json!({"source":"held/project.yaml","entry":"held/project.yaml","environment_path":"$"});
-            let want = [
-                (
-                    "codelists[0].codelists[0].items[0].value",
-                    "123456789012345678901234567890",
-                ),
-                (
-                    "codelists[0].codelists[0].items[0].rank",
-                    "-123456789012345678901234567890",
-                ),
-                (
-                    "codelists[0].codelists[0].items[1].value",
-                    "9223372036854775808",
-                ),
-            ]
-            .map(|(path, actual)| {
-                expected(
-                    "integer_overflow",
-                    "VALUE-5",
-                    path,
-                    with(&overflow(actual), project.clone()),
-                )
-            });
-            let result = diagnostic::scalar_root(&root, &findings).unwrap();
-            assert_eq!(crate::support::rows(&result), want);
-            assert_eq!(diagnostic::scalar_root(&root, &findings).unwrap(), result);
-            // A failed project scalar stops before any file it names is read.
-            assert_eq!(port.trace, []);
-            assert!(port.error.is_some());
-        }
-
-        #[test]
-        fn lock_kind_mismatch_reports_against_the_project_file_that_holds_the_lock() {
-            let allocation = Rc::new(Cell::new(19));
-            let mut port = Port::new(Opaque {
-                allocation,
-                text: "never consumed".into(),
-            });
-            port.lock_kind = LockKind::Renv;
-            let rejected = match prepare(
-                &mut port,
-                "yamaa: '1.0'\ntype: project\nenvironments: {python: {lock: uv.lock}}\n",
-            ) {
-                Err(Failure::Rejected(rejected)) => rejected,
-                _ => panic!("retained lock kind rejection"),
-            };
-            // The project file holds the lock at `environments.python.lock`
-            // (FUNC-3).
-            let want = [expected(
-                "function_file_invalid",
-                "FUNC-2",
-                "environments.python.lock",
-                json!({"reason":"lock_kind_mismatch","language":"python","actual_lock_kind":"renv","source":"held/project.yaml","entry":"held/project.yaml","environment_path":"environments.python.lock"}),
-            )];
-            let result = diagnostic::admission(&rejected).unwrap();
-            assert_eq!(crate::support::rows(&result), want);
-            assert_eq!(diagnostic::admission(&rejected).unwrap(), result);
-            assert_eq!(port.trace, [(Kind::Lock, "uv.lock".into())]);
-            assert!(port.error.is_some());
-        }
-
-        #[test]
         fn actual_captured_two_hundred_function_files_keep_the_full_six_hundred_record_report() {
+            // Seam: two hundred generated function files and the six hundred findings of one
+            // projection.
             let allocation = Rc::new(Cell::new(19));
             let mut port = Port::new(Opaque {
                 allocation,
@@ -636,6 +571,8 @@ mod project {
         }
         #[test]
         fn every_runtime_failure_keeps_versionless_identity_and_authored_provenance() {
+            // Seam: forged invocation failures, among them argument failures a valid specification
+            // never makes the engine raise.
             let cases = [
                 (
                     FailureKind::UnknownArguments(vec!["extra".into()]),
@@ -712,6 +649,8 @@ mod project {
         }
         #[test]
         fn opaque_payload_is_borrowed_unchanged_and_complete_ordinary_facts_remain_exact() {
+            // Seam: the original payload of an opaque invocation failure, by address, and forged
+            // host details.
             let payload: Rc<str> = Rc::from("original interrupt or boundary");
             for kind in [
                 FailureKind::CallFailed(payload.clone()),
@@ -772,6 +711,7 @@ mod project {
         }
         #[test]
         fn malformed_identity_keys_refuse_and_escaped_arguments_remain_complete() {
+            // Seam: forged identity keys and arguments, which no run produces.
             let failure = make_failure(FailureKind::BooleanResult);
             let row = RowIdentity {
                 position: 0,
@@ -816,6 +756,12 @@ mod project {
 
         #[test]
         fn actual_engine_failures_project_without_a_second_callback_or_payload_consumption() {
+            // Seam: the original payload the invocation holds, which no
+            // replay compares, and the one call it made. The issue each
+            // failure reports, classified, is project_functions.json's
+            // a_classified_live_call_failure_fails_the_call_after_the_input_is_read
+            // and a_live_call_whose_result_its_host_rejects_fails_its_result,
+            // beside the results the engine refuses (FUNC-9).
             use yamaa_core::function_invocation::{
                 invoke_project, Argument, FunctionPort, HostError,
             };
@@ -847,78 +793,26 @@ mod project {
             )
             .unwrap();
             let payload: Rc<str> = Rc::from("original host condition");
-            for (result, condition, rule, host_failure) in [
-                (
-                    Ok(Value::Bool(true)),
-                    "invalid_function_result",
-                    "FUNC-9",
-                    false,
-                ),
-                (
-                    Ok(Value::Missing),
-                    "invalid_function_result",
-                    "FUNC-9",
-                    false,
-                ),
-                (
-                    Ok(Value::float(7.0)),
-                    "invalid_function_result",
-                    "FUNC-9",
-                    false,
-                ),
-                (
-                    Err(HostError::Raised(payload.clone())),
-                    "function_call_failed",
-                    "FUNC-8",
-                    true,
-                ),
-                (
-                    Err(HostError::InvalidResult(payload.clone())),
-                    "invalid_function_result",
-                    "FUNC-9",
-                    true,
-                ),
+            for result in [
+                HostError::Raised(payload.clone()),
+                HostError::InvalidResult(payload.clone()),
             ] {
                 let mut port = Port {
                     calls: 0,
-                    result: Some(result),
+                    result: Some(Err(result)),
                 };
                 let failure = invoke_project(&plan, &std::collections::BTreeMap::new(), &mut port)
                     .unwrap_err();
-                let issue = if host_failure {
-                    let Err(Error::Opaque(held)) = invocation(
-                        "columns.VALUE.derivation.function",
-                        &failure,
-                        None,
-                        &[],
-                        None,
-                    ) else {
-                        panic!("opaque payload consumed")
-                    };
-                    assert!(Rc::ptr_eq(held, &payload));
-                    invocation(
-                        "columns.VALUE.derivation.function",
-                        &failure,
-                        None,
-                        &[],
-                        Some(HostDetails::Exception {
-                            class: "OriginalCondition",
-                            message: "ordinary classified failure",
-                        }),
-                    )
-                    .unwrap()
-                } else {
-                    invocation(
-                        "columns.VALUE.derivation.function",
-                        &failure,
-                        None,
-                        &[],
-                        None,
-                    )
-                    .unwrap()
+                let Err(Error::Opaque(held)) = invocation(
+                    "columns.VALUE.derivation.function",
+                    &failure,
+                    None,
+                    &[],
+                    None,
+                ) else {
+                    panic!("opaque payload consumed")
                 };
-                assert_eq!(issue.condition(), condition);
-                assert_eq!(issue.rule(), Some(rule));
+                assert!(Rc::ptr_eq(held, &payload));
                 assert_eq!(port.calls, 1);
             }
         }
@@ -927,6 +821,7 @@ mod project {
         use yamaa_adapters::project_lock::{decode_renv, Error, RenvLock};
         #[test]
         fn uv_classification_allows_unresolved_versions_but_validates_written_identities() {
+            // Seam: the lock codec, on lock bytes alone.
             let dynamic =
                 b"version = 1\n[[package]]\nname = 'program'\nsource = {editable = 'program'}\n";
             assert_eq!(
@@ -943,6 +838,7 @@ mod project {
         }
         #[test]
         fn renv_metadata_preserves_exact_names_versions_and_ignores_unrelated_tool_metadata() {
+            // Seam: the renv lock codec, on lock bytes alone.
             let raw=br#"{"R":{"Version":"4.6.1","Repositories":[{"Name":"CRAN","URL":"https://example.invalid"}]},"Packages":{"yamaa":{"Package":"yamaa","Version":"0.2.0","Source":"Local"},"projectbmi":{"Package":"projectbmi","Version":"1.2-0","Source":"Repository"}}}"#;
             assert_eq!(
                 decode_renv(raw).unwrap(),
@@ -958,6 +854,7 @@ mod project {
         }
         #[test]
         fn duplicate_keys_are_rejected_including_nested_package_version_replacement() {
+            // Seam: the renv lock codec, on lock bytes alone.
             for raw in [
                 r#"{"R":{"Version":"4.6.1"},"R":{"Version":"4.5.0"},"Packages":{}}"#,
                 r#"{"R":{"Version":"4.6.1"},"Packages":{"yamaa":{"Version":"0.2.0","Version":"9.0.0"}}}"#,
@@ -971,6 +868,7 @@ mod project {
         }
         #[test]
         fn yaml_extensions_never_become_valid_renv_json() {
+            // Seam: the renv lock codec, on lock bytes alone.
             for raw in [
                 "R: {Version: '4.6.1'}\nPackages: {}",
                 r#"{"R":{"Version":"4.6.1"},"Packages":{},}"#,
@@ -981,6 +879,7 @@ mod project {
         }
         #[test]
         fn wrong_shapes_and_package_identity_mismatches_never_produce_partial_metadata() {
+            // Seam: the renv lock codec, on lock bytes alone.
             for raw in [
                 r#"{"Packages":{}}"#,
                 r#"{"R":{"Version":4.6},"Packages":{}}"#,
@@ -993,6 +892,7 @@ mod project {
         }
         #[test]
         fn complete_version_text_is_retained_and_nul_is_rejected_without_truncation() {
+            // Seam: the renv lock codec, on lock bytes alone.
             let raw = format!(
         "{{\"R\":{{\"Version\":\"4.6.1\"}},\"Packages\":{{\"yamaa\":{{\"Version\":\"{}\"}}}}}}",
         "x".repeat(2049)
@@ -1123,71 +1023,19 @@ mod project {
         }
 
         #[test]
-        fn complete_classified_host_facts_preserve_order_and_held_lock_origins_without_reads() {
+        fn classified_host_facts_project_from_the_held_lock_without_reading_it() {
+            // Seam: the projection's reads and the held bytes it leaves in
+            // place, which a build's issues do not show. Each finding's row is
+            // project_functions.json's
+            // lock_findings_report_against_the_project_file_that_holds_the_lock,
+            // and the host's version spelling its
+            // a_lock_finding_keeps_the_host_s_version_spelling_without_comparing_versions.
             let (environment, capture) = environment(true);
             let root = environment.root().source().bytes.as_ptr();
             let lock = environment.lock().unwrap().source.bytes.as_ptr();
-            let facts = [
-                finding(Reason::DistributionNotIdentified, &[], None),
-                finding(Reason::VersionNotLocked, &[], None),
-                finding(Reason::AmbiguousLockVersion, &["1.0", "2.0"], None),
-                finding(Reason::InvalidLockedVersion, &["invalid\0é"], None),
-                finding(Reason::PackageNotInstalled, &["1.0"], None),
-                finding(Reason::InvalidInstalledVersion, &["1.0"], Some("bad\0🙂")),
-                finding(Reason::VersionMismatch, &["1.0"], Some("2.0")),
-            ];
+            let facts = [finding(Reason::VersionMismatch, &["1.0"], Some("2.0"))];
             let records = issues(&environment, Some(Language::Python), &facts).unwrap();
-            assert_eq!(records.len(), 7);
-            let expected = [
-                (
-                    "distribution_not_identified",
-                    yamaa_adapters::json!([]),
-                    yamaa_core::json::Value::Null,
-                ),
-                (
-                    "version_not_locked",
-                    yamaa_adapters::json!([]),
-                    yamaa_core::json::Value::Null,
-                ),
-                (
-                    "ambiguous_lock_version",
-                    yamaa_adapters::json!(["1.0", "2.0"]),
-                    yamaa_core::json::Value::Null,
-                ),
-                (
-                    "invalid_locked_version",
-                    yamaa_adapters::json!(["invalid\0é"]),
-                    yamaa_core::json::Value::Null,
-                ),
-                (
-                    "package_not_installed",
-                    yamaa_adapters::json!(["1.0"]),
-                    yamaa_core::json::Value::Null,
-                ),
-                (
-                    "invalid_installed_version",
-                    yamaa_adapters::json!(["1.0"]),
-                    yamaa_adapters::json!("bad\0🙂"),
-                ),
-                (
-                    "version_mismatch",
-                    yamaa_adapters::json!(["1.0"]),
-                    yamaa_adapters::json!("2.0"),
-                ),
-            ];
-            for (record, (reason, versions, actual)) in records.iter().zip(expected) {
-                assert_eq!(record.phase(), "validation");
-                assert_eq!(record.condition(), "runtime_artifact_mismatch");
-                assert_eq!(record.rule(), Some("FUNC-3"));
-                // The project file holds the lock (FUNC-3, D107).
-                assert_eq!(record.spec_paths, ["environments.python.lock"]);
-                assert_eq!(
-                    yamaa_core::json::Value::Object(record.context.clone()),
-                    yamaa_adapters::json!({"source":"study/project.yaml", "entry":"study/project.yaml",
-                "lock_source":"held/uv.lock", "lock":"../uv.lock", "package":"program",
-                "reason":reason, "expected":versions, "actual":actual})
-                );
-            }
+            assert_eq!(records.len(), 1);
             assert_eq!(
                 issues(&environment, Some(Language::Python), &facts).unwrap(),
                 records
@@ -1198,22 +1046,9 @@ mod project {
         }
 
         #[test]
-        fn projection_preserves_host_version_spelling_and_does_not_reimplement_comparison() {
-            let (environment, _) = environment(true);
-            let facts = [
-                finding(Reason::InvalidInstalledVersion, &["1.0"], None),
-                finding(Reason::InvalidLockedVersion, &[], None),
-                finding(Reason::VersionMismatch, &["1.0"], Some("1.0.0")),
-            ];
-            let records = issues(&environment, Some(Language::Python), &facts).unwrap();
-            assert_eq!(records.len(), 3);
-            let context = yamaa_core::json::Value::Object(records[2].context.clone());
-            assert_eq!(context["expected"], yamaa_adapters::json!(["1.0"]));
-            assert_eq!(context["actual"], "1.0.0");
-        }
-
-        #[test]
         fn absent_lock_and_contradictory_facts_refuse_the_complete_projection() {
+            // Seam: lock facts no host classification gives: findings for a project without the
+            // host's lock, and contradictory findings.
             for (unlocked, _) in [environment(false), without_environment()] {
                 assert!(issues(&unlocked, Some(Language::Python), &[])
                     .unwrap()
@@ -1242,6 +1077,8 @@ mod project {
 
         #[test]
         fn complete_escaped_host_versions_and_all_given_findings_remain_exact() {
+            // Seam: equal findings, a 1,025-fold version text and 2,050 findings, each kept whole
+            // by the projection.
             let (environment, _) = environment(true);
             let first = finding(Reason::VersionMismatch, &["1.0"], Some("2.0"));
             assert_eq!(
@@ -1274,17 +1111,6 @@ mod project {
             let result = issues(&environment, Some(Language::Python), &facts).unwrap();
             assert_eq!(result.len(), 2_050);
             assert_eq!(result[0], result[2_049]);
-        }
-
-        #[test]
-        fn empty_unlocked_projection_preserves_success_without_lock_capture() {
-            for (environment, capture) in [environment(false), without_environment()] {
-                assert_eq!(
-                    issues(&environment, Some(Language::Python), &[]).unwrap(),
-                    vec![]
-                );
-                assert_eq!(capture.locks, 0);
-            }
         }
     }
 }

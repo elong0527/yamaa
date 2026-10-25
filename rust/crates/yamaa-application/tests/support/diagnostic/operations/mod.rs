@@ -40,6 +40,7 @@ mod define;
 mod file_route;
 mod host_functions;
 mod odm;
+mod preparation;
 mod project_scope;
 
 /// What one operation reported, with the study directory its files were
@@ -55,11 +56,12 @@ pub struct Reported {
 type Reader = fn(&str, &Value) -> Option<Reported>;
 
 /// Each module's readers, by the operations it names, and its files.
-const MODULES: [(Reader, &[File]); 5] = [
+const MODULES: [(Reader, &[File]); 6] = [
     (define::run, define::FILES),
     (file_route::run, file_route::FILES),
     (host_functions::run, host_functions::FILES),
     (odm::run, odm::FILES),
+    (preparation::run, preparation::FILES),
     (project_scope::run, project_scope::FILES),
 ];
 
@@ -122,6 +124,28 @@ pub fn study(input: &Value) -> Scratch {
     study
 }
 
+/// Build and save, in order, each specification of `study` that `built`
+/// names, for the `host`, with the project file `environment` names as each
+/// request's environment, if any: each must build without an issue and save.
+/// A reader whose input names `built` calls this before its own call, and so
+/// does a sidecar that repeats that call.
+pub fn build_first(study: &Scratch, built: &[Value], environment: Option<&str>, host: Language) {
+    for name in built {
+        let built = path(study, text(name));
+        let mut domain = crate::support::study::domain(
+            host,
+            yamaa_core::domain_entry::Request {
+                specification: &built,
+                environment,
+            },
+            crate::support::study::identity("diagnostics", &built),
+        )
+        .unwrap_or_else(|issues| panic!("{built} is refused: {issues:?}"));
+        assert!(domain.issues().is_empty(), "{built}: {:?}", domain.issues());
+        assert!(domain.save().unwrap(), "{built} saves");
+    }
+}
+
 /// The submission section `name` names: `sdtm`, `adam` or `send`.
 pub fn section(name: &Value) -> Submission {
     match text(name) {
@@ -140,7 +164,7 @@ fn path(study: &Scratch, name: &str) -> String {
 
 /// Every file of `study` and its bytes, by its path there with forward
 /// slashes.
-fn contents(study: &Scratch) -> Files {
+pub fn contents(study: &Scratch) -> Files {
     state(study).files
 }
 

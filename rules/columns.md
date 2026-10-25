@@ -110,7 +110,7 @@ order. Composition orders the resolved columns
 order.
 
 Fails: `unknown_reference`, `forward_reference`.
-Evidence: `negative-forward-reference`, `negative-forward-key-reference`, `rust/crates/yamaa-core/tests/schema_references.rs::unknown_dependencies_are_lexical_and_precede_cycle_reporting`, `rust/crates/yamaa-application/tests/execution_column_driver_bindings.rs::column_bindings_run_one_driver_after_another`.
+Evidence: `negative-forward-reference`, `negative-forward-key-reference`, `rust/crates/yamaa-core/tests/schema_references.rs::unknown_dependencies_are_lexical_and_precede_cycle_reporting`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/column_driver_bindings.json::column_bindings_run_one_driver_after_another`.
 
 [Inheritance](inheritance.md) composes and prunes every specification before
 these rules apply: a specification that declares no `parent` and includes no
@@ -157,7 +157,7 @@ an aggregate or an `odm` read, unless a key derived by a window makes each
 base record its own row.
 
 Fails: `key_dependency`.
-Evidence: `negative-keys-missing`, `negative-keys-aggregate`, `negative-keys-odm`, `schema-keys-record-reads`, `rust/crates/yamaa-application/tests/execution_no_rows_record_reads.rs`.
+Evidence: `negative-keys-missing`, `negative-keys-aggregate`, `negative-keys-odm`, `schema-keys-record-reads`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/row_scopes.json`.
 
 A key reads its base record's fields, the keys declared before it, and a
 named intermediate's selection for that record, through any operation that
