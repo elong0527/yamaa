@@ -132,6 +132,19 @@ const CASE_DIFFERENCES: &[Difference] = &[
         domain: "out",
         class: Class::Q3,
     },
+    // A grouped row aggregate over its driver's bare field (LOOKUP-18): the
+    // pass also reports a cycle through the column (COLUMN-6), which neither
+    // binding nor `run()` reports.
+    Difference {
+        case: "specification_runs.json::aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path_for_a_bare_driver_field",
+        domain: "adlb",
+        class: Class::Q2,
+    },
+    Difference {
+        case: "specification_runs.json::aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path_for_a_bare_driver_field_after_an_unparsed_float",
+        domain: "adlb",
+        class: Class::Q2,
+    },
     // A read of a field a named driver's projection hides (NAME-3, LOOKUP-11).
     Difference {
         case: "row_scopes.json::a_named_driver_s_projection_hides_a_field_from_a_derivation",

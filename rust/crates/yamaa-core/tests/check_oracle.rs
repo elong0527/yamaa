@@ -10,6 +10,14 @@ use yamaa_core::specification::check_oracle::{self, Class, Difference};
 
 /// The differences of this crate's cases, as #3805 records them.
 const DIFFERENCES: &[Difference] = &[
+    // A template a foreign input drives, whose column defaults read the key
+    // that input may not store: the pass reports a cycle through the column
+    // (COLUMN-6), which neither binding nor `run()` reports.
+    Difference {
+        case: "intermediates.json::a_template_a_foreign_input_drives_needs_the_raw_key_its_column_defaults_read",
+        domain: "out",
+        class: Class::Q2,
+    },
     // A row template's intermediate driver whose filter reads another input
     // (ROW-2), and the read of its field that follows, which `run()` alone
     // reported.
