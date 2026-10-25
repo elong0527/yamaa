@@ -229,11 +229,11 @@ pub(super) const REGISTERED: &[(&str, &[&str], Option<&str>)] = &[
 ];
 #[rustfmt::skip]
 pub(super) const RETIRED: &[(&str, &str)] = &[
-    ("bare_derivation_scalar", "1.0.0"),
-    ("day_not_permitted", "1.0.0"),
-    ("day_required", "1.0.0"),
-    ("model_contract_mismatch", "1.0.0"),
-    ("month_not_permitted", "1.0.0"),
-    ("month_required", "1.0.0"),
-    ("window_order_by_forbidden", "1.0.0"),
+    ("bare_derivation_scalar", "0.6.0"),
+    ("day_not_permitted", "0.6.0"),
+    ("day_required", "0.6.0"),
+    ("model_contract_mismatch", "0.6.0"),
+    ("month_not_permitted", "0.6.0"),
+    ("month_required", "0.6.0"),
+    ("window_order_by_forbidden", "0.6.0"),
 ];

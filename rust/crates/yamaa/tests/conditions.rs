@@ -7,7 +7,7 @@
 //! of each shape, written by hand from `yaml/conditions.yaml` and the core
 //! registry's causes: rules in card order across prefixes and numbers, a
 //! condition whose issues cite no rule, the four renames and the seven
-//! retirements of 1.0.0.
+//! retirements of 0.6.0.
 
 use std::sync::LazyLock;
 
@@ -205,9 +205,9 @@ fn an_entry_prints_as_a_tab_separated_line_and_one_object() {
         ),
         (
             "month_required",
-            "month_required\terror\t\t\t\t\t1.0.0",
+            "month_required\terror\t\t\t\t\t0.6.0",
             "{\"condition\":\"month_required\",\"message\":null,\"phases\":[],\
-             \"renamed_from\":null,\"retired_in\":\"1.0.0\",\"rules\":[],\"severity\":\"error\"}",
+             \"renamed_from\":null,\"retired_in\":\"0.6.0\",\"rules\":[],\"severity\":\"error\"}",
         ),
     ] {
         let entry = entry(name);

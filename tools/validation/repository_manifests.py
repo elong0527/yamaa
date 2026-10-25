@@ -180,7 +180,7 @@ def retired_errors(label: str, registry, conditions: dict) -> list[str]:
         if not (isinstance(release, str) and RELEASE.fullmatch(release)):
             errors.append(
                 f"ERROR: {path}.retired_in: expected the release that retired it, "
-                "such as '1.0.0'"
+                "such as '0.6.0'"
             )
     return errors
 

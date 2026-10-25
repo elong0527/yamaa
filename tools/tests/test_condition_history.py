@@ -1,9 +1,9 @@
-"""The registry carries the conditions 1.0.0 renamed or retired (#3700).
+"""The registry carries the conditions 0.6.0 renamed or retired (#3700).
 
-tools/migrate/renames.yaml records each condition that 1.0.0 renamed or
-retired. yaml/conditions.yaml carries them, as `renamed_from` on the
-condition that took the name and as a `retired` entry with
-`retired_in: "1.0.0"`, so the catalogue that `conditions()` returns names
+tools/migrate/renames.yaml records each condition that the 1.0 language
+renamed or retired, which 0.6.0 ships (#3673 D289). yaml/conditions.yaml
+carries them, as `renamed_from` on the condition that took the name and as
+a `retired` entry with `retired_in: "0.6.0"`, so the catalogue that `conditions()` returns names
 every condition a program written for 0.5.0 matched, and no package ships the
 rename table.
 """
@@ -46,7 +46,7 @@ class ConditionHistory(unittest.TestCase):
                 for condition, entry in self.registry["retired"].items()
             },
             {
-                entry["today"]: "1.0.0"
+                entry["today"]: "0.6.0"
                 for entry in self.table
                 if entry["kind"] == "removed"
             },

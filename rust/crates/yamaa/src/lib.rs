@@ -31,9 +31,10 @@
 //! features to `yamaa-adapters`, all on by default, and builds with any
 //! combination of them. With no format feature, the CSV route remains. The
 //! `arrow` feature, also on by default, is not a format: it gives a table its
-//! Arrow form and admits host frames, through the Arrow types this crate
-//! re-exports, `Table::batches` and `Table::stream` among them, and
-//! `InputFrame::import`. A build without it links no Arrow crate unless
+//! Arrow form, admits host frames and reads an output as a stream, through
+//! the Arrow types this crate re-exports, `Table::batches` and
+//! `Table::stream` among them, `InputFrame::import`, and `SpecRequest::stream`
+//! with its streamed-run types. A build without it links no Arrow crate unless
 //! `parquet` brings Arrow for its own reader.
 //! A capability a build omits fails the same way it does in adapters: the
 //! stable codes (`yaml_reader_unavailable`, `parquet_reader_unavailable`,

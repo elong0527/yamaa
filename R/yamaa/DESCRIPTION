@@ -1,6 +1,6 @@
 Package: yamaa
 Title: Clinical Data Specifications with the Shared 'Rust' Engine
-Version: 1.0.0
+Version: 0.6.0
 Authors@R: c(
     person("Yilong", "Zhang", email = "elong0527@gmail.com", role = c("aut", "cre")),
     person("Ming-Chun", "Chen", role = "ctb"),

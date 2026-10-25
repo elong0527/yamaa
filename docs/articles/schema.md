@@ -136,8 +136,8 @@ release's tag, read from GitHub:
 https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v<version>/yaml/json/<type>.schema.json
 ```
 
-For `spec` in 1.0.0, that is
-`https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v1.0.0/yaml/json/spec.schema.json`.
+For `spec` in 0.6.0, that is
+`https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v0.6.0/yaml/json/spec.schema.json`.
 From 1.0.0 the files keep their path and carry no `$id`, so only the tag
 changes from one release's address to the next, and every later 1.x release
 keeps each field they give
@@ -152,7 +152,7 @@ every specification under `sdtm/` and `adam/` as you type:
 ```json
 {
   "yaml.schemas": {
-    "https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v1.0.0/yaml/json/spec.schema.json": [
+    "https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v0.6.0/yaml/json/spec.schema.json": [
       "sdtm/*.yaml",
       "adam/*.yaml"
     ]

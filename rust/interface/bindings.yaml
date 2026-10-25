@@ -294,7 +294,7 @@ tables:
         meaning: the name it had before a release renamed it; missing when no release did
       - name: retired_in
         type: optional<str>
-        meaning: the release that retired it, such as 1.0.0; missing for a condition the engine may report
+        meaning: the release that retired it, such as 0.6.0; missing for a condition the engine may report
   # #3762: the phases a result ran. Timings live on the result alone; no saved
   # file holds them (P10).
   timings:

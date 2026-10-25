@@ -110,11 +110,12 @@ constants, so `UNKNOWN` there is text.
 Python engine:
 
 Install yamaa from [PyPI](https://pypi.org/project/yamaa/). A release
-candidate is a pre-release there, so name it and add `--pre`:
+candidate, when there is one, is a pre-release there, so name it and add
+`--pre`:
 
 ```sh
 python -m pip install yamaa                     # the newest release
-python -m pip install --pre yamaa==<candidate>  # a candidate, such as 1.0.0rc1
+python -m pip install --pre yamaa==<candidate>  # a release candidate
 ```
 
 The wheels and a standalone Python source archive are also assets of each
@@ -125,7 +126,7 @@ for source prerequisites, development setup and supported platforms.
 R engine:
 
 Each [GitHub release](https://github.com/elong0527/yamaa/releases) carries the
-R source package and, from the 1.0.0 release candidates on, binary packages
+R source package and, from 0.6.0 on, binary packages
 for Windows x64 and macOS arm64 built for R-release and R-oldrel, today R 4.6
 and R 4.5. A binary package installs without Rust, Rtools or a network, and
 works only with the R series that ends its file name. Download the package for
@@ -142,7 +143,7 @@ install.packages("yamaa_<version>-4.5.tgz", repos = NULL)  # R 4.5
 install.packages("yamaa_<version>.tar.gz", repos = NULL, type = "source")
 ```
 
-Once CRAN accepts 1.0.0, `install.packages("yamaa")` installs it from there
+Once CRAN accepts 0.6.0, `install.packages("yamaa")` installs it from there
 too. Then load the package and run the example above:
 
 ```r
@@ -170,7 +171,7 @@ files carried in, as
 [Installing in a restricted environment](https://elong0527.github.io/yamaa/articles/restricted-environments/)
 describes.
 
-Packages from 1.0.0 on carry a self-test, which earlier packages do not.
+Packages from 0.6.0 on carry a self-test, which earlier packages do not.
 After installing one, run `yamaa.selftest()` in Python or
 `yamaa_selftest()` in R. It runs the cases that the package carries,
 benchmarks with independently authored expected files, through the installed
@@ -182,7 +183,7 @@ installation and operational qualification evidence of that installation.
 
 Command line:
 
-From 1.0.0, each GitHub release also carries the `yamaa` command line as a
+From 0.6.0, each GitHub release also carries the `yamaa` command line as a
 standalone binary that needs no Python, R or Rust:
 `yamaa-<version>-<target>.zip`, where the target is
 `x86_64-unknown-linux-musl` or `aarch64-unknown-linux-musl` for Linux,
