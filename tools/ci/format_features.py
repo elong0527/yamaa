@@ -86,9 +86,12 @@ def qualify(selection, enabled):
     features = selected(enabled)
     tree = graph(enabled)
     check_arrow(selection, tree, enabled)
+    # The native Parquet reader and writer need no parquet crate; only the
+    # adapters' differential harness, a test build, compiles it (#3878).
+    if "parquet" in tree:
+        raise RuntimeError(f"unexpected parquet dependency for {selection}")
     for package, feature in [
         ("yamaa-saphyr-parser", "yaml"),
-        ("parquet", "parquet"),
         ("zstd-sys", "parquet"),
         ("quick-xml", "odm"),
     ]:

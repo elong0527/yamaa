@@ -10,7 +10,7 @@ from tools.ci import format_features
 PACKAGES = {
     "none": "yamaa\nyamaa-adapters\nyamaa-core\n",
     "yaml-parquet": (
-        "yamaa\nyamaa-saphyr-parser\nparquet\nzstd-sys\nflate2\ncc\n"
+        "yamaa\nyamaa-saphyr-parser\nzstd-sys\nflate2\ncc\n"
         "arrow-array\narrow-buffer\narrow-data\narrow-schema\narrow-ipc\nflatbuffers\n"
     ),
 }
@@ -100,6 +100,15 @@ class MinimalBuilds(unittest.TestCase):
             ),
             calls,
         )
+
+    def test_no_selection_builds_the_parquet_crate(self):
+        # The native Parquet reader and writer need no parquet crate; only the
+        # adapters' differential harness, a test build, compiles it (#3878).
+        with mock.patch.dict(
+            PACKAGES, {"yaml-parquet": PACKAGES["yaml-parquet"] + "parquet\n"}
+        ):
+            with self.assertRaisesRegex(RuntimeError, "unexpected parquet dependency"):
+                self.cargo_calls("yaml-parquet")
 
 
 if __name__ == "__main__":
