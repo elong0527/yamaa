@@ -56,7 +56,12 @@ pub struct EngineOptions {
 /// There are two strategies:
 ///
 /// - [`Partitions::new`] divides the input into consecutive partitions of
-///   `rows` records, the last holding the rest (#3697).
+///   `rows` records, the last holding the rest (#3697). When the
+///   specification reads records together, in a grouped row template, its
+///   key grain or an ODM read of the input, a partition ends only between
+///   runs of the input fields all of those reads share, so it holds as many
+///   whole runs as fit in `rows` records, a longer run alone; an input not
+///   grouped by those fields is one partition (#3830).
 /// - [`Partitions::by_keys`] divides it into key-bounded partitions (#3763):
 ///   consecutive partitions that never split a group of the specification's
 ///   leading `keys` declared keys, each holding as many whole groups as fit
@@ -80,9 +85,17 @@ pub struct EngineOptions {
 /// each key, an aggregate whose `group_by` names each, a grouped row
 /// template's aggregate when the template groups by each, or a qualified
 /// aggregate whose `key` pairs each. Every other step that needs the whole
-/// table refuses as it does under consecutive partitions. With
-/// [`Partitions::with_whole_table_fallback`], such a step runs over the
-/// whole input instead.
+/// table refuses as it does under consecutive partitions.
+///
+/// The records a step reads together must sit in one partition (#3830), so
+/// these steps refuse the run too: rows driven by an intermediate over the
+/// input, and an intermediate over the input with a `unique` check; under
+/// key-bounded partitions, a grouped row template, the key grain or an ODM
+/// read whose fields omit a partition key, or any of them when the input
+/// does not hold every partition key; under consecutive partitions, the
+/// first of those reads that shares no input field with the ones before it.
+/// With [`Partitions::with_whole_table_fallback`], a step that needs the
+/// whole table runs over the whole input instead.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Partitions {

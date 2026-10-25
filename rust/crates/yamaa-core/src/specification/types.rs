@@ -126,9 +126,14 @@ impl<'a> DeclaredTypes<'a> {
                     Some(&(_, contract)) => Stored::Linked(contract),
                     None => match input.source.profile {
                         Some(ast::Profile::Csv) => Stored::Typeless(&input.source.types),
-                        Some(ast::Profile::Xport | ast::Profile::Sas7bdat) => {
-                            Stored::Narrowed(&input.source.types)
-                        }
+                        // A SAS or Dataset-JSON container supplies each
+                        // type, which `types` may narrow (SAS-3, DSJSON-2).
+                        Some(
+                            ast::Profile::Xport
+                            | ast::Profile::Sas7bdat
+                            | ast::Profile::DatasetJson
+                            | ast::Profile::DatasetNdjson,
+                        ) => Stored::Narrowed(&input.source.types),
                         _ => Stored::Captured,
                     },
                 };

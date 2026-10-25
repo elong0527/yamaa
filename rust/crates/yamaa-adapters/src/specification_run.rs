@@ -33,6 +33,9 @@ pub enum Error {
     TypedSource(crate::typed_csv::Error),
     ParquetSource(crate::parquet_source::Error),
     SasSource(crate::sas_source::Error),
+    /// The Dataset-JSON profiles' read of a `.json` or `.ndjson` input
+    /// (DSJSON-1).
+    DatasetJsonSource(crate::dataset_json_source::Error),
     Ordinal(yamaa_core::source_ordinal::Error),
     OdmFields(Vec<yamaa_core::odm_source::SchemaError>),
     OdmValues(Vec<yamaa_core::odm_source::MissingValues>),
@@ -377,6 +380,19 @@ pub(crate) fn decode_source(
                 table
             }
         }
+        yamaa_core::specification::SourceProfile::DatasetJson
+        | yamaa_core::specification::SourceProfile::DatasetNdjson => {
+            // Each column's `dataType` types its field, which a `types`
+            // entry may narrow (DSJSON-2); the profile applies the
+            // empty-string convention as it reads each text (DSJSON-3).
+            let table = crate::dataset_json_source::parse(bytes, source)
+                .map_err(Error::DatasetJsonSource)?;
+            if odm {
+                project_odm(table)?
+            } else {
+                table
+            }
+        }
         yamaa_core::specification::SourceProfile::OdmXml => {
             // The fixed clinical-item table, whose fields the profile names
             // and types; an `odm` read binds its eleven fields (NAME-8).
@@ -477,6 +493,9 @@ pub(crate) struct Scanned {
     pub(crate) schema: yamaa_core::table::TableSchema,
     /// The input's records.
     pub(crate) records: usize,
+    /// The record ranges admitted separately by the scan. Decoding a report
+    /// must not combine them into a table with larger text offsets.
+    pub(crate) partitions: Vec<std::ops::Range<usize>>,
     source: SourceDeclaration,
     reader: Reader,
 }
@@ -544,6 +563,7 @@ pub(crate) fn scan_partitions(
     let odm = interpretation == yamaa_core::specification::SourceInterpretation::Odm;
     let mut first = First(None);
     let mut schema = None;
+    let mut admitted = Vec::new();
     let mut partition = 0usize;
     // The checks the whole read makes once the table has decoded, each
     // partition's on its own, and its visit.
@@ -568,6 +588,7 @@ pub(crate) fn scan_partitions(
         }
         match crate::source_ordinal::append_at(source, table, start) {
             Ok(table) => {
+                admitted.push(start..start + table.row_count());
                 if schema.is_none() {
                     schema = Some(table.schema().clone());
                 }
@@ -634,7 +655,11 @@ pub(crate) fn scan_partitions(
             }
         }
         // Every other profile is read whole.
-        SourceProfile::Xport | SourceProfile::Sas7bdat | SourceProfile::OdmXml => return None,
+        SourceProfile::Xport
+        | SourceProfile::Sas7bdat
+        | SourceProfile::OdmXml
+        | SourceProfile::DatasetJson
+        | SourceProfile::DatasetNdjson => return None,
     };
     if let Some((_, error)) = first.0 {
         return Some(Err(error));
@@ -642,6 +667,7 @@ pub(crate) fn scan_partitions(
     Some(Ok(Scanned {
         schema: schema.expect("a scan reads at least one partition"),
         records,
+        partitions: admitted,
         source: source.clone(),
         reader,
     }))
@@ -707,7 +733,11 @@ pub(crate) fn source_schema(
                 Err(_) => None,
             }
         }
-        SourceProfile::Xport | SourceProfile::Sas7bdat | SourceProfile::OdmXml => None,
+        SourceProfile::Xport
+        | SourceProfile::Sas7bdat
+        | SourceProfile::OdmXml
+        | SourceProfile::DatasetJson
+        | SourceProfile::DatasetNdjson => None,
     }
 }
 

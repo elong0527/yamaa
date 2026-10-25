@@ -1,5 +1,8 @@
 //! Relations contracts: reference scope, relation ranges, relation shapes, row
-//! intermediate context, source ordinal and run report.
+//! intermediate context, source ordinal and run report. The refusals of
+//! preparing and binding the row intermediate context are cases of
+//! `fixtures/diagnostics/intermediates.json`; each test here proves a seam the
+//! replay cannot reach, which its first comment names (#3798).
 mod relations {
     mod reference_scope {
         use yamaa_core::{
@@ -52,6 +55,8 @@ mod relations {
         }
 
         /// Stop after driver/existence failures, but retain scope-before-type diagnostic order.
+        /// Seam: the internal `Finding` values the reference scope's `validate`
+        /// returns.
         #[test]
         fn independent_scope_and_priority_truth() {
             let catalog = catalog();
@@ -304,6 +309,8 @@ mod relations {
         }
 
         /// A malformed query remains separate from later valid scope checks.
+        /// Seam: the internal `Finding` values `validate` returns for qualified
+        /// queries.
         #[test]
         fn qualified_query_shape_and_reuse() {
             let catalog = catalog();
@@ -345,6 +352,8 @@ mod relations {
             )
             .unwrap()
         }
+        /// Seam: a range's admission over scripted endpoints and the refusal value it
+        /// returns.
         #[test]
         fn declared_bounds_are_optional_but_cannot_both_be_omitted() {
             for (lo, hi) in [(true, false), (false, true), (true, true)] {
@@ -377,6 +386,7 @@ mod relations {
                 Err(RelationRangeError::NoBounds)
             );
         }
+        /// Seam: which endpoints a range reads, logged by scripted rows.
         #[test]
         fn missing_current_or_stated_lower_stops_before_later_opaque_reads() {
             let mut reads = Vec::new();
@@ -411,6 +421,7 @@ mod relations {
                 .unwrap());
             assert_eq!(reads, vec![0, 1]);
         }
+        /// Seam: which endpoints a range reads, logged by scripted rows.
         #[test]
         fn both_present_endpoints_are_read_before_lower_exclusion_and_upper_comparison_is_lazy() {
             let mut reads = Vec::new();
@@ -426,6 +437,7 @@ mod relations {
                 .unwrap());
             assert_eq!(reads, vec![0, 1]);
         }
+        /// Seam: the original endpoint failure, by identity, and the reads before it.
         #[test]
         fn endpoint_access_failure_preserves_original_box_and_complete_read_prefix() {
             #[derive(Debug, PartialEq, Eq)]
@@ -449,6 +461,7 @@ mod relations {
             };
             assert_eq!(error.as_ref() as *const Opaque, address);
         }
+        /// Seam: the range's runtime type refusal value and the reads before it.
         #[test]
         fn runtime_type_failure_reports_all_present_endpoint_types_after_both_reads() {
             let mut reads = Vec::new();
@@ -472,6 +485,7 @@ mod relations {
                 })
             );
         }
+        /// Seam: the range comparison kernel over large integers.
         #[test]
         fn large_signed_integer_bounds_compare_without_rounding_to_binary64() {
             let value = 9_007_199_254_740_993;
@@ -495,6 +509,7 @@ mod relations {
                 )))
                 .unwrap());
         }
+        /// Seam: the range's type refusal value before any endpoint is read.
         #[test]
         fn known_type_mismatch_is_refused_before_any_endpoint_context_exists() {
             assert_eq!(
@@ -516,6 +531,7 @@ mod relations {
             );
         }
 
+        /// Seam: the projection of an internal range type refusal into its issues.
         #[test]
         fn aggregate_type_projection_omits_only_the_intermediate_owner() {
             use yamaa_core::json::Value as JsonValue;
@@ -575,6 +591,7 @@ mod relations {
                 },
             ]
         }
+        /// Seam: the `RelationShape` a projection publishes.
         #[test]
         fn projection_restricts_reads_while_key_filter_and_order_metadata_stay_available() {
             let shape = RelationShape::new(fields(), Some(vec![2])).unwrap();
@@ -584,6 +601,7 @@ mod relations {
             assert_eq!(shape.fields()[2].kind, None);
             assert_eq!(shape.fields()[3].kind, Some(ValueType::Bool));
         }
+        /// Seam: the refusals `RelationShape` admission returns.
         #[test]
         fn declaration_shadowing_wrong_origins_and_invalid_projection_cannot_publish_a_shape() {
             let mut f = fields();
@@ -605,6 +623,7 @@ mod relations {
                 );
             }
         }
+        /// Seam: the refusals `RelationShape` admission returns for field kinds.
         #[test]
         fn only_derived_fields_may_have_unknown_or_boolean_logical_kind() {
             for kind in [None, Some(ValueType::Bool)] {
@@ -616,6 +635,7 @@ mod relations {
                 );
             }
         }
+        /// Seam: the `RelationShape` an empty projection publishes.
         #[test]
         fn empty_projection_hides_every_field_without_discarding_donor_metadata() {
             let shape = RelationShape::new(fields(), Some(vec![])).unwrap();
@@ -623,6 +643,7 @@ mod relations {
             assert_eq!(shape.index("ID"), Some(0));
             assert_eq!(shape.fields().len(), 4);
         }
+        /// Seam: the 1,024-column limit over generated fields.
         #[test]
         fn fixed_relation_width_precedes_coordinate_admission_and_keeps_exact_shape() {
             let fields = |count| {
@@ -650,7 +671,10 @@ mod relations {
         }
     }
     mod row_intermediate_context {
-        //! Row admission uses original named selectors and actual completed match values.
+        //! Row admission uses original named selectors and actual completed match
+        //! values. The refusals of preparing and binding this specification are
+        //! cases of `fixtures/diagnostics/intermediates.json` (its `row_context`
+        //! document); these tests keep the resolved plan they bind.
         use crate::support::document::Tree;
         use crate::support::resolved;
         use crate::support::specification::{header, prepare};
@@ -658,8 +682,7 @@ mod relations {
         use yamaa_core::{
             dataset::resolved::Grain,
             schema::{Document, DocumentNode as N},
-            specification::{BindError, PrepareError},
-            value::{ColumnType as T, Value},
+            value::ColumnType as T,
         };
 
         fn doc(
@@ -761,6 +784,8 @@ mod relations {
         /// An intermediate drives rows whenever each field it exposes has one
         /// result type (ROW-2, EXPR-14): a formula over integers is an
         /// integer, padding is text.
+        /// Seam: the result type the resolved plan gives each field a driving
+        /// intermediate exposes.
         #[test]
         fn a_driving_intermediate_exposes_each_derived_field_as_its_one_result_type() {
             let src = schema(&[("ID", T::Int)]);
@@ -846,6 +871,7 @@ mod relations {
                 );
             }
         }
+        /// Seam: the resolved plan's source, secondary inputs, grain and reads.
         #[test]
         fn common_authored_input_needs_no_base_and_can_follow_secondary_input_in_written_order() {
             let src = schema(&[("ID", T::Str), ("K", T::Str)]);
@@ -883,76 +909,9 @@ mod relations {
                 assert!(resolved::reads_intermediate(&plan, columns[0].expr, 0, 1));
             }
         }
+        /// Seam: the resolved plan's grain and the reads its templates bind.
         #[test]
-        fn unknown_and_omitted_drivers_keep_model_preflight_and_exact_typed_context() {
-            for (driver, expected) in [(Some("ABSENT"), Some("ABSENT")), (None, None)] {
-                let Err(PrepareError::Invalid(findings)) =
-                    prepare(&doc(false, [Some("SRC"), driver], false, "P.V"))
-                else {
-                    panic!("preflight")
-                };
-                assert_eq!(findings.len(), 1);
-                let diagnostic = findings[0].diagnostic();
-                assert_eq!(
-                    (
-                        diagnostic.definition().phase,
-                        diagnostic.definition().condition,
-                        diagnostic.definition().rule
-                    ),
-                    ("validation", "driver_unavailable", Some("ROW-1"))
-                );
-                assert_eq!(diagnostic.spec_paths, ["rows.second.dataset"]);
-                assert_eq!(diagnostic.context.len(), 2);
-                assert_eq!(
-                    diagnostic.context["row"],
-                    yamaa_core::json::Value::String("second".into())
-                );
-                assert_eq!(
-                    diagnostic.context["dataset"],
-                    yamaa_core::json::Value::from(
-                        expected
-                            .map(|v| Value::Str(v.into()))
-                            .unwrap_or(Value::Missing)
-                    )
-                );
-            }
-        }
-        #[test]
-        fn foreign_driver_defaults_require_raw_keys_and_grouped_named_reads_bind() {
-            let prepared =
-                prepare(&doc(false, [Some("SRC"), Some("DONOR")], false, "P.V")).unwrap();
-            let src = schema(&[("ID", T::Str), ("K", T::Str)]);
-            let donor = schema(&[("K", T::Str), ("V", T::Str)]);
-            let Err(BindError::Invalid(findings)) = prepared.bind_sources(&[&src, &donor]) else {
-                panic!("a foreign default cannot bootstrap its own matching key")
-            };
-            let diagnostics = findings
-                .iter()
-                .flat_map(|finding| finding.diagnostics(prepared.source()).unwrap())
-                .collect::<Vec<_>>();
-            // LOOKUP-2: this template's raw DONOR record must carry ID.
-            assert_eq!(diagnostics.len(), 2);
-            for (diagnostic, path) in diagnostics.iter().zip([
-                "columns.ID.derivation.source",
-                "columns.KEY.derivation.source",
-            ]) {
-                assert_eq!(
-                    (
-                        diagnostic.definition().phase,
-                        diagnostic.definition().condition,
-                        diagnostic.definition().rule
-                    ),
-                    ("validation", "unknown_field", Some("NAME-3"))
-                );
-                assert_eq!(diagnostic.spec_paths, [path]);
-                assert_eq!(
-                    diagnostic.context,
-                    std::collections::BTreeMap::from([(
-                        "identifier".into(),
-                        yamaa_core::json::Value::String("DONOR.ID".into())
-                    )])
-                );
-            }
+        fn grouped_named_reads_bind_at_the_grain_of_their_groups() {
             let prepared = prepare(&doc(false, [Some("SRC"), Some("SRC")], true, "P.V")).unwrap();
             let src = schema(&[("ID", T::Str), ("K", T::Str)]);
             let donor = schema(&[("K", T::Str), ("V", T::Str)]);
@@ -963,45 +922,7 @@ mod relations {
                 assert!(resolved::reads_intermediate(&plan, row[2].expr, 0, 1));
             }
         }
-        #[test]
-        fn unknown_named_field_retains_full_lookup_cause_at_authored_read_boundary() {
-            let prepared =
-                prepare(&doc(false, [Some("SRC"), Some("SRC")], false, "P.ABSENT")).unwrap();
-            let src = schema(&[("ID", T::Str), ("K", T::Str)]);
-            let donor = schema(&[("K", T::Str), ("V", T::Str)]);
-            let Err(BindError::Invalid(findings)) = prepared.bind_sources(&[&src, &donor]) else {
-                panic!("lookup")
-            };
-            let diagnostics = findings
-                .iter()
-                .flat_map(|f| f.diagnostics(prepared.source()).unwrap())
-                .collect::<Vec<_>>();
-            assert_eq!(diagnostics.len(), 2);
-            for (index, d) in diagnostics.iter().enumerate() {
-                assert_eq!(
-                    (
-                        d.definition().phase,
-                        d.definition().condition,
-                        d.definition().rule
-                    ),
-                    ("validation", "unknown_field", Some("LOOKUP-11"))
-                );
-                assert_eq!(
-                    d.spec_paths,
-                    [format!(
-                        "rows.{}.derivations.ROWV.source",
-                        ["first", "second"][index]
-                    )]
-                );
-                assert_eq!(
-                    d.context,
-                    std::collections::BTreeMap::from([(
-                        "identifier".into(),
-                        yamaa_core::json::Value::String("P.ABSENT".into())
-                    )])
-                );
-            }
-        }
+        /// Seam: a column name of a million generated characters in the resolved plan.
         #[test]
         fn complete_source_metadata_is_preserved_even_without_source_rows() {
             let prepared = prepare(&doc(false, [Some("SRC"), Some("SRC")], false, "P.V")).unwrap();
@@ -1028,6 +949,8 @@ mod relations {
             .unwrap()
         }
 
+        /// Seam: the admitted ordinal source: its schema, values and refusals at its
+        /// limits.
         #[test]
         fn positions_and_stored_contract_are_exact_at_the_admission_boundary() {
             let original = schema();
@@ -1213,6 +1136,7 @@ mod relations {
                 })
                 .collect()
         }
+        /// Seam: the run report's column schema, which core owns.
         #[test]
         fn the_column_schema_stays_owned_by_core() {
             assert_eq!(
@@ -1247,6 +1171,7 @@ mod relations {
                 2
             );
         }
+        /// Seam: the run report core prepares from hand-built facts.
         #[test]
         fn complete_reports_prepare_kinds_in_order_with_typed_cells_and_all_keys() {
             let facts = facts(vec![held(), warning()]);
@@ -1311,6 +1236,7 @@ mod relations {
             assert_eq!(report.row_count(), 9);
             assert_eq!(report.cell(8, 7).unwrap(), ValueRef::Str("warning"));
         }
+        /// Seam: the run report core prepares from hand-built facts.
         #[test]
         fn failed_runs_name_their_condition_and_carry_no_column_rows() {
             let mut failed = facts(vec![held()]);
@@ -1332,6 +1258,7 @@ mod relations {
             assert_eq!(rows[3][11], PreparedCell::Missing);
             run_report::verify(&run_report::assemble(plain(rows)), &failed).unwrap();
         }
+        /// Seam: the refusal of hand-built facts before any report row.
         #[test]
         fn malformed_facts_refuse_before_rows_are_returned() {
             let mut malformed = Vec::new();
@@ -1369,6 +1296,7 @@ mod relations {
                 ));
             }
         }
+        /// Seam: the run report's verification of hand-built rows.
         #[test]
         fn verification_rejects_any_row_that_breaks_the_contract() {
             let facts = facts(vec![held(), warning()]);
@@ -1400,6 +1328,7 @@ mod relations {
         /// however its file writes the row template (P-CLR-2), and cites the
         /// rule of the condition its handler answers: an `absent` row
         /// LOOKUP-24 (D204).
+        /// Seam: the run report core prepares from hand-built facts.
         #[test]
         fn handler_rows_cite_the_condition_their_handler_answers() {
             for (path, handler, target, rule) in [
@@ -1540,6 +1469,7 @@ mod relations {
                 );
             }
         }
+        /// Seam: the run report core prepares from hand-built facts.
         #[test]
         fn canonical_json_numbers_and_temporal_values_are_retained_as_typed_details() {
             let mut check = warning();
@@ -1579,6 +1509,7 @@ mod relations {
             // asserted by the adapter projection tests.
             assert_eq!(rows[7][13], PreparedCell::Details(details));
         }
+        /// Seam: the run report core prepares from hand-built facts.
         #[test]
         fn complete_check_sets_keep_all_rows_and_metadata_without_copy_allowances() {
             let checks: Vec<_> = (0..6_000)
@@ -1602,6 +1533,7 @@ mod relations {
             }
             run_report::verify(&run_report::assemble(plain(rows)), &facts).unwrap();
         }
+        /// Seam: the run report's depth boundary over generated details.
         #[test]
         fn recursive_json_details_use_the_shared_semantic_depth_boundary() {
             use yamaa_core::limits::Limits;
@@ -1665,6 +1597,7 @@ mod relations {
         /// A saved report reads back as the run, its row count or failed
         /// condition, and each input's records and bytes (PROJECT-15); a
         /// table that is not a run report reads as nothing.
+        /// Seam: the `Recorded` value read back from a report saved from hand-built facts.
         #[test]
         fn a_saved_report_reads_back_its_run_and_its_inputs() {
             let facts = facts(vec![held(), warning()]);

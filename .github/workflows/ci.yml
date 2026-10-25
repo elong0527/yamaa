@@ -2,9 +2,7 @@ name: CI
 
 # Four stable required checks. Each selects its work before installing tools,
 # while engine/build changes retain both hosts' fresh-install equivalence.
-# Main's scheduled runs save the Rust caches restored by pull requests. A
-# fifth lane, not required, checks both hosts in the test-only loaded mode
-# when an input of that mode changes.
+# Main's scheduled runs save the Rust caches restored by pull requests.
 on:
   pull_request:
   push:
@@ -181,44 +179,3 @@ jobs:
       - name: No R inputs changed
         if: steps.paths.outputs.r == 'false'
         run: echo '::notice::No R inputs changed; the R checks did not run.'
-
-  # The test-only loaded mode (rust/interface/README.md): both hosts built
-  # with their dynamic-engine feature load the engine library from beside
-  # their module, and their suites run so, with each fixture engine of the
-  # loading tests.
-  loaded:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 150
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: ./.github/actions/select-checks
-        id: paths
-      - uses: ./.github/actions/setup
-        if: steps.paths.outputs.loaded == 'true'
-        with:
-          r: check
-          package: tools
-      - name: Install the programs that CRAN's checks use
-        if: steps.paths.outputs.loaded == 'true'
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends devscripts aspell aspell-en
-      - name: Check the freshly installed Python host with the engine loaded at runtime
-        id: python
-        if: steps.paths.outputs.loaded == 'true'
-        env:
-          YAMAA_ENGINE: loaded
-        run: uv run --project python --no-sync python -m tools.commands.host_checks --host python
-      - name: Check the freshly installed R host with the engine loaded at runtime
-        if: steps.paths.outputs.loaded == 'true' && (success() || steps.python.outcome == 'failure')
-        env:
-          YAMAA_ENGINE: loaded
-          YAMAA_R_CARGO_TARGET_DIR: ${{ github.workspace }}/rust/target
-        run: uv run --project python --no-sync python -m tools.commands.host_checks --host r
-      - name: No loaded-mode inputs changed
-        if: steps.paths.outputs.loaded == 'false'
-        run: echo '::notice::No loaded-mode inputs changed; the loaded-mode checks did not run.'

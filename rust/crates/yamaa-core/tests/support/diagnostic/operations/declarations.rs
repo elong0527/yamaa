@@ -47,6 +47,7 @@ pub(super) const FILES: &[File] = &[
     fixture!("producers.json"),
     fixture!("projects.json"),
     fixture!("records.json"),
+    fixture!("rows.json"),
     fixture!("schema.json"),
 ];
 
@@ -168,9 +169,11 @@ fn flag_condition(input: &Json) -> Vec<Diagnostic> {
 /// (`"python"`, `"r"` or `null` for an engine that claims none) and each
 /// function file by its name, an integer identity with the tests its
 /// contract needs (`support::project_call_compiler::definition`), mapping
-/// each language to the callable that implements it.
+/// each language to the callable that implements it. With `sources`, as
+/// `bind` reads them, the document must prepare, and the findings are those
+/// binding it to their schemas refuses with.
 fn prepare_in(input: &Json) -> Vec<Diagnostic> {
-    let input = input.closed(&["document", "project"]);
+    let input = input.closed(&["document", "project", "sources"]);
     let project = input.field("project").closed(&["language", "functions"]);
     let host = match project.field("language") {
         Json::Null => None,
@@ -200,9 +203,14 @@ fn prepare_in(input: &Json) -> Vec<Diagnostic> {
     )
     .unwrap_or_else(|findings| panic!("the project is admitted: {findings:?}"))
     .into_execution();
-    prepare_in_environment(&tree(input.field("document")).document(), &environment)
-        .err()
-        .map_or_else(Vec::new, refusal)
+    let prepared = prepare_in_environment(&tree(input.field("document")).document(), &environment);
+    match input.get("sources") {
+        None => prepared.err().map_or_else(Vec::new, refusal),
+        Some(_) => bound(
+            &prepared.unwrap_or_else(|error| panic!("the document prepares: {error:?}")),
+            &schemas(input),
+        ),
+    }
 }
 
 /// A project's scope finding, `{finding, ...}`: `duplicate_name` with `name`

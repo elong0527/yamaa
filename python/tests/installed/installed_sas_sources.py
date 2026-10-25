@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 import polars as pl
+from host_fixtures import first_difference
 
 import yamaa
 
@@ -86,7 +87,9 @@ class SasSources(unittest.TestCase):
         self.assert_types(result.output, case["fields"])
         rows = self.rows(result.output, case["fields"])
         if "rows" in case:
-            self.assertEqual(rows, case["rows"])
+            # The rows are compared as a summary of their first difference
+            # (#3882).
+            self.assertIsNone(first_difference(rows, case["rows"]))
         else:
             self.assertEqual(rows[0], case["first_row"])
             # The independent haven owner states only the first row. Do not

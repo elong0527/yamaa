@@ -1,0 +1,173 @@
+{
+  "about": "The admitted report of a project environment's findings, each naming the file that declares its subject and the declaration that names that file (D8): a project's inline codelists (CT-1, CT-3 to CT-6) and the lock it holds (FUNC-2, FUNC-3) report against the project file, each finding of a definition against the function file the project lists (FUNC-2), and a value a held file writes outside the int range against that file, as a function file's failure (FUNC-2) or as a codelist source's literal (VALUE-5). Every report is complete: the projection reports each finding it is given and nothing else.",
+  "cases": [
+    {
+      "case": "independent_complete_sixteen_record_project_report_preserves_every_field_and_order",
+      "operation": "admit_admission",
+      "input": {
+        "root": "held/project.yaml",
+        "project": {"functions": [], "environments": {"python": {"lock": "uv.lock"}}, "codelists": [{"codelists": []}]},
+        "draft": {
+          "language": "python",
+          "lock": null,
+          "functions": [],
+          "codelists": [
+            {
+              "codelists": [
+                {"id": "SEX", "name": "Sex", "data_type": "text", "items": [{"value": true, "decode": "bad", "rank": 1, "extended": true}, {"value": true}], "external": {"dictionary": "Other", "version": "1"}},
+                {"id": "SEX", "name": "Sex", "data_type": "text", "items": [{"value": true, "decode": "bad", "rank": 1, "extended": true}, {"value": true}], "external": {"dictionary": "Other", "version": "1"}}
+              ]
+            }
+          ]
+        },
+        "function_origins": [],
+        "function_files": [],
+        "codelist_origins": [0],
+        "captures": []
+      },
+      "issues": [
+        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-3", "spec_paths": ["codelists[0].codelists[0]"], "context": {"codelist": "SEX", "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},
+        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[0].items[0].value"], "context": {"codelist": "SEX", "value": true, "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},
+        {"phase": "validation", "condition": "codelist_extension_not_admitted", "rule": "CT-6", "spec_paths": ["codelists[0].codelists[0].items[0].extended"], "context": {"codelist": "SEX", "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},
+        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[0].items[1].value"], "context": {"codelist": "SEX", "value": true, "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},
+        {"phase": "validation", "condition": "codelist_duplicate_value", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[0].items[1].value"], "context": {"codelist": "SEX", "value": true, "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},
+        {"phase": "validation", "condition": "codelist_partial_item_field", "rule": "CT-5", "spec_paths": ["codelists[0].codelists[0]"], "context": {"codelist": "SEX", "field": "decode", "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},
+        {"phase": "validation", "condition": "codelist_partial_item_field", "rule": "CT-5", "spec_paths": ["codelists[0].codelists[0]"], "context": {"codelist": "SEX", "field": "rank", "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},
+        {"phase": "validation", "condition": "duplicate_define_identifier", "rule": "CT-1", "spec_paths": ["codelists[0].codelists[1].id"], "context": {"codelist": "SEX", "field": "id", "identifier": "SEX", "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},
+        {"phase": "validation", "condition": "duplicate_define_identifier", "rule": "CT-1", "spec_paths": ["codelists[0].codelists[1].name"], "context": {"codelist": "SEX", "field": "name", "name": "Sex", "identifier": "Sex", "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},
+        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-3", "spec_paths": ["codelists[0].codelists[1]"], "context": {"codelist": "SEX", "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},
+        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[1].items[0].value"], "context": {"codelist": "SEX", "value": true, "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},
+        {"phase": "validation", "condition": "codelist_extension_not_admitted", "rule": "CT-6", "spec_paths": ["codelists[0].codelists[1].items[0].extended"], "context": {"codelist": "SEX", "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},
+        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[1].items[1].value"], "context": {"codelist": "SEX", "value": true, "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},
+        {"phase": "validation", "condition": "codelist_duplicate_value", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[1].items[1].value"], "context": {"codelist": "SEX", "value": true, "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},
+        {"phase": "validation", "condition": "codelist_partial_item_field", "rule": "CT-5", "spec_paths": ["codelists[0].codelists[1]"], "context": {"codelist": "SEX", "field": "decode", "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}},
+        {"phase": "validation", "condition": "codelist_partial_item_field", "rule": "CT-5", "spec_paths": ["codelists[0].codelists[1]"], "context": {"codelist": "SEX", "field": "rank", "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "codelists[0]"}}
+      ]
+    },
+    {
+      "case": "every_function_route_has_complete_independent_context_in_its_function_file",
+      "operation": "admit_admission",
+      "input": {
+        "root": "held/project.yaml",
+        "project": {"functions": ["functions/f0.yaml"], "environments": {"python": {"lock": "uv.lock"}}, "codelists": []},
+        "draft": {
+          "language": "python",
+          "lock": {"written": "uv.lock", "kind": "uv"},
+          "functions": [
+            {"name": "id", "description": "Identity", "params": [{"name": "x", "type": "int"}], "returns": "int", "implementations": [["python", "project.id"]], "tests": [{"id": "ordinary", "covers": ["normal"], "args": {"x": -9223372036854775808}, "result": 9223372036854775807}]}
+          ],
+          "codelists": []
+        },
+        "function_origins": ["id"],
+        "function_files": [0],
+        "codelist_origins": [],
+        "captures": [{"function_file": 0, "identity": "held/function.yaml"}],
+        "findings": [
+          {"function": 0, "finding": "invalid_name"},
+          {"function": 0, "finding": "missing_implementation"},
+          {"function": 0, "finding": "invalid_implementation", "language": "r"},
+          {"function": 0, "finding": "empty_description"},
+          {"function": 0, "finding": "negative_comparison_decimals"},
+          {"function": 0, "finding": "invalid_parameter_name", "parameter": 0},
+          {"function": 0, "finding": "duplicate_parameter", "parameter": 0},
+          {"function": 0, "finding": "required_default", "parameter": 0},
+          {"function": 0, "finding": "missing_default", "parameter": 0},
+          {"function": 0, "finding": "invalid_default", "parameter": 0},
+          {"function": 0, "finding": "invalid_case_id", "case": 0},
+          {"function": 0, "finding": "duplicate_case_id", "case": 0},
+          {"function": 0, "finding": "empty_coverage", "case": 0},
+          {"function": 0, "finding": "duplicate_coverage", "case": 0, "tag": 0},
+          {"function": 0, "finding": "invalid_coverage", "case": 0, "tag": 0},
+          {"function": 0, "finding": "unsupported_evidence", "case": 0, "tag": 0},
+          {"function": 0, "finding": "duplicate_argument", "case": 0, "argument": 0},
+          {"function": 0, "finding": "unknown_argument", "case": 0, "argument": 0},
+          {"function": 0, "finding": "missing_required_argument", "case": 0, "parameter": 0},
+          {"function": 0, "finding": "argument_type", "case": 0, "argument": 0},
+          {"function": 0, "finding": "invalid_result", "case": 0},
+          {"function": 0, "finding": "missing_obligation", "obligation": "boundary"}
+        ]
+      },
+      "issues": [
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["name"], "context": {"function": "id", "reason": "invalid_function_name", "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["implementations"], "context": {"function": "id", "reason": "missing_implementation", "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["implementations.r"], "context": {"function": "id", "reason": "invalid_callable", "language": "r", "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["description"], "context": {"function": "id", "reason": "empty_description", "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["comparison_decimals"], "context": {"function": "id", "reason": "negative_comparison_decimals", "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["params[0].name"], "context": {"function": "id", "reason": "invalid_parameter_name", "parameter": "x", "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["params[0].name"], "context": {"function": "id", "reason": "duplicate_parameter", "parameter": "x", "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["params[0].default"], "context": {"function": "id", "reason": "required_parameter_default", "parameter": "x", "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["params[0].default"], "context": {"function": "id", "reason": "missing_parameter_default", "parameter": "x", "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["params[0].default"], "context": {"function": "id", "reason": "invalid_parameter_default", "parameter": "x", "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].id"], "context": {"function": "id", "reason": "invalid_case_id", "case": "ordinary", "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].id"], "context": {"function": "id", "reason": "duplicate_case_id", "case": "ordinary", "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].covers"], "context": {"function": "id", "reason": "empty_coverage", "case": "ordinary", "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].covers[0]"], "context": {"function": "id", "reason": "duplicate_coverage", "case": "ordinary", "tag": "normal", "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].covers[0]"], "context": {"function": "id", "reason": "invalid_coverage", "case": "ordinary", "tag": "normal", "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].covers[0]"], "context": {"function": "id", "reason": "unsupported_coverage_evidence", "case": "ordinary", "tag": "normal", "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].args.x"], "context": {"function": "id", "reason": "duplicate_case_argument", "case": "ordinary", "argument": "x", "value": -9223372036854775808, "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].args.x"], "context": {"function": "id", "reason": "unknown_case_argument", "case": "ordinary", "argument": "x", "value": -9223372036854775808, "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].args.x"], "context": {"function": "id", "reason": "missing_required_case_argument", "case": "ordinary", "argument": "x", "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].args.x"], "context": {"function": "id", "reason": "invalid_case_argument_type", "case": "ordinary", "argument": "x", "value": -9223372036854775808, "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].result"], "context": {"function": "id", "reason": "invalid_case_result", "case": "ordinary", "value": 9223372036854775807, "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests"], "context": {"function": "id", "reason": "missing_coverage_obligation", "obligation": "boundary", "source": "held/function.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}}
+      ]
+    },
+    {
+      "case": "lock_findings_name_the_project_file_that_holds_the_lock",
+      "operation": "admit_admission",
+      "input": {
+        "root": "held/project.yaml",
+        "project": {"functions": null, "environments": {"python": {"lock": "uv.lock"}}, "codelists": []},
+        "draft": {"language": "python", "lock": {"written": "uv.lock", "kind": "renv"}, "functions": null, "codelists": []},
+        "function_origins": [],
+        "function_files": [],
+        "codelist_origins": [],
+        "captures": []
+      },
+      "issues": [
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["environments.python.lock"], "context": {"reason": "lock_kind_mismatch", "language": "python", "actual_lock_kind": "renv", "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "environments.python.lock"}}
+      ]
+    },
+    {
+      "case": "root_wide_scalars_are_one_admitted_complete_report",
+      "operation": "admit_root_scalars",
+      "input": {
+        "root": "held/project.yaml",
+        "findings": [{"path": "codelists[0].codelists[0].items[0].value", "node": 0, "kind": "integer_range", "value": "123456789012345678901234567890"}]
+      },
+      "issues": [
+        {"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["codelists[0].codelists[0].items[0].value"], "context": {"actual": 123456789012345678901234567890, "value": "123456789012345678901234567890", "minimum": -9223372036854775808, "maximum": 9223372036854775807, "source": "held/project.yaml", "entry": "held/project.yaml", "environment_path": "$"}}
+      ]
+    },
+    {
+      "case": "function_file_scalar_failures_report_against_the_project_listing",
+      "operation": "admit_scalar_sources",
+      "input": {
+        "root": "held/project.yaml",
+        "project": {"functions": ["functions/f0.yaml"], "environments": {"python": {"lock": "uv.lock"}}, "codelists": []},
+        "sources": [
+          {"function_file": 0, "identity": "held/first.yaml", "findings": [{"path": "tests[0].result", "node": 0, "kind": "integer_range", "value": "9223372036854775808"}]}
+        ]
+      },
+      "issues": [
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].result"], "context": {"reason": "integer_out_of_range", "value": 9223372036854775808, "source": "held/first.yaml", "entry": "held/project.yaml", "environment_path": "functions[0]"}}
+      ]
+    },
+    {
+      "case": "each_codelist_file_reports_its_wide_integer_against_its_own_declaration_leaving_an_unheld_one_out",
+      "operation": "admit_scalar_sources",
+      "input": {
+        "root": "held/project.yaml",
+        "project": {"functions": null, "environments": {"python": {"lock": "uv.lock"}}, "codelists": ["ct.yaml", "ct.yaml", "ct.yaml"]},
+        "sources": [
+          {"codelist": 1, "identity": "held/first.yaml", "findings": [{"path": "items[0].value", "node": 0, "kind": "integer_range", "value": "9223372036854775808"}]},
+          {"codelist": 2, "identity": "held/second.yaml", "findings": [{"path": "items[0].value", "node": 0, "kind": "integer_range", "value": "9223372036854775808"}]}
+        ]
+      },
+      "issues": [
+        {"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["items[0].value"], "context": {"actual": 9223372036854775808, "value": "9223372036854775808", "minimum": -9223372036854775808, "maximum": 9223372036854775807, "source": "held/first.yaml", "entry": "held/project.yaml", "environment_path": "codelists[1]"}},
+        {"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["items[0].value"], "context": {"actual": 9223372036854775808, "value": "9223372036854775808", "minimum": -9223372036854775808, "maximum": 9223372036854775807, "source": "held/second.yaml", "entry": "held/project.yaml", "environment_path": "codelists[2]"}}
+      ]
+    }
+  ]
+}

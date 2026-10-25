@@ -82,6 +82,7 @@ pub fn findings(
         Error::Sources(_)
         | Error::ParquetSource(_)
         | Error::SasSource(_)
+        | Error::DatasetJsonSource(_)
         | Error::TypedSource(_)
         | Error::Source(_)
         | Error::Ordinal(_)
@@ -118,6 +119,9 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> Rejection {
             Error::Source(TextTableError::Table(_)) => Fault::TableLimit,
             Error::ParquetSource(_) => Fault::ParquetLimit,
             Error::SasSource(_) => Fault::SasLimit,
+            Error::DatasetJsonSource(crate::dataset_json_source::Error::Table(_)) => {
+                Fault::TableLimit
+            }
             _ => Fault::SourceLimit,
         };
         return Rejection::Fault(refusal.diagnostic(Step::Ingest, code));
@@ -158,6 +162,13 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> Rejection {
             (Step::Ingest, Fault::SasReaderUnavailable)
         }
         Error::SasSource(_) => (Step::Ingest, Fault::SasBoundary),
+        Error::DatasetJsonSource(crate::dataset_json_source::Error::Limit { .. }) => {
+            (Step::Ingest, Fault::SourceLimit)
+        }
+        Error::DatasetJsonSource(crate::dataset_json_source::Error::Table(
+            crate::column_table::TableError::Limit { .. },
+        )) => (Step::Ingest, Fault::TableLimit),
+        Error::DatasetJsonSource(_) => (Step::Ingest, Fault::SourceBoundary),
         Error::Ordinal(_) => (Step::Ingest, Fault::SourceOrdinalBoundary),
         Error::Bind(BindError::Catalog(_)) => (Step::Bind, Fault::ReferenceCatalog),
         Error::Bind(BindError::DependencyPolicy(_)) => (Step::Bind, Fault::DependencyPolicy),

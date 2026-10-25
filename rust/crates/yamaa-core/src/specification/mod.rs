@@ -306,6 +306,12 @@ pub enum SourceProfile {
     /// An ODM 1.3 or 2.0 document read into the clinical-item table
     /// (`crate::odm_items`; INPUT-1, ODM-1).
     OdmXml,
+    /// A Dataset-JSON 1.1 file in its single-object representation
+    /// (INPUT-1, DSJSON-1).
+    DatasetJson,
+    /// A Dataset-JSON 1.1 file in its newline-delimited representation
+    /// (INPUT-1, DSJSON-1).
+    DatasetNdjson,
 }
 /// Core-selected semantic source interpretation, independent of storage profile.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -331,6 +337,10 @@ impl SourceProfile {
             Some(Self::Sas7bdat)
         } else if extension.eq_ignore_ascii_case("xml") {
             Some(Self::OdmXml)
+        } else if extension.eq_ignore_ascii_case("json") {
+            Some(Self::DatasetJson)
+        } else if extension.eq_ignore_ascii_case("ndjson") {
+            Some(Self::DatasetNdjson)
         } else {
             None
         }
@@ -552,6 +562,8 @@ fn build_sources(
                 Some(ast::Profile::Xport) => SourceProfile::Xport,
                 Some(ast::Profile::Sas7bdat) => SourceProfile::Sas7bdat,
                 Some(ast::Profile::OdmXml) => SourceProfile::OdmXml,
+                Some(ast::Profile::DatasetJson) => SourceProfile::DatasetJson,
+                Some(ast::Profile::DatasetNdjson) => SourceProfile::DatasetNdjson,
             },
             encoding: input.source.encoding.as_ref().map(|text| text.text.clone()),
             byte_order_mark: input.source.byte_order_mark,

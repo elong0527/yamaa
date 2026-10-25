@@ -1,0 +1,29 @@
+{
+  "creationDateTime": "2026-09-30T10:15:00",
+  "datasetJSONVersion": "1.0.0",
+  "fileOID": "www.example.org/PILOT7/DM",
+  "originator": "Example CRO",
+  "sourceSystem": "Example EDC",
+  "sourceSystemVersion": "5.1",
+  "clinicalData": {
+    "studyOID": "PILOT7",
+    "metaDataVersionOID": "MDV.1",
+    "itemGroupData": {
+      "IG.DM": {
+        "records": 2,
+        "name": "DM",
+        "label": "Demographics",
+        "items": [
+          {"OID": "ITEMGROUPDATASEQ", "name": "ITEMGROUPDATASEQ", "label": "Record identifier", "type": "integer"},
+          {"OID": "IT.DM.STUDYID", "name": "STUDYID", "label": "Study Identifier", "type": "string", "length": 6, "keySequence": 1},
+          {"OID": "IT.DM.USUBJID", "name": "USUBJID", "label": "Unique Subject Identifier", "type": "string", "length": 6, "keySequence": 2},
+          {"OID": "IT.DM.SITEID", "name": "SITEID", "label": "Study Site Identifier", "type": "string", "length": 3}
+        ],
+        "itemData": [
+          [1, "PILOT7", "P7-741", "101"],
+          [2, "PILOT7", "P7-742", "102"]
+        ]
+      }
+    }
+  }
+}

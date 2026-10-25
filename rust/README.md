@@ -52,7 +52,7 @@ other configuration.
 | `readstat` | Bundled read-only C backend and direct `cc` build dependency for `.sas7bdat` and `.xpt` input. |
 | `odm` | The `quick-xml` tokenizer and the pure-Rust Gzip codec; reads CDISC ODM 1.3 and 2.0 XML clinical items from plain XML or plain/Gzip TAR files into the fixed clinical-item table, for `read_odm` and for a specification's `.xml` inputs. |
 | `arrow` | Not a format: the Arrow form of tables at the hosts' edge. The facade's re-exported Arrow types, `Table::columns`, `schema`, `batches` and `stream`, and `InputFrame::import`, plus `SpecRequest::stream` and its streamed-run types, through `arrow-array` and `arrow-schema`. `parquet` builds the adapter's Arrow code too. |
-| No optional features | The CSV route and the engine's own tables remain; a table has its rows and its preview, and `save_table` writes it. No YAML parser, Parquet codec, ODM XML reader, ReadStat, native compression build or Arrow crate is selected. |
+| No optional features | The CSV and Dataset-JSON routes and the engine's own tables remain; a table has its rows and its preview, and `save_table` writes it. No YAML parser, Parquet codec, ODM XML reader, ReadStat, native compression build or Arrow crate is selected. |
 
 The engine's own tables are columnar (`column_table.rs` over `columns.rs`):
 every source decodes into one, and a public table holds the same storage. Its
@@ -206,11 +206,10 @@ operation of #3765.
 The supported API lives in one new crate, `rust/crates/yamaa` (package name
 `yamaa`), a small facade over `yamaa-adapters` and `yamaa-core`. The owner
 decided this on 2026-10-16: a separate facade crate, not a module inside
-`yamaa-adapters`. Host crates reach the engine only through the facade:
-the command line depends on it (plus its language runtime), and the two
-bindings link `yamaa-engine`, the facade behind a C ABI, and call it through
-the client of `yamaa-boundary`, which holds no engine code (D225 on #3030).
-So the compiler enforces the boundary: the 69 `pub mod`s of
+`yamaa-adapters`. Host crates depend only on the facade (plus their language
+runtime, and for the two bindings `yamaa-boundary`, which holds their
+interface handshake and no engine code; D281 on #3673), so the compiler
+enforces the boundary: the 69 `pub mod`s of
 `yamaa-adapters` and the 107 of `yamaa-core` stay internal and cannot be
 reached past the facade. The facade re-exports no adapters or core type; every
 public type below is facade-owned, and adapters/core types are converted at
@@ -708,11 +707,11 @@ git/path is the distribution route.
 Every adapters or core module the two host crates used before they moved onto
 the facade (24 adapters modules and 11 core modules, counted from the host
 sources on 2026-10-16, less the removed producer-route modules) maps to a facade
-item or is marked internal. The host crates reach the facade through the
-engine's C ABI, depending on `yamaa-boundary` and `yamaa-engine`; they use none
-of these modules directly. The facade itself uses 29 adapters modules
-and 17 core modules, counted from `crates/yamaa/src` after the producer route
-was removed. Any module not listed here is internal by default.
+item or is marked internal. The Python and R bindings depend on the facade and
+`yamaa-boundary`; the command line depends on the facade alone. None uses these
+modules directly. The facade itself uses 29 adapters modules and 17 core
+modules, counted from `crates/yamaa/src` after the producer route was removed.
+Any module not listed here is internal by default.
 
 | Module the hosts used | Facade disposition |
 | --- | --- |
@@ -781,8 +780,13 @@ strategies:
   by those keys runs as one partition, and a specification that declares no
   key runs over consecutive partitions.
 
-Under either strategy, `Partitions::with_whole_table_fallback` runs a step
-that would refuse over the whole input instead.
+Under either strategy, the records one step reads together must sit in one
+partition (#3830): a grouped row template, the key grain or an ODM read whose
+records the partitions cannot keep whole, rows driven by an intermediate over
+the driver input and such an intermediate's `unique` check refuse the run too,
+and consecutive partitions end only between runs of the fields those reads
+share. `Partitions::with_whole_table_fallback` runs a step that would refuse
+over the whole input instead.
 
 ### Terminology: key groups vs. data partitions
 

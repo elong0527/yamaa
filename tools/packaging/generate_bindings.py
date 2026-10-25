@@ -50,10 +50,9 @@ definition against the handwritten PyO3 surface (``#[pyclass]`` names,
 method or private export is drift, not a silent deletion.
 
 The one path translation is the version constant: the definition names
-``yamaa_core::VERSION``, which is core's package version, but
-``yamaa-python`` reaches the engine only through the boundary's client.
-Every workspace crate carries the workspace's version, so the registration
-reads the binding's own, ``env!("CARGO_PKG_VERSION")``.
+``yamaa_core::VERSION``, which is core's package version. Every workspace
+crate carries the workspace's version, so the registration reads the
+binding's own, ``env!("CARGO_PKG_VERSION")``.
 
 R declarations are reconciled against every handwritten ``#[extendr]`` function,
 including argument order/types and return types.
@@ -254,7 +253,7 @@ def _load_definition():
         raise ValueError(
             f"unsupported interface format_version: {definition['format_version']!r}"
         )
-    if definition["boundary"] != "engine_c_abi":
+    if definition["boundary"] != "rust_generated_host_glue":
         raise ValueError(f"unexpected boundary: {definition['boundary']!r}")
     if definition["contract"] != "README.md":
         raise ValueError(f"unexpected contract document: {definition['contract']!r}")

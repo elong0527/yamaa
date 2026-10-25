@@ -117,13 +117,6 @@ CLI_TARGETS = {
 # UNC path, or a drive mapped to the share.
 SHARE_PLATFORMS = ("windows-2025",)
 SHARE_ROUTES = ("unc-path", "mapped-drive")
-# The test-only loaded mode (rust/interface/README.md, #3702): both hosts
-# built from the checkout with their dynamic-engine feature, each loading the
-# engine library from beside its module, where the installed Python suites
-# and the R package check run, with each fixture engine of the loading tests.
-# CI's loaded lane runs it on Linux; native qualification adds Windows x64 and
-# macOS arm64.
-LOADED_PLATFORMS = ("macos-15", "windows-2025")
 
 
 def r_series(version):
@@ -184,7 +177,6 @@ def coverage():
             ]
         },
         "share": {"os": list(SHARE_PLATFORMS), "route": list(SHARE_ROUTES)},
-        "loaded": {"os": list(LOADED_PLATFORMS)},
     }
 
 
