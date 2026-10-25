@@ -38,6 +38,8 @@ macro_rules! fixture {
 
 mod define;
 mod file_route;
+mod host_functions;
+mod odm;
 mod project_scope;
 
 /// What one operation reported, with the study directory its files were
@@ -53,9 +55,11 @@ pub struct Reported {
 type Reader = fn(&str, &Value) -> Option<Reported>;
 
 /// Each module's readers, by the operations it names, and its files.
-const MODULES: [(Reader, &[File]); 3] = [
+const MODULES: [(Reader, &[File]); 5] = [
     (define::run, define::FILES),
     (file_route::run, file_route::FILES),
+    (host_functions::run, host_functions::FILES),
+    (odm::run, odm::FILES),
     (project_scope::run, project_scope::FILES),
 ];
 
@@ -65,6 +69,15 @@ pub fn run(operation: &str, input: &Value) -> Reported {
         .iter()
         .find_map(|(run, _)| run(operation, input))
         .unwrap_or_else(|| panic!("no reader for the operation {operation:?}"))
+}
+
+/// The calls the scripted host-functions port of `operation`, one of
+/// [`host_functions`]'s, received for `input`, and where its run started
+/// reading its study input, in order.
+pub fn calls(operation: &str, input: &Value) -> Vec<String> {
+    host_functions::logged(operation, input)
+        .unwrap_or_else(|| panic!("{operation:?} runs no scripted host"))
+        .1
 }
 
 /// Every fixture file the modules read.
@@ -110,7 +123,7 @@ pub fn study(input: &Value) -> Scratch {
 }
 
 /// The submission section `name` names: `sdtm`, `adam` or `send`.
-fn section(name: &Value) -> Submission {
+pub fn section(name: &Value) -> Submission {
     match text(name) {
         "sdtm" => Submission::Sdtm,
         "adam" => Submission::Adam,

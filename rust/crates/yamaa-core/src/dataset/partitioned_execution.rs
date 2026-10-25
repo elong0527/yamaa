@@ -3,7 +3,9 @@
 //! a step that needs the whole table and its whole-table fallback, and the
 //! end states of a cancelled or failed partitioned run; then the same over
 //! key-bounded partitions (#3763), which keep subject-keyed windows and
-//! aggregates inside one partition.
+//! aggregates inside one partition; and a run that holds one decoded
+//! partition at a time (#3830), whose partitions are cut between runs of the
+//! fields its grouped templates and key grain read together.
 //!
 //! No benchmark or host fixture reaches this seam, because the hosts run
 //! whole tables: these hand-built plans call `ResolvedPlan::execute_divided`
@@ -108,18 +110,6 @@ impl Rows {
             reads: Cell::new(0),
         }
     }
-    /// The snapshot divided into consecutive partitions of these sizes.
-    fn divided(&self, sizes: &[usize]) -> Vec<Rows> {
-        assert_eq!(sizes.iter().sum::<usize>(), self.rows.len());
-        let mut start = 0;
-        sizes
-            .iter()
-            .map(|&size| {
-                start += size;
-                Rows::new(self.schema.clone(), self.rows[start - size..start].to_vec())
-            })
-            .collect()
-    }
 }
 impl TableAccess for Rows {
     type Error = Infallible;
@@ -153,28 +143,105 @@ fn divisions(rows: usize) -> Vec<Vec<usize>> {
 /// The secondary inputs of a run, which no partitioning divides.
 type Secondary<'a> = [&'a dyn TableAccess<Error = Infallible>];
 
+/// `input` divided into consecutive partitions of `sizes` records, each
+/// decoded as a copy of its records when the run asks for it (#3830). It
+/// counts the partitions it decoded and the most that were alive at once.
+struct Source<'i> {
+    input: &'i Rows,
+    ranges: Vec<std::ops::Range<usize>>,
+    decoded: usize,
+    live: std::rc::Rc<Cell<usize>>,
+    most: usize,
+}
+impl<'i> Source<'i> {
+    fn new(input: &'i Rows, sizes: &[usize]) -> Self {
+        assert_eq!(sizes.iter().sum::<usize>(), input.rows.len());
+        let mut start = 0;
+        let ranges = sizes
+            .iter()
+            .map(|&size| {
+                start += size;
+                start - size..start
+            })
+            .collect();
+        Self {
+            input,
+            ranges,
+            decoded: 0,
+            live: std::rc::Rc::default(),
+            most: 0,
+        }
+    }
+}
+impl super::PartitionSource for Source<'_> {
+    type Table = Decoded;
+    fn schema(&self) -> &TableSchema {
+        &self.input.schema
+    }
+    fn ranges(&self) -> &[std::ops::Range<usize>] {
+        &self.ranges
+    }
+    fn decode(&mut self, index: usize) -> Option<Decoded> {
+        self.decoded += 1;
+        self.live.set(self.live.get() + 1);
+        self.most = self.most.max(self.live.get());
+        let rows = self.input.rows[self.ranges[index].clone()].to_vec();
+        Some(Decoded {
+            rows: Rows::new(self.input.schema.clone(), rows),
+            live: std::rc::Rc::clone(&self.live),
+        })
+    }
+}
+
+/// One decoded partition, alive until the run drops it.
+struct Decoded {
+    rows: Rows,
+    live: std::rc::Rc<Cell<usize>>,
+}
+impl Drop for Decoded {
+    fn drop(&mut self) {
+        self.live.set(self.live.get() - 1);
+    }
+}
+impl TableAccess for Decoded {
+    type Error = Infallible;
+    fn schema(&self) -> &TableSchema {
+        self.rows.schema()
+    }
+    fn row_count(&self) -> usize {
+        self.rows.row_count()
+    }
+    fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<Infallible>> {
+        self.rows.cell(row, column)
+    }
+}
+
 /// One partitioned attempt over `input` divided into `sizes`.
 fn partitioned(
     plan: &super::ResolvedPlan,
     input: &Rows,
     secondary: &Secondary<'_>,
     sizes: &[usize],
-    fallback: bool,
 ) -> ExecutionAttempt<Infallible> {
-    let parts = input.divided(sizes);
-    let parts: Vec<&dyn TableAccess<Error = Infallible>> = parts
-        .iter()
-        .map(|part| part as &dyn TableAccess<Error = Infallible>)
-        .collect();
     plan.execute_partitioned(
-        &parts,
+        &mut Source::new(input, sizes),
         secondary,
         &mut NoFunctions::new(),
         None,
         &|| false,
-        fallback,
         0,
     )
+}
+
+/// Consecutive partitions of at most `rows` records (#3697), with or
+/// without the whole-table fallback.
+fn consecutive(rows: usize, fallback: bool) -> Option<Partitioning> {
+    Some(Partitioning {
+        rows: std::num::NonZeroUsize::new(rows).unwrap(),
+        leading_keys: None,
+        whole_table_fallback: fallback,
+        whole_output: false,
+    })
 }
 
 /// `attempt` as a whole-table run states it. A partitioned run also records
@@ -201,7 +268,7 @@ fn assert_every_division(
     let whole = resolved.execute(input, secondary, &mut NoFunctions::new(), None, &|| false);
     assert_eq!(&whole, expected, "the whole-table run");
     for sizes in divisions(input.rows.len()) {
-        let attempt = as_stated(partitioned(&resolved, input, secondary, &sizes, false));
+        let attempt = as_stated(partitioned(&resolved, input, secondary, &sizes));
         assert_eq!(&attempt, expected, "partitions {sizes:?}");
     }
 }
@@ -376,11 +443,47 @@ fn a_partition_safe_plan_has_its_whole_table_result_over_any_partitions() {
     assert_every_division(&plan, &input, &[], &graded_attempt());
 }
 
-/// A group that spans partitions is merged into one candidate at its first
-/// occurrence, with every record feeding it: G groups A, B and C in that
-/// order, and each group's one distinct V is collected over all its records.
+/// `plan` over `input` divided into consecutive partitions of at most each
+/// `rows`, cut between runs of the fields its cross-record reads share
+/// (#3830): every run has `expected`, the whole-table attempt, and its
+/// largest partition, which bounds its output's (D264), holds `largest`.
+fn assert_cut(
+    plan: &DatasetPlan,
+    input: &Rows,
+    expected: impl Fn() -> ExecutionAttempt<Infallible>,
+    cases: &[(usize, usize)],
+    label: &str,
+) {
+    let resolved = plan.resolve().unwrap();
+    let whole = resolved.execute(input, &[], &mut NoFunctions::new(), None, &|| false);
+    assert_eq!(whole, expected(), "{label}: the whole-table run");
+    for &(rows, largest) in cases {
+        let attempt = divided_run(&resolved, input, consecutive(rows, false), &|| false);
+        let partition = attempt
+            .result
+            .as_ref()
+            .ok()
+            .and_then(|execution| execution.partition_rows)
+            .map(std::num::NonZeroUsize::get);
+        assert_eq!(
+            (as_stated(attempt), partition),
+            (expected(), Some(largest)),
+            "{label}: partitions of at most {rows} records"
+        );
+    }
+}
+
+/// A grouped template's records never meet across partitions (#3830): the
+/// partitions are cut between runs of its group field G, each holding as
+/// many whole runs as fit. Over A, A, B, C, C the runs are 0..2, 2..3 and
+/// 3..5, so partitions of at most one or two records are those runs, the
+/// largest two, of three are A with B, then C, and of five the whole input.
+/// Over A, B, A, C, B, A, where A recurs after its run, the input is not
+/// grouped by G and is one partition of six. Either way G groups A, B and C
+/// in that order, and each group's one distinct V is collected over all its
+/// records.
 #[test]
-fn a_group_that_spans_partitions_is_one_candidate_at_its_first_occurrence() {
+fn a_grouped_template_divides_between_runs_of_its_group_field() {
     let source = schema(&[("G", ColumnType::Str), ("V", ColumnType::Int)]);
     let output = schema(&[("G", ColumnType::Str), ("N", ColumnType::Int)]);
     let plan = DatasetPlan::new(
@@ -403,25 +506,25 @@ fn a_group_that_spans_partitions_is_one_candidate_at_its_first_occurrence() {
         vec![0],
         Vec::new(),
     );
-    let input = Rows::new(
-        source,
-        [
-            ("A", 10),
-            ("B", 20),
-            ("A", 10),
-            ("C", 30),
-            ("B", 20),
-            ("A", 10),
-        ]
-        .iter()
-        .map(|&(g, v)| vec![text(g), int(v)])
-        .collect(),
-    );
-    let expected = ExecutionAttempt {
+    let value = |g: &str| match g {
+        "A" => 10,
+        "B" => 20,
+        _ => 30,
+    };
+    let input = |groups: &[&str]| {
+        Rows::new(
+            source.clone(),
+            groups
+                .iter()
+                .map(|&g| vec![text(g), int(value(g))])
+                .collect(),
+        )
+    };
+    let expected = |read: usize| ExecutionAttempt {
         result: Ok(Execution {
             partition_rows: None,
             dataset: Dataset::from_rows(
-                output,
+                output.clone(),
                 vec![
                     vec![text("A"), int(10)],
                     vec![text("B"), int(20)],
@@ -432,19 +535,33 @@ fn a_group_that_spans_partitions_is_one_candidate_at_its_first_occurrence() {
         }),
         handler_counts: Vec::new(),
         retained_verifications: Vec::new(),
-        template_rows: vec![TemplateRows {
-            emitted: 3,
-            read: 6,
-        }],
+        template_rows: vec![TemplateRows { emitted: 3, read }],
     };
-    assert_every_division(&plan, &input, &[], &expected);
+    assert_cut(
+        &plan,
+        &input(&["A", "A", "B", "C", "C"]),
+        || expected(5),
+        &[(1, 2), (2, 2), (3, 3), (5, 5)],
+        "grouped by G",
+    );
+    assert_cut(
+        &plan,
+        &input(&["A", "B", "A", "C", "B", "A"]),
+        || expected(6),
+        &[(1, 6), (6, 6)],
+        "not grouped by G",
+    );
 }
 
-/// The key grain filters every record, derives its keys partition by
-/// partition and merges equal keys across partitions: keys 1 and 2 each
-/// span partitions, and the filtered record 3 builds nothing.
+/// The key grain's keys never meet across partitions (#3830): the
+/// partitions are cut between runs of ID, the field its one key copies.
+/// The filter drops the record whose V is 0, and keys 1 and 2 remain. Over
+/// IDs 1, 1, 2, 3 the runs are 0..2, 2..3 and 3..4, so partitions of at
+/// most one record hold at most two, and of four the whole input; over
+/// 1, 2, 1, 3, 2 the input is not grouped by ID and is one partition of
+/// five.
 #[test]
-fn equal_keys_in_different_partitions_build_one_key_grain_candidate() {
+fn the_key_grain_divides_between_runs_of_the_field_its_key_copies() {
     let source = schema(&[("ID", ColumnType::Int), ("V", ColumnType::Int)]);
     let output = schema(&[("ID", ColumnType::Int), ("N", ColumnType::Int)]);
     let plan = DatasetPlan::new(
@@ -480,17 +597,22 @@ fn equal_keys_in_different_partitions_build_one_key_grain_candidate() {
             },
         )],
     );
-    let input = Rows::new(
-        source,
-        [(1, 5), (2, 6), (1, 5), (3, 0), (2, 6)]
-            .iter()
-            .map(|&(id, v)| vec![int(id), int(v)])
-            .collect(),
-    );
-    let expected = ExecutionAttempt {
+    let input = |records: &[(i64, i64)]| {
+        Rows::new(
+            source.clone(),
+            records
+                .iter()
+                .map(|&(id, v)| vec![int(id), int(v)])
+                .collect(),
+        )
+    };
+    let expected = |read: usize| ExecutionAttempt {
         result: Ok(Execution {
             partition_rows: None,
-            dataset: Dataset::from_rows(output, vec![vec![int(1), int(5)], vec![int(2), int(6)]]),
+            dataset: Dataset::from_rows(
+                output.clone(),
+                vec![vec![int(1), int(5)], vec![int(2), int(6)]],
+            ),
             verifications: vec![record(
                 "verifications[0]",
                 ConditionCode::VerificationRowCountFailed,
@@ -499,12 +621,22 @@ fn equal_keys_in_different_partitions_build_one_key_grain_candidate() {
         }),
         handler_counts: Vec::new(),
         retained_verifications: Vec::new(),
-        template_rows: vec![TemplateRows {
-            emitted: 2,
-            read: 5,
-        }],
+        template_rows: vec![TemplateRows { emitted: 2, read }],
     };
-    assert_every_division(&plan, &input, &[], &expected);
+    assert_cut(
+        &plan,
+        &input(&[(1, 5), (1, 5), (2, 6), (3, 0)]),
+        || expected(4),
+        &[(1, 2), (4, 4)],
+        "grouped by ID",
+    );
+    assert_cut(
+        &plan,
+        &input(&[(1, 5), (2, 6), (1, 5), (3, 0), (2, 6)]),
+        || expected(5),
+        &[(1, 5), (5, 5)],
+        "not grouped by ID",
+    );
 }
 
 /// Output keys combine across partitions: the key 1 of the first and third
@@ -801,28 +933,24 @@ fn numbered() -> (DatasetPlan, Rows) {
 }
 
 /// Without the fallback, a partitioned run of a plan with a window fails at
-/// admission, naming the window's column binding, before any cell is read;
-/// it keeps nothing, and its observer exits admission as failed. With the
-/// fallback, the window runs over the whole input: V orders the records 2,
-/// 1, 3, numbered 1 to 3.
+/// admission, naming the window's column binding, before any partition is
+/// decoded; it keeps nothing, and its observer exits admission as failed.
+/// With the fallback, the run reads the input whole and the window runs over
+/// every record, whatever the partitions' size: V orders the records 2, 1,
+/// 3, numbered 1 to 3.
 #[test]
 fn a_step_that_needs_the_whole_table_refuses_the_run_unless_it_falls_back() {
     let (plan, input) = numbered();
     let resolved = plan.resolve().unwrap();
-    let parts = input.divided(&[1, 1, 1]);
-    let refs: Vec<&dyn TableAccess<Error = Infallible>> = parts
-        .iter()
-        .map(|part| part as &dyn TableAccess<Error = Infallible>)
-        .collect();
+    let mut source = Source::new(&input, &[1, 1, 1]);
     let mut events = Vec::new();
     let mut observe = |event| events.push(event);
     let refused = resolved.execute_partitioned(
-        &refs,
+        &mut source,
         &[],
         &mut NoFunctions::new(),
         Some(&mut observe),
         &|| false,
-        false,
         0,
     );
     let expected = ExecutionAttempt {
@@ -833,11 +961,10 @@ fn a_step_that_needs_the_whole_table_refuses_the_run_unless_it_falls_back() {
         retained_verifications: Vec::new(),
         template_rows: Vec::new(),
     };
-    assert_eq!(refused, expected, "refused without the fallback");
     assert_eq!(
-        parts.iter().map(|part| part.reads.get()).sum::<usize>(),
-        0,
-        "cells read before the refusal"
+        (refused, source.decoded),
+        (expected, 0),
+        "refused without the fallback, and the partitions it decoded"
     );
     assert_eq!(
         events,
@@ -875,31 +1002,30 @@ fn a_step_that_needs_the_whole_table_refuses_the_run_unless_it_falls_back() {
             read: 3,
         }],
     };
-    for sizes in divisions(3) {
+    for rows in 1..=3 {
         assert_eq!(
-            partitioned(&resolved, &input, &[], &sizes, true),
+            divided_run(&resolved, &input, consecutive(rows, true), &|| false),
             numbered,
-            "fallback over partitions {sizes:?}"
+            "fallback over partitions of {rows}"
         );
     }
 }
 
-/// A partition whose schema is not the driver's fails admission as a schema
-/// mismatch, as a whole input would, before any record is read: every
-/// handler site of the plan is reported at zero.
+/// A source whose partitions' schema is not the driver's fails admission as
+/// a schema mismatch, as a whole input would, before any partition is
+/// decoded: every handler site of the plan is reported at zero.
 #[test]
-fn a_partition_with_another_schema_fails_admission() {
-    let (plan, input) = graded();
+fn a_source_with_another_schema_fails_admission() {
+    let (plan, _) = graded();
     let resolved = plan.resolve().unwrap();
     let other = Rows::new(schema(&[("ID", ColumnType::Int)]), vec![vec![int(9)]]);
-    let parts: Vec<&dyn TableAccess<Error = Infallible>> = vec![&input, &other];
+    let mut source = Source::new(&other, &[1]);
     let attempt = resolved.execute_partitioned(
-        &parts,
+        &mut source,
         &[],
         &mut NoFunctions::new(),
         None,
         &|| false,
-        false,
         0,
     );
     let zero = |spec_path: &str| HandlerCount {
@@ -916,8 +1042,34 @@ fn a_partition_with_another_schema_fails_admission() {
         retained_verifications: Vec::new(),
         template_rows: Vec::new(),
     };
-    assert_eq!(attempt, expected);
-    assert_eq!(input.reads.get() + other.reads.get(), 0, "cells read");
+    assert_eq!((attempt, source.decoded), (expected, 0));
+}
+
+/// A partitioned run holds at most one decoded partition of its driver
+/// input at a time (#3830): each partition is decoded when the run reaches
+/// it and dropped before the next, so over every division of [`graded`]'s
+/// records into partitions, at most one is alive at once, each is decoded
+/// once, and the run has the whole-table attempt.
+#[test]
+fn a_partitioned_run_holds_one_decoded_partition_at_a_time() {
+    let (plan, input) = graded();
+    let resolved = plan.resolve().unwrap();
+    for sizes in divisions(input.rows.len()) {
+        let mut source = Source::new(&input, &sizes);
+        let attempt = resolved.execute_partitioned(
+            &mut source,
+            &[],
+            &mut NoFunctions::new(),
+            None,
+            &|| false,
+            0,
+        );
+        assert_eq!(
+            (as_stated(attempt), source.most, source.decoded),
+            (graded_attempt(), 1, sizes.len()),
+            "partitions {sizes:?}: the attempt, the most alive at once, and those decoded"
+        );
+    }
 }
 
 /// A cancellation probe that counts its polls and answers true from poll
@@ -940,53 +1092,36 @@ impl Probe {
     }
 }
 
-/// A partitioned run polls at every checkpoint of its schedule and before
-/// every partition of a divided unit after the first. [`graded`] over five
-/// one-record partitions divides three units, its row stage and its two
-/// column steps, so it polls four more times in each. Cancelled at any of
-/// those polls, the run keeps nothing any partition built, and its observer
-/// exits the phase it stopped in: admission at the first poll, output keys
-/// and verification at the last two checkpoints, derivation in between.
-#[test]
-fn a_run_cancelled_between_partitions_keeps_nothing_and_names_its_phase() {
-    let (plan, input) = graded();
-    let resolved = plan.resolve().unwrap();
-    let checkpoints = resolved
-        .region_schedule(super::resolved::RegionId::DATASET)
+/// The checkpoints of `plan`'s schedule a partitioned run polls (#3830):
+/// those of each partition's derivation, between admission and the output
+/// keys, and those from the output keys on, which it polls once.
+fn polled(plan: &super::ResolvedPlan) -> (usize, usize) {
+    let schedule = plan.region_schedule(super::resolved::RegionId::DATASET);
+    let keys = schedule
         .iter()
-        .filter(|info| info.checkpoint)
-        .count();
-    let total = checkpoints + 3 * 4;
-    let parts = input.divided(&[1; 5]);
-    let refs: Vec<&dyn TableAccess<Error = Infallible>> = parts
-        .iter()
-        .map(|part| part as &dyn TableAccess<Error = Infallible>)
-        .collect();
-    let probe = Probe::new(None);
-    let attempt = resolved.execute_partitioned(
-        &refs,
-        &[],
-        &mut NoFunctions::new(),
-        None,
-        &|| probe.cancelled(),
-        false,
-        0,
-    );
-    assert_eq!(as_stated(attempt), graded_attempt(), "uncancelled");
-    assert_eq!(probe.polls.get(), total, "polls of an uncancelled run");
+        .position(|info| info.step == super::resolved::Step::OutputKeys)
+        .unwrap();
+    let count =
+        |steps: &[super::resolved::StepInfo]| steps.iter().filter(|info| info.checkpoint).count();
+    (count(&schedule[1..keys]), count(&schedule[keys..]))
+}
+
+/// A run polling `Probe` and reporting to an observer.
+type Probed<'r> =
+    dyn Fn(&Probe, &mut dyn FnMut(ExecutionEvent)) -> ExecutionAttempt<Infallible> + 'r;
+
+/// Cancel `run`, whose `partitions` each poll `derivation` times, at each of
+/// its `total` polls in turn: it keeps nothing any partition built, and its
+/// observer exits the phase it stopped in, admission at the first poll, then
+/// derivation in every partition's run, then output keys and verification.
+fn assert_cancelled_at_every_poll(
+    run: &Probed<'_>,
+    (partitions, derivation, total): (usize, usize, usize),
+) {
     for from in 1..=total {
         let probe = Probe::new(Some(from));
         let mut events = Vec::new();
-        let mut observe = |event| events.push(event);
-        let attempt = resolved.execute_partitioned(
-            &refs,
-            &[],
-            &mut NoFunctions::new(),
-            Some(&mut observe),
-            &|| probe.cancelled(),
-            false,
-            0,
-        );
+        let attempt = run(&probe, &mut |event| events.push(event));
         let expected = ExecutionAttempt {
             result: Err(Box::new(ExecutionError::Cancelled)),
             handler_counts: Vec::new(),
@@ -995,11 +1130,12 @@ fn a_run_cancelled_between_partitions_keeps_nothing_and_names_its_phase() {
         };
         assert_eq!(attempt, expected, "cancelled at poll {from}");
         assert_eq!(probe.polls.get(), from, "polls once cancelled at {from}");
+        let derived = 1 + partitions * derivation;
         let phase = match from {
             1 => ExecutionPhase::Admission,
-            last if last == total => ExecutionPhase::Verification,
-            keys if keys == total - 1 => ExecutionPhase::OutputKeys,
-            _ => ExecutionPhase::Derivation,
+            from if from <= derived => ExecutionPhase::Derivation,
+            from if from == derived + 1 => ExecutionPhase::OutputKeys,
+            _ => ExecutionPhase::Verification,
         };
         assert_eq!(
             events[events.len() - 2..],
@@ -1013,6 +1149,39 @@ fn a_run_cancelled_between_partitions_keeps_nothing_and_names_its_phase() {
             "the phase cancelled at poll {from}"
         );
     }
+}
+
+/// A partitioned run polls once at admission, at every checkpoint of each
+/// partition's derivation, then at the checkpoints of its output keys and
+/// checks. [`graded`] over five one-record partitions polls its five
+/// derivation checkpoints in each, then its output keys and its row count.
+/// Cancelled at any of those polls, the run keeps nothing any partition
+/// built, and its observer exits the phase it stopped in.
+#[test]
+fn a_run_cancelled_between_partitions_keeps_nothing_and_names_its_phase() {
+    let (plan, input) = graded();
+    let resolved = plan.resolve().unwrap();
+    let (derivation, tail) = polled(&resolved);
+    assert_eq!((derivation, tail), (5, 2), "the checkpoints polled");
+    let total = 1 + 5 * derivation + tail;
+    let run = |probe: &Probe, observe: &mut dyn FnMut(ExecutionEvent)| {
+        resolved.execute_partitioned(
+            &mut Source::new(&input, &[1; 5]),
+            &[],
+            &mut NoFunctions::new(),
+            Some(observe),
+            &|| probe.cancelled(),
+            0,
+        )
+    };
+    let probe = Probe::new(None);
+    assert_eq!(
+        as_stated(run(&probe, &mut |_| {})),
+        graded_attempt(),
+        "uncancelled"
+    );
+    assert_eq!(probe.polls.get(), total, "polls of an uncancelled run");
+    assert_cancelled_at_every_poll(&run, (5, derivation, total));
 }
 
 /// A function port that counts its calls and answers each with 0.
@@ -1095,11 +1264,6 @@ fn a_project_function_runs_only_under_the_fallback_and_then_once_per_record() {
     );
     let resolved = plan.resolve().unwrap();
     let input = Rows::new(source, vec![vec![int(1)], vec![int(2)], vec![int(3)]]);
-    let parts = input.divided(&[1, 2]);
-    let refs: Vec<&dyn TableAccess<Error = Infallible>> = parts
-        .iter()
-        .map(|part| part as &dyn TableAccess<Error = Infallible>)
-        .collect();
     for (fallback, calls, expected) in [
         (
             false,
@@ -1142,8 +1306,14 @@ fn a_project_function_runs_only_under_the_fallback_and_then_once_per_record() {
             plan: signature.clone(),
             calls: Cell::new(0),
         };
-        let attempt =
-            resolved.execute_partitioned(&refs, &[], &mut port, None, &|| false, fallback, 0);
+        let attempt = resolved.execute_divided(
+            consecutive(2, fallback),
+            &input,
+            &[],
+            &mut port,
+            None,
+            &|| false,
+        );
         assert_eq!(attempt, expected, "fallback {fallback}");
         assert_eq!(port.calls.get(), calls, "calls with fallback {fallback}");
     }
@@ -1608,10 +1778,11 @@ fn conversions(records: &[(&str, i64, f64, f64)]) -> (DatasetPlan, Rows) {
 /// fails as the whole-table run does, in base-record order. In the order a,
 /// b, a the subject a recurs: the run divides nothing, so it polls only at
 /// the whole-table run's checkpoints. In the order a, a, b, the subjects
-/// are two partitions: the row stage and the column steps N and X each poll
-/// once between them, and Y's first partition fails. Either way X's handler
-/// fires for 0.5 and 1.5 before Y fails at the earliest record whose B is
-/// not integral, the second.
+/// are two partitions: Y's first partition fails, and the second partition,
+/// which runs only what comes before Y's binding, polls at each of its six
+/// derivation checkpoints up to Y's. Either way X's handler fires for 0.5
+/// and 1.5 before Y fails at the earliest record whose B is not integral,
+/// the second.
 #[test]
 fn an_input_not_grouped_by_its_keys_is_one_partition_and_fails_in_base_record_order() {
     let failed = |b: f64, u: &str, seq: i64| ExecutionAttempt {
@@ -1649,7 +1820,7 @@ fn an_input_not_grouped_by_its_keys_is_one_partition_and_fails_in_base_record_or
             "a, a, b: grouped",
             [("a", 1, 0.5, 1.0), ("a", 2, 1.5, 3.5), ("b", 1, 1.0, 2.5)],
             failed(3.5, "a", 2),
-            3,
+            6,
         ),
     ];
     for (label, records, expected, between) in cases {
@@ -1675,73 +1846,43 @@ fn an_input_not_grouped_by_its_keys_is_one_partition_and_fails_in_base_record_or
 
 /// Cancellation between key-bounded partitions keeps nothing any partition
 /// built (#3763), as between consecutive ones. [`visits`] over its three
-/// subjects divides four units, its row stage, its window stage and its two
-/// column steps, so it polls twice more in each. Cancelled at any of those
-/// polls, the run keeps nothing, and its observer exits the phase it stopped
-/// in. The cut follows admission, so a run cancelled at its admission
-/// checkpoint has read no record.
+/// subjects polls its five derivation checkpoints in each, then its output
+/// keys and its order. Cancelled at any of those polls, the run keeps
+/// nothing, and its observer exits the phase it stopped in. The cut follows
+/// admission, so a run cancelled at its admission checkpoint has read no
+/// record.
 #[test]
 fn a_run_cancelled_between_key_bounded_partitions_keeps_nothing_and_names_its_phase() {
     let (plan, input) = visits();
     let resolved = plan.resolve().unwrap();
-    let checkpoints = resolved
-        .region_schedule(super::resolved::RegionId::DATASET)
-        .iter()
-        .filter(|info| info.checkpoint)
-        .count();
-    let total = checkpoints + 4 * 2;
-    let probe = Probe::new(None);
-    let attempt = divided_run(&resolved, &input, by_keys(2, 1, false), &|| {
-        probe.cancelled()
-    });
-    assert_eq!(as_stated(attempt), visits_attempt(), "uncancelled");
-    assert_eq!(probe.polls.get(), total, "polls of an uncancelled run");
-    for from in 1..=total {
-        let probe = Probe::new(Some(from));
-        let mut events = Vec::new();
-        let mut observe = |event| events.push(event);
-        input.reads.set(0);
-        let attempt = resolved.execute_divided(
+    let (derivation, tail) = polled(&resolved);
+    assert_eq!((derivation, tail), (5, 2), "the checkpoints polled");
+    let total = 1 + 3 * derivation + tail;
+    let run = |probe: &Probe, observe: &mut dyn FnMut(ExecutionEvent)| {
+        resolved.execute_divided(
             by_keys(2, 1, false),
             &input,
             &[],
             &mut NoFunctions::new(),
-            Some(&mut observe),
+            Some(observe),
             &|| probe.cancelled(),
-        );
-        let expected = ExecutionAttempt {
-            result: Err(Box::new(ExecutionError::Cancelled)),
-            handler_counts: Vec::new(),
-            retained_verifications: Vec::new(),
-            template_rows: Vec::new(),
-        };
-        assert_eq!(attempt, expected, "cancelled at poll {from}");
-        assert_eq!(probe.polls.get(), from, "polls once cancelled at {from}");
-        if from == 1 {
-            assert_eq!(
-                input.reads.get(),
-                0,
-                "cells read when cancelled at admission"
-            );
-        }
-        let phase = match from {
-            1 => ExecutionPhase::Admission,
-            last if last == total => ExecutionPhase::Verification,
-            keys if keys == total - 1 => ExecutionPhase::OutputKeys,
-            _ => ExecutionPhase::Derivation,
-        };
-        assert_eq!(
-            events[events.len() - 2..],
-            [
-                ExecutionEvent::Exit {
-                    phase,
-                    outcome: Outcome::Failed,
-                },
-                ExecutionEvent::Phase(ExecutionPhase::Finished),
-            ],
-            "the phase cancelled at poll {from}"
-        );
-    }
+        )
+    };
+    let probe = Probe::new(None);
+    assert_eq!(
+        as_stated(run(&probe, &mut |_| {})),
+        visits_attempt(),
+        "uncancelled"
+    );
+    assert_eq!(probe.polls.get(), total, "polls of an uncancelled run");
+    assert_cancelled_at_every_poll(&run, (3, derivation, total));
+    input.reads.set(0);
+    run(&Probe::new(Some(1)), &mut |_| {});
+    assert_eq!(
+        input.reads.get(),
+        0,
+        "cells read when cancelled at admission"
+    );
 }
 
 /// A partitioned run that divides every step records the most rows one
@@ -1776,7 +1917,7 @@ fn the_output_divides_into_partitions_as_large_as_the_largest_driver_partition()
     ];
     for (sizes, largest) in consecutive {
         assert_eq!(
-            rows(partitioned(&resolved, &input, &[], sizes, false)),
+            rows(partitioned(&resolved, &input, &[], sizes)),
             Some(largest),
             "consecutive partitions {sizes:?}"
         );

@@ -115,6 +115,8 @@ struct ByPartition {
     fields: Vec<usize>,
 }
 
+type PartitionRead = (ByPartition, Vec<std::ops::Range<usize>>);
+
 /// What a scan of a driver input read by partition found (#3830): the
 /// records of each partition the run divides it into, cut as the scan read
 /// them, and the ODM findings of its records, the first record failure
@@ -122,6 +124,23 @@ struct ByPartition {
 struct Scan<E> {
     partitions: Vec<std::ops::Range<usize>>,
     odm: Result<Vec<crate::odm_source::MissingValues>, crate::odm_source::RecordError<E>>,
+}
+
+/// Admit the decoded input using the same geometry policy for a whole
+/// table or for each partition the scan cut from its records.
+fn admit_source_table<T: TableAccess>(
+    table: &T,
+    scan: Option<&Scan<T::Error>>,
+) -> Result<(), crate::limits::LimitExceeded> {
+    match scan {
+        Some(scan) => {
+            let width = table.schema().columns().len();
+            scan.partitions
+                .iter()
+                .try_for_each(|range| crate::limits::Limits::table(range.len(), width))
+        }
+        None => crate::limits::Limits::table(table.row_count(), table.schema().columns().len()),
+    }
 }
 
 /// Scan `declaration`'s held bytes by partition (#3830): every partition
@@ -457,7 +476,7 @@ fn execute_inner_into<R: Resolver, D: Decoder>(
     let mut errors = Vec::new();
     // How the driver input was read by partition (#3792), and the records
     // of each partition the run divides it into (#3830).
-    let mut by_partition: Option<(ByPartition, Vec<std::ops::Range<usize>>)> = None;
+    let mut by_partition: Option<PartitionRead> = None;
     for (index, declaration) in prepared.sources().iter().enumerate() {
         // Record the request before crossing the host boundary so a panic leaves
         // a truthful incomplete observation without discarding earlier sources.
@@ -543,18 +562,7 @@ fn execute_inner_into<R: Resolver, D: Decoder>(
                 let table = observed.table.as_ref().expect("decoded source");
                 // An input read by partition is admitted a partition at a
                 // time, each on its own; any other input is admitted whole.
-                let admitted = match &scanned {
-                    Some(scan) => {
-                        let width = table.schema().columns().len();
-                        scan.partitions
-                            .iter()
-                            .try_for_each(|range| crate::limits::Limits::table(range.len(), width))
-                    }
-                    None => crate::limits::Limits::table(
-                        table.row_count(),
-                        table.schema().columns().len(),
-                    ),
-                };
+                let admitted = admit_source_table(table, scanned.as_ref());
                 if let Err(error) = admitted {
                     attempt.result = Err(PortError::Run(RunError::Boundary {
                         source: index,
@@ -661,42 +669,6 @@ fn execute_captured_into<C, D: Decoder>(
                 as &dyn TableAccess<Error = <D::Table as TableAccess>::Error>
         })
         .collect::<Vec<_>>();
-    // The partitions of a driver input read by partition, each decoded again
-    // from the held bytes the scan read.
-    let mut parts = Vec::new();
-    if let Some((_, partitions)) = &by_partition {
-        let declaration = &prepared.sources()[driver];
-        let bytes = attempt.sources[driver]
-            .snapshot
-            .as_deref()
-            .expect("a scanned input keeps its bytes");
-        let interpretation = prepared
-            .source_interpretation(driver)
-            .expect("admitted source interpretation");
-        for range in partitions {
-            match decoder.partition(
-                primary,
-                declaration,
-                bytes,
-                interpretation,
-                prepared.source_contract(driver),
-                range.clone(),
-            ) {
-                Ok(part) => parts.push(part),
-                Err(error) => {
-                    attempt.result = Err(PortError::Run(source_errors(vec![(
-                        driver,
-                        SourceIssue::Decode(error),
-                    )])));
-                    return;
-                }
-            }
-        }
-    }
-    let parts = parts
-        .iter()
-        .map(|part| part as &dyn TableAccess<Error = <D::Table as TableAccess>::Error>)
-        .collect::<Vec<_>>();
     let phase = std::cell::Cell::new(dataset::ExecutionPhase::Admission);
     let mut functions = scope.functions(functions, &phase);
     input_finished.set(true);
@@ -717,26 +689,87 @@ fn execute_captured_into<C, D: Decoder>(
         }
     };
     let cancelled = || scope.cancelled();
-    attempt.result = Ok(match &by_partition {
-        // The partitions the scan cut the input into are the run's (#3792).
-        Some((read, _)) => plan.execute_partitioned(
-            &parts,
-            &secondary,
-            &mut functions,
-            Some(&mut observer),
-            &cancelled,
-            read.partitioning.whole_table_fallback,
-            read.keys,
-        ),
-        None => plan.execute_divided(
+    attempt.result = match by_partition {
+        // The partitions the scan cut the input into are the run's (#3792),
+        // each decoded again from the held bytes the scan read when the run
+        // reaches it (#3830).
+        Some((read, ranges)) => {
+            let mut source = Partitions {
+                decoder,
+                scanned: primary,
+                declaration: &prepared.sources()[driver],
+                bytes: attempt.sources[driver]
+                    .snapshot
+                    .as_deref()
+                    .expect("a scanned input keeps its bytes"),
+                interpretation: prepared
+                    .source_interpretation(driver)
+                    .expect("admitted source interpretation"),
+                contract: prepared.source_contract(driver),
+                ranges,
+                error: None,
+            };
+            let executed = plan.execute_partitioned(
+                &mut source,
+                &secondary,
+                &mut functions,
+                Some(&mut observer),
+                &cancelled,
+                read.keys,
+            );
+            match source.error {
+                Some(error) => Err(PortError::Run(source_errors(vec![(
+                    driver,
+                    SourceIssue::Decode(error),
+                )]))),
+                None => Ok(executed),
+            }
+        }
+        None => Ok(plan.execute_divided(
             divided(prepared, scope.partitioning()),
             primary,
             &secondary,
             &mut functions,
             Some(&mut observer),
             &cancelled,
-        ),
-    });
+        )),
+    };
+}
+
+/// The partitions of a driver input read by partition (#3830), each decoded
+/// again from the held bytes the scan read when the run reaches it, and
+/// dropped by the run before it decodes the next.
+struct Partitions<'r, D: Decoder> {
+    decoder: &'r mut D,
+    scanned: &'r D::Table,
+    declaration: &'r SourceDeclaration,
+    bytes: &'r [u8],
+    interpretation: SourceInterpretation,
+    contract: Option<&'r crate::producer_contract::Contract>,
+    ranges: Vec<std::ops::Range<usize>>,
+    /// Why a partition did not decode, which ends the run.
+    error: Option<D::Error>,
+}
+
+impl<D: Decoder> dataset::PartitionSource for Partitions<'_, D> {
+    type Table = D::Table;
+    fn schema(&self) -> &crate::table::TableSchema {
+        self.scanned.schema()
+    }
+    fn ranges(&self) -> &[std::ops::Range<usize>] {
+        &self.ranges
+    }
+    fn decode(&mut self, index: usize) -> Option<D::Table> {
+        let decoded = self.decoder.partition(
+            self.scanned,
+            self.declaration,
+            self.bytes,
+            self.interpretation,
+            self.contract,
+            self.ranges[index].clone(),
+        );
+        decoded.map_err(|error| self.error = Some(error)).ok()
+    }
 }
 
 /// How a run that reads its driver input whole divides it: as `partitioning`
@@ -788,10 +821,7 @@ fn reads_by_partition<D: Decoder>(
     if plan.whole_table_step(keys).is_some() {
         return None;
     }
-    let fields = match keys {
-        0 => Vec::new(),
-        keys => plan.partition_fields(keys)?,
-    };
+    let fields = plan.cut_fields(keys)?;
     Some(ByPartition {
         partitioning,
         keys,

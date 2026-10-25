@@ -1,5 +1,6 @@
 //! Factories and observers owned by the yamaa integration suite.
 
+pub mod peak;
 pub mod scratch;
 
 pub use scratch::Scratch;

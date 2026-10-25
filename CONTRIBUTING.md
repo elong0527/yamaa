@@ -17,9 +17,8 @@ applies.
 | `rules/`, `yaml/` | Normative contracts, diagnostics, schemas and grammar fixtures. |
 | `rust/crates/yamaa-core/` | Specification admission, expressions, dataset execution, project lifecycle, verification and submission metadata composition. |
 | `rust/crates/yamaa-adapters/` | Codecs, storage formats, physical IO and filesystem environment capture. |
-| `rust/crates/yamaa-boundary/` | The interface handshake of both host bindings, the gate every native call passes, the census of live native handles, the types of the engine's C ABI, the safe client through which both bindings call it and the test-only loaded mode's engine loader. |
-| `rust/crates/yamaa-engine/` | The engine's C ABI over the facade: its function table, handle table, callback adapters and Arrow stream export, which both bindings link, with the loading tests' fixture engines in `examples/`. |
-| `rust/crates/yamaa-python/`, `rust/crates/yamaa-r/` | Host arguments, callbacks, scalar conversion and owned result views, over the client of `yamaa-boundary`. |
+| `rust/crates/yamaa-boundary/` | The interface handshake of both host bindings, the gate every native call passes and the census of live native handles. |
+| `rust/crates/yamaa-python/`, `rust/crates/yamaa-r/` | Host arguments, callbacks, scalar conversion and owned result views, over the facade. |
 | `rust/crates/yamaa-cli/` | The `yamaa` command line: its arguments, exit statuses and printed output, over the facade alone, with the third-party notices and component inventory of its release archives. |
 | `python/`, `R/yamaa/` | Public host packages and package builds. |
 | `benchmarks/` | Authored specifications, inputs, metadata and expected results. |
@@ -33,22 +32,14 @@ results. Explicit Save publishes held bytes in contract order. Diagnostic codes
 belong to the shared registry. Resource policies and supported platforms have
 one owner in [release guidance](docs/release.md).
 
-The workspace has eight crates. `yamaa-core` owns preparation, project ports,
+The workspace has seven crates. `yamaa-core` owns preparation, project ports,
 activation and the complete build lifecycle; its dataset model owns execution.
 `yamaa-adapters` implements physical boundaries, and the `yamaa` facade
 composes the two. The two binding crates and the `yamaa-cli` command line
-implement their host boundaries; the command line depends on the facade
-alone. `yamaa-boundary` holds the types of the engine's C ABI, the interface
-handshake and the safe client, and depends on nothing else in the workspace;
-`yamaa-engine` puts the facade behind that C ABI and depends on the facade and
-the boundary alone. Each binding links `yamaa-engine` and reaches it only
-through the client, never through the facade (D225 on #3030 amends section
-2.10). In the test-only loaded mode, a binding built with its `dynamic-engine`
-feature links no engine and loads the engine library from beside its module
-instead; `YAMAA_ENGINE=loaded` runs `make setup`, `make test-python` and
-`make test-r` so (`tools/commands/loaded.py`, and
-[the shared host interface](rust/interface/README.md#the-boundary)), and a
-repository check refuses the feature in every shipped build. Core may use
+implement their host boundaries and depend on the facade; the bindings also
+depend on `yamaa-boundary`, which holds their interface handshake and depends
+on nothing else in the workspace (D281 on #3673 restores these edges of
+#3030 section 2.10, which D225 had amended). Core may use
 `std` but holds no file or format code: it keeps the formats' metadata models,
 and the adapters read and write their bytes. Portable math still uses the
 pinned libm policy. `make check-repository` holds both rules of #3030 section
@@ -81,8 +72,8 @@ package uses an edition that Rust does not read
 
 One tool, `tools/staging/engine_bundle.py`, stages the engine source bundle
 that each host's source package builds from: the engine crates, the boundary
-and engine C ABI crates and that host's binding crate, a lock trimmed from the
-canonical one and verified crate
+crate and that host's binding crate, a lock trimmed from the canonical one and
+verified crate
 by crate against it, and the crates.io crates that the lock selects, vendored,
 with no tests and no toolchain file anywhere (#3030 D55). It builds the Python
 source archive, maturin's output over the bundle, with maturin 1.9.6 on the
@@ -211,6 +202,7 @@ Rust consumer reads it.
 | The expression grammar, its closed function and reducer lists, its parse cases | `yaml/grammar/*.yaml` | `tools.packaging.generate_expression_table`, `tools.validation.check_expression_conformance` and the core replay of its cases |
 | A condition, its phases and its message | `yaml/conditions.yaml` | `tools.packaging.generate_message_templates`, `tools.validation.check_diagnostics` |
 | A CDISC closed list | `yaml/vocabulary/cdisc.yaml` | `tools.packaging.generate_cdisc_vocabulary` and the vocabulary checks |
+| What a Parquet source must hold to be read: its column types, physical types and encodings, pages and codecs | `rust/crates/yamaa-adapters/profile/parquet.toml` | the Parquet reader, which includes it, and `tools.validation.check_parquet_profile`, which keeps PARQUET-7's table on it |
 | What an expression evaluates to | `yaml/conformance/expressions.yaml`, `yaml/conformance/regex.yaml` | `tools.validation.check_expression_conformance` |
 | What a specification produces or refuses | a benchmark under `benchmarks/` | the corpus walk, public conformance, `support::benchmarks::reproduce` |
 | What both hosts return for one case | a `rust/tests/host-fixtures/` family | the readers beside `cases.json`, in both installed suites |
@@ -466,7 +458,7 @@ test.
 Integration tests live in `tests/<family>.rs`, each a module of the
 crate's one test binary, `tests/main.rs`; the file and its nested `mod`
 blocks give a test its path, so a failure reads as
-`schema_validation::schema::schema_validation::case_otherwise_reports_inside_the_otherwise_member`.
+`schema_validation::schema::schema_validation::typed_dictionary_keys_have_independent_key_and_value_paths`.
 Families share one process, so a temporary name carries its family's own
 prefix. Each crate's `tests/support/` is its one helper tree, declared once
 in `tests/main.rs` and reached as `crate::support`. Reach for its factories
@@ -499,8 +491,8 @@ made to both, and `make check-repository` fails while they differ
   cites as `<file>::<case>`), the operations that reach it (`operation`),
   their `input`, and the complete issue rows they report (`issues`, in the
   shape `assert_issues` compares). Several operations must each report the
-  same complete rows, compared with each other whatever `compares` and
-  `among` leave out. Core's input holds a specification as
+  same complete rows, compared with each other whatever `compares`,
+  `prefix` and `among` leave out. Core's input holds a specification as
   a JSON object, or a document of the file's `documents` with edits that
   set or remove a member. The adapters' input holds the `files` its
   operation writes to a fresh study directory, each its text, a
@@ -539,8 +531,25 @@ made to both, and `make check-repository` fails while they differ
   directory, to its text or to `{"file": path}`, an authored expected file
   named by its path from the repository root, such as a benchmark's
   `expected/` file, and each file removed to `null`; `{}` states that
-  nothing was created, changed or removed. A case states a table only when its
-  operation reports one, and `saved` exactly when its operation saves: the
+  nothing was created, changed or removed. A file the operation generated
+  whose whole text no authored file holds, such as a composed Define-XML
+  document, is instead `{"select": {path: [text, ...]}}`, for a case whose
+  source compared parts of it; a document an authored file holds is stated
+  whole with `{"file": path}`. Each path selects nodes of the document, and
+  its list holds the text of every node it selects, each node whole and
+  spelt as the file spells it, in document order, so a count or an absence
+  is a list too, `[]` selecting nothing. In an `.xml` file a path is an
+  absolute XPath location path of child steps, such as
+  `/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.DM.AGE']/def:Origin`: each
+  step names an element as the document spells it, prefix included, with at
+  most one `[@name='value']` predicate, and the last may be `@name`. An
+  element's text runs from its start tag through its end tag, and an
+  attribute's is its value between the quotes. In a `.json` file a path is
+  a JSON Pointer (RFC 6901), such as `/columns/5/dataType`, and a value's
+  text is its JSON text, a string's quotes included. A selected node is
+  never matched by a substring, and `select` names at least one path. A
+  case states a table only when its operation reports one, and `saved`
+  exactly when its operation saves: the
   adapters' `build` reports the tables a built result holds, `save`
   builds as `build` does, then saves, and `define` composes a project's
   submission section, then saves it, each reporting its issues after the
@@ -552,11 +561,14 @@ made to both, and `make check-repository` fails while they differ
 - A case whose source compared only part of each record names the fields
   it compares in `compares`, and a case whose source compared some keys of
   a context names each as `context.<key>` in place of `context`, its rows'
-  contexts holding exactly those keys. A case whose source found its
-  record by cause among several issues writes `"among": true`: its rows
-  need only be among the issues reported, in any order, since the issues
-  its source left unstated give its rows no authored position. It is the
-  one exception to comparing the whole issue list.
+  contexts holding exactly those keys. A case whose source read the first
+  of several issues by position writes `"prefix": true`: its rows are the
+  first issues reported, in order, and the issues after them are not
+  compared. A case whose source found its record by cause among several
+  issues writes `"among": true`: its rows need only be among the issues
+  reported, in any order, since the issues its source left unstated give
+  its rows no authored position. These are the two exceptions to comparing
+  the whole issue list, and a case writes at most one (`form::Order`).
 - A variant of a document comes from an exact-once edit,
   `document.edit(from, to)` through the adapters' `support::Edit`, never
   from `str::replace`, which does nothing when its pattern is missing.
@@ -717,12 +729,7 @@ shared Python dependency metadata, engine/build changes and unknown paths
 run all four lanes. Fuzzing remains a separate workflow selected by affected
 parsers. There is no separate reporting job or equivalence status to wait for.
 The main schedule and release pushes run all development checks; dispatch
-also qualifies both hosts against benchmark truth. A fifth lane, `loaded`,
-which is not required, checks both freshly installed hosts in the test-only
-loaded mode (`YAMAA_ENGINE=loaded`) when an input of that mode changes: the
-boundary, the engine's C ABI, either binding, the R build files, the
-interface suites or the tooling that builds the hosts; main's schedule and
-dispatch run it too.
+also qualifies both hosts against benchmark truth.
 
 The `Release compatibility` workflow checks the minimum Rust toolchain, the R
 source package built with it, minimal format builds, Python 3.15 and minimum

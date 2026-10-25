@@ -1,0 +1,848 @@
+{
+  "about": "A project's functions answered by a scripted host-functions port (#3778 group 2): each build or save runs through the double the case's functions member scripts, which stands in for the host behind the facade's project functions. Moved from project_run.rs at 43a2da793, whose tests ran the same project through a scripted host and a scripted resolver: the project lists three function files and holds the Python lock beside the study (D8), each case reads its study input from files, and the calls each port received are in function_call_contracts.json. Callback cases state the output rows and calls their tests compared; activation-report cases state the issue rows their tests read from the report, through the file route, which reports a refused report as engine_rejected at step build (an unclassified host failure as opaque_host, an interrupt or a panic as activation_boundary, a report the facts contradict as result_projection) and names each file by its path in the study.",
+  "documents": {
+    "project": "yamaa: '1.0'\ntype: project\nfunctions: [functions/unused.yaml, functions/id.yaml, functions/pair.yaml]\nenvironments: {python: {lock: ../uv.lock}}\n",
+    "unused": "yamaa: '1.0'\ntype: function\nname: unused\ndescription: Uncalled definition.\nparams: []\nreturns: int\nimplementations: {python: project.unused}\ntests: [{id: ordinary, covers: [normal, boundary], args: {}, result: 7}]\n",
+    "id": "yamaa: '1.0'\ntype: function\nname: id\ndescription: Integer identity.\nparams: [{name: x, type: int}]\nreturns: int\nimplementations: {python: project.id}\ntests:\n  - {id: ordinary, covers: [normal], args: {x: 7}, result: 7}\n  - {id: boundary, covers: [boundary], args: {x: -9223372036854775808}, result: -9223372036854775808}\n  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+    "pair": "yamaa: '1.0'\ntype: function\nname: pair\ndescription: Integer sum of a weight and an own value.\nparams: [{name: weight, type: int}, {name: own, type: int}]\nreturns: int\nimplementations: {python: project.pair}\ntests:\n  - {id: ordinary, covers: [normal], args: {weight: 7, own: 3}, result: 10}\n  - {id: boundary, covers: [boundary], args: {weight: 0, own: 0}, result: 0}\n  - {id: missing-weight, covers: ['short-circuit-missing:weight'], args: {weight: null, own: 1}, result: null}\n  - {id: missing-own, covers: ['short-circuit-missing:own'], args: {weight: 1, own: null}, result: null}\n",
+    "uv.lock": "version = 1\npackage = []\n",
+    "domain": "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\noutput: {path: output.csv, columns: [ID, VALUE]}\n",
+    "aggregate": "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, key: [ID], types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: int\n    derivation:\n      aggregate:\n        derivations:\n          BASE: {type: int, derivation: SRC.ID}\n          V: {type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\n        expr: SUM(V)\noutput: {path: output.csv, columns: [ID, VALUE]}\n",
+    "intermediate": "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\nintermediates:\n  - id: DON\n    dataset: SRC\n    key: [ID]\n    order_by: [SRC.ID]\n    keep: first\n    derivations:\n      BASE: SRC.ID\n      V: {function: {name: id, args: {x: SRC.ID}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: DON.V}\noutput: {path: output.csv, columns: [ID, VALUE]}\n",
+    "join": "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput:\n  SRC: {path: a.csv, key: [ID], types: {ID: int, N: int}}\n  B: {path: b.csv, key: [ID], types: {ID: int, N: int}}\nbase: SRC\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int}\n  - {name: VALUE, type: int}\nrows:\n  - id: records\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      VALUE: {function: {name: id, args: {x: B.N}}}\noutput: {path: output.csv, columns: [ID, VALUE]}\n",
+    "windowed": "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput:\n  SRC: {path: a.csv, types: {ID: int, N: int}}\nbase: SRC\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int}\n  - {name: N, type: int}\n  - {name: SEQ, type: int}\n  - {name: VALUE, type: int}\nrows:\n  - id: records\n    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      N: SRC.N\n      SEQ: {row_number: {window: {order_by: [N]}}}\n      VALUE: {function: {name: id, args: {x: SEQ}}}\noutput: {path: output.csv, columns: [ID, N, SEQ, VALUE]}\n"
+  },
+  "cases": [
+    {
+      "case": "an_aggregate_derivation_calls_its_function_after_activation_with_each_donor_record",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "aggregate"},
+          "study/input.csv": "ID\n1\n1\n2\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 1}, "returns": 1},
+            {"function": "id", "args": {"x": 2}, "returns": 2}
+          ]
+        }
+      },
+      "issues": [],
+      "output": [["ID", "VALUE"], [1, 2], [2, 2]]
+    },
+    {
+      "case": "an_aggregate_derivation_calls_its_function_after_activation_with_each_prior_binding",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "aggregate", "edits": [{"from": "args: {x: SRC.ID}", "to": "args: {x: BASE}"}]},
+          "study/input.csv": "ID\n1\n1\n2\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 1}, "returns": 1},
+            {"function": "id", "args": {"x": 2}, "returns": 2}
+          ]
+        }
+      },
+      "issues": [],
+      "output": [["ID", "VALUE"], [1, 2], [2, 2]]
+    },
+    {
+      "case": "a_grouped_template_s_aggregate_derivation_calls_its_function_with_each_donor_record",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {
+            "base": "aggregate",
+            "edits": [{"from": "keys: [ID]\n", "to": "keys: [ID]\nrows: [{id: all, group_by: [SRC.ID], derivations: {ID: SRC.ID}}]\n"}]
+          },
+          "study/input.csv": "ID\n1\n1\n2\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 1}, "returns": 1},
+            {"function": "id", "args": {"x": 2}, "returns": 2}
+          ]
+        }
+      },
+      "issues": [],
+      "output": [["ID", "VALUE"], [1, 2], [2, 2]]
+    },
+    {
+      "case": "a_grouped_template_s_aggregate_derivation_calls_its_function_with_each_prior_binding",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {
+            "base": "aggregate",
+            "edits": [{"from": "keys: [ID]\n", "to": "keys: [ID]\nrows: [{id: all, group_by: [SRC.ID], derivations: {ID: SRC.ID}}]\n"}, {"from": "args: {x: SRC.ID}", "to": "args: {x: BASE}"}]
+          },
+          "study/input.csv": "ID\n1\n1\n2\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 1}, "returns": 1},
+            {"function": "id", "args": {"x": 2}, "returns": 2}
+          ]
+        }
+      },
+      "issues": [],
+      "output": [["ID", "VALUE"], [1, 2], [2, 2]]
+    },
+    {
+      "case": "an_aggregate_callback_reads_the_kept_current_row_instead_of_each_donor_record",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, key: [ID], types: {ID: int, N: int}}}\nkeys: [ID]\nintermediates:\n  - {id: CAP, dataset: SRC, key: {ID: ID}, order_by: [SRC.N], keep: first}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: int\n    derivation:\n      aggregate:\n        derivations:\n          BASE: {type: int, derivation: SRC.N}\n          V: {type: int, derivation: {function: {name: id, args: {x: CAP.N}}}}\n        expr: SUM(V)\noutput: {path: output.csv, columns: [ID, VALUE]}\n",
+          "study/input.csv": "ID,N\n1,10\n1,30\n2,40\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 10}, "returns": 10},
+            {"function": "id", "args": {"x": 40}, "returns": 40}
+          ]
+        }
+      },
+      "issues": [],
+      "output": [["ID", "VALUE"], [1, 20], [2, 40]]
+    },
+    {
+      "case": "an_aggregate_callback_reads_the_current_source_s_types_where_its_donor_s_differ",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput:\n  SRC: {path: input.csv, types: {ID: int, N: int}}\n  B: {path: input.csv, types: {ID: int, N: str}}\nbase: SRC\nkeys: [ID, N]\nintermediates:\n  - {id: CAP, dataset: SRC, key: {N: SRC.N}, order_by: [SRC.ID], keep: first}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - name: VALUE\n    type: int\n    derivation:\n      aggregate:\n        key: {ID: ID}\n        derivations:\n          BASE: {type: int, derivation: B.N}\n          V: {type: int, derivation: {function: {name: id, args: {x: CAP.N}}}}\n        expr: SUM(V)\noutput: {path: output.csv, columns: [ID, N, VALUE]}\n",
+          "study/input.csv": "ID,N\n1,10\n1,30\n2,40\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 10}, "returns": 10},
+            {"function": "id", "args": {"x": 30}, "returns": 30},
+            {"function": "id", "args": {"x": 40}, "returns": 40}
+          ]
+        }
+      },
+      "issues": [],
+      "output": [["ID", "N", "VALUE"], [1, 10, 20], [1, 30, 60], [2, 40, 40]]
+    },
+    {
+      "case": "a_row_callback_joins_the_secondary_record_of_each_primary_record_by_its_key",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "join"},
+          "study/a.csv": "ID,N\n1,10\n2,20\n3,30\n",
+          "study/b.csv": "ID,N\n2,40\n1,50\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 50}, "returns": 50},
+            {"function": "id", "args": {"x": 40}, "returns": 40}
+          ]
+        }
+      },
+      "issues": [],
+      "output": [["ID", "VALUE"], [1, 50], [2, 40], [3, null]]
+    },
+    {
+      "case": "a_row_callback_joins_the_primary_record_of_each_secondary_record_by_its_key",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {
+            "base": "join",
+            "edits": [{"from": "    dataset: SRC\n    derivations:\n      ID: SRC.ID\n      VALUE: {function: {name: id, args: {x: B.N}}}", "to": "    dataset: B\n    derivations:\n      ID: B.ID\n      VALUE: {function: {name: id, args: {x: SRC.N}}}"}]
+          },
+          "study/a.csv": "ID,N\n1,10\n2,20\n3,30\n",
+          "study/b.csv": "ID,N\n2,40\n1,50\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 20}, "returns": 20},
+            {"function": "id", "args": {"x": 10}, "returns": 10}
+          ]
+        }
+      },
+      "issues": [],
+      "output": [["ID", "VALUE"], [2, 20], [1, 10]]
+    },
+    {
+      "case": "a_window_stage_calls_its_function_for_each_row_in_row_order",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "windowed"},
+          "study/a.csv": "ID,N\n3,30\n1,10\n2,20\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 1}, "returns": 1},
+            {"function": "id", "args": {"x": 2}, "returns": 2},
+            {"function": "id", "args": {"x": 3}, "returns": 3}
+          ]
+        }
+      },
+      "issues": [],
+      "output": [["ID", "N", "SEQ", "VALUE"], [3, 30, 3, 3], [1, 10, 1, 1], [2, 20, 2, 2]]
+    },
+    {
+      "case": "a_window_stage_calls_its_function_for_every_row_before_a_post_window_filter_drops_one",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {
+            "base": "windowed",
+            "edits": [{"from": "    dataset: SRC\n    derivations:", "to": "    dataset: SRC\n    group_by: [SRC.ID]\n    filter: \"SEQ <= 2\"\n    derivations:"}, {"from": "      N: SRC.N\n", "to": "      N: {aggregate: \"SUM(SRC.N)\"}\n"}]
+          },
+          "study/a.csv": "ID,N\n3,30\n1,10\n2,20\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 1}, "returns": 1},
+            {"function": "id", "args": {"x": 2}, "returns": 2},
+            {"function": "id", "args": {"x": 3}, "returns": 3}
+          ]
+        }
+      },
+      "issues": [],
+      "output": [["ID", "N", "SEQ", "VALUE"], [1, 10, 1, 1], [2, 20, 2, 2]]
+    },
+    {
+      "case": "the_key_grain_calls_its_function_for_each_key_in_the_order_its_first_record_is_stored",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput:\n  SRC: {path: a.csv, types: {ID: int, N: int}}\nbase: SRC\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.N}}}}\noutput: {path: output.csv, columns: [ID, VALUE]}\n",
+          "study/a.csv": "ID,N\n3,30\n1,10\n2,20\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 10}, "returns": 10},
+            {"function": "id", "args": {"x": 20}, "returns": 20},
+            {"function": "id", "args": {"x": 30}, "returns": 30}
+          ]
+        }
+      },
+      "issues": [],
+      "output": [["ID", "VALUE"], [3, 30], [1, 10], [2, 20]]
+    },
+    {
+      "case": "an_intermediate_derivation_calls_its_function_after_activation_with_each_donor_value",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "intermediate"},
+          "study/input.csv": "ID\n1\n1\n2\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 1}, "returns": 1},
+            {"function": "id", "args": {"x": 2}, "returns": 2}
+          ]
+        }
+      },
+      "issues": [],
+      "output": [["ID", "VALUE"], [1, 1], [2, 2]]
+    },
+    {
+      "case": "an_intermediate_derivation_calls_its_function_after_activation_with_each_prior_value",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "intermediate", "edits": [{"from": "args: {x: SRC.ID}", "to": "args: {x: BASE}"}]},
+          "study/input.csv": "ID\n1\n1\n2\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 1}, "returns": 1},
+            {"function": "id", "args": {"x": 2}, "returns": 2}
+          ]
+        }
+      },
+      "issues": [],
+      "output": [["ID", "VALUE"], [1, 1], [2, 2]]
+    },
+    {
+      "case": "a_grouped_template_s_intermediate_derivation_calls_its_function_with_each_donor_value",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {
+            "base": "intermediate",
+            "edits": [{"from": "keys: [ID]\n", "to": "keys: [ID]\nrows: [{id: all, group_by: [SRC.ID], derivations: {ID: SRC.ID}}]\n"}]
+          },
+          "study/input.csv": "ID\n1\n1\n2\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 1}, "returns": 1},
+            {"function": "id", "args": {"x": 2}, "returns": 2}
+          ]
+        }
+      },
+      "issues": [],
+      "output": [["ID", "VALUE"], [1, 1], [2, 2]]
+    },
+    {
+      "case": "a_grouped_template_s_intermediate_derivation_calls_its_function_with_each_prior_value",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {
+            "base": "intermediate",
+            "edits": [{"from": "keys: [ID]\n", "to": "keys: [ID]\nrows: [{id: all, group_by: [SRC.ID], derivations: {ID: SRC.ID}}]\n"}, {"from": "args: {x: SRC.ID}", "to": "args: {x: BASE}"}]
+          },
+          "study/input.csv": "ID\n1\n1\n2\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 1}, "returns": 1},
+            {"function": "id", "args": {"x": 2}, "returns": 2}
+          ]
+        }
+      },
+      "issues": [],
+      "output": [["ID", "VALUE"], [1, 1], [2, 2]]
+    },
+    {
+      "case": "an_intermediate_callback_selects_for_its_donor_record_and_keeps_the_selected_field_s_type",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput:\n  SRC: {path: input.csv, types: {ID: int, N: int}}\n  B: {path: input.csv, types: {ID: int, N: str}}\nbase: SRC\nkeys: [ID, N]\nintermediates:\n  - {id: CAP, dataset: SRC, key: [ID], order_by: [SRC.N], keep: first}\n  - id: DON\n    dataset: B\n    key: {ID: ID}\n    order_by: [B.ID]\n    keep: first\n    derivations:\n      V: {function: {name: id, args: {x: CAP.N}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: VALUE, type: int, derivation: DON.V}\noutput: {path: output.csv, columns: [ID, N, VALUE]}\n",
+          "study/input.csv": "ID,N\n1,10\n1,30\n2,40\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 10}, "returns": 10},
+            {"function": "id", "args": {"x": 40}, "returns": 40}
+          ]
+        }
+      },
+      "issues": [],
+      "output": [["ID", "N", "VALUE"], [1, 10, 10], [1, 30, 10], [2, 40, 40]]
+    },
+    {
+      "case": "an_intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput:\n  SRC: {path: input.csv, types: {ID: int, N: int}}\n  B: {path: input.csv, types: {ID: int, N: int}}\nbase: SRC\nkeys: [ID, N]\nintermediates:\n  - {id: CAP, dataset: SRC, key: [ID], order_by: [SRC.N], keep: first}\n  - id: DON\n    dataset: B\n    key: {ID: ID, N: N}\n    derivations:\n      V: {function: {name: pair, args: {weight: CAP.N, own: B.N}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: VALUE, type: int, derivation: DON.V}\noutput: {path: output.csv, columns: [ID, N, VALUE]}\n",
+          "study/input.csv": "ID,N\n1,10\n1,30\n2,40\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "pair", "args": {"weight": 7, "own": 3}, "returns": 10},
+            {"function": "pair", "args": {"weight": 0, "own": 0}, "returns": 0},
+            {"function": "pair", "args": {"weight": 10, "own": 10}, "returns": 20},
+            {"function": "pair", "args": {"weight": 10, "own": 30}, "returns": 40},
+            {"function": "pair", "args": {"weight": 40, "own": 40}, "returns": 80}
+          ]
+        }
+      },
+      "issues": [],
+      "output": [["ID", "N", "VALUE"], [1, 10, 20], [1, 30, 40], [2, 40, 80]]
+    },
+    {
+      "case": "a_callback_derived_field_drives_rows_with_its_declared_result_type",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\nintermediates:\n  - id: DON\n    dataset: SRC\n    derivations:\n      V: {function: {name: id, args: {x: SRC.ID}}}\ncolumns:\n  - {name: ID, type: int}\n  - {name: VALUE, type: int}\nrows:\n  - id: records\n    dataset: DON\n    derivations: {ID: DON.ID, VALUE: DON.V}\noutput: {path: output.csv, columns: [ID, VALUE]}\n",
+          "study/input.csv": "ID\n1\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 1}, "returns": 1}
+          ]
+        }
+      },
+      "issues": [],
+      "output": [["ID", "VALUE"], [1, 1]]
+    },
+    {
+      "case": "a_specification_that_calls_no_function_verifies_no_lock_and_binds_and_runs_nothing",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "domain", "edits": [{"from": "derivation: {function: {name: id, args: {x: SRC.ID}}}", "to": "derivation: SRC.ID"}]},
+          "study/input.csv": "ID\n1\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {"lock": "opaque"}
+      },
+      "issues": []
+    },
+    {
+      "case": "a_saved_project_run_publishes_its_output_without_activating_again",
+      "operation": "host_save",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "domain"},
+          "study/input.csv": "ID\n1\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 1}, "returns": 1}
+          ]
+        }
+      },
+      "issues": [],
+      "output": [["ID", "VALUE"], [1, 1]],
+      "saved": {"study/output.csv": "ID,VALUE\n1,1\n"}
+    },
+    {
+      "case": "a_classified_binding_failure_fails_the_function_file",
+      "operation": "host_save",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "domain"},
+          "study/input.csv": "ID\n1\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {"bind": {"id": {"class": "OriginalFailure", "message": "é failure"}}}
+      },
+      "compares": ["condition"],
+      "issues": [{"condition": "function_file_invalid"}],
+      "saved": {}
+    },
+    {
+      "case": "a_classified_case_failure_fails_the_function_s_conformance",
+      "operation": "host_save",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "domain"},
+          "study/input.csv": "ID\n1\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "raises": {"class": "OriginalFailure", "message": "é failure"}}
+          ]
+        }
+      },
+      "compares": ["condition"],
+      "issues": [{"condition": "function_conformance_failed"}],
+      "saved": {}
+    },
+    {
+      "case": "a_classified_live_call_failure_fails_the_call_after_the_input_is_read",
+      "operation": "host_save",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "domain"},
+          "study/input.csv": "ID\n1\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 1}, "raises": {"class": "OriginalFailure", "message": "é failure"}}
+          ]
+        }
+      },
+      "compares": ["condition"],
+      "issues": [{"condition": "function_call_failed"}],
+      "saved": {}
+    },
+    {
+      "case": "an_unclassified_binding_failure_refuses_the_build_opaquely",
+      "operation": "host_save",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "domain"},
+          "study/input.csv": "ID\n1\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {"bind": {"id": "opaque"}}
+      },
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": [], "context": {"step": "build", "code": "opaque_host"}}],
+      "saved": {}
+    },
+    {
+      "case": "an_unclassified_case_failure_refuses_the_build_opaquely",
+      "operation": "host_save",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "domain"},
+          "study/input.csv": "ID\n1\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "raises": "opaque"}
+          ]
+        }
+      },
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": [], "context": {"step": "build", "code": "opaque_host"}}],
+      "saved": {}
+    },
+    {
+      "case": "an_unclassified_live_call_failure_refuses_the_build_opaquely_after_the_input_is_read",
+      "operation": "host_save",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "domain"},
+          "study/input.csv": "ID\n1\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 1}, "raises": "opaque"}
+          ]
+        }
+      },
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": [], "context": {"step": "build", "code": "opaque_host"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_host_interrupt_in_a_case_refuses_the_build_at_the_activation_boundary",
+      "operation": "host_save",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "domain"},
+          "study/input.csv": "ID\n1\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "raises": "interrupt"}
+          ]
+        }
+      },
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": [], "context": {"step": "build", "code": "activation_boundary"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_panic_in_a_case_refuses_the_build_at_the_activation_boundary",
+      "operation": "host_save",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "domain"},
+          "study/input.csv": "ID\n1\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {"calls": [{"function": "id", "args": {"x": 7}, "returns": 7}, {"function": "id", "args": {"x": -9223372036854775808}, "unwinds": true}]}
+      },
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": [], "context": {"step": "build", "code": "activation_boundary"}}],
+      "saved": {}
+    },
+    {
+      "case": "lock_findings_report_against_the_project_file_that_holds_the_lock",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "domain"},
+          "study/input.csv": "ID\n1\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {"lock": {"lock": [{"package": "project", "reason": "distribution_not_identified", "expected": [], "actual": null}]}}
+      },
+      "compares": ["condition", "spec_paths", "context"],
+      "prefix": true,
+      "issues": [{"condition": "runtime_artifact_mismatch", "spec_paths": ["environments.python.lock"], "context": {"source": "{study}/study/project.yaml", "entry": "{study}/study/project.yaml", "lock_source": "{study}/uv.lock", "lock": "../uv.lock", "package": "project", "reason": "distribution_not_identified", "expected": [], "actual": null}}]
+    },
+    {
+      "case": "a_host_exception_while_verifying_the_lock_refuses_the_build_opaquely",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "domain"},
+          "study/input.csv": "ID\n1\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {"lock": {"class": "OSError", "message": "lock unreadable"}}
+      },
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": [], "context": {"step": "build", "code": "opaque_host"}}]
+    },
+    {
+      "case": "a_lock_failure_classified_with_no_finding_refuses_the_report",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "domain"},
+          "study/input.csv": "ID\n1\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {"lock": {"lock": []}}
+      },
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": [], "context": {"step": "build", "code": "result_projection"}}]
+    },
+    {
+      "case": "a_case_result_that_differs_fails_conformance_in_the_function_file_that_defines_it",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "domain"},
+          "study/input.csv": "ID\n1\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 8},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808}
+          ]
+        }
+      },
+      "compares": ["condition", "spec_paths", "context.expected", "context.actual", "context.source", "context.entry", "context.environment_path"],
+      "prefix": true,
+      "issues": [{"condition": "function_conformance_failed", "spec_paths": ["tests[0]"], "context": {"expected": 7, "actual": 8, "source": "{study}/study/functions/id.yaml", "entry": "{study}/study/project.yaml", "environment_path": "functions[1]"}}]
+    }
+  ]
+}

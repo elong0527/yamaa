@@ -581,8 +581,119 @@ mod diagnostics {
     /// How the replay compares an authored case with what its operation
     /// reports (#3691).
     mod replay {
-        use crate::support::diagnostic::replay::{among, compared};
+        use crate::support::diagnostic::{
+            form::{Order, Outcome, Stated},
+            replay::{among, compared},
+        };
         use yamaa_core::json::Value;
+
+        fn stated_selection(name: &str, path: &str, texts: Vec<Value>, label: &str) -> Stated {
+            let case = Value::Object(
+                [(
+                    "saved".into(),
+                    Value::Object(
+                        [(
+                            name.into(),
+                            Value::Object(
+                                [(
+                                    "select".into(),
+                                    Value::Object([(path.into(), Value::Array(texts))].into()),
+                                )]
+                                .into(),
+                            ),
+                        )]
+                        .into(),
+                    ),
+                )]
+                .into(),
+            );
+            Stated::read(&case, label)
+        }
+
+        #[test]
+        fn json_pointer_matches_decoded_member_names_and_retains_value_text() {
+            // The saved-selection comparator is the seam under test: a replay
+            // fixture cannot assert that its own false absence must fail.
+            for (document, path, expected, label) in [
+                (r#"{"\u0061":1.0}"#, "/a", Some("1.0"), "Unicode escape"),
+                (
+                    r#"{"a\"b":"v\u0061lue"}"#,
+                    "/a\"b",
+                    Some(r#""v\u0061lue""#),
+                    "escaped quote and unchanged value text",
+                ),
+                (
+                    r#"{"a\\b":true}"#,
+                    r"/a\b",
+                    Some("true"),
+                    "escaped backslash",
+                ),
+                (
+                    r#"{"\uD83D\uDE00":null}"#,
+                    "/😀",
+                    Some("null"),
+                    "surrogate pair",
+                ),
+                (
+                    r#"{"\u0061":[{"b\/c\u007e":"x"}]}"#,
+                    "/a/0/b~1c~0",
+                    Some(r#""x""#),
+                    "nested decoded names and pointer escapes",
+                ),
+                (
+                    r#"{"\u0061":1}"#,
+                    r"/\u0061",
+                    None,
+                    "the raw escape is not the member name",
+                ),
+                (r#"{"\u0061":1}"#, "/b", None, "absent member"),
+            ] {
+                let reported = Outcome {
+                    saved: Some([("data.json".into(), Some(document.as_bytes().to_vec()))].into()),
+                    ..Outcome::default()
+                };
+                let compare = |texts: Vec<Value>| {
+                    std::panic::catch_unwind(|| {
+                        stated_selection("data.json", path, texts, label)
+                            .compare(&reported, "save", label);
+                    })
+                    .is_ok()
+                };
+                let texts = expected
+                    .into_iter()
+                    .map(|text| Value::String(text.into()))
+                    .collect();
+                assert_eq!(
+                    (compare(texts), compare(vec![])),
+                    (true, expected.is_none()),
+                    "{label}: authored selection and stated absence"
+                );
+            }
+        }
+
+        #[test]
+        fn xml_selections_refuse_xpath_syntax_outside_literal_qualified_names() {
+            // The selector admission seam must refuse unsupported XPath;
+            // replay fixtures cannot expect their own admission to fail.
+            for (path, accepted) in [
+                ("/ODM/Item-1[@xml:id='x']/@def:Origin", true),
+                ("/ODM/étude.1", true),
+                ("/ODM/*", false),
+                ("/ODM/Item()", false),
+                ("/ODM/.", false),
+                ("/ODM/..", false),
+                ("/ODM/1Item", false),
+                ("/ODM/:Item", false),
+                ("/ODM/def:Item:Other", false),
+                ("/ODM/@*", false),
+                ("/ODM/Item[@*='x']", false),
+                ("/ODM/Item/@count()", false),
+            ] {
+                let read =
+                    std::panic::catch_unwind(|| stated_selection("define.xml", path, vec![], path));
+                assert_eq!(read.is_ok(), accepted, "{path}: selector admission");
+            }
+        }
 
         /// A case that compares some keys of the context reads a reported
         /// context at those keys alone: another reported key is ignored, and
@@ -647,6 +758,40 @@ mod diagnostics {
             }
         }
 
+        /// The replay runs its cases on several threads and returns what
+        /// each returned, in the cases' order; a case that fails stops no
+        /// other, and the replay then fails naming each failed case, in
+        /// order, with its own message.
+        #[test]
+        fn in_parallel_returns_each_case_in_order_or_names_each_failed_case() {
+            use crate::support::diagnostic::form::in_parallel;
+            let cases = (0..64).map(|n| format!("case {n}")).collect::<Vec<_>>();
+            for (failing, expected, label) in [
+                (&[][..], Ok(cases.clone()), "every case passes"),
+                (
+                    &["case 40", "case 3"][..],
+                    Err(
+                        "2 of 64 cases failed:\n\ncase 3:\ncase 3 fails\n\ncase 40:\ncase 40 fails",
+                    ),
+                    "two cases fail",
+                ),
+            ] {
+                let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    in_parallel(&cases, String::as_str, |case| {
+                        assert!(!failing.contains(&case.as_str()), "{case} fails");
+                        case.clone()
+                    })
+                }));
+                let ran = ran.map_err(|payload| {
+                    payload
+                        .downcast_ref::<String>()
+                        .cloned()
+                        .unwrap_or_else(|| "a failure with no message".into())
+                });
+                assert_eq!(ran, expected.map_err(str::to_owned), "{label}");
+            }
+        }
+
         /// An `among` case's rows are some of the issues its operation
         /// reports: each matches a distinct reported row, in any order, and
         /// a row that matches none is named.
@@ -675,6 +820,24 @@ mod diagnostics {
                 ),
             ] {
                 assert_eq!(among(&authored, &reported), expected, "{label}");
+            }
+        }
+
+        /// A `prefix` case's rows are compared with the first rows its
+        /// operation reports, in order, and the rows after them are not
+        /// compared; when fewer are reported than it writes, every reported
+        /// row is compared, so the case fails, as a complete case's rows are
+        /// compared with every reported row.
+        #[test]
+        fn prefix_rows_are_compared_with_the_first_reported_rows_in_order() {
+            let reported = ["a", "b", "c"];
+            for (order, written, expected, label) in [
+                (Order::Prefix, 1, &["a"][..], "the first of three rows"),
+                (Order::Prefix, 2, &["a", "b"][..], "the first two, in order"),
+                (Order::Prefix, 4, &["a", "b", "c"][..], "more than reported"),
+                (Order::Complete, 1, &["a", "b", "c"][..], "a complete case"),
+            ] {
+                assert_eq!(order.compared(&reported, written), expected, "{label}");
             }
         }
     }

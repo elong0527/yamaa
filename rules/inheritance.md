@@ -46,7 +46,7 @@ parent or fragment path. Two spellings that reach the same file, after
 symbolic links are resolved, are one layer.
 
 Fails: `invalid_parent_path`, `parent_not_found`.
-Evidence: `negative-remote-parent`, `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_malformed_parent_spelling_is_refused_as_written_on_every_route`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_linked_parent_is_refused_at_parent_on_every_route`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::an_empty_parent_fails_schema_admission_before_it_is_resolved`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::an_empty_parent_fails_schema_admission_in_its_layer`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_list_of_parents_carries_the_one_parent_hint`.
+Evidence: `negative-remote-parent`, `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_malformed_parent_spelling_is_refused_as_written_on_every_route`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_linked_parent_is_refused_at_parent_on_every_route`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/file_origins.json::an_empty_parent_fails_schema_admission_before_it_is_resolved`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::an_empty_parent_fails_schema_admission_in_its_layer`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_list_of_parents_carries_the_one_parent_hint`.
 
 A URL, URI or other non-local reference fails with `invalid_parent_path`,
 reporting the declaring file and its `parent`. An empty `parent` fails schema
@@ -298,7 +298,7 @@ field that no layer supplies fails on the resolved specification, and a later
 layer that never mentions a field cannot replace an earlier value with the
 field's default.
 
-Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::complete_composition_materializes_defaults_once_and_keeps_written_provenance`, `rust/crates/yamaa-core/tests/schema_references.rs::keyed_member_fragments_defer_nested_requiredness_but_root_values_do_not`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_cleared_field_takes_its_default_again_and_its_path_its_base`.
+Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::complete_composition_materializes_defaults_once_and_keeps_written_provenance`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::keyed_member_fragments_defer_nested_requiredness_but_root_values_do_not`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_cleared_field_takes_its_default_again_and_its_path_its_base`.
 
 A whole root field is a complete value in the layer that writes it, so its
 requiredness and defaults apply there. A default fills a field the composed

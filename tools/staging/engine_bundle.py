@@ -1,9 +1,8 @@
 """Stage the engine source bundle that a host's source archive builds from.
 
 A host's bundle is the Rust workspace that its source archive compiles (#3030
-D55): the engine crates, the boundary crate through which both host bindings
-reach the engine and the engine's C ABI that each links, and that host's
-binding crate, a workspace manifest
+D55): the engine crates, the boundary crate that both host bindings negotiate
+through, and that host's binding crate, a workspace manifest
 whose members are only those crates and whose profiles are those that the
 host builds with (the R bundle's leaves out the wheels' dist profile), a lock
 trimmed from the canonical rust/Cargo.lock and
@@ -20,8 +19,8 @@ tools/packaging/generate_shipped_schema.py writes, so a build from the bundle
 reads nothing outside it. It holds no tests,
 examples, other benchmark fixtures or public-api.txt, and no Rust toolchain
 file anywhere, the vendored crates included. The command line has no source
-archive: its bundle, with the yamaa-cli crate in place of the boundary crates
-and a binding, is the workspace that its
+archive: its bundle, with the yamaa-cli crate in place of the boundary and a
+binding, is the workspace that its
 binaries build from, whose trimmed lock its component inventory lists
 (tools/packaging/generate_component_inventory.py).
 
@@ -56,13 +55,14 @@ from tools.staging import vendor_crates
 ENGINE = ("yamaa-core", "yamaa-adapters", "yamaa")
 # The facade crate, which embeds the selftest cases.
 FACADE = "yamaa"
-# The adapters crate's directory of the schema files that it embeds.
-SCHEMA = "schema"
-# The crates through which both host bindings reach the engine
-# (rust/interface/README.md): the boundary, with the client each binding
-# calls, and the engine's C ABI, which each binding links. The command line
-# crosses no boundary.
-BOUNDARY = ("yamaa-boundary", "yamaa-engine")
+# The adapters crate's directories of the data it embeds with include_str!,
+# and the suffix each file there has: the copies of the schema files
+# (src/shipped_schema/data.rs), which tools/packaging/generate_shipped_schema.py
+# writes, and the closed Parquet profile (src/parquet_source/closed_profile.rs).
+EMBEDDED = {"schema": (".yaml", ".json"), "profile": (".toml",)}
+# The crate through which both host bindings negotiate their interface
+# (rust/interface/README.md); the command line crosses no boundary.
+BOUNDARY = "yamaa-boundary"
 BINDINGS = {"python": "yamaa-python", "r": "yamaa-r", "cli": "yamaa-cli"}
 MANIFEST, LOCK = "Cargo.toml", "Cargo.lock"
 # Cargo reads its configuration from the directory it runs in and its parents.
@@ -84,14 +84,13 @@ WHEEL_PROFILE = "dist"
 
 def members(host):
     """The workspace members of a host's bundle."""
-    boundary = () if host == "cli" else BOUNDARY
+    boundary = () if host == "cli" else (BOUNDARY,)
     return (*ENGINE, *boundary, BINDINGS[host])
 
 
 def member_sources(member_root: Path):
     """Yield a member's manifest, build script, license files and Rust sources,
-    the adapters' copies of the schema files they embed and their ReadStat
-    sources."""
+    the data the adapters embed (EMBEDDED) and their ReadStat sources."""
     manifest = member_root / MANIFEST
     build_script = member_root / "build.rs"
     sources = member_root / "src"
@@ -114,21 +113,21 @@ def member_sources(member_root: Path):
             raise ValueError("workspace member sources must not be symlinks")
         if path.is_file() and path.suffix == ".rs":
             yield path
-    # The schema modules and JSON Schemas that the adapters embed with
-    # include_str! (src/shipped_schema/data.rs): the byte-identical copies of
-    # yaml/ that tools/packaging/generate_shipped_schema.py writes.
-    schema = member_root / SCHEMA
-    if schema.is_symlink():
-        raise ValueError("embedded schema files must not be symlinks")
-    if schema.exists():
+    # The data that the adapters embed with include_str! (EMBEDDED).
+    for name, suffixes in EMBEDDED.items():
+        embedded = member_root / name
+        if embedded.is_symlink():
+            raise ValueError(f"embedded {name} files must not be symlinks")
+        if not embedded.exists():
+            continue
         if member_root.name != "yamaa-adapters":
-            raise ValueError("unreviewed embedded schema directory")
-        for path in sorted(schema.rglob("*")):
+            raise ValueError(f"unreviewed embedded {name} directory")
+        for path in sorted(embedded.rglob("*")):
             if path.is_symlink():
-                raise ValueError("embedded schema files must not be symlinks")
+                raise ValueError(f"embedded {name} files must not be symlinks")
             if path.is_file():
-                if path.suffix not in {".yaml", ".json"}:
-                    raise ValueError("unreviewed embedded schema file")
+                if path.suffix not in suffixes:
+                    raise ValueError(f"unreviewed embedded {name} file")
                 yield path
     # ReadStat is compiled from this exact licensed vendored source tree.
     vendor = member_root / "vendor" / "readstat"

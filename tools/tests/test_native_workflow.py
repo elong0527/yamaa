@@ -1933,59 +1933,6 @@ class NativeWorkflowContract(unittest.TestCase):
                     ],
                 )
 
-    def test_each_loaded_lane_checks_both_hosts_and_keeps_their_logs(self):
-        # The test-only loaded mode's checks continue on error until their
-        # first green run on main promotes them to blocking (#3702): a release
-        # requires the job to finish, and neither check to pass. Each check
-        # writes its logs where the job's last step uploads them, whatever
-        # the checks did.
-        command = "python -m tools.commands.loaded_checks --host {host} --logs "
-        checks = [
-            (
-                "Check the Python host with the engine loaded at runtime",
-                {"YAMAA_ENGINE": "loaded"},
-                command.format(host="python") + '"${RUNNER_TEMP}/loaded-logs/python"',
-            ),
-            (
-                "Check the R host with the engine loaded at runtime",
-                {"YAMAA_ENGINE": "loaded", "_R_CHECK_CRAN_INCOMING_REMOTE_": "false"},
-                command.format(host="r") + '"${RUNNER_TEMP}/loaded-logs/r"',
-            ),
-        ]
-        required = release.required_jobs(self.coverage)
-        for platform in self.coverage["loaded"]["os"]:
-            job = f"native-loaded ({platform})"
-            definitions = self.jobs[job]["definitions"]
-            found = [
-                (
-                    step["name"],
-                    step["env"],
-                    step["run"],
-                    step.get("continue-on-error"),
-                    step.get("if"),
-                )
-                for step in definitions
-                if "tools.commands.loaded_checks" in step.get("run", "")
-            ]
-            with self.subTest(job=job):
-                self.assertEqual(required[job], ())
-                self.assertEqual(
-                    found,
-                    [(name, env, run, True, None) for name, env, run in checks],
-                )
-                self.assertEqual(
-                    (
-                        self.jobs[job]["uploads"],
-                        definitions[-1]["if"],
-                        definitions[-1]["with"]["path"],
-                    ),
-                    (
-                        [f"native-loaded-logs-{platform}"],
-                        "always()",
-                        "${{ runner.temp }}/loaded-logs",
-                    ),
-                )
-
 
 if __name__ == "__main__":
     unittest.main()

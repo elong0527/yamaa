@@ -8210,28 +8210,6 @@
         }
       ],
       "census_kinds": ["check", "run", "project_run", "submission", "selftest", "plans", "table"],
-      "fixtures": [
-        {
-          "fixture": "an engine of the next boundary version",
-          "library": "fixture_next_version",
-          "outcome": {"accepted": false, "requested_version": "{version}", "supported_version": "{next_version}", "reason": "version_mismatch", "missing_features": []}
-        },
-        {
-          "fixture": "a library without the negotiation entry",
-          "library": "fixture_no_entry",
-          "outcome": {"accepted": false, "requested_version": "{version}", "supported_version": null, "reason": "missing_interface", "missing_features": []}
-        },
-        {
-          "fixture": "an engine without plan_reuse",
-          "library": "fixture_no_plan_reuse",
-          "outcome": {"accepted": false, "requested_version": "{version}", "supported_version": "{version}", "reason": "missing_feature", "missing_features": ["plan_reuse"]}
-        },
-        {
-          "fixture": "an engine without format_parquet",
-          "library": "fixture_no_format_parquet",
-          "outcome": {"accepted": true, "version": "{version}", "enabled": ["structured_records", "arrow_c_stream", "plan_reuse", "format_yaml", "format_readstat", "format_odm"], "supported": ["structured_records", "arrow_c_stream", "plan_reuse", "format_yaml", "format_readstat", "format_odm"], "core_version": "{core_version}", "language_versions": ["1.0"]}
-        }
-      ],
       "lifetime": {
         "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: {path: input.csv, types: {ID: int, NAME: str}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n  - {name: NAME, type: str, label: Name, derivation: SRC.NAME}\noutput: {path: output.csv, columns: [ID, NAME]}\n",
         "input_csv": "ID,NAME\n1,alpha\n2,beta\n",
