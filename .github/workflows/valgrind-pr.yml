@@ -1,0 +1,123 @@
+name: Valgrind (temporary)
+
+# Temporary, for this pull request alone: native qualification's
+# native-cran (valgrind) job, which pull request CI does not run, on the R
+# source archive that native-r-dist builds, so the leak-kinds change of
+# tools/commands/check_r.py is proven before the next native run on main.
+# Its steps are native.yml's, unchanged. Remove this file before merging.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: valgrind-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  r-dist:
+    name: native-r-dist (ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install repository tools
+        run: |
+          python -m pip install --no-deps -e .
+          python -m tools.ci.toolchain
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: '4.6.1'
+          use-public-rspm: true
+      - name: Install Rust
+        run: python -m tools.ci.toolchain --install
+      - name: Install the shared grammar and benchmark metadata codecs
+        run: python -m pip install py-yaml12==0.2.0 pyyaml==6.0.3
+      - name: Stage standalone R package
+        run: python -m tools.staging.stage_r_package "${RUNNER_TEMP}/native-stage/yamaa"
+      - uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          working-directory: R/yamaa
+      - name: Build R source package
+        working-directory: ${{ runner.temp }}
+        run: |
+          R CMD build --no-manual native-stage/yamaa
+          python -m tools.packaging.check_cargo_lock yamaa_0.6.0.tar.gz
+      - name: Preserve source archive
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: native-r-ubuntu-24.04
+          path: ${{ runner.temp }}/yamaa_0.6.0.tar.gz
+          if-no-files-found: error
+
+  valgrind:
+    name: native-cran (valgrind)
+    needs: r-dist
+    runs-on: ubuntu-24.04
+    container: ghcr.io/r-hub/containers/valgrind:latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Fedora's Cargo and rustc, and Python
+        run: |
+          for pause in 30 60 120 240 stop; do
+            dnf install -y cargo rust python3 pandoc && break
+            if [ "${pause}" = stop ]; then exit 1; fi
+            echo "dnf failed; trying again in ${pause} seconds"
+            sleep "${pause}"
+          done
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+      - name: Install the package's Suggests
+        env:
+          R_LIBS: ${{ runner.temp }}/library
+        run: |
+          mkdir -p "${R_LIBS}"
+          for pause in 30 60 120 240 stop; do
+            Rscript -e 'suggests <- strsplit(read.dcf("R/yamaa/DESCRIPTION")[1, "Suggests"], ",", fixed = TRUE)[[1]]' \
+              -e 'packages <- trimws(sub("[[:space:]]*[(][^)]*[)]", "", suggests))' \
+              -e 'pak::pkg_install(packages, lib = Sys.getenv("R_LIBS"))' \
+              -e 'stopifnot(all(vapply(packages, requireNamespace, logical(1), quietly = TRUE, lib.loc = Sys.getenv("R_LIBS"))))' && break
+            if [ "${pause}" = stop ]; then exit 1; fi
+            echo "pak failed; trying again in ${pause} seconds"
+            sleep "${pause}"
+          done
+      - name: Download the published R source archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: native-r-ubuntu-24.04
+          path: ${{ runner.temp }}/published
+      - name: Check the R source package as CRAN does
+        id: check
+        env:
+          R_LIBS: ${{ runner.temp }}/library
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          echo "directory=${RUNNER_TEMP}/cran-check" >> "${GITHUB_OUTPUT}"
+          python3 -m tools.commands.check_r --archive "${RUNNER_TEMP}"/published/yamaa_*.tar.gz \
+            --work-dir "${RUNNER_TEMP}/cran-check" --valgrind
+      - name: Preserve the CRAN check
+        if: ${{ always() && steps.check.outputs.directory != '' }}
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: native-cran-valgrind
+          path: |
+            ${{ steps.check.outputs.directory }}/yamaa.Rcheck/00check.log
+            ${{ steps.check.outputs.directory }}/yamaa.Rcheck/00install.out
+            ${{ steps.check.outputs.directory }}/yamaa.Rcheck/tests/*.Rout*
+          if-no-files-found: ignore
