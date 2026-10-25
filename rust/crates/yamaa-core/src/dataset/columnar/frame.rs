@@ -97,6 +97,11 @@ impl Frame {
         self.columns.len()
     }
 
+    /// The member records of every row.
+    pub(super) fn member_count(&self) -> usize {
+        self.records.len()
+    }
+
     /// Room for `rows` more rows holding `records` more member records.
     pub(super) fn try_reserve(
         &mut self,
@@ -245,6 +250,25 @@ impl Frame {
     pub(super) fn reset(&mut self, row: usize, column: usize) {
         self.columns[column].set(row, ValueRef::Missing);
         self.completed[column].set(row, false);
+    }
+
+    /// Append rows `rows` of `other`, their member records moved on by
+    /// `records`: one partition's candidates joining the whole run's, whose
+    /// records count the whole input's (#3830).
+    pub(super) fn append(&mut self, other: &Frame, rows: std::ops::Range<usize>, records: usize) {
+        for row in rows {
+            for (values, from) in self.columns.iter_mut().zip(&other.columns) {
+                values.push(from.get(row));
+            }
+            for (completed, from) in self.completed.iter_mut().zip(&other.completed) {
+                completed.push(from.get(row));
+            }
+            self.templates.push(other.templates[row]);
+            self.identities.push(other.identities[row]);
+            self.records
+                .extend(other.members(row).iter().map(|&record| record + records));
+            self.offsets.push(self.records.len());
+        }
     }
 
     /// Every value of one row, in column order.

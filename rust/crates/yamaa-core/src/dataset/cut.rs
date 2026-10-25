@@ -134,3 +134,179 @@ impl PartitionCut {
         Some(bounds)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::PartitionCut;
+    use crate::table::{CellError, Column, TableAccess, TableSchema, ValueRef};
+    use crate::value::{ColumnType, Value};
+    use std::convert::Infallible;
+    use std::num::NonZeroUsize;
+    use std::ops::Range;
+
+    /// Records of two fields, K and J. The cut reads their cells and never
+    /// their declared types, so a field may hold a value of any type.
+    struct Records {
+        schema: TableSchema,
+        rows: Vec<[Value; 2]>,
+    }
+    impl Records {
+        fn new(rows: Vec<[Value; 2]>) -> Self {
+            let column = |name: &str, kind| Column {
+                name: name.into(),
+                kind,
+            };
+            Self {
+                schema: TableSchema::new(vec![
+                    column("K", ColumnType::Str),
+                    column("J", ColumnType::Int),
+                ])
+                .unwrap(),
+                rows,
+            }
+        }
+    }
+    impl TableAccess for Records {
+        type Error = Infallible;
+        fn schema(&self) -> &TableSchema {
+            &self.schema
+        }
+        fn row_count(&self) -> usize {
+            self.rows.len()
+        }
+        fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<Infallible>> {
+            self.rows
+                .get(row)
+                .and_then(|values| values.get(column))
+                .map(ValueRef::from)
+                .ok_or(CellError::OutOfBounds { row, column })
+        }
+    }
+    /// One partition of the records `range`.
+    fn whole(range: Range<usize>) -> Vec<Range<usize>> {
+        vec![range]
+    }
+    fn keyed(keys: &[&str]) -> Records {
+        Records::new(
+            keys.iter()
+                .map(|&key| [Value::Str(key.into()), Value::Int(0)])
+                .collect(),
+        )
+    }
+
+    /// The cut of a held input (`ResolvedPlan::execute_divided`), a seam no
+    /// reader reaches: partitions hold whole runs of equal keys, as many
+    /// as fit in the partition size, and a run longer than it alone. The
+    /// runs of a, a, b, c, c, c, d are 0..2, 2..3, 3..6 and 6..7, so a size
+    /// of 3 packs a with b, then c, then d, and a size of 4 packs a with b,
+    /// then c with d.
+    #[test]
+    fn key_bounded_partitions_hold_whole_runs_as_many_as_fit() {
+        let records = keyed(&["a", "a", "b", "c", "c", "c", "d"]);
+        let cases: [(usize, Vec<Range<usize>>); 5] = [
+            (1, vec![0..2, 2..3, 3..6, 6..7]),
+            (2, vec![0..2, 2..3, 3..6, 6..7]),
+            (3, vec![0..3, 3..6, 6..7]),
+            (4, vec![0..3, 3..7]),
+            (7, whole(0..7)),
+        ];
+        for (rows, expected) in cases {
+            assert_eq!(
+                key_bounded(&records, &[0], NonZeroUsize::new(rows).unwrap()),
+                Some(expected),
+                "partitions of at most {rows} records"
+            );
+        }
+        assert_eq!(
+            key_bounded(&keyed(&[]), &[0], NonZeroUsize::MIN),
+            Some(whole(0..0)),
+            "an empty input is one empty partition"
+        );
+    }
+
+    /// The cut's runs, a seam no reader reaches: they are
+    /// those of the key tuple, under `Key`'s equality, so missing equals
+    /// missing, the float zero signs are equal, and an integer is not its
+    /// decimal text. A value that recurs after its run has ended leaves the
+    /// input ungrouped, which keeps no partition.
+    #[test]
+    fn key_bounded_partitions_follow_runs_of_the_whole_key_tuple() {
+        let text = |value: &str| Value::Str(value.into());
+        let cases = [
+            (
+                "a value of K recurs under another J",
+                vec![
+                    [text("a"), Value::Int(1)],
+                    [text("b"), Value::Int(1)],
+                    [text("a"), Value::Int(2)],
+                ],
+                vec![0, 1],
+                Some(vec![0..1, 1..2, 2..3]),
+            ),
+            (
+                "the same records by K alone",
+                vec![
+                    [text("a"), Value::Int(1)],
+                    [text("b"), Value::Int(1)],
+                    [text("a"), Value::Int(2)],
+                ],
+                vec![0],
+                None,
+            ),
+            (
+                "missing values are one run",
+                vec![
+                    [Value::Missing, Value::Int(1)],
+                    [Value::Missing, Value::Int(2)],
+                    [text("x"), Value::Int(3)],
+                ],
+                vec![0],
+                Some(vec![0..2, 2..3]),
+            ),
+            (
+                "a missing value recurs",
+                vec![
+                    [Value::Missing, Value::Int(1)],
+                    [text("x"), Value::Int(2)],
+                    [Value::Missing, Value::Int(3)],
+                ],
+                vec![0],
+                None,
+            ),
+            (
+                "an integer and its text are two keys",
+                vec![[text("1"), Value::Int(1)], [Value::Int(1), Value::Int(1)]],
+                vec![0],
+                Some(vec![0..1, 1..2]),
+            ),
+            (
+                "the float zero signs are one key",
+                vec![
+                    [Value::float(-0.0), Value::Int(1)],
+                    [Value::float(0.0), Value::Int(2)],
+                ],
+                vec![0],
+                Some(whole(0..2)),
+            ),
+        ];
+        for (label, rows, fields, expected) in cases {
+            assert_eq!(
+                key_bounded(&Records::new(rows), &fields, NonZeroUsize::MIN),
+                expected,
+                "{label}"
+            );
+        }
+    }
+
+    /// The cut of `table`'s records into partitions of at most `rows`
+    /// records that keep the runs of `fields` whole.
+    fn key_bounded<T: TableAccess>(
+        table: &T,
+        fields: &[usize],
+        rows: NonZeroUsize,
+    ) -> Option<Vec<Range<usize>>> {
+        let mut cut = PartitionCut::new(fields.to_vec(), rows);
+        cut.read(table);
+        cut.finish()
+    }
+}

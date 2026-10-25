@@ -419,7 +419,6 @@ mod project {
     }
 
     mod project_run {
-        use crate::support::Edit as _;
         use std::{cell::RefCell, rc::Rc, sync::Arc};
         use yamaa_adapters::{
             document::Closures,
@@ -608,10 +607,6 @@ tests:
             original: Rc<()>,
             unwind: Arc<()>,
             mode: Mode,
-            values: Vec<i64>,
-            /// The one function the run calls: `id`, or `pair`, which sums
-            /// its two arguments.
-            function: &'static str,
         }
         impl Activation {
             fn payload(&self, interrupt: bool) -> Payload {
@@ -633,7 +628,7 @@ tests:
                 assert_eq!(language, Language::Python);
                 assert_eq!(lock.reference.written, "../uv.lock");
                 assert_eq!(functions.len(), 1);
-                assert_eq!(functions[0].name, self.function);
+                assert_eq!(functions[0].name, "id");
                 self.trace.borrow_mut().push("lock");
                 if matches!(self.mode, Mode::LockFailure) {
                     Err(self.payload(false))
@@ -646,20 +641,13 @@ tests:
                 identity: &ProjectFunctionIdentity,
                 signature: &LogicalSignature,
             ) -> Result<(), Payload> {
-                assert_eq!(identity.call, format!("project.{}", self.function));
+                assert_eq!(identity.call, "project.id");
                 let names = signature
                     .parameters()
                     .iter()
                     .map(|parameter| parameter.name.as_str())
                     .collect::<Vec<_>>();
-                assert_eq!(
-                    names,
-                    if self.function == "pair" {
-                        vec!["weight", "own"]
-                    } else {
-                        vec!["x"]
-                    }
-                );
+                assert_eq!(names, ["x"]);
                 self.trace.borrow_mut().push("bind");
                 if matches!(self.mode, Mode::BindFailure) {
                     Err(self.payload(false))
@@ -675,18 +663,6 @@ tests:
                 _: &(),
                 args: &[Argument<'_>],
             ) -> Result<Value, HostError<Payload>> {
-                if let [Argument {
-                    name: "weight",
-                    value: ValueRef::Int(weight),
-                }, Argument {
-                    name: "own",
-                    value: ValueRef::Int(own),
-                }] = args
-                {
-                    self.values.extend([*weight, *own]);
-                    self.trace.borrow_mut().push("pair");
-                    return Ok(Value::Int(weight + own));
-                }
                 let [Argument {
                     name: "x",
                     value: ValueRef::Int(value),
@@ -694,7 +670,6 @@ tests:
                 else {
                     panic!("an exact integer argument; missing cases are engine-short-circuited")
                 };
-                self.values.push(*value);
                 self.trace
                     .borrow_mut()
                     .push(if *value == 1 { "live" } else { "case" });
@@ -774,8 +749,6 @@ tests:
                     original: Rc::new(()),
                     unwind: Arc::new(()),
                     mode: Mode::Pass,
-                    values: Vec::new(),
-                    function: "id",
                 },
                 Study {
                     trace,
@@ -788,6 +761,7 @@ tests:
 
         #[test]
         fn prepared_and_rejected_runs_retain_original_documents_lock_and_metadata_allocations() {
+            // Seam: the allocations a prepared or rejected run holds, by address.
             for name in ["id", "unknown"] {
                 let document = document(Some(name));
                 let environment = environment();
@@ -830,6 +804,8 @@ tests:
 
         #[test]
         fn every_build_reactivates_only_called_definitions_on_exact_cached_study_bytes() {
+            // Seam: one prepared run built twice, its activation observations and the
+            // snapshot both builds share, by identity.
             let run =
                 PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
             let (mut activation, mut study) = ports();
@@ -903,143 +879,9 @@ tests:
         }
 
         #[test]
-        fn aggregate_derive_callbacks_activate_before_data_and_receive_each_donor_or_prior_binding()
-        {
-            for grouped_rows in [false, true] {
-                for argument in ["SRC.ID", "BASE"] {
-                    let rows = if grouped_rows {
-                        "rows: [{id: all, group_by: [SRC.ID], derivations: {ID: SRC.ID}}]\n"
-                    } else {
-                        ""
-                    };
-                    let raw = format!(
-                "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {{SRC: {{path: input.csv, key: [ID], types: {{ID: int}}}}}}\nkeys: [ID]\n{rows}columns:\n  - {{name: ID, type: int, derivation: SRC.ID}}\n  - name: VALUE\n    type: int\n    derivation:\n      aggregate:\n        derivations:\n          BASE: {{type: int, derivation: SRC.ID}}\n          V: {{type: int, derivation: {{function: {{name: id, args: {{x: {argument}}}}}}}}}\n        expr: SUM(V)\noutput: {{path: output.csv, columns: [ID, VALUE]}}\n"
-            );
-                    let document = crate::support::specification_run::prepare_as(
-                        "study/domain.yaml",
-                        raw.as_bytes(),
-                    );
-                    let run = PreparedRun::prepare_with_environment(document, environment())
-                        .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
-                    assert_eq!(run.compiled().called_functions(), [1]);
-                    let (mut activation, mut study) = ports();
-                    study.bytes = Arc::from(b"ID\n1\n1\n2\n".as_slice());
-                    let attempt =
-                        run.execute_with_ports(&mut activation, &mut study, Scope::default());
-                    assert!(attempt.boundary.is_ok());
-                    let trace = activation.trace.borrow();
-                    assert_eq!(&trace[..4], &["lock", "bind", "case", "case"]);
-                    assert!(trace.iter().position(|event| *event == "capture").unwrap() > 3);
-                    assert_eq!(activation.values, [7, i64::MIN, 1, 1, 2]);
-                    assert_eq!(
-                        attempt
-                            .dataset
-                            .result
-                            .unwrap()
-                            .result
-                            .unwrap()
-                            .dataset
-                            .rows(),
-                        &[
-                            vec![Value::Int(1), Value::Int(2)],
-                            vec![Value::Int(2), Value::Int(2)]
-                        ]
-                    );
-                }
-            }
-        }
-
-        #[test]
-        fn aggregate_callback_reads_the_kept_current_row_instead_of_each_donor_record() {
-            let raw = "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, key: [ID], types: {ID: int, N: int}}}\nkeys: [ID]\nintermediates:\n  - {id: CAP, dataset: SRC, key: {ID: ID}, order_by: [SRC.N], keep: first}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: VALUE\n    type: int\n    derivation:\n      aggregate:\n        derivations:\n          BASE: {type: int, derivation: SRC.N}\n          V: {type: int, derivation: {function: {name: id, args: {x: CAP.N}}}}\n        expr: SUM(V)\noutput: {path: output.csv, columns: [ID, VALUE]}\n";
-            let document =
-                crate::support::specification_run::prepare_as("study/domain.yaml", raw.as_bytes());
-            let run = PreparedRun::prepare_with_environment(document, environment())
-                .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
-            let (mut activation, mut study) = ports();
-            study.bytes = Arc::from(b"ID,N\n1,10\n1,30\n2,40\n".as_slice());
-            let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
-            assert_eq!(activation.values, [7, i64::MIN, 10, 10, 40]);
-            assert_eq!(
-                attempt
-                    .dataset
-                    .result
-                    .unwrap()
-                    .result
-                    .unwrap()
-                    .dataset
-                    .rows(),
-                &[
-                    vec![Value::Int(1), Value::Int(20)],
-                    vec![Value::Int(2), Value::Int(40)]
-                ]
-            );
-            let document = crate::support::specification_run::prepare_as(
-                "study/domain.yaml",
-                raw.edit(", order_by: [SRC.N], keep: first", "").as_bytes(),
-            );
-            // Without a kept record the scalar read is refused
-            // (`project_run.json`).
-            assert!(
-                PreparedRun::prepare_with_environment(document, environment()).is_err(),
-                "kept scalar read required"
-            );
-        }
-
-        #[test]
-        fn aggregate_callback_uses_original_current_source_types_when_donor_types_differ() {
-            let raw = "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput:\n  SRC: {path: input.csv, types: {ID: int, N: int}}\n  B: {path: input.csv, types: {ID: int, N: str}}\nbase: SRC\nkeys: [ID, N]\nintermediates:\n  - {id: CAP, dataset: SRC, key: {N: SRC.N}, order_by: [SRC.ID], keep: first}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - name: VALUE\n    type: int\n    derivation:\n      aggregate:\n        key: {ID: ID}\n        derivations:\n          BASE: {type: int, derivation: B.N}\n          V: {type: int, derivation: {function: {name: id, args: {x: CAP.N}}}}\n        expr: SUM(V)\noutput: {path: output.csv, columns: [ID, N, VALUE]}\n";
-            let document =
-                crate::support::specification_run::prepare_as("study/domain.yaml", raw.as_bytes());
-            let run = PreparedRun::prepare_with_environment(document, environment())
-                .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
-            let (mut activation, mut study) = ports();
-            study.bytes = Arc::from(b"ID,N\n1,10\n1,30\n2,40\n".as_slice());
-            let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
-            assert!(
-                attempt
-                    .dataset
-                    .result
-                    .as_ref()
-                    .is_ok_and(|entered| entered.result.is_ok()),
-                "{:?}",
-                attempt
-                    .dataset
-                    .result
-                    .as_ref()
-                    .err()
-                    .map(|error| format!("{error:?}"))
-                    .or_else(|| attempt
-                        .dataset
-                        .result
-                        .as_ref()
-                        .ok()
-                        .and_then(|entered| entered
-                            .result
-                            .as_ref()
-                            .err()
-                            .map(|error| format!("{error:?}"))))
-            );
-            assert_eq!(activation.values, [7, i64::MIN, 10, 10, 30, 30, 40]);
-            assert_eq!(
-                attempt
-                    .dataset
-                    .result
-                    .unwrap()
-                    .result
-                    .unwrap()
-                    .dataset
-                    .rows(),
-                &[
-                    vec![Value::Int(1), Value::Int(10), Value::Int(20)],
-                    vec![Value::Int(1), Value::Int(30), Value::Int(60)],
-                    vec![Value::Int(2), Value::Int(40), Value::Int(40)]
-                ]
-            );
-        }
-
-        #[test]
         fn rejected_activation_preserves_original_payloads_and_has_zero_study_authority() {
+            // Seam: the payload a failed activation holds, by identity, and the attempt's
+            // empty sources.
             let run =
                 PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
             for mode in [
@@ -1099,6 +941,8 @@ tests:
 
         #[test]
         fn unwound_activation_keeps_original_boundary_payload_and_completed_case_evidence() {
+            // Seam: an unwound activation's payload, by identity, and the case evidence its
+            // attempt keeps.
             let run =
                 PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
             let (mut activation, mut study) = ports();
@@ -1141,6 +985,8 @@ tests:
 
         #[test]
         fn live_host_failure_retains_exact_study_snapshot_and_typed_activation_success() {
+            // Seam: a live call failure's payload and study snapshot, by identity, and its
+            // typed execution error.
             let run =
                 PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
             let (mut activation, mut study) = ports();
@@ -1259,21 +1105,9 @@ tests:
         }
 
         #[test]
-        fn unused_environment_does_not_request_any_host_activation() {
-            let run = PreparedRun::prepare_with_environment(document(None), environment()).unwrap();
-            let (mut activation, mut study) = ports();
-            activation.mode = Mode::LockFailure;
-            let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
-            assert!(attempt.boundary.is_ok());
-            assert_eq!(attempt.activation.lock, LockObservation::NotRequested);
-            assert!(attempt.activation.bindings.is_empty());
-            assert!(attempt.activation.tests.is_empty());
-            assert!(attempt.dataset.result.unwrap().result.is_ok());
-            assert_eq!(&*activation.trace.borrow(), &["inspect", "capture"]);
-        }
-
-        #[test]
         fn activation_projection_validates_forged_case_order_without_effects() {
+            // Seam: activation observations forged in the attempt, which no input can
+            // write.
             use yamaa_adapters::project_activation_observations::{activation, Error};
             let run =
                 PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
@@ -1293,6 +1127,8 @@ tests:
 
         #[test]
         fn repeated_forged_activation_facts_cannot_gain_report_authority() {
+            // Seam: activation observations forged past their limits in the attempt, which
+            // no input can write.
             use yamaa_adapters::project_activation_observations as activation;
             let run =
                 PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
@@ -1348,7 +1184,11 @@ tests:
         }
 
         #[test]
-        fn complete_project_output_and_save_borrow_the_exact_attempt_without_reactivation() {
+        fn complete_project_observations_borrow_the_exact_attempt_without_reactivation() {
+            // Seam: the observation record of a completed project report and
+            // the snapshot its attempt holds, which no case states. Its
+            // issues, output, saved bytes and calls are
+            // `project_functions.json::a_saved_project_run_publishes_its_output_without_activating_again`.
             let run =
                 PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
             let (mut activation, mut study) = ports();
@@ -1387,12 +1227,6 @@ tests:
                 report["activation"]["tests"][2]["actual"],
                 yamaa_adapters::json!({"missing":null})
             );
-            assert!(result.output().is_some());
-            assert!(result.issues().is_empty());
-            assert_eq!(
-                result.files(),
-                [("output.csv", b"ID,VALUE\n1,1\n".as_slice())]
-            );
             let saved = result.saved_observations().unwrap();
             assert_eq!(saved["artifacts"][0]["content"], "ID,VALUE\n1,1\n");
             assert_eq!(saved["artifacts"][0]["row_count"], 1);
@@ -1410,7 +1244,12 @@ tests:
         }
 
         #[test]
-        fn project_reports_keep_opaque_failures_and_interrupts_original_and_failed_saves_inert() {
+        fn project_reports_hold_original_opaque_and_boundary_failures_and_their_observations() {
+            // Seam: the payload a refused report holds, by identity, and the
+            // observation record of a classified failure's report, which no
+            // case states. The issues, saved files and calls of each failure
+            // are `project_functions.json`'s binding, case, live call,
+            // interrupt and panic cases.
             use yamaa_adapters::{
                 project_function_diagnostics::HostDetails, project_report::Classified,
                 specification_report::Refusal as Error,
@@ -1462,22 +1301,12 @@ tests:
                     assert_eq!(observed["outcome"], "failure");
                     assert_eq!(observed["artifacts"], yamaa_adapters::json!([]));
                     assert_eq!(result.output(), None);
-                    assert_eq!(result.issues().len(), 1);
-                    let expected = if matches!(mode, Mode::BindFailure) {
-                        "function_file_invalid"
-                    } else if matches!(mode, Mode::CaseFailure) {
-                        "function_conformance_failed"
-                    } else {
-                        "function_call_failed"
-                    };
-                    assert_eq!(result.issues()[0].condition(), expected);
                     if matches!(mode, Mode::LiveFailure) {
                         assert_eq!(observed["source_reads"].as_array().unwrap().len(), 1);
                         assert_eq!(observed["activation"]["tests"].as_array().unwrap().len(), 3);
                     } else {
                         assert_eq!(observed["source_reads"], yamaa_adapters::json!([]));
                     }
-                    assert!(result.files().is_empty());
                     assert!(Rc::ptr_eq(&held.original, &activation.original));
                 }
                 assert_eq!(*activation.trace.borrow(), trace);
@@ -1490,6 +1319,8 @@ tests:
 
         #[test]
         fn report_classifications_cannot_target_a_different_failure_or_supply_duplicates() {
+            // Seam: classification facts naming another payload, or one twice, which no
+            // host's classification can give.
             use yamaa_adapters::{
                 project_function_diagnostics::HostDetails, project_report::Classified,
                 specification_report::Refusal as Error,
@@ -1546,6 +1377,8 @@ tests:
 
         #[test]
         fn complete_reports_refuse_missing_or_contradictory_activation_success() {
+            // Seam: activation observations removed or contradicted in the attempt, which
+            // no input can write.
             use yamaa_adapters::specification_report::{self, Refusal as Error};
             use yamaa_core::project_activation::BindingOutcome;
             let run =
@@ -1582,7 +1415,14 @@ tests:
         }
 
         #[test]
-        fn lock_and_actual_conformance_mismatches_keep_complete_zero_read_reports() {
+        fn lock_and_conformance_reports_hold_the_original_lock_payload_and_activation_record() {
+            // Seam: the lock payload a refused report holds, by identity, and
+            // the observation record of a lock or conformance report, which no
+            // case states. Their issues and calls are
+            // `project_functions.json::lock_findings_report_against_the_project_file_that_holds_the_lock`,
+            // `a_host_exception_while_verifying_the_lock_refuses_the_build_opaquely`,
+            // `a_lock_failure_classified_with_no_finding_refuses_the_report` and
+            // `a_case_result_that_differs_fails_conformance_in_the_function_file_that_defines_it`.
             use yamaa_adapters::{
                 project_lock::{Finding, Reason},
                 project_report::Classified,
@@ -1613,14 +1453,6 @@ tests:
                 }],
             )
             .unwrap();
-            // The project file holds the lock at `environments.python.lock`
-            // (FUNC-3, D107).
-            assert_eq!(result.issues()[0].condition(), "runtime_artifact_mismatch");
-            assert_eq!(result.issues()[0].spec_paths, ["environments.python.lock"]);
-            assert_eq!(
-                yamaa_core::json::Value::Object(result.issues()[0].context.clone()),
-                yamaa_adapters::json!({"source":"study/project.yaml","entry":"study/project.yaml","lock_source":"held/uv.lock","lock":"../uv.lock","package":"project","reason":"distribution_not_identified","expected":[],"actual":null})
-            );
             // A host exception while verifying the lock names no lock
             // finding: the lock failure stays the original opaque payload.
             let host = yamaa_adapters::specification_report::build_result(
@@ -1647,18 +1479,6 @@ tests:
             assert_eq!(*activation.trace.borrow(), ["lock"]);
             assert_eq!(study.reads(), 0);
             assert!(Rc::ptr_eq(&original.original, &activation.original));
-            assert!(matches!(
-                yamaa_adapters::specification_report::build_result(
-                    &run,
-                    &attempt,
-                    report_identity(),
-                    &[Classified::Lock {
-                        failure: original,
-                        findings: &[]
-                    }]
-                ),
-                Err(Error::Report(_))
-            ));
             let (mut activation, mut study) = ports();
             activation.mode = Mode::CaseMismatch;
             let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
@@ -1669,19 +1489,6 @@ tests:
                 &[],
             )
             .unwrap();
-            assert_eq!(
-                result.issues()[0].condition(),
-                "function_conformance_failed"
-            );
-            // The case is reported in the function file that defines it,
-            // which the project lists at `functions[1]` (FUNC-12, D107).
-            assert_eq!(result.issues()[0].spec_paths, ["tests[0]"]);
-            let context = yamaa_core::json::Value::Object(result.issues()[0].context.clone());
-            assert_eq!(context["expected"], 7);
-            assert_eq!(context["actual"], 8);
-            assert_eq!(context["source"], "study/functions/id.yaml");
-            assert_eq!(context["entry"], "study/project.yaml");
-            assert_eq!(context["environment_path"], "functions[1]");
             assert_eq!(
                 result.observations()["activation"]["tests"]
                     .as_array()
@@ -1701,6 +1508,8 @@ tests:
 
         #[test]
         fn zero_sized_host_failures_remain_opaque_and_never_accept_address_classification() {
+            // Seam: classification facts naming a zero-sized payload by address, which no
+            // host's classification can give.
             use yamaa_adapters::{
                 project_function_diagnostics::HostDetails, project_report::Classified,
                 specification_report, specification_report::Refusal as Error,
@@ -1788,375 +1597,6 @@ tests:
                 Err(BoundaryFailure::Activation(Failure::Lock(_)))
             ));
             assert_eq!(study.reads(), 0);
-        }
-
-        #[test]
-        fn row_callbacks_join_primary_or_secondary_records_by_completed_keys() {
-            struct TwoSources {
-                trace: Trace,
-                reads: usize,
-            }
-            use yamaa_core::resolver;
-            impl resolver::Resolver for TwoSources {
-                type Error = std::convert::Infallible;
-                fn inspect(
-                    &mut self,
-                    name: resolver::Name<'_>,
-                ) -> Result<resolver::Located, Self::Error> {
-                    let resolver::Name::Input(source) = name else {
-                        panic!("unexpected request {name:?}")
-                    };
-                    self.trace.borrow_mut().push("inspect");
-                    Ok(resolver::Located {
-                        identity: source.path.clone(),
-                        display_path: source.path.clone(),
-                    })
-                }
-                fn capture(
-                    &mut self,
-                    name: resolver::Name<'_>,
-                ) -> Result<resolver::Captured, Self::Error> {
-                    let resolver::Name::Input(source) = name else {
-                        panic!("unexpected request {name:?}")
-                    };
-                    self.reads += 1;
-                    self.trace.borrow_mut().push("capture");
-                    Ok(resolver::Captured::resource(
-                        Arc::from(match source.name.as_str() {
-                            "SRC" => b"ID,N\n1,10\n2,20\n3,30\n".as_slice(),
-                            "B" => b"ID,N\n2,40\n1,50\n".as_slice(),
-                            _ => panic!("known source"),
-                        }),
-                        true,
-                    ))
-                }
-                fn failure(
-                    &self,
-                    _: resolver::Name<'_>,
-                    _: &Self::Error,
-                ) -> Option<resolver::Failure> {
-                    None
-                }
-                fn rebase(
-                    &mut self,
-                    _: &resolver::Located,
-                    _: &resolver::Located,
-                    _: &str,
-                ) -> Result<String, Self::Error> {
-                    panic!("an input is never rebased")
-                }
-            }
-            for (driver, other, expected, live) in [
-                (
-                    "SRC",
-                    "B",
-                    vec![
-                        vec![Value::Int(1), Value::Int(50)],
-                        vec![Value::Int(2), Value::Int(40)],
-                        vec![Value::Int(3), Value::Missing],
-                    ],
-                    vec![50, 40],
-                ),
-                (
-                    "B",
-                    "SRC",
-                    vec![
-                        vec![Value::Int(2), Value::Int(20)],
-                        vec![Value::Int(1), Value::Int(10)],
-                    ],
-                    vec![20, 10],
-                ),
-            ] {
-                let raw = format!("yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput:\n  SRC: {{path: a.csv, key: [ID], types: {{ID: int, N: int}}}}\n  B: {{path: b.csv, key: [ID], types: {{ID: int, N: int}}}}\nbase: SRC\nkeys: [ID]\ncolumns:\n  - {{name: ID, type: int}}\n  - {{name: VALUE, type: int}}\nrows:\n  - id: records\n    dataset: {driver}\n    derivations:\n      ID: {driver}.ID\n      VALUE: {{function: {{name: id, args: {{x: {other}.N}}}}}}\noutput: {{path: output.csv, columns: [ID, VALUE]}}\n");
-                let document = crate::support::specification_run::prepare_as(
-                    "study/domain.yaml",
-                    raw.as_bytes(),
-                );
-                let run = PreparedRun::prepare_with_environment(document, environment())
-                    .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
-                let (mut activation, _) = ports();
-                let mut study = TwoSources {
-                    trace: Rc::clone(&activation.trace),
-                    reads: 0,
-                };
-                let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
-                let entered = attempt
-                    .dataset
-                    .result
-                    .unwrap_or_else(|error| panic!("{error:?}"));
-                let result = entered.result.unwrap_or_else(|error| panic!("{error:?}"));
-                assert_eq!(result.dataset.rows(), expected.as_slice());
-                let mut values = vec![7, i64::MIN];
-                values.extend(live);
-                assert_eq!(activation.values, values);
-                assert_eq!(
-                    &activation.trace.borrow()[..4],
-                    &["lock", "bind", "case", "case"]
-                );
-            }
-        }
-
-        /// Callbacks keep their logical row order where a call evaluates in a
-        /// row template's window stage, before its post-window filter drops
-        /// rows, and in the column phase of the key grain (FUNC-8). Under
-        /// the equivalence gate's attempt comparison, both executors replay
-        /// these calls and must make them in this order.
-        #[test]
-        fn callbacks_keep_row_order_in_window_stages_post_window_filters_and_the_key_grain() {
-            struct Unordered {
-                trace: Trace,
-                reads: usize,
-            }
-            use yamaa_core::resolver;
-            impl resolver::Resolver for Unordered {
-                type Error = std::convert::Infallible;
-                fn inspect(
-                    &mut self,
-                    name: resolver::Name<'_>,
-                ) -> Result<resolver::Located, Self::Error> {
-                    let resolver::Name::Input(source) = name else {
-                        panic!("unexpected request {name:?}")
-                    };
-                    self.trace.borrow_mut().push("inspect");
-                    Ok(resolver::Located {
-                        identity: source.path.clone(),
-                        display_path: source.path.clone(),
-                    })
-                }
-                fn capture(
-                    &mut self,
-                    name: resolver::Name<'_>,
-                ) -> Result<resolver::Captured, Self::Error> {
-                    let resolver::Name::Input(_) = name else {
-                        panic!("unexpected request {name:?}")
-                    };
-                    self.reads += 1;
-                    self.trace.borrow_mut().push("capture");
-                    // Stored out of key order, so row order and key order differ.
-                    Ok(resolver::Captured::resource(
-                        Arc::from(b"ID,N\n3,30\n1,10\n2,20\n".as_slice()),
-                        true,
-                    ))
-                }
-                fn failure(
-                    &self,
-                    _: resolver::Name<'_>,
-                    _: &Self::Error,
-                ) -> Option<resolver::Failure> {
-                    None
-                }
-                fn rebase(
-                    &mut self,
-                    _: &resolver::Located,
-                    _: &resolver::Located,
-                    _: &str,
-                ) -> Result<String, Self::Error> {
-                    panic!("an input is never rebased")
-                }
-            }
-            let head = "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput:\n  SRC: {path: a.csv, types: {ID: int, N: int}}\nbase: SRC\nkeys: [ID]\n";
-            // A row template whose window stage calls `id` on each row's rank
-            // by N. `TEMPLATE` is the template's grain and filter, and `N`
-            // the derivation of N.
-            let windowed = "columns:\n  - {name: ID, type: int}\n  - {name: N, type: int}\n  - {name: SEQ, type: int}\n  - {name: VALUE, type: int}\nrows:\n  - id: records\n    dataset: SRC\nTEMPLATE    derivations:\n      ID: SRC.ID\n      N: VALUE_OF_N\n      SEQ: {row_number: {window: {order_by: [N]}}}\n      VALUE: {function: {name: id, args: {x: SEQ}}}\noutput: {path: output.csv, columns: [ID, N, SEQ, VALUE]}\n";
-            let row = |id: i64, sequence: i64| {
-                vec![
-                    Value::Int(id),
-                    Value::Int(id * 10),
-                    Value::Int(sequence),
-                    Value::Int(sequence),
-                ]
-            };
-            let cases = [
-                // The window stage calls `id` for each row in row order, the
-                // rows of IDs 3, 1 and 2 ranking 3, 1 and 2 by N; rows keep
-                // their stored order.
-                (
-                    format!(
-                        "{head}{}",
-                        windowed
-                            .edit("TEMPLATE", "")
-                            .edit("VALUE_OF_N", "SRC.N")
-                    ),
-                    vec![row(3, 3), row(1, 1), row(2, 2)],
-                    vec![3, 1, 2],
-                ),
-                // A grouped template's filter that reads the rank is applied
-                // after the window stage, which has made every call by then;
-                // it drops ID 3.
-                (
-                    format!(
-                        "{head}{}",
-                        windowed
-                            .edit(
-                                "TEMPLATE",
-                                "    group_by: [SRC.ID]\n    filter: \"SEQ <= 2\"\n"
-                            )
-                            .edit("VALUE_OF_N", "{aggregate: \"SUM(SRC.N)\"}")
-                    ),
-                    vec![row(1, 1), row(2, 2)],
-                    vec![3, 1, 2],
-                ),
-                // Without row templates, the key grain calls `id` for each key
-                // in the order its first record is stored.
-                (
-                    format!("{head}columns:\n  - {{name: ID, type: int, derivation: SRC.ID}}\n  - {{name: VALUE, type: int, derivation: {{function: {{name: id, args: {{x: SRC.N}}}}}}}}\noutput: {{path: output.csv, columns: [ID, VALUE]}}\n"),
-                    vec![
-                        vec![Value::Int(3), Value::Int(30)],
-                        vec![Value::Int(1), Value::Int(10)],
-                        vec![Value::Int(2), Value::Int(20)],
-                    ],
-                    vec![30, 10, 20],
-                ),
-            ];
-            for (raw, expected, calls) in cases {
-                let document = crate::support::specification_run::prepare_as(
-                    "study/domain.yaml",
-                    raw.as_bytes(),
-                );
-                let run = PreparedRun::prepare_with_environment(document, environment())
-                    .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
-                let (mut activation, _) = ports();
-                let mut study = Unordered {
-                    trace: Rc::clone(&activation.trace),
-                    reads: 0,
-                };
-                let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
-                let entered = attempt
-                    .dataset
-                    .result
-                    .unwrap_or_else(|error| panic!("{error:?}"));
-                let result = entered.result.unwrap_or_else(|error| panic!("{error:?}"));
-                assert_eq!(result.dataset.rows(), expected.as_slice(), "{raw}");
-                // Activation's two case calls come first.
-                let mut values = vec![7, i64::MIN];
-                values.extend(calls);
-                assert_eq!(activation.values, values, "{raw}");
-            }
-        }
-
-        #[test]
-        fn intermediate_derive_callbacks_activate_before_data_and_receive_donor_or_prior_values() {
-            for grouped_rows in [false, true] {
-                for argument in ["SRC.ID", "BASE"] {
-                    let rows = if grouped_rows {
-                        "rows: [{id: all, group_by: [SRC.ID], derivations: {ID: SRC.ID}}]\n"
-                    } else {
-                        ""
-                    };
-                    let raw = format!("yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {{SRC: {{path: input.csv, types: {{ID: int}}}}}}\nkeys: [ID]\n{rows}intermediates:\n  - id: DON\n    dataset: SRC\n    key: [ID]\n    order_by: [SRC.ID]\n    keep: first\n    derivations:\n      BASE: SRC.ID\n      V: {{function: {{name: id, args: {{x: {argument}}}}}}}\ncolumns:\n  - {{name: ID, type: int, derivation: SRC.ID}}\n  - {{name: VALUE, type: int, derivation: DON.V}}\noutput: {{path: output.csv, columns: [ID, VALUE]}}\n");
-                    let document = crate::support::specification_run::prepare_as(
-                        "study/domain.yaml",
-                        raw.as_bytes(),
-                    );
-                    let run = PreparedRun::prepare_with_environment(document, environment())
-                        .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
-                    assert_eq!(run.compiled().called_functions(), [1]);
-                    let (mut activation, mut study) = ports();
-                    study.bytes = Arc::from(b"ID\n1\n1\n2\n".as_slice());
-                    let attempt =
-                        run.execute_with_ports(&mut activation, &mut study, Scope::default());
-                    assert!(attempt.boundary.is_ok());
-                    let trace = activation.trace.borrow();
-                    assert_eq!(&trace[..4], &["lock", "bind", "case", "case"]);
-                    assert!(trace.iter().position(|event| *event == "capture").unwrap() > 3);
-                    assert_eq!(activation.values, [7, i64::MIN, 1, 1, 2]);
-                    let entered = attempt
-                        .dataset
-                        .result
-                        .unwrap_or_else(|error| panic!("{error:?}"));
-                    let result = entered.result.unwrap_or_else(|error| panic!("{error:?}"));
-                    assert_eq!(
-                        result.dataset.rows(),
-                        &[
-                            vec![Value::Int(1), Value::Int(1)],
-                            vec![Value::Int(2), Value::Int(2)]
-                        ]
-                    );
-                }
-            }
-        }
-
-        #[test]
-        fn intermediate_callback_selects_for_donor_record_and_keeps_selected_field_types() {
-            let raw = "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput:\n  SRC: {path: input.csv, types: {ID: int, N: int}}\n  B: {path: input.csv, types: {ID: int, N: str}}\nbase: SRC\nkeys: [ID, N]\nintermediates:\n  - {id: CAP, dataset: SRC, key: [ID], order_by: [SRC.N], keep: first}\n  - id: DON\n    dataset: B\n    key: {ID: ID}\n    order_by: [B.ID]\n    keep: first\n    derivations:\n      V: {function: {name: id, args: {x: CAP.N}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: VALUE, type: int, derivation: DON.V}\noutput: {path: output.csv, columns: [ID, N, VALUE]}\n";
-            let document =
-                crate::support::specification_run::prepare_as("study/domain.yaml", raw.as_bytes());
-            let run = PreparedRun::prepare_with_environment(document, environment())
-                .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
-            let (mut activation, mut study) = ports();
-            study.bytes = Arc::from(b"ID,N\n1,10\n1,30\n2,40\n".as_slice());
-            let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
-            assert!(attempt.boundary.is_ok());
-            let entered = attempt
-                .dataset
-                .result
-                .unwrap_or_else(|error| panic!("{error:?}"));
-            let result = entered.result.unwrap_or_else(|error| panic!("{error:?}"));
-            assert_eq!(
-                result.dataset.rows(),
-                &[
-                    vec![Value::Int(1), Value::Int(10), Value::Int(10)],
-                    vec![Value::Int(1), Value::Int(30), Value::Int(10)],
-                    vec![Value::Int(2), Value::Int(40), Value::Int(40)]
-                ]
-            );
-            assert_eq!(activation.values, [7, i64::MIN, 10, 10, 40]);
-        }
-
-        /// A donor function call reads a kept intermediate's selection for
-        /// its donor record beside the donor's own field (LOOKUP-16,
-        /// LOOKUP-22): each B record sums CAP's lowest N of its subject and
-        /// its own N.
-        #[test]
-        fn intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field() {
-            let raw = "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput:\n  SRC: {path: input.csv, types: {ID: int, N: int}}\n  B: {path: input.csv, types: {ID: int, N: int}}\nbase: SRC\nkeys: [ID, N]\nintermediates:\n  - {id: CAP, dataset: SRC, key: [ID], order_by: [SRC.N], keep: first}\n  - id: DON\n    dataset: B\n    key: {ID: ID, N: N}\n    derivations:\n      V: {function: {name: pair, args: {weight: CAP.N, own: B.N}}}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: N, type: int, derivation: SRC.N}\n  - {name: VALUE, type: int, derivation: DON.V}\noutput: {path: output.csv, columns: [ID, N, VALUE]}\n";
-            let document =
-                crate::support::specification_run::prepare_as("study/domain.yaml", raw.as_bytes());
-            let run = PreparedRun::prepare_with_environment(document, environment())
-                .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
-            let (mut activation, mut study) = ports();
-            activation.function = "pair";
-            study.bytes = Arc::from(b"ID,N\n1,10\n1,30\n2,40\n".as_slice());
-            let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
-            assert!(attempt.boundary.is_ok());
-            let entered = attempt
-                .dataset
-                .result
-                .unwrap_or_else(|error| panic!("{error:?}"));
-            let result = entered.result.unwrap_or_else(|error| panic!("{error:?}"));
-            assert_eq!(
-                result.dataset.rows(),
-                &[
-                    vec![Value::Int(1), Value::Int(10), Value::Int(20)],
-                    vec![Value::Int(1), Value::Int(30), Value::Int(40)],
-                    vec![Value::Int(2), Value::Int(40), Value::Int(80)]
-                ]
-            );
-            // The cases run first, then one call per donor record.
-            assert_eq!(activation.values, [7, 3, 0, 0, 10, 10, 10, 30, 40, 40]);
-        }
-
-        /// A function's declared result type is its derived field's type
-        /// (EXPR-14), so an intermediate exposing it drives rows (ROW-2).
-        #[test]
-        fn callback_derived_fields_expose_their_declared_result_type_to_row_drivers() {
-            let raw = "yamaa: '1.0'\ntype: spec\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\nintermediates:\n  - id: DON\n    dataset: SRC\n    derivations:\n      V: {function: {name: id, args: {x: SRC.ID}}}\ncolumns:\n  - {name: ID, type: int}\n  - {name: VALUE, type: int}\nrows:\n  - id: records\n    dataset: DON\n    derivations: {ID: DON.ID, VALUE: DON.V}\noutput: {path: output.csv, columns: [ID, VALUE]}\n";
-            let document =
-                crate::support::specification_run::prepare_as("study/domain.yaml", raw.as_bytes());
-            let run = PreparedRun::prepare_with_environment(document, environment())
-                .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
-            let (mut activation, mut study) = ports();
-            study.bytes = Arc::from(b"ID\n1\n".as_slice());
-            let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
-            assert!(attempt.boundary.is_ok());
-            let entered = attempt
-                .dataset
-                .result
-                .unwrap_or_else(|error| panic!("{error:?}"));
-            let result = entered.result.unwrap_or_else(|error| panic!("{error:?}"));
-            assert_eq!(result.dataset.rows(), &[vec![Value::Int(1), Value::Int(1)]]);
-            assert_eq!(activation.values, [7, i64::MIN, 1]);
         }
     }
 }

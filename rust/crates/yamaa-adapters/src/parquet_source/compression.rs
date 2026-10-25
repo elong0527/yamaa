@@ -2,6 +2,8 @@
 //! Streaming codecs grow through fixed scratch buffers; raw codecs preflight
 //! borrowed tags, and Zstandard grows only after destination-size errors.
 //! This is not a total-RSS guarantee.
+use super::closed_profile;
+use super::format::Codec;
 use super::framing::Page;
 use std::io::Read;
 
@@ -283,7 +285,8 @@ pub(super) fn decode(page: &Page<'_>) -> Result<Vec<u8>, Error> {
     if prefix > page.decoded_bytes || prefix > page.body.len() {
         return Err(Error::Malformed);
     }
-    if !page.compressed || page.codec == 0 {
+    let codec = closed_profile::codec(page.codec);
+    if !page.compressed || matches!(codec, Some((Codec::Uncompressed, _))) {
         return if page.body.len() == page.decoded_bytes {
             Ok(page.body.to_vec())
         } else {
@@ -292,20 +295,26 @@ pub(super) fn decode(page: &Page<'_>) -> Result<Vec<u8>, Error> {
     }
     let input = &page.body[prefix..];
     let expected = page.decoded_bytes - prefix;
-    let mut decoded = match page.codec {
-        1 => fixed_codec(1, input, expected),
-        2 => exact_stream(flate2::read::MultiGzDecoder::new(input), expected),
-        3 => Err(Error::Unavailable(3)),
-        4 => {
+    let mut decoded = match codec {
+        None => Err(Error::Malformed),
+        Some((Codec::Snappy, true)) => fixed_codec(1, input, expected),
+        Some((Codec::Gzip, true)) => {
+            exact_stream(flate2::read::MultiGzDecoder::new(input), expected)
+        }
+        Some((Codec::Brotli, true)) => {
             brotli_window(input)?;
             exact_stream(brotli::Decompressor::new(input, 4096), expected)
         }
-        5 => fixed_codec(5, input, expected)
+        Some((Codec::Lz4, true)) => fixed_codec(5, input, expected)
             .or_else(|_| exact_stream(lz4_flex::frame::FrameDecoder::new(input), expected))
             .or_else(|_| fixed_codec(7, input, expected)),
-        6 => zstd(input, expected),
-        7 => fixed_codec(7, input, expected),
-        _ => Err(Error::Malformed),
+        Some((Codec::Zstd, true)) => zstd(input, expected),
+        Some((Codec::Lz4Raw, true)) => fixed_codec(7, input, expected),
+        // A codec the profile marks unavailable, which this build has no
+        // decoder for. An uncompressed page was read whole above.
+        Some((Codec::Uncompressed | Codec::Lzo, _) | (_, false)) => {
+            Err(Error::Unavailable(page.codec))
+        }
     }?;
     if prefix != 0 {
         let mut with_prefix = Vec::new();

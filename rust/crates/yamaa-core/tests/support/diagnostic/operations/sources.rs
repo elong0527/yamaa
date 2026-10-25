@@ -6,8 +6,9 @@ use crate::support::diagnostic::{json::Json, Record};
 use yamaa_core::{
     csv_source::{CsvSource, Error as CsvError, Field as CsvField, ProfileCause},
     diagnostic::{DatasetJsonCause, Diagnostic, SourceFinding},
-    parquet_source::{self as parquet, Converted, Field, Logical, Physical, Representation},
+    parquet_source::{self as parquet, Field},
     typed_csv::PreparedTypes,
+    value::ColumnType,
     yaml_diagnostics::{diagnostics, Failure, UnicodeIssue},
 };
 
@@ -126,15 +127,12 @@ fn parquet_columns(input: &Json) -> Vec<Diagnostic> {
         .iter()
         .map(|field| {
             let field = field.closed(&["name", "leaves", "stored_type"]);
+            // A field of several leaves is nested, and no column row admits
+            // it; a field of one is an admitted int64.
+            let leaves = field.get("leaves").map_or(1, Json::integer);
             Field {
                 name: text(field, "name").into(),
-                leaves: field.get("leaves").map_or(1, Json::integer),
-                path: text(field, "name").into(),
-                repetition: 0,
-                physical: Physical::Int64,
-                logical: Logical::None,
-                converted: Converted::None,
-                representation: Representation::Int64,
+                kind: (leaves == 1).then_some(ColumnType::Int),
                 stored_type: field.get("stored_type").map_or("int64", Json::text).into(),
             }
         })

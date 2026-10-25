@@ -42,6 +42,47 @@ impl<'a> Value<'a> {
         }
         Ok(found)
     }
+
+    /// Every field of a struct with an id from 1 to `N - 1`, read in one
+    /// pass, by id, the last occurrence supplying each; with how many fields
+    /// the struct holds and the id of the first, which name a union's
+    /// variant. Any other value has none.
+    #[cfg(test)]
+    pub(super) fn fields<const N: usize>(&self) -> Result<Fields<'a, N>, Error> {
+        let mut fields = Fields {
+            values: [None; N],
+            count: 0,
+            first: None,
+        };
+        let Self::Struct(bytes) = self else {
+            return Ok(fields);
+        };
+        let mut reader = Reader::new(bytes);
+        let mut previous = 0;
+        while let Some((id, value)) = reader.field(previous, 0)? {
+            fields.count += 1;
+            fields.first.get_or_insert(id);
+            if let Some(slot) = usize::try_from(id)
+                .ok()
+                .and_then(|id| fields.values.get_mut(id))
+            {
+                *slot = Some(value);
+            }
+            previous = id;
+        }
+        Ok(fields)
+    }
+}
+
+/// A struct's fields, read in one pass (`Value::fields`).
+#[cfg(test)]
+pub(super) struct Fields<'a, const N: usize> {
+    /// Each field by its id.
+    pub values: [Option<Value<'a>>; N],
+    /// How many fields the struct holds, any id.
+    pub count: usize,
+    /// The id of its first field.
+    pub first: Option<i16>,
 }
 
 /// Child nodes borrow their validated wire ranges, including unknown fields.
