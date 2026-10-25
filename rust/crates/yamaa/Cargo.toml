@@ -19,7 +19,8 @@ readstat = ["yamaa-adapters/readstat"]
 # ODM XML clinical items from plain XML or plain/gzip TAR input; pure Rust.
 odm = ["yamaa-adapters/odm"]
 # The Arrow form of tables, which is not a format: the re-exported Arrow
-# types, a table's record batches and C stream, and InputFrame::import.
+# types, a table's record batches and C stream, InputFrame::import, and an
+# output read as a stream (SpecRequest::stream and its streamed-run types).
 arrow = ["yamaa-adapters/arrow", "dep:arrow-array", "dep:arrow-schema"]
 
 [dependencies]

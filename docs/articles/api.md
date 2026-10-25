@@ -223,12 +223,11 @@ so an integer column with a missing value keeps its exact integers.
 ## Read an output as a stream
 
 `run(stream = TRUE)` in R and `run(stream=True)` in Python build a dataset as
-its output is read. The output's whole Arrow table, and the Arrow IPC copy that
-a run without `stream` keeps beside it, are never built; the run still holds
-the accepted rows that each batch is built from. The call reads no study data
-and runs no project code. The output is an Arrow stream: in Python a
-`yamaa.Table`, which a library that reads the Arrow PyCapsule stream interface
-pulls batch by batch, such as
+its output is read. The output's whole table, which a run without `stream`
+keeps, is never built; the run still holds the accepted rows that each batch
+is built from. The call reads no study data and runs no project code. The
+output is an Arrow stream: in Python a `yamaa.Table`, which a library that
+reads the Arrow PyCapsule stream interface pulls batch by batch, such as
 `pyarrow.RecordBatchReader.from_stream(run.output)` or
 `polars.DataFrame(run.output)`; in R an Arrow C stream, an external pointer of
 class `nanoarrow_array_stream`, which nanoarrow and arrow read, such as
