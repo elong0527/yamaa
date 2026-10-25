@@ -12,9 +12,8 @@ functioning scale, with study, subject, and visit (`STUDYID`,
 (`QSTESTCD`, `QSTEST`), and numeric result (`QSSTRESN`) on the
 zero to four answer scale. An unanswered item is marked not done
 (`QSSTAT`), with the reason (`QSREASND`) when one was recorded.
-One record on the emotional functioning scale is included and
-excluded from the output, showing that only the physical
-functioning records feed the dataset.
+Records of other questionnaire scales are left out, so only the
+physical functioning records feed the dataset.
 
 **Variables:**
 

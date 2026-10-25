@@ -17,8 +17,9 @@ three of the four items were answered. AVAL is not rounded.
 AREASND on an item record is the reason recorded for the item not being
 done, and has no value when none was recorded. On a score record whose
 AVAL has no value, AREASND is the reason recorded on the visit's items
-when none of them was answered, and "NOT CALCULABLE" otherwise; it has
-no value on a score record with a value.
+when none of them was answered and they record one reason between them,
+and "NOT CALCULABLE" otherwise; it has no value on a score record with a
+value.
 
 Read the source datasets from /app/input and save the completed dataset as
 /app/output/adqs.csv.
