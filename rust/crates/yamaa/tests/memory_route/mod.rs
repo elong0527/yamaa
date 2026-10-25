@@ -239,10 +239,13 @@ impl Served {
     }
 
     /// An engine over this case's resolver as the R host configures it, with
-    /// `functions`, or with none, as the command line runs.
+    /// `functions`, or with none, as the command line runs. It reports its
+    /// progress to a callback, so every benchmark's saved files are compared
+    /// with their expected bytes with progress and timings taken (#3762).
     fn engine_with(&self, functions: Option<Arc<dyn ProjectFunctions>>) -> Engine {
         let options = EngineOptions::new(HostLanguage::R, "rust".into(), "memory".into())
-            .with_resolver(Arc::clone(&self.resolver) as Arc<dyn ResourceResolver>);
+            .with_resolver(Arc::clone(&self.resolver) as Arc<dyn ResourceResolver>)
+            .with_progress(|_: &yamaa::ProgressEvent| Ok(()));
         Engine::new(match functions {
             Some(functions) => options.with_functions(functions),
             None => options,
