@@ -126,6 +126,13 @@ const CASE_DIFFERENCES: &[Difference] = &[
         domain: "result",
         class: Class::Q3,
     },
+    // A column's read of a field its driving intermediate's `columns` leaves
+    // out (NAME-3, ROW-2).
+    Difference {
+        case: "intermediate_driver_columns.json::columns_list_limits_the_driver_fields",
+        domain: "out",
+        class: Class::Q3,
+    },
     // A range value of the intermediate driving the rows (unsupported).
     Difference {
         case: "lookup_model.json::a_range_value_naming_a_field_its_driver_intermediate_derives_is_unsupported",
