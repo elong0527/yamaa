@@ -586,7 +586,8 @@ impl Runs {
                     DataType::LargeUtf8
                 )
             };
-            let declared = columns.get(index).and_then(|c| profile::declared_width(c));
+            let arrow = self.arrow_schema.field(index).data_type();
+            let declared = columns.get(index).and_then(|c| profile::width(c, arrow));
             let array = column_array(field.kind, stored, large, declared)
                 .map_err(|(step, error)| ((ARRAYS, index, step), error))?;
             if array.len() != records {
@@ -652,13 +653,14 @@ fn column_array(
     }
     Ok(match (kind, stored) {
         (ColumnType::Int, physical::Column::Int64(values)) => Arc::new(Int64Array::from(values)),
-        // A signed annotation declares the width of every stored value. The
+        // A narrower signed annotation declares the width of every stored
+        // value, as its column row's `width` says (`closed_profile`). The
         // format forbids writing a value outside it and leaves reading one
         // to each reader, so such a value fails rather than reads as one of
         // their answers. Every stored value fits 32 bits, with or without an
         // annotation that says so.
         (ColumnType::Int, physical::Column::Int32(values)) => {
-            if let Some(bits @ (8 | 16)) = declared {
+            if let Some(bits) = declared {
                 let bound = 1i64 << (bits - 1);
                 if values
                     .iter()

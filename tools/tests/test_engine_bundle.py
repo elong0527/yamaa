@@ -325,7 +325,7 @@ class SourceTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "must not be symlinks"):
                 list(bundle.member_sources(other))
 
-    def test_member_sources_carry_the_adapters_schema_copies_and_refuse_others(self):
+    def test_member_sources_carry_the_adapters_embedded_data_and_refuse_others(self):
         # The walk of one member's directory, on a scratch crate.
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -335,6 +335,7 @@ class SourceTests(unittest.TestCase):
                 "src/lib.rs": b"pub fn f() {}\n",
                 "schema/schema_spec.yaml": b'version: "1.0"\n',
                 "schema/json/spec.schema.json": b"{}\n",
+                "profile/parquet.toml": b"[levels]\n",
             }.items():
                 support.write(adapter, name, payload)
             self.assertEqual(
@@ -347,13 +348,20 @@ class SourceTests(unittest.TestCase):
                     "src/lib.rs",
                     "schema/json/spec.schema.json",
                     "schema/schema_spec.yaml",
+                    "profile/parquet.toml",
                 ],
             )
-            # Only the YAML modules and JSON Schemas that the table embeds.
-            backup = support.write(adapter, "schema/schema_spec.yaml~", b"old\n")
-            with self.assertRaisesRegex(ValueError, "unreviewed embedded schema file"):
-                list(bundle.member_sources(adapter))
-            backup.unlink()
+            # Only the YAML modules and JSON Schemas that the table embeds,
+            # and the profile's TOML data.
+            for name, refusal in (
+                ("schema/schema_spec.yaml~", "unreviewed embedded schema file"),
+                ("profile/parquet.json", "unreviewed embedded profile file"),
+            ):
+                with self.subTest(name=name):
+                    backup = support.write(adapter, name, b"old\n")
+                    with self.assertRaisesRegex(ValueError, refusal):
+                        list(bundle.member_sources(adapter))
+                    backup.unlink()
             other = root / "crates/yamaa-core"
             shutil.copytree(adapter, other)
             with self.assertRaisesRegex(

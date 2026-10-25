@@ -191,7 +191,7 @@ impl Spelling<'_> {
     }
 }
 
-fn unit(unit: &TimeUnit) -> &'static str {
+pub(super) fn unit(unit: &TimeUnit) -> &'static str {
     match unit {
         TimeUnit::Second => "s",
         TimeUnit::Millisecond => "ms",
