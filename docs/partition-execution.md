@@ -266,6 +266,11 @@ with no host surface.
   read the driver input, driven by a secondary input or by a named
   intermediate over one, belong to no partition: the first partition's run
   builds them, and every later run passes their marks without building any.
+  An output admitted whole, as a SAS or ODM driver input's is (D264), is
+  checked as the whole-table run checks it: each partition's run records the
+  rows its capacity checks see, and the run adds every partition's up at
+  each check, so it refuses at the template, and with the count, the
+  whole-table run refuses at.
 - **Combine state.** Only the state this inventory marks combinable crosses
   partitions: the candidate rows the output is built from, appended
   partition after partition; the handler counts (`columnar/handlers.rs`),

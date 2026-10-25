@@ -738,7 +738,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
     /// rows: the whole output, or each of its partitions in a run that admits
     /// it a partition at a time (D264).
     fn check_capacity(
-        &self,
+        &mut self,
         region: RegionId,
         current: usize,
         additional: usize,
@@ -750,8 +750,25 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
                 required: None,
             })
         })?;
+        // A partition's run of an output admitted whole records what it
+        // would hold; the run checks every partition's rows added up, as the
+        // whole-table run checks them (#3830).
+        if let (Some(marks), None) = (self.marks.as_mut(), self.output_partition) {
+            marks.capacity(rows);
+            return Ok(());
+        }
         let width = self.plan.region(region).output.columns().len();
-        Limits::partitioned(rows, self.output_partition, width).map_err(|error| {
+        Self::capacity(rows, self.output_partition, width)
+    }
+
+    /// Whether an output of `rows` rows of `width` columns, admitted in
+    /// partitions of at most `partition` rows or whole, is within the limits.
+    pub(super) fn capacity(
+        rows: usize,
+        partition: Option<std::num::NonZeroUsize>,
+        width: usize,
+    ) -> Result<(), Fail<E>> {
+        Limits::partitioned(rows, partition, width).map_err(|error| {
             if error.resource == "columns" {
                 return Box::new(ExecutionError::ScopedLimit {
                     resource: Resource::OutputColumns,
@@ -818,7 +835,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
     {
         let plan = self.plan;
         if !self.builds(template) {
-            return self.pass_template(template, templates);
+            return self.pass_template(template, frame.rows(), templates);
         }
         let node = plan.template(template);
         let region = node.region;

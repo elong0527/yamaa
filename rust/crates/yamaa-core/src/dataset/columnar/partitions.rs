@@ -141,6 +141,10 @@ pub(super) struct Marks {
     checks: Vec<(usize, Option<usize>)>,
     /// After how many marks each template completed.
     completed: Vec<usize>,
+    /// The rows an output admitted whole would hold at each of its
+    /// capacity checks, after how many marks: one per template and for the
+    /// key grain, which every partition's run makes in the same order.
+    capacity: Vec<(usize, usize)>,
 }
 
 impl Marks {
@@ -154,6 +158,7 @@ impl Marks {
             snapshots: Vec::new(),
             checks: Vec::new(),
             completed: Vec::new(),
+            capacity: Vec::new(),
         }
     }
 
@@ -166,6 +171,20 @@ impl Marks {
     pub(super) fn restore(&mut self, (entered, snapshots): (usize, usize)) {
         self.entered = entered;
         self.snapshots.truncate(snapshots);
+    }
+
+    /// An output admitted whole would hold `rows` rows here; a step's second
+    /// check at one mark replaces its first.
+    pub(super) fn capacity(&mut self, rows: usize) {
+        if let Some(last) = self
+            .capacity
+            .last_mut()
+            .filter(|(at, _)| *at == self.entered)
+        {
+            last.1 = rows;
+        } else {
+            self.capacity.push((self.entered, rows));
+        }
     }
 
     /// The column checks run here, `column` just completed.
@@ -219,6 +238,7 @@ impl<E> Run<'_, '_, E> {
     pub(super) fn pass_template(
         &mut self,
         template: TemplateId,
+        rows: usize,
         templates: &mut Vec<TemplateRows>,
     ) -> Result<(), Fail<E>> {
         let plan = self.plan;
@@ -232,6 +252,8 @@ impl<E> Run<'_, '_, E> {
             .is_some_and(|filter| filter.placement == FilterPlacement::Postwindow);
         self.mark(Coordinates::Frame)?;
         self.poll(Step::Driver(template))?;
+        // The output holds the rows of the templates before it here.
+        self.check_capacity(plan.template(template).region, rows, 0)?;
         for _ in 0..1 + 2 * windows + usize::from(postwindow) {
             self.mark(Coordinates::Frame)?;
         }
@@ -627,6 +649,23 @@ impl ResolvedPlan {
         failure: Failure,
         observer: &mut dyn FnMut(ExecutionEvent),
     ) -> Result<Found<E>, Fail<E>> {
+        // An output admitted whole is checked as the whole-table run checks
+        // it, every partition's rows added up at each capacity check.
+        if let Some((mark, error)) = outer
+            .output_partition
+            .is_none()
+            .then(|| self.capacity_failure(&parts, failure))
+            .flatten()
+        {
+            let counts = compose(&parts, |_, part| part.counts_before(mark + 1));
+            return Ok(Found {
+                result: Err(error),
+                handler_counts: report(self, counts),
+                records: std::mem::take(&mut parts[0].checked),
+                templates: template_rows(&parts, failure.map_or(0, |(index, _)| index), mark),
+                cancelled: false,
+            });
+        }
         let templates = self.region_templates(RegionId::DATASET).count();
         let blocks: Vec<Vec<Range<usize>>> =
             parts.iter().map(|part| part.blocks(templates)).collect();
@@ -701,6 +740,37 @@ impl ResolvedPlan {
             templates,
             cancelled: outer.stopped.get(),
         })
+    }
+}
+
+impl ResolvedPlan {
+    /// The first capacity check of an output admitted whole that the whole
+    /// table fails, every partition's rows added up (#3830), in a step
+    /// before the first partition's failure: the mark it fails at, after
+    /// every partition's driver step, and the failure.
+    fn capacity_failure<E>(&self, parts: &[Part<E>], failure: Failure) -> Option<(usize, Fail<E>)> {
+        let (reference, end) = failure.unwrap_or((0, usize::MAX));
+        let width = self.region(RegionId::DATASET).output.columns().len();
+        parts[reference]
+            .marks
+            .capacity
+            .iter()
+            .enumerate()
+            .take_while(|(_, &(entered, _))| entered - 1 < end)
+            .find_map(|(index, &(entered, _))| {
+                let rows = parts.iter().try_fold(0usize, |rows, part| {
+                    rows.checked_add(part.marks.capacity.get(index).map_or(0, |&(_, rows)| rows))
+                });
+                let error = match rows {
+                    Some(rows) => Run::capacity(rows, None, width).err()?,
+                    None => Box::new(ExecutionError::Limit {
+                        resource: crate::dataset::execution::Resource::OutputRows,
+                        limit: crate::limits::Limits::TABLE_ROWS,
+                        required: None,
+                    }),
+                };
+                Some((entered - 1, error))
+            })
     }
 }
 
