@@ -204,7 +204,7 @@ may contain an operator, a function call or another expression, and a name
 resolves under [FORMULA-9](../formulas.md#formula-9).
 
 Fails: `invalid_function_argument`.
-Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_function_argument_is_one_leaf_and_any_other_text_fails`, `schema-functions`, `schema-non-finite`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::retired_fields_and_malformed_literals_are_complete_static_findings`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_function_argument_is_one_leaf_and_any_other_text_fails`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::a_function_argument_holding_an_operator_is_no_leaf`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::a_function_argument_holding_a_call_is_no_leaf`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::a_function_argument_holding_a_truth_value_as_text_is_no_leaf`, `schema-functions`, `schema-non-finite`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::retired_fields_and_malformed_literals_are_complete_static_findings`.
 
 An argument is an expression field ([EXPR-5](../expressions.md#expr-5)):
 `weight: WEIGHTKG` passes a variable, `unit: "'kg'"` text,

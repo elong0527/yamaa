@@ -311,7 +311,7 @@ default, keeps its meaning. The refusal applies to what an author wrote, never
 to the canonical form a validation produces.
 
 Fails: `redundant_long_form`.
-Evidence: `negative-redundant-long-form`, `rust/crates/yamaa-adapters/tests/declaration_one_spelling.rs`, `rust/crates/yamaa-adapters/tests/declaration_one_spelling.rs::a_structured_source_holding_only_its_variable_restates_the_bare_read`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_check_that_declares_no_field_is_written_as_its_bare_keyword`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_dataset_mapping_holding_only_its_path_restates_the_path_shorthand`.
+Evidence: `negative-redundant-long-form`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::a_structured_source_holding_only_its_variable_restates_the_bare_read`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_check_that_declares_no_field_is_written_as_its_bare_keyword`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::a_check_that_declares_no_field_written_as_a_mapping_restates_its_bare_keyword`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_dataset_mapping_holding_only_its_path_restates_the_path_shorthand`.
 
 The shorthand unions of the specification bundle, and the long form each one
 refuses, are:

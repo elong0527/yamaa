@@ -95,7 +95,7 @@ row holds. When the row templates do not all share one driver, a field of one
 of their drivers, or of the input a driver intermediate reads, fails.
 
 Fails: `unknown_field`.
-Evidence: `negative-window-other-driver`, `sdtm-fa-reactogenicity-diary`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/window_drivers.json`, `rust/crates/yamaa-application/tests/execution_grouped_driver_dataset.rs`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_column_window_reads_no_field_of_a_driver_one_row_template_lacks`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_column_window_may_read_the_driver_every_row_template_shares`.
+Evidence: `negative-window-other-driver`, `sdtm-fa-reactogenicity-diary`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/window_drivers.json`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/check_row_scopes.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_column_window_reads_no_field_of_a_driver_one_row_template_lacks`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_column_window_may_read_the_driver_every_row_template_shares`.
 
 A column-level window is evaluated once over every constructed row, whichever
 row template built it; [SPEC-6](specification.md#spec-6) lets no row template
@@ -166,7 +166,7 @@ with that `date` ascending, and its later terms break ties
 ([WINDOW-9](#window-9)).
 
 Fails: `window_order_by_required`, `value_not_permitted`.
-Evidence: `negative-locf-no-order`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_declared_baseline_order_starts_with_the_date_ascending`, `rust/crates/yamaa-application/tests/fixtures/window_diagnostics.tsv`.
+Evidence: `negative-locf-no-order`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_declared_baseline_order_starts_with_the_date_ascending`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::a_baseline_order_starting_with_another_variable_is_refused_at_that_term`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/one_spelling.json::a_baseline_order_starting_with_the_date_descending_is_refused_at_that_term`, `rust/crates/yamaa-application/tests/fixtures/window_diagnostics.tsv`.
 
 A `baseline_flag` order whose first term is not its `date` ascending fails
 validation as `value_not_permitted` at that term, its context naming the
