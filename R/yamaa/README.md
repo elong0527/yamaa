@@ -44,7 +44,7 @@ specification item means.
 
 ## Installation
 
-From the 1.0.0 release candidates on, each
+From 0.6.0 on, each
 [GitHub release](https://github.com/elong0527/yamaa/releases) carries binary
 packages for Windows x64 and macOS arm64, built for R-release and R-oldrel,
 today R 4.6 and R 4.5. They install without Rust, Rtools or a network, and
@@ -69,7 +69,7 @@ release:
 install.packages("yamaa_<version>.tar.gz", repos = NULL, type = "source")
 ```
 
-Once CRAN accepts 1.0.0, `install.packages("yamaa")` installs it from there
+Once CRAN accepts 0.6.0, `install.packages("yamaa")` installs it from there
 too.
 
 Installing the source package compiles the Rust engine, so it needs R 4.2.0

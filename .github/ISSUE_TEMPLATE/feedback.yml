@@ -1,0 +1,85 @@
+name: "0.6.0 feedback"
+description: "Tried 0.6.0? Tell us what worked, what didn't, and where the interface felt wrong before 1.0.0 freezes it."
+labels: ["feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Everything here is public: use public fixtures or invented data only.
+        Checking yamaa against a private study? Follow
+        [Reporting findings from private studies](https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md#reporting-findings-from-private-studies)
+        first. yamaa 0.6.0 is the 1.0 interface, released for you to test
+        before 1.0.0 freezes it, so a name, an argument or a message that
+        felt wrong is worth reporting now. For a crash or wrong output, the
+        bug report form asks for the smallest failing example. Title it
+        `<area>: <what you found>`, where the area is rules, schema, engine,
+        python, R, cli, benchmark, harbor or docs.
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: "What did you try?"
+      description: "The task, in plain words: what you were building or checking, and the calls or commands you used."
+      placeholder: "I rewrote our ADSL specification for 0.6.0 and ran check() and run() on a study's DM and EX extracts."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: host
+    attributes:
+      label: "Host"
+      description: "Where you ran yamaa. Pick every one you used."
+      multiple: true
+      options:
+        - Python
+        - R
+        - Command line
+    validations:
+      required: true
+
+  - type: textarea
+    id: version
+    attributes:
+      label: "Version, host and OS"
+      description: 'Paste what `yamaa --version` prints, or what `yamaa.info()` (Python) or `yamaa_info()` (R) returns. Name the commit if you built from a checkout.'
+      render: text
+      placeholder: |
+        yamaa 0.6.0
+        language versions: 1.0
+        features: odm, parquet, readstat, yaml
+        host: python
+        platform: linux-x86_64
+    validations:
+      required: true
+
+  - type: textarea
+    id: happened
+    attributes:
+      label: "What happened?"
+      description: "What yamaa did, printed or wrote. Paste the summary, issue lines or output that matter."
+      placeholder: "check() reported no issues, but run() refused the specification with unknown_field at columns.TRTSDT.derivation."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: "What did you expect?"
+      description: "What you expected yamaa to do, and why: a rule, a page of the docs, or how another tool does it."
+      placeholder: "I expected check() to report the unknown field too, before any data was read."
+    validations:
+      required: true
+
+  - type: textarea
+    id: interface
+    attributes:
+      label: "Did the interface feel wrong?"
+      description: "A field, verb, argument, condition or message whose name, shape or default surprised you, and what you would expect instead. 1.0.0 can still change it; after 1.0.0 it is frozen."
+      placeholder: "The aggregate's `derivations` map reads well, but I kept writing `derive:` as in 0.5.0; a lint hint for the old spelling would have helped."
+
+  - type: textarea
+    id: references
+    attributes:
+      label: "Links and references"
+      description: "Rule IDs, docs pages, benchmarks or URLs that bear on it."
+      placeholder: "LOOKUP-5, docs/articles/api.md, benchmarks/adam-adsl-demographics"

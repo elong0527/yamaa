@@ -150,10 +150,10 @@ homes and their readers, and how to measure the ceilings.
   closing keyword only for an issue the pull request completes, and name
   every other issue without one.
 - Branch from and target `main`; `release/1.0.0` is cut only to qualify
-  release candidates. The planning issue is #3673, for 1.0.0 (wave 3, from
-  the candidate 1 tag to the CRAN submission); #3030, closed, holds the
-  design and the decisions D1 to D230, which stay the record and keep their
-  citations.
+  release candidates. The planning issue is #3673 for 0.6.0, the 1.0
+  interface released for users to test (D289), and #3950 for 1.0.0, which
+  follows their feedback; #3030, closed, holds the design and the decisions
+  D1 to D230, which stay the record and keep their citations.
 - **Open ready for review**, not as a draft, once it builds and its nearest
   tests pass (D148). The one exception is a pull request that cannot merge
   until another one merges: it stays a draft, with `[hold: after #N]` at
