@@ -4,38 +4,41 @@
 # would write it. Harbor's oracle agent runs it to check that the prompt can
 # be solved and that the grader scores a correct answer 1.
 
-"""Create ADAE (one record per adverse event) from ADSL and AE.
+"""Derive ADAE (one record per AE record) from ADSL and AE.
 
-Treatment emergence is decided at second precision: an onset collected
-without seconds has its seconds taken as zero. TRTEMFL is "Y" when the
-onset moment is at or after the first exposure moment and at or before
-the end of the treatment-emergent window (30 days after last exposure).
+Treatment emergence is judged to the second.
 """
 
 import csv
 from datetime import datetime, timedelta
+from pathlib import Path
 
-INPUT_DIR = "/app/input"
-OUTPUT_DIR = "/app/output"
+INPUT = Path("/app/input")
+OUTPUT = Path("/app/output")
+
+COLUMNS = [
+    "STUDYID", "USUBJID", "AESEQ", "AETERM", "AESER", "ASTDTM", "TRTSDTM",
+    "TRTEDTM", "EOTSTT", "TEENDDTM", "TRTEMFL", "AOCCFL",
+]
+
+ISO = "%Y-%m-%dT%H:%M:%S"
 
 
 def parse_dtm(value):
-    """Parse an ISO datetime; missing seconds are taken as zero."""
+    """ISO 8601 date-time to the second; a value without seconds is at second zero."""
     value = (value or "").strip()
     if not value:
         return None
-    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d"):
+    for fmt in (ISO, "%Y-%m-%dT%H:%M"):
         try:
             return datetime.strptime(value, fmt)
         except ValueError:
-            continue
-    raise ValueError(f"Unrecognised datetime value: {value!r}")
+            pass
+    return None
 
 
-def format_dtm(value):
-    if value is None:
-        return ""
-    return value.strftime("%Y-%m-%dT%H:%M:%S")
+def fmt_dtm(value):
+    return value.strftime(ISO) if value is not None else ""
 
 
 def read_csv(path):
@@ -44,83 +47,79 @@ def read_csv(path):
 
 
 def main():
-    adsl = read_csv(f"{INPUT_DIR}/adsl.csv")
-    ae = read_csv(f"{INPUT_DIR}/ae.csv")
-
-    subjects = {}
-    for row in adsl:
-        trtsdtm = parse_dtm(row.get("TRTSDTM"))
-        trtendtm = parse_dtm(row.get("TRTENDTM"))
-        teenddtm = parse_dtm(row.get("TEENDDTM"))
-        if teenddtm is None and trtendtm is not None:
-            teenddtm = trtendtm + timedelta(days=30)
-        subjects[(row["STUDYID"], row["USUBJID"])] = (trtsdtm, teenddtm)
+    adsl = {
+        (row["STUDYID"], row["USUBJID"]): row
+        for row in read_csv(INPUT / "adsl.csv")
+    }
+    ae = read_csv(INPUT / "ae.csv")
 
     records = []
     for row in ae:
-        key = (row["STUDYID"], row["USUBJID"])
-        trtsdtm, teenddtm = subjects.get(key, (None, None))
+        subject = adsl.get((row["STUDYID"], row["USUBJID"]), {})
+        trtsdtm = parse_dtm(subject.get("TRTSDTM"))
+        trtedtm = parse_dtm(subject.get("TRTEDTM"))
+        eotstt = (subject.get("EOTSTT") or "").strip()
+        aeser = (row.get("AESER") or "").strip()
         astdtm = parse_dtm(row.get("AESTDTC"))
 
-        if trtsdtm is None:
-            trtemfl = ""
-        elif astdtm is None:
-            trtemfl = "Y"
-        elif astdtm < trtsdtm:
-            trtemfl = ""
-        elif teenddtm is not None and astdtm > teenddtm:
-            trtemfl = ""
-        else:
-            trtemfl = "Y"
+        treated = trtsdtm is not None
+        ongoing = eotstt == "ONGOING"
 
-        records.append(
-            {
-                "STUDYID": row["STUDYID"],
-                "USUBJID": row["USUBJID"],
-                "AESEQ": row["AESEQ"],
-                "AETERM": row["AETERM"],
-                "ASTDTM": astdtm,
-                "TRTSDTM": trtsdtm,
-                "TEENDDTM": teenddtm,
-                "TRTEMFL": trtemfl,
-                "AOCCFL": "",
-            }
-        )
+        teenddtm = None
+        if treated and not ongoing and trtedtm is not None:
+            days = 30 if aeser == "N" else 90
+            teenddtm = trtedtm + timedelta(days=days)
 
-    # AOCCFL flags each subject's earliest treatment-emergent event by
-    # onset moment; ties on the same onset second go to the lower AESEQ.
-    # Events without an onset moment never carry AOCCFL.
-    earliest = {}
-    for record in records:
-        if record["TRTEMFL"] != "Y" or record["ASTDTM"] is None:
+        trtemfl = ""
+        if treated:
+            if astdtm is None:
+                trtemfl = "Y"
+            elif astdtm >= trtsdtm:
+                if ongoing:
+                    trtemfl = "Y"
+                elif teenddtm is not None and astdtm <= teenddtm:
+                    trtemfl = "Y"
+
+        records.append({
+            "STUDYID": row["STUDYID"],
+            "USUBJID": row["USUBJID"],
+            "AESEQ": int(row["AESEQ"]),
+            "AETERM": row["AETERM"],
+            "AESER": aeser,
+            "ASTDTM": astdtm,
+            "TRTSDTM": trtsdtm,
+            "TRTEDTM": trtedtm,
+            "EOTSTT": eotstt,
+            "TEENDDTM": teenddtm,
+            "TRTEMFL": trtemfl,
+            "AOCCFL": "",
+        })
+
+    records.sort(key=lambda r: (r["STUDYID"], r["USUBJID"], r["AESEQ"]))
+
+    # First treatment-emergent event per subject by ASTDTM, lower AESEQ on ties.
+    first = {}
+    for rec in records:
+        if rec["TRTEMFL"] != "Y" or rec["ASTDTM"] is None:
             continue
-        key = (record["STUDYID"], record["USUBJID"])
-        candidate = (record["ASTDTM"], int(record["AESEQ"]))
-        if key not in earliest or candidate < earliest[key][0]:
-            earliest[key] = (candidate, record)
-    for _, record in earliest.values():
-        record["AOCCFL"] = "Y"
+        key = (rec["STUDYID"], rec["USUBJID"])
+        best = first.get(key)
+        if best is None or (rec["ASTDTM"], rec["AESEQ"]) < (best["ASTDTM"], best["AESEQ"]):
+            first[key] = rec
+    for rec in first.values():
+        rec["AOCCFL"] = "Y"
 
-    columns = [
-        "STUDYID",
-        "USUBJID",
-        "AESEQ",
-        "AETERM",
-        "ASTDTM",
-        "TRTSDTM",
-        "TEENDDTM",
-        "TRTEMFL",
-        "AOCCFL",
-    ]
-    with open(f"{OUTPUT_DIR}/adae.csv", "w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=columns)
-        writer.writeheader()
-        for record in records:
-            out = dict(record)
-            out["ASTDTM"] = format_dtm(record["ASTDTM"])
-            out["TRTSDTM"] = format_dtm(record["TRTSDTM"])
-            out["TEENDDTM"] = format_dtm(record["TEENDDTM"])
-            writer.writerow(out)
+    OUTPUT.mkdir(parents=True, exist_ok=True)
+    with open(OUTPUT / "adae.csv", "w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle, lineterminator="\n")
+        writer.writerow(COLUMNS)
+        for rec in records:
+            writer.writerow([
+                rec["STUDYID"], rec["USUBJID"], rec["AESEQ"], rec["AETERM"],
+                rec["AESER"], fmt_dtm(rec["ASTDTM"]), fmt_dtm(rec["TRTSDTM"]),
+                fmt_dtm(rec["TRTEDTM"]), rec["EOTSTT"], fmt_dtm(rec["TEENDDTM"]),
+                rec["TRTEMFL"], rec["AOCCFL"],
+            ])
 
 
 if __name__ == "__main__":
