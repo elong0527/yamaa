@@ -141,6 +141,7 @@ TARGETS = {
         ("*.parquet",),
         (
             *SOURCE_DECODE,
+            "rust/crates/yamaa-adapters/profile/",
             "rust/crates/yamaa-adapters/src/parquet_source/",
             "rust/crates/yamaa-adapters/src/storage_api.rs",
             "rust/crates/yamaa-core/src/parquet_source.rs",

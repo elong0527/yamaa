@@ -15,6 +15,7 @@ on:
       - 'rust/Cargo.lock'
       - 'rust/crates/yamaa-adapters/Cargo.toml'
       - 'rust/crates/yamaa-adapters/build.rs'
+      - 'rust/crates/yamaa-adapters/profile/**'
       - 'rust/crates/yamaa-adapters/schema/**'
       - 'rust/crates/yamaa-adapters/src/column_table.rs'
       - 'rust/crates/yamaa-adapters/src/columns.rs'

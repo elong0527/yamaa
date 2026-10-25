@@ -1045,9 +1045,7 @@ mod source {
             diagnostic::{
                 source_diagnostics, ConditionCode as C, Diagnostic, ParquetFinding, SourceFinding,
             },
-            parquet_source::{
-                self as parquet, Converted, Field, Logical, Physical, Representation,
-            },
+            parquet_source::{self as parquet, Field},
             typed_csv::PreparedTypes,
             value::ColumnType,
         };
@@ -1137,115 +1135,14 @@ mod source {
         fn field(name: &str) -> Field {
             Field {
                 name: name.into(),
-                leaves: 1,
-                path: name.into(),
-                repetition: 0,
-                physical: Physical::Int64,
-                logical: Logical::None,
-                converted: Converted::None,
-                representation: Representation::Int64,
+                kind: Some(ColumnType::Int),
                 stored_type: "int64".into(),
-            }
-        }
-        #[test]
-        fn signed_integer_fields_that_fit_their_physical_type_read_as_int() {
-            let signed = |bits| Logical::Integer { bits, signed: true };
-            let legacy = |bits| Converted::Integer { bits, signed: true };
-            // An unannotated INT32 or INT64 is a signed integer of its width.
-            for (physical, representation) in [
-                (Physical::Int32, Representation::Int32),
-                (Physical::Int64, Representation::Int64),
-            ] {
-                assert_eq!(
-                    parquet::column_type(physical, Logical::None, Converted::None, representation),
-                    Some(ColumnType::Int),
-                    "{physical:?}"
-                );
-            }
-            for (physical, bits, representation) in [
-                (Physical::Int64, 64, Representation::Int64),
-                (Physical::Int32, 32, Representation::Int32),
-                (Physical::Int32, 16, Representation::Int16),
-                (Physical::Int32, 8, Representation::Int8),
-            ] {
-                // The logical type alone, both annotations, and the converted
-                // type alone, as DuckDB writes it.
-                for (logical, converted) in [
-                    (signed(bits), Converted::None),
-                    (signed(bits), legacy(bits)),
-                    (Logical::None, legacy(bits)),
-                ] {
-                    assert_eq!(
-                        parquet::column_type(physical, logical, converted, representation),
-                        Some(ColumnType::Int),
-                        "{bits}: {logical:?} {converted:?}"
-                    );
-                }
-                let unsigned = Logical::Integer {
-                    bits,
-                    signed: false,
-                };
-                let legacy_unsigned = Converted::Integer {
-                    bits,
-                    signed: false,
-                };
-                for (logical, converted) in [
-                    (unsigned, Converted::None),
-                    (unsigned, legacy_unsigned),
-                    (Logical::None, legacy_unsigned),
-                ] {
-                    assert_eq!(
-                        parquet::column_type(physical, logical, converted, representation),
-                        None,
-                        "{bits}: {logical:?} {converted:?}"
-                    );
-                }
-            }
-            // A width the physical type does not hold, and a layout of another
-            // width or type, stay refused.
-            let microseconds = Representation::Timestamp {
-                unit: parquet::Unit::Microsecond,
-                timezone: false,
-            };
-            for (physical, logical, converted, representation) in [
-                (
-                    Physical::Int32,
-                    signed(64),
-                    legacy(64),
-                    Representation::Int64,
-                ),
-                (
-                    Physical::Int64,
-                    signed(32),
-                    legacy(32),
-                    Representation::Int32,
-                ),
-                (Physical::Int32, signed(8), legacy(8), Representation::Int16),
-                (Physical::Int64, signed(64), legacy(64), microseconds),
-                (
-                    Physical::Int32,
-                    Logical::None,
-                    legacy(16),
-                    Representation::Int8,
-                ),
-                (
-                    Physical::Int32,
-                    Logical::None,
-                    Converted::None,
-                    Representation::Int16,
-                ),
-            ] {
-                assert_eq!(
-                    parquet::column_type(physical, logical, converted, representation),
-                    None,
-                    "{physical:?} {logical:?} {converted:?} {representation:?}"
-                );
             }
         }
         #[test]
         fn physical_schema_and_raw_temporal_findings_keep_all_original_facts() {
             let mut nested = field("S");
-            nested.leaves = 2;
+            nested.kind = None;
             nested.stored_type = "struct<left: int64, right: string>".into();
             let errors = [
                 parquet::columns(vec![], 0).unwrap_err(),

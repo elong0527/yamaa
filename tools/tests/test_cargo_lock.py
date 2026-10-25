@@ -166,6 +166,10 @@ class BundleArchiveTests(unittest.TestCase):
         (schema / "json").mkdir(parents=True)
         (schema / "schema_spec.yaml").write_text('version: "1.0"\n')
         (schema / "json/spec.schema.json").write_text("{}\n")
+        # And the closed Parquet profile that the adapters' reader embeds.
+        profile = self.workspace / "crates/yamaa-adapters/profile"
+        profile.mkdir()
+        (profile / "parquet.toml").write_text("[levels]\n")
         self.path = self.root / "source.tar.gz"
 
     def vendored(self, crates, unlisted=()):
@@ -256,6 +260,10 @@ class BundleArchiveTests(unittest.TestCase):
                         copies + "schema_spec.yaml": b'version: "1.0"\n',
                     },
                 )
+                profile = (
+                    layout.workspace + "crates/yamaa-adapters/profile/parquet.toml"
+                )
+                self.assertEqual(entries[profile], b"[levels]\n")
 
     def test_only_a_manifest_alone_may_have_an_empty_unrecorded_library(self):
         # tools/staging/vendor_crates.py reduces a crate that no supported

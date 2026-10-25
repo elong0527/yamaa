@@ -38,6 +38,7 @@ CHECKS = (
     "tools.validation.check_cdisc_vocabulary",
     "tools.validation.check_cdisc_tables",
     "tools.validation.check_cdisc_copies",
+    "tools.validation.check_parquet_profile",
     "tools.rules.check",
     "tools.validation.check_documentation",
     "tools.validation.check_site_examples",

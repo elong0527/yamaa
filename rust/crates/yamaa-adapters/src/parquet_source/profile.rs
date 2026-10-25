@@ -1,108 +1,99 @@
-//! Represent physical codec metadata; closed source type admission is core-owned.
+//! A leaf's column type, read by the closed profile's column rows
+//! (`closed_profile`), and the table schema of a file's fields; the findings
+//! and their order are core-owned.
+use super::closed_profile;
+use super::format::{Converted, Logical, Physical};
 use crate::storage_api::LaterType;
-use arrow_schema::{DataType, Schema, TimeUnit as ArrowUnit};
+use arrow_schema::{DataType, Schema};
 pub(super) use core_profile::{temporal, Error};
 use parquet::{
-    basic::{ConvertedType, Type as Physical},
+    basic::{ConvertedType, Type as StoredPhysical},
     schema::types::{ColumnDescriptor, SchemaDescriptor},
 };
 use yamaa_core::{parquet_source as core_profile, table::TableSchema, value::ColumnType};
 
-fn physical(stored: &ColumnDescriptor) -> core_profile::Physical {
-    use core_profile::Physical as P;
-    match stored.physical_type() {
-        Physical::BYTE_ARRAY => P::ByteArray,
-        Physical::INT32 => P::Int32,
-        Physical::INT64 => P::Int64,
-        Physical::DOUBLE => P::Double,
-        _ => P::Other,
+fn physical(stored: &ColumnDescriptor) -> Physical {
+    physical_type(stored.physical_type())
+}
+/// A physical type as the reader names it (`format`).
+pub(super) fn physical_type(stored: StoredPhysical) -> Physical {
+    match stored {
+        StoredPhysical::BOOLEAN => Physical::Boolean,
+        StoredPhysical::INT32 => Physical::Int32,
+        StoredPhysical::INT64 => Physical::Int64,
+        StoredPhysical::INT96 => Physical::Int96,
+        StoredPhysical::FLOAT => Physical::Float,
+        StoredPhysical::DOUBLE => Physical::Double,
+        StoredPhysical::BYTE_ARRAY => Physical::ByteArray,
+        StoredPhysical::FIXED_LEN_BYTE_ARRAY => Physical::FixedLenByteArray,
     }
 }
-fn logical(stored: &ColumnDescriptor) -> core_profile::Logical {
+fn logical(stored: &ColumnDescriptor) -> Option<Logical> {
     crate::storage_api::column_logical(stored)
 }
-fn converted(stored: &ColumnDescriptor) -> core_profile::Converted {
-    use core_profile::Converted as C;
-    let integer = |bits, signed| C::Integer { bits, signed };
-    match stored.converted_type() {
-        ConvertedType::NONE => C::None,
-        ConvertedType::UTF8 => C::Utf8,
-        ConvertedType::DATE => C::Date,
-        ConvertedType::INT_8 => integer(8, true),
-        ConvertedType::INT_16 => integer(16, true),
-        ConvertedType::INT_32 => integer(32, true),
-        ConvertedType::INT_64 => integer(64, true),
-        ConvertedType::UINT_8 => integer(8, false),
-        ConvertedType::UINT_16 => integer(16, false),
-        ConvertedType::UINT_32 => integer(32, false),
-        ConvertedType::UINT_64 => integer(64, false),
-        _ => C::Other,
+fn converted(stored: &ColumnDescriptor) -> Converted {
+    converted_type(stored.converted_type())
+}
+/// A converted type as the reader names it (`format`).
+pub(super) fn converted_type(stored: ConvertedType) -> Converted {
+    match stored {
+        ConvertedType::NONE => Converted::None,
+        ConvertedType::UTF8 => Converted::Utf8,
+        ConvertedType::MAP => Converted::Map,
+        ConvertedType::MAP_KEY_VALUE => Converted::MapKeyValue,
+        ConvertedType::LIST => Converted::List,
+        ConvertedType::ENUM => Converted::Enum,
+        ConvertedType::DECIMAL => Converted::Decimal,
+        ConvertedType::DATE => Converted::Date,
+        ConvertedType::TIME_MILLIS => Converted::TimeMillis,
+        ConvertedType::TIME_MICROS => Converted::TimeMicros,
+        ConvertedType::TIMESTAMP_MILLIS => Converted::TimestampMillis,
+        ConvertedType::TIMESTAMP_MICROS => Converted::TimestampMicros,
+        ConvertedType::UINT_8 => Converted::Uint8,
+        ConvertedType::UINT_16 => Converted::Uint16,
+        ConvertedType::UINT_32 => Converted::Uint32,
+        ConvertedType::UINT_64 => Converted::Uint64,
+        ConvertedType::INT_8 => Converted::Int8,
+        ConvertedType::INT_16 => Converted::Int16,
+        ConvertedType::INT_32 => Converted::Int32,
+        ConvertedType::INT_64 => Converted::Int64,
+        ConvertedType::JSON => Converted::Json,
+        ConvertedType::BSON => Converted::Bson,
+        ConvertedType::INTERVAL => Converted::Interval,
     }
 }
-/// The width a field's signed integer annotation declares, logical or legacy.
-/// Every stored value of an `INT32` field that reads as `int` must fit it
-/// (PARQUET-7).
-pub(super) fn declared_width(stored: &ColumnDescriptor) -> Option<u8> {
-    use core_profile::{Converted as C, Logical as L};
-    match (logical(stored), converted(stored)) {
-        (L::Integer { bits, signed: true }, _) | (L::None, C::Integer { bits, signed: true }) => {
-            Some(bits)
-        }
-        _ => None,
-    }
-}
-/// The embedded Arrow schema chooses a layout, never a type (PARQUET-7): every
-/// string layout is text, and a dictionary reads as its value type whatever
-/// its index type.
-fn representation(arrow: &DataType) -> core_profile::Representation {
-    use core_profile::{Representation as R, Unit};
-    match arrow {
-        DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View => R::Text,
-        DataType::Dictionary(_, value) => representation(value),
-        DataType::Int8 => R::Int8,
-        DataType::Int16 => R::Int16,
-        DataType::Int32 => R::Int32,
-        DataType::Int64 => R::Int64,
-        DataType::Float64 => R::Float64,
-        DataType::Date32 => R::Date32,
-        DataType::Timestamp(unit, timezone) => R::Timestamp {
-            unit: match unit {
-                ArrowUnit::Second => Unit::Second,
-                ArrowUnit::Millisecond => Unit::Millisecond,
-                ArrowUnit::Microsecond => Unit::Microsecond,
-                ArrowUnit::Nanosecond => Unit::Nanosecond,
-            },
-            timezone: timezone.is_some(),
-        },
-        _ => R::Other,
-    }
-}
-/// The logical type of the leaf column `stored`, whose variant, geometry or
-/// geography annotation the native decoder was not shown when `annotated`
-/// (`wire::Checked`): that annotation is outside the mapping (PARQUET-7).
-fn annotated_logical(stored: &ColumnDescriptor, annotated: bool) -> core_profile::Logical {
+/// The column row the leaf column `stored` reads by when the embedded Arrow
+/// schema names it in `arrow` (PARQUET-7). A leaf whose variant, geometry or
+/// geography annotation the native decoder was not shown, `annotated`
+/// (`wire::Checked`), reads by none: that annotation is outside the mapping.
+fn row(
+    stored: &ColumnDescriptor,
+    arrow: &DataType,
+    annotated: bool,
+) -> Option<&'static closed_profile::Column> {
     if annotated {
-        core_profile::Logical::Other
-    } else {
-        logical(stored)
+        return None;
     }
+    closed_profile::column(physical(stored), logical(stored), converted(stored), arrow)
+}
+/// The bits of the signed integer every stored value of the leaf `stored`
+/// must fit, when the embedded schema names it in `arrow` (PARQUET-7).
+pub(super) fn width(stored: &ColumnDescriptor, arrow: &DataType) -> Option<u8> {
+    row(stored, arrow, false).and_then(|row| row.width)
 }
 pub(super) fn column_type(
     stored: &ColumnDescriptor,
     arrow: &DataType,
     annotated: bool,
 ) -> Option<ColumnType> {
-    core_profile::column_type(
-        physical(stored),
-        annotated_logical(stored, annotated),
-        converted(stored),
-        representation(arrow),
-    )
+    row(stored, arrow, annotated).map(|row| row.kind)
 }
 /// The table schema of the fields `arrow` of the leaf columns `stored`, or
-/// the first field's finding. `annotated` lists the leaf columns whose
-/// variant, geometry or geography annotation the native decoder was not
-/// shown, and `later` the later types the embedded schema names
+/// the first field's finding. A field has a column type when it is one leaf,
+/// not repeated, whose path is its name, and a column row admits that leaf
+/// (`column_type`). `annotated` lists the leaf columns whose variant,
+/// geometry or geography annotation the native decoder was not shown, and
+/// `later` the later types the embedded schema names
 /// (`storage_api::LaterTypes`), which a refused field's stored type spells.
 pub(super) fn columns(
     arrow: &Schema,
@@ -124,27 +115,12 @@ pub(super) fn columns(
                 _ => None,
             })
             .collect();
+        let kind = descriptor
+            .filter(|column| column.max_rep_level() == 0 && column.path().string() == *field.name())
+            .and_then(|column| column_type(&column, field.data_type(), annotated.contains(&first)));
         core_profile::Field {
             name: field.name().clone(),
-            leaves: leaf - first,
-            path: descriptor
-                .as_ref()
-                .map_or_else(String::new, |column| column.path().string()),
-            repetition: descriptor
-                .as_ref()
-                .map_or(0, |column| column.max_rep_level()),
-            physical: descriptor
-                .as_ref()
-                .map_or(core_profile::Physical::Other, |column| physical(column)),
-            logical: descriptor
-                .as_ref()
-                .map_or(core_profile::Logical::Other, |column| {
-                    annotated_logical(column, annotated.contains(&first))
-                }),
-            converted: descriptor
-                .as_ref()
-                .map_or(core_profile::Converted::Other, |column| converted(column)),
-            representation: representation(field.data_type()),
+            kind,
             stored_type: super::type_name::stored_type(field, &later),
         }
     });
@@ -154,7 +130,8 @@ pub(super) fn columns(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use parquet::basic::LogicalType;
+    use arrow_schema::TimeUnit as ArrowUnit;
+    use parquet::basic::{LogicalType, Type as Physical};
     use parquet::{basic::Repetition, schema::types::Type};
     use std::sync::Arc;
     fn descriptor(
@@ -317,7 +294,10 @@ mod tests {
             for logical in [logical, None] {
                 let stored = descriptor(physical, logical.clone(), converted);
                 let column = stored.column(0);
-                assert_eq!(declared_width(&column), Some(bits), "{converted}");
+                // A narrower annotation bounds every stored value; a 32- or
+                // 64-bit one holds whatever its physical type stores.
+                let bound = (bits < 32).then_some(bits);
+                assert_eq!(width(&column, &arrow), bound, "{converted}");
                 let dictionary =
                     DataType::Dictionary(Box::new(DataType::Int32), Box::new(arrow.clone()));
                 for arrow in [&arrow, &dictionary] {
@@ -335,7 +315,8 @@ mod tests {
             ConvertedType::DATE,
         ] {
             let stored = descriptor(Physical::INT32, None, converted);
-            assert_eq!(declared_width(&stored.column(0)), None, "{converted}");
+            let column = stored.column(0);
+            assert_eq!(width(&column, &DataType::Int32), None, "{converted}");
         }
     }
     #[test]

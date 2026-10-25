@@ -586,7 +586,7 @@ fn long_header(id: i16, kind: u8) -> Vec<u8> {
 /// a geometry or geography as text. On a primitive it admitted a geometry or
 /// geography only on a `BYTE_ARRAY` without a converted type, and a variant
 /// never; on a group it admitted each, and checked nothing.
-fn accepted(bytes: &[u8], variant: i16) -> Result<bool, Error> {
+pub(super) fn accepted(bytes: &[u8], variant: i16) -> Result<bool, Error> {
     let (element, _) = compact::parse(bytes)?;
     let annotation = match element.field(10)? {
         Some(union) => union.field(variant)?,
