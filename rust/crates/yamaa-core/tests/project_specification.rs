@@ -1,4 +1,9 @@
-//! Project contracts: specification project rows and specification str pad.
+//! Project contracts: the seams of a specification's row templates over its
+//! column defaults that the diagnostic replay cannot reach, each named in its
+//! test's first comment: the project calls a preparation activates, the
+//! resolved plan, rows executed, and identifiers 200,000 characters long. What
+//! these specifications refuse is `tests/fixtures/diagnostics/rows.json`'s,
+//! and the order of str_pad's checkpoints is `text.json`'s (#3798).
 mod project {
     mod specification_project_rows {
         use crate::support::id_source_schema as source;
@@ -50,32 +55,8 @@ mod project {
             }
             Tree::map(fields)
         }
-        #[test]
-        fn grouped_filters_admit_completed_candidate_windows() {
-            let mut template = row(
-                "groups",
-                vec![(
-                    "SEQ",
-                    Tree::map(vec![(
-                        "row_number",
-                        Tree::map(vec![(
-                            "window",
-                            Tree::map(vec![("order_by", Tree::List(vec![Tree::text("ID")]))]),
-                        )]),
-                    )]),
-                )],
-                Some(vec!["SRC.ID"]),
-            );
-            let Tree::Map(fields) = &mut template else {
-                panic!("row mapping");
-            };
-            fields.push(("filter".into(), Tree::text("SEQ > 1")));
-            let spec = specification_with_rows(vec![("SEQ", "int", literal(0))], vec![template]);
-            let prepared = prepare(&spec).unwrap();
-            // Grouped filters gate completed groups under ROW-1.
-            assert!(prepared.bind(&source()).is_ok());
-        }
-
+        /// A seam the replay cannot reach: the functions a preparation calls,
+        /// each template's completion order and a bound call's argument read.
         #[test]
         fn row_reads_promote_transitive_defaults_and_schedule_each_override_graph() {
             let spec = specification_with_rows(
@@ -123,8 +104,11 @@ mod project {
             );
         }
 
+        /// A seam the replay cannot reach: the functions a preparation calls
+        /// and the plans and slots of its project calls. That the replaced
+        /// default is still checked is `rows.json`'s.
         #[test]
-        fn fully_overridden_function_defaults_do_not_activate_but_remain_statically_checked() {
+        fn fully_overridden_function_defaults_do_not_activate() {
             let spec = specification_with_rows(
                 vec![(
                     "A",
@@ -141,28 +125,11 @@ mod project {
             assert!(prepared.project_calls().unwrap().plans().is_empty());
             assert_eq!(prepared.project_calls().unwrap().calls()[0].slot(), None);
             assert!(prepared.bind(&source()).is_ok());
-            let invalid = specification_with_rows(
-                vec![(
-                    "A",
-                    "int",
-                    call("id", vec![("x", Tree::Scalar(N::Float(7.0)))]),
-                )],
-                vec![
-                    row("first", vec![("A", literal(8))], None),
-                    row("second", vec![("A", literal(9))], None),
-                ],
-            );
-            let Err(PrepareError::Invalid(findings)) = prepare_in(&invalid, &environment(&["id"]))
-            else {
-                panic!("unused default still checked")
-            };
-            assert_eq!(findings.len(), 1);
-            assert_eq!(
-                findings[0].diagnostic().spec_paths,
-                ["columns.A.derivation.function.args.x"]
-            );
         }
 
+        /// A seam the replay cannot reach: the first calling derivation a
+        /// preparation returns, a value and not an issue.
+        ///
         /// A build no host can run is refused at the first derivation, in
         /// authored order, that calls a project function the build runs
         /// (#3030 D221). Authored order is the order a formatted file writes
@@ -295,156 +262,9 @@ mod project {
             }
         }
 
-        #[test]
-        fn row_function_cycles_report_authored_paths_without_column_forward_rules() {
-            let spec = specification_with_rows(
-                vec![
-                    ("A", "int", call("id", vec![("x", Tree::text("B"))])),
-                    ("B", "int", call("id", vec![("x", Tree::text("A"))])),
-                    ("D", "int", literal(0)),
-                ],
-                vec![row(
-                    "record",
-                    vec![("D", call("id", vec![("x", Tree::text("A"))]))],
-                    None,
-                )],
-            );
-            let prepared = prepare_in(&spec, &environment(&["id"])).unwrap();
-            let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
-                panic!("cycle")
-            };
-            let diagnostics = findings
-                .iter()
-                .flat_map(|f| f.diagnostics(prepared.source()).unwrap())
-                .collect::<Vec<_>>();
-            assert_eq!(diagnostics.len(), 1);
-            assert_eq!(diagnostics[0].definition().condition, "dependency_cycle");
-            assert_eq!(
-                diagnostics[0].spec_paths,
-                [
-                    "columns.A.derivation.function",
-                    "columns.B.derivation.function"
-                ]
-            );
-            assert_eq!(
-                diagnostics[0].context["cycle"],
-                JsonValue::Array(
-                    vec!["A", "B", "A"]
-                        .into_iter()
-                        .map(|s| JsonValue::String(s.into()))
-                        .collect()
-                )
-            );
-        }
-
-        #[test]
-        fn transitive_nonlocal_defaults_report_one_issue_per_column_with_all_overriding_rows() {
-            use yamaa_core::json::Value as JsonValue;
-            let spec = specification_with_rows(
-                vec![
-                    (
-                        "A",
-                        "int",
-                        Tree::map(vec![(
-                            "aggregate",
-                            Tree::map(vec![("expr", Tree::text("SUM(SRC.ID)"))]),
-                        )]),
-                    ),
-                    ("B", "int", call("id", vec![("x", Tree::text("A"))])),
-                    ("C", "int", call("id", vec![("x", Tree::text("B"))])),
-                ],
-                vec![
-                    row("first", vec![("C", literal(1)), ("B", literal(2))], None),
-                    row("second", vec![("B", literal(3)), ("C", literal(4))], None),
-                ],
-            );
-            let Err(PrepareError::Invalid(findings)) = prepare_in(&spec, &environment(&["id"]))
-            else {
-                panic!("duplicate defaults")
-            };
-            assert_eq!(findings.len(), 2);
-            for (finding, column) in findings.iter().zip(["B", "C"]) {
-                let diagnostic = finding.diagnostic();
-                assert_eq!(
-                    diagnostic.spec_paths,
-                    [format!("columns.{column}.derivation")]
-                );
-                assert_eq!(diagnostic.definition().condition, "duplicate_derivation");
-                assert_eq!(diagnostic.definition().rule, Some("SPEC-6"));
-                assert_eq!(
-                    diagnostic.context["rows"],
-                    JsonValue::Array(vec![
-                        JsonValue::String("first".into()),
-                        JsonValue::String("second".into()),
-                    ])
-                );
-            }
-        }
-
-        #[test]
-        fn inherited_cycles_are_reported_once_while_distinct_row_override_cycles_keep_their_paths()
-        {
-            for local_override in [false, true] {
-                let mut rows = vec![
-                    row(
-                        "first",
-                        vec![("D", call("id", vec![("x", Tree::text("A"))]))],
-                        None,
-                    ),
-                    row(
-                        "second",
-                        vec![("D", call("id", vec![("x", Tree::text("A"))]))],
-                        None,
-                    ),
-                ];
-                if local_override {
-                    rows.push(row(
-                        "local",
-                        vec![
-                            ("A", call("id", vec![("x", Tree::text("B"))])),
-                            ("D", call("id", vec![("x", Tree::text("A"))])),
-                        ],
-                        None,
-                    ));
-                }
-                let spec = specification_with_rows(
-                    vec![
-                        ("A", "int", call("id", vec![("x", Tree::text("B"))])),
-                        ("B", "int", call("id", vec![("x", Tree::text("A"))])),
-                        ("D", "int", literal(0)),
-                    ],
-                    rows,
-                );
-                let prepared = prepare_in(&spec, &environment(&["id"])).unwrap();
-                let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
-                    panic!("cycles")
-                };
-                let diagnostics = findings
-                    .iter()
-                    .flat_map(|f| f.diagnostics(prepared.source()).unwrap())
-                    .collect::<Vec<_>>();
-                assert_eq!(diagnostics.len(), if local_override { 2 } else { 1 });
-                assert_eq!(diagnostics[0].definition().condition, "dependency_cycle");
-                assert_eq!(
-                    diagnostics[0].spec_paths,
-                    [
-                        "columns.A.derivation.function",
-                        "columns.B.derivation.function"
-                    ]
-                );
-                if local_override {
-                    assert_eq!(diagnostics[1].definition().condition, "dependency_cycle");
-                    assert_eq!(
-                        diagnostics[1].spec_paths,
-                        [
-                            "rows.local.derivations.A.function",
-                            "columns.B.derivation.function"
-                        ]
-                    );
-                }
-            }
-        }
-
+        /// A seam the replay cannot reach: a row template id 200,000
+        /// characters long, generated, and the default-conflict finding each
+        /// of 21 columns reports as its preflight record.
         #[test]
         fn grouped_nonlocal_defaults_keep_complete_long_conflict_context() {
             let names = (0..21).map(|n| format!("C{n}")).collect::<Vec<_>>();
@@ -489,6 +309,11 @@ mod project {
             }
         }
 
+        /// A seam the replay cannot reach: the resolved plan's record read of
+        /// a grouped call's argument. Its second half stays beside it: of
+        /// binding's two findings for one argument the table compared the
+        /// first's `row` alone, which a case's `compares` would state for
+        /// both, and no authored record gives the second's.
         #[test]
         fn grouped_function_arguments_keep_record_reads_and_complete_scope_and_type_findings() {
             let spec = specification_with_rows(
@@ -554,6 +379,9 @@ mod project {
                 .all(|d| d.spec_paths == ["rows.group.derivations.A.function.args.x"]));
         }
 
+        /// A seam the replay cannot reach: the resolved plan's row and column
+        /// bindings, their completion order and a column call's record read.
+        /// A call reading a later column is `rows.json`'s.
         #[test]
         fn unpromoted_column_calls_keep_record_reads_and_column_declaration_order() {
             let spec = specification_with_rows(
@@ -575,66 +403,10 @@ mod project {
                 bound.arguments()[0].input,
                 FunctionInput::Read(Read::Source(0))
             );
-            let forward = specification_with_rows(
-                vec![
-                    ("A", "int", call("id", vec![("x", Tree::text("B"))])),
-                    ("B", "int", literal(7)),
-                ],
-                vec![row("record", vec![], None)],
-            );
-            let prepared = prepare_in(&forward, &environment(&["id"])).unwrap();
-            let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
-                panic!("column forward reference")
-            };
-            let diagnostics = findings
-                .iter()
-                .flat_map(|f| f.diagnostics(prepared.source()).unwrap())
-                .collect::<Vec<_>>();
-            assert_eq!(diagnostics.len(), 1);
-            assert_eq!(diagnostics[0].definition().condition, "forward_reference");
-            assert_eq!(diagnostics[0].spec_paths, ["columns.A.derivation.function"]);
         }
 
-        #[test]
-        fn row_reads_of_nonlocal_columns_return_complete_phase_findings_before_lowering() {
-            let spec = specification_with_rows(
-                vec![
-                    (
-                        "A",
-                        "int",
-                        Tree::map(vec![(
-                            "aggregate",
-                            Tree::map(vec![("expr", Tree::text("SUM(SRC.ID)"))]),
-                        )]),
-                    ),
-                    ("B", "int", literal(0)),
-                    ("C", "int", literal(0)),
-                ],
-                vec![row(
-                    "record",
-                    vec![
-                        ("B", call("id", vec![("x", Tree::text("A"))])),
-                        ("C", call("id", vec![("x", Tree::text("A"))])),
-                    ],
-                    None,
-                )],
-            );
-            let Err(PrepareError::Invalid(findings)) = prepare_in(&spec, &environment(&["id"]))
-            else {
-                panic!("row phase findings")
-            };
-            assert_eq!(findings.len(), 2);
-            for (finding, column) in findings.iter().zip(["B", "C"]) {
-                let diagnostic = finding.diagnostic();
-                assert_eq!(diagnostic.definition().condition, "phase_boundary");
-                assert_eq!(diagnostic.definition().rule, Some("COLUMN-4"));
-                assert_eq!(
-                    diagnostic.spec_paths,
-                    [format!("rows.record.derivations.{column}.function.args.x")]
-                );
-            }
-        }
-
+        /// A seam the replay cannot reach: the resolved plan's column and row
+        /// bindings, their completion order and a template's filter.
         #[test]
         fn grouped_filters_promote_function_defaults_and_qualified_fields_do_not_promote_outputs() {
             let mut grouped = row("group", vec![], Some(vec!["SRC.ID"]));
@@ -679,6 +451,9 @@ mod project {
             assert_eq!(resolved::columns(&plan)[0].column.index(), 1);
         }
 
+        /// A seam the replay cannot reach: a row template id 200,000
+        /// characters long, generated, and the 63 project calls a preparation
+        /// returns.
         #[test]
         fn every_function_argument_keeps_the_complete_long_row_context() {
             use crate::support::roots::{Case, Parameter};
@@ -752,146 +527,44 @@ mod project {
             assert_eq!(prepared.project_calls().unwrap().calls().len(), 63);
         }
 
+        /// A seam the replay cannot reach: the resolved plan of a scalar
+        /// `first_available` default, which stays row-local whether or not a
+        /// row template replaces it. A window default stays in the column
+        /// phase instead, as `rows.json`'s cases state.
         #[test]
-        fn column_windows_stay_global_and_scalar_row_defaults_remain_local() {
-            for operation in ["row_number", "rank", "locf", "first_available"] {
-                for overridden in [false, true] {
-                    let payload = if operation == "first_available" {
-                        Tree::map(vec![("sources", Tree::List(vec![Tree::text("ID")]))])
-                    } else {
-                        let mut fields = vec![(
-                            "window",
-                            Tree::map(vec![("order_by", Tree::List(vec![Tree::text("ID")]))]),
-                        )];
-                        if operation == "locf" {
-                            fields.push(("source", Tree::text("ID")));
-                        }
-                        Tree::map(fields)
-                    };
-                    let mut derivations = vec![("B", Tree::text("A"))];
-                    if overridden {
-                        derivations.push(("A", literal(7)));
-                    }
-                    let spec = specification_with_rows(
-                        vec![
-                            ("A", "int", Tree::map(vec![(operation, payload)])),
-                            ("B", "int", literal(0)),
-                        ],
-                        vec![row("record", derivations, None)],
-                    );
-                    let prepared = prepare_in(&spec, &environment(&[]));
-                    if operation != "first_available" {
-                        let Err(PrepareError::Invalid(findings)) = prepared else {
-                            panic!("column windows stay in the column phase");
-                        };
-                        let condition = if overridden {
-                            "duplicate_derivation"
-                        } else {
-                            "phase_boundary"
-                        };
-                        assert!(
-                            findings.iter().any(|finding| finding
-                                .diagnostic()
-                                .definition()
-                                .condition
-                                == condition),
-                            "{findings:?}"
-                        );
-                        if overridden {
-                            // SPEC-6 names why the column-level derivation cannot
-                            // be a row default: it is a window derivation.
-                            let duplicate = findings
-                                .iter()
-                                .find(|finding| {
-                                    finding.diagnostic().definition().condition
-                                        == "duplicate_derivation"
-                                })
-                                .expect("duplicate finding");
-                            assert_eq!(
-                                duplicate.diagnostic().context["not_row_local"],
-                                JsonValue::String("window".into())
-                            );
-                        }
-                        continue;
-                    }
-                    let prepared = prepared.unwrap();
-                    let plan = prepared.bind(&source()).unwrap();
-                    assert!(resolved::columns(&plan).is_empty());
-                    assert_eq!(resolved::completed(&resolved::row(&plan, 0)), [0, 1, 2]);
-                    let a = resolved::row(&plan, 0)[1];
-                    if overridden {
-                        assert_eq!(resolved::op(&plan, a.expr), &Op::Literal(Value::Int(7)));
-                    } else {
-                        assert_eq!(&*a.path, format!("columns.A.derivation.{operation}"));
-                        assert!(matches!(
-                            resolved::op(&plan, a.expr),
-                            Op::Window { .. }
-                                | Op::ContextWindow { .. }
-                                | Op::FirstAvailable { .. }
-                        ));
-                    }
+        fn first_available_column_defaults_remain_row_local() {
+            for overridden in [false, true] {
+                let mut derivations = vec![("B", Tree::text("A"))];
+                if overridden {
+                    derivations.push(("A", literal(7)));
+                }
+                let payload = Tree::map(vec![("sources", Tree::List(vec![Tree::text("ID")]))]);
+                let spec = specification_with_rows(
+                    vec![
+                        ("A", "int", Tree::map(vec![("first_available", payload)])),
+                        ("B", "int", literal(0)),
+                    ],
+                    vec![row("record", derivations, None)],
+                );
+                let prepared = prepare_in(&spec, &environment(&[])).unwrap();
+                let plan = prepared.bind(&source()).unwrap();
+                assert!(resolved::columns(&plan).is_empty());
+                assert_eq!(resolved::completed(&resolved::row(&plan, 0)), [0, 1, 2]);
+                let a = resolved::row(&plan, 0)[1];
+                if overridden {
+                    assert_eq!(resolved::op(&plan, a.expr), &Op::Literal(Value::Int(7)));
+                } else {
+                    assert_eq!(&*a.path, "columns.A.derivation.first_available");
+                    assert!(matches!(
+                        resolved::op(&plan, a.expr),
+                        Op::Window { .. } | Op::ContextWindow { .. } | Op::FirstAvailable { .. }
+                    ));
                 }
             }
         }
 
-        #[test]
-        fn bare_row_reads_of_nonlocal_outputs_keep_complete_phase_diagnostics_without_function_context(
-        ) {
-            let bare = || Tree::text("A");
-            let spec = specification_with_rows(
-                vec![
-                    (
-                        "A",
-                        "int",
-                        Tree::map(vec![(
-                            "aggregate",
-                            Tree::map(vec![("expr", Tree::text("SUM(SRC.ID)"))]),
-                        )]),
-                    ),
-                    ("B", "int", literal(0)),
-                    ("C", "int", literal(0)),
-                ],
-                vec![row("record", vec![("B", bare()), ("C", bare())], None)],
-            );
-            let Err(PrepareError::Invalid(findings)) = prepare_in(&spec, &environment(&[])) else {
-                panic!("complete bare row phase findings before lowering")
-            };
-            assert_eq!(findings.len(), 2);
-            for (finding, column) in findings.iter().zip(["B", "C"]) {
-                let diagnostic = finding.diagnostic();
-                assert_eq!(
-                    (
-                        diagnostic.definition().phase,
-                        diagnostic.definition().condition,
-                        diagnostic.definition().rule
-                    ),
-                    ("validation", "phase_boundary", Some("COLUMN-4"))
-                );
-                assert_eq!(
-                    diagnostic.spec_paths,
-                    [format!("rows.record.derivations.{column}.source")]
-                );
-                assert_eq!(
-                    diagnostic.context,
-                    [
-                        (
-                            "available_phase".into(),
-                            JsonValue::String("column_derivation".into())
-                        ),
-                        ("identifier".into(), JsonValue::String("A".into())),
-                        (
-                            "required_phase".into(),
-                            JsonValue::String("row_construction".into())
-                        ),
-                        ("row".into(), JsonValue::String("record".into()))
-                    ]
-                    .into_iter()
-                    .collect()
-                );
-                assert!(diagnostic.source_span.is_none() && diagnostic.operand_route.is_none());
-            }
-        }
-
+        /// A seam the replay cannot reach: the functions a preparation calls,
+        /// the template's completion order and a nested call's argument read.
         #[test]
         fn nested_row_case_calls_share_activation_and_dependency_order() {
             let mut definition = file("format");
@@ -957,6 +630,8 @@ mod project {
                 .unwrap()
         }
 
+        /// A seam the replay cannot reach: each template's bound assignments,
+        /// their paths and grouping, over repeated binds.
         #[test]
         fn shared_defaults_bind_per_template_with_own_paths_and_repeated_binds() {
             // One large authored default is inherited by two of three
@@ -1030,6 +705,8 @@ mod project {
             }
         }
 
+        /// A seam the replay cannot reach: the rows a bound plan executes to,
+        /// a table core's readers do not return, over repeated runs.
         #[test]
         fn shared_defaults_execute_across_drivers_grouping_and_repeated_runs() {
             // Three admitted drivers: the second template reads ALT, the
@@ -1189,221 +866,6 @@ mod project {
                     &|| false,
                 );
                 assert_eq!(attempt.result.unwrap().dataset.rows(), expected.as_slice());
-            }
-        }
-    }
-    mod specification_str_pad {
-        //! Independent captured reference ordering for positive-width admission failures.
-        use crate::support::project_call_compiler as support;
-        use crate::support::specification::prepare;
-        use support::{specification, specification_with_rows, Tree};
-        use yamaa_core::{
-            diagnostic::ConditionCode,
-            schema::{Document, DocumentNode as N},
-            specification::BindError,
-            table::{Column, TableSchema},
-            value::ColumnType,
-        };
-
-        fn pad(source: &str, width: &str) -> Tree {
-            Tree::map(vec![(
-                "str_pad",
-                Tree::map(vec![
-                    ("source", Tree::text(source)),
-                    ("width", Tree::Scalar(N::Integer(width.into()))),
-                ]),
-            )])
-        }
-        fn cases(when: &str, first: Tree, otherwise: Tree) -> Tree {
-            Tree::map(vec![(
-                "case",
-                Tree::List(vec![
-                    Tree::map(vec![("when", Tree::text(when)), ("then", first)]),
-                    Tree::map(vec![("otherwise", otherwise)]),
-                ]),
-            )])
-        }
-        fn findings(spec: &Document) -> Vec<(ConditionCode, String)> {
-            let prepared = prepare(spec).unwrap();
-            let source = TableSchema::new(vec![Column {
-                name: "ID".into(),
-                kind: ColumnType::Int,
-            }])
-            .unwrap();
-            let Err(BindError::Invalid(findings)) = prepared.bind(&source) else {
-                panic!("retained width and reference findings")
-            };
-            findings
-                .iter()
-                .flat_map(|finding| finding.diagnostics(prepared.source()).unwrap())
-                .map(|diagnostic| (diagnostic.code, diagnostic.spec_paths[0].clone()))
-                .collect()
-        }
-        fn widths_and_sources(paths: &[&str]) -> Vec<String> {
-            paths.iter().map(|path| (*path).into()).collect()
-        }
-
-        #[test]
-        fn all_nested_case_widths_precede_that_derivations_reference_findings() {
-            let spec = specification(vec![(
-                "A",
-                "str",
-                cases(
-                    "ID = 1",
-                    cases("ID = 1", pad("SRC.ABSENT1", "0"), pad("SRC.ABSENT2", "-1")),
-                    pad("SRC.ABSENT3", "0"),
-                ),
-            )]);
-            let actual = findings(&spec);
-            assert_eq!(
-                actual
-                    .iter()
-                    .map(|(_, path)| path.clone())
-                    .collect::<Vec<_>>(),
-                widths_and_sources(&[
-                    "columns.A.derivation.case[0].then.case[0].then.str_pad.width",
-                    "columns.A.derivation.case[0].then.case[1].otherwise.str_pad.width",
-                    "columns.A.derivation.case[1].otherwise.str_pad.width",
-                    "columns.A.derivation.case[0].then.case[0].then.str_pad.source",
-                    "columns.A.derivation.case[0].then.case[1].otherwise.str_pad.source",
-                    "columns.A.derivation.case[1].otherwise.str_pad.source",
-                ])
-            );
-            assert!(actual[..3]
-                .iter()
-                .all(|(code, _)| *code == ConditionCode::StrPadWidth));
-        }
-
-        #[test]
-        fn width_checkpoint_precedes_case_predicate_reference_binding_without_duplication() {
-            let spec = specification(vec![(
-                "A",
-                "str",
-                cases("ABSENT = 1", pad("SRC.ABSENT1", "0"), pad("SRC.ID", "2")),
-            )]);
-            let actual = findings(&spec);
-            assert_eq!(actual[0].0, ConditionCode::StrPadWidth);
-            assert_eq!(actual[1].0, ConditionCode::PredicateUnknownField);
-            assert_eq!(
-                actual.into_iter().map(|(_, path)| path).collect::<Vec<_>>(),
-                widths_and_sources(&[
-                    "columns.A.derivation.case[0].then.str_pad.width",
-                    "columns.A.derivation.case[0].when",
-                    "columns.A.derivation.case[0].then.str_pad.source",
-                ])
-            );
-            // Predicate ownership is retained without moving the earlier width failure.
-        }
-
-        #[test]
-        fn separate_column_derivations_keep_width_then_reference_interleaving() {
-            let spec = specification(vec![
-                ("A", "str", pad("SRC.ABSENT1", "0")),
-                ("B", "str", pad("SRC.ABSENT2", "-1")),
-            ]);
-            assert_eq!(
-                findings(&spec)
-                    .into_iter()
-                    .map(|(_, path)| path)
-                    .collect::<Vec<_>>(),
-                widths_and_sources(&[
-                    "columns.A.derivation.str_pad.width",
-                    "columns.A.derivation.str_pad.source",
-                    "columns.B.derivation.str_pad.width",
-                    "columns.B.derivation.str_pad.source",
-                ])
-            );
-        }
-
-        #[test]
-        fn row_substitutions_report_all_widths_before_reference_binding() {
-            let spec = specification_with_rows(
-                vec![
-                    ("A", "str", Tree::text("'unused'")),
-                    ("B", "str", Tree::text("'unused'")),
-                ],
-                vec![Tree::map(vec![
-                    ("id", Tree::text("records")),
-                    (
-                        "derivations",
-                        Tree::map(vec![
-                            ("A", Tree::map(vec![("value", pad("ABSENT1", "0"))])),
-                            ("B", Tree::map(vec![("value", pad("ABSENT2", "-1"))])),
-                        ]),
-                    ),
-                ])],
-            );
-            assert_eq!(
-                findings(&spec)
-                    .into_iter()
-                    .map(|(_, path)| path)
-                    .collect::<Vec<_>>(),
-                widths_and_sources(&[
-                    "rows.records.derivations.A.str_pad.width",
-                    "rows.records.derivations.B.str_pad.width",
-                    "rows.records.derivations.A.str_pad.source",
-                    "rows.records.derivations.B.str_pad.source",
-                ])
-            );
-        }
-
-        #[test]
-        fn predicate_grammar_stays_before_its_branch_width_validation() {
-            let spec = specification(vec![(
-                "A",
-                "str",
-                cases("ID >", pad("SRC.ABSENT", "0"), pad("SRC.ID", "2")),
-            )]);
-            let actual = findings(&spec);
-            assert_eq!(actual[0].0.definition().condition, "invalid_expression");
-            assert_eq!(actual[1].0, ConditionCode::StrPadWidth);
-            assert_eq!(
-                actual.into_iter().map(|(_, path)| path).collect::<Vec<_>>(),
-                widths_and_sources(&[
-                    "columns.A.derivation.case[0].when",
-                    "columns.A.derivation.case[0].then.str_pad.width",
-                    "columns.A.derivation.case[0].then.str_pad.source",
-                ])
-            );
-        }
-
-        #[test]
-        fn numeric_grammar_and_widths_keep_authored_order_before_reference_binding() {
-            let invalid_numeric = || Tree::text("ID +");
-            for (first, otherwise, expected) in [
-                (
-                    invalid_numeric(),
-                    pad("SRC.ABSENT", "0"),
-                    widths_and_sources(&[
-                        "columns.A.derivation.case[0].then",
-                        "columns.A.derivation.case[1].otherwise.str_pad.width",
-                        "columns.A.derivation.case[0].when",
-                        "columns.A.derivation.case[1].otherwise.str_pad.source",
-                    ]),
-                ),
-                (
-                    pad("SRC.ABSENT", "0"),
-                    invalid_numeric(),
-                    widths_and_sources(&[
-                        "columns.A.derivation.case[0].then.str_pad.width",
-                        "columns.A.derivation.case[1].otherwise",
-                        "columns.A.derivation.case[0].when",
-                        "columns.A.derivation.case[0].then.str_pad.source",
-                    ]),
-                ),
-            ] {
-                let spec = specification(vec![("A", "str", cases("ABSENT = 1", first, otherwise))]);
-                let actual = findings(&spec);
-                assert!(actual[..2]
-                    .iter()
-                    .any(|(code, _)| *code == ConditionCode::StrPadWidth));
-                assert!(actual[..2]
-                    .iter()
-                    .any(|(code, _)| code.definition().condition == "invalid_expression"));
-                assert_eq!(
-                    actual.into_iter().map(|(_, path)| path).collect::<Vec<_>>(),
-                    expected
-                );
             }
         }
     }
