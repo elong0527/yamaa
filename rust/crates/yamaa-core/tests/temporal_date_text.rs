@@ -1,7 +1,10 @@
 //! Collected date text with unknown components, intervals and durations
 //! (TIME-2, TIME-7, TIME-13), date parts written as collected date text
 //! (TIME-19), times of day (TIME-20) and the ISO 8601 forms of the date and
-//! time submission data types (SUB-26), against hand-written vectors.
+//! time submission data types (SUB-26), against hand-written vectors. The
+//! values these operations return are core outcomes, which core's issue-only
+//! readers cannot state; dtc's refusals of a part outside its form are cases
+//! of `fixtures/diagnostics/temporal.json`.
 mod temporal_date_text {
     use yamaa_core::{
         dataset::{
@@ -41,6 +44,7 @@ mod temporal_date_text {
         }
     }
 
+    /// Already data: `fixtures/collected_date_text.tsv`.
     #[test]
     fn collected_text_reads_its_prefix_and_names_intervals_and_durations() {
         let date = operation(K::Precision { target: T::Date });
@@ -78,6 +82,8 @@ mod temporal_date_text {
         assert!(rows > 20);
     }
 
+    /// Seam: the recovered step a declared `invalid` gives (core outcome),
+    /// beside the failure it answers.
     #[test]
     fn a_declared_invalid_answers_an_interval_as_it_answers_invalid_text() {
         let answered = Imputation::new(
@@ -133,6 +139,7 @@ mod temporal_date_text {
         Value::Str(value.into())
     }
 
+    /// Seam: the collected date text dtc writes (core outcome).
     #[test]
     fn dtc_writes_its_parts_and_stops_before_the_first_missing_one() {
         let missing = Value::Missing;
@@ -203,55 +210,35 @@ mod temporal_date_text {
         }
     }
 
+    /// Seam: the step dtc returns when a declared `invalid` answers a part
+    /// outside its form (core outcome). Without it, each part is refused,
+    /// naming the part, as the cases `dtc_refuses_*` of
+    /// `fixtures/diagnostics/temporal.json` state.
     #[test]
-    fn dtc_refuses_a_part_outside_its_form_unless_invalid_answers_it() {
-        for (values, part) in [
-            (vec![text("2025"), text("3")], "month"),
-            (vec![text("2025"), text("MAR")], "month"),
-            (vec![text("2025"), text("13")], "month"),
-            (vec![text("25")], "year"),
-            (vec![text("0000")], "year"),
-            (vec![Value::Int(0)], "year"),
-            (vec![Value::Int(10000)], "year"),
-            (vec![text("2025"), text("02"), text("29")], "day"),
-            (vec![text("2025"), text("04"), Value::Int(31)], "day"),
-            (
-                vec![text("2025"), text("03"), text("15"), text("24")],
-                "hour",
-            ),
-            (vec![text("2025"), Value::Int(-1)], "month"),
+    fn a_declared_invalid_answers_each_dtc_part_outside_its_form() {
+        for values in [
+            vec![text("2025"), text("3")],
+            vec![text("2025"), text("MAR")],
+            vec![text("2025"), text("13")],
+            vec![text("25")],
+            vec![text("0000")],
+            vec![Value::Int(0)],
+            vec![Value::Int(10000)],
+            vec![text("2025"), text("02"), text("29")],
+            vec![text("2025"), text("04"), Value::Int(31)],
+            vec![text("2025"), text("03"), text("15"), text("24")],
+            vec![text("2025"), Value::Int(-1)],
         ] {
-            let Err(failure) = dtc(&values, None) else {
-                panic!("{values:?} must fail")
-            };
-            let definition = failure.code.definition();
-            assert_eq!(
-                (definition.phase, definition.condition, definition.rule),
-                ("impute", "invalid_date_text", Some("TIME-19")),
-                "{values:?}"
-            );
-            assert_eq!(failure.spec_paths, ["columns.DTC.derivation.dtc"]);
-            assert_eq!(
-                failure.context["part"],
-                yamaa_core::json::Value::String(part.into()),
-                "{values:?}"
-            );
             assert_eq!(
                 dtc(&values, Some(Value::Missing)),
                 Ok(TemporalStep::Invalid),
                 "{values:?}"
             );
         }
-        let Err(failure) = dtc(&[text("2025"), Value::float(3.0)], None) else {
-            panic!("a float part is an incompatible input")
-        };
-        let definition = failure.code.definition();
-        assert_eq!(
-            (definition.condition, definition.rule),
-            ("incompatible_input_type", Some("TIME-19"))
-        );
     }
 
+    /// Seam: the seconds time_of_day returns (core outcome), beside its
+    /// refusal of text.
     #[test]
     fn time_of_day_counts_whole_seconds_since_midnight() {
         let operation = Temporal::new(
@@ -290,6 +277,7 @@ mod temporal_date_text {
         );
     }
 
+    /// Already data: `fixtures/submission_data_types.tsv`.
     #[test]
     fn date_and_time_data_types_admit_exactly_their_iso_8601_forms() {
         let mut seen = Vec::new();
