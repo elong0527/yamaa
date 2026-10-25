@@ -508,20 +508,24 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
     assert_eq!((accepted_saves, refused_saves, no_save), (160, 47, 235));
 }
 
-/// Seam: the composition's save return, held artifact set and capture counter
-/// are independent of the replay's issue rows and saved-file delta.
+/// Seam: the composition's save return, held artifact order, capture counter
+/// and absent directories are independent of the replay's saved-file delta.
 #[test]
 fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
     let authored = resource_contracts();
     let contracts = replay::object(replay::field(&authored, "define"));
     let mut seen = BTreeSet::new();
     let (mut accepted, mut refused, mut artifact_contracts) = (0, 0, 0);
+    let mut ordered_artifacts = 0;
     for case in replay::cases() {
         let Some(expected) = contracts.get(&case.label) else {
             continue;
         };
         assert!(seen.insert(case.label.clone()));
-        replay::closed(expected, &["save", "empty_artifacts", "absent"]);
+        replay::closed(
+            expected,
+            &["save", "empty_artifacts", "artifacts", "absent"],
+        );
         let study = operations::study(&case.input);
         let staged = operations::state(&study);
         let project = study.identity(replay::text(replay::field(&case.input, "project")));
@@ -548,6 +552,21 @@ fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
                 &Value::Bool(define.artifacts().len() == 0),
                 empty,
                 "{}: the authored held-artifact contract",
+                case.label
+            );
+        }
+        if let Some(artifacts) = expected.get("artifacts") {
+            ordered_artifacts += 1;
+            assert_eq!(
+                define
+                    .artifacts()
+                    .map(|(path, _, _)| path)
+                    .collect::<Vec<_>>(),
+                replay::items(artifacts)
+                    .iter()
+                    .map(replay::text)
+                    .collect::<Vec<_>>(),
+                "{}: the authored held-artifact order and cardinality",
                 case.label
             );
         }
@@ -599,7 +618,10 @@ fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
         contracts.keys().cloned().collect(),
         "every define API case remains present"
     );
-    assert_eq!((accepted, refused, artifact_contracts), (3, 23, 3));
+    assert_eq!(
+        (accepted, refused, artifact_contracts, ordered_artifacts),
+        (7, 23, 3, 3)
+    );
 }
 
 /// Seam: a refused written path has no accepted output and cannot publish,

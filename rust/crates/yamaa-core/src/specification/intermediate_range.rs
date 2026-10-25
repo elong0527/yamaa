@@ -1,7 +1,7 @@
 //! Pure range/projection binding; donor data and native effects remain in execution.
 use super::*;
 use crate::{
-    dataset::{CurrentRead, Intermediate, RelationRange},
+    dataset::{CurrentRead, RelationRange},
     diagnostic::{lookup::Owner, ConditionCode as C},
 };
 /// A named intermediate's range (LOOKUP-9), refused at preparation when it
@@ -41,8 +41,7 @@ pub(super) fn bind(
     relation: &intermediates::Donor<'_>,
     catalog: &Catalog,
     contextual: bool,
-    previous: &[Option<Intermediate>],
-    secondary: &[crate::dataset::SecondarySource],
+    donors: binder::Donors<'_>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<RelationRange>, BindError> {
     let intermediates::Donor {
@@ -76,8 +75,7 @@ pub(super) fn bind(
             },
         );
     }
-    let current =
-        declaration.current_value(catalog, secondary, previous, None, None, &mut Vec::new())?;
+    let current = declaration.current_value(catalog, donors, None, None, &mut Vec::new())?;
     let Some((read, kind)) = current else {
         findings.push(wrap(declaration.unknown_value(owner)));
         return Ok(None);
