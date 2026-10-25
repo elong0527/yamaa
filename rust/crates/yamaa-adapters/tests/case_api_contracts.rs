@@ -267,7 +267,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
     let contracts = replay::object(replay::field(&routes, "cases"));
     assert_eq!(
         contracts.len(),
-        306,
+        332,
         "every original API contract is authored"
     );
     let mut seen = BTreeSet::new();
@@ -338,6 +338,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
             // returned refused domain also retains FailedBuild (CHECK-2).
             if let Some(save) = save.or((!accepted_output).then_some(false)) {
                 let before = operations::state(&study);
+                let rows = crate::support::rows(&domain.issues());
                 let result = domain.save();
                 if save {
                     assert!(
@@ -379,32 +380,31 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
                         );
                     }
                 } else {
-                    assert!(
-                        matches!(result, Err(file_application::FailedBuild)),
-                        "{}: expected FailedBuild, got {result:?}",
-                        case.label
-                    );
-                    // A failed run publishes only its declared report
-                    // (OUTPUT-10): the bytes its case states as saved, whose
-                    // whole delta the replay compares. Without one, every
-                    // staged path stays.
+                    // A failed build refuses every save alike (CHECK-2): each
+                    // of two saves returns FailedBuild and leaves the build's
+                    // complete issue rows as they were. The first publishes
+                    // only the declared report (OUTPUT-10), the bytes its
+                    // case states as saved, whose whole delta the replay
+                    // compares; without one, every staged path stays. The
+                    // second leaves the study as the first left it.
+                    let refused = |result: Result<bool, file_application::FailedBuild>,
+                                   domain: &file_application::Domain,
+                                   attempt: &str| {
+                        assert!(
+                            matches!(result, Err(file_application::FailedBuild)),
+                            "{}: {attempt} refused save: expected FailedBuild, got {result:?}",
+                            case.label
+                        );
+                        assert_eq!(
+                            crate::support::rows(&domain.issues()),
+                            rows,
+                            "{}: the {attempt} refused save keeps the build's issues",
+                            case.label
+                        );
+                    };
+                    refused(result, &domain, "first");
                     match case.stated.saved.as_ref().filter(|saved| !saved.is_empty()) {
-                        Some(report) => {
-                            saved_bytes(&study, report, &case.label);
-                            let published = operations::state(&study);
-                            let again = domain.save();
-                            assert!(
-                                matches!(again, Err(file_application::FailedBuild)),
-                                "{}: repeated refused save: {again:?}",
-                                case.label
-                            );
-                            assert_eq!(
-                                operations::state(&study),
-                                published,
-                                "{}: repeated refused save preserves the report and every staged path",
-                                case.label
-                            );
-                        }
+                        Some(report) => saved_bytes(&study, report, &case.label),
                         None => assert_eq!(
                             operations::state(&study),
                             before,
@@ -412,6 +412,15 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
                             case.label
                         ),
                     }
+                    let published = operations::state(&study);
+                    let again = domain.save();
+                    refused(again, &domain, "repeated");
+                    assert_eq!(
+                        operations::state(&study),
+                        published,
+                        "{}: repeated refused save preserves the report and every staged path",
+                        case.label
+                    );
                 }
             }
         }
@@ -421,8 +430,8 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         contracts.keys().cloned().collect::<BTreeSet<_>>(),
         "every authored API case still exists"
     );
-    assert_eq!((domains, preparation, either, checks), (195, 2, 4, 105));
-    assert_eq!((accepted_saves, refused_saves, no_save), (127, 33, 146));
+    assert_eq!((domains, preparation, either, checks), (210, 13, 4, 105));
+    assert_eq!((accepted_saves, refused_saves, no_save), (139, 36, 157));
 }
 
 /// Seam: the composition's save return, held artifact set and capture counter
