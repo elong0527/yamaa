@@ -1,5 +1,6 @@
 Following CDISC ADaM standards, use the provided CM dataset to create an ADCM
-dataset with one record per concomitant medication.
+dataset with one record per concomitant medication, identified by USUBJID and
+CMSEQ.
 
 The output dataset should contain the following columns in this order:
 STUDYID, USUBJID, CMSEQ, CMTRT, CMSTDAT, ASTDTC, ASTDT
