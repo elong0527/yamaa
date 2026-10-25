@@ -644,9 +644,10 @@ impl ResolvedPlan {
         let mut records = std::mem::take(&mut parts[0].checked);
         let frame = if failure.is_none() || !checks.is_empty() {
             merged(
-                &parts,
+                &mut parts,
                 &blocks,
                 self.region(RegionId::DATASET).output.columns().len(),
+                failure.is_none(),
             )?
         } else {
             Frame::new(0)
@@ -692,7 +693,7 @@ impl ResolvedPlan {
         let templates = template_rows(&parts, reference, end);
         drop(parts);
         let inputs = outer.inputs();
-        let result = outer.finish(&frame, &inputs, &mut records, observer);
+        let result = outer.finish(frame, &inputs, &mut records, observer);
         Ok(Found {
             result,
             handler_counts: outer.handlers.snapshot(self),
@@ -718,18 +719,25 @@ impl<E> Found<E> {
 
 /// Every partition's candidates as the whole-table run builds them: each
 /// template's rows, partition after partition, before the next template's.
+/// With `consume`, each partition's candidates are dropped once its last
+/// template's rows are merged, so the run never holds them twice (#3870).
 fn merged<E>(
-    parts: &[Part<E>],
+    parts: &mut [Part<E>],
     blocks: &[Vec<Range<usize>>],
     width: usize,
+    consume: bool,
 ) -> Result<Frame, Fail<E>> {
     let mut frame = Frame::new(width);
     let rows = parts.iter().map(|part| part.frame.rows()).sum();
     let members = parts.iter().map(|part| part.frame.member_count()).sum();
     reserved(frame.try_reserve(rows, members))?;
-    for template in 0..blocks.first().map_or(0, Vec::len) {
-        for (part, blocks) in parts.iter().zip(blocks) {
+    let templates = blocks.first().map_or(0, Vec::len);
+    for template in 0..templates {
+        for (part, blocks) in parts.iter_mut().zip(blocks) {
             frame.append(&part.frame, blocks[template].clone(), part.records);
+            if consume && template + 1 == templates {
+                part.frame = Frame::default();
+            }
         }
     }
     Ok(frame)

@@ -172,6 +172,26 @@ pub(crate) struct StoredTable {
     pub(crate) rows: Rows,
 }
 
+/// The `records` and the `content` of the artifact named `name`, encoded
+/// from the run's output whenever the report is serialized, so the report
+/// holds no copy of them (#3870). The artifact entry holds `null` for each.
+#[derive(Clone)]
+pub(crate) struct ArtifactContent {
+    pub(crate) name: String,
+    #[allow(clippy::type_complexity)]
+    pub(crate) encode:
+        Arc<dyn Fn() -> Result<(Arc<RawValue>, Arc<RawValue>), Error> + Send + Sync>,
+}
+
+impl fmt::Debug for ArtifactContent {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ArtifactContent")
+            .field("name", &self.name)
+            .finish_non_exhaustive()
+    }
+}
+
 /// The report's form of one diagnostic: phase, condition, rule,
 /// paths and context, with `source_span` and `operand_route` only when
 /// recorded, so an absent span stays distinct from a zero-width one.

@@ -11,7 +11,7 @@ use std::collections::TryReserveError;
 
 /// A growable bit vector.
 #[derive(Clone, Debug, Default)]
-pub(super) struct Bits {
+pub(crate) struct Bits {
     words: Vec<u64>,
     len: usize,
 }
@@ -102,7 +102,7 @@ impl Bits {
 
 /// Text in one byte arena; each row lends a slice of it.
 #[derive(Clone, Debug, Default)]
-pub(super) struct Strings {
+pub(crate) struct Strings {
     spans: Vec<(usize, usize)>,
     bytes: String,
 }
@@ -149,7 +149,7 @@ impl Strings {
 /// One value per row. A typed buffer holds every present value in one closed
 /// type; the first value of another type turns the buffer mixed.
 #[derive(Clone, Debug)]
-pub(super) enum Values {
+pub(crate) enum Values {
     /// Every row is missing.
     Missing(usize),
     Int(Vec<i64>, Bits),
@@ -168,7 +168,7 @@ impl Default for Values {
 }
 
 impl Values {
-    pub(super) fn missing(len: usize) -> Self {
+    pub(crate) fn missing(len: usize) -> Self {
         Self::Missing(len)
     }
 
@@ -214,7 +214,7 @@ impl Values {
         values
     }
 
-    pub(super) fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         match self {
             Self::Missing(len) => *len,
             Self::Int(values, _) => values.len(),
@@ -228,7 +228,7 @@ impl Values {
     }
 
     /// Lend one row's value.
-    pub(super) fn get(&self, index: usize) -> ValueRef<'_> {
+    pub(crate) fn get(&self, index: usize) -> ValueRef<'_> {
         match self {
             Self::Missing(len) => {
                 debug_assert!(index < *len);
@@ -281,13 +281,13 @@ impl Values {
     }
 
     /// An owned copy of one row's value.
-    pub(super) fn value(&self, index: usize) -> Value {
+    pub(crate) fn value(&self, index: usize) -> Value {
         own(self.get(index))
     }
 
     /// Append one value, keeping the buffer typed while its present values
     /// share one type.
-    pub(super) fn push(&mut self, value: ValueRef<'_>) {
+    pub(crate) fn push(&mut self, value: ValueRef<'_>) {
         match (&mut *self, value) {
             (Self::Missing(len), ValueRef::Missing) => *len += 1,
             (Self::Missing(len), _) => {
@@ -522,7 +522,7 @@ impl Values {
     }
 
     /// The values at `rows`, in that order.
-    pub(super) fn gather(&self, rows: &[usize]) -> Self {
+    pub(crate) fn gather(&self, rows: &[usize]) -> Self {
         let mut gathered = Self::Missing(0);
         for &row in rows {
             gathered.push(self.get(row));

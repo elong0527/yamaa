@@ -29,7 +29,7 @@ use crate::value::Value;
 use std::ops::Range;
 
 mod aggregates;
-mod buffer;
+pub(crate) mod buffer;
 mod checks;
 mod donor;
 mod eval;
@@ -612,7 +612,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             rows: records.rows(),
         }));
         self.derive(&mut frame, &secondary, records, templates)?;
-        self.finish(&frame, &secondary, records, observer)
+        self.finish(frame, &secondary, records, observer)
     }
 
     /// Build every candidate of the dataset: verify the intermediates over
@@ -666,7 +666,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
     /// checks, then order them into the dataset.
     fn finish<'s>(
         &mut self,
-        frame: &Frame,
+        frame: Frame,
         secondary: &[Table<'s, E>],
         records: &mut Vec<CheckRecord>,
         observer: &mut dyn FnMut(ExecutionEvent),
@@ -678,14 +678,19 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         // A selector hidden by an empty input or a lazy branch must still report
         // its known filter-type refusal before a successful result can publish.
         relations::check_unobserved_filter_types(plan)?;
-        checks::verify_output(self, frame, secondary, records, observer)?;
+        checks::verify_output(self, &frame, secondary, records, observer)?;
         self.poll(super::resolved::Step::Order)?;
-        let order = checks::output_order(plan, frame);
-        let mut rows = Vec::new();
-        reserved(rows.try_reserve_exact(order.len()))?;
-        rows.extend(order.iter().map(|&row| frame.row_values(row)));
+        let order = checks::output_order(plan, &frame);
+        let rows = order.len();
+        // The frame becomes the dataset a column at a time, so the run never
+        // holds its candidates and its output whole at once (#3870).
+        let columns = reserved(frame.into_columns(&order))?;
         Ok(Execution {
-            dataset: Dataset::from_rows(plan.region(RegionId::DATASET).output.clone(), rows),
+            dataset: Dataset::from_columns(
+                plan.region(RegionId::DATASET).output.clone(),
+                columns,
+                rows,
+            ),
             verifications: std::mem::take(records),
             partition_rows: self.output_partition,
         })
