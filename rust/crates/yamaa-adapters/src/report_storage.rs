@@ -718,7 +718,7 @@ mod tests {
             r#"[[{"type":"float","value":"8000000000000000"},{"type":"missing","value":null}]]"#;
         let rows: Arc<RawValue> = Arc::from(RawValue::from_string(raw.to_owned()).unwrap());
         let first = StoredReport::with_tables(
-            crate::json!({"nodes":[{}],"tables":[],"artifacts":[{"path":"out.csv"}]}),
+            crate::json!({"nodes":[{"diagnostics":[]}],"tables":[],"artifacts":[{"path":"out.csv"}]}),
             vec![StoredTable {
                 metadata: crate::json!({"name":"ROOT","rows":null}),
                 rows: Rows::Encoded(Arc::clone(&rows)),
