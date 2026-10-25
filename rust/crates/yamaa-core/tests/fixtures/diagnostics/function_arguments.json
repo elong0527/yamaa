@@ -1,5 +1,5 @@
 {
-  "about": "What `invalid_function_argument` names when a call's argument is written as a value the engine cannot run with (FUNC-5): the `argument`, and in `value` the text it is written as, null when it is no scalar text, while a fault of the call's own shape names no argument. `called` derives VALUE with a call of the project function id, the integer identity of a project whose function file implements it in Python. A `DATE` or `DATETIME` literal whose text names no day or second fails the grammar before the call reads it, so no specification reaches those two causes, and their cases read the finding a call's decoding makes.",
+  "about": "What `invalid_function_argument` names when a call's argument is written as a value the engine cannot run with (FUNC-5): the `argument`, and in `value` the text it is written as, null when it is no scalar text, while a fault of the call's own shape names no argument. `called` derives VALUE with a call of the project function id, the integer identity of a project whose function file implements it in Python. An integer past the 64-bit range is the third row of `projects.json::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`. A `DATE` or `DATETIME` literal whose text names no day or second fails the grammar before the call reads it, so no specification reaches those two causes, and their cases read the finding a call's decoding makes.",
   "documents": {
     "called": {
       "yamaa": "1.0",
@@ -15,16 +15,6 @@
     }
   },
   "cases": [
-    {
-      "case": "a_call_argument_past_the_int_range_names_its_argument_and_its_written_value",
-      "operation": "prepare_in",
-      "input": {
-        "base": "called",
-        "edits": [{"set": ["columns", "1", "derivation", "value", "function", "args", "x"], "to": 9223372036854775808}],
-        "project": {"language": "python", "functions": {"id": {"python": "project.id"}}}
-      },
-      "issues": [{"phase": "validation", "condition": "invalid_function_argument", "rule": "FUNC-5", "spec_paths": ["columns.VALUE.derivation.function.args.x"], "context": {"function": "id", "argument": "x", "cause": "integer_range", "value": "9223372036854775808"}}]
-    },
     {
       "case": "a_call_argument_that_is_no_scalar_names_its_argument_and_no_written_value",
       "operation": "prepare_in",

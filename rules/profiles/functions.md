@@ -161,7 +161,7 @@ and a required parameter declares no `default`. Parameter types are the
 matches its declared exact type, with no implicit conversion.
 
 Fails: `invalid_function_argument`.
-Evidence: `negative-function-contract`, `rust/crates/yamaa-core/tests/project_function_invocation.rs::shared_function_invocation_vectors`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`.
+Evidence: `negative-function-contract`, `rust/crates/yamaa-core/tests/project_function_invocation.rs::shared_function_invocation_vectors`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/function_arguments.json::a_call_argument_that_is_no_scalar_names_its_argument_and_no_written_value`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/function_arguments.json::a_call_argument_that_names_no_day_names_its_argument_and_its_written_date`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/runtime.json::an_argument_of_another_type_than_its_parameter_is_invalid`.
 
 The function-only `bool` introduces neither Boolean columns nor Boolean
 derivation results. There is no `int`-to-`float` widening, and
