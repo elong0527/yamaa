@@ -3,11 +3,12 @@ use std::{fs, io, path::Path, sync::Arc};
 use yamaa_core::resolver::{Captured, Failure, Located, Name, Resolver};
 use yamaa_core::resource::ResourceFailure;
 
-/// Metadata files resolve beside their declaring file, named by their
-/// canonical path without a removable Windows verbatim prefix, as the file
-/// resolver names them (`canonical_path::canonicalize`); input paths stay as
-/// written. A located file is read at its canonical path. A file that cannot
-/// be located is missing; a file that cannot be read keeps its error.
+/// Metadata files resolve beside their declaring file, named as the file
+/// resolver names them: by their canonical path without a removable Windows
+/// verbatim prefix (`canonical_path::canonicalize`), with forward slashes;
+/// input paths stay as written. A located file is read at its canonical path.
+/// A file that cannot be located is missing; a file that cannot be read keeps
+/// its error.
 pub struct Files;
 impl Resolver for Files {
     type Error = io::Error;
@@ -21,7 +22,7 @@ impl Resolver for Files {
         let candidate = Path::new(declaring).parent().unwrap().join(written);
         let identity = yamaa_adapters::canonical_path::canonicalize(&candidate)?;
         Ok(Located {
-            identity: identity.to_str().unwrap().into(),
+            identity: identity.to_str().unwrap().replace('\\', "/"),
             display_path: candidate.to_str().unwrap().into(),
         })
     }
