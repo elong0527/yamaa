@@ -104,7 +104,7 @@ class FindingsTests(unittest.TestCase):
             ),
             (
                 log(spelling, status="1 NOTE"),
-                "Possibly misspelled words in DESCRIPTION:",
+                "Yamaa (2:8)",
             ),
             (
                 log(
@@ -148,6 +148,27 @@ class FindingsTests(unittest.TestCase):
             with self.subTest(problem=problem):
                 problems = check_r.unexpected(text)
                 self.assertTrue(any(problem in line for line in problems), problems)
+
+    def test_description_spelling_accepts_only_the_explained_model_acronyms(self):
+        # The log parser must keep an unknown spelling fatal beside explained
+        # standard model names, without needing R or aspell to run the check.
+        for label, extra, expected in (
+            ("standard model names", "", []),
+            (
+                "an unknown spelling beside the model names",
+                "  SDTMM (17:4)\n",
+                ["NOTE: checking CRAN incoming feasibility: SDTMM (17:4)"],
+            ),
+        ):
+            text = HEAD.replace(
+                "Size of tarball",
+                "Possibly misspelled words in DESCRIPTION:\n"
+                "  ADaM (16:26)\n  SDTM (15:63, 18:7)\n" + extra + "\nSize of tarball",
+            )
+            with self.subTest(case=label):
+                self.assertEqual(
+                    check_r.unexpected(log(text, status="1 NOTE")), expected
+                )
 
     def test_a_missing_checkbashisms_is_the_one_tolerated_warning(self):
         text = log(HEAD, BASHISMS, status="1 WARNING, 1 NOTE")
