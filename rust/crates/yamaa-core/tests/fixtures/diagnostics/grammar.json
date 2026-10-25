@@ -1,5 +1,5 @@
 {
-  "about": "The refusals of an expression's text, which an expression field, an aggregate and a predicate share: a syntax error (FORMULA-1), a refused construct (FORMULA-27), a refused or misused function (FORMULA-13), a nested reduction (FORMULA-21), a predicate's escape and pattern refusals (FORMULA-7, FORMULA-8) and an integer literal outside the 64-bit range (VALUE-5). A refused predicate also names its text as the predicate and its position; five of its cases compare the fields their table compared.",
+  "about": "The refusals of an expression's text, which an expression field, an aggregate and a predicate share: a syntax error (FORMULA-1), a refused construct (FORMULA-27), a refused or misused function (FORMULA-13), a nested reduction (FORMULA-21), a predicate's escape and pattern refusals (FORMULA-7, FORMULA-8) and an integer literal outside the 64-bit range (VALUE-5), checked once the whole text parses and wherever it is written, its sign included. A literal at either end of the range, and any float literal, is admitted, which a case states with no issue. A refused predicate also names its text as the predicate and its position in characters; seven of its cases compare the fields their table compared.",
   "cases": [
     {
       "case": "an_incomplete_derivation_is_an_invalid_expression",
@@ -83,6 +83,98 @@
       "operation": "expression_refusal",
       "input": {"field": "predicate", "expression": "A = 9223372036854775808", "path": "filter"},
       "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["filter"], "context": {"expr": "A = 9223372036854775808", "predicate": "A = 9223372036854775808", "position": 4, "value": "9223372036854775808", "actual": 9223372036854775808, "minimum": -9223372036854775808, "maximum": 9223372036854775807}}]
+    },
+    {
+      "case": "a_predicate_admits_the_smallest_int_written_with_its_sign",
+      "operation": "expression_refusal",
+      "input": {"field": "predicate", "expression": "X = -9223372036854775808", "path": "filter"},
+      "issues": []
+    },
+    {
+      "case": "a_predicate_admits_the_largest_int_written_with_a_plus_sign",
+      "operation": "expression_refusal",
+      "input": {"field": "predicate", "expression": "X = +9223372036854775807", "path": "filter"},
+      "issues": []
+    },
+    {
+      "case": "a_predicate_admits_the_largest_int_written_after_leading_zeros",
+      "operation": "expression_refusal",
+      "input": {"field": "predicate", "expression": "X = 0009223372036854775807", "path": "filter"},
+      "issues": []
+    },
+    {
+      "case": "a_predicate_admits_both_int_bounds_in_one_list",
+      "operation": "expression_refusal",
+      "input": {"field": "predicate", "expression": "X IN (-9223372036854775808, 9223372036854775807)", "path": "filter"},
+      "issues": []
+    },
+    {
+      "case": "a_predicate_admits_a_float_literal_past_the_int_range",
+      "operation": "expression_refusal",
+      "input": {"field": "predicate", "expression": "X = 9223372036854775808.0", "path": "filter"},
+      "issues": []
+    },
+    {
+      "case": "a_predicate_admits_a_float_literal_past_the_float_range",
+      "operation": "expression_refusal",
+      "input": {"field": "predicate", "expression": "X = 1e309", "path": "filter"},
+      "issues": []
+    },
+    {
+      "case": "an_integer_literal_below_the_64_bit_range_keeps_its_sign",
+      "operation": "expression_refusal",
+      "input": {"field": "predicate", "expression": "X = -9223372036854775809", "path": "filter"},
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["filter"], "context": {"expr": "X = -9223372036854775809", "predicate": "X = -9223372036854775809", "position": 4, "value": "-9223372036854775809", "actual": -9223372036854775809, "minimum": -9223372036854775808, "maximum": 9223372036854775807}}]
+    },
+    {
+      "case": "an_integer_literal_past_the_range_behind_false_and_keeps_its_plus_sign",
+      "operation": "expression_refusal",
+      "input": {"field": "predicate", "expression": "FALSE AND X IN (1, +9223372036854775808)", "path": "filter"},
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["filter"], "context": {"expr": "FALSE AND X IN (1, +9223372036854775808)", "predicate": "FALSE AND X IN (1, +9223372036854775808)", "position": 19, "value": "+9223372036854775808", "actual": 9223372036854775808, "minimum": -9223372036854775808, "maximum": 9223372036854775807}}]
+    },
+    {
+      "case": "an_integer_literal_past_the_range_after_an_emoji_counts_its_position_in_characters",
+      "operation": "expression_refusal",
+      "input": {"field": "predicate", "expression": "'😀' = -9223372036854775809", "path": "filter"},
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["filter"], "context": {"expr": "'😀' = -9223372036854775809", "predicate": "'😀' = -9223372036854775809", "position": 6, "value": "-9223372036854775809", "actual": -9223372036854775809, "minimum": -9223372036854775808, "maximum": 9223372036854775807}}]
+    },
+    {
+      "case": "an_integer_literal_of_31_digits_in_a_between_bound_fails_before_data",
+      "operation": "expression_refusal",
+      "input": {"field": "predicate", "expression": "X BETWEEN 0 AND 9999999999999999999999999999999", "path": "filter"},
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["filter"], "context": {"expr": "X BETWEEN 0 AND 9999999999999999999999999999999", "predicate": "X BETWEEN 0 AND 9999999999999999999999999999999", "position": 16, "value": "9999999999999999999999999999999", "actual": 9999999999999999999999999999999, "minimum": -9223372036854775808, "maximum": 9223372036854775807}}]
+    },
+    {
+      "case": "an_integer_literal_past_the_range_before_a_dangling_and_is_a_syntax_error",
+      "operation": "expression_refusal",
+      "input": {"field": "predicate", "expression": "X = 9223372036854775808 AND", "path": "filter"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.predicate", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["filter"], "context": {"predicate": "X = 9223372036854775808 AND"}}]
+    },
+    {
+      "case": "a_comparison_left_incomplete_behind_false_and_is_a_syntax_error",
+      "operation": "expression_refusal",
+      "input": {"field": "predicate", "expression": "FALSE AND X =", "path": "site"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.predicate", "source_span", "operand_route"],
+      "issues": [{"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["site"], "context": {"predicate": "FALSE AND X ="}}]
+    },
+    {
+      "case": "an_integer_literal_past_the_range_behind_false_and_fails_before_data",
+      "operation": "expression_refusal",
+      "input": {"field": "predicate", "expression": "FALSE AND X = 9223372036854775808", "path": "site"},
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["site"], "context": {"expr": "FALSE AND X = 9223372036854775808", "predicate": "FALSE AND X = 9223372036854775808", "position": 14, "value": "9223372036854775808", "actual": 9223372036854775808, "minimum": -9223372036854775808, "maximum": 9223372036854775807}}]
+    },
+    {
+      "case": "a_retired_round_call_after_another_call_is_a_prohibited_function_naming_its_replacement",
+      "operation": "expression_refusal",
+      "input": {"field": "derivation", "expression": "SQRT(A) + ROUND(B)", "path": "spec"},
+      "issues": [{"phase": "validation", "condition": "prohibited_function", "rule": "FORMULA-13", "spec_paths": ["spec"], "context": {"expr": "SQRT(A) + ROUND(B)", "function": "ROUND", "hint": "use the round_half_away_from_zero operation"}}]
+    },
+    {
+      "case": "a_retired_round_call_after_a_name_is_a_prohibited_function_naming_its_replacement",
+      "operation": "expression_refusal",
+      "input": {"field": "derivation", "expression": "A + ROUND(B)", "path": "spec"},
+      "issues": [{"phase": "validation", "condition": "prohibited_function", "rule": "FORMULA-13", "spec_paths": ["spec"], "context": {"expr": "A + ROUND(B)", "function": "ROUND", "hint": "use the round_half_away_from_zero operation"}}]
     }
   ]
 }
