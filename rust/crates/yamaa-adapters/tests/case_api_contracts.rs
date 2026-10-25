@@ -252,14 +252,23 @@ fn lookup_model_keeps_first_findings_and_successful_save_returns() {
 /// each specification once, for the default host. This seam makes the R
 /// calls those tests made: the check and the build publish nothing, each
 /// operation a case names reports its rows, and a save returns `Ok(true)` and
-/// writes the bytes its case states.
+/// writes the bytes its case states. The lookup-placeholder case moved from
+/// the two-host check family to `completed_intermediates.json` keeps its R
+/// build here; Q2 removes only its old check finding (#3805).
 #[test]
 fn moved_two_host_families_keep_their_r_host_calls() {
-    const FAMILIES: [&str; 2] = ["case_item_order.json", "check_output_validation.json"];
-    let mut counts = [0; 2];
+    const SELECTED: [&str; 3] = [
+        "case_item_order.json",
+        "check_output_validation.json",
+        "completed_intermediates.json::a_lookup_placeholder_of_another_lookup_s_field_is_typed",
+    ];
+    let mut counts = [0; 3];
     for case in replay::cases() {
         let family = case.label.split_once("::").unwrap().0;
-        let Some(index) = FAMILIES.iter().position(|name| *name == family) else {
+        let Some(index) = SELECTED
+            .iter()
+            .position(|name| *name == family || *name == case.label)
+        else {
             continue;
         };
         counts[index] += 1;
@@ -302,7 +311,7 @@ fn moved_two_host_families_keep_their_r_host_calls() {
     }
     assert_eq!(
         counts,
-        [10, 67],
+        [10, 67, 1],
         "every moved two-host case makes its R calls"
     );
 }
