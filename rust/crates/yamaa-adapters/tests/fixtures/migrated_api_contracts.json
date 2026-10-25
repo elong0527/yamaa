@@ -94,7 +94,7 @@
     "completed_intermediates.json::a_case_numeric_choice_checks_clean_as_integer_days": {"route": "check", "save": null},
     "completed_intermediates.json::a_case_numeric_choice_shifts_by_a_selected_integer": {"route": "domain", "save": true},
     "completed_intermediates.json::a_case_numeric_choice_refuses_a_selected_float_as_days": {"route": "domain", "save": null},
-    "completed_intermediates.json::nullif_over_an_int_and_a_float_checks_clean_as_integer_days": {"route": "check", "save": null},
+    "completed_intermediates.json::nullif_over_an_int_and_a_float_is_refused_as_integer_days_before_data": {"route": "check", "save": null},
     "completed_intermediates.json::nullif_over_an_int_and_a_float_is_refused_as_integer_days_when_bound": {"route": "domain", "save": null},
     "completed_intermediates.json::nullif_of_an_int_and_a_float_column_checks_clean": {"route": "check", "save": null},
     "completed_intermediates.json::nullif_widens_its_int_result_when_the_float_argument_is_missing": {"route": "domain", "save": true},

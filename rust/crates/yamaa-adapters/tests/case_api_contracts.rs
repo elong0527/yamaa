@@ -181,10 +181,10 @@ fn migrated_check_families_keep_first_issues_subsequences_and_both_hosts() {
     }
     assert_eq!(
         counts,
-        [177, 237, 18, 87],
+        [176, 237, 18, 87],
         "every migrated case retains its API contract"
     );
-    assert_eq!((subsequences, first_issues, executions), (12, 162, 606));
+    assert_eq!((subsequences, first_issues, executions), (12, 162, 605));
 }
 
 #[test]
