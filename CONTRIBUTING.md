@@ -990,7 +990,9 @@ installation, the examples and the tests (`--extra-arch`), the last two under
 valgrind's memcheck (`--use-valgrind`), without `--as-cran`, which would turn
 `--extra-arch` off and report every example as slow. It fails on any output of
 the examples or a test where memcheck counted an error, which it prints whole,
-or did not run. Remote checks (CRAN's
+or did not run; it adds `--errors-for-leak-kinds=definite,indirect` to the
+image's `VALGRIND_OPTS`, so a "possibly lost" block, which Rust's
+process-lifetime state shows at every exit, is printed but not counted. Remote checks (CRAN's
 package index, URLs and the clock) stay off unless the caller sets
 `_R_CHECK_CRAN_INCOMING_REMOTE_` or `_R_CHECK_SYSTEM_CLOCK_`. The PDF and
 HTML manuals, which need LaTeX and HTML Tidy, stay out (`--no-manual`)

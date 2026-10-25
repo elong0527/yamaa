@@ -359,16 +359,20 @@ class FakeCheckTests(unittest.TestCase):
         check_log=None,
         ignore_vignettes=False,
         valgrind=False,
+        environment=None,
     ):
         """Run check() against a fake R CMD check that writes `outputs`, by
         path below yamaa.Rcheck, and `check_log` or a log with the explained
-        note as its 00check.log, and exits with `returncode`."""
+        note as its 00check.log, and exits with `returncode`. The check's
+        environment starts from `environment`, and the one that R CMD check
+        received is kept as self.environment."""
         commands = []
         # Each check needs a work directory of its own.
         work = Path(tempfile.mkdtemp(dir=self.root)) / "check"
 
         def fake_run(command, cwd, env, check):
             commands.append((command, check))
+            self.environment = env
             directory = Path(cwd) / "yamaa.Rcheck"
             (directory / "tests").mkdir(parents=True)
             for name, text in outputs.items():
@@ -380,7 +384,9 @@ class FakeCheckTests(unittest.TestCase):
 
         printed = io.StringIO()
         with (
-            mock.patch.object(check_r, "check_environment", return_value={}),
+            mock.patch.object(
+                check_r, "check_environment", return_value=dict(environment or {})
+            ),
             mock.patch.object(check_r, "has_checkbashisms", return_value=True),
             mock.patch.object(
                 check_r.subprocess, "check_output", return_value="revision\n"
@@ -626,6 +632,41 @@ class ValgrindTests(FakeCheckTests):
             str(self.archive.resolve()),
         ]
         self.assertEqual((commands, failure), ([(command, False)], None))
+
+    def test_memcheck_counts_only_definite_and_indirect_leaks(self):
+        # The seam is the environment that R CMD check passes to valgrind,
+        # which counts the errors itself: the image's options stay, and the
+        # leak kinds that count come last, so they win.
+        image = "--track-origins=yes --leak-check=full"
+        for label, valgrind, environment, expected in (
+            (
+                "the image's options",
+                True,
+                {"VALGRIND_OPTS": image},
+                {"VALGRIND_OPTS": f"{image} --errors-for-leak-kinds=definite,indirect"},
+            ),
+            (
+                "no options",
+                True,
+                {},
+                {"VALGRIND_OPTS": "--errors-for-leak-kinds=definite,indirect"},
+            ),
+            (
+                "a check without valgrind",
+                False,
+                {"VALGRIND_OPTS": image},
+                {"VALGRIND_OPTS": image},
+            ),
+        ):
+            with self.subTest(case=label):
+                self.run_check(
+                    0,
+                    {"tests/lint.Rout": MEMCHECK_CLEAN},
+                    check_log=RUNTIME_LOG if valgrind else None,
+                    valgrind=valgrind,
+                    environment=environment,
+                )
+                self.assertEqual(self.environment, expected, label)
 
     def test_each_output_must_hold_a_memcheck_summary_with_no_error(self):
         examples = f"> library(yamaa)\n{MEMCHECK_CLEAN}"

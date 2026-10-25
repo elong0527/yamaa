@@ -18,10 +18,11 @@ builders installed. Other checks continue to validate and rebuild vignettes.
 With --valgrind it runs CRAN's valgrind check instead, as R-hub's valgrind
 image does: only the checks that run the package (--extra-arch), its
 installation, examples and tests, with the examples and each test under
-valgrind's memcheck (--use-valgrind) and the options of VALGRIND_OPTS. It
-leaves out --as-cran, which turns --extra-arch off and reports every example
-slower than five seconds, as each is under valgrind. The output of the
-examples and of each test must hold memcheck's summary, with no error.
+valgrind's memcheck (--use-valgrind) and the options of VALGRIND_OPTS, to
+which it adds MEMCHECK_LEAK_ERRORS. It leaves out --as-cran, which turns
+--extra-arch off and reports every example slower than five seconds, as each
+is under valgrind. The output of the examples and of each test must hold
+memcheck's summary, with no error.
 
     python -m tools.commands.check_r --archive <yamaa_X.Y.Z.tar.gz> --work-dir <new dir> [--manual] [--ignore-vignettes]
     python -m tools.commands.check_r --archive <yamaa_X.Y.Z.tar.gz> --work-dir <new dir> --valgrind
@@ -126,11 +127,20 @@ SANITIZER_REPORT = re.compile(
 # examples and each test file.
 SANITIZER_OUTPUTS = ("00install.out", "*-Ex.Rout", "tests/*.Rout", "tests/*.Rout.fail")
 # What memcheck prints as each process under valgrind ends: the errors that it
-# counted, the leaks that --leak-check=full reports among them. In a valgrind
+# counted, the leaks of MEMCHECK_LEAK_ERRORS's kinds among them. In a valgrind
 # check, the output of the examples and of each test must hold this summary,
 # which is absent where valgrind did not run, and count no error.
 MEMCHECK_SUMMARY = re.compile(r"^==\d+== ERROR SUMMARY: (\d+) errors", re.M)
 MEMCHECK_OUTPUTS = ("*-Ex.Rout", "tests/*.Rout", "tests/*.Rout.fail")
+# The leaks that memcheck counts as errors: a block that no pointer reaches
+# (definite), and the blocks reached only from such a block (indirect). Its
+# default also counts a "possibly lost" block, one reached only by a pointer
+# into its middle. Rust's process-lifetime state is reached that way, through
+# a hash table's control bytes or an Arc's data: extendr's ownership map, the
+# current thread's handle and a regex's lazy cache, so memcheck reports them
+# at every exit though nothing is lost. It still prints them, and still counts
+# every memory error.
+MEMCHECK_LEAK_ERRORS = "--errors-for-leak-kinds=definite,indirect"
 COUNTED = ("ERROR", "WARNING", "NOTE")
 STATUSES = (*COUNTED, "INFO", "OK", "SKIPPED", "NONE")
 HEADER = re.compile(r"^\* checking (?P<check>.+?) \.\.\.(?P<rest>.*)$")
@@ -384,6 +394,11 @@ def check(
     )
     (work / "source-revision.txt").write_text(revision, encoding="utf-8")
     environment = check_environment(environment)
+    if valgrind:
+        # valgrind reads VALGRIND_OPTS itself, and the last of an option wins.
+        environment["VALGRIND_OPTS"] = " ".join(
+            filter(None, (environment.get("VALGRIND_OPTS"), MEMCHECK_LEAK_ERRORS))
+        )
     # Every test file runs, so one failing file does not hide the others.
     # Without `manual`, R leaves out the PDF and HTML manuals. With
     # `valgrind`, R runs only the installation, the examples and the tests.
