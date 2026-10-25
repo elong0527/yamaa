@@ -21,7 +21,7 @@ adding a keyword takes one complete registry entry. An unknown keyword or an
 unknown payload field fails validation, and an unsatisfied semantic constraint
 of an operation fails.
 
-Evidence: `schema-expressions`, `rust/crates/yamaa-core/tests/schema_validation.rs::registry_and_bare_derivation_diagnostics_preserve_paths_and_context`.
+Evidence: `schema-expressions`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_registry_value_naming_no_keyword_declares_no_operation`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_registry_value_naming_a_keyword_the_registry_lacks_is_an_unknown_operation`.
 
 `schema_expression_*.yaml` contribute the entries of the `expressions`
 registry under [Schema language](reference/schema-language.md), and
@@ -183,7 +183,7 @@ Boolean or null is a literal. A forgotten quote therefore fails validation as
 an unknown name. A value field holds a constant, and its bare text is text.
 
 Fails: `unknown_field`, `redundant_long_form`.
-Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::text_holding_one_literal_lowers_to_it_and_other_text_to_a_formula`, `schema-shorthand`, `schema-expressions`, `rust/crates/yamaa-core/tests/schema_validation.rs::bare_derivation_strings_are_source_references_never_calls`, `rust/crates/yamaa-core/tests/schema_validation.rs::registry_and_bare_derivation_diagnostics_preserve_paths_and_context`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::text_holding_one_literal_lowers_to_it_and_other_text_to_a_formula`, `schema-shorthand`, `schema-expressions`, `rust/crates/yamaa-core/tests/schema_validation.rs::bare_derivation_strings_are_source_references_never_calls`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_derivation_s_source_long_form_restates_the_bare_string_source`.
 
 Text in an expression field is one expression in the derivation context of
 [FORMULA-27](formulas.md#formula-27): text that holds only a name is a
@@ -239,7 +239,7 @@ whose `when` predicate is `TRUE`, then the `otherwise` value, or missing. A
 `otherwise` item in any other position fails.
 
 Fails: `invalid_field_type`.
-Evidence: `schema-expressions`, `negative-case-otherwise-only`, `rust/crates/yamaa-core/tests/schema_validation.rs::case_otherwise_reports_inside_the_otherwise_member`.
+Evidence: `schema-expressions`, `negative-case-otherwise-only`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::case_otherwise_reports_inside_the_otherwise_member`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/schema.json::a_case_list_without_a_branch_or_with_an_otherwise_before_its_end_is_refused_under_expr_7`.
 
 A malformed `case` fails as `invalid_field_type`, at the `case` when it has no
 `when`/`then` item and at each `otherwise` item that is not the last item.

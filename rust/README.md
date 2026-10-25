@@ -707,10 +707,11 @@ git/path is the distribution route.
 Every adapters or core module the two host crates used before they moved onto
 the facade (24 adapters modules and 11 core modules, counted from the host
 sources on 2026-10-16, less the removed producer-route modules) maps to a facade
-item or is marked internal. The host crates now depend only on the facade and
-use none of these modules directly; the facade itself uses 29 adapters modules
-and 17 core modules, counted from `crates/yamaa/src` after the producer route
-was removed. Any module not listed here is internal by default.
+item or is marked internal. The Python and R bindings depend on the facade and
+`yamaa-boundary`; the command line depends on the facade alone. None uses these
+modules directly. The facade itself uses 29 adapters modules and 17 core
+modules, counted from `crates/yamaa/src` after the producer route was removed.
+Any module not listed here is internal by default.
 
 | Module the hosts used | Facade disposition |
 | --- | --- |

@@ -477,6 +477,9 @@ pub(crate) struct Scanned {
     pub(crate) schema: yamaa_core::table::TableSchema,
     /// The input's records.
     pub(crate) records: usize,
+    /// The record ranges admitted separately by the scan. Decoding a report
+    /// must not combine them into a table with larger text offsets.
+    pub(crate) partitions: Vec<std::ops::Range<usize>>,
     source: SourceDeclaration,
     reader: Reader,
 }
@@ -544,6 +547,7 @@ pub(crate) fn scan_partitions(
     let odm = interpretation == yamaa_core::specification::SourceInterpretation::Odm;
     let mut first = First(None);
     let mut schema = None;
+    let mut admitted = Vec::new();
     let mut partition = 0usize;
     // The checks the whole read makes once the table has decoded, each
     // partition's on its own, and its visit.
@@ -568,6 +572,7 @@ pub(crate) fn scan_partitions(
         }
         match crate::source_ordinal::append_at(source, table, start) {
             Ok(table) => {
+                admitted.push(start..start + table.row_count());
                 if schema.is_none() {
                     schema = Some(table.schema().clone());
                 }
@@ -642,6 +647,7 @@ pub(crate) fn scan_partitions(
     Some(Ok(Scanned {
         schema: schema.expect("a scan reads at least one partition"),
         records,
+        partitions: admitted,
         source: source.clone(),
         reader,
     }))

@@ -34,6 +34,7 @@ macro_rules! fixture {
     };
 }
 
+mod admission;
 mod binding;
 mod declarations;
 mod document;
@@ -48,7 +49,7 @@ mod values;
 type Reader = fn(&str, &Json) -> Option<Vec<Diagnostic>>;
 
 /// Each module's readers, by the operations it names, and its files.
-const MODULES: [(Reader, &[File]); 10] = [
+const MODULES: [(Reader, &[File]); 11] = [
     (document::run, document::FILES),
     (sources::run, sources::FILES),
     (temporal::run, temporal::FILES),
@@ -59,6 +60,7 @@ const MODULES: [(Reader, &[File]); 10] = [
     (declarations::run, declarations::FILES),
     (findings::run, findings::FILES),
     (registry::run, registry::FILES),
+    (admission::run, admission::FILES),
 ];
 
 /// The issues `operation` reports for `input`.
