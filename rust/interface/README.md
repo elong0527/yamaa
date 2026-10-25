@@ -31,8 +31,7 @@ below applying to both hosts.
 
 Each host package builds the facade, adapters, core, boundary and its binding
 crate together with the selected toolchain and lock. No stable Rust ABI is
-required. The boundary's unused `abi` and `client` modules remain temporarily
-for removal in the final step of #3877; no binding links or calls them.
+required.
 
 The IDL owns export names, ordered arguments, defaults, host projections, Rust
 implementation paths, feature names and semantic pairings. The adjacent document

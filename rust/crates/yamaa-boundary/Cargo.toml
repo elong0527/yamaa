@@ -8,8 +8,8 @@ authors.workspace = true
 publish.workspace = true
 autotests = false
 
-# The boundary depends on nothing else in the workspace, and each host
-# binding links it beside the engine (rust/interface/README.md).
+# No dependencies: the boundary depends on nothing in the workspace, and the
+# host bindings link it beside the facade (rust/interface/README.md).
 
 [dev-dependencies]
 # The handshake family decodes the shared host truth,
