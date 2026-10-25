@@ -1,0 +1,69 @@
+{
+  "about": "CSV output precision through the file route's save (CSV-6, OUTPUT-7, OUTPUT-10). output.decimals rounds each float the CSV file writes to that many decimals, half away from zero, and leaves the derivation unrounded: the output table keeps 1.234 and its double 2.468, while the saved file writes 1.23 and 2.47. decimals outside 0 to 18, including one beyond any integer, fail the output as invalid_field_type, and decimals on a Parquet output fail as decimals_not_applicable; a division by zero in a derivation fails first; and a run that fails publishes nothing. Moved from the csv_precision module of table_arrow_table.rs at 55276b420, whose tests ran the prepared specification over the same input and compared the unrounded derivation's bits, the bytes a save writes, or the one issue's condition, with no output and no file. The specification is the tests' SPEC, with the edits of their prepared(precision, path, expression) helper. An output cell is the shortest number that reads back as the bits the test compared, or a value derived the same way: 0.125 and 2.345 doubled are exactly 0.25 and 4.69. No engine output supplied these values.",
+  "documents": {
+    "precision": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: output.csv, columns: [ID, VALUE, DOUBLE], decimals: PRECISION}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n  - {name: DOUBLE, type: float, derivation: 'VALUE + VALUE'}\n"
+  },
+  "cases": [
+    {
+      "case": "two_decimals_round_the_saved_bytes_and_leave_the_output_unrounded",
+      "operation": "save",
+      "input": {"files": {"input.csv": "ID,VALUE\n1,0.125\n2,1.234\n3,2.345\n", "spec.yaml": {"base": "precision", "edits": [{"from": "PRECISION", "to": "2"}]}}, "specification": "spec.yaml"},
+      "issues": [],
+      "output": [
+        ["ID", "VALUE", "DOUBLE"],
+        [1, 0.125, 0.25],
+        [2, 1.234, 2.468],
+        [3, 2.345, 4.69]
+      ],
+      "saved": {"output.csv": "ID,VALUE,DOUBLE\n1,0.13,0.25\n2,1.23,2.47\n3,2.35,4.69\n"}
+    },
+    {
+      "case": "negative_decimals_fail_the_output_and_publish_nothing",
+      "operation": "save",
+      "input": {"files": {"input.csv": "ID,VALUE\n1,0.125\n2,1.234\n3,2.345\n", "spec.yaml": {"base": "precision", "edits": [{"from": "PRECISION", "to": "-1"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition"],
+      "issues": [{"condition": "invalid_field_type"}],
+      "saved": {}
+    },
+    {
+      "case": "decimals_above_eighteen_fail_the_output_and_publish_nothing",
+      "operation": "save",
+      "input": {"files": {"input.csv": "ID,VALUE\n1,0.125\n2,1.234\n3,2.345\n", "spec.yaml": {"base": "precision", "edits": [{"from": "PRECISION", "to": "19"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition"],
+      "issues": [{"condition": "invalid_field_type"}],
+      "saved": {}
+    },
+    {
+      "case": "decimals_beyond_any_integer_fail_the_output_and_publish_nothing",
+      "operation": "save",
+      "input": {"files": {"input.csv": "ID,VALUE\n1,0.125\n2,1.234\n3,2.345\n", "spec.yaml": {"base": "precision", "edits": [{"from": "PRECISION", "to": "999999999999999999999999999999"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition"],
+      "issues": [{"condition": "invalid_field_type"}],
+      "saved": {}
+    },
+    {
+      "case": "decimals_on_a_parquet_output_are_not_applicable_and_publish_nothing",
+      "operation": "save",
+      "input": {"files": {"input.csv": "ID,VALUE\n1,0.125\n2,1.234\n3,2.345\n", "spec.yaml": {"base": "precision", "edits": [{"from": "PRECISION", "to": "2"}, {"from": "output.csv", "to": "output.parquet"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition"],
+      "issues": [{"condition": "decimals_not_applicable"}],
+      "saved": {}
+    },
+    {
+      "case": "a_division_by_zero_precedes_negative_decimals",
+      "operation": "save",
+      "input": {"files": {"input.csv": "ID,VALUE\n1,0.125\n2,1.234\n3,2.345\n", "spec.yaml": {"base": "precision", "edits": [{"from": "PRECISION", "to": "-1"}, {"from": "VALUE + VALUE", "to": "1 / 0"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition"],
+      "issues": [{"condition": "division_by_zero"}],
+      "saved": {}
+    },
+    {
+      "case": "a_division_by_zero_precedes_decimals_above_eighteen",
+      "operation": "save",
+      "input": {"files": {"input.csv": "ID,VALUE\n1,0.125\n2,1.234\n3,2.345\n", "spec.yaml": {"base": "precision", "edits": [{"from": "PRECISION", "to": "19"}, {"from": "VALUE + VALUE", "to": "1 / 0"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition"],
+      "issues": [{"condition": "division_by_zero"}],
+      "saved": {}
+    }
+  ]
+}

@@ -10,8 +10,10 @@ values.
 
 **Variables:**
 
-- `SITEID` would be the site the subject enrolled at, and `AGE` the age in
-  whole years, each taken directly from the received demographics.
+- `SITEID` would identify the site where the subject enrolled. The rejected
+  file produces no output value.
+- `AGE` would give the subject's age in whole years. The rejected file
+  produces no output value.
 
 A study's columns hold text, whole numbers, decimals, dates and date-times;
 none holds a true or false value, so no type can be chosen for the flag
