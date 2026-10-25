@@ -6,7 +6,10 @@
 //! original domain/preparation distinction, output and save results, staged
 //! file preservation and completed bytes across repeated saves.
 use crate::support::diagnostic::{form, operations, replay};
-use std::{collections::BTreeSet, fs};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+};
 use yamaa_adapters::file_application;
 use yamaa_core::{
     diagnostic::Diagnostic, domain_entry::Request, json::Value, project_function::Language,
@@ -241,17 +244,19 @@ fn api_routes() -> Value {
     routes
 }
 
-fn saved_bytes(study: &crate::support::Scratch, expected: &form::Saved, label: &str) {
+fn saved_bytes(
+    study: &crate::support::Scratch,
+    expected: &BTreeMap<String, form::Expected>,
+    label: &str,
+) {
     assert!(!expected.is_empty(), "{label}: authored saved files");
-    for (name, bytes) in expected {
-        let bytes = bytes
-            .as_ref()
-            .unwrap_or_else(|| panic!("{label}: an accepted save retains {name}"));
-        assert_eq!(
-            fs::read(study.join(name)).unwrap(),
-            *bytes,
-            "{label}: saved {name}"
+    for (name, stated) in expected {
+        assert!(
+            *stated != form::Expected::Removed,
+            "{label}: an accepted save retains {name}"
         );
+        let bytes = fs::read(study.join(name)).unwrap();
+        stated.compare(name, Some(&bytes), &format!("{label}: saved"));
     }
 }
 
