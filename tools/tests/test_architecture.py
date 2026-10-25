@@ -17,7 +17,6 @@ MEMBERS = {
     "yamaa-adapters": ("yamaa-core",),
     "yamaa": ("yamaa-adapters", "yamaa-core"),
     "yamaa-boundary": (),
-    "yamaa-engine": ("yamaa", "yamaa-boundary"),
     "yamaa-python": ("yamaa", "yamaa-boundary"),
     "yamaa-r": ("yamaa", "yamaa-boundary"),
     "yamaa-cli": ("yamaa",),
@@ -101,12 +100,6 @@ class ArchitectureTests(unittest.TestCase):
                 '\n[dev-dependencies]\nyamaa = { path = "../yamaa" }\n',
                 "[dev-dependencies] yamaa-boundary depends on yamaa, but the "
                 "boundary depends on nothing else in the workspace",
-            ),
-            (
-                "yamaa-engine",
-                '\n[dev-dependencies]\nyamaa-adapters = { path = "../yamaa-adapters" }\n',
-                "[dev-dependencies] yamaa-engine depends on yamaa-adapters, but the "
-                "engine depends on the facade and the boundary alone",
             ),
             (
                 "yamaa-python",

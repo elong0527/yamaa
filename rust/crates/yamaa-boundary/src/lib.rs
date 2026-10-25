@@ -35,9 +35,9 @@
 //! new boundary version, and an identifier is never reused with another
 //! meaning.
 //!
-//! [`abi`] holds the engine's C ABI, which `rust/crates/yamaa-engine`
-//! implements, and [`client`] its safe client. Both are unused by the
-//! bindings, which call the facade directly, and leave in #3877's next steps.
+//! [`abi`] holds the types of the retired engine C ABI and [`client`] its
+//! safe client. Since both bindings call the facade (D281), nothing uses
+//! either, and both leave next (#3877).
 use std::fmt;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 

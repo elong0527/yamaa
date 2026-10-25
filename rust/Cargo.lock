@@ -1379,14 +1379,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "yamaa-engine"
-version = "1.0.0-rc.1"
-dependencies = [
- "yamaa",
- "yamaa-boundary",
-]
-
-[[package]]
 name = "yamaa-python"
 version = "1.0.0-rc.1"
 dependencies = [
