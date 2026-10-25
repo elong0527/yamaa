@@ -252,6 +252,37 @@ fn admit_page_counts(frame: &framing::Framing<'_>, footer: &Footer) -> Result<()
     Ok(())
 }
 
+/// Refuse a file whose pages share a byte, once one of its page headers would
+/// be presented otherwise: a header holding a value parquet 55's page reader
+/// could not skip (`compact::native_metadata`), or a skipped binary that is
+/// not UTF-8 (`framing::Framing::opaque`). parquet 55 read such a header
+/// rewritten in place in a copy of the held file, and the reader refused the
+/// file if two pages then shared a byte, since parquet 55 could read header
+/// or body bytes that admission never saw. The native reader reads the held
+/// bytes, and keeps the refusal at the same point of the read, so the set of
+/// admitted files does not change (D283, #3878). Written files never overlap
+/// pages, and a file with nothing to present reads as held.
+fn refuse_shared_presented_pages(bytes: &[u8], frame: &framing::Framing<'_>) -> Result<(), Error> {
+    let mut presented = !frame.opaque.is_empty();
+    for page in &frame.pages {
+        let shown = compact::native_metadata(&bytes[page.header.clone()])?;
+        presented |= matches!(shown, std::borrow::Cow::Owned(_));
+    }
+    if !presented {
+        return Ok(());
+    }
+    let mut extents: Vec<_> = frame
+        .pages
+        .iter()
+        .map(|page| (page.header.start, page.body.end))
+        .collect();
+    extents.sort_unstable();
+    if extents.windows(2).any(|pair| pair[1].0 < pair[0].1) {
+        return Err(Error::Malformed);
+    }
+    Ok(())
+}
+
 /// The Arrow schema of the admitted footer `footer`, with the file's embedded
 /// schema `hint` (`conversion`). A hint that nests deeper than the
 /// FlatBuffers verifier's default depth gives none (`metadata::Hint`).
@@ -411,6 +442,7 @@ impl Runs {
                     })
             })
             .collect();
+        refuse_shared_presented_pages(bytes, &frame)?;
         let group_rows = footer.row_groups.iter().try_fold(0usize, |sum, group| {
             sum.checked_add(usize::try_from(group.num_rows).map_err(|_| Error::Malformed)?)
                 .ok_or(Error::Malformed)
@@ -976,10 +1008,11 @@ mod tests {
         assert_eq!(strings(&read(&bytes).unwrap()), [Some("a"), Some("ab")]);
     }
 
-    /// Two row groups whose chunks name the same page each read it, whatever
-    /// unknown fields its header holds: the reader reads the held bytes.
+    /// Two row groups whose chunks name the same page: refused once its header
+    /// would be presented, as parquet 55's path refused it, and read as held
+    /// otherwise (`refuse_shared_presented_pages`).
     #[test]
-    fn chunks_that_name_one_page_each_read_it_whatever_its_header_holds() {
+    fn a_file_whose_chunks_name_one_presented_page_is_malformed() {
         let mut body = progression(0, 1, 2);
         body.extend(progression(1, 0, 2));
         body.extend(b"ab"); // a, ab
@@ -988,7 +1021,7 @@ mod tests {
         let mut unskippable = plain.clone();
         let stop = plain.len() - body.len() - 1;
         unskippable.splice(stop..stop, unskippable_fields(0xaa));
-        for page in [plain, unskippable] {
+        for (page, presented) in [(plain, false), (unskippable, true)] {
             let mut bytes = container(0, 2, 2, 0, &[page]);
             // A second row group, a copy of the first, so its chunk names the
             // same page; the file then declares four rows.
@@ -998,11 +1031,15 @@ mod tests {
             bytes[position - 1] = 8; // num_rows: 4
             bytes[position + 1] = 0x2c; // two row groups
             splice_footer(&mut bytes, trailer - 1..trailer - 1, &group);
-            let decoded = read(&bytes).unwrap();
-            assert_eq!(
-                strings(&decoded),
-                [Some("a"), Some("ab"), Some("a"), Some("ab")]
-            );
+            let decoded = read(&bytes);
+            if presented {
+                assert_eq!(decoded.unwrap_err(), Error::Malformed);
+            } else {
+                assert_eq!(
+                    strings(&decoded.unwrap()),
+                    [Some("a"), Some("ab"), Some("a"), Some("ab")]
+                );
+            }
         }
     }
 
@@ -1078,26 +1115,22 @@ mod tests {
         }
     }
 
-    /// The installed hosts' `parquet-containment` truth: a file whose INT96
-    /// column chunk has a 13-byte `min_value` statistic, where the type's
-    /// statistics hold exactly 12, and a readable file holding the INT64
-    /// values 1 and 2.
-    fn host_containment() -> (Vec<u8>, Vec<u8>) {
+    /// A file of the installed hosts' `parquet-containment` truth: one whose
+    /// INT96 column chunk has a 13-byte `min_value` statistic, where the
+    /// type's statistics hold exactly 12; one whose two row groups name one
+    /// page, whose header holds fields parquet 55 could not skip; and a
+    /// readable file holding the INT64 values 1 and 2.
+    fn host_containment(name: &str) -> Vec<u8> {
         let truth =
             crate::json_wire::decode(include_str!("../../../../tests/host-fixtures/cases.json"))
                 .unwrap();
-        let family = &truth["families"]["parquet-containment"];
-        let bytes = |name: &str| -> Vec<u8> {
-            let hex = family[name]["hex"].as_str().unwrap();
-            (0..hex.len())
-                .step_by(2)
-                .map(|at| u8::from_str_radix(&hex[at..at + 2], 16).unwrap())
-                .collect()
-        };
-        (
-            bytes("long_int96_statistic_parquet"),
-            bytes("readable_parquet"),
-        )
+        let hex = truth["families"]["parquet-containment"][name]["hex"]
+            .as_str()
+            .unwrap();
+        (0..hex.len())
+            .step_by(2)
+            .map(|at| u8::from_str_radix(&hex[at..at + 2], 16).unwrap())
+            .collect()
     }
 
     fn values(decoded: &Decoded) -> &[i64] {
@@ -1114,7 +1147,8 @@ mod tests {
     /// is read, and the readable file reads.
     #[test]
     fn the_host_fixture_int96_statistic_of_thirteen_bytes_is_invalid() {
-        let (long, readable) = host_containment();
+        let long = host_containment("long_int96_statistic_parquet");
+        let readable = host_containment("readable_parquet");
         let frame = framing::admit(&long).unwrap();
         assert_eq!(
             footer::decode(frame.metadata).unwrap_err(),
@@ -1123,6 +1157,24 @@ mod tests {
         for _ in 0..2 {
             assert_eq!(read(&long).unwrap_err(), Error::Malformed);
             assert_eq!(values(&read(&readable).unwrap()), [1, 2]);
+        }
+    }
+
+    /// The hosts' shared page: its footer decodes and its table schema reads,
+    /// so a check binds it, and the read refuses it where the pages are
+    /// compared (`refuse_shared_presented_pages`), however often it is read.
+    #[test]
+    fn the_host_fixture_shared_presented_page_is_invalid_once_read() {
+        let shared = host_containment("shared_presented_page_parquet");
+        let frame = framing::admit(&shared).unwrap();
+        assert!(footer::decode(frame.metadata).is_ok());
+        assert!(table_schema(&shared, false, NATIVE).is_ok());
+        assert_eq!(
+            refuse_shared_presented_pages(&shared, &frame).unwrap_err(),
+            Error::Malformed
+        );
+        for _ in 0..2 {
+            assert_eq!(read(&shared).unwrap_err(), Error::Malformed);
         }
     }
 
