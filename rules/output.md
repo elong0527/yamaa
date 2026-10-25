@@ -195,7 +195,7 @@ value's lifecycle, key validation and verification under
 [Column derivation](columns.md), and after its rows are ordered.
 Rows are not streamed to the target as they are constructed.
 
-Evidence: `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_case_predicates.json::case_predicate_multiplicity_retains_its_complete_report_and_blocks_publication`, `rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs::a_failed_case_predicate_save_preserves_the_existing_target`.
+Evidence: `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/declarative_case_predicates.json::case_predicate_multiplicity_retains_its_complete_report_and_blocks_publication`.
 
 A conversion failure with no `unconvertible` on the result wrapper fails the
 run ([VALUE-3](values.md#value-3)), and no artifact is published; the failed
