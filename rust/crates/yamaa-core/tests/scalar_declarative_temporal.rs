@@ -1,12 +1,13 @@
 //! Scalar contracts: declarative rounding, declarative temporal and
-//! declarative temporal imputation.
+//! declarative temporal imputation. These are the seams the diagnostic
+//! replay cannot reach, each named in its test's first comment: the values
+//! an operation returns, generated sizes and constructor shapes. What the
+//! operations refuse is `registry.json`'s and `temporal.json`'s.
 mod scalar {
     mod declarative_rounding {
-        use yamaa_core::json::Value as JsonValue;
-        use yamaa_core::{
-            dataset::Rounding, diagnostic::ConditionCode, table::ValueRef, value::Value,
-        };
+        use yamaa_core::{dataset::Rounding, table::ValueRef, value::Value};
 
+        /// Seam: rounded values, which no reader returns (core outcome).
         #[test]
         fn declarative_rounding_reuses_independent_numeric_truth_and_missing() {
             for (digits, input, expected) in [
@@ -34,6 +35,8 @@ mod scalar {
             }
         }
 
+        /// Seam: already data, the authored `numeric_rounding.tsv` vectors, whose results are
+        /// rounded values.
         /// Replay the independent exact rounding controls through the one rounding operation.
         #[test]
         fn shared_rounding_vectors() {
@@ -64,6 +67,7 @@ mod scalar {
             }
         }
 
+        /// Seam: bit-exact rounded values at extreme digits.
         /// Extreme digits keep a float result; a rounded overflow normalizes to missing.
         #[test]
         fn extreme_digits_and_values_keep_the_rounding_range_contract() {
@@ -97,6 +101,7 @@ mod scalar {
             }
         }
 
+        /// Seam: the `Rounding::new` shape refusal, which reports no issue, and rounded values.
         #[test]
         fn digits_are_admitted_before_values_and_arbitrary_width_is_not_narrowed() {
             for invalid in ["", "-", "+", "1.0", "false", " 1", "١", "--1"] {
@@ -112,37 +117,6 @@ mod scalar {
                     Ok(Value::float(expected))
                 );
             }
-        }
-
-        #[test]
-        fn nonnumeric_cause_retains_original_source_without_formula_geometry() {
-            let rounding = Rounding::new(
-                "SEX",
-                "columns.RNDVAL.derivation.round_half_away_from_zero",
-                "0",
-            )
-            .unwrap();
-            let error = rounding.apply(ValueRef::Str("F")).unwrap_err();
-            assert_eq!(error.code, ConditionCode::DeclarativeRoundingInput);
-            assert_eq!(error.definition().phase, "validation");
-            assert_eq!(error.definition().condition, "incompatible_input_type");
-            assert_eq!(error.definition().rule, Some("FORMULA-16"));
-            assert_eq!(
-                error.spec_paths,
-                ["columns.RNDVAL.derivation.round_half_away_from_zero.source"]
-            );
-            assert_eq!(
-                error.context,
-                [
-                    ("source".into(), JsonValue::String("SEX".into())),
-                    ("expected".into(), JsonValue::String("numeric".into())),
-                    ("actual".into(), JsonValue::String("str".into())),
-                ]
-                .into()
-            );
-            assert_eq!(error.source_span, None);
-            assert_eq!(error.operand_route, None);
-            assert_eq!(rounding.apply(ValueRef::Missing), Ok(Value::Missing));
         }
     }
 
@@ -171,6 +145,7 @@ mod scalar {
                 other => panic!("{other:?}"),
             }
         }
+        /// Seam: date differences, values no reader returns (core outcome).
         #[test]
         fn whole_calendar_units_preserve_clamped_anniversaries_sign_and_endpoint_rules() {
             for (start, end, unit, bounds, expected) in [
@@ -200,6 +175,7 @@ mod scalar {
                 1
             );
         }
+        /// Seam: study and epoch day values, and the arity refusal (`None`).
         #[test]
         fn study_day_has_no_zero_and_epoch_counts_use_complete_civil_dates() {
             let study = Temporal::new(
@@ -229,6 +205,9 @@ mod scalar {
                 Some(Value::Missing)
             );
         }
+        /// Seam: the constructor's arity and bounds refusals and a missing operand's `Ok(None)`,
+        /// none of them an issue; a text operand's refusal is
+        /// `temporal.json::study_day_refuses_a_date_operand_that_is_text`.
         #[test]
         fn immutable_declarations_reject_invalid_arity_and_bounds_and_retain_typed_operand_facts() {
             assert!(Temporal::new(K::StudyDay, vec!["DATE".into()], "study".into()).is_err());
@@ -248,22 +227,9 @@ mod scalar {
             )
             .unwrap();
             assert_eq!(operation.operand(0, ValueRef::Missing), Some(Ok(None)));
-            let diagnostic = operation
-                .operand(0, ValueRef::Str("2024-01-01"))
-                .unwrap()
-                .unwrap_err();
-            assert_eq!(diagnostic.definition().phase, "validation");
-            assert_eq!(diagnostic.definition().condition, "incompatible_input_type");
-            assert_eq!(diagnostic.definition().rule, Some("TIME-1"));
-            assert_eq!(
-                diagnostic.spec_paths,
-                ["columns.DTHDY.derivation.study_day.date"]
-            );
-            assert_eq!(diagnostic.context.len(), 3);
-            assert_eq!(diagnostic.source_span, None);
-            assert_eq!(diagnostic.operand_route, None);
         }
 
+        /// Seam: a generated 200,000-character source name and an operand index past the operands.
         #[test]
         fn temporal_metadata_is_complete_and_operand_indexes_stay_validated() {
             let huge = "x".repeat(200_000);
@@ -334,6 +300,7 @@ mod scalar {
         fn word(text: &str) -> S {
             S::Value(Value::Str(text.into()))
         }
+        /// Seam: completed dates, their collected precision and flags, values no reader returns.
         #[test]
         fn independent_partial_dates_preserve_precision_and_calendar_bound_intervals() {
             let first = operation(date_policy_kind(P::Year, D::Position("first")), false, None);
@@ -504,6 +471,7 @@ mod scalar {
             assert_eq!(date.collected_precision(), completed.collected_precision());
             (result, crossed)
         }
+        /// Seam: bounded dates, values no reader returns.
         #[test]
         fn upper_bound_moves_only_supplied_components_within_the_collected_interval() {
             let last = bounded(false, true, D::Position("last"));
@@ -542,6 +510,7 @@ mod scalar {
                 (Value::Date("2025-03-01".parse().unwrap()), false)
             );
         }
+        /// Seam: bounded dates and the crossed-bounds flag.
         #[test]
         fn paired_bounds_keep_a_completion_between_them_and_crossed_bounds_give_not_after() {
             let both = bounded(true, true, D::Number("15"));
@@ -585,6 +554,7 @@ mod scalar {
             assert!(both.counts_crossed_bounds());
             assert!(!lower_only.counts_crossed_bounds());
         }
+        /// Seam: bounded datetimes and the crossed-bounds flag.
         #[test]
         fn datetime_bounds_move_only_supplied_time_fields() {
             let op = Imputation::new(
@@ -666,56 +636,8 @@ mod scalar {
                 )))
             );
         }
-        #[test]
-        fn a_non_date_bound_or_fallback_names_its_own_field() {
-            use yamaa_core::json::Value as JsonValue;
-            let both = bounded(true, true, D::Number("15"));
-            for (lower, upper, field, source) in [
-                (
-                    ValueRef::Str("2025-03-01"),
-                    date("2025-03-20"),
-                    "not_before",
-                    "LOW",
-                ),
-                (date("2025-03-01"), ValueRef::Int(20), "not_after", "HIGH"),
-            ] {
-                let S::Bound(completed) = both.source_value(ValueRef::Str("2025-03")).unwrap()
-                else {
-                    panic!("bound")
-                };
-                let error = both.apply_bounds(completed, lower, upper).unwrap_err();
-                assert_eq!(error.definition().condition, "incompatible_input_type");
-                assert_eq!(error.definition().rule, Some("TIME-1"));
-                assert_eq!(
-                    error.spec_paths,
-                    [format!("columns.DATE.derivation.impute.{field}")]
-                );
-                assert_eq!(error.context["source"], JsonValue::String(source.into()));
-                assert_eq!(error.context["expected"], JsonValue::String("date".into()));
-            }
-            let fallback = Imputation::new(
-                K::Impute(completion(T::DateTime, P::Day, None, Some(TimeRule::First))),
-                "SRC.TEXT".into(),
-                None,
-                None,
-                Some("TRTSDT".into()),
-                "columns.DTM.derivation.impute".into(),
-                None,
-            )
-            .unwrap();
-            let error = fallback.fallback_value(date("2025-03-01")).unwrap_err();
-            assert_eq!(error.definition().condition, "incompatible_input_type");
-            assert_eq!(error.spec_paths, ["columns.DTM.derivation.impute.fallback"]);
-            assert_eq!(error.context["source"], JsonValue::String("TRTSDT".into()));
-            assert_eq!(
-                error.context["expected"],
-                JsonValue::String("datetime".into())
-            );
-            assert_eq!(
-                fallback.fallback_value(ValueRef::Missing),
-                Ok(Value::Missing)
-            );
-        }
+        /// Seam: the fallback's value and its collected precision `none`; a fallback of another
+        /// type is `temporal.json::a_datetime_fallback_that_is_a_date_names_its_own_field`.
         #[test]
         fn a_fallback_answers_a_missing_source_with_collected_precision_none() {
             let op = Imputation::new(
@@ -734,6 +656,8 @@ mod scalar {
                 [("source", "SRC.TEXT"), ("fallback", "TRTSDT")]
             );
             assert!(op.has_conditional_operands());
+            // A missing fallback gives missing (TIME-13).
+            assert_eq!(op.fallback_value(ValueRef::Missing), Ok(Value::Missing));
             let Ok(Value::Date(value)) = op.fallback_value(date("2025-01-10")) else {
                 panic!("fallback date")
             };
@@ -759,39 +683,8 @@ mod scalar {
             );
         }
 
-        #[test]
-        fn original_zero_year_month_prefix_retains_both_operation_diagnostics() {
-            use yamaa_core::json::Value as JsonValue;
-            for (kind, name) in [
-                (date_policy_kind(P::Year, D::Position("first")), "impute"),
-                (K::Precision { target: T::Date }, "precision"),
-                (datetime_kind(TimeRule::First), "impute"),
-                (
-                    K::Precision {
-                        target: T::DateTime,
-                    },
-                    "precision",
-                ),
-            ] {
-                let path = format!("columns.DATE.derivation.{name}");
-                let op = Imputation::new(kind, "S".into(), None, None, None, path.clone(), None)
-                    .unwrap();
-                let error = op.source_value(ValueRef::Str("0000-01")).unwrap_err();
-                assert_eq!(error.definition().condition, "invalid_date_text");
-                assert_eq!(error.definition().rule, Some("TIME-13"));
-                assert_eq!(error.spec_paths, [path]);
-                assert_eq!(
-                    error.context,
-                    [
-                        ("operation".into(), JsonValue::String(name.into())),
-                        ("source".into(), JsonValue::String("S".into())),
-                        ("value".into(), JsonValue::String("0000-01".into())),
-                    ]
-                    .into()
-                );
-            }
-        }
-
+        /// Seam: completed datetimes, precision words and converted dates; its type refusals are
+        /// asserted only as refusals.
         #[test]
         fn datetime_edges_precision_and_explicit_date_conversion_are_field_copies() {
             for (rule, expected) in [
@@ -928,6 +821,7 @@ mod scalar {
                 Ok(word("H"))
             );
         }
+        /// Seam: completed datetimes and their collected precision.
         #[test]
         fn partial_dates_complete_to_datetimes_by_the_date_and_time_rules() {
             let op = operation(
@@ -963,6 +857,8 @@ mod scalar {
                 );
             }
         }
+        /// Seam: completed datetimes, precision words, flags and the `invalid` handler's recovery
+        /// step.
         #[test]
         fn reduced_precision_times_receive_only_their_missing_fields() {
             for (input, early, late, collected, name, code) in [
@@ -1089,6 +985,7 @@ mod scalar {
                 }
             }
         }
+        /// Seam: the missing step each reading gives a missing source.
         /// Each reading of collected date text answers a missing source with
         /// missing, never a failure (TIME-13); its refusals are cases of
         /// `tests/fixtures/diagnostics/temporal.json`.
@@ -1115,37 +1012,8 @@ mod scalar {
             }
         }
 
-        #[test]
-        fn calendar_policy_preserves_wide_integers() {
-            use yamaa_core::dataset::DatePolicyError;
-            use yamaa_core::diagnostic::ConditionCode as C;
-            use yamaa_core::json::Value as JsonValue;
-            let wide = "9".repeat(5000);
-            let policy = |month: Option<&str>, day: D<'_>| {
-                completion_policy(T::Date, month, Some(day), None, "date")
-            };
-            let DatePolicyError::Diagnostic(error) =
-                policy(Some(&wide), D::Number("1")).unwrap_err()
-            else {
-                panic!("admitted semantic failure")
-            };
-            assert_eq!(error.code, C::ImputationMonthRange);
-            assert_eq!(
-                error.context["month"],
-                JsonValue::Number((wide.clone()).parse().expect("canonical integer"))
-            );
-            let DatePolicyError::Diagnostic(error) =
-                policy(Some("6"), D::Number(&wide)).unwrap_err()
-            else {
-                panic!("admitted semantic failure")
-            };
-            assert_eq!(error.code, C::ImputationDayRange);
-            assert_eq!(
-                error.context["value"],
-                JsonValue::Number((wide).parse().expect("canonical integer"))
-            );
-        }
-
+        /// Seam: generated 200,000-digit policy fields and the policy's shape refusal, which
+        /// reports no issue.
         #[test]
         fn public_policy_admits_whole_context_before_semantic_copies_or_integer_scans() {
             use yamaa_core::{dataset::DatePolicyError as E, diagnostic::ConditionCode as C};
@@ -1183,6 +1051,7 @@ mod scalar {
             );
         }
 
+        /// Seam: `Imputation::new`'s shape refusals and generated 100,000-character metadata.
         #[test]
         fn constructor_retains_complete_metadata_and_rejects_invalid_shapes() {
             let oversized = "x".repeat(100_000);
