@@ -321,7 +321,7 @@ pub fn specification_value(
             ),
             N::Mapping(items) => {
                 let mut keys = Vec::new();
-                let mut mapping = BTreeMap::new();
+                let mut mapping = yamaa_core::json::Map::new();
                 for &(key, child) in items {
                     let N::Text(key) = &document.nodes()[key] else {
                         return Err(Error::MappingKey);

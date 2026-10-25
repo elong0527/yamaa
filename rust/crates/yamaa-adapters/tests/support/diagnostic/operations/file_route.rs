@@ -31,6 +31,7 @@ use crate::support::diagnostic::{
 use yamaa_core::{domain_entry::Request, json::Value};
 
 pub(super) const FILES: &[File] = &[
+    fixture!("aggregate_key_reads.json"),
     fixture!("aggregate_record_operations.json"),
     fixture!("case_item_order.json"),
     fixture!("check_keyless_donor.json"),
@@ -127,20 +128,12 @@ pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
             (issues, Outcome::default())
         }
         _ => {
-            for name in input.get("built").map_or(&[][..], items) {
-                let built = path(&study, text(name));
-                let mut domain = crate::support::study::domain(
-                    host,
-                    Request {
-                        specification: &built,
-                        environment: project.as_deref(),
-                    },
-                    crate::support::study::identity("diagnostics", &built),
-                )
-                .unwrap_or_else(|issues| panic!("{built} is refused: {issues:?}"));
-                assert!(domain.issues().is_empty(), "{built}: {:?}", domain.issues());
-                assert!(domain.save().unwrap(), "{built} saves");
-            }
+            super::build_first(
+                &study,
+                input.get("built").map_or(&[][..], items),
+                project.as_deref(),
+                host,
+            );
             let saves = operation == "save";
             // The directory as the case staged it, which what the request
             // did is read against, whether it is refused or not.

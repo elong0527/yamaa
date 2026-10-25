@@ -90,7 +90,7 @@ is scalar only when the exact variable appears in the enclosing
 source variable with a scalar `source` fails.
 
 Fails: `ungrouped_driver_field`.
-Evidence: `schema-rows-group-scope`, `schema-column-default-own-record`, `rust/crates/yamaa-adapters/tests/fixtures/source_filter_scope.json`, `rust/crates/yamaa-adapters/tests/execution_grouped_driver_dataset.rs`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/window_drivers.json`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/column_driver_bindings.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_column_reads_a_driver_field_its_grouped_templates_leave_out_only_through_an_aggregate`.
+Evidence: `schema-rows-group-scope`, `schema-column-default-own-record`, `rust/crates/yamaa-adapters/tests/fixtures/source_filter_scope.json`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_row_scopes.json`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/window_drivers.json`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/column_driver_bindings.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_column_reads_a_driver_field_its_grouped_templates_leave_out_only_through_an_aggregate`.
 
 The driver is an input dataset or an eligible named intermediate under
 [ROW-2](rows.md#row-2). A scalar `source` naming a source

@@ -53,6 +53,7 @@ mod project {
                 yamaa_core::application_observer::Phase,
                 yamaa_core::application_observer::Refusal,
             ),
+            Divided(yamaa_core::dataset::Division),
         }
         #[derive(Default)]
         struct Stages(RefCell<Vec<Stage>>);
@@ -65,6 +66,7 @@ mod project {
                     Event::Exit { phase, outcome } => Stage::Exit(phase, outcome),
                     Event::FunctionReturn { stage, outcome } => Stage::Return(stage, outcome),
                     Event::Refusal { phase, refusal } => Stage::Refusal(phase, refusal),
+                    Event::Divided { division, .. } => Stage::Divided(division),
                 });
             }
         }

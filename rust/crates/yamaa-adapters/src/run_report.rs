@@ -11,7 +11,7 @@ use yamaa_core::{
     dataset::{Check, Execution, TemplateRows, VerificationSeverity},
     run_report::{self as core, Facts},
     specification::SourceProfile,
-    table::TableAccess,
+    table::{TableAccess, ValueRef},
     value::{ColumnType, Value as Scalar},
 };
 
@@ -321,7 +321,6 @@ fn handlers(report: &Value) -> Result<Vec<core::Handler>, Error> {
 /// in any partition, so the facts, and the report, are the whole output's.
 fn columns(run: &PreparedRun, execution: &Execution) -> Result<Vec<core::Column>, Error> {
     let dataset = &execution.dataset;
-    let rows = dataset.rows();
     let partitions = execution.output_partitions();
     run.compiled()
         .projection()
@@ -341,20 +340,23 @@ fn columns(run: &PreparedRun, execution: &Execution) -> Result<Vec<core::Column>
                 max_length: text.then_some(0),
             };
             for partition in &partitions {
-                let values = rows[partition.clone()].iter().map(|row| &row[index]);
-                column.missing += values
-                    .clone()
-                    .filter(|value| matches!(value, Scalar::Missing))
-                    .count();
-                column.rows += partition.len();
-                if let Some(longest) = &mut column.max_length {
-                    *longest = values
-                        .filter_map(|value| match value {
-                            Scalar::Str(text) => Some(text.chars().count()),
-                            _ => None,
-                        })
-                        .fold(*longest, usize::max);
+                let values = partition.clone().map(|row| {
+                    dataset
+                        .cell(row, index)
+                        .map_err(|_| Error::InvalidObservation)
+                });
+                for value in values {
+                    match value? {
+                        ValueRef::Missing => column.missing += 1,
+                        ValueRef::Str(text) => {
+                            if let Some(longest) = &mut column.max_length {
+                                *longest = (*longest).max(text.chars().count());
+                            }
+                        }
+                        _ => {}
+                    }
                 }
+                column.rows += partition.len();
             }
             Ok(column)
         })

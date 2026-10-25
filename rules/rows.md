@@ -118,7 +118,7 @@ literals, earlier row-derived columns, or a record lookup with already-complete
 matching values, in dependency order.
 
 Fails: `ungrouped_driver_field`.
-Evidence: `negative-row-window-ungrouped`, `negative-row-ungrouped-second-template`, `rust/crates/yamaa-adapters/tests/fixtures/binding_diagnostics.tsv`, `rust/crates/yamaa-adapters/tests/execution_grouped_driver_dataset.rs`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_grouped_row_reads_a_driver_field_outside_its_group_by_only_through_an_aggregate`.
+Evidence: `negative-row-window-ungrouped`, `negative-row-ungrouped-second-template`, `rust/crates/yamaa-adapters/tests/fixtures/binding_diagnostics.tsv`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/check_row_scopes.json`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/binding.json::a_grouped_row_reads_a_driver_field_outside_its_group_by_only_through_an_aggregate`.
 
 The aggregate reduces the group under
 [Expressions](expressions.md) and
@@ -203,7 +203,7 @@ records; it is required unless `input` declares exactly one dataset, which then
 supplies them.
 
 Fails: `driver_unavailable`.
-Evidence: `sdtm-se-subject-elements`, `schema-window-key-records`, `schema-window-key-odm-records`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::without_row_templates_two_inputs_need_a_base`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::preparation_reports_column_name_key_and_base_refusals_in_that_order`, `rust/crates/yamaa-adapters/tests/execution_no_rows_record_reads.rs`.
+Evidence: `sdtm-se-subject-elements`, `schema-window-key-records`, `schema-window-key-odm-records`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::without_row_templates_two_inputs_need_a_base`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::preparation_reports_column_name_key_and_base_refusals_in_that_order`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/row_scopes.json`.
 
 The key table is standalone: it has one row per unique key combination and no
 link back to the input records. The input records a key combination was

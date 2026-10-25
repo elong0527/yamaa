@@ -134,6 +134,48 @@
     "shared_define.json::unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files": {
       "save": true,
       "absent": ["acrf.pdf", "input"]
+    },
+    "shared_define.json::a_matching_report_composes": {
+      "save": true,
+      "absent": []
+    },
+    "shared_define.json::an_inherited_output_report_compares_the_entry_relative_output_path": {
+      "save": true,
+      "absent": []
+    },
+    "shared_define.json::a_dataset_declared_without_data_whose_report_counts_rows_is_stale": {
+      "save": false,
+      "absent": []
+    },
+    "shared_define.json::a_dataset_not_declared_without_data_whose_report_counts_no_rows_is_stale": {
+      "save": false,
+      "absent": []
+    },
+    "shared_define.json::a_file_that_is_not_a_run_report_is_stale": {
+      "save": false,
+      "absent": []
+    },
+    "shared_define.json::a_declared_report_that_is_absent_fails_as_a_missing_file": {
+      "save": false,
+      "absent": []
+    },
+    "shared_define.json::a_transport_file_never_replaces_a_declared_input": {
+      "save": false,
+      "absent": []
+    },
+    "shared_define.json::a_dataset_declared_without_data_has_no_transport_file_and_no_leaf": {
+      "save": true,
+      "artifacts": ["dm.xpt", "define.xml"],
+      "absent": ["ae.xpt"]
+    },
+    "shared_define.json::a_dataset_without_rows_must_declare_it_has_no_data": {
+      "save": false,
+      "absent": ["dm.xpt"]
+    },
+    "shared_define.json::adam_dataset_json_targets_the_integer_its_document_submits": {
+      "save": true,
+      "artifacts": ["adsl.json", "define.xml"],
+      "absent": []
     }
   },
   "written_paths": [

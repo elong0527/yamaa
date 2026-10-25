@@ -1322,21 +1322,30 @@ as `failed` and includes the refusal's `issues`.
 | YAML nesting depth | 64 |
 | Semantic expression and context nesting depth | 128 |
 
-In a run divided into partitions (`docs/partition-execution.md`), the row and
-cell limits bound each materialized partition of a CSV or Parquet driver input
-that the run reads by partition, which it does when that input is the
-specification's only one and its plan is safe under its partitions,
-consecutive or key-bounded, and each table it reads whole. A run that also
-reads the source of a lookup, join or named relation reads every input whole.
+Every Python, R and command-line build runs over key-bounded partitions
+(`docs/partition-execution.md`, D264): partitions of at most 624,640 driver
+records that never split a group of the specification's first two declared
+keys, such as STUDYID and USUBJID, with the whole-table fallback. The row and
+cell limits then bound one partition where the run divides a table, and the
+whole table everywhere else:
 
-When such a run's driver input is CSV or Parquet and no step of the run needs
-the whole table, its output is admitted a partition at a time too, each
-holding at most as many rows as its largest driver partition, and a CSV or
-Parquet output file is written one partition after another, with the
-whole-table write's bytes, row groups included. A run over a SAS or ODM driver
-input admits its output whole, as it admits that input. The run report is
-admitted and written whole, as is every file of a submission: a SAS Transport
-or Dataset-JSON file states its record count in its header.
+| Table | What the row and cell limits bound |
+| --- | --- |
+| A CSV or Parquet driver input that is the specification's only input, in a run with no step that needs the whole table | Each partition, decoded one at a time |
+| The output of such a run | Each partition, which holds at most as many rows as its largest driver partition; a CSV or Parquet file is written one partition after another, with the whole-table write's bytes, row groups included |
+| The run report | The whole report, built once from every partition's counts |
+| A SAS, ODM or Dataset-JSON input, and its output | The whole table |
+| Every input of a specification that reads more than one, such as the source of a lookup, join or named relation | Each whole table |
+| A run with a step that needs the whole table, which the fallback runs whole | The whole input and output |
+| A submission's SAS Transport or Dataset-JSON file | The whole file, whose header states its record count |
+
+A step needs the whole table when what it reads crosses the partitions: a
+window or aggregate whose grouping omits one of the two keys, a named or
+joined relation, `SELF` rows or a project function. So a run whose steps
+group by subject reads, builds and saves a CSV or Parquet input of any number
+of records, and a run that needs the whole table refuses beyond the limits
+exactly as it does without partitions. A Rust embedder's engine runs every
+build whole unless it sets `EngineOptions::with_partitions`.
 
 A MiB is 1,048,576 bytes; a GiB is 1,073,741,824 bytes. File readers check the
 encoded size before retaining bytes and check growth during reading. A

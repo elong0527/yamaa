@@ -1,7 +1,8 @@
 # Installed public capacity acceptance for the approved longitudinal profile.
-# The profile's size, its value rule and its source and output formats are the
-# `longitudinal-capacity` family of the shared host truth, which the Python
-# `installed_longitudinal_capacity` suite reads too.
+# The profile's size, its value rule, its source and output formats and how a
+# run of it divides its input are the `longitudinal-capacity` family of the
+# shared host truth, which the Python `installed_longitudinal_capacity` suite
+# reads too.
 library(yamaa)
 # The truth is JSON, and jsonlite, which reads it, is a suggested package:
 # where it is not installed, the file is skipped.
@@ -67,6 +68,12 @@ run_longitudinal_capacity <- function() {
     stopifnot_case(label, "the specification checks" = nrow(check(entry)$issues) == 0L)
     built <- run(entry)
     stopifnot_case(label, "the run has no issues" = nrow(built$issues) == 0L)
+    # How the run divided its input, which its measurements name (#3794): the
+    # hosts' default partitions.
+    observed <- jsonlite::fromJSON(
+      yamaa:::.run_observations(built, include_measurements = TRUE), simplifyVector = FALSE)
+    expect_identical(observed$measurements$partitions, truth$partitions,
+      paste(label, "runs over the default partitions"))
     expect_identical(dim(built$output), c(rows, length(names)),
       paste(label, "builds every row and column"))
     expect_identical(names(built$output), names, paste(label, "names its columns"))

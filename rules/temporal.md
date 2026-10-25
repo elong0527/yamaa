@@ -69,7 +69,7 @@ interval or duration fails as [TIME-13](#time-13) states, and other text fails
 as invalid date text.
 
 Fails: `incompatible_input_type`, `invalid_date_text`, `interval_or_duration_text`.
-Evidence: `negative-date-conversion`, `schema-to-date-partial`, `adam-adae-post-dose-window`, `schema-birth-date`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`, `rust/crates/yamaa-adapters/tests/execution_date_text_reads.rs`.
+Evidence: `negative-date-conversion`, `schema-to-date-partial`, `adam-adae-post-dose-window`, `schema-birth-date`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/temporal_imputation.json::to_date_refuses_an_interval_with_its_source_and_row`.
 
 `2025-03-04T08` gives `2025-03-04`, and `2025-03` gives missing. A known date
 before an unknown time gives that date, so `2025-03-04T-:30` gives
@@ -325,7 +325,7 @@ text stops before the first missing part, so a missing day gives `YYYY-MM`
 and a missing year gives missing. Nothing is counted.
 
 Fails: `incompatible_input_type`, `missing_required_field`, `invalid_date_text`.
-Evidence: `sdtm-ae-partial-dates`, `sdtm-mh-ongoing-conditions`, `negative-dtc-month-digits`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json`, `rust/crates/yamaa-adapters/tests/execution_date_text_reads.rs`.
+Evidence: `sdtm-ae-partial-dates`, `sdtm-mh-ongoing-conditions`, `negative-dtc-month-digits`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/temporal.json::a_day_after_a_missing_month_is_never_looked_up`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/temporal.json::an_absence_answer_after_a_missing_month_is_not_counted`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/temporal.json::no_absence_is_reached_when_only_the_row_without_a_month_lacks_a_day_record`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/temporal.json::a_reached_day_with_two_lookup_records_fails_the_run`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/temporal.json::a_reached_day_that_is_not_two_digits_is_refused_with_its_part_and_row`.
 
 The parts are read in order from `year`, and reading stops at the first
 missing part: the parts after it are not read, and the result is the
@@ -446,7 +446,7 @@ position and is rejected where the specification is read, before any data is
 seen.
 
 Fails: `missing_required_field`, `month_out_of_range`, `value_not_permitted`, `invalid_calendar_date`.
-Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_month_rule_without_a_day_rule_fails_at_the_impute`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::an_impute_month_rule_needs_a_day_rule`, `negative-impute-bad-month`, `negative-impute-bad-day`, `negative-impute-day-rule`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::an_impute_month_above_twelve_is_out_of_range`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::an_impute_day_number_above_thirty_one_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::an_impute_day_position_other_than_first_or_last_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::an_impute_that_completes_a_day_past_the_month_end_fails`.
+Evidence: `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/one_spelling.json::an_impute_with_a_month_rule_and_a_day_rule_is_admitted`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/one_spelling.json::an_impute_with_a_day_rule_alone_is_admitted`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/one_spelling.json::an_impute_with_neither_rule_is_admitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/front_end.json::an_impute_month_rule_needs_a_day_rule`, `negative-impute-bad-month`, `negative-impute-bad-day`, `negative-impute-day-rule`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::an_impute_month_above_twelve_is_out_of_range`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::an_impute_day_number_above_thirty_one_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::an_impute_day_position_other_than_first_or_last_is_not_permitted`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json::an_impute_that_completes_a_day_past_the_month_end_fails`.
 
 A `month` without `day` fails as `missing_required_field` at the `impute`,
 naming `day`: a source missing its month also misses its day, so the `month`

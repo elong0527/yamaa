@@ -96,11 +96,18 @@ fn migrated_check_families_keep_first_issues_subsequences_and_both_hosts() {
     let mut counts = [0; 4];
     let (mut subsequences, mut first_issues, mut executions) = (0, 0, 0);
     let mut row_phase_saves = 0;
+    let mut single_routes = 0;
     for mut case in replay::cases() {
         let family = case.label.split_once("::").unwrap().0;
         let Some(index) = FAMILIES.iter().position(|name| *name == family) else {
             continue;
         };
+        // These migrated execution cases called one route at a time;
+        // the two list-operation cases still prove complete call parity.
+        if index == 3 && case.operations.len() == 1 {
+            single_routes += 1;
+            continue;
+        }
         counts[index] += 1;
         // The save cases moved from execution_row_phase_reads.rs keep their
         // route and save results in migrated_api_contracts.json; their tests
@@ -190,7 +197,7 @@ fn migrated_check_families_keep_first_issues_subsequences_and_both_hosts() {
     }
     assert_eq!(
         counts,
-        [176, 237, 33, 87],
+        [176, 237, 33, 89],
         "every migrated case retains its API contract"
     );
     assert_eq!(
@@ -198,6 +205,7 @@ fn migrated_check_families_keep_first_issues_subsequences_and_both_hosts() {
         "the save cases moved from execution_row_phase_reads.rs"
     );
     assert_eq!((subsequences, first_issues, executions), (12, 162, 605));
+    assert_eq!(single_routes, 22, "every moved single-route row-scope case");
 }
 
 #[test]
@@ -405,13 +413,46 @@ fn saved_report_rows(bytes: &[u8], expected: &BTreeMap<String, Vec<Value>>, labe
     }
 }
 
+/// A migrated build case whose original test saved only to read artifacts.
+/// Output bytes come from that test's literal; report rows stay in the replay.
+fn saved_build_artifacts(study: &crate::support::Scratch, case: &replay::Case, expected: &Value) {
+    assert!(
+        case.stated.report.is_some(),
+        "{}: authored report",
+        case.label
+    );
+    assert_eq!(
+        case.operations,
+        ["build"],
+        "{}: build-only replay",
+        case.label
+    );
+    if let Some(report) = expected.get("publishes") {
+        let files = replay::object(replay::field(expected, "saved"));
+        assert!(!files.is_empty(), "{}: authored saved output", case.label);
+        for (name, text) in files {
+            assert_eq!(
+                fs::read(study.join(name)).unwrap(),
+                replay::text(text).as_bytes(),
+                "{}: saved {name}",
+                case.label
+            );
+        }
+        saved_report_rows(
+            &fs::read(study.join(replay::text(report))).unwrap(),
+            case.stated.report.as_ref().unwrap(),
+            &case.label,
+        );
+    }
+}
+
 #[test]
 fn migrated_execution_cases_keep_their_authored_api_contracts() {
     let routes = api_routes();
     let contracts = replay::object(replay::field(&routes, "cases"));
     assert_eq!(
         contracts.len(),
-        641,
+        692,
         "every original API contract is authored"
     );
     let mut seen = BTreeSet::new();
@@ -424,7 +465,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
             continue;
         };
         assert!(seen.insert(case.label.clone()));
-        replay::closed(expected, &["route", "save", "publishes"]);
+        replay::closed(expected, &["route", "save", "publishes", "saved"]);
         let route = replay::text(replay::field(expected, "route"));
         match route {
             "domain" => domains += 1,
@@ -448,20 +489,25 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
             }
             other => panic!("{}: unknown save result {other:?}", case.label),
         };
-        // A build case whose test read back the report its failed save
-        // published states that report's rows, and names its path here.
+        // A build case whose test read a saved report states its rows in
+        // the replay, and names the published file here.
         let publishes = expected.get("publishes").map(replay::text);
         if publishes.is_some() {
             published_reports += 1;
             assert!(
-                save == Some(false)
+                save.is_some()
                     && case.operations == ["build"]
                     && case.stated.report.is_some()
                     && case.stated.saved.is_none(),
-                "{}: a refused build case that states its report's rows publishes it",
+                "{}: a build case that states its saved report's rows publishes it",
                 case.label
             );
         }
+        assert!(
+            expected.get("saved").is_none() || (save == Some(true) && publishes.is_some()),
+            "{}: authored output accompanies an accepted save and report",
+            case.label
+        );
         let host =
             crate::support::host(case.input.get("host").map(replay::text).unwrap_or("python"));
         if route == "check" {
@@ -527,19 +573,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
                         );
                         saved_bytes(&study, expected, &case.label);
                     } else {
-                        // A test that saved only to read its report back
-                        // states the report's rows, and its case builds.
-                        assert!(
-                            case.stated.report.is_some(),
-                            "{}: an authored positive save states its bytes",
-                            case.label
-                        );
-                        assert_eq!(
-                            case.operations,
-                            ["build"],
-                            "{}: the return-value-only case builds without saving in the replay",
-                            case.label
-                        );
+                        saved_build_artifacts(&study, &case, expected);
                     }
                 } else {
                     // A failed build refuses every save alike (CHECK-2): each
@@ -611,13 +645,15 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         contracts.keys().cloned().collect::<BTreeSet<_>>(),
         "every authored API case still exists"
     );
-    assert_eq!((domains, preparation, either, checks), (421, 54, 56, 110));
-    assert_eq!((accepted_saves, refused_saves, no_save), (268, 79, 294));
-    assert_eq!(published_reports, 2, "every published report is authored");
+    assert_eq!((domains, preparation, either, checks), (455, 54, 73, 110));
+    assert_eq!((accepted_saves, refused_saves, no_save), (295, 98, 299));
+    assert_eq!(published_reports, 5, "every published report is authored");
 }
 
 /// Seam: the composition's save return, held artifact order, capture counter
 /// and absent directories are independent of the replay's saved-file delta.
+/// A case's `built` specifications are built and saved first, as the replay's
+/// `define` builds them, and a refused composition plans no file to save.
 #[test]
 fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
     let authored = resource_contracts();
@@ -635,11 +671,17 @@ fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
             &["save", "empty_artifacts", "artifacts", "absent"],
         );
         let study = operations::study(&case.input);
+        let host =
+            crate::support::host(case.input.get("host").map(replay::text).unwrap_or("python"));
+        operations::build_first(
+            &study,
+            case.input.get("built").map_or(&[][..], replay::items),
+            None,
+            host,
+        );
         let staged = operations::state(&study);
         let project = study.identity(replay::text(replay::field(&case.input, "project")));
         let section = operations::section(replay::field(&case.input, "section"));
-        let host =
-            crate::support::host(case.input.get("host").map(replay::text).unwrap_or("python"));
         let mut define = yamaa_adapters::file_define::Define::prepare(
             &project,
             section,
@@ -679,6 +721,7 @@ fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
             );
         }
         let reads = define.capture_reads();
+        let planned = define.plan().is_some();
         let result = define.save();
         match replay::field(expected, "save") {
             Value::Bool(true) => {
@@ -692,6 +735,11 @@ fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
             }
             Value::Bool(false) => {
                 refused += 1;
+                assert!(
+                    !planned,
+                    "{}: a refused composition plans no file to save",
+                    case.label
+                );
                 assert!(
                     result.is_err(),
                     "{}: refused composition must fail its save, got {result:?}",
@@ -728,7 +776,7 @@ fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
     );
     assert_eq!(
         (accepted, refused, artifact_contracts, ordered_artifacts),
-        (7, 23, 3, 3)
+        (11, 29, 3, 5)
     );
 }
 
