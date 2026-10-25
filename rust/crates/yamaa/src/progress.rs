@@ -398,6 +398,7 @@ impl Reporter {
 
     /// The observer of work `measured` already holds, such as a streamed
     /// run's build after its compilation.
+    #[cfg(feature = "arrow")]
     pub(crate) fn resume(&self, measured: Measured) -> Observed<'_> {
         Observed {
             reporter: self,
@@ -437,6 +438,7 @@ impl Reporter {
 
     /// Report the batch `number` of `rows` rows that the reader of a
     /// streamed run named `name` hands out.
+    #[cfg(feature = "arrow")]
     pub(crate) fn batch(&self, name: &str, number: usize, rows: usize) {
         self.send(|| ProgressEvent {
             name: name.to_owned(),
