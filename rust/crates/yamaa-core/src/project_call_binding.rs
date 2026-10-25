@@ -134,12 +134,16 @@ pub fn bind(
                                 .iter()
                                 .find(|p| p.name == item.name)
                                 .ok_or(Error::InvalidAdmittedCall)?;
-                            if kind(actual) != parameter.kind {
+                            // A field whose type the schema source does not
+                            // decide is not compared.
+                            if let Some(actual) =
+                                actual.map(kind).filter(|actual| *actual != parameter.kind)
+                            {
                                 findings.push(Finding {
                                     argument,
                                     kind: Kind::ArgumentType {
                                         expected: parameter.kind,
-                                        actual: kind(actual),
+                                        actual,
                                     },
                                 });
                             }
