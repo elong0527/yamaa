@@ -25,7 +25,8 @@ yamaa-core = { path = "../yamaa-core" }
 # The integration suite reads JSON and Parquet as the adapters' suite does,
 # at the adapters' releases: the test support writes Parquet inputs at test
 # time (tests/support/parquet_files.rs, the adapters' module copied), with the
-# features the adapters build their Parquet codec with.
+# features of the adapters' differential oracle; no package builds Parquet
+# (#3878).
 [dev-dependencies]
 arrow-array = { version = "=55.2.0", default-features = false }
 arrow-buffer = { version = "=55.2.0", default-features = false }
