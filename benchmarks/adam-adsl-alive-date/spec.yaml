@@ -126,7 +126,7 @@ columns:
     derivation:
       aggregate:
         key: [STUDYID, USUBJID]
-        filter: "SS.SSTESTCD = 'SURVSTAT' AND SS.SSSTRESC = 'ALIVE'"
+        filter: "SS.SSSTRESC = 'ALIVE'"
         derivations:
           SSDT:
             type: date
