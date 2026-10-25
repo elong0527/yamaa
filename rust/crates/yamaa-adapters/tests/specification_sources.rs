@@ -2,11 +2,15 @@
 //! Native specification run assertions.
 mod execution {
     mod specification_run {
+        // A specification run whose findings a case can state through the public
+        // build is a case of `fixtures/diagnostics/specification_runs.json`. These
+        // tests keep the seams no case states and replay authored fixtures.
         use crate::support::ports::NoFunctions;
         use crate::support::specification_run::*;
         use crate::support::Edit as _;
         use yamaa_core::application_observer::Scope;
 
+        /// Seam: the scripted `Sources` port's read count and the captured source table's cells.
         #[test]
         #[cfg(feature = "parquet")]
         fn parquet_input_policy_and_owned_source_observations_use_the_shared_build_path() {
@@ -46,6 +50,8 @@ output: {{path: output.csv, columns: [I, S]}}
             }
         }
 
+        /// Seam: the core plan's `ExecutionError::Numeric` over an in-memory table and the failing
+        /// record's key values, against each benchmark's own `expected/error.yaml`.
         #[test]
         fn original_yaml_to_checked_numeric_failure_without_python_plan() {
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
@@ -98,6 +104,8 @@ output: {{path: output.csv, columns: [I, S]}}
             }
         }
 
+        /// Seam: the core plan's rows over an in-memory table and its
+        /// `ExecutionError::MultipleValues`.
         #[test]
         fn repeated_keys_collect_raw_readings_before_conversion() {
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
@@ -162,6 +170,7 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
+        /// Seam: the internal `PrepareError` and `BindError` variants of compiling and binding.
         #[test]
         fn unsupported_operations_handlers_and_metadata_are_refused_before_binding() {
             use yamaa_core::specification::PrepareError;
@@ -188,6 +197,8 @@ output: {{path: output.csv, columns: [I, S]}}
             ));
         }
 
+        /// Seam: the internal `BindFinding` and `reference_binding::Diagnostic` variants of
+        /// binding.
         #[test]
         fn binding_uses_shared_reference_and_dependency_findings() {
             use yamaa_core::reference_binding::Diagnostic;
@@ -231,6 +242,8 @@ output: {{path: output.csv, columns: [I, S]}}
             ));
         }
 
+        /// Seam: the prepared run's source and the condition outcome's failing record (its
+        /// position, key values, partition and matched key) beside its portable issue row.
         #[test]
         fn original_yaml_run_returns_complete_independent_portable_failures() {
             use yamaa_adapters::json;
@@ -299,6 +312,7 @@ output: {{path: output.csv, columns: [I, S]}}
             }
         }
 
+        /// Seam: the internal `Error::Source` and `BindFinding` variants of a run over raw bytes.
         #[test]
         fn source_ingestion_failure_precedes_deferred_formula_diagnostics() {
             use yamaa_adapters::specification_run::{Error, PreparedRun};
@@ -345,112 +359,7 @@ output: {{path: output.csv, columns: [I, S]}}
             }
         }
 
-        #[test]
-        fn compiler_diagnostics_match_independent_reference_paths_context_and_phase() {
-            use yamaa_adapters::json;
-            use yamaa_adapters::specification_run::PreparedRun;
-            let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-            let case = root.join("benchmarks/negative-zero-division");
-            // The benchmark as 1.0 writes it, since the test edits its text
-            // (#3422); its input is the benchmark's own.
-            let raw = crate::support::benchmarks::converted("negative-zero-division");
-            let data = std::fs::read(case.join("input/lb.csv")).unwrap();
-            for (expr, condition, rule, context) in [
-                (
-                    "AVAL +",
-                    "invalid_expression",
-                    Some("FORMULA-1"),
-                    json!({"expr":"AVAL +"}),
-                ),
-                (
-                    "LB.LBSTRESN + 1",
-                    "qualified_identifier",
-                    Some("FORMULA-9"),
-                    json!({"expr":"LB.LBSTRESN + 1","identifier":"LB.LBSTRESN"}),
-                ),
-                (
-                    "BOGUS + 1",
-                    "unknown_field",
-                    Some("NAME-3"),
-                    json!({"identifier":"BOGUS"}),
-                ),
-                (
-                    "LBSTRESN + 1",
-                    "unresolvable_name",
-                    Some("NAME-3"),
-                    json!({"identifier":"LBSTRESN","suggestion":"LB.LBSTRESN"}),
-                ),
-            ] {
-                let written = raw.edit("100 * (AVAL - BASE) / BASE", expr);
-                let run = PreparedRun::prepare(prepare(written.as_bytes())).unwrap();
-                let error = run.execute_csv(&data).err().unwrap();
-                assert_eq!(
-                    spec_findings(&error, Some(run.source())).unwrap(),
-                    vec![
-                        json!({"phase":"validation","condition":condition,"rule":rule,"spec_paths":["columns.PCHG.derivation"],"context":context})
-                    ]
-                );
-            }
-            let written = raw.edit("derivation: LB.LBSTRESN", "derivation: LB.BOGUS");
-            let run = PreparedRun::prepare(prepare(written.as_bytes())).unwrap();
-            let error = run.execute_csv(&data).err().unwrap();
-            assert_eq!(
-                spec_findings(&error, Some(run.source())).unwrap(),
-                vec![
-                    json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["columns.AVAL.derivation.source"],"context":{"identifier":"LB.BOGUS"}})
-                ]
-            );
-            let written = raw.edit("100 * (AVAL - BASE) / BASE", "AVAL +");
-            let run = PreparedRun::prepare(prepare(written.as_bytes())).unwrap();
-            let error = run.execute_csv(b"A\n\"bad").err().unwrap();
-            assert_eq!(
-                spec_findings(&error, Some(run.source())).unwrap(),
-                vec![
-                    json!({"phase":"ingest","condition":"source_quote_unterminated","rule":"CSV-16","spec_paths":["input.LB.path"],"context":{"dataset":"LB","path":"input/lb.csv","record":2,"field":1}})
-                ]
-            );
-            // BOGUS joins the projection as an undeclared column while PCHG
-            // stays in it: pruning (LAYER-11) would otherwise discard PCHG
-            // and its division before execution.
-            let written = raw.edit(
-                "columns: [STUDYID, USUBJID, PARAMCD, AVAL, BASE, PCHG]",
-                "columns: [STUDYID, USUBJID, PARAMCD, AVAL, BASE, PCHG, BOGUS]",
-            );
-            let run = PreparedRun::prepare(prepare(written.as_bytes())).unwrap();
-            let response = run.execute_csv(&data).unwrap();
-            let yamaa_adapters::dataset_result::Outcome::Condition(found) = &response.outcome
-            else {
-                panic!("the division fails as a condition outcome");
-            };
-            assert_eq!(found.diagnostic.condition(), "division_by_zero");
-        }
-
-        #[test]
-        fn preflight_reports_all_findings_in_reference_order_before_source_access() {
-            use yamaa_adapters::json;
-            use yamaa_adapters::specification_run::PreparedRun;
-            // The benchmark as 1.0 writes it, since the test edits its text
-            // (#3422).
-            let raw = crate::support::benchmarks::converted("negative-zero-division");
-            let written = raw
-                .edit("domain: ADLB", "domain: LB\nbase: BAD")
-                .edit(
-                    "keys: [STUDYID, USUBJID, PARAMCD]",
-                    "keys: [STUDYID, USUBJID, PARAMCD, BOGUS]",
-                )
-                .edit("    derivation: \"100 * (AVAL - BASE) / BASE\"", "");
-            let error = PreparedRun::prepare(prepare(written.as_bytes())).unwrap_err();
-            assert_eq!(
-                spec_findings(&error, None).unwrap(),
-                vec![
-                    json!({"phase":"validation","condition":"missing_derivation","spec_paths":["columns.PCHG.derivation"],"rule":"SPEC-4","context":{"column":"PCHG"}}),
-                    json!({"phase":"validation","condition":"duplicate_identifier","spec_paths":["input.LB","domain"],"rule":"NAME-2","context":{"identifier":"LB"}}),
-                    json!({"phase":"validation","condition":"undeclared_column","spec_paths":["keys[3]"],"rule":"OUTPUT-2","context":{"column":"BOGUS"}}),
-                    json!({"phase":"validation","condition":"driver_unavailable","spec_paths":["base"],"rule":"ROW-8","context":{"dataset":"BAD","row":null}}),
-                ]
-            );
-        }
-
+        /// Already data: the authored findings of `fixtures/preflight.tsv`.
         #[test]
         fn core_preflight_matches_independent_complete_findings() {
             use yamaa_adapters::{specification_diagnostics, specification_run::PreparedRun};
@@ -473,6 +382,7 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(count, 5);
         }
 
+        /// Already data: the authored reports of `fixtures/output_declarations.tsv`.
         #[test]
         fn core_output_declarations_match_independent_complete_failed_reports() {
             independent_failed_reports(
@@ -483,6 +393,7 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
+        /// Already data: the authored reports of `fixtures/grammar_diagnostics.tsv`.
         #[test]
         fn core_grammar_matches_independent_complete_failed_reports() {
             independent_failed_reports(
@@ -493,6 +404,7 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
+        /// Already data: the authored reports of `fixtures/binding_diagnostics.tsv`.
         #[test]
         fn core_binding_matches_independent_complete_failed_reports() {
             independent_failed_reports(
@@ -503,6 +415,7 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
+        /// Already data: the authored reports of `fixtures/csv_profile_diagnostics.json`.
         #[test]
         fn core_csv_profile_matches_independent_complete_failed_reports() {
             independent_failed_reports(
@@ -513,6 +426,7 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
+        /// Already data: the authored findings of `fixtures/window_diagnostics.tsv`.
         #[test]
         fn core_window_findings_match_independent_complete_failed_reports() {
             independent_failed_reports(
@@ -523,6 +437,7 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
+        /// Already data: the authored reports of `fixtures/predicate_diagnostics.tsv`.
         #[test]
         fn core_predicate_matches_independent_complete_failed_report() {
             independent_failed_reports(
@@ -533,6 +448,7 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
+        /// Already data: the authored reports of `fixtures/source_typing.json`.
         #[test]
         fn core_source_typing_matches_independent_complete_failed_reports() {
             independent_failed_reports(
@@ -543,46 +459,8 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
-        #[test]
-        fn binding_collects_ordered_findings_before_dependency_diagnostics() {
-            use yamaa_adapters::json;
-            use yamaa_adapters::specification_run::PreparedRun;
-            let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-            let case = root.join("benchmarks/negative-zero-division");
-            // The benchmark as 1.0 writes it, since the test edits its text
-            // (#3422); its input is the benchmark's own.
-            let raw = crate::support::benchmarks::converted("negative-zero-division");
-            let data = std::fs::read(case.join("input/lb.csv")).unwrap();
-            let unknown = json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["columns.PCHG.derivation"],"context":{"identifier":"BOGUS"}});
-            let cycle = json!({"phase":"validation","condition":"dependency_cycle","rule":"COLUMN-6","spec_paths":["columns.PCHG.derivation"],"context":{"cycle":["PCHG","PCHG"]}});
-            let written = raw
-                .edit("derivation: LB.LBSTRESN", "derivation: LB.BOGUS")
-                .edit("100 * (AVAL - BASE) / BASE", "BOGUS + PCHG");
-            let run = PreparedRun::prepare(prepare(written.as_bytes())).unwrap();
-            let error = run.execute_csv(&data).err().unwrap();
-            assert_eq!(
-                spec_findings(&error, Some(run.source())).unwrap(),
-                vec![
-                    json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["columns.AVAL.derivation.source"],"context":{"identifier":"LB.BOGUS"}}),
-                    unknown.clone(),
-                    cycle.clone()
-                ]
-            );
-            let expr = "LB.LBSTRESN + BOGUS + LB.LBBLRESN + PCHG";
-            let written = raw.edit("100 * (AVAL - BASE) / BASE", expr);
-            let run = PreparedRun::prepare(prepare(written.as_bytes())).unwrap();
-            let error = run.execute_csv(&data).err().unwrap();
-            assert_eq!(
-                spec_findings(&error, Some(run.source())).unwrap(),
-                vec![
-                    json!({"phase":"validation","condition":"qualified_identifier","rule":"FORMULA-9","spec_paths":["columns.PCHG.derivation"],"context":{"expr":expr,"identifier":"LB.LBSTRESN"}}),
-                    json!({"phase":"validation","condition":"qualified_identifier","rule":"FORMULA-9","spec_paths":["columns.PCHG.derivation"],"context":{"expr":expr,"identifier":"LB.LBBLRESN"}}),
-                    unknown,
-                    cycle
-                ]
-            );
-        }
-
+        /// Seam: a scripted resolver port's request and read counts, snapshot identity and the
+        /// `PortError` variants of a failed capture.
         #[test]
         fn actual_capture_observations_survive_errors_and_distinguish_cached_reads() {
             use yamaa_adapters::specification_run::{Error, PortError, PreparedRun};
@@ -700,6 +578,8 @@ output: {{path: output.csv, columns: [I, S]}}
             ));
         }
 
+        /// Already data: the authored observation records of `fixtures/specs/<benchmark>.json`,
+        /// read through a capturing port that counts its reads.
         #[test]
         fn whole_failure_reports_match_reference_observations_from_actual_capture() {
             use yamaa_adapters::{
@@ -810,6 +690,8 @@ output: {{path: output.csv, columns: [I, S]}}
             }
         }
 
+        /// Seam: the prepared run's declared source types (`run.source().types`), beside the two
+        /// issue rows its runs report.
         #[test]
         fn declared_source_types_preserve_ingestion_diagnostics_before_formula_errors() {
             use yamaa_adapters::json;
@@ -850,6 +732,8 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
+        /// Seam: the core plan's typed rows and exact float bits, against the benchmark's
+        /// `expected/adlb.csv`.
         #[test]
         fn original_ordered_sum_yaml_executes_all_seventeen_rows_with_exact_float_bits() {
             use yamaa_adapters::typed_csv;
@@ -939,83 +823,8 @@ output: {{path: output.csv, columns: [I, S]}}
             assert!(result.verifications.iter().all(|v| v.failed_count == 0));
         }
 
-        #[test]
-        fn aggregate_grammar_findings_follow_typed_ingestion_and_retain_original_path() {
-            use yamaa_adapters::json;
-            use yamaa_adapters::specification_run::PreparedRun;
-            let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-            let case = root.join("benchmarks/adam-adlb-ordered-sum");
-            // The benchmark as 1.0 writes it, since the test edits its text
-            // (#3422); its input is the benchmark's own.
-            let raw = crate::support::benchmarks::converted("adam-adlb-ordered-sum");
-            let data = std::fs::read(case.join("input/lb.csv")).unwrap();
-            for (expr, condition, rule, context) in [
-                (
-                    "SUM(AVAL)",
-                    "invalid_aggregate_context",
-                    "LOOKUP-18",
-                    json!({"expr":"SUM(AVAL)","reason":"a grouped row aggregate reads its row driver"}),
-                ),
-                (
-                    "SUM(ABSENT)",
-                    "invalid_aggregate_context",
-                    "LOOKUP-18",
-                    json!({"expr":"SUM(ABSENT)","reason":"a grouped row aggregate reads its row driver"}),
-                ),
-                (
-                    "SUM(OTHER.X)",
-                    "invalid_aggregate_context",
-                    "LOOKUP-18",
-                    json!({"expr":"SUM(OTHER.X)","reason":"a grouped row aggregate reads 'LB', not 'OTHER'"}),
-                ),
-                (
-                    "SUM(LB.ABSENT)",
-                    "unknown_field",
-                    "NAME-3",
-                    json!({"identifier":"LB.ABSENT"}),
-                ),
-                (
-                    "SUM(",
-                    "invalid_expression",
-                    "FORMULA-1",
-                    json!({"expr":"SUM("}),
-                ),
-                (
-                    "SUM(SUM(LB.LBSTRESN))",
-                    "nested_reduction",
-                    "FORMULA-21",
-                    json!({"expr":"SUM(SUM(LB.LBSTRESN))","outer":"SUM","inner":"SUM"}),
-                ),
-                (
-                    "SUM(LB.LBSTRESN, LB.LBSTRESN)",
-                    "invalid_expression",
-                    "FORMULA-1",
-                    json!({"expr":"SUM(LB.LBSTRESN, LB.LBSTRESN)"}),
-                ),
-            ] {
-                let run =
-                    PreparedRun::prepare(prepare(raw.edit("SUM(LB.LBSTRESN)", expr).as_bytes()))
-                        .unwrap();
-                let error = run.execute_csv(&data).err().unwrap();
-                assert_eq!(
-                    spec_findings(&error, Some(run.source())).unwrap(),
-                    vec![
-                        json!({"phase":"validation","condition":condition,"rule":rule,"spec_paths":["rows.total.derivations.AVAL.aggregate"],"context":context})
-                    ]
-                );
-                let invalid_data = String::from_utf8(data.clone())
-                    .unwrap()
-                    .replacen(",0.1", ",invalid", 1);
-                let error = run.execute_csv(invalid_data.as_bytes()).err().unwrap();
-                assert_eq!(
-                    spec_findings(&error, Some(run.source())).unwrap(),
-                    vec![
-                        json!({"phase":"ingest","condition":"field_parse_failed","rule":"INPUT-7","spec_paths":["input.LB.types.LBSTRESN"],"context":{"dataset":"LB","field":"LBSTRESN","type":"float","value":"invalid"}})
-                    ]
-                );
-            }
-        }
-
+        /// Seam: the observation record a build returns (`saved_observations`), against
+        /// `fixtures/specs/adam-adlb-ordered-sum.json`.
         #[test]
         fn original_success_report_describes_its_saved_file_and_output_failures_save_nothing() {
             use yamaa_adapters::json;
@@ -1174,6 +983,9 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(actual, expected);
         }
 
+        /// Seam: the observation record's verification records, each failure's context and log
+        /// context, and the scripted port's read count, which `report.check` rows do not state
+        /// whole.
         #[test]
         fn verification_declarations_preserve_completed_prefix_and_phase_precedence() {
             use crate::support::ports::Sources;
@@ -1324,86 +1136,7 @@ output: {{path: output.csv, columns: [I, S]}}
             ));
         }
 
-        #[test]
-        fn row_group_declarations_and_shared_scope_keep_authored_diagnostics() {
-            use yamaa_adapters::json;
-            use yamaa_adapters::specification_run::PreparedRun;
-            let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-            // The benchmark as 1.0 writes it, since the test edits its text
-            // (#3422); its input is the benchmark's own.
-            let raw = crate::support::benchmarks::converted("adam-adlb-ordered-sum");
-            let bytes =
-                std::fs::read(root.join("benchmarks/adam-adlb-ordered-sum/input/lb.csv")).unwrap();
-            for (replacement, condition, rule, context) in [
-                (
-                    "[]",
-                    "invalid_field_type",
-                    "ROW-4",
-                    json!({"row":"total","group_by":[],"expected":"at least one driver variable, each once"}),
-                ),
-                (
-                    "[LB.STUDYID, LB.STUDYID]",
-                    "invalid_field_type",
-                    "ROW-4",
-                    json!({"row":"total","group_by":["LB.STUDYID","LB.STUDYID"],"expected":"at least one driver variable, each once"}),
-                ),
-                (
-                    "[STUDYID]",
-                    "unknown_field",
-                    "ROW-4",
-                    json!({"row":"total","identifier":"STUDYID","dataset":"LB"}),
-                ),
-            ] {
-                let written = raw.edit(
-                    "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]",
-                    &format!("group_by: {replacement}"),
-                );
-                let error = PreparedRun::prepare(prepare(written.as_bytes()))
-                    .expect_err("preflight without source");
-                assert_eq!(spec_findings(&error,None).unwrap(),json!([{"phase":"validation","condition":condition,"rule":rule,"spec_paths":["rows.total.group_by"],"context":context}]).as_array().unwrap().clone());
-            }
-            let written = raw
-                .edit("id: total", "id: total\n    dataset: ABSENT")
-                .edit("    group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]\n", "");
-            let error = PreparedRun::prepare(prepare(written.as_bytes()))
-                .err()
-                .unwrap();
-            assert_eq!(spec_findings(&error,None).unwrap(),json!([{"phase":"validation","condition":"driver_unavailable","rule":"ROW-1","spec_paths":["rows.total.dataset"],"context":{"row":"total","dataset":"ABSENT"}}]).as_array().unwrap().clone());
-            let written = raw.edit(
-                "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]",
-                "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT, LB.ABSENT]",
-            );
-            let run = PreparedRun::prepare(prepare(written.as_bytes())).unwrap();
-            let error = run.execute_csv(&bytes).err().unwrap();
-            assert_eq!(
-                spec_findings(&error, Some(run.source())).unwrap(),
-                vec![
-                    json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["rows.total.group_by[3]"],"context":{"identifier":"LB.ABSENT"}})
-                ]
-            );
-            for (written, path, rule, context) in [
-                (
-                    raw.edit("PARAM: \"'Total of Components'\"", "PARAM: LB.LBTEST"),
-                    "rows.total.derivations.PARAM.source",
-                    "ROW-5",
-                    json!({"identifier":"LB.LBTEST","row":"total","dataset":"LB"}),
-                ),
-                (
-                    raw.edit("derivation: LB.VISIT", "derivation: LB.LBTEST"),
-                    "columns.AVISIT.derivation.source",
-                    "ROW-5",
-                    json!({"identifier":"LB.LBTEST","row":"total","dataset":"LB"}),
-                ),
-            ] {
-                let run = PreparedRun::prepare(prepare(written.as_bytes())).unwrap();
-                let error = run
-                    .execute_csv(&bytes)
-                    .err()
-                    .expect("scope finding after ingestion");
-                assert_eq!(spec_findings(&error,Some(run.source())).unwrap(),json!([{"phase":"validation","condition":"ungrouped_driver_field","rule":rule,"spec_paths":[path],"context":context}]).as_array().unwrap().clone());
-            }
-        }
-
+        /// Seam: the observation record a build returns and the scripted port's read count.
         #[test]
         fn original_sum_reports_nonnumeric_values_but_publishes_all_missing_groups() {
             use crate::support::ports::Sources;
@@ -1493,6 +1226,8 @@ output: {{path: output.csv, columns: [I, S]}}
             }
         }
 
+        /// Seam: the observation record a build returns and the scripted port's read count, beside
+        /// the findings of its edited specifications.
         #[test]
         fn row_defaults_are_inherited_per_template_and_coverage_errors_precede_io() {
             use crate::support::ports::Sources;
@@ -1591,6 +1326,8 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
+        /// Seam: the core plan's binding of several schemas (`SourceCount`, `bind_sources`) and its
+        /// handler counts.
         #[test]
         fn original_lookup_compiles_multiple_schemas_and_executes_named_selections() {
             use yamaa_core::specification::BindError;
@@ -1679,6 +1416,7 @@ output: {{path: output.csv, columns: [I, S]}}
             }
         }
 
+        /// Seam: the observation record a build returns and a scripted host's capture requests.
         #[test]
         fn original_lookup_complete_report_uses_all_captured_sources_and_actual_handlers() {
             use std::collections::BTreeMap;
@@ -1795,6 +1533,8 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(host.reads, 3);
         }
 
+        /// Seam: the observation record of each authored variant of
+        /// `fixtures/specs/lookup-failures.json` and a scripted host's capture requests.
         #[test]
         fn original_lookup_failures_match_independent_diagnostics_and_completed_observations() {
             use yamaa_adapters::json;
@@ -1914,6 +1654,7 @@ output: {{path: output.csv, columns: [I, S]}}
             }
         }
 
+        /// Seam: the internal `Rejection::Fault` of a run given one buffer for three sources.
         #[test]
         fn single_buffer_execution_reports_source_count_without_an_internal_failure() {
             use yamaa_adapters::{specification_diagnostics, specification_run::PreparedRun};
@@ -1937,6 +1678,8 @@ output: {{path: output.csv, columns: [I, S]}}
             );
         }
 
+        /// Seam: the observation record a build returns and a scripted host's read and request
+        /// counts.
         #[test]
         fn original_window_yaml_compiles_and_publishes_complete_independent_report() {
             use yamaa_adapters::json;

@@ -1,10 +1,12 @@
-//! The Dataset-JSON transport writer. The engine writes Dataset-JSON and reads
-//! none: untrusted bytes reach the writer as the published artifact that a
-//! submission build reads back. Each input is such a CSV artifact, admitted by
-//! the same CSV profile and declared typing as that build; every typed table
-//! is rendered in both representations (JSON-4), and the output must parse
-//! as JSON that holds every cell: the single-object form as one object, the
-//! newline-delimited form as a first line and one JSON array per later line.
+//! The Dataset-JSON transport writer, and its files read back. Untrusted bytes
+//! reach the writer as the published artifact that a submission build reads
+//! back. Each input is such a CSV artifact, admitted by the same CSV profile
+//! and declared typing as that build; every typed table is rendered in both
+//! representations (JSON-4), and the output must parse as JSON that holds
+//! every cell: the single-object form as one object, the newline-delimited
+//! form as a first line and one JSON array per later line. Each rendered file
+//! must then read back through the shared source decode, as a `.json` or
+//! `.ndjson` input, as the table it was written from (JSON-15).
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
@@ -15,6 +17,7 @@ use yamaa_adapters::{
     submission_json::{DatasetJsonColumn, DatasetJsonDocument, Layout},
 };
 use yamaa_core::{
+    specification::{SourceInterpretation, SourceProfile},
     table::{TableAccess, ValueRef},
     typed_csv::{PreparedTypes, TypedRows},
     value::ColumnType,
@@ -111,6 +114,30 @@ fn rendered(bytes: &[u8], layout: Layout) -> Rendered<'_> {
     }
 }
 
+/// The rendered file read as an input of the profile its representation's
+/// extension selects gives the table it was written from: its fields, their
+/// types and every value (JSON-15). A CSV artifact holds no present empty
+/// string, so the default convention reads it back.
+fn read_back(bytes: &[u8], layout: Layout, table: &TypedRows) {
+    let profile = match layout {
+        Layout::Object => SourceProfile::DatasetJson,
+        Layout::Lines => SourceProfile::DatasetNdjson,
+    };
+    let input = yamaa_fuzz::source(profile, Vec::new(), None);
+    let read = yamaa_fuzz::decode(&input, bytes, SourceInterpretation::Ordinary)
+        .unwrap_or_else(|error| panic!("a written file reads back: {error:?}"));
+    assert_eq!(read.schema(), table.schema());
+    for row in 0..table.row_count() {
+        for column in 0..table.schema().columns().len() {
+            assert_eq!(
+                read.cell(row, column).expect("a read cell"),
+                table.cell(row, column).expect("a held cell"),
+                "row {row}, column {column}"
+            );
+        }
+    }
+}
+
 /// The rendered file is JSON whose header and rows hold the table exactly.
 fn check(rendered: &Rendered<'_>, table: &TypedRows) {
     let columns = table.schema().columns();
@@ -168,6 +195,7 @@ fuzz_target!(|data: &[u8]| {
             let bytes = yamaa_adapters::submission_json::render(&document(&table), &table, layout)
                 .expect("an admitted table renders");
             check(&rendered(&bytes, layout), &table);
+            read_back(&bytes, layout, &table);
         }
     }
 });

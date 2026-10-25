@@ -277,7 +277,7 @@ pub enum PathBase {
 }
 
 /// The storage profile, including the ODM XML profile of P-ODMIN-1, which
-/// has no 0.5 form.
+/// has no 0.5 form, and the two Dataset-JSON profiles (DSJSON-1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Profile {
     Csv,
@@ -285,6 +285,8 @@ pub enum Profile {
     Xport,
     Sas7bdat,
     OdmXml,
+    DatasetJson,
+    DatasetNdjson,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
