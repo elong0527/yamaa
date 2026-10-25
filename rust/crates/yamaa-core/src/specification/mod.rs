@@ -22,9 +22,9 @@ pub use compiler_limits::CompilerLimit;
 mod binder;
 use binder::BindContext;
 mod binding_diagnostics;
-mod checks;
 #[doc(hidden)]
 pub mod check_oracle;
+mod checks;
 mod input_schemas;
 use input_schemas::{InputSchema, InputSchemas};
 mod intermediate_derivations;
@@ -275,12 +275,12 @@ pub enum BindFinding {
         paths: Vec<String>,
         diagnostics: Vec<column_dependencies::Diagnostic>,
     },
-    /// A finding whose wording the schema source does not decide: it depends
-    /// on whether an input stores a field no declaration states, or on a
-    /// type no declaration gives (#3805). The failure is certain, so binding
-    /// goes on as it does for the finding itself, but `check()` withholds it
-    /// and each finding the same failure causes; `run()`, whose captured
-    /// schemas decide everything, never holds one.
+    /// A finding the schema source does not decide: whether binding makes
+    /// it, or how it words it, depends on whether an input stores a field no
+    /// declaration states (#3805). Binding goes on as it does for the finding
+    /// itself, but `check()` withholds it, and each read of a lookup it alone
+    /// leaves unbound; `run()`, whose captured schemas decide everything,
+    /// never holds one.
     Withheld(std::boxed::Box<BindFinding>),
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -952,10 +952,20 @@ impl PreparedSpecification {
         Ok(self)
     }
     /// Every finding binding reports over the input schemas `schemas`, in
-    /// binding's order: none when it builds a plan.
+    /// binding's order. A plan it builds still holds the filter type faults
+    /// it defers until the keys a lookup matches on resolve, in the order the
+    /// lookups are derived, which execution reports before any record is
+    /// selected.
     fn bind_findings(&self, schemas: &InputSchemas) -> Result<Vec<BindFinding>, BindError> {
         match self.rows.bind(self, self.inputs(schemas)) {
-            Ok(_) => Ok(Vec::new()),
+            Ok(plan) => Ok(plan
+                .intermediates()
+                .iter()
+                .filter_map(|item| item.filter.as_ref())
+                .flat_map(|filter| filter.deferred_type_findings())
+                .cloned()
+                .map(BindFinding::Predicate)
+                .collect()),
             Err(BindError::Invalid(findings)) => Ok(findings),
             Err(error) => Err(error),
         }

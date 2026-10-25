@@ -56,7 +56,9 @@ pub(super) fn bind(
                     sources
                         .iter()
                         .position(|source| source.name == dataset)
-                        .and_then(|index| schemas[index].position(field).map(|column| (index, column)))
+                        .and_then(|index| {
+                            schemas[index].position(field).map(|column| (index, column))
+                        })
                 })
                 .map(|(index, column)| {
                     let slot = current.len();
@@ -92,7 +94,12 @@ pub(super) fn bind(
                 .any(|(column, metadata)| metadata.name == bare && admits(column))
                 .then(|| format!("{donor_name}.{bare}"));
             // The suggestion names a field of the donor, so it is withheld
-            // unless the donor's schema decides whether it stores it.
+            // unless the donor's schema decides whether it stores it, or the
+            // lookup derives it.
+            let derived = suggestion.is_some()
+                && inputs
+                    .schema(donor_name)
+                    .is_some_and(|schema| schema.position(bare).is_none());
             let finding = BindFinding::Lookup(LookupFinding::reference(
                 plan.spec_path(),
                 name,
@@ -100,7 +107,7 @@ pub(super) fn bind(
                 ReferenceCause::Selection,
                 suggestion,
             ));
-            findings.push(if inputs.decides(donor_name, bare) {
+            findings.push(if derived || inputs.decides(donor_name, bare) {
                 finding
             } else {
                 BindFinding::Withheld(std::boxed::Box::new(finding))

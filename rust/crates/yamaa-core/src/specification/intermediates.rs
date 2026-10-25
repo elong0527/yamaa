@@ -393,7 +393,9 @@ fn bind_one(
     } = inputs;
     let mut failed = false;
     let (schema, source_name) = match item.source {
-        self_relations::Relation::Input(index) => (schemas[index].layout(), sources[index].name.as_str()),
+        self_relations::Relation::Input(index) => {
+            (schemas[index].layout(), sources[index].name.as_str())
+        }
         self_relations::Relation::SelfRows => (output, "SELF"),
         // A pair relation binds its two sides ([`pairs::bind`]).
         self_relations::Relation::Pair => return Err(BindError::Internal),
@@ -463,6 +465,7 @@ fn bind_one(
             let suggestion = (!name.contains('.')
                 && schema.columns().iter().any(|c| c.name == name))
             .then(|| format!("{source_name}.{name}"));
+            let derived_suggestion = suggestion.is_some();
             let finding = BindFinding::Lookup(LookupFinding::reference(
                 path,
                 name,
@@ -471,9 +474,13 @@ fn bind_one(
                 suggestion,
             ));
             // A bare name's suggestion is withheld unless the donor's schema
-            // decides whether it stores the name.
+            // decides whether it stores the name, or the lookup derives it.
+            let derived = derived_suggestion
+                && inputs
+                    .schema(source_name)
+                    .is_some_and(|stored| stored.position(name).is_none());
             findings.push(
-                if name.contains('.') || inputs.decides(source_name, name) {
+                if name.contains('.') || derived || inputs.decides(source_name, name) {
                     finding
                 } else {
                     BindFinding::Withheld(std::boxed::Box::new(finding))
@@ -1264,13 +1271,14 @@ impl Declarations {
         project: Option<&crate::project_calls::ProjectCalls>,
         tree: &types::Tree,
         findings: &mut Vec<BindFinding>,
-    ) -> Result<(Vec<SecondarySource>, Vec<Option<Intermediate>>), BindError> {
+    ) -> Result<Bound, BindError> {
         let binder::Inputs {
             sources,
             schemas,
             driver,
         } = inputs;
         let mut secondary = inputs.secondary();
+        let mut withheld = Vec::new();
         // Each pair relation's records follow the inputs once it binds, read
         // as an input's by every intermediate derived after it (LOOKUP-27).
         // The inputs are borrowed until the first pair relation binds.
@@ -1305,9 +1313,7 @@ impl Declarations {
                     None => TableSchema::new(Vec::new()).map_err(|_| BindError::Internal)?,
                 };
                 relations.to_mut().push(pairs::pseudo_input(&item.name));
-                relation_schemas
-                    .to_mut()
-                    .push(InputSchema::exact(&fields));
+                relation_schemas.to_mut().push(InputSchema::exact(&fields));
                 secondary.push(SecondarySource {
                     name: item.name.clone(),
                     schema: fields,
@@ -1327,6 +1333,7 @@ impl Declarations {
                     continue;
                 }
             }
+            let before = findings.len();
             let bound = bind_one(
                 Context {
                     named: self,
@@ -1345,13 +1352,53 @@ impl Declarations {
                 item,
                 findings,
             )?;
+            withhold_reads(&mut findings[before..], &withheld);
+            let failed = &findings[before..];
+            if bound.is_none()
+                && !failed.is_empty()
+                && failed
+                    .iter()
+                    .all(|finding| matches!(finding, BindFinding::Withheld(_)))
+            {
+                withheld.push(item.name.clone());
+            }
             result.push(bound);
         }
-        Ok((secondary, result))
+        Ok(Bound {
+            secondary,
+            items: result,
+            withheld,
+        })
     }
     /// The position of the intermediate `name`, a pair relation included.
     pub(super) fn position(&self, name: &str) -> Option<usize> {
         self.0.iter().position(|item| item.name == name)
+    }
+}
+
+/// The named intermediates as binding bound them ([`Declarations::bind`]):
+/// the secondary ports, with each pair relation's records after the inputs;
+/// each intermediate, or `None` where it did not bind; and the names of those
+/// that did not bind only because of findings `check()` withholds.
+pub(super) struct Bound {
+    pub secondary: Vec<SecondarySource>,
+    pub items: Vec<Option<Intermediate>>,
+    pub withheld: Vec<String>,
+}
+
+/// Withhold each read of an intermediate in `withheld` that binding refuses
+/// as unbound: the failure follows from an answer the schemas do not decide,
+/// so `check()` withholds it with the finding that caused it (#3805).
+pub(super) fn withhold_reads(findings: &mut [BindFinding], withheld: &[String]) {
+    for finding in findings {
+        let caused = matches!(finding, BindFinding::UnknownReference { name, .. }
+            if name
+                .split_once('.')
+                .is_some_and(|(owner, _)| withheld.iter().any(|name| name == owner)));
+        if caused {
+            let read = finding.take();
+            *finding = BindFinding::Withheld(std::boxed::Box::new(read));
+        }
     }
 }
 

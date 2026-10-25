@@ -94,17 +94,7 @@ impl Donors<'_> {
     /// named intermediate leaves a field it does not derive to the input it
     /// reads, and any other relation's fields are what its binding laid out.
     pub(super) fn decides(&self, relation: &str, field: &str) -> bool {
-        if self.inputs.schema(relation).is_some() {
-            return self.inputs.decides(relation, field);
-        }
-        match self.named.input(relation) {
-            Some(index) if !self.named.derives(relation, field) => self
-                .inputs
-                .schemas
-                .get(index)
-                .is_none_or(|schema| schema.stores(field).is_some()),
-            _ => true,
-        }
+        self.inputs.decides_through(self.named, relation, field)
     }
     /// `finding`, withheld from `check()` unless the schemas decide whether
     /// `relation` stores `field`, on which its wording depends.
@@ -127,7 +117,7 @@ impl Donors<'_> {
 /// rows. Built once where binding starts and carried as this one value to
 /// every layer that reads an input's schema, and to the catalogs and
 /// secondary ports built from it: `run()` binds the captured schemas, and
-/// `check()` the declared ones (#3805).
+/// the oracle beside the checks pass the declared ones (#3805).
 #[derive(Clone, Copy)]
 pub(super) struct Inputs<'a> {
     pub sources: &'a [SourceDeclaration],
@@ -168,11 +158,35 @@ impl<'a> Inputs<'a> {
         self.schema(relation)
             .is_none_or(|schema| schema.stores(field).is_some())
     }
+    /// [`Self::decides`], where `relation` may be a named intermediate,
+    /// which leaves a field it does not derive to the input it reads.
+    pub(super) fn decides_through(
+        &self,
+        named: &intermediates::Declarations,
+        relation: &str,
+        field: &str,
+    ) -> bool {
+        if self.schema(relation).is_some() {
+            return self.decides(relation, field);
+        }
+        match named.input(relation) {
+            Some(index) if !named.derives(relation, field) => self
+                .schemas
+                .get(index)
+                .is_none_or(|schema| schema.stores(field).is_some()),
+            _ => true,
+        }
+    }
     /// The kind of the field `field` of the relation `relation`, laid out as
     /// `layout`: an input's stored field as its schema decides it, and any
     /// other field, of a relation no input is or one an intermediate
     /// derives, as its layout gives it, which its binding decided.
-    pub(super) fn kind_of(&self, relation: &str, field: &str, layout: ColumnType) -> Option<ColumnType> {
+    pub(super) fn kind_of(
+        &self,
+        relation: &str,
+        field: &str,
+        layout: ColumnType,
+    ) -> Option<ColumnType> {
         match self.schema(relation) {
             Some(schema) => match schema.position(field) {
                 Some(column) => schema.kind(column),
@@ -220,7 +234,9 @@ impl<'a> Inputs<'a> {
         }
         let layout = item.source_kind(secondary, column)?;
         let relation = match &item.source {
-            IntermediateSource::Input(index) => secondary.get(*index).map(|source| source.name.as_str()),
+            IntermediateSource::Input(index) => {
+                secondary.get(*index).map(|source| source.name.as_str())
+            }
             IntermediateSource::Primary { name, .. } => Some(name.as_str()),
             IntermediateSource::SelfRows { .. } | IntermediateSource::Pairs(_) => None,
         };

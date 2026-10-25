@@ -225,9 +225,7 @@ impl Catalog {
                 } => self
                     .record_kinds
                     .as_ref()
-                    .map_or(column_type, |kinds| {
-                        kinds.get(column).copied().flatten()
-                    }),
+                    .map_or(column_type, |kinds| kinds.get(column).copied().flatten()),
                 Binding::Dataset {
                     dataset: 0,
                     field,
@@ -235,9 +233,7 @@ impl Catalog {
                 } => self
                     .record_kinds
                     .as_ref()
-                    .map_or(column_type, |kinds| {
-                        kinds.get(field).copied().flatten()
-                    }),
+                    .map_or(column_type, |kinds| kinds.get(field).copied().flatten()),
                 Binding::Dataset { column_type, .. } => column_type,
             };
         }

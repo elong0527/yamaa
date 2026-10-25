@@ -63,7 +63,13 @@ pub(in crate::specification) fn bind(
             None
         };
         let filter = if let (Some(dataset), Some((schema, kinds))) = (dataset, schema.as_ref()) {
-            declaration.bind_filter_named(path, dataset, (schema, &kinds[..]), named, cx.findings)?
+            declaration.bind_filter_named(
+                path,
+                dataset,
+                (schema, &kinds[..]),
+                named,
+                cx.findings,
+            )?
         } else {
             declaration.bind_row_filter(path, driver, catalog, named, cx.findings)?
         };

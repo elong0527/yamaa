@@ -136,9 +136,12 @@ impl Catalog {
                 };
                 // A pair whose either type is not decided is not compared.
                 if let Some((expected, actual)) =
-                    self.type_of(&identifier).zip(actual).filter(|(expected, actual)| {
-                        !crate::result_type::ResultType::from(*expected).comparable((*actual).into())
-                    })
+                    self.type_of(&identifier)
+                        .zip(actual)
+                        .filter(|(expected, actual)| {
+                            !crate::result_type::ResultType::from(*expected)
+                                .comparable((*actual).into())
+                        })
                 {
                     return Ok(Some(Err(JoinedFinding::KeyType {
                         source: name.clone(),

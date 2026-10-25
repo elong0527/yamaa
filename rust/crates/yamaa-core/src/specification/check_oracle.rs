@@ -26,11 +26,46 @@ pub struct Comparison {
     pub written_binding: Result<Vec<crate::diagnostic::Diagnostic>, String>,
 }
 
+/// The complete row a host reports of `diagnostic`: its phase, condition,
+/// rule, specification paths, context, source span and operand route. Its
+/// message is its condition's template over the context, and its location
+/// follows its first path, so two causes that render one row are one row.
+type Row<'d> = (
+    &'static str,
+    &'static str,
+    Option<&'static str>,
+    &'d [String],
+    &'d crate::diagnostic::Context,
+    &'d Option<crate::expression::SourceSpan>,
+    &'d Option<Vec<String>>,
+);
+
+fn row(diagnostic: &crate::diagnostic::Diagnostic) -> Row<'_> {
+    (
+        diagnostic.phase(),
+        diagnostic.condition(),
+        diagnostic.rule(),
+        &diagnostic.spec_paths,
+        &diagnostic.context,
+        &diagnostic.source_span,
+        &diagnostic.operand_route,
+    )
+}
+
+/// Whether binding's rows, or the error that stopped it, are the pass's.
+fn same(
+    binding: &Result<Vec<crate::diagnostic::Diagnostic>, String>,
+    pass: &[crate::diagnostic::Diagnostic],
+) -> bool {
+    binding
+        .as_ref()
+        .is_ok_and(|binding| binding.iter().map(row).eq(pass.iter().map(row)))
+}
+
 impl Comparison {
     /// Whether both implementations report the same rows.
     pub fn agrees(&self) -> bool {
-        self.binding.as_ref() == Ok(&self.pass)
-            && self.written_binding.as_ref() == Ok(&self.written_pass)
+        same(&self.binding, &self.pass) && same(&self.written_binding, &self.written_pass)
     }
 }
 
@@ -102,5 +137,109 @@ impl PreparedSpecification {
                 recorded.push(comparison);
             }
         });
+    }
+}
+
+/// The classes of #3805's answers into which each difference falls.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Class {
+    /// A schema-linked input is closed, so binding reports a field it does
+    /// not store, which the pass left open.
+    Q1,
+    /// The pass reports a finding binding withholds or never makes.
+    Q2,
+    /// Binding reports a finding it decides that the pass left to `run()`.
+    Q3,
+}
+
+/// One difference #3805 records: the case that makes it, the domain of the
+/// specification that differs, and its class.
+#[derive(Clone, Copy, Debug)]
+pub struct Difference {
+    pub case: &'static str,
+    pub domain: &'static str,
+    pub class: Class,
+}
+
+/// The complete rows of `diagnostics`, one line each.
+fn rows(diagnostics: &[crate::diagnostic::Diagnostic]) -> String {
+    diagnostics
+        .iter()
+        .map(|diagnostic| {
+            format!(
+                "    {} {} {} {:?} {:?} span={:?} route={:?} ({:?})\n",
+                diagnostic.phase(),
+                diagnostic.condition(),
+                diagnostic.rule().unwrap_or("-"),
+                diagnostic.spec_paths,
+                diagnostic.context,
+                diagnostic.source_span,
+                diagnostic.operand_route,
+                diagnostic.code,
+            )
+        })
+        .collect()
+}
+
+impl Comparison {
+    /// Both sides of the comparison, as a failure prints them.
+    pub fn report(&self, case: &str) -> String {
+        let side = |found: &Result<Vec<_>, String>| match found {
+            Ok(found) => rows(found),
+            Err(error) => format!("    error: {error}\n"),
+        };
+        format!(
+            "{case} ({}):\n  pass:\n{}  binding:\n{}  withheld:\n{}  written pass:\n{}  \
+             written binding:\n{}",
+            self.domain,
+            rows(&self.pass),
+            side(&self.binding),
+            rows(&self.withheld),
+            rows(&self.written_pass),
+            side(&self.written_binding),
+        )
+    }
+}
+
+/// Judge the comparisons each case recorded against the differences #3805
+/// records: every comparison agrees but those listed, and each listed one
+/// differs. The error reports what does not hold; `Ok` counts the
+/// comparisons.
+pub fn judge(
+    recorded: &[(String, Comparison)],
+    differences: &[Difference],
+) -> Result<usize, String> {
+    let listed = |case: &str, domain: &str| {
+        differences
+            .iter()
+            .any(|difference| difference.case == case && difference.domain == domain)
+    };
+    let mut failures = Vec::new();
+    for (case, comparison) in recorded {
+        if !comparison.agrees() && !listed(case, &comparison.domain) {
+            failures.push(comparison.report(case));
+        }
+    }
+    for difference in differences {
+        let differs = recorded.iter().any(|(case, comparison)| {
+            case == difference.case
+                && comparison.domain == difference.domain
+                && !comparison.agrees()
+        });
+        if !differs {
+            failures.push(format!(
+                "{} ({}): listed as a {:?} difference, but it agrees or was not compared\n",
+                difference.case, difference.domain, difference.class
+            ));
+        }
+    }
+    match (recorded.len(), failures.is_empty()) {
+        (0, _) => Err("no case prepared a specification".into()),
+        (compared, true) => Ok(compared),
+        (compared, false) => Err(format!(
+            "{} of {compared} comparisons do not hold:\n{}",
+            failures.len(),
+            failures.join("\n")
+        )),
     }
 }

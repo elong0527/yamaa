@@ -85,7 +85,11 @@ pub(super) fn extend_catalog(
 ) -> Result<Catalog, BindError> {
     let secondary = donors.secondary;
     let fields = std::iter::once((name, primary))
-        .chain(secondary.iter().map(|source| (source.name.as_str(), &source.schema)))
+        .chain(
+            secondary
+                .iter()
+                .map(|source| (source.name.as_str(), &source.schema)),
+        )
         .map(|(relation, schema)| donors.inputs.fields_of(relation, schema))
         .collect::<Vec<_>>();
     let relations = std::iter::once(name)

@@ -819,7 +819,11 @@ fn validate_header<'a>(
     Ok(Some((compiled, relations)))
 }
 
-type ResolveRef<'a> = &'a (dyn Fn(&str, &str, &mut Vec<BindFinding>) -> Result<Option<(usize, Option<ColumnType>)>, BindError>
+type ResolveRef<'a> = &'a (dyn Fn(
+    &str,
+    &str,
+    &mut Vec<BindFinding>,
+) -> Result<Option<(usize, Option<ColumnType>)>, BindError>
          + 'a);
 type GroupOperands = (Vec<usize>, Vec<AggregateBinding>);
 
@@ -1382,7 +1386,11 @@ pub(super) fn bind(
         }
         (None, _) => (
             output.clone(),
-            output.columns().iter().map(|column| Some(column.kind)).collect(),
+            output
+                .columns()
+                .iter()
+                .map(|column| Some(column.kind))
+                .collect(),
         ),
     };
     let resolve = |name: &str,
@@ -1783,16 +1791,15 @@ fn bind_range(
         }
         return Ok(None);
     };
-    let Some((read, kind)) =
-        range.current_value(
-            catalog,
-            donors.inputs,
-            donors.secondary,
-            donors.items,
-            None,
-            None,
-            edges,
-        )?
+    let Some((read, kind)) = range.current_value(
+        catalog,
+        donors.inputs,
+        donors.secondary,
+        donors.items,
+        None,
+        None,
+        edges,
+    )?
     else {
         findings.push(BindFinding::AggregateDiagnostic(
             range.unknown_value(Owner::Unnamed),
@@ -1922,12 +1929,7 @@ fn bind_derivations(
             .iter()
             .enumerate()
             .filter(|(_, field)| item.source_column(secondary, &field.name).is_some())
-            .map(|(column, field)| {
-                (
-                    field.name.clone(),
-                    (column, donors.kind(item, column)),
-                )
-            })
+            .map(|(column, field)| (field.name.clone(), (column, donors.kind(item, column))))
             .collect();
         selected.push((
             item.identifier.clone(),

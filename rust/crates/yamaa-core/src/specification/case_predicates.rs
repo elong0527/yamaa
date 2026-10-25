@@ -214,7 +214,10 @@ fn implicit_predicate(
                 || catalog
                     .relation_names()
                     .all(|relation| cx.donors.decides(relation, name));
-            let finding = match catalog.unique_field_owner(name).filter(|_| !name.contains('.')) {
+            let finding = match catalog
+                .unique_field_owner(name)
+                .filter(|_| !name.contains('.'))
+            {
                 Some(owner) => {
                     let mut finding = LookupFinding::new(
                         plan.spec_path(),

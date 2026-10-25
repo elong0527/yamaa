@@ -81,8 +81,7 @@ pub(super) fn bind(
             },
         );
     }
-    let current =
-        declaration.current_value(
+    let current = declaration.current_value(
         catalog,
         inputs,
         secondary,

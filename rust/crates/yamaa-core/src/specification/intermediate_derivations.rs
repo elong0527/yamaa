@@ -212,7 +212,16 @@ fn resolve_field_kinds(
             finding.text("identifier", &format!("{dataset}.{}", declaration.name));
             finding.text("intermediate", reader);
             finding.text("derivation", &declaration.name);
-            findings.push(BindFinding::Lookup(finding));
+            // A donor field only read, which the input may not store, leaves
+            // the repetition undecided.
+            let finding = BindFinding::Lookup(finding);
+            findings.push(
+                if inputs.decides_through(named, dataset, &declaration.name) {
+                    finding
+                } else {
+                    BindFinding::Withheld(std::boxed::Box::new(finding))
+                },
+            );
             continue;
         }
         fields.push(Column {
@@ -405,9 +414,18 @@ fn build_catalog_context(
 
 type EarlierSelection = (
     Vec<Option<Intermediate>>,
-    std::collections::BTreeMap<usize, String>,
+    std::collections::BTreeMap<usize, Unavailable>,
     Catalog,
 );
+
+/// The name a lookup reads that a donor record cannot answer, and whether
+/// the schemas decide that it cannot: a field the donor's input may store,
+/// which its schema leaves open, does not (#3805).
+#[derive(Clone, Debug)]
+struct Unavailable {
+    identifier: String,
+    decided: bool,
+}
 
 fn select_earlier(
     cx: intermediates::Context<'_>,
@@ -676,7 +694,7 @@ fn donor_scope_findings(
     findings: &mut [BindFinding],
     reader: &str,
     named: &intermediates::Declarations,
-    unavailable: &BTreeMap<usize, String>,
+    unavailable: &BTreeMap<usize, Unavailable>,
 ) {
     for finding in findings {
         // The donor's own cause replaces a withheld one, whose wording it
@@ -705,20 +723,25 @@ fn donor_scope_findings(
         };
         if let Some((path, reference)) = reference {
             if let Some((index, _)) = named.reference(reference) {
-                if let Some(identifier) = unavailable.get(&index) {
+                if let Some(missing) = unavailable.get(&index) {
                     let mut result = LookupFinding::new(
                         path,
                         crate::diagnostic::ConditionCode::IntermediateDerivationDependency,
                     );
                     result.text("intermediate", reader);
-                    result.text("identifier", identifier);
+                    result.text("identifier", &missing.identifier);
                     result.text(
                         "read",
                         reference
                             .split_once('.')
                             .map_or(reference, |(owner, _)| owner),
                     );
-                    *finding = BindFinding::Lookup(result);
+                    let result = BindFinding::Lookup(result);
+                    *finding = if missing.decided {
+                        result
+                    } else {
+                        BindFinding::Withheld(std::boxed::Box::new(result))
+                    };
                     continue;
                 }
             }
@@ -819,7 +842,7 @@ fn rebase(
     plan: DonorPlan<'_>,
     required: &std::collections::BTreeSet<usize>,
     direct: &std::collections::BTreeSet<usize>,
-    unavailable: &mut BTreeMap<usize, String>,
+    unavailable: &mut BTreeMap<usize, Unavailable>,
     catalog: &Catalog,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Vec<Option<Intermediate>>, BindError> {
@@ -851,6 +874,16 @@ fn rebase(
         }
     };
     let donor_field = |name: &str| output.columns().iter().position(|field| field.name == name);
+    // Whether `identifier`, written bare or qualified by the donor, names a
+    // field of the donor's input that its schema leaves open.
+    let open = |identifier: &str| {
+        let field = identifier
+            .strip_prefix(&format!("{donor_name}."))
+            .or_else(|| (!identifier.contains('.')).then_some(identifier));
+        field
+            .zip(donor.and_then(|donor| schemas.get(donor)))
+            .is_some_and(|(field, schema)| schema.stores(field).is_none())
+    };
     let current_field = |field: &CurrentField| -> Result<CurrentField, BindError> {
         let read = match field.read {
             CurrentRead::Record {
@@ -916,6 +949,10 @@ fn rebase(
             .source_schema(&original_secondary)
             .ok_or(BindError::Internal)?
             .clone();
+        let decided = |identifier: String| Unavailable {
+            decided: !open(&identifier),
+            identifier,
+        };
         let missing = item
             .current_fields()
             .find_map(|field| match field.read {
@@ -923,16 +960,19 @@ fn rebase(
                     .columns()
                     .iter()
                     .any(|field| field.name == outer.columns()[column].name))
-                .then(|| field.identifier.clone()),
+                .then(|| decided(field.identifier.clone())),
                 CurrentRead::Intermediate { index, .. } => unavailable.get(&index).cloned(),
                 // A donor read gives the donor record alone (LOOKUP-16): the
                 // record of any other input names no value of it.
                 CurrentRead::Record { source: owner, .. } => authored(owner)
                     .is_ok_and(|authored| Some(authored) != donor)
-                    .then(|| field.identifier.clone()),
+                    .then(|| Unavailable {
+                        identifier: field.identifier.clone(),
+                        decided: true,
+                    }),
                 CurrentRead::Contextual => donor_field(&field.identifier)
                     .is_none()
-                    .then(|| field.identifier.clone()),
+                    .then(|| decided(field.identifier.clone())),
             })
             .or_else(|| {
                 // A lookup a range value reads runs for the donor record too,
@@ -951,6 +991,7 @@ fn rebase(
                         )
                     })
                     .flatten()
+                    .map(decided)
             });
         if let Some(identifier) = missing {
             // Retain the unavailable name until its actual read is bound, so

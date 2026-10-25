@@ -729,7 +729,9 @@ fn bind_values(
         read.split_once('.')
             .filter(|(owner, _)| *owner == left)
             .and_then(|(_, field)| fields.iter().find(|candidate| candidate.name == field))
-            .map_or(ResultType::UNKNOWN, |field| ResultType::declared(field.kind))
+            .map_or(ResultType::UNKNOWN, |field| {
+                ResultType::declared(field.kind)
+            })
     };
     let types = expressions
         .iter()
@@ -807,7 +809,11 @@ fn bind_filter(
             ))),
         }
     }
-    let kind = |name: &str| joined.field(name).and_then(|(_, kind)| kind.map(Into::into));
+    let kind = |name: &str| {
+        joined
+            .field(name)
+            .and_then(|(_, kind)| kind.map(Into::into))
+    };
     findings.extend(
         types::predicate_kinds(plan, kind)
             .into_iter()

@@ -134,7 +134,11 @@ impl Rows {
             Rows::Implicit(_) => None,
             Rows::Templates(templates) => Some(templates.self_columns()),
         };
-        let (secondary, intermediates) = prepared.intermediates.bind(
+        let intermediates::Bound {
+            secondary,
+            items: intermediates,
+            withheld,
+        } = prepared.intermediates.bind(
             inputs,
             &prepared.output,
             self_columns.as_deref(),
@@ -144,7 +148,7 @@ impl Rows {
         )?;
         let plan = match self {
             Rows::Implicit(implicit) => {
-                implicit.bind(prepared, inputs, secondary, intermediates, findings)?
+                implicit.bind(prepared, inputs, secondary, intermediates, findings)
             }
             Rows::Templates(templates) => {
                 let verifications =
@@ -158,9 +162,17 @@ impl Rows {
                     secondary,
                     intermediates,
                     findings,
-                )?
+                )
             }
-        };
+        }
+        .map_err(|error| match error {
+            // Every read of a lookup withheld from `check()` is withheld too.
+            BindError::Invalid(mut findings) => {
+                intermediates::withhold_reads(&mut findings, &withheld);
+                BindError::Invalid(findings)
+            }
+            error => error,
+        })?;
         Ok(plan
             .with_column_verifications(prepared.column_verification_groups())
             .with_warning_verifications(prepared.warning_verification_paths())
@@ -254,8 +266,13 @@ impl Implicit {
             items: &intermediates,
             inputs,
         };
-        let catalog =
-            row_drivers::joined_catalog(prepared.tree.spec(), &prepared.output, source, base, donors)?;
+        let catalog = row_drivers::joined_catalog(
+            prepared.tree.spec(),
+            &prepared.output,
+            source,
+            base,
+            donors,
+        )?;
         let mut assignments = BTreeMap::new();
         let mut dependencies = Vec::new();
         for (column, declaration) in self.declarations.iter().enumerate() {

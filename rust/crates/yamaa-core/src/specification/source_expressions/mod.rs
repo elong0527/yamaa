@@ -285,7 +285,10 @@ impl Declaration {
             crate::result_type::ResultType::declared(
                 name.split_once('.')
                     .and_then(|(_, field)| {
-                        schema.columns().iter().position(|column| column.name == field)
+                        schema
+                            .columns()
+                            .iter()
+                            .position(|column| column.name == field)
                     })
                     .and_then(|column| kinds.get(column).copied().flatten()),
             )
@@ -541,16 +544,15 @@ impl Declaration {
             )));
             return Ok(None);
         }
-        let Some((read, kind)) =
-            range.current_value(
-                catalog,
-                cx.donors.inputs,
-                secondary,
-                intermediates,
-                driver,
-                available,
-                edges,
-            )?
+        let Some((read, kind)) = range.current_value(
+            catalog,
+            cx.donors.inputs,
+            secondary,
+            intermediates,
+            driver,
+            available,
+            edges,
+        )?
         else {
             findings.push(wrap(range.unknown_value(owner)));
             return Ok(None);
@@ -648,7 +650,10 @@ fn bind_implicit_source(
     } = cx.donors;
     let base = cx.scope.driver;
     let fields = catalog.fields(base).ok_or(BindError::Internal)?;
-    let base_kinds = fields.iter().map(|field| field.column_type).collect::<Vec<_>>();
+    let base_kinds = fields
+        .iter()
+        .map(|field| field.column_type)
+        .collect::<Vec<_>>();
     let base_fields = TableSchema::new(
         fields
             .into_iter()
@@ -779,8 +784,7 @@ fn bind_implicit_source(
                 None
             }
         } else if dataset == cx.scope.driver {
-            let filter =
-                declaration.bind_filter_named(path, dataset, base, named, cx.findings)?;
+            let filter = declaration.bind_filter_named(path, dataset, base, named, cx.findings)?;
             let selection = declaration.bind_selection(path, dataset, base.0, cx.findings);
             if let Some(reference_binding::Binding::Dataset { field, .. }) = catalog.bind(name) {
                 if implicit.key && filter.is_none() && selection.is_none() {
