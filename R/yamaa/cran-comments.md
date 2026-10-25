@@ -52,6 +52,9 @@ remain:
   CRAN's guidance for packages that use Rust asks to be bundled rather than
   downloaded. The Repository Policy allows a modestly increased size limit to
   be requested for such bundled sources; we request a limit of 15 MB.
+  The spelling check may also flag SDTM and ADaM in DESCRIPTION. These are
+  the standard abbreviations for Study Data Tabulation Model and Analysis
+  Data Model, respectively, both expanded in the description.
 - `checking installed package size ... NOTE` (R 4.2.0; R 4.6.1 and R-devel
   report it as INFO): 25.2 MB on Linux, 20.4 MB on macOS and 17.7 MB on
   Windows, almost all of it the shared object (24.8, 20.0 and 17.3 MB), which
