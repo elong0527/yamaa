@@ -42,7 +42,7 @@ the held bytes.
 | public-grammar | Shared condition families; existing `grammar-original/cases.tsv` decisions |
 | diagnostic-parity | Refusal cases with their complete expected issue rows; `{path}` in a row's message and context stands for the specification path the test gave, and `{entry}` in its context for that specification's absolute path as the engine resolves it, with forward slashes |
 | read-odm | The two reader documents (the adapters' `odm` fixtures), all 30 columns and cells, archive member selection, the authored sources two refusals read, and each refusal's one issue row and error text (`{source}` stands for the source path the test gave) |
-| parquet-containment | A Parquet file that makes the native decoder panic, its issue row, and a readable file with its saved CSV |
+| parquet-containment | A Parquet file whose INT96 statistic is too long, its issue row, and a readable file with its saved CSV |
 | plan-reuse | One specification run A, B, A on one object with exact output CSV and issue rows; a changed specification's output; a changed function default's output |
 | lint | One specification with layout, authoring and suppression findings: its exact `lint()` rows, the text the proved fixes write, the rows that remain, and three refusals, a named file written for 0.5 among them; and a layer that restates its parent's row template without one derivation, with its `partial_restatement` row, written from the style guide, which `fix` leaves |
 | selftest | The bundled cases in list order, the cases table's columns, the status vocabulary, and the report's lines and the layout of its information line |
@@ -178,15 +178,17 @@ suites write beside the documents: a plain document under a `.tar` name,
 which ODM-1 refuses as an archive name holding no archive, and a bzip2
 stream, refused from its first bytes before anything is decompressed.
 
-`parquet-containment` pairs the installed Python and R containment suites.
-Both files were authored field by field. In the first, the column chunk of an
-INT96 column holds a 13-byte `min_value` statistic, which parquet 55.2.0's
-metadata decoder asserts is 12 bytes long. The engine contains that panic as
+`parquet-containment` pairs the installed Python and R Parquet refusal
+suites. Both files were authored field by field. In the first, the column
+chunk of an INT96 column holds a 13-byte `min_value` statistic, where the
+statistic of an INT96 column holds 12 bytes. The engine refuses the file as
 one `source_parquet_invalid` issue, and the adapters' reader test checks that
-these bytes still reach the panic. The second file holds the INT64 values 1
-and 2, which a later run in the same process reads and saves. Each suite also
-runs both specifications in a fresh process and requires its stderr to be
-empty, so the R suite proves containment on the Windows GNU build too.
+these bytes reach that refusal. The second file holds the INT64 values 1 and
+2, which a later run in the same process reads and saves. Each suite also runs
+both specifications in a fresh process and requires its stderr to be empty.
+The family is named for what it first proved: that the engine contained the
+panic of the upstream decoder on that statistic, which the native reader
+refuses without one (#3878).
 
 `selftest` pairs the installed Python and R selftest suites. Its cases are
 the list in `benchmarks/selftest.yaml`, and its lines are the printed lines of
@@ -313,7 +315,7 @@ the list, so the supplemental catalog stages it nowhere.
 
 The command line is the third host of the issue and run-report parity truth
 (#2846). `rust/crates/yamaa-cli/tests/parity.rs` runs each case of
-`diagnostic-parity` and `project-parity`, and the contained panic of
+`diagnostic-parity` and `project-parity`, and the invalid file of
 `parquet-containment`, through the `yamaa` binary with `--format json`. It
 compares every issue that the printed document holds with the case's rows:
 all twelve columns, in report order, with the context as the canonical JSON

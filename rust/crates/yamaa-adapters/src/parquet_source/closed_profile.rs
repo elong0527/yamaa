@@ -14,13 +14,6 @@ const SOURCE: &str = include_str!("../../profile/parquet.toml");
 #[serde(deny_unknown_fields)]
 struct Profile {
     column: Vec<Column>,
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the native reader of #3878 reads it; its tests do now"
-        )
-    )]
     physical: Vec<PhysicalRow>,
     encoding: Vec<Coded<Encoding>>,
     dictionary: Dictionary,
@@ -50,13 +43,6 @@ pub(super) struct Column {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the native reader of #3878 reads it; its tests do now"
-    )
-)]
 struct PhysicalRow {
     name: Physical,
     code: i64,
@@ -189,7 +175,6 @@ pub(super) fn levels(code: i64) -> Option<Encoding> {
 
 /// The physical type of format code `code`; `None` for a code the profile
 /// does not list.
-#[cfg(test)]
 pub(super) fn physical(code: i64) -> Option<Physical> {
     let row = profile().physical.iter().find(|row| row.code == code)?;
     Some(row.name)
@@ -197,10 +182,18 @@ pub(super) fn physical(code: i64) -> Option<Physical> {
 
 /// The fewest bytes a minimum or maximum statistic of `physical` holds, and
 /// whether it holds exactly that many; `None` when the profile bounds none.
-#[cfg(test)]
 pub(super) fn statistics(physical: Physical) -> Option<(usize, bool)> {
     let row = profile().physical.iter().find(|row| row.name == physical)?;
     row.statistics.map(|width| (width, row.exact))
+}
+
+/// Whether a data page of `physical` values decodes from `encoding`, a value
+/// encoding that holds no dictionary indices.
+pub(super) fn decodes(physical: Physical, encoding: Encoding) -> bool {
+    profile()
+        .physical
+        .iter()
+        .any(|row| row.name == physical && row.encodings.contains(&encoding))
 }
 
 /// The page type of format code `code`; `None` for a code the profile does
@@ -208,6 +201,13 @@ pub(super) fn statistics(physical: Physical) -> Option<(usize, bool)> {
 pub(super) fn page(code: i64) -> Option<PageType> {
     let row = profile().page.iter().find(|row| row.code == code)?;
     Some(row.name)
+}
+
+/// The most encoding statistics a column chunk lists: one for each page
+/// type and encoding the profile lists, as a chunk counts the pages of each
+/// pair once.
+pub(super) fn encoding_statistics() -> usize {
+    profile().page.len() * profile().encoding.len()
 }
 
 #[cfg(test)]

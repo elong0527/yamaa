@@ -1,7 +1,7 @@
-"""Installed Parquet containment: a decoder panic is one finding, and silent.
+"""Installed Parquet refusal: an invalid statistic is one finding, and silent.
 
-parquet 55.2.0's metadata decoder panics on an INT96 statistic longer than 12
-bytes. The engine contains that panic as `source_parquet_invalid` (PARQUET-5),
+An INT96 column statistic holds 12 bytes, and the file of this family holds one
+of 13. The engine refuses the file as `source_parquet_invalid` (PARQUET-5),
 prints nothing, and later reads in the same process still work. R reads the
 same truth.
 """
@@ -19,8 +19,8 @@ import yamaa
 
 TRUTH = load_truth(__file__, "parquet-containment")
 # Runs each specification in a fresh interpreter, whose stderr is the one a
-# panic hook writes to, saves a run that has output, and prints each run's
-# conditions.
+# panic hook or a warning would write to, saves a run that has output, and
+# prints each run's conditions.
 CHILD = """
 import json, sys
 import yamaa
@@ -39,7 +39,7 @@ class ParquetContainment(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory(prefix="yamaa-parquet-containment-")
         self.addCleanup(temporary.cleanup)
         self.specs = {}
-        for name in ("contained_panic_parquet", "readable_parquet"):
+        for name in ("long_int96_statistic_parquet", "readable_parquet"):
             directory = Path(temporary.name) / name
             directory.mkdir()
             spec = directory / "spec.yaml"
@@ -48,16 +48,16 @@ class ParquetContainment(unittest.TestCase):
             self.specs[name] = spec
         self.saved = self.specs["readable_parquet"].with_name("output.csv")
 
-    def test_a_decoder_panic_is_an_invalid_source_and_later_reads_still_work(self):
+    def test_a_long_int96_statistic_is_invalid_and_later_reads_still_work(self):
         # A truth row names its file relative to the specification's
         # directory; a location names it by its absolute path (P-ISSUE-1).
-        directory = self.specs["contained_panic_parquet"].parent.resolve()
+        directory = self.specs["long_int96_statistic_parquet"].parent.resolve()
         expected = [
             {**row, "file": (directory / row["file"]).as_posix()}
             for row in TRUTH["issues"]
         ]
         for _ in range(2):
-            result = yamaa.spec(self.specs["contained_panic_parquet"]).run()
+            result = yamaa.spec(self.specs["long_int96_statistic_parquet"]).run()
             self.assertEqual(result.issues.to_pylist(), expected)
             self.assertIsNone(result.output)
             with self.assertRaises(yamaa.Error):
@@ -69,14 +69,14 @@ class ParquetContainment(unittest.TestCase):
                 self.saved.read_bytes(), TRUTH["readable_csv"].encode("utf-8")
             )
 
-    def test_a_contained_decoder_panic_prints_nothing(self):
+    def test_refusing_a_long_int96_statistic_prints_nothing(self):
         child = subprocess.run(
             [
                 sys.executable,
                 "-I",
                 "-c",
                 CHILD,
-                str(self.specs["contained_panic_parquet"]),
+                str(self.specs["long_int96_statistic_parquet"]),
                 str(self.specs["readable_parquet"]),
             ],
             capture_output=True,

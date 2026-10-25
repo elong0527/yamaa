@@ -1,27 +1,30 @@
-//! Opaque physical values: read every chunk before profile/text validation.
-use super::{reader::Error, shape};
-use crate::storage_api::contain_decode;
+//! parquet 55.2.0's column reader, which the reader read stored columns with
+//! until #3878: the differential harness's oracle for the native column
+//! reader (`columns`), reading the pages with each header presented as the
+//! footer is (`differential`).
+use super::{columns, footer::Footer, reader::Error, shape};
 use parquet::{
     column::reader::{ColumnReader, ColumnReaderImpl},
     data_type::{ByteArray, DataType},
     errors::ParquetError,
-    file::{metadata::ParquetMetaData, properties::ReaderProperties, reader::RowGroupReader},
+    file::{
+        metadata::ParquetMetaData, properties::ReaderProperties, reader::RowGroupReader,
+        serialized_reader::SerializedRowGroupReader,
+    },
     schema::types::ColumnDescriptor,
 };
 use std::sync::Arc;
 
 /// Make one call into the Parquet crate on admitted input. Its panic, like its
-/// error, reports a malformed page or page header. The code around each call
-/// stays outside `contain_decode`, so that a panic in it is not mistaken for
-/// malformed input.
-fn native<T>(call: impl FnOnce() -> Result<T, ParquetError>) -> Result<T, Error> {
-    contain_decode(call)
-        .ok_or(Error::Malformed)?
+/// error, reports a malformed page, page header or footer.
+pub(super) fn native<T>(call: impl FnOnce() -> Result<T, ParquetError>) -> Result<T, Error> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(call))
+        .map_err(|_| Error::Malformed)?
         .map_err(|_| Error::Malformed)
 }
 
 #[derive(Debug)]
-pub(super) enum Column {
+enum Column {
     Int32(Vec<Option<i32>>),
     Int64(Vec<Option<i64>>),
     Double(Vec<Option<f64>>),
@@ -102,40 +105,32 @@ fn collect<T: DataType>(
     Ok(result)
 }
 
-/// Read the pages of the row groups `groups`, a run of the file's row groups
-/// such as one partition's (#3792), through the native column readers.
-/// `source` is the held file with each page header presented as the footer
-/// is presented to the metadata decoder. Each call into the Parquet crate is
-/// contained on its own (`native`).
+/// Read the pages of the row groups `groups` of the file `source`, whose
+/// footer parquet 55 decoded to `metadata` and the native decoder to
+/// `footer`, through parquet 55's column readers. Each call into the
+/// Parquet crate is contained on its own (`native`).
 pub(super) fn read(
     source: bytes::Bytes,
     metadata: &ParquetMetaData,
+    footer: &Footer,
     keep: &[bool],
     schema: &arrow_schema::Schema,
     groups: std::ops::Range<usize>,
-) -> Result<Vec<Column>, Error> {
+) -> Result<Vec<columns::Column>, Error> {
     // Reuse the admitted metadata instead of reparsing the footer through the
     // native decoder's unknown-field skip a second time.
     let source = Arc::new(source);
     let properties = Arc::new(ReaderProperties::builder().build());
     let descriptors = metadata.file_metadata().schema_descr().columns();
-    let shapes = shape::constraints(schema, metadata.file_metadata().schema_descr())?;
+    let shapes = shape::constraints(schema, &footer.schema)?;
     if keep.len() != descriptors.len() {
         return Err(Error::Malformed);
     }
     let mut result: Vec<_> = descriptors.iter().map(|_| Column::Discard).collect();
-    let first = groups.start;
     let row_groups = metadata.row_groups().get(groups).ok_or(Error::Malformed)?;
-    for (offset, group) in row_groups.iter().enumerate() {
-        let index = first + offset;
+    for group in row_groups {
         let group = native(|| {
-            crate::storage_api::row_group_reader(
-                source.clone(),
-                group,
-                metadata,
-                index,
-                properties.clone(),
-            )
+            SerializedRowGroupReader::new(source.clone(), group, None, properties.clone())
         })?;
         let rows = usize::try_from(group.metadata().num_rows()).map_err(|_| Error::Malformed)?;
         if group.num_columns() != descriptors.len() {
@@ -196,42 +191,22 @@ pub(super) fn read(
             };
         }
     }
-    Ok(result)
+    Ok(result.into_iter().map(converted).collect())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use arrow_array::{Int64Array, RecordBatch};
-    use arrow_schema::{DataType as ArrowType, Field, Schema};
-    use parquet::arrow::ArrowWriter;
-    use parquet::file::{reader::FileReader, serialized_reader::SerializedFileReader};
-
-    /// A panic inside the call into the Parquet crate reads as malformed
-    /// input, and a panic in the code around it reaches the caller.
-    #[test]
-    fn only_the_call_into_the_parquet_crate_is_contained() {
-        let inside = native::<()>(|| panic!("a panic inside the native call"));
-        assert_eq!(inside.unwrap_err(), Error::Malformed);
-        let around = std::panic::catch_unwind(|| {
-            native(|| Ok(())).map(|()| panic!("a panic around the native call"))
-        });
-        assert!(around.is_err());
-    }
-
-    #[test]
-    fn physical_values_are_decoded_in_order() {
-        let schema = Arc::new(Schema::new(vec![Field::new("N", ArrowType::Int64, false)]));
-        let batch =
-            RecordBatch::try_new(schema.clone(), vec![Arc::new(Int64Array::from(vec![1, 2]))])
-                .unwrap();
-        let mut bytes = Vec::new();
-        let mut writer = ArrowWriter::try_new(&mut bytes, schema.clone(), None).unwrap();
-        writer.write(&batch).unwrap();
-        writer.close().unwrap();
-        let bytes = bytes::Bytes::from(bytes);
-        let reader = SerializedFileReader::new(bytes.clone()).unwrap();
-        let result = read(bytes, reader.metadata(), &[true], &schema, 0..1).unwrap();
-        assert!(matches!(&result[0], Column::Int64(values) if values == &[Some(1), Some(2)]));
+/// A column as the native reader holds it.
+fn converted(column: Column) -> columns::Column {
+    match column {
+        Column::Int32(values) => columns::Column::Int32(values),
+        Column::Int64(values) => columns::Column::Int64(values),
+        Column::Double(values) => columns::Column::Double(values),
+        Column::Bytes(values) => {
+            let mut binary = columns::Binary::default();
+            for value in &values {
+                binary.push(value.as_ref().map(ByteArray::data));
+            }
+            columns::Column::Bytes(binary)
+        }
+        Column::Discard => columns::Column::Discard,
     }
 }
