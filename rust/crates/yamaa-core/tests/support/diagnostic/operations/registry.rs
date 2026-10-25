@@ -1,8 +1,12 @@
 //! The findings of single core entry points (`registry.json`) and of a
 //! project's environment (`environment.json`). Each operation calls one core
 //! function with the arguments its case writes.
-use super::{bindings, codelist_source, column_type, language, text, value, File};
-use crate::support::{diagnostic::json::Json, project_call_compiler::definition};
+use super::{bindings, codelist_source, column_type, language, text, value, value_type, File};
+use crate::support::{
+    diagnostic::json::Json,
+    project_call_compiler::definition,
+    roots::{Case, Definition, Parameter},
+};
 use yamaa_core::{
     application_issue::{self, Fault, Step},
     ast, conversion,
@@ -13,7 +17,7 @@ use yamaa_core::{
     iso8601::Form,
     portable_regex::{CompileError, Pattern},
     project_environment::{self, Draft, LockKind, LockReference},
-    project_environment_diagnostics,
+    project_environment_diagnostics, project_function,
     project_function_document::{Finding, Kind},
     resource::ResourceFailure,
     scalar_language,
@@ -331,15 +335,23 @@ fn incomparable_sources(input: &Json) -> Vec<Diagnostic> {
 }
 
 /// The findings of a project's environment, each at its path, `{language,
-/// lock, functions, codelists}`: the host `language`, or `null` for none; the
-/// host's `lock`, `{written, kind}`, or `null`; the function files the project
-/// lists, or `null` when it writes no list, each the support's integer
-/// identity `{identity, implementations}` with its callables as `[language,
-/// callable]` pairs; and the codelist sources, each as a codelist file
-/// writes it ([`codelist_source`]).
+/// lock, functions, codelists, findings}`: the environment [`draft`], and the
+/// [`findings`] its projection reads.
 fn project_environment(input: &Json) -> Vec<Diagnostic> {
-    let input = input.closed(&["language", "lock", "functions", "codelists"]);
-    let draft = Draft {
+    let input = input.closed(&["language", "lock", "functions", "codelists", "findings"]);
+    let draft = draft(input);
+    project_environment_diagnostics::diagnostics(&draft, &findings(input, &draft))
+        .expect("a complete projection")
+}
+
+/// A project's environment, `{language, lock, functions, codelists}`: the
+/// host `language`, or `null` for none; the host's `lock`, `{written, kind}`,
+/// or `null`; the function files the project lists, or `null` when it writes
+/// no list, each a [`function_file`]; and the codelist sources, each as a
+/// codelist file writes it ([`codelist_source`]).
+#[track_caller]
+pub(super) fn draft(input: &Json) -> Draft {
+    Draft {
         language: match input.field("language") {
             Json::Null => None,
             host => Some(language(host.text())),
@@ -368,16 +380,120 @@ fn project_environment(input: &Json) -> Vec<Diagnostic> {
             .iter()
             .map(codelist_source)
             .collect(),
-    };
-    let findings = project_environment::validate(&draft);
-    project_environment_diagnostics::diagnostics(&draft, &findings).expect("a complete projection")
+    }
 }
 
-/// A function file defining the support's integer identity `identity`,
-/// `{identity, implementations}`.
+/// The findings a projection of `draft` reads: those `input` states as
+/// `findings`, each a finding of the definition at index `function` of the
+/// draft's functions ([`function_finding`]), or, when it states none, every
+/// finding `project_environment::validate` reports for `draft`.
+#[track_caller]
+pub(super) fn findings(input: &Json, draft: &Draft) -> Vec<project_environment::Finding> {
+    let Some(stated) = input.get("findings") else {
+        return project_environment::validate(draft);
+    };
+    stated
+        .items()
+        .iter()
+        .map(|finding| project_environment::Finding::Function {
+            function: finding.field("function").integer(),
+            finding: function_finding(finding),
+        })
+        .collect()
+}
+
+/// A function definition's finding, `{function, finding, ...}`: the variant
+/// `finding` names, in snake case, with the members it holds, each an index
+/// (`parameter`, `case`, `tag`, `argument`), the `language` of a callable or
+/// the `obligation` no case covers.
+#[track_caller]
+fn function_finding(json: &Json) -> project_function::Finding {
+    use project_function::Finding as F;
+    let json = json.closed(&[
+        "function",
+        "finding",
+        "language",
+        "parameter",
+        "case",
+        "tag",
+        "argument",
+        "obligation",
+    ]);
+    let parameter = || json.field("parameter").integer();
+    let case = || json.field("case").integer();
+    let tag = || json.field("tag").integer();
+    let argument = || json.field("argument").integer();
+    match text(json, "finding") {
+        "invalid_name" => F::InvalidName,
+        "missing_implementation" => F::MissingImplementation,
+        "invalid_implementation" => F::InvalidImplementation(language(text(json, "language"))),
+        "empty_description" => F::EmptyDescription,
+        "negative_comparison_decimals" => F::NegativeComparisonDecimals,
+        "invalid_parameter_name" => F::InvalidParameterName {
+            parameter: parameter(),
+        },
+        "duplicate_parameter" => F::DuplicateParameter {
+            parameter: parameter(),
+        },
+        "required_default" => F::RequiredDefault {
+            parameter: parameter(),
+        },
+        "missing_default" => F::MissingDefault {
+            parameter: parameter(),
+        },
+        "invalid_default" => F::InvalidDefault {
+            parameter: parameter(),
+        },
+        "invalid_case_id" => F::InvalidCaseId { case: case() },
+        "duplicate_case_id" => F::DuplicateCaseId { case: case() },
+        "empty_coverage" => F::EmptyCoverage { case: case() },
+        "duplicate_coverage" => F::DuplicateCoverage {
+            case: case(),
+            tag: tag(),
+        },
+        "invalid_coverage" => F::InvalidCoverage {
+            case: case(),
+            tag: tag(),
+        },
+        "unsupported_evidence" => F::UnsupportedEvidence {
+            case: case(),
+            tag: tag(),
+        },
+        "duplicate_argument" => F::DuplicateArgument {
+            case: case(),
+            argument: argument(),
+        },
+        "unknown_argument" => F::UnknownArgument {
+            case: case(),
+            argument: argument(),
+        },
+        "missing_required_argument" => F::MissingRequiredArgument {
+            case: case(),
+            parameter: parameter(),
+        },
+        "argument_type" => F::ArgumentType {
+            case: case(),
+            argument: argument(),
+        },
+        "invalid_result" => F::InvalidResult { case: case() },
+        "missing_obligation" => F::MissingObligation(text(json, "obligation").into()),
+        other => panic!("no function definition finding {other:?}"),
+    }
+}
+
+/// A function file: the support's integer identity `{identity,
+/// implementations}`, or a definition written in full, `{name, description,
+/// params, returns, may_return_missing, comparison_decimals,
+/// implementations, tests}`, as a function file writes it
+/// (`yaml/schema_function.yaml`), its parameters each `{name, type,
+/// required, default, accepts_missing}` and its tests each `{id, covers,
+/// args, result}`, with `args` by parameter name and each value written as
+/// [`value`] reads one. As the schema says, `required` defaults to true,
+/// `accepts_missing` and `may_return_missing` to false and
+/// `comparison_decimals` to 4, and a parameter without `default` has none.
+/// Either form writes its callables as `[language, callable]` pairs.
 #[track_caller]
 fn function_file(json: &Json) -> ast::Function {
-    let json = json.closed(&["identity", "implementations"]);
     let implementations = json
         .field("implementations")
         .items()
@@ -387,36 +503,106 @@ fn function_file(json: &Json) -> ast::Function {
             other => panic!("an implementation is a [language, callable] pair: {other:?}"),
         })
         .collect::<Vec<_>>();
-    definition(text(json, "identity")).file(&implementations)
+    if json.get("identity").is_some() {
+        let json = json.closed(&["identity", "implementations"]);
+        return definition(text(json, "identity")).file(&implementations);
+    }
+    let json = json.closed(&[
+        "name",
+        "description",
+        "params",
+        "returns",
+        "may_return_missing",
+        "comparison_decimals",
+        "implementations",
+        "tests",
+    ]);
+    let flag = |json: &Json, key: &str| json.get(key).is_some_and(Json::boolean);
+    Definition {
+        name: text(json, "name").into(),
+        // The callables are the pairs `file` writes.
+        function: String::new(),
+        description: text(json, "description").into(),
+        params: json
+            .field("params")
+            .items()
+            .iter()
+            .map(|parameter| {
+                let parameter =
+                    parameter.closed(&["name", "type", "required", "default", "accepts_missing"]);
+                Parameter {
+                    name: text(parameter, "name").into(),
+                    kind: value_type(parameter.field("type")),
+                    required: parameter.get("required").is_none_or(Json::boolean),
+                    default: parameter.get("default").map(value),
+                    accepts_missing: flag(parameter, "accepts_missing"),
+                }
+            })
+            .collect(),
+        returns: column_type(json.field("returns")),
+        may_return_missing: flag(json, "may_return_missing"),
+        comparison_decimals: json
+            .get("comparison_decimals")
+            .map_or(4, |decimals| decimals.integer()),
+        tests: json
+            .field("tests")
+            .items()
+            .iter()
+            .map(|case| {
+                let case = case.closed(&["id", "covers", "args", "result"]);
+                Case {
+                    id: text(case, "id").into(),
+                    covers: case
+                        .field("covers")
+                        .items()
+                        .iter()
+                        .map(|tag| tag.text().into())
+                        .collect(),
+                    args: case
+                        .field("args")
+                        .members()
+                        .iter()
+                        .map(|(name, argument)| (name.clone(), value(argument)))
+                        .collect(),
+                    result: value(case.field("result")),
+                }
+            })
+            .collect(),
+    }
+    .file(&implementations)
 }
 
 /// The findings of a function file's values that their declared types cannot
-/// read, `{findings}`, each `{path, node, kind, value}` with the text the
-/// value is written as.
+/// read, `{findings}`, each a [`scalar_finding`].
 fn function_file_scalars(input: &Json) -> Vec<Diagnostic> {
     let input = input.closed(&["findings"]);
     let findings = input
         .field("findings")
         .items()
         .iter()
-        .map(|finding| {
-            let finding = finding.closed(&["path", "node", "kind", "value"]);
-            Finding {
-                path: text(finding, "path").into(),
-                node: finding.field("node").integer(),
-                kind: match text(finding, "kind") {
-                    "normalized_shape" => Kind::NormalizedShape,
-                    "integer_range" => Kind::IntegerRange,
-                    "invalid_date" => Kind::InvalidDate,
-                    "invalid_datetime" => Kind::InvalidDateTime,
-                    other => panic!("no function file value finding {other:?}"),
-                },
-                value: finding.get("value").map(|written| written.text().into()),
-            }
-        })
+        .map(scalar_finding)
         .collect::<Vec<_>>();
     project_environment_diagnostics::function_file_scalar_diagnostics(&findings)
         .expect("a complete projection")
+}
+
+/// A value a captured file writes that its declared type cannot read, `{path,
+/// node, kind, value}`, with the text the value is written as.
+#[track_caller]
+pub(super) fn scalar_finding(finding: &Json) -> Finding {
+    let finding = finding.closed(&["path", "node", "kind", "value"]);
+    Finding {
+        path: text(finding, "path").into(),
+        node: finding.field("node").integer(),
+        kind: match text(finding, "kind") {
+            "normalized_shape" => Kind::NormalizedShape,
+            "integer_range" => Kind::IntegerRange,
+            "invalid_date" => Kind::InvalidDate,
+            "invalid_datetime" => Kind::InvalidDateTime,
+            other => panic!("no function file value finding {other:?}"),
+        },
+        value: finding.get("value").map(|written| written.text().into()),
+    }
 }
 
 /// The refusal of a `language` host's lock that is no packaging lock,
