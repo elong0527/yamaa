@@ -75,6 +75,18 @@ An object with three methods:
     keeps. Releasing the stream before its last batch cancels the run, which
     then saves nothing.}
 }
+\code{$check()} and \code{$run()} also take \code{progress}, a function
+called on the calling thread with one named list per event as each phase
+starts and ends: \code{name}, \code{phase}, \code{kind} (\code{"start"},
+\code{"end"}, \code{"partition"} or \code{"batch"}), \code{outcome},
+\code{number} and \code{rows}, the last three \code{NULL} where the event has
+none. A \code{progress} function that signals an error is called no more,
+and the check or run then fails with one \code{engine_rejected} issue whose
+code is \code{host_progress_failure}; such a run saves nothing. A check and
+a run hold \code{$timings}, a data frame of each phase the call ran, with the
+columns \code{name}, \code{phase}, \code{started_ms}, \code{elapsed_ms} and
+\code{outcome}; no saved file holds them.
+
 A failure raises a condition of class \code{yamaa_error} whose \code{issues}
 data frame says why; for a refused \code{$save()}, its \code{paths} lists
 the files written before the refusal.

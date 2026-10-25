@@ -792,9 +792,9 @@ impl<'a> SpecRequest<'a> {
         plans.retain(|kept| identity.as_ref() == Some(kept));
         let reporter = Arc::new(self.reporter());
         let observed = reporter.observe(&self.path);
-        let (plan, compiled) = self
-            .engine
-            .plan_reusing(plans, &request, identity.as_ref(), &observed);
+        let (plan, compiled) =
+            self.engine
+                .plan_reusing(plans, &request, identity.as_ref(), &observed);
         if compiled {
             self.engine.keep(plans, &request, identity, &plan);
         }
@@ -1303,12 +1303,20 @@ impl<'a> ProjectRequest<'a> {
             }
             let (checked, measured) = if listed.failure().is_empty() {
                 let observed = reporter.observe(listed.name().unwrap_or(listed.written()));
-                let checked =
-                    crate::internal::run_check(shared, listed.path(), Some(project), &observed, &token)
-                        .map_err(|Cancelled| self.cancelled())?;
+                let checked = crate::internal::run_check(
+                    shared,
+                    listed.path(),
+                    Some(project),
+                    &observed,
+                    &token,
+                )
+                .map_err(|Cancelled| self.cancelled())?;
                 (checked, Some(observed.measured().clone()))
             } else {
-                ((listed.failure().to_vec(), Arc::clone(read.locator())), None)
+                (
+                    (listed.failure().to_vec(), Arc::clone(read.locator())),
+                    None,
+                )
             };
             members.push(Member {
                 name: listed.name().map(str::to_owned),

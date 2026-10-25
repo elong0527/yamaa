@@ -424,7 +424,13 @@ fn project_request<'a>(
 /// The check of a specification, or, with `parent`, of a fragment composed on
 /// the specification `parent` names as its parent (#3694).
 #[extendr]
-fn spec_check(specification: Raw, project: Robj, parent: Robj, version: Raw, progress: Robj) -> List {
+fn spec_check(
+    specification: Raw,
+    project: Robj,
+    parent: Robj,
+    version: Raw,
+    progress: Robj,
+) -> List {
     reply(|| {
         let project = optional_text(&project)?;
         let parent = optional_text(&parent)?;
@@ -544,15 +550,19 @@ fn spec_run(
             }
             return store(Value::Streamed(run?));
         }
-        let run = called(&version, (Some(capabilities), &progress), |engine, token| {
-            let request =
-                spec_request(engine, &specification, project.as_deref()).cancel_with(token);
-            match plans {
-                Some(plans) => request.reusing(plans),
-                None => request,
-            }
-            .run()
-        })?;
+        let run = called(
+            &version,
+            (Some(capabilities), &progress),
+            |engine, token| {
+                let request =
+                    spec_request(engine, &specification, project.as_deref()).cancel_with(token);
+                match plans {
+                    Some(plans) => request.reusing(plans),
+                    None => request,
+                }
+                .run()
+            },
+        )?;
         store(Value::Run(Mutex::new(run)))
     })
 }
@@ -736,7 +746,9 @@ fn project_spec(project: Raw, name: Raw, version: Raw) -> List {
 fn project_names(project: Raw, version: Raw) -> List {
     reply(|| {
         let project = text(&project)?;
-        let names = engine(&text(&version)?, None, None).project(&project).names()?;
+        let names = engine(&text(&version)?, None, None)
+            .project(&project)
+            .names()?;
         Ok(Strings::from_values(names).into_robj())
     })
 }
@@ -766,15 +778,20 @@ fn project_run(
         let project = text(&project)?;
         let holder = held_plans(&plans)?;
         let plans = plans_of(&holder);
-        let runs = called(&version, (Some(capabilities), &progress), |engine, token| {
-            let request = project_request(engine, &project, section.as_deref()).cancel_with(token);
-            // Only an unknown section refuses the call with issues.
-            match plans {
-                Some(plans) => request.reusing(plans),
-                None => request,
-            }
-            .run()
-        })?;
+        let runs = called(
+            &version,
+            (Some(capabilities), &progress),
+            |engine, token| {
+                let request =
+                    project_request(engine, &project, section.as_deref()).cancel_with(token);
+                // Only an unknown section refuses the call with issues.
+                match plans {
+                    Some(plans) => request.reusing(plans),
+                    None => request,
+                }
+                .run()
+            },
+        )?;
         store(Value::ProjectRun(Mutex::new(runs)))
     })
 }

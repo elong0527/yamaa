@@ -66,12 +66,26 @@ fn hearing(heard: &Arc<Mutex<Vec<Heard>>>, partitions: Option<Partitions>) -> En
 }
 
 fn start(name: &str, phase: ProgressPhase) -> Heard {
-    (name.to_owned(), phase, ProgressKind::Start, None, None, None)
+    (
+        name.to_owned(),
+        phase,
+        ProgressKind::Start,
+        None,
+        None,
+        None,
+    )
 }
 
 fn end(name: &str, phase: ProgressPhase) -> Heard {
     let succeeded = Some(Status::Succeeded);
-    (name.to_owned(), phase, ProgressKind::End, succeeded, None, None)
+    (
+        name.to_owned(),
+        phase,
+        ProgressKind::End,
+        succeeded,
+        None,
+        None,
+    )
 }
 
 fn numbered(name: &str, kind: ProgressKind, number: usize, rows: usize) -> Heard {
@@ -113,8 +127,8 @@ fn a_run_reports_each_phase_partition_and_batch_in_order() {
     let thirds = Partitions::new(NonZeroUsize::new(3).unwrap());
     let partitions = [(1, 3), (2, 3), (3, 2)]
         .map(|(number, rows)| numbered(path, ProgressKind::Partition, number, rows));
-    let batches =
-        [(1, 3), (2, 3), (3, 2)].map(|(number, rows)| numbered(path, ProgressKind::Batch, number, rows));
+    let batches = [(1, 3), (2, 3), (3, 2)]
+        .map(|(number, rows)| numbered(path, ProgressKind::Batch, number, rows));
     for (partitioned, streamed, expected, label) in [
         (None, false, phases(path, &[], &[]), "a whole-table run"),
         (
@@ -176,7 +190,10 @@ fn progress_failure(step: &str) -> String {
 
 #[test]
 fn a_callback_that_panics_or_fails_fails_the_run_which_saves_nothing() {
-    for (panics, label) in [(true, "a callback that panics"), (false, "a callback that fails")] {
+    for (panics, label) in [
+        (true, "a callback that panics"),
+        (false, "a callback that fails"),
+    ] {
         let resolver = served();
         let calls = Arc::new(AtomicUsize::new(0));
         let counted = Arc::clone(&calls);
@@ -192,7 +209,11 @@ fn a_callback_that_panics_or_fails_fails_the_run_which_saves_nothing() {
                 }),
         );
         let mut run = engine.spec("spec.yaml").run().unwrap();
-        assert_eq!(calls.load(Ordering::SeqCst), 1, "{label}: called once, then no more");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            1,
+            "{label}: called once, then no more"
+        );
         assert_eq!(
             (
                 run.status(),
@@ -297,11 +318,19 @@ fn every_result_carries_the_phases_it_ran() {
             .collect::<Vec<_>>()
     };
     let check = engine.spec(spec).project(project).check().unwrap();
-    assert_eq!(listed(check.timings()), succeeded(spec, &[Preparation]), "a check");
+    assert_eq!(
+        listed(check.timings()),
+        succeeded(spec, &[Preparation]),
+        "a check"
+    );
     let run = engine.spec(spec).project(project).run().unwrap();
     assert_eq!(listed(run.timings()), succeeded(spec, &run_phases), "a run");
     let mut runs = engine.project(project).run().unwrap();
-    assert_eq!(listed(runs.timings()), succeeded("ADSL", &run_phases), "a project run");
+    assert_eq!(
+        listed(runs.timings()),
+        succeeded("ADSL", &run_phases),
+        "a project run"
+    );
     let project_check = engine.project(project).check().unwrap();
     assert_eq!(
         listed(project_check.timings()),

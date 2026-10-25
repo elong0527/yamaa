@@ -158,8 +158,15 @@ impl Pending {
         self.measured.measurements().complete(build.accepted());
         // A failed progress callback fails the run, which keeps no output.
         if self.reporter.failed() {
-            build.fail(vec![Reporter::failure(yamaa_core::application_issue::Step::Build)]);
-            return Some((Run { build: build.with_subject(subject) }, None));
+            build.fail(vec![Reporter::failure(
+                yamaa_core::application_issue::Step::Build,
+            )]);
+            return Some((
+                Run {
+                    build: build.with_subject(subject),
+                },
+                None,
+            ));
         }
         let build = build.with_subject(subject);
         Some((Run { build }, batches))
@@ -367,10 +374,13 @@ impl Streamed {
                 reporter: Arc::clone(&reporter),
             }))
         } else {
-            let mut build = plan.run_through(&shared, None, &reporter.resume(measured.clone()), token);
+            let mut build =
+                plan.run_through(&shared, None, &reporter.resume(measured.clone()), token);
             measured.measurements().complete(false);
             if reporter.failed() {
-                build.fail(vec![Reporter::failure(yamaa_core::application_issue::Step::Build)]);
+                build.fail(vec![Reporter::failure(
+                    yamaa_core::application_issue::Step::Build,
+                )]);
             }
             let build = build.with_subject(&subject);
             State::Ended {

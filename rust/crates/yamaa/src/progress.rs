@@ -181,8 +181,7 @@ pub struct ProgressEvent {
 /// The callback an engine's operations report their progress to. An error it
 /// returns, such as the exception a host's callback raised, fails the
 /// operation's result, as a panic in it does.
-pub type ProgressCallback =
-    Arc<dyn Fn(&ProgressEvent) -> Result<(), FunctionError> + Send + Sync>;
+pub type ProgressCallback = Arc<dyn Fn(&ProgressEvent) -> Result<(), FunctionError> + Send + Sync>;
 
 /// One phase a result ran, a row of its [`Timings`].
 #[non_exhaustive]

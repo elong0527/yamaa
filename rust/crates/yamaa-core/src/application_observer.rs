@@ -61,14 +61,30 @@ pub struct Refusal {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Event {
-    Phase { phase: Phase },
-    FunctionCall { stage: CallStage },
-    Exit { phase: Phase, outcome: Outcome },
-    FunctionReturn { stage: CallStage, outcome: Outcome },
-    Refusal { phase: Phase, refusal: Refusal },
+    Phase {
+        phase: Phase,
+    },
+    FunctionCall {
+        stage: CallStage,
+    },
+    Exit {
+        phase: Phase,
+        outcome: Outcome,
+    },
+    FunctionReturn {
+        stage: CallStage,
+        outcome: Outcome,
+    },
+    Refusal {
+        phase: Phase,
+        refusal: Refusal,
+    },
     /// A partitioned run enters its partition `number`, from 1, of `records`
     /// driver records (#3762).
-    Partition { number: usize, records: usize },
+    Partition {
+        number: usize,
+        records: usize,
+    },
 }
 
 /// Observers have no failure result and must not mutate source/callback state,

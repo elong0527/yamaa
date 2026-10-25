@@ -52,11 +52,12 @@ impl Progress {
             number = count(event.number),
             rows = count(event.rows)
         );
-        let reply = function
-            .call(pairlist!(event = fields))
-            .map_err(|_| FunctionError::Internal {
-                code: "progress_boundary",
-            })?;
+        let reply =
+            function
+                .call(pairlist!(event = fields))
+                .map_err(|_| FunctionError::Internal {
+                    code: "progress_boundary",
+                })?;
         let reply = reply
             .as_list()
             .filter(|reply| reply.len() == 2)

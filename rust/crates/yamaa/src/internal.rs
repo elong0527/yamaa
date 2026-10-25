@@ -21,7 +21,6 @@ use crate::cancel::{CancellationToken, Cancelled};
 use crate::diagnostic::Locator;
 use crate::engine::Build;
 use crate::error::Failure;
-use crate::progress::Observed;
 use crate::host::functions::{
     Argument, BatchArgument, CallError, FunctionError, FunctionHandle, FunctionIdentity,
     HostLanguage, LockContext, LockKind, ProjectFunctions, Signature,
@@ -30,6 +29,7 @@ use crate::host::resolver::{
     ResolverFailure, ResolverKind, ResolverOperation, ResolverReply, ResolverRequest,
     ResourceResolver,
 };
+use crate::progress::Observed;
 use crate::scalar::{Scalar, ScalarRef};
 use crate::text::Action;
 
@@ -351,7 +351,11 @@ pub(crate) fn run_check_on(
                     resolver_bridge(shared),
                 )
             },
-            |checked| checked.as_ref().map_or(true, |(issues, _)| crate::outcome::fails(issues)),
+            |checked| {
+                checked
+                    .as_ref()
+                    .map_or(true, |(issues, _)| crate::outcome::fails(issues))
+            },
         )
         .map_err(|refusal| Failure::from_issues(action, &refusal))?;
     Ok((issues, Arc::new(locator)))
@@ -443,16 +447,7 @@ pub(crate) fn run(
     observed: &Observed<'_>,
     token: &CancellationToken,
 ) -> Build {
-    run_with(
-        shared,
-        specification,
-        compiled,
-        held,
-        observed,
-        token,
-        None,
-    )
-    .0
+    run_with(shared, specification, compiled, held, observed, token, None).0
 }
 
 /// One run of a compiled request whose output is read as a stream (#3697):
@@ -505,13 +500,7 @@ fn run_with(
         Compiled::Ready(prepared, _) => prepared,
         Compiled::Refused { issues, .. } => {
             yamaa_core::domain_entry::finish(scope);
-            let build = Build::new(
-                Err(issues.clone()),
-                Vec::new(),
-                measured,
-                shared,
-                locator,
-            );
+            let build = Build::new(Err(issues.clone()), Vec::new(), measured, shared, locator);
             return (build, None);
         }
     };

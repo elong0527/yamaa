@@ -87,8 +87,8 @@ use std::io::Write;
 
 use yamaa::{
     CancellationToken, Condition, ContextValue, Diagnostic, Engine, EngineOptions, Failure,
-    FileType, Host, Info, LintFinding, OdmOptions, ProgressEvent, ProgressKind, ProjectRequest, ProjectRun, Run,
-    Status, SubmissionOptions, Summary, Timings,
+    FileType, Host, Info, LintFinding, OdmOptions, ProgressEvent, ProgressKind, ProjectRequest,
+    ProjectRun, Run, Status, SubmissionOptions, Summary, Timings,
 };
 
 use crate::arguments::{Call, Format, Usage};
@@ -504,9 +504,12 @@ fn run(call: &Call, token: &CancellationToken, verbose: &Verbose) -> Result<Prin
     };
     // The arguments give `--spec` or `--section`, not both.
     Ok(match (file_type, name, section) {
-        (FileType::Spec, None, None) => {
-            saved(document, engine.spec(path).cancel_with(token).run(), token, verbose)
-        }
+        (FileType::Spec, None, None) => saved(
+            document,
+            engine.spec(path).cancel_with(token).run(),
+            token,
+            verbose,
+        ),
         (FileType::Project, Some(name), _) => {
             match engine.project(path).cancel_with(token).spec(name) {
                 Ok(spec) => saved(document, spec.run(), token, verbose),
