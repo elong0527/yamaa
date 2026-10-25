@@ -339,7 +339,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
     let contracts = replay::object(replay::field(&routes, "cases"));
     assert_eq!(
         contracts.len(),
-        442,
+        491,
         "every original API contract is authored"
     );
     let mut seen = BTreeSet::new();
@@ -504,8 +504,8 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         contracts.keys().cloned().collect::<BTreeSet<_>>(),
         "every authored API case still exists"
     );
-    assert_eq!((domains, preparation, either, checks), (275, 22, 39, 106));
-    assert_eq!((accepted_saves, refused_saves, no_save), (160, 47, 235));
+    assert_eq!((domains, preparation, either, checks), (289, 53, 39, 110));
+    assert_eq!((accepted_saves, refused_saves, no_save), (167, 53, 271));
 }
 
 /// Seam: the composition's save return, held artifact order, capture counter
@@ -717,4 +717,46 @@ fn host_function_cases_keep_the_calls_their_port_received() {
         "every case with authored calls remains present"
     );
     assert_eq!(seen.len(), 32);
+}
+
+/// Seam: the R-host calls of the language-header tests whose cases build,
+/// read a project's listings or compose a submission. The host is read only
+/// for a project's environment, functions or lock, so each case is stated
+/// once and the replay runs it for the default host; those tests also called
+/// the R host, so this seam runs each operation of those cases for R and
+/// compares what it reports with the case's rows.
+#[test]
+fn language_header_cases_keep_their_r_host_calls() {
+    let (mut cases, mut calls) = (0, 0);
+    for case in replay::cases() {
+        if !case.label.starts_with("language_header.json::")
+            || !case.operations.iter().any(|operation| {
+                matches!(
+                    operation.as_str(),
+                    "build" | "define" | "listing_failure" | "listing_step"
+                )
+            })
+        {
+            continue;
+        }
+        assert!(
+            case.input.get("host").is_none(),
+            "{}: a case is stated once, for every host",
+            case.label
+        );
+        cases += 1;
+        let mut input = case.input.clone();
+        input["host"] = Value::String("r".into());
+        for operation in &case.operations {
+            calls += 1;
+            let reported = operations::run(operation, &input);
+            replay::compare_issues(
+                &case,
+                &reported.issues,
+                reported.study.as_ref(),
+                &format!("{} ({operation}, R)", case.label),
+            );
+        }
+    }
+    assert_eq!((cases, calls), (16, 29));
 }

@@ -3,6 +3,7 @@
 //! functions, a project's scope findings, the schema language's validation
 //! of a document or a layer, and the headers a call reads.
 use super::{
+    codelist_source,
     document::{prepared, schemas, tree},
     language, text, value, File,
 };
@@ -28,6 +29,7 @@ use yamaa_core::{
     },
     producer_contract::{prepare_document, Link, Links},
     project_environment::{Draft, Environment},
+    project_function_document::Kind,
     project_scope,
     run_report::{Recorded, Run},
     schema::{
@@ -35,13 +37,17 @@ use yamaa_core::{
         NormalizationError, SchemaContext, SchemaDiagnostic, SchemaDiagnosticValue, SchemaModule,
         SchemaStructure,
     },
-    specification::{BindError, PreflightFinding, PrepareError, PreparedSpecification},
+    specification::{
+        BindError, FunctionCause, FunctionFinding, PreflightFinding, PrepareError,
+        PreparedSpecification,
+    },
     submission_staleness::Guard,
     table::TableSchema,
     value::{Selection, Value},
 };
 
 pub(super) const FILES: &[File] = &[
+    fixture!("function_arguments.json"),
     fixture!("intermediates.json"),
     fixture!("language.json"),
     fixture!("producers.json"),
@@ -58,6 +64,7 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
         "copy_datasets" => copy_datasets(input),
         "file_type_argument" => file_type_argument(input),
         "flag_condition" => flag_condition(input),
+        "function_finding" => function_finding(input),
         "language_header" => language_header(input),
         "layer_header" => layer_header(input),
         "prepare_in" => prepare_in(input),
@@ -165,40 +172,52 @@ fn flag_condition(input: &Json) -> Vec<Diagnostic> {
 }
 
 /// The findings preparing `document` in a project refuses with, `{document,
-/// project}`: `project` is `{language, functions}`, the host language
-/// (`"python"`, `"r"` or `null` for an engine that claims none) and each
-/// function file by its name, an integer identity with the tests its
+/// project}`: `project` is `{language, functions, codelists}`, the host
+/// language (`"python"`, `"r"` or `null` for an engine that claims none),
+/// each function file by its name, an integer identity with the tests its
 /// contract needs (`support::project_call_compiler::definition`), mapping
-/// each language to the callable that implements it. With `sources`, as
-/// `bind` reads them, the document must prepare, and the findings are those
-/// binding it to their schemas refuses with.
+/// each language to the callable that implements it, and its codelist files,
+/// each the codelist source [`codelist_source`] reads. A project without
+/// `functions` lists no function file, and one without `codelists` no
+/// codelist file. With `sources`, as `bind` reads them, the document must
+/// prepare, and the findings are those binding it to their schemas refuses
+/// with.
 fn prepare_in(input: &Json) -> Vec<Diagnostic> {
     let input = input.closed(&["document", "project", "sources"]);
-    let project = input.field("project").closed(&["language", "functions"]);
+    let project = input
+        .field("project")
+        .closed(&["language", "functions", "codelists"]);
     let host = match project.field("language") {
         Json::Null => None,
         written => Some(language(written.text())),
     };
-    let functions = project
-        .field("functions")
-        .members()
+    let functions = project.get("functions").map(|files| {
+        files
+            .members()
+            .iter()
+            .map(|(name, implementations)| {
+                let implementations = implementations
+                    .members()
+                    .iter()
+                    .map(|(written, callable)| (language(written), callable.text()))
+                    .collect::<Vec<_>>();
+                definition(name).file(&implementations)
+            })
+            .collect()
+    });
+    let codelists = project
+        .get("codelists")
+        .map_or(&[][..], Json::items)
         .iter()
-        .map(|(name, implementations)| {
-            let implementations = implementations
-                .members()
-                .iter()
-                .map(|(written, callable)| (language(written), callable.text()))
-                .collect::<Vec<_>>();
-            definition(name).file(&implementations)
-        })
+        .map(codelist_source)
         .collect();
     let environment = Environment::admit(
         host,
         Draft {
             language: host,
             lock: None,
-            functions: Some(functions),
-            codelists: Vec::new(),
+            functions,
+            codelists,
         },
     )
     .unwrap_or_else(|findings| panic!("the project is admitted: {findings:?}"))
@@ -341,6 +360,38 @@ fn prepare_linked(input: &Json) -> Vec<Diagnostic> {
     prepare_linked_with(&tree(input.field("document")).document(), None, links)
         .err()
         .map_or_else(Vec::new, refusal)
+}
+
+/// The finding of a call of the project function `function` at `path`
+/// whose decoding failed, `{path, function, argument, cause, value}`: a
+/// fault of the call's `argument`, or of the call itself when it is `null`,
+/// of the `cause` `integer_range`, `invalid_date`, `invalid_datetime` or
+/// `invalid_shape`, with the text its value is written as, or `null`. A case
+/// reads it for a cause no specification reaches, since the grammar reads
+/// a `DATE` or `DATETIME` literal's text before the call does.
+fn function_finding(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&["path", "function", "argument", "cause", "value"]);
+    let written = |key: &str| match input.field(key) {
+        Json::Null => None,
+        written => Some(written.text().to_owned()),
+    };
+    let kind = match text(input, "cause") {
+        "integer_range" => Kind::IntegerRange,
+        "invalid_date" => Kind::InvalidDate,
+        "invalid_datetime" => Kind::InvalidDateTime,
+        "invalid_shape" => Kind::NormalizedShape,
+        other => panic!("no decoding cause {other:?}"),
+    };
+    let finding = FunctionFinding {
+        path: text(input, "path").into(),
+        function: text(input, "function").into(),
+        argument: written("argument"),
+        cause: FunctionCause::Scalar {
+            kind,
+            value: written("value"),
+        },
+    };
+    vec![finding.diagnostic()]
 }
 
 /// The finding of a stored `header` that the contract of the `producer`

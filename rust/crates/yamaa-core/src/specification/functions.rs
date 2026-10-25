@@ -31,7 +31,14 @@ pub enum Cause {
         expected: ValueType,
         actual: ValueType,
     },
-    Scalar(crate::project_function_document::Kind),
+    /// A call or an argument of a shape no normalized call has, or a
+    /// written value the engine cannot run with: the decoder's kind and
+    /// the text an out-of-range integer, an invalid date or an invalid
+    /// datetime is written as.
+    Scalar {
+        kind: crate::project_function_document::Kind,
+        value: Option<String>,
+    },
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FunctionFinding {
@@ -96,15 +103,24 @@ impl FunctionFinding {
                 context.insert("actual_type".into(), text(type_name(actual)));
                 (C::InvalidFunctionArgument, Some("type_mismatch"))
             }
-            Cause::Scalar(kind) => (
-                C::InvalidFunctionArgument,
-                Some(match kind {
-                    crate::project_function_document::Kind::NormalizedShape => "invalid_shape",
-                    crate::project_function_document::Kind::IntegerRange => "integer_range",
-                    crate::project_function_document::Kind::InvalidDate => "invalid_date",
-                    crate::project_function_document::Kind::InvalidDateTime => "invalid_datetime",
-                }),
-            ),
+            Cause::Scalar { kind, ref value } => {
+                // A fault of one argument names the argument and the text it
+                // is written as, null when it is no scalar text (D253).
+                if self.argument.is_some() {
+                    context.insert("value".into(), value.as_deref().map_or(V::Null, text));
+                }
+                (
+                    C::InvalidFunctionArgument,
+                    Some(match kind {
+                        crate::project_function_document::Kind::NormalizedShape => "invalid_shape",
+                        crate::project_function_document::Kind::IntegerRange => "integer_range",
+                        crate::project_function_document::Kind::InvalidDate => "invalid_date",
+                        crate::project_function_document::Kind::InvalidDateTime => {
+                            "invalid_datetime"
+                        }
+                    }),
+                )
+            }
         };
         if let Some(cause) = cause {
             context.insert("cause".into(), text(cause));
@@ -247,6 +263,10 @@ fn requests(spec: &ast::Spec) -> (Vec<Request>, BTreeMap<ExprId, Vec<usize>>, Ve
     (requests, by_site, bindings)
 }
 
+/// A call's decoding fault, and the argument it is a fault of: none for the
+/// shape of the call itself.
+type DecodeFault = (crate::project_function_document::Finding, Option<String>);
+
 /// A call as written: its function's name and each argument, a name read
 /// or a written value. Every value the engine cannot run with is refused
 /// at its argument, and no partial call is admitted.
@@ -254,14 +274,17 @@ fn decode(
     spec: &ast::Spec,
     call: ExprId,
     path: &str,
-) -> Result<project_call_document::Call, Vec<crate::project_function_document::Finding>> {
+) -> Result<project_call_document::Call, Vec<DecodeFault>> {
     use crate::project_function_document::{Finding, Kind};
     use crate::value::Value;
-    let shape_fault = |path: String| Finding {
-        path,
-        node: call.index(),
-        kind: Kind::NormalizedShape,
-        value: None,
+    let shape_fault = |path: String| {
+        let fault = Finding {
+            path,
+            node: call.index(),
+            kind: Kind::NormalizedShape,
+            value: None,
+        };
+        (fault, None)
     };
     let ExprKind::Call {
         function,
@@ -283,12 +306,13 @@ fn decode(
     for (name, value) in args {
         let path = format!("{path}.args.{}", name.name);
         let mut refuse = |kind, value: Option<&String>| {
-            findings.push(Finding {
+            let fault = Finding {
                 path: path.clone(),
                 node: call.index(),
                 kind,
                 value: value.cloned(),
-            });
+            };
+            findings.push((fault, Some(name.name.clone())));
             Value::Missing
         };
         let input = match &spec.expr(*value).kind {
@@ -405,14 +429,17 @@ pub(super) fn prepare(
                         }),
                     ));
                 }
-                findings.extend(errors.into_iter().map(|error| {
+                findings.extend(errors.into_iter().map(|(error, argument)| {
                     (
                         request,
                         invalid(FunctionFinding {
                             path: error.path,
                             function: function.into(),
-                            argument: None,
-                            cause: Cause::Scalar(error.kind),
+                            argument,
+                            cause: Cause::Scalar {
+                                kind: error.kind,
+                                value: error.value,
+                            },
                         }),
                     )
                 }));

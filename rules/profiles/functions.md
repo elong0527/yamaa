@@ -133,7 +133,7 @@ is one scalar for one logical row. A call naming no function the project lists
 fails.
 
 Fails: `unknown_project_function`.
-Evidence: `schema-functions`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_function_file_names_its_function_and_types_its_values_by_declaration`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`, `rust/crates/yamaa-core/tests/project_execution.rs::retired_fields_and_malformed_literals_are_complete_static_findings`.
+Evidence: `schema-functions`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_function_file_names_its_function_and_types_its_values_by_declaration`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::retired_fields_and_malformed_literals_are_complete_static_findings`.
 
 A call contains no implementation language, callable name or contract version.
 A `function` call's exact argument and result types are those its definition
@@ -161,7 +161,7 @@ and a required parameter declares no `default`. Parameter types are the
 matches its declared exact type, with no implicit conversion.
 
 Fails: `invalid_function_argument`.
-Evidence: `negative-function-contract`, `rust/crates/yamaa-core/tests/project_function_invocation.rs::shared_function_invocation_vectors`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`.
+Evidence: `negative-function-contract`, `rust/crates/yamaa-core/tests/project_function_invocation.rs::shared_function_invocation_vectors`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/function_arguments.json::a_call_argument_that_is_no_scalar_names_its_argument_and_no_written_value`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/function_arguments.json::a_call_argument_that_names_no_day_names_its_argument_and_its_written_date`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/runtime.json::an_argument_of_another_type_than_its_parameter_is_invalid`.
 
 The function-only `bool` introduces neither Boolean columns nor Boolean
 derivation results. There is no `int`-to-`float` widening, and
@@ -172,6 +172,21 @@ and exact types are contract-dependent checks at the implementation stage;
 structural validation before then checks only the closed argument-leaf forms of
 [FUNC-6](#func-6). An unknown, missing required, or incorrectly typed argument
 or default fails with `invalid_function_argument`.
+
+Its context names the `function` and, for a fault of one argument, the
+`argument`, with a `cause`: `unknown_argument`, `duplicate_argument`,
+`missing_required_argument`, or `type_mismatch` with the parameter's
+`expected_type` and the argument's `actual_type`. A written value the engine
+cannot run with is a fault of its argument too: an integer outside the 64-bit
+range (`integer_range`), a `DATE` or `DATETIME` literal that names no day or
+second (`invalid_date`, `invalid_datetime`), or a value that is no scalar
+(`invalid_shape`), each naming the text it is written as in `value`, null when
+it is no scalar text. A call with other fields than `name` and `args`, or
+whose `args` are no mapping, fails as `invalid_shape` there, naming no
+argument. A run that passes a function an argument it does not accept fails
+in the derivation phase, its context naming the `function` and its `call`,
+and the `unknown` arguments, or the `argument`, with `expected_type` and
+`actual_type` for a type mismatch.
 
 A function file writes a `date` or `datetime` default, test argument or result
 as text, which the declared parameter or return type reads; text that type
@@ -189,7 +204,7 @@ may contain an operator, a function call or another expression, and a name
 resolves under [FORMULA-9](../formulas.md#formula-9).
 
 Fails: `invalid_function_argument`.
-Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_function_argument_is_one_leaf_and_any_other_text_fails`, `schema-functions`, `schema-non-finite`, `rust/crates/yamaa-core/tests/project_execution.rs::retired_fields_and_malformed_literals_are_complete_static_findings`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_function_argument_is_one_leaf_and_any_other_text_fails`, `schema-functions`, `schema-non-finite`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/projects.json::retired_fields_and_malformed_literals_are_complete_static_findings`.
 
 An argument is an expression field ([EXPR-5](../expressions.md#expr-5)):
 `weight: WEIGHTKG` passes a variable, `unit: "'kg'"` text,

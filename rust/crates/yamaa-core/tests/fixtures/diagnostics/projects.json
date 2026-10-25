@@ -1,5 +1,5 @@
 {
-  "about": "The refusals of a specification's project function calls (FUNC-1, FUNC-4, FUNC-5, COLUMN-4, LOOKUP-22), prepared in a project whose function files each define an integer identity, and a project's own scope findings: its names, sections, producers, cycles, saves and stale artifacts (PROJECT-5 to PROJECT-15). `called` derives VALUE with a call of the project function id.",
+  "about": "The refusals of a specification's project function calls (FUNC-1, FUNC-4 to FUNC-6, COLUMN-4, COLUMN-6, NAME-3, LOOKUP-22), prepared in a project whose function files each define an integer identity, or prepared without a project, where each call misses its binding (CT-13), and a project's own scope findings: its names, sections, producers, cycles, saves and stale artifacts (PROJECT-5 to PROJECT-15). With `sources`, `prepare_in` reports what binding the prepared document to those schemas refuses. `called` derives VALUE with a call of the project function id, `nested` derives A with a call of the undeclared function unknown inside a case, and `mutual` derives A and B with calls of id that read each other. A case whose table compared part of a record compares those fields, and an `among` case finds its record by cause among the others.",
   "documents": {
     "called": {
       "yamaa": "1.0",
@@ -12,6 +12,31 @@
         {"name": "VALUE", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": 7}}}}}
       ],
       "output": {"path": "output.csv", "columns": ["ID", "VALUE"]}
+    },
+    "nested": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "input": {"SRC": {"path": "input.csv"}},
+      "keys": ["ID"],
+      "columns": [
+        {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+        {"name": "A", "type": "int", "derivation": {"value": {"case": [{"when": "ID > 0", "then": {"function": {"name": "unknown", "args": {"x": "ID"}}}}]}}}
+      ],
+      "output": {"path": "output.csv", "columns": ["ID", "A"]}
+    },
+    "mutual": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "input": {"SRC": {"path": "input.csv"}},
+      "keys": ["ID"],
+      "columns": [
+        {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+        {"name": "A", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": "B"}}}}},
+        {"name": "B", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": "A"}}}}}
+      ],
+      "output": {"path": "output.csv", "columns": ["ID", "A", "B"]}
     }
   },
   "cases": [
@@ -100,6 +125,167 @@
       },
       "compares": ["phase", "condition", "rule", "spec_paths", "context"],
       "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["intermediates.FIRST.derivations.NV.function.args.x"], "context": {"function": "id", "argument": "x", "intermediate": "SUBJ", "reason": "a donor function argument reads only named intermediates that declare a selection (keep or nearest)"}}]
+    },
+    {
+      "case": "a_nested_call_of_a_function_the_project_does_not_define_is_unknown_at_its_name",
+      "operation": "prepare_in",
+      "input": {
+        "base": "nested",
+        "project": {"language": "python", "functions": {}}
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "unknown_project_function", "spec_paths": ["columns.A.derivation.case[0].then.function.name"]}]
+    },
+    {
+      "case": "a_nested_call_prepared_without_a_project_misses_its_binding_at_its_name",
+      "operation": "prepare",
+      "input": {"base": "nested"},
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "project_binding_missing", "spec_paths": ["columns.A.derivation.case[0].then.function.name"]}]
+    },
+    {
+      "case": "complete_static_faults_are_projected_in_authored_call_order_without_source_binding",
+      "operation": "prepare_in",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "int", "derivation": {"value": {"function": {"name": "unknown", "args": {"x": 7}}}}},
+            {"name": "B", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": 7.0}}}}},
+            {"name": "C", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": 9223372036854775808}}}}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A", "B", "C"]}
+        },
+        "project": {"language": "python", "functions": {"id": {"python": "project.id"}}}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_project_function", "rule": "FUNC-4", "spec_paths": ["columns.A.derivation.function.name"], "context": {"function": "unknown"}},
+        {"phase": "validation", "condition": "invalid_function_argument", "rule": "FUNC-5", "spec_paths": ["columns.B.derivation.function.args.x"], "context": {"function": "id", "argument": "x", "cause": "type_mismatch", "expected_type": "int", "actual_type": "float"}},
+        {"phase": "validation", "condition": "invalid_function_argument", "rule": "FUNC-5", "spec_paths": ["columns.C.derivation.function.args.x"], "context": {"function": "id", "argument": "x", "cause": "integer_range", "value": "9223372036854775808"}}
+      ]
+    },
+    {
+      "case": "declared_output_reference_types_and_unknown_names_fail_during_prepare",
+      "operation": "prepare_in",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "F", "type": "float", "derivation": {"value": 1.0}},
+            {"name": "A", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": "F"}}}}},
+            {"name": "B", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": "UNDECLARED"}}}}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "F", "A", "B"]}
+        },
+        "project": {"language": "python", "functions": {"id": {"python": "project.id"}}}
+      },
+      "compares": ["condition", "spec_paths", "context"],
+      "issues": [
+        {"condition": "invalid_function_argument", "spec_paths": ["columns.A.derivation.function.args.x"], "context": {"function": "id", "argument": "x", "cause": "type_mismatch", "expected_type": "int", "actual_type": "float"}},
+        {"condition": "unknown_field", "spec_paths": ["columns.B.derivation.function.args.x"], "context": {"function": "id", "argument": "x", "identifier": "UNDECLARED"}}
+      ]
+    },
+    {
+      "case": "a_stored_field_of_another_type_than_its_parameter_is_refused_at_binding",
+      "operation": "prepare_in",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": "SRC.ID"}}}}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A"]}
+        },
+        "project": {"language": "python", "functions": {"id": {"python": "project.id"}}},
+        "sources": {"SRC": [["ID", "float"]]}
+      },
+      "compares": ["rule", "spec_paths", "context.cause"],
+      "among": true,
+      "issues": [{"rule": "FUNC-5", "spec_paths": ["columns.A.derivation.function.args.x"], "context": {"cause": "type_mismatch"}}]
+    },
+    {
+      "case": "missing_stored_fields_and_unknown_relations_keep_authored_argument_diagnostics",
+      "operation": "prepare_in",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": "SRC.TYPO"}}}}},
+            {"name": "B", "type": "int", "derivation": {"value": {"function": {"name": "id", "args": {"x": "OTHER.ID"}}}}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A", "B"]}
+        },
+        "project": {"language": "python", "functions": {"id": {"python": "project.id"}}},
+        "sources": {"SRC": [["ID", "int"]]}
+      },
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.A.derivation.function.args.x"], "context": {"identifier": "SRC.TYPO"}},
+        {"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["columns.B.derivation.function.args.x"], "context": {"identifier": "OTHER.ID"}}
+      ]
+    },
+    {
+      "case": "calls_prepared_without_a_project_each_miss_their_binding",
+      "operation": "prepare",
+      "input": {"base": "mutual"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "project_binding_missing", "rule": "CT-13", "spec_paths": ["columns.A.derivation.function.name"], "context": {"binding": "function", "function": "id"}},
+        {"phase": "validation", "condition": "project_binding_missing", "rule": "CT-13", "spec_paths": ["columns.B.derivation.function.name"], "context": {"binding": "function", "function": "id"}}
+      ]
+    },
+    {
+      "case": "calls_that_read_each_other_keep_their_dependency_cycle_at_binding",
+      "operation": "prepare_in",
+      "input": {
+        "base": "mutual",
+        "project": {"language": "python", "functions": {"id": {"python": "project.id"}}},
+        "sources": {"SRC": [["ID", "int"]]}
+      },
+      "compares": ["condition"],
+      "among": true,
+      "issues": [{"condition": "dependency_cycle"}]
+    },
+    {
+      "case": "retired_fields_and_malformed_literals_are_complete_static_findings",
+      "operation": "prepare_in",
+      "input": {
+        "document": {
+          "yamaa": "1.0",
+          "type": "spec",
+          "domain": "TEST",
+          "input": {"SRC": {"path": "input.csv"}},
+          "keys": ["ID"],
+          "columns": [
+            {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+            {"name": "A", "type": "int", "derivation": {"value": {"function": {"name": "id", "contract_version": "1", "args": {"x": {"literal": 7}}}}}}
+          ],
+          "output": {"path": "output.csv", "columns": ["ID", "A"]}
+        },
+        "project": {"language": "python", "functions": {"id": {"python": "project.id"}}}
+      },
+      "compares": ["context.function"],
+      "issues": [{"context": {"function": "id"}}, {"context": {"function": "id"}}]
     },
     {
       "case": "a_name_two_listings_share_is_refused_at_both",
