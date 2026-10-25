@@ -8,6 +8,7 @@ The following notes may occur:
 
 - `checking CRAN incoming feasibility ... NOTE`: new submission. SDTM and
   ADaM are standard abbreviations in clinical trials, expanded in DESCRIPTION.
+  For the bundled Rust source, we request a limit of 15 MB.
 - `checking installed package size ... NOTE`: the installation is
   about 22 MB, almost all the statically linked Rust shared library. Symbols
   and Rust standard-library debug information are retained. Test inputs stay
