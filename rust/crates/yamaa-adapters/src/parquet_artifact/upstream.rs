@@ -124,7 +124,7 @@ pub(super) fn render_partitions<T: TableAccess>(
         .map(|index| (Vec::new(), empty(index)))
         .collect();
     let flush = |file: &mut SerializedFileWriter<Vec<u8>>,
-                     pending: &mut Vec<(Vec<i16>, Values)>| {
+                 pending: &mut Vec<(Vec<i16>, Values)>| {
         let mut group = file.next_row_group().unwrap();
         for (levels, values) in pending.iter() {
             let mut column = group.next_column().unwrap().unwrap();
