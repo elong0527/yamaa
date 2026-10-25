@@ -1029,18 +1029,18 @@ mod project {
             Catalog::compile(
                 &[Field {
                     name: "OUT",
-                    column_type: ColumnType::Int,
+                    column_type: Some(ColumnType::Int),
                 }],
                 &[Dataset {
                     name: "SRC",
                     fields: &[
                         Field {
                             name: "ID",
-                            column_type: ColumnType::Int,
+                            column_type: Some(ColumnType::Int),
                         },
                         Field {
                             name: "X",
-                            column_type: kind,
+                            column_type: Some(kind),
                         },
                     ],
                 }],
