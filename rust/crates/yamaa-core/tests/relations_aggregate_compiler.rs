@@ -963,19 +963,19 @@ mod relations {
                     fields: &[
                         Field {
                             name: "K",
-                            column_type: ColumnType::Str,
+                            column_type: Some(ColumnType::Str),
                         },
                         Field {
                             name: "N",
-                            column_type: ColumnType::Int,
+                            column_type: Some(ColumnType::Int),
                         },
                         Field {
                             name: "X.Y",
-                            column_type: ColumnType::Str,
+                            column_type: Some(ColumnType::Str),
                         },
                         Field {
                             name: "é",
-                            column_type: ColumnType::Str,
+                            column_type: Some(ColumnType::Str),
                         },
                     ],
                 }],
@@ -1231,7 +1231,10 @@ mod relations {
 
         /// Named typed declarations, independent of records or any host table representation.
         fn field(name: &str, column_type: ColumnType) -> Field<'_> {
-            Field { name, column_type }
+            Field {
+                name,
+                column_type: Some(column_type),
+            }
         }
 
         /// Copy metadata from short-lived buffers so every test also exercises catalog ownership.
@@ -1277,28 +1280,28 @@ mod relations {
                     "OUT",
                     Some(Binding::Output {
                         column: 0,
-                        column_type: Str,
+                        column_type: Some(Str),
                     }),
                 ),
                 (
                     "X",
                     Some(Binding::Output {
                         column: 1,
-                        column_type: Int,
+                        column_type: Some(Int),
                     }),
                 ),
                 (
                     "WHEN",
                     Some(Binding::Output {
                         column: 2,
-                        column_type: Date,
+                        column_type: Some(Date),
                     }),
                 ),
                 (
                     "β",
                     Some(Binding::Output {
                         column: 3,
-                        column_type: Float,
+                        column_type: Some(Float),
                     }),
                 ),
                 (
@@ -1306,7 +1309,7 @@ mod relations {
                     Some(Binding::Dataset {
                         dataset: 0,
                         field: 0,
-                        column_type: Int,
+                        column_type: Some(Int),
                     }),
                 ),
                 (
@@ -1314,7 +1317,7 @@ mod relations {
                     Some(Binding::Dataset {
                         dataset: 1,
                         field: 0,
-                        column_type: Float,
+                        column_type: Some(Float),
                     }),
                 ),
                 (
@@ -1322,7 +1325,7 @@ mod relations {
                     Some(Binding::Dataset {
                         dataset: 0,
                         field: 2,
-                        column_type: Str,
+                        column_type: Some(Str),
                     }),
                 ),
                 (
@@ -1330,7 +1333,7 @@ mod relations {
                     Some(Binding::Dataset {
                         dataset: 0,
                         field: 3,
-                        column_type: Str,
+                        column_type: Some(Str),
                     }),
                 ),
                 (
@@ -1338,7 +1341,7 @@ mod relations {
                     Some(Binding::Dataset {
                         dataset: 2,
                         field: 0,
-                        column_type: Str,
+                        column_type: Some(Str),
                     }),
                 ),
                 ("F", None),
@@ -1494,7 +1497,7 @@ mod relations {
                 catalog.bind("X"),
                 Some(Binding::Output {
                     column: 1,
-                    column_type: Int
+                    column_type: Some(Int)
                 })
             );
         }
@@ -1531,7 +1534,7 @@ mod relations {
                 unicode.bind("é"),
                 Some(Binding::Output {
                     column: 0,
-                    column_type: Str,
+                    column_type: Some(Str),
                 })
             );
             assert_eq!(unicode.validate_output("é", None, None, &[]), Ok(None));

@@ -242,7 +242,7 @@ document carries for the same column: `itemOID` is the `ItemDef` identifier
 are its `Length` and `def:DisplayFormat`, and `keySequence` is the `ItemRef`
 `KeySequence` [DEFINE-18](define-xml.md#define-18) writes.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::integer_terminology_items_admit_equal_float_published_values`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::integer_terminology_items_admit_equal_float_published_values`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
 
 | Member | Source |
 |---|---|

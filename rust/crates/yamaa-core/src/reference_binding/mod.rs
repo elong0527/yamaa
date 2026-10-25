@@ -5,16 +5,18 @@ use crate::value::ColumnType;
 mod joined_binding;
 pub use joined_binding::JoinedFinding;
 
-/// Borrowed field metadata supplied by a schema/normalization adapter.
+/// Borrowed field metadata supplied by a schema/normalization adapter: a
+/// field's name and its type, `None` where the schema source does not decide
+/// it (#3805), so every check that compares it is skipped.
 #[derive(Clone, Copy, Debug)]
 pub struct Field<'a> {
     pub name: &'a str,
-    pub column_type: ColumnType,
+    pub column_type: Option<ColumnType>,
 }
 
 /// One side of a pair relation's joined record (LOOKUP-27): its name and each
 /// `(field, position, type)` it reads, at the field's position in the record.
-pub(crate) type JoinedSide<'a> = (&'a str, &'a [(&'a str, usize, ColumnType)]);
+pub(crate) type JoinedSide<'a> = (&'a str, &'a [(&'a str, usize, Option<ColumnType>)]);
 
 /// A relation's declared name and ordered stored fields, not its records.
 #[derive(Clone, Copy, Debug)]
@@ -44,17 +46,18 @@ pub enum Error {
     BareQualifiedQuery,
 }
 
-/// A resolved declaration and exact declared type, with no host representation.
+/// A resolved declaration and its declared type, `None` where the schema
+/// source does not decide it, with no host representation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Binding {
     Output {
         column: usize,
-        column_type: ColumnType,
+        column_type: Option<ColumnType>,
     },
     Dataset {
         dataset: usize,
         field: usize,
-        column_type: ColumnType,
+        column_type: Option<ColumnType>,
     },
 }
 
@@ -79,7 +82,7 @@ pub enum Diagnostic {
 pub struct Catalog {
     record_derivation: bool,
     record_kinds: Option<Vec<Option<ColumnType>>>,
-    outputs: BTreeMap<String, (usize, ColumnType)>,
+    outputs: BTreeMap<String, (usize, Option<ColumnType>)>,
     datasets: BTreeMap<String, DatasetCatalog>,
     selected: BTreeMap<String, SelectedRelation>,
     joined: BTreeMap<String, JoinedRelation>,
@@ -93,7 +96,7 @@ struct RowJoinScope {
 #[derive(Debug)]
 pub(crate) struct JoinedRelation {
     pub source: usize,
-    pub fields: BTreeMap<String, (usize, ColumnType)>,
+    pub fields: BTreeMap<String, (usize, Option<ColumnType>)>,
     /// The column-phase match, its indices into `keys`.
     pub inference: crate::key_relation::Inference,
     /// The input's declared key, which the join pairs in full, each column
@@ -104,6 +107,17 @@ pub(crate) struct JoinedRelation {
     /// A pair relation's port, which declares no input `key`
     /// (LOOKUP-27).
     pub pair: bool,
+}
+
+impl JoinedRelation {
+    /// Each field's kind, in the order of `schema`.
+    pub fn kinds(&self) -> std::vec::Vec<Option<ColumnType>> {
+        let mut kinds = std::vec![None; self.schema.columns().len()];
+        for &(index, kind) in self.fields.values() {
+            kinds[index] = kind;
+        }
+        kinds
+    }
 }
 
 /// A kept relation used by a scalar callback, with its original key dependencies.
@@ -122,7 +136,7 @@ pub(crate) type SelectedRead<'a> = (
 #[derive(Debug)]
 struct DatasetCatalog {
     index: usize,
-    fields: BTreeMap<String, (usize, ColumnType)>,
+    fields: BTreeMap<String, (usize, Option<ColumnType>)>,
 }
 
 impl Catalog {
@@ -196,7 +210,7 @@ impl Catalog {
         {
             dataset
                 .fields
-                .insert(column.name.clone(), (field, column.kind));
+                .insert(column.name.clone(), (field, Some(column.kind)));
         }
     }
     pub(crate) fn joined(&self, name: &str) -> Option<&JoinedRelation> {
@@ -211,9 +225,7 @@ impl Catalog {
                 } => self
                     .record_kinds
                     .as_ref()
-                    .map_or(Some(column_type), |kinds| {
-                        kinds.get(column).copied().flatten()
-                    }),
+                    .map_or(column_type, |kinds| kinds.get(column).copied().flatten()),
                 Binding::Dataset {
                     dataset: 0,
                     field,
@@ -221,17 +233,15 @@ impl Catalog {
                 } => self
                     .record_kinds
                     .as_ref()
-                    .map_or(Some(column_type), |kinds| {
-                        kinds.get(field).copied().flatten()
-                    }),
-                Binding::Dataset { column_type, .. } => Some(column_type),
+                    .map_or(column_type, |kinds| kinds.get(field).copied().flatten()),
+                Binding::Dataset { column_type, .. } => column_type,
             };
         }
         name.split_once('.').and_then(|(relation, field)| {
             self.joined(relation)?
                 .fields
                 .get(field)
-                .map(|(_, kind)| *kind)
+                .and_then(|(_, kind)| *kind)
         })
     }
 
@@ -274,7 +284,8 @@ impl Catalog {
                         .iter()
                         .map(|field| crate::table::Column {
                             name: field.name.into(),
-                            kind: field.column_type,
+                            // A layout slot; the kind a check reads is `fields`'s.
+                            kind: field.column_type.unwrap_or(ColumnType::Str),
                         })
                         .collect(),
                 )
@@ -308,6 +319,14 @@ impl Catalog {
             .iter()
             .find(|(_, dataset)| dataset.index == index)
             .map(|(name, _)| name.as_str())
+    }
+    /// The name of every relation the catalog holds a record of: its datasets
+    /// and the relations it joins.
+    pub(crate) fn relation_names(&self) -> impl Iterator<Item = &str> {
+        self.datasets
+            .keys()
+            .chain(self.joined.keys())
+            .map(String::as_str)
     }
     /// Suggest a qualifier only when exactly one admitted dataset owns a bare field.
     pub(crate) fn unique_field_owner(&self, field: &str) -> Option<&str> {
@@ -357,9 +376,9 @@ impl Catalog {
     pub(crate) fn output_width(&self) -> usize {
         self.outputs.len()
     }
-    /// Read an exact output declaration without interpreting it as a source path.
-    pub(crate) fn output_type(&self, name: &str) -> Option<ColumnType> {
-        self.outputs.get(name).map(|&(_, kind)| kind)
+    /// Whether `name` is an output declaration, whatever its type.
+    pub(crate) fn has_output(&self, name: &str) -> bool {
+        self.outputs.contains_key(name)
     }
 
     /// Inspect literal stored-field visibility, retaining an absent relation as distinct metadata.
