@@ -1835,6 +1835,84 @@ fn admit_reads(
     findings.extend(admitted);
 }
 
+/// Without row templates, each key is computed from one base record before
+/// any key combination exists (COLUMN-7). Unless record rows make every
+/// record its own row, an aggregate, which reduces the records of a key
+/// combination, and an `odm` read, which reads them, fail as
+/// `key_dependency` at the operation, also inside a `case` branch.
+///
+/// With record rows, a key is derived as any column is, but during row
+/// construction: an unqualified aggregate, which reduces the constructed
+/// rows, is not supported there yet and fails as `unsupported_operation`.
+fn key_record(prepared: &PreparedSpecification, column: usize) -> Vec<BindFinding> {
+    let spec = prepared.tree.spec();
+    if matches!(prepared.rows, Rows::Templates(_)) || !prepared.keys.contains(&column) {
+        return Vec::new();
+    }
+    let Some(derivation) = spec
+        .columns
+        .get(column)
+        .and_then(|column| column.derivation.as_ref())
+    else {
+        return Vec::new();
+    };
+    let found = checks::positions(spec, derivation.expr)
+        .into_iter()
+        .filter_map(|e| match &spec.expr(e).kind {
+            ExprKind::Aggregate(aggregate) => Some((
+                crate::expression_table::Verb::Aggregate.name(),
+                e,
+                reduces_output(spec, aggregate),
+            )),
+            ExprKind::Odm(_) => Some((crate::expression_table::Verb::Odm.name(), e, false)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    if prepared.record_rows() {
+        return found
+            .into_iter()
+            .filter(|&(_, _, output)| output)
+            .map(|(_, e, _)| {
+                BindFinding::Scalar(crate::application_issue::unsupported(
+                    "output_aggregate_key",
+                    Some(&checks::path(spec, e)),
+                ))
+            })
+            .collect();
+    }
+    let name = &prepared.output.columns()[column].name;
+    found
+        .into_iter()
+        .map(|(operation, e, _)| {
+            BindFinding::Scalar(crate::diagnostic::Diagnostic {
+                code: crate::diagnostic::ConditionCode::ColumnKeyRecordRead,
+                spec_paths: vec![checks::path(spec, e)],
+                context: [
+                    ("column".into(), crate::json::Value::String(name.clone())),
+                    (
+                        "operation".into(),
+                        crate::json::Value::String(operation.into()),
+                    ),
+                ]
+                .into(),
+                source_span: None,
+                operand_route: None,
+            })
+        })
+        .collect()
+}
+
+/// Whether an aggregate reduces the constructed output rows: neither its
+/// expression nor a derive binding names a relation (LOOKUP-18).
+fn reduces_output(spec: &ast::Spec, aggregate: &ast::Aggregate) -> bool {
+    aggregate.bindings.is_empty()
+        && matches!(&spec.expr(aggregate.expr).kind, ExprKind::Formula(ast::Formula {
+            compiled: Ok(compiled),
+            ..
+        }) if !compiled.identifiers().any(|name| name.contains('.'))
+            && compiled.record_relations().next().is_none())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2202,82 +2280,4 @@ mod tests {
         ));
         assert_eq!(grouped.available, Some(&[0][..]));
     }
-}
-
-/// Without row templates, each key is computed from one base record before
-/// any key combination exists (COLUMN-7). Unless record rows make every
-/// record its own row, an aggregate, which reduces the records of a key
-/// combination, and an `odm` read, which reads them, fail as
-/// `key_dependency` at the operation, also inside a `case` branch.
-///
-/// With record rows, a key is derived as any column is, but during row
-/// construction: an unqualified aggregate, which reduces the constructed
-/// rows, is not supported there yet and fails as `unsupported_operation`.
-fn key_record(prepared: &PreparedSpecification, column: usize) -> Vec<BindFinding> {
-    let spec = prepared.tree.spec();
-    if matches!(prepared.rows, Rows::Templates(_)) || !prepared.keys.contains(&column) {
-        return Vec::new();
-    }
-    let Some(derivation) = spec
-        .columns
-        .get(column)
-        .and_then(|column| column.derivation.as_ref())
-    else {
-        return Vec::new();
-    };
-    let found = checks::positions(spec, derivation.expr)
-        .into_iter()
-        .filter_map(|e| match &spec.expr(e).kind {
-            ExprKind::Aggregate(aggregate) => Some((
-                crate::expression_table::Verb::Aggregate.name(),
-                e,
-                reduces_output(spec, aggregate),
-            )),
-            ExprKind::Odm(_) => Some((crate::expression_table::Verb::Odm.name(), e, false)),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    if prepared.record_rows() {
-        return found
-            .into_iter()
-            .filter(|&(_, _, output)| output)
-            .map(|(_, e, _)| {
-                BindFinding::Scalar(crate::application_issue::unsupported(
-                    "output_aggregate_key",
-                    Some(&checks::path(spec, e)),
-                ))
-            })
-            .collect();
-    }
-    let name = &prepared.output.columns()[column].name;
-    found
-        .into_iter()
-        .map(|(operation, e, _)| {
-            BindFinding::Scalar(crate::diagnostic::Diagnostic {
-                code: crate::diagnostic::ConditionCode::ColumnKeyRecordRead,
-                spec_paths: vec![checks::path(spec, e)],
-                context: [
-                    ("column".into(), crate::json::Value::String(name.clone())),
-                    (
-                        "operation".into(),
-                        crate::json::Value::String(operation.into()),
-                    ),
-                ]
-                .into(),
-                source_span: None,
-                operand_route: None,
-            })
-        })
-        .collect()
-}
-
-/// Whether an aggregate reduces the constructed output rows: neither its
-/// expression nor a derive binding names a relation (LOOKUP-18).
-fn reduces_output(spec: &ast::Spec, aggregate: &ast::Aggregate) -> bool {
-    aggregate.bindings.is_empty()
-        && matches!(&spec.expr(aggregate.expr).kind, ExprKind::Formula(ast::Formula {
-            compiled: Ok(compiled),
-            ..
-        }) if !compiled.identifiers().any(|name| name.contains('.'))
-            && compiled.record_relations().next().is_none())
 }

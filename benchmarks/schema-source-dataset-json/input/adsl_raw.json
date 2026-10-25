@@ -1,0 +1,27 @@
+{
+  "datasetJSONCreationDateTime": "2026-09-30T10:15:00",
+  "datasetJSONVersion": "1.1.0",
+  "fileOID": "www.example.org/PILOT7/ADSL_RAW",
+  "originator": "Example CRO",
+  "sourceSystem": {"name": "Example EDC", "version": "5.1"},
+  "studyOID": "PILOT7",
+  "metaDataVersionOID": "MDV.1",
+  "itemGroupOID": "IG.ADSL_RAW",
+  "records": 3,
+  "name": "ADSL_RAW",
+  "label": "Subject-Level Source",
+  "columns": [
+    {"itemOID": "IT.ADSL_RAW.STUDYID", "name": "STUDYID", "label": "Study Identifier", "dataType": "string", "length": 6, "keySequence": 1},
+    {"itemOID": "IT.ADSL_RAW.USUBJID", "name": "USUBJID", "label": "Unique Subject Identifier", "dataType": "string", "length": 6, "keySequence": 2},
+    {"itemOID": "IT.ADSL_RAW.TRT01A", "name": "TRT01A", "label": "Actual Treatment for Period 01", "dataType": "string", "length": 7},
+    {"itemOID": "IT.ADSL_RAW.AGE", "name": "AGE", "label": "Age", "dataType": "integer", "length": 3},
+    {"itemOID": "IT.ADSL_RAW.HEIGHTBL", "name": "HEIGHTBL", "label": "Baseline Height (cm)", "dataType": "decimal", "displayFormat": "6.2"},
+    {"itemOID": "IT.ADSL_RAW.TRTSDT", "name": "TRTSDT", "label": "Date of First Exposure to Treatment", "dataType": "date", "targetDataType": "integer", "displayFormat": "DATE9."},
+    {"itemOID": "IT.ADSL_RAW.TRTSDTM", "name": "TRTSDTM", "label": "Datetime of First Exposure to Treatment", "dataType": "datetime", "targetDataType": "integer", "displayFormat": "DATETIME20."}
+  ],
+  "rows": [
+    ["PILOT7", "P7-741", "Drug A", 24, "172.50", "2025-03-04", "2025-03-04T09:15"],
+    ["PILOT7", "P7-742", "Placebo", 67, null, "2025-03-05", "2025-03-05T14:02:37"],
+    ["PILOT7", "P7-743", null, 52, "165.20", null, null]
+  ]
+}
