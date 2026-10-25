@@ -325,7 +325,7 @@ text stops before the first missing part, so a missing day gives `YYYY-MM`
 and a missing year gives missing. Nothing is counted.
 
 Fails: `incompatible_input_type`, `missing_required_field`, `invalid_date_text`.
-Evidence: `sdtm-ae-partial-dates`, `sdtm-mh-ongoing-conditions`, `negative-dtc-month-digits`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`, `rust/crates/yamaa-application/tests/execution_date_text_reads.rs`.
+Evidence: `sdtm-ae-partial-dates`, `sdtm-mh-ongoing-conditions`, `negative-dtc-month-digits`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/temporal.json`, `rust/crates/yamaa-application/tests/execution_date_text_reads.rs`.
 
 The parts are read in order from `year`, and reading stops at the first
 missing part: the parts after it are not read, and the result is the

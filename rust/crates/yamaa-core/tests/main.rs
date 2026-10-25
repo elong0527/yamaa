@@ -10,7 +10,6 @@
 #[allow(dead_code)]
 mod support;
 
-mod check_oracle;
 // The file wraps its tests in a module of its own name, which kept their
 // paths when each file was its own binary.
 #[allow(clippy::module_inception)]

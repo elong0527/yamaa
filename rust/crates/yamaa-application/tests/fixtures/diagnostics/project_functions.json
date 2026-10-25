@@ -1,5 +1,5 @@
 {
-  "about": "A project's functions answered by a scripted host-functions port (#3778 group 2): each build or save runs through the double the case's functions member scripts, which stands in for the host behind the facade's project functions. Moved from project_run.rs at 43a2da793, whose tests ran the same project through a scripted host and a scripted resolver: the project lists three function files and holds the Python lock beside the study (D8), each case reads its study input from files, and the calls each port received are in function_call_contracts.json. Callback cases state the output rows and calls their tests compared; activation-report cases state the issue rows their tests read from the report, through the file route, which reports a refused report as engine_rejected at step build (an unclassified host failure as opaque_host, an interrupt or a panic as activation_boundary, a report the facts contradict as result_projection) and names each file by its path in the study.",
+  "about": "A project's functions answered by a scripted host-functions port (#3778 group 2): each build or save runs through the double the case's functions member scripts, which stands in for the host behind the facade's project functions. Moved from project_run.rs at 43a2da793, whose tests ran the same project through a scripted host and a scripted resolver: the project lists three function files and holds the Python lock beside the study (D8), each case reads its study input from files, and the calls each port received are in function_call_contracts.json. Callback cases state the output rows and calls their tests compared; activation-report cases state the issue rows their tests read from the report, through the file route, which reports a refused report as engine_rejected at step build (an unclassified host failure as opaque_host, an interrupt or a panic as activation_boundary, a report the facts contradict as result_projection) and names each file by its path in the study. The lock-finding and live-call result cases also hold project_environment.rs's lock and invocation projections, moved at 8e662c648: their findings and results become the script, whose host classifies each failure it raises, and their rows the issues of the build.",
   "documents": {
     "project": "yamaa: '1.0'\ntype: project\nfunctions: [functions/unused.yaml, functions/id.yaml, functions/pair.yaml]\nenvironments: {python: {lock: ../uv.lock}}\n",
     "unused": "yamaa: '1.0'\ntype: function\nname: unused\ndescription: Uncalled definition.\nparams: []\nreturns: int\nimplementations: {python: project.unused}\ntests: [{id: ordinary, covers: [normal, boundary], args: {}, result: 7}]\n",
@@ -639,8 +639,8 @@
           ]
         }
       },
-      "compares": ["condition"],
-      "issues": [{"condition": "function_call_failed"}],
+      "compares": ["condition", "rule"],
+      "issues": [{"condition": "function_call_failed", "rule": "FUNC-8"}],
       "saved": {}
     },
     {
@@ -715,6 +715,110 @@
       "saved": {}
     },
     {
+      "case": "a_live_call_that_returns_a_boolean_fails_its_result",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "domain"},
+          "study/input.csv": "ID\n1\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 1}, "returns": true}
+          ]
+        }
+      },
+      "compares": ["condition", "rule"],
+      "issues": [{"condition": "invalid_function_result", "rule": "FUNC-9"}]
+    },
+    {
+      "case": "a_live_call_that_returns_an_undeclared_missing_fails_its_result",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "domain"},
+          "study/input.csv": "ID\n1\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 1}, "returns": null}
+          ]
+        }
+      },
+      "compares": ["condition", "rule"],
+      "issues": [{"condition": "invalid_function_result", "rule": "FUNC-9"}]
+    },
+    {
+      "case": "a_live_call_that_returns_a_float_for_an_integer_fails_its_result",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "domain"},
+          "study/input.csv": "ID\n1\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 1}, "returns": 7.0}
+          ]
+        }
+      },
+      "compares": ["condition", "rule"],
+      "issues": [{"condition": "invalid_function_result", "rule": "FUNC-9"}]
+    },
+    {
+      "case": "a_live_call_whose_result_its_host_rejects_fails_its_result",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "domain"},
+          "study/input.csv": "ID\n1\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "calls": [
+            {"function": "id", "args": {"x": 7}, "returns": 7},
+            {"function": "id", "args": {"x": -9223372036854775808}, "returns": -9223372036854775808},
+            {"function": "id", "args": {"x": 1}, "rejects": {"class": "OriginalCondition", "message": "ordinary classified failure"}}
+          ]
+        }
+      },
+      "compares": ["condition", "rule"],
+      "issues": [{"condition": "invalid_function_result", "rule": "FUNC-9"}]
+    },
+    {
       "case": "a_host_interrupt_in_a_case_refuses_the_build_at_the_activation_boundary",
       "operation": "host_save",
       "input": {
@@ -774,11 +878,38 @@
         },
         "specification": "study/domain.yaml",
         "project": "study/project.yaml",
-        "functions": {"lock": {"lock": [{"package": "project", "reason": "distribution_not_identified", "expected": [], "actual": null}]}}
+        "functions": {
+          "lock": {
+            "lock": [{"package": "program", "reason": "distribution_not_identified", "expected": [], "actual": null}, {"package": "program", "reason": "version_not_locked", "expected": [], "actual": null}, {"package": "program", "reason": "ambiguous_lock_version", "expected": ["1.0", "2.0"], "actual": null}, {"package": "program", "reason": "invalid_locked_version", "expected": ["invalid\u0000é"], "actual": null}, {"package": "program", "reason": "package_not_installed", "expected": ["1.0"], "actual": null}, {"package": "program", "reason": "invalid_installed_version", "expected": ["1.0"], "actual": "bad\u0000🙂"}, {"package": "program", "reason": "version_mismatch", "expected": ["1.0"], "actual": "2.0"}]
+          }
+        }
       },
-      "compares": ["condition", "spec_paths", "context"],
-      "prefix": true,
-      "issues": [{"condition": "runtime_artifact_mismatch", "spec_paths": ["environments.python.lock"], "context": {"source": "{study}/study/project.yaml", "entry": "{study}/study/project.yaml", "lock_source": "{study}/uv.lock", "lock": "../uv.lock", "package": "project", "reason": "distribution_not_identified", "expected": [], "actual": null}}]
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["environments.python.lock"], "context": {"source": "{study}/study/project.yaml", "entry": "{study}/study/project.yaml", "lock_source": "{study}/uv.lock", "lock": "../uv.lock", "package": "program", "reason": "distribution_not_identified", "expected": [], "actual": null}}, {"phase": "validation", "condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["environments.python.lock"], "context": {"source": "{study}/study/project.yaml", "entry": "{study}/study/project.yaml", "lock_source": "{study}/uv.lock", "lock": "../uv.lock", "package": "program", "reason": "version_not_locked", "expected": [], "actual": null}}, {"phase": "validation", "condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["environments.python.lock"], "context": {"source": "{study}/study/project.yaml", "entry": "{study}/study/project.yaml", "lock_source": "{study}/uv.lock", "lock": "../uv.lock", "package": "program", "reason": "ambiguous_lock_version", "expected": ["1.0", "2.0"], "actual": null}}, {"phase": "validation", "condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["environments.python.lock"], "context": {"source": "{study}/study/project.yaml", "entry": "{study}/study/project.yaml", "lock_source": "{study}/uv.lock", "lock": "../uv.lock", "package": "program", "reason": "invalid_locked_version", "expected": ["invalid\u0000é"], "actual": null}}, {"phase": "validation", "condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["environments.python.lock"], "context": {"source": "{study}/study/project.yaml", "entry": "{study}/study/project.yaml", "lock_source": "{study}/uv.lock", "lock": "../uv.lock", "package": "program", "reason": "package_not_installed", "expected": ["1.0"], "actual": null}}, {"phase": "validation", "condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["environments.python.lock"], "context": {"source": "{study}/study/project.yaml", "entry": "{study}/study/project.yaml", "lock_source": "{study}/uv.lock", "lock": "../uv.lock", "package": "program", "reason": "invalid_installed_version", "expected": ["1.0"], "actual": "bad\u0000🙂"}}, {"phase": "validation", "condition": "runtime_artifact_mismatch", "rule": "FUNC-3", "spec_paths": ["environments.python.lock"], "context": {"source": "{study}/study/project.yaml", "entry": "{study}/study/project.yaml", "lock_source": "{study}/uv.lock", "lock": "../uv.lock", "package": "program", "reason": "version_mismatch", "expected": ["1.0"], "actual": "2.0"}}]
+    },
+    {
+      "case": "a_lock_finding_keeps_the_host_s_version_spelling_without_comparing_versions",
+      "operation": "host_build",
+      "input": {
+        "files": {
+          "study/project.yaml": {"base": "project"},
+          "study/functions/unused.yaml": {"base": "unused"},
+          "study/functions/id.yaml": {"base": "id"},
+          "study/functions/pair.yaml": {"base": "pair"},
+          "uv.lock": {"base": "uv.lock"},
+          "study/domain.yaml": {"base": "domain"},
+          "study/input.csv": "ID\n1\n"
+        },
+        "specification": "study/domain.yaml",
+        "project": "study/project.yaml",
+        "functions": {
+          "lock": {
+            "lock": [{"package": "program", "reason": "invalid_installed_version", "expected": ["1.0"], "actual": null}, {"package": "program", "reason": "invalid_locked_version", "expected": [], "actual": null}, {"package": "program", "reason": "version_mismatch", "expected": ["1.0"], "actual": "1.0.0"}]
+          }
+        }
+      },
+      "compares": ["condition", "context.reason", "context.expected", "context.actual"],
+      "issues": [{"condition": "runtime_artifact_mismatch", "context": {"reason": "invalid_installed_version", "expected": ["1.0"], "actual": null}}, {"condition": "runtime_artifact_mismatch", "context": {"reason": "invalid_locked_version", "expected": [], "actual": null}}, {"condition": "runtime_artifact_mismatch", "context": {"reason": "version_mismatch", "expected": ["1.0"], "actual": "1.0.0"}}]
     },
     {
       "case": "a_host_exception_while_verifying_the_lock_refuses_the_build_opaquely",

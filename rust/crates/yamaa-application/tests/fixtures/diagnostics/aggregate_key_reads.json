@@ -1,0 +1,279 @@
+{
+  "about": "A matched aggregate reads the current row through its match values, its range value and its derive bindings (LOOKUP-5, SPEC-6, D132). A match value read from an input's record names the driver of every row that evaluates it, so a key read from another template's input is refused at its pair, also in a case result and without row templates, and a home-record key cannot make a nested aggregate default eligible for a template override. During row construction, a range value or a derive binding that reads a window result before the stage split completes it, and an unqualified aggregate key beside a window key, are not supported yet; a case condition or a key that reads the window moves the read after it. Moved from execution_aggregate_key_reads.rs: each test's run became a save case, which states the saved out.csv of a build, or the issues of a refusal and that it saved nothing; the window-key refusal, which its test also checked, is a check and a build reporting the same complete rows. Each test compared its issues through support::study::issue_row, so a refusal compares its five fields. Every specification is its test's format! template, filled as the test filled it: a document of the first variant, which each other variant edits. Every value is its test's.",
+  "documents": {
+    "devices": "yamaa: \"1.0\"\ntype: spec\ndomain: VS\nkeys: [ID, ORIGIN]\ninput:\n  CLINIC: clinic.csv\n  HOME: home.csv\n  CALIB: {path: calib.csv, types: {DAY: int}}\noutput: {path: out.csv, columns: [ID, ORIGIN, NCAL]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: ORIGIN, type: str}\n  - {name: DEVICE, type: str}\n  - name: NCAL\n    type: int\n    derivation:\n      aggregate:\n        expr: 'COUNT(CALIB.DAY)'\n        key: {DEVICE: CLINIC.DEVICE}\nrows:\n  - id: clinic\n    dataset: CLINIC\n    derivations:\n      ID: CLINIC.ID\n      ORIGIN: \"'CLINIC'\"\n      DEVICE: CLINIC.DEVICE\n  - id: home\n    dataset: HOME\n    derivations:\n      ID: HOME.ID\n      ORIGIN: \"'HOME'\"\n      DEVICE: null\n",
+    "nested_devices": "yamaa: \"1.0\"\ntype: spec\ndomain: VS\nkeys: [ID, ORIGIN]\ninput:\n  CLINIC: clinic.csv\n  HOME: home.csv\n  CALIB: {path: calib.csv, types: {DAY: int}}\noutput: {path: out.csv, columns: [ID, ORIGIN, NCAL]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: ORIGIN, type: str}\n  - {name: DEVICE, type: str}\n  - name: NCAL\n    type: int\n    derivation:\n      case:\n        - when: ID IS NOT NULL\n          then:\n            aggregate:\n              expr: 'COUNT(CALIB.DAY)'\n              key: {DEVICE: CLINIC.DEVICE}\nrows:\n  - id: clinic\n    dataset: CLINIC\n    derivations:\n      ID: CLINIC.ID\n      ORIGIN: \"'CLINIC'\"\n      DEVICE: CLINIC.DEVICE\n  - id: home\n    dataset: HOME\n    derivations:\n      ID: HOME.ID\n      ORIGIN: \"'HOME'\"\n      DEVICE: null\n",
+    "clinic": "ID,DEVICE\na,D1\nb,D2\n",
+    "home": "DEVICE,ID\nD2,a\n",
+    "calib": "DEVICE,DAY\nD1,1\nD1,2\nD2,3\n",
+    "window_key": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, SEQ, WT]\nbase: SRC\ninput:\n  SRC: {path: source.csv, key: [ID], types: {ID: int, VAL: int, LO: int, HI: int, W: int}}\n  CAL: {path: cal.csv, types: {SEQN: int, LO: int, HI: int, W: int}}\noutput: {path: out.csv, columns: [ID, SEQ, WT]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: SEQ\n    type: int\n    derivation:\n      row_number:\n        window: {group_by: [ID], order_by: [SRC.VAL]}\n  - name: WT\n    type: int\n    derivation:\n      aggregate:\n        expr: 'SUM(SRC.W)'\n        between: {value: SEQ, lower: LO, upper: HI}\n",
+    "window_derive": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, SEQ, WT]\nbase: SRC\ninput:\n  SRC: {path: source.csv, key: [ID], types: {ID: int, VAL: int, LO: int, HI: int, W: int}}\n  CAL: {path: cal.csv, types: {SEQN: int, LO: int, HI: int, W: int}}\noutput: {path: out.csv, columns: [ID, SEQ, WT]}\nintermediates:\n  - id: K\n    dataset: CAL\n    key: {SEQN: SEQ}\n    order_by: [CAL.W]\n    keep: first\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: SEQ\n    type: int\n    derivation:\n      row_number:\n        window: {group_by: [ID], order_by: [SRC.VAL]}\n  - name: WT\n    type: int\n    derivation:\n      aggregate:\n        key: [ID]\n        derivations:\n          D: {type: int, derivation: SRC.W}\n          V: {type: int, derivation: K.W}\n          T: {type: int, derivation: {greatest: {sources: [D, V]}}}\n        expr: 'SUM(T)'\n",
+    "windowed_source": "ID,VAL,LO,HI,W\n1,3,1,1,10\n1,5,2,9,20\n2,4,1,9,30\n",
+    "windowed_calibrations": "SEQN,LO,HI,W\n1,1,1,10\n1,1,5,5\n2,2,2,20\n"
+  },
+  "cases": [
+    {
+      "case": "a_clinic_key_is_refused_where_home_rows_evaluate_it",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "devices"}, "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "calib.csv": {"base": "calib"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.NCAL.derivation.aggregate.key.DEVICE"], "context": {"identifier": "CLINIC.DEVICE"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_home_key_is_refused_where_clinic_rows_evaluate_it",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "devices", "edits": [
+            {"from": "key: {DEVICE: CLINIC.DEVICE}", "to": "key: {DEVICE: HOME.DEVICE}"}
+          ]},
+          "clinic.csv": {"base": "clinic"},
+          "home.csv": {"base": "home"},
+          "calib.csv": {"base": "calib"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.NCAL.derivation.aggregate.key.DEVICE"], "context": {"identifier": "HOME.DEVICE"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_clinic_key_in_a_case_result_is_refused_where_home_rows_evaluate_it",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "nested_devices"}, "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "calib.csv": {"base": "calib"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.NCAL.derivation.case[0].then.aggregate.key.DEVICE"], "context": {"identifier": "CLINIC.DEVICE"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "without_a_home_template_every_row_reads_the_clinic_device",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "devices", "edits": [
+            {"from": "  - id: home\n    dataset: HOME\n    derivations:\n      ID: HOME.ID\n      ORIGIN: \"'HOME'\"\n      DEVICE: null\n", "to": ""}
+          ]},
+          "clinic.csv": {"base": "clinic"},
+          "home.csv": {"base": "home"},
+          "calib.csv": {"base": "calib"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,ORIGIN,NCAL\na,CLINIC,2\nb,CLINIC,1\n"}
+    },
+    {
+      "case": "without_a_home_template_a_case_result_reads_the_clinic_device",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "nested_devices", "edits": [
+            {"from": "  - id: home\n    dataset: HOME\n    derivations:\n      ID: HOME.ID\n      ORIGIN: \"'HOME'\"\n      DEVICE: null\n", "to": ""}
+          ]},
+          "clinic.csv": {"base": "clinic"},
+          "home.csv": {"base": "home"},
+          "calib.csv": {"base": "calib"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,ORIGIN,NCAL\na,CLINIC,2\nb,CLINIC,1\n"}
+    },
+    {
+      "case": "a_template_may_not_override_an_aggregate_in_a_case_result",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "nested_devices", "edits": [
+            {"from": "      DEVICE: null\n", "to": "      DEVICE: null\n      NCAL: 0\n"}
+          ]},
+          "clinic.csv": {"base": "clinic"},
+          "home.csv": {"base": "home"},
+          "calib.csv": {"base": "calib"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "duplicate_derivation", "rule": "SPEC-6", "spec_paths": ["columns.NCAL.derivation"], "context": {"column": "NCAL", "identifier": "NCAL", "not_row_local": "aggregate", "rows": ["home"]}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "an_unqualified_key_reads_the_device_each_row_derives",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "devices", "edits": [
+            {"from": "key: {DEVICE: CLINIC.DEVICE}", "to": "key: {DEVICE: DEVICE}"}
+          ]},
+          "clinic.csv": {"base": "clinic"},
+          "home.csv": {"base": "home"},
+          "calib.csv": {"base": "calib"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,ORIGIN,NCAL\na,CLINIC,2\nb,CLINIC,1\na,HOME,\n"}
+    },
+    {
+      "case": "a_home_key_does_not_let_the_clinic_template_override_a_nested_aggregate",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "nested_devices", "edits": [
+            {"from": "key: {DEVICE: CLINIC.DEVICE}", "to": "key: {DEVICE: HOME.DEVICE}"},
+            {"from": "      DEVICE: CLINIC.DEVICE\n", "to": "      DEVICE: CLINIC.DEVICE\n      NCAL: 0\n"}
+          ]},
+          "clinic.csv": {"base": "clinic"},
+          "home.csv": {"base": "home"},
+          "calib.csv": {"base": "calib"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "duplicate_derivation", "rule": "SPEC-6", "spec_paths": ["columns.NCAL.derivation"], "context": {"column": "NCAL", "identifier": "NCAL", "not_row_local": "aggregate", "rows": ["clinic"]}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_home_key_in_an_expression_does_not_let_the_clinic_template_override_a_nested_aggregate",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "nested_devices", "edits": [
+            {"from": "key: {DEVICE: CLINIC.DEVICE}", "to": "key: {DEVICE: {str_case: {source: HOME.DEVICE, to: upper}}}"},
+            {"from": "      DEVICE: CLINIC.DEVICE\n", "to": "      DEVICE: CLINIC.DEVICE\n      NCAL: 0\n"}
+          ]},
+          "clinic.csv": {"base": "clinic"},
+          "home.csv": {"base": "home"},
+          "calib.csv": {"base": "calib"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "duplicate_derivation", "rule": "SPEC-6", "spec_paths": ["columns.NCAL.derivation"], "context": {"column": "NCAL", "identifier": "NCAL", "not_row_local": "aggregate", "rows": ["clinic"]}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "without_row_templates_a_key_that_reads_another_input_is_refused",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: VS\nkeys: [ID]\nbase: CLINIC\ninput:\n  CLINIC: clinic.csv\n  HOME: home.csv\n  CALIB: {path: calib.csv, types: {DAY: int}}\noutput: {path: out.csv, columns: [ID, NCAL]}\ncolumns:\n  - {name: ID, type: str, derivation: CLINIC.ID}\n  - name: NCAL\n    type: int\n    derivation:\n      aggregate:\n        expr: 'COUNT(CALIB.DAY)'\n        key: {DEVICE: HOME.DEVICE}\n", "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "calib.csv": {"base": "calib"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "LOOKUP-5", "spec_paths": ["columns.NCAL.derivation.aggregate.key.DEVICE"], "context": {"identifier": "HOME.DEVICE"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "an_aggregate_over_the_first_input_serves_rows_another_input_builds",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: VS\nkeys: [ID, ORIGIN]\ninput:\n  CLINIC: clinic.csv\n  HOME: home.csv\noutput: {path: out.csv, columns: [ID, ORIGIN, NCAL]}\ncolumns:\n  - {name: ID, type: str}\n  - {name: ORIGIN, type: str}\n  - name: NCAL\n    type: int\n    derivation:\n      case:\n        - when: ORIGIN = 'HOME'\n          then:\n            aggregate:\n              expr: 'COUNT(CLINIC.DEVICE)'\n              key: {ID: ID}\n        - otherwise: 0\nrows:\n  - id: clinic\n    dataset: CLINIC\n    derivations:\n      ID: CLINIC.ID\n      ORIGIN: \"'CLINIC'\"\n  - id: home\n    dataset: HOME\n    derivations:\n      ID: HOME.ID\n      ORIGIN: \"'HOME'\"\n", "clinic.csv": {"base": "clinic"}, "home.csv": {"base": "home"}, "calib.csv": {"base": "calib"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "ID,ORIGIN,NCAL\na,CLINIC,0\nb,CLINIC,0\na,HOME,1\n"}
+    },
+    {
+      "case": "an_aggregate_range_read_before_its_window_completes_is_unsupported",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "window_key"}, "source.csv": {"base": "windowed_source"}, "cal.csv": {"base": "windowed_calibrations"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "planning", "condition": "unsupported_operation", "rule": null, "spec_paths": ["columns.WT.derivation.aggregate.between.value"], "context": {"operation": "aggregate_range_window_read"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "an_aggregate_range_value_the_record_holds_before_the_window_builds",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "window_key", "edits": [
+            {"from": "between: {value: SEQ,", "to": "between: {value: SRC.VAL,"}
+          ]},
+          "source.csv": {"base": "windowed_source"},
+          "cal.csv": {"base": "windowed_calibrations"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,SEQ,WT\n1,1,20\n1,2,20\n2,1,30\n"}
+    },
+    {
+      "case": "a_case_condition_that_reads_the_window_moves_a_range_read_after_it",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "window_key", "edits": [
+            {"from": "      aggregate:\n        expr: 'SUM(SRC.W)'\n        between: {value: SEQ, lower: LO, upper: HI}\n", "to": "      case:\n        - when: SEQ > 0\n          then:\n            aggregate:\n              expr: 'SUM(SRC.W)'\n              between: {value: SEQ, lower: LO, upper: HI}\n"}
+          ]},
+          "source.csv": {"base": "windowed_source"},
+          "cal.csv": {"base": "windowed_calibrations"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,SEQ,WT\n1,1,10\n1,2,20\n2,1,30\n"}
+    },
+    {
+      "case": "a_key_that_reads_the_window_moves_a_range_read_after_it",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "window_key", "edits": [
+            {"from": "        expr: 'SUM(SRC.W)'\n", "to": "        expr: 'SUM(CAL.W)'\n        key: {SEQN: SEQ}\n"}
+          ]},
+          "source.csv": {"base": "windowed_source"},
+          "cal.csv": {"base": "windowed_calibrations"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,SEQ,WT\n1,1,15\n1,2,20\n2,1,15\n"}
+    },
+    {
+      "case": "an_aggregate_derive_read_before_its_window_completes_is_unsupported",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "window_derive"}, "source.csv": {"base": "windowed_source"}, "cal.csv": {"base": "windowed_calibrations"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "planning", "condition": "unsupported_operation", "rule": null, "spec_paths": ["columns.WT.derivation.aggregate.derivations.V.derivation.source"], "context": {"operation": "aggregate_derive_window_read"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_case_condition_that_reads_the_window_moves_a_derive_read_after_it",
+      "operation": "save",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "window_derive", "edits": [
+            {"from": "      aggregate:\n        key: [ID]\n        derivations:\n          D: {type: int, derivation: SRC.W}\n          V: {type: int, derivation: K.W}\n          T: {type: int, derivation: {greatest: {sources: [D, V]}}}\n        expr: 'SUM(T)'\n", "to": "      case:\n        - when: SEQ > 0\n          then:\n            aggregate:\n              key: [ID]\n              derivations:\n                D: {type: int, derivation: SRC.W}\n                V: {type: int, derivation: K.W}\n                T: {type: int, derivation: {greatest: {sources: [D, V]}}}\n              expr: 'SUM(T)'\n"}
+          ]},
+          "source.csv": {"base": "windowed_source"},
+          "cal.csv": {"base": "windowed_calibrations"}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,SEQ,WT\n1,1,30\n1,2,40\n2,1,30\n"}
+    },
+    {
+      "case": "an_unqualified_aggregate_key_beside_a_window_key_is_unsupported",
+      "operation": ["check", "build"],
+      "input": {"files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID, SEQ, N]\nbase: SRC\ninput:\n  SRC: {path: source.csv, key: [ID], types: {ID: int, VAL: int, LO: int, HI: int, W: int}}\n  CAL: {path: cal.csv, types: {SEQN: int, LO: int, HI: int, W: int}}\noutput: {path: out.csv, columns: [ID, SEQ, N]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: SEQ\n    type: int\n    derivation:\n      row_number:\n        window: {group_by: [ID], order_by: [SRC.VAL]}\n  - name: N\n    type: int\n    derivation:\n      aggregate:\n        group_by: [ID]\n        expr: 'COUNT(SEQ)'\n", "source.csv": {"base": "windowed_source"}, "cal.csv": {"base": "windowed_calibrations"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "planning", "condition": "unsupported_operation", "rule": null, "spec_paths": ["columns.N.derivation.aggregate"], "context": {"operation": "output_aggregate_key"}}
+      ]
+    }
+  ]
+}

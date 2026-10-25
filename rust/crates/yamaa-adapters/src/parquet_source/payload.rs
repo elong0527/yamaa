@@ -1,5 +1,7 @@
 //! Physical payload validation after footer framing and actual decompression.
 //! These checks do not replace the general reader's full format validation.
+use super::footer::Leaf;
+use super::format::Physical;
 use super::{
     closed_profile,
     compact::Error,
@@ -8,7 +10,6 @@ use super::{
     framing::{Page, Payload},
     rle,
 };
-use parquet::{basic::Type, schema::types::ColumnDescriptor};
 
 fn levels(bytes: &[u8], maximum: i16, encoding: i64, values: usize) -> Result<&[u8], Error> {
     if maximum == 0 {
@@ -35,7 +36,7 @@ fn levels(bytes: &[u8], maximum: i16, encoding: i64, values: usize) -> Result<&[
     bytes.get(length..).ok_or(Error::Malformed)
 }
 
-fn level_runs(
+pub(super) fn level_runs(
     bytes: &[u8],
     maximum: i16,
     encoding: i64,
@@ -119,11 +120,11 @@ impl Rows {
 
     pub(super) fn admit(
         &mut self,
-        page: &Page<'_>,
+        page: &Page,
         decoded: &[u8],
-        column: &ColumnDescriptor,
+        column: &Leaf,
     ) -> Result<(), Error> {
-        let maximum = column.max_rep_level();
+        let maximum = column.max_repetition;
         let (raw, encoding, values) = match page.payload {
             Payload::Index | Payload::Dictionary { .. } => return Ok(()),
             Payload::DataV1 {
@@ -176,9 +177,9 @@ pub(super) struct Values<'a> {
 /// Return encoding, actual non-null count and checked value bytes. Level
 /// validation precedes string and dictionary decoding.
 pub(super) fn values<'a>(
-    page: &Page<'_>,
+    page: &Page,
     decoded: &'a [u8],
-    column: &ColumnDescriptor,
+    column: &Leaf,
 ) -> Result<Option<Values<'a>>, Error> {
     let result = match page.payload {
         Payload::Index => return Ok(None),
@@ -195,8 +196,8 @@ pub(super) fn values<'a>(
                 .checked_add(definition_bytes)
                 .ok_or(Error::Malformed)?;
             let def = decoded.get(repetition_bytes..end).ok_or(Error::Malformed)?;
-            present(rep, column.max_rep_level(), 3, values)?;
-            let non_null = present(def, column.max_def_level(), 3, values)?;
+            present(rep, column.max_repetition, 3, values)?;
+            let non_null = present(def, column.max_definition, 3, values)?;
             if nulls != values - non_null {
                 return Err(Error::Malformed);
             }
@@ -208,10 +209,9 @@ pub(super) fn values<'a>(
             definition_encoding,
             repetition_encoding,
         } => {
-            let (body, _) =
-                v1_levels(decoded, column.max_rep_level(), repetition_encoding, values)?;
+            let (body, _) = v1_levels(decoded, column.max_repetition, repetition_encoding, values)?;
             let (body, non_null) =
-                v1_levels(body, column.max_def_level(), definition_encoding, values)?;
+                v1_levels(body, column.max_definition, definition_encoding, values)?;
             (encoding, non_null, body)
         }
     };
@@ -223,8 +223,68 @@ pub(super) fn values<'a>(
     }))
 }
 
+/// A data page as it holds its levels and values: its levels, the bytes of
+/// its repetition and definition levels with their encodings, and its value
+/// encoding and bytes.
+pub(super) struct Data<'a> {
+    pub levels: usize,
+    pub repetition: (&'a [u8], i64),
+    pub definition: (&'a [u8], i64),
+    pub encoding: i64,
+    pub body: &'a [u8],
+}
+
+/// The levels and values of a data page that admission has checked; none
+/// for another page.
+pub(super) fn data<'a>(
+    page: &Page,
+    decoded: &'a [u8],
+    column: &Leaf,
+) -> Result<Option<Data<'a>>, Error> {
+    match page.payload {
+        Payload::Index | Payload::Dictionary { .. } => Ok(None),
+        Payload::DataV2 {
+            encoding,
+            values,
+            definition_bytes,
+            repetition_bytes,
+            ..
+        } => {
+            let end = repetition_bytes
+                .checked_add(definition_bytes)
+                .ok_or(Error::Malformed)?;
+            let slice = |range| decoded.get(range).ok_or(Error::Malformed);
+            Ok(Some(Data {
+                levels: values,
+                repetition: (slice(0..repetition_bytes)?, 3),
+                definition: (slice(repetition_bytes..end)?, 3),
+                encoding,
+                body: slice(end..decoded.len())?,
+            }))
+        }
+        Payload::DataV1 {
+            encoding,
+            values,
+            definition_encoding,
+            repetition_encoding,
+        } => {
+            let (rest, repetition) =
+                v1_level_bytes(decoded, column.max_repetition, repetition_encoding, values)?;
+            let (body, definition) =
+                v1_level_bytes(rest, column.max_definition, definition_encoding, values)?;
+            Ok(Some(Data {
+                levels: values,
+                repetition: (repetition, repetition_encoding),
+                definition: (definition, definition_encoding),
+                encoding,
+                body,
+            }))
+        }
+    }
+}
+
 /// Validate delta counts and strings against their physical page framing.
-fn delta_values(page: &Page<'_>, decoded: &[u8], column: &ColumnDescriptor) -> Result<(), Error> {
+fn delta_values(page: &Page, decoded: &[u8], column: &Leaf) -> Result<(), Error> {
     let Some(Values {
         encoding,
         count: values,
@@ -233,16 +293,16 @@ fn delta_values(page: &Page<'_>, decoded: &[u8], column: &ColumnDescriptor) -> R
     else {
         return Ok(());
     };
-    let physical = column.physical_type();
+    let physical = column.physical;
     match encoding {
-        5 if matches!(physical, Type::INT32 | Type::INT64) => delta::admit(
+        5 if matches!(physical, Physical::Int32 | Physical::Int64) => delta::admit(
             body,
             encoding,
-            if physical == Type::INT32 { 32 } else { 64 },
+            if physical == Physical::Int32 { 32 } else { 64 },
             values,
         ),
-        6 if physical == Type::BYTE_ARRAY => delta::admit(body, encoding, 32, values),
-        7 if matches!(physical, Type::BYTE_ARRAY | Type::FIXED_LEN_BYTE_ARRAY) => {
+        6 if physical == Physical::ByteArray => delta::admit(body, encoding, 32, values),
+        7 if matches!(physical, Physical::ByteArray | Physical::FixedLenByteArray) => {
             delta::admit(body, encoding, 32, values)
         }
         // The physical reader validates the remaining encodings and types.
@@ -265,9 +325,9 @@ impl Validation {
 
     pub(super) fn admit(
         &mut self,
-        page: &Page<'_>,
+        page: &Page,
         decoded: &[u8],
-        column: &ColumnDescriptor,
+        column: &Leaf,
     ) -> Result<(), Error> {
         let chunk = (page.row_group, page.column);
         if self.chunk != Some(chunk) {
@@ -317,8 +377,8 @@ impl Validation {
     }
 }
 
-fn plain(mut bytes: &[u8], values: usize, column: &ColumnDescriptor) -> Result<(), Error> {
-    if column.physical_type() == Type::BYTE_ARRAY {
+fn plain(mut bytes: &[u8], values: usize, column: &Leaf) -> Result<(), Error> {
+    if column.physical == Physical::ByteArray {
         for _ in 0..values {
             let header = bytes.get(..4).ok_or(Error::Malformed)?;
             let length = u32::from_le_bytes(header.try_into().unwrap()) as usize;
@@ -326,17 +386,17 @@ fn plain(mut bytes: &[u8], values: usize, column: &ColumnDescriptor) -> Result<(
             bytes = bytes.get(end..).ok_or(Error::Malformed)?;
         }
     } else {
-        let length = match column.physical_type() {
-            Type::BOOLEAN => 1,
-            Type::INT32 | Type::FLOAT => 4,
-            Type::INT64 | Type::DOUBLE => 8,
-            Type::INT96 => 12,
-            Type::FIXED_LEN_BYTE_ARRAY => {
-                usize::try_from(column.type_length()).map_err(|_| Error::Malformed)?
+        let length = match column.physical {
+            Physical::Boolean => 1,
+            Physical::Int32 | Physical::Float => 4,
+            Physical::Int64 | Physical::Double => 8,
+            Physical::Int96 => 12,
+            Physical::FixedLenByteArray => {
+                usize::try_from(column.type_length).map_err(|_| Error::Malformed)?
             }
-            Type::BYTE_ARRAY => unreachable!(),
+            Physical::ByteArray => unreachable!(),
         };
-        let stored = if column.physical_type() == Type::BOOLEAN {
+        let stored = if column.physical == Physical::Boolean {
             values.div_ceil(8)
         } else {
             values.checked_mul(length).ok_or(Error::Malformed)?
@@ -367,32 +427,29 @@ mod tests {
         assert_eq!(levels(&[0, 0, 42], 2, 4, 5).unwrap(), [42]);
         assert!(matches!(levels(&[0], 1, 9, 1), Err(Error::Malformed)));
     }
-    use parquet::{
-        basic::Repetition,
-        schema::types::{SchemaDescriptor, Type as SchemaType},
-    };
-    use std::sync::Arc;
-    fn column() -> SchemaDescriptor {
-        column_with_repetition(Repetition::REQUIRED)
+    use crate::parquet_source::format::Converted;
+    /// A BYTE_ARRAY leaf `S` of these maximum definition and repetition
+    /// levels.
+    fn leaf(definition: i16, repetition: i16) -> Leaf {
+        Leaf {
+            node: 1,
+            root: 0,
+            path: vec!["S".into()],
+            physical: Physical::ByteArray,
+            type_length: -1,
+            precision: -1,
+            scale: -1,
+            converted: Converted::None,
+            logical: None,
+            max_definition: definition,
+            max_repetition: repetition,
+        }
     }
-    fn column_with_repetition(repetition: Repetition) -> SchemaDescriptor {
-        let field = Arc::new(
-            SchemaType::primitive_type_builder("S", Type::BYTE_ARRAY)
-                .with_repetition(repetition)
-                .build()
-                .unwrap(),
-        );
-        SchemaDescriptor::new(Arc::new(
-            SchemaType::group_type_builder("s")
-                .with_fields(vec![field])
-                .build()
-                .unwrap(),
-        ))
-    }
-    fn page(payload: Payload) -> Page<'static> {
+    fn page(payload: Payload) -> Page {
         Page {
             codec: 0,
-            body: &[],
+            header: 0..0,
+            body: 0..0,
             decoded_bytes: 0,
             uncompressed_prefix: 0,
             compressed: false,
@@ -409,7 +466,7 @@ mod tests {
         }
         out
     }
-    fn data(values: usize) -> Page<'static> {
+    fn data(values: usize) -> Page {
         page(Payload::DataV1 {
             encoding: 8,
             values,
@@ -419,8 +476,7 @@ mod tests {
     }
     #[test]
     fn row_starts_use_run_cardinality_without_capping_repeated_values() {
-        let schema = column_with_repetition(Repetition::REPEATED);
-        let column = schema.column(0);
+        let column = leaf(1, 1);
         let page = data(i32::MAX as usize);
         // One RLE run claims i32::MAX distinct rows. Its cardinality is checked
         // without emitting those levels or invoking an ordinary value decoder.
@@ -444,8 +500,7 @@ mod tests {
 
     #[test]
     fn row_starts_validate_chunk_boundaries_packed_levels_and_empty_chunks() {
-        let schema = column_with_repetition(Repetition::REPEATED);
-        let column = schema.column(0);
+        let column = leaf(1, 1);
         let mut packed = data(5);
         packed.payload = Payload::DataV1 {
             encoding: 7,
@@ -492,8 +547,7 @@ mod tests {
     }
     #[test]
     fn missing_dictionary_bad_indices_and_truncated_plain_strings_fail_safely() {
-        let schema = column();
-        let column = schema.column(0);
+        let column = leaf(0, 0);
         let mut state = Validation::new();
         assert_eq!(
             state.admit(&data(1), &[1, 2, 0], &column),

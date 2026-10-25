@@ -6,9 +6,11 @@
 //! (see `json_wire` there), which projects these values through explicit
 //! wire wrappers because the serde orphan rule bars foreign trait impls.
 
-use std::{collections::BTreeMap, fmt, ops, str::FromStr};
+mod map;
 
-pub type Map<K, V> = BTreeMap<K, V>;
+use std::{fmt, ops, str::FromStr};
+
+pub use map::Map;
 
 /// A validated JSON number, retaining integer, fractional and exponent spelling.
 #[derive(Clone, Debug, PartialEq, Eq)]

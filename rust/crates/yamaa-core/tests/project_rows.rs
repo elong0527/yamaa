@@ -452,7 +452,6 @@ mod project {
     }
     mod project_environment_projection {
         use crate::support::roots::{meta, text as written, Case, Definition, Parameter};
-        use std::collections::BTreeMap;
         use yamaa_core::json::Value as CV;
         use yamaa_core::{
             ast::{self, FunctionDeclaration},
@@ -619,7 +618,7 @@ mod project {
             source: &str,
             declaration: &str,
         ) -> Diagnostic {
-            let mut context: BTreeMap<String, CV> = fields
+            let mut context: yamaa_core::json::Map<String, CV> = fields
                 .iter()
                 .map(|(name, value)| ((*name).into(), value.clone()))
                 .collect();

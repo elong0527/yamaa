@@ -1,5 +1,5 @@
 {
-  "about": "The refusals of the date and time operations: civil arithmetic, duration text, dtc and time_of_day (TIME-4, TIME-14, TIME-17, TIME-19, TIME-20, TIME-21), whose cases compare the fields their table compared, and date completion: impute's policy (TIME-10), the text impute, precision and to_date read (TIME-2, TIME-10, TIME-13) and their operands' types (TIME-1, TIME-2, TIME-7, TIME-8, TIME-18), and the text date_text reads in its declared forms and its source's type (TIME-22). They include study_day's operand types (TIME-1), every text that is no fixed-length ISO 8601 duration (TIME-17), shifts past the calendar and operand types a missing operand does not hide (TIME-4, TIME-14), a zero year with a month (TIME-13), month and day rules wider than any integer (TIME-10), and bounds and a fallback of another type than the declared one, which impute_bounds reaches after completing its source (TIME-1, TIME-9, TIME-13).",
+  "about": "The refusals of the date and time operations: civil arithmetic, duration text, dtc and time_of_day (TIME-4, TIME-14, TIME-17, TIME-19, TIME-20, TIME-21), whose cases compare the fields their table compared, and date completion: impute's policy (TIME-10), the text impute, precision and to_date read (TIME-2, TIME-10, TIME-13) and their operands' types (TIME-1, TIME-2, TIME-7, TIME-8, TIME-18), and the text date_text reads in its declared forms and its source's type (TIME-22). They include study_day's operand types (TIME-1), every text that is no fixed-length ISO 8601 duration (TIME-17), shifts past the calendar and operand types a missing operand does not hide (TIME-4, TIME-14), a zero year with a month (TIME-13), month and day rules wider than any integer (TIME-10), and bounds and a fallback of another type than the declared one, which impute_bounds reaches after completing its source (TIME-1, TIME-9, TIME-13). dtc refuses each part outside its form, naming the part: a month or day of other than two digits or past its calendar, a year of other than four digits or zero, and an hour past 23, whether written as text or as a number (TIME-19); these come from temporal_date_text.rs at 144fc5559, whose table compared the phase, condition, rule, spec paths and part.",
   "cases": [
     {
       "case": "date_shift_refuses_a_source_that_is_not_a_date",
@@ -73,8 +73,83 @@
       "case": "dtc_fails_on_a_month_outside_its_range",
       "operation": "temporal",
       "input": {"kind": {"date_text": 2}, "path": "columns.RESULT.derivation", "values": ["2030", "13"]},
-      "compares": ["phase", "condition", "rule", "source_span", "operand_route"],
-      "issues": [{"phase": "impute", "condition": "invalid_date_text", "rule": "TIME-19"}]
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.part", "source_span", "operand_route"],
+      "issues": [{"phase": "impute", "condition": "invalid_date_text", "rule": "TIME-19", "spec_paths": ["columns.RESULT.derivation"], "context": {"part": "month"}}]
+    },
+    {
+      "case": "dtc_refuses_a_one_digit_month_text",
+      "operation": "temporal",
+      "input": {"kind": {"date_text": 2}, "path": "columns.DTC.derivation.dtc", "sources": ["YR", "MO"], "values": ["2025", "3"]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.part"],
+      "issues": [{"phase": "impute", "condition": "invalid_date_text", "rule": "TIME-19", "spec_paths": ["columns.DTC.derivation.dtc"], "context": {"part": "month"}}]
+    },
+    {
+      "case": "dtc_refuses_a_month_text_that_is_not_digits",
+      "operation": "temporal",
+      "input": {"kind": {"date_text": 2}, "path": "columns.DTC.derivation.dtc", "sources": ["YR", "MO"], "values": ["2025", "MAR"]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.part"],
+      "issues": [{"phase": "impute", "condition": "invalid_date_text", "rule": "TIME-19", "spec_paths": ["columns.DTC.derivation.dtc"], "context": {"part": "month"}}]
+    },
+    {
+      "case": "dtc_refuses_a_two_digit_year_text",
+      "operation": "temporal",
+      "input": {"kind": {"date_text": 1}, "path": "columns.DTC.derivation.dtc", "sources": ["YR"], "values": ["25"]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.part"],
+      "issues": [{"phase": "impute", "condition": "invalid_date_text", "rule": "TIME-19", "spec_paths": ["columns.DTC.derivation.dtc"], "context": {"part": "year"}}]
+    },
+    {
+      "case": "dtc_refuses_a_zero_year_text",
+      "operation": "temporal",
+      "input": {"kind": {"date_text": 1}, "path": "columns.DTC.derivation.dtc", "sources": ["YR"], "values": ["0000"]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.part"],
+      "issues": [{"phase": "impute", "condition": "invalid_date_text", "rule": "TIME-19", "spec_paths": ["columns.DTC.derivation.dtc"], "context": {"part": "year"}}]
+    },
+    {
+      "case": "dtc_refuses_a_zero_year_number",
+      "operation": "temporal",
+      "input": {"kind": {"date_text": 1}, "path": "columns.DTC.derivation.dtc", "sources": ["YR"], "values": [0]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.part"],
+      "issues": [{"phase": "impute", "condition": "invalid_date_text", "rule": "TIME-19", "spec_paths": ["columns.DTC.derivation.dtc"], "context": {"part": "year"}}]
+    },
+    {
+      "case": "dtc_refuses_a_five_digit_year_number",
+      "operation": "temporal",
+      "input": {"kind": {"date_text": 1}, "path": "columns.DTC.derivation.dtc", "sources": ["YR"], "values": [10000]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.part"],
+      "issues": [{"phase": "impute", "condition": "invalid_date_text", "rule": "TIME-19", "spec_paths": ["columns.DTC.derivation.dtc"], "context": {"part": "year"}}]
+    },
+    {
+      "case": "dtc_refuses_a_day_a_common_year_s_month_lacks",
+      "operation": "temporal",
+      "input": {"kind": {"date_text": 3}, "path": "columns.DTC.derivation.dtc", "sources": ["YR", "MO", "DY"], "values": ["2025", "02", "29"]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.part"],
+      "issues": [{"phase": "impute", "condition": "invalid_date_text", "rule": "TIME-19", "spec_paths": ["columns.DTC.derivation.dtc"], "context": {"part": "day"}}]
+    },
+    {
+      "case": "dtc_refuses_a_day_number_past_the_end_of_its_month",
+      "operation": "temporal",
+      "input": {"kind": {"date_text": 3}, "path": "columns.DTC.derivation.dtc", "sources": ["YR", "MO", "DY"], "values": ["2025", "04", 31]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.part"],
+      "issues": [{"phase": "impute", "condition": "invalid_date_text", "rule": "TIME-19", "spec_paths": ["columns.DTC.derivation.dtc"], "context": {"part": "day"}}]
+    },
+    {
+      "case": "dtc_refuses_an_hour_past_23",
+      "operation": "temporal",
+      "input": {
+        "kind": {"date_text": 4},
+        "path": "columns.DTC.derivation.dtc",
+        "sources": ["YR", "MO", "DY", "HR"],
+        "values": ["2025", "03", "15", "24"]
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.part"],
+      "issues": [{"phase": "impute", "condition": "invalid_date_text", "rule": "TIME-19", "spec_paths": ["columns.DTC.derivation.dtc"], "context": {"part": "hour"}}]
+    },
+    {
+      "case": "dtc_refuses_a_negative_month_number",
+      "operation": "temporal",
+      "input": {"kind": {"date_text": 2}, "path": "columns.DTC.derivation.dtc", "sources": ["YR", "MO"], "values": ["2025", -1]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.part"],
+      "issues": [{"phase": "impute", "condition": "invalid_date_text", "rule": "TIME-19", "spec_paths": ["columns.DTC.derivation.dtc"], "context": {"part": "month"}}]
     },
     {
       "case": "time_of_day_refuses_a_source_that_is_not_a_datetime",

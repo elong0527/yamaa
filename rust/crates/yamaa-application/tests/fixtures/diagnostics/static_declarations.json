@@ -1,0 +1,114 @@
+{
+  "about": "Static declarations a check admits or refuses before any record is read. Arithmetic over numeric operands belongs to the one expression language, so a case when, a root filter and an assert.require that compute a difference are each admitted (#2204). A flag whose condition can be missing needs a missing value whatever its false value is: text, the least and greatest 64-bit integers, either Boolean, or text holding a NUL, which the specification writes as the YAML escape \\u0000; each is refused as missing_value_required at the flag's missing (EXPR-8), naming the false value as written. The R declarations of five benchmarks' projects are admitted statically for the R host: four specifications check clean, and negative-function-contract reports the one invalid_function_argument its expected/error.yaml states (FUNC-5). Moved from the static_declarations and validator_r_declarations modules of declaration_schema_capture.rs, which prepared each specification and read specification_check's issues, or the R project through a resolver double serving the project's function file and a typed renv lock; a case runs the public check instead, on the staged specification or the staged benchmark with its project, which reads no study input. The flag tests compared the one issue's condition, rule, spec paths and context; the R refusal compared all five fields. The advs and flag documents are the tests' specifications, the first holding its head alone and each case adding the column or declarations its test appended, the second holding the false value \"N\", which each other case edits to the JSON text of its test's value. The retained validator_r_declarations Rust seam checks the R environment host and language, one function-file capture and one R-lock capture, and no additional captures during specification admission. No engine output supplied these values.",
+  "documents": {
+    "advs": "yamaa: '1.0'\ntype: spec\ndomain: ADVS\nkeys: [USUBJID]\ninput: {VS: {path: never-read.csv, types: {SBPSUP: float, SBPSTD: float}}}\noutput: {path: advs.csv, columns: [USUBJID, OHYPO]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: VS.USUBJID}\n  - {name: SBPSUP, type: float, derivation: VS.SBPSUP}\n  - {name: SBPSTD, type: float, derivation: VS.SBPSTD}\n",
+    "flag": "yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {DM: never-read.csv}\noutput: {path: result.csv, columns: [ID, B, F]}\ncolumns:\n  - {name: ID, type: str, derivation: DM.ID}\n  - {name: B, type: int, derivation: 2}\n  - {name: F, type: str, derivation: {flag: {condition: 'B > 1', false_value: \"N\"}}}\n"
+  },
+  "cases": [
+    {
+      "case": "an_arithmetic_case_condition_is_admitted",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "advs", "edits": [{"from": "  - {name: SBPSTD, type: float, derivation: VS.SBPSTD}\n", "to": "  - {name: SBPSTD, type: float, derivation: VS.SBPSTD}\n  - name: OHYPO\n    type: str\n    derivation:\n      case:\n        - {when: 'SBPSTD - SBPSUP <= -20', then: \"'Y'\"}\n        - {otherwise: \"'N'\"}\n"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "an_arithmetic_root_filter_is_admitted",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "advs", "edits": [{"from": "  - {name: SBPSTD, type: float, derivation: VS.SBPSTD}\n", "to": "  - {name: SBPSTD, type: float, derivation: VS.SBPSTD}\n  - {name: OHYPO, type: str, derivation: \"'N'\"}\nfilter: 'VS.SBPSTD - VS.SBPSUP < 0'\n"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "an_arithmetic_assertion_requirement_is_admitted",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "advs", "edits": [{"from": "  - {name: SBPSTD, type: float, derivation: VS.SBPSTD}\n", "to": "  - {name: SBPSTD, type: float, derivation: VS.SBPSTD}\n  - {name: OHYPO, type: str, derivation: \"'N'\"}\nverifications:\n  - {assert: {when: \"OHYPO = 'Y'\", require: 'SBPSTD - SBPSUP <= -20'}}\n"}]}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_text_false_value_does_not_answer_a_missing_condition",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "flag"}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"condition": "missing_value_required", "rule": "EXPR-8", "spec_paths": ["columns.F.derivation.flag.missing"], "context": {"false_value": "N"}}
+      ]
+    },
+    {
+      "case": "the_least_integer_false_value_does_not_answer_a_missing_condition",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "flag", "edits": [{"from": "false_value: \"N\"}", "to": "false_value: -9223372036854775808}"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"condition": "missing_value_required", "rule": "EXPR-8", "spec_paths": ["columns.F.derivation.flag.missing"], "context": {"false_value": -9223372036854775808}}
+      ]
+    },
+    {
+      "case": "the_greatest_integer_false_value_does_not_answer_a_missing_condition",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "flag", "edits": [{"from": "false_value: \"N\"}", "to": "false_value: 9223372036854775807}"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"condition": "missing_value_required", "rule": "EXPR-8", "spec_paths": ["columns.F.derivation.flag.missing"], "context": {"false_value": 9223372036854775807}}
+      ]
+    },
+    {
+      "case": "a_false_boolean_false_value_does_not_answer_a_missing_condition",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "flag", "edits": [{"from": "false_value: \"N\"}", "to": "false_value: false}"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"condition": "missing_value_required", "rule": "EXPR-8", "spec_paths": ["columns.F.derivation.flag.missing"], "context": {"false_value": false}}
+      ]
+    },
+    {
+      "case": "a_true_boolean_false_value_does_not_answer_a_missing_condition",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "flag", "edits": [{"from": "false_value: \"N\"}", "to": "false_value: true}"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"condition": "missing_value_required", "rule": "EXPR-8", "spec_paths": ["columns.F.derivation.flag.missing"], "context": {"false_value": true}}
+      ]
+    },
+    {
+      "case": "a_text_false_value_holding_nul_does_not_answer_a_missing_condition",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "flag", "edits": [{"from": "false_value: \"N\"}", "to": "false_value: \"N\\u0000U\"}"}]}}, "specification": "spec.yaml"},
+      "compares": ["condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"condition": "missing_value_required", "rule": "EXPR-8", "spec_paths": ["columns.F.derivation.flag.missing"], "context": {"false_value": "N\u0000U"}}
+      ]
+    },
+    {
+      "case": "schema_functions_r_declared_calls_are_statically_admitted",
+      "operation": "check",
+      "input": {"benchmark": "schema-functions", "specification": "spec.yaml", "project": "project.yaml", "host": "r"},
+      "issues": []
+    },
+    {
+      "case": "schema_non_finite_r_declared_calls_are_statically_admitted",
+      "operation": "check",
+      "input": {"benchmark": "schema-non-finite", "specification": "spec.yaml", "project": "project.yaml", "host": "r"},
+      "issues": []
+    },
+    {
+      "case": "adam_adsl_bmi_r_declared_calls_are_statically_admitted",
+      "operation": "check",
+      "input": {"benchmark": "adam-adsl-bmi", "specification": "spec.yaml", "project": "project.yaml", "host": "r"},
+      "issues": []
+    },
+    {
+      "case": "adam_advs_percentiles_r_declared_calls_are_statically_admitted",
+      "operation": "check",
+      "input": {"benchmark": "adam-advs-percentiles", "specification": "spec_function.yaml", "project": "project.yaml", "host": "r"},
+      "issues": []
+    },
+    {
+      "case": "negative_function_contract_r_preserves_the_exact_static_issue",
+      "operation": "check",
+      "input": {"benchmark": "negative-function-contract", "specification": "spec.yaml", "project": "project.yaml", "host": "r"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "validation", "condition": "invalid_function_argument", "rule": "FUNC-5", "spec_paths": ["columns.RESULT.derivation.function.args"], "context": {"argument": "x", "cause": "missing_required_argument", "function": "project_value"}}
+      ]
+    }
+  ]
+}

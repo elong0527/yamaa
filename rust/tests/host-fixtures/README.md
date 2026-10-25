@@ -42,7 +42,7 @@ the held bytes.
 | public-grammar | Shared condition families; existing `grammar-original/cases.tsv` decisions |
 | diagnostic-parity | Refusal cases with their complete expected issue rows; `{path}` in a row's message and context stands for the specification path the test gave, and `{entry}` in its context for that specification's absolute path as the engine resolves it, with forward slashes |
 | read-odm | The two reader documents (the adapters' `odm` fixtures), all 30 columns and cells, archive member selection, the authored sources two refusals read, and each refusal's one issue row and error text (`{source}` stands for the source path the test gave) |
-| parquet-containment | A Parquet file that makes the native decoder panic, its issue row, and a readable file with its saved CSV |
+| parquet-containment | Two invalid Parquet files, one whose INT96 statistic is too long and one whose row groups name one page with a header parquet 55 could not skip, their issue row, and a readable file with its saved CSV |
 | plan-reuse | One specification run A, B, A on one object with exact output CSV and issue rows; a changed specification's output; a changed function default's output |
 | lint | One specification with layout, authoring and suppression findings: its exact `lint()` rows, the text the proved fixes write, the rows that remain, and three refusals, a named file written for 0.5 among them; and a layer that restates its parent's row template without one derivation, with its `partial_restatement` row, written from the style guide, which `fix` leaves |
 | selftest | The bundled cases in list order, the cases table's columns, the status vocabulary, and the report's lines and the layout of its information line |
@@ -54,7 +54,8 @@ the held bytes.
 | include-fragments | One study whose entries compose a parent chain and an `include` list (LAYER-1 to LAYER-4): the files it writes, each check case's entry and complete issue rows, each parent case's fragment, given parent and child, whose two checks return its rows, each refused parent's error text and rows (#3694), and the resolve case's layers, `parent` and `include` resources, resolved columns, the layer of each named value and the fields the resolved specification never holds; `{root}` stands for the study's directory, `{path}` in an error text for the path the test gave and `{parent}` for the parent it gave |
 | project-parity | Project cases with their complete expected issue rows: the files a case writes, its call (a project check, a member of a project run, a specification the project names, or a submission) and every issue row, or under `calls` each of several calls on those files with its rows; rows and files that depend on the host language are given by language, `{root}` stands for the case's directory and `{version}` for the installed yamaa version |
 | compact-yaml | A specification with a block and a flow input, the block, compact, flow and explicit-key verification forms with their one output and saved CSV, failed row-count bounds, malformed closers, and raw NULs with their `invalid_yaml` context (#2196, #3125) |
-| longitudinal-capacity | The 50,000-row, 100-column profile: its column names, its value rule (the row index for the key, then an offset plus the row and column index modulo a prime), the size its CSV must exceed, and its source and output formats |
+| longitudinal-capacity | The 50,000-row, 100-column profile: its column names, its value rule (the row index for the key, then an offset plus the row and column index modulo a prime), the size its CSV must exceed, its source and output formats, and how every run of it divides its input under the hosts' default partitions (#3794) |
+| partitioned-default | A study of 10,000,001 records, beyond the row limit, keyed by subject: its specification, whose window numbers each subject's records, its input header and value rule (record `i`, counted from 0, is study `S1`, subject `i` divided by `subject_records` in eight digits, and `SEQ` the remainder plus 1), and the line count and first and last lines of its saved CSV (#3794) |
 | column-ceilings | The 1,024 admitted and 1,025 refused widths of each boundary, the compiler-limit and parent-occurrence issue rows, the repaired capacity's remaining error, the inheritance depth that builds and the wide inherited cases' rows by column index modulo 3 |
 | interface | The generated request, each crafted request with its authored outcome (the accepted record or the refusal envelope), the message template of each reason and the gate's refusal, where `{version}` stands for the boundary version, `{next_version}` for the version after it and `{core_version}` for the installed engine's release; the census kinds; and the lifetime study's specification, input, project and output rows |
 | streaming | A study of every column type: its specification, whose output orders the records by descending ID, its input, the output rows in that order and the exact CSV its save writes; a 70,000-record study with its value rule (the ID counts from 1, and the name is the prefix and the ID) and the batches the engine's 65,536-record batches give it; the class of the stream object R returns; and D39's text of a cancelled streamed run and of its `stream_taken` and `host_thread` refusals |
@@ -178,15 +179,24 @@ suites write beside the documents: a plain document under a `.tar` name,
 which ODM-1 refuses as an archive name holding no archive, and a bzip2
 stream, refused from its first bytes before anything is decompressed.
 
-`parquet-containment` pairs the installed Python and R containment suites.
-Both files were authored field by field. In the first, the column chunk of an
-INT96 column holds a 13-byte `min_value` statistic, which parquet 55.2.0's
-metadata decoder asserts is 12 bytes long. The engine contains that panic as
-one `source_parquet_invalid` issue, and the adapters' reader test checks that
-these bytes still reach the panic. The second file holds the INT64 values 1
+`parquet-containment` pairs the installed Python and R Parquet refusal
+suites. It holds two invalid files, which share one issue row, and a readable
+one. The first invalid file was authored field by field: the column chunk of
+an INT96 column holds a 13-byte `min_value` statistic, where the statistic of
+an INT96 column holds 12 bytes, and the footer refuses it. The second is the
+readable file with the unknown set, maps, UUID and UUID list fields of the
+adapters' reader tests in its page header, which parquet 55 could not skip,
+and its row group repeated, so that two row groups name that one page and the
+file declares four rows. parquet 55's path refused such a file once it
+presented the header, and the native reader keeps that refusal, so the
+admitted files do not change (D283). The engine refuses each file as one
+`source_parquet_invalid` issue, and the adapters' reader tests check that
+these bytes reach that refusal. The readable file holds the INT64 values 1
 and 2, which a later run in the same process reads and saves. Each suite also
-runs both specifications in a fresh process and requires its stderr to be
-empty, so the R suite proves containment on the Windows GNU build too.
+runs every specification in a fresh process and requires its stderr to be
+empty. The family is named for what it first proved: that the engine
+contained the panic of the upstream decoder on the INT96 statistic, which the
+native reader refuses without one (#3878).
 
 `selftest` pairs the installed Python and R selftest suites. Its cases are
 the list in `benchmarks/selftest.yaml`, and its lines are the printed lines of
@@ -258,6 +268,18 @@ mechanics: Python reaches a listed specification through `project.spec()`
 where it has a domain, R through the project's own `check()` and `run()`.
 Without arrow, R skips the Parquet sources and only requires a saved Parquet
 output to exist.
+The profile's `partitions` is the record each run's measured observations
+give under the hosts' default partitions (#3794), key-bounded over two
+leading keys with at most 624,640 records each: the profile declares one key,
+so its partitions keep one, and its 50,000 records fit in one partition.
+
+`partitioned-default` is the Python and R suites of the same name, which run
+only under the supplemental inventory of native qualification: a whole-table
+run refuses its 10,000,001 records, and the hosts' default partitions, over
+the two leading keys STUDYID and USUBJID that the window groups by, run it a
+subject at a time. Its lines were written by hand from the rule: each
+subject's ten records number 1 to 10 in SEQ order, and the last record is a
+subject of its own.
 
 The R grammar suite's conditional failure and original
 CSV preservation controls also remain. Exact float bit witnesses, NUL/invalid
@@ -313,7 +335,7 @@ the list, so the supplemental catalog stages it nowhere.
 
 The command line is the third host of the issue and run-report parity truth
 (#2846). `rust/crates/yamaa-cli/tests/parity.rs` runs each case of
-`diagnostic-parity` and `project-parity`, and the contained panic of
+`diagnostic-parity` and `project-parity`, and the invalid files of
 `parquet-containment`, through the `yamaa` binary with `--format json`. It
 compares every issue that the printed document holds with the case's rows:
 all twelve columns, in report order, with the context as the canonical JSON

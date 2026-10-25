@@ -271,10 +271,42 @@ impl Frame {
         }
     }
 
-    /// Every value of one row, in column order.
-    pub(super) fn row_values(&self, row: usize) -> Vec<Value> {
-        (0..self.width())
-            .map(|column| self.value(row, column))
-            .collect()
+    /// The rows `order` names, in that order, as columns, consuming the
+    /// frame a column at a time (#3870): a column moves whole when `order`
+    /// keeps every row in place, and is otherwise gathered and dropped before
+    /// the next one is.
+    pub(super) fn into_columns(
+        self,
+        order: &[usize],
+    ) -> Result<Vec<Values>, std::collections::TryReserveError> {
+        let in_place = order.len() == self.rows()
+            && order
+                .iter()
+                .enumerate()
+                .all(|(position, &row)| position == row);
+        let Self {
+            columns,
+            completed,
+            templates,
+            identities,
+            offsets,
+            records,
+        } = self;
+        drop((completed, templates, identities, offsets, records));
+        let mut ordered = Vec::new();
+        ordered.try_reserve_exact(columns.len())?;
+        for column in columns {
+            ordered.push(if in_place {
+                column
+            } else {
+                let mut gathered = Values::missing(0);
+                gathered.try_reserve(order.len())?;
+                for &row in order {
+                    gathered.push(column.get(row));
+                }
+                gathered
+            });
+        }
+        Ok(ordered)
     }
 }

@@ -203,7 +203,7 @@ records; it is required unless `input` declares exactly one dataset, which then
 supplies them.
 
 Fails: `driver_unavailable`.
-Evidence: `sdtm-se-subject-elements`, `schema-window-key-records`, `schema-window-key-odm-records`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::without_row_templates_two_inputs_need_a_base`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::preparation_reports_column_name_key_and_base_refusals_in_that_order`, `rust/crates/yamaa-application/tests/execution_no_rows_record_reads.rs`.
+Evidence: `sdtm-se-subject-elements`, `schema-window-key-records`, `schema-window-key-odm-records`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::without_row_templates_two_inputs_need_a_base`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::preparation_reports_column_name_key_and_base_refusals_in_that_order`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/row_scopes.json`.
 
 The key table is standalone: it has one row per unique key combination and no
 link back to the input records. The input records a key combination was

@@ -1,25 +1,26 @@
 //! The wire type of each Thrift field the native decoder reads.
 //!
-//! parquet 55.2.0 decodes footers and page headers with the readers that the
-//! Thrift compiler generated (`parquet::format`). They read a known field id
-//! by its declared type whatever wire type its field header carries, and each
-//! element of a known list by its declared type whatever element type the
-//! list header carries. They skip only an unknown id, by that field's own
-//! wire type. A known field with another wire type would make the native
-//! decoder read other bytes, or other values, than the ones admission
-//! checked. Admission therefore refuses it as malformed wherever it occurs.
+//! The native decoder (`footer`, and `framing` for page headers) reads a
+//! known field id by the wire type this table gives it, as the readers that
+//! the Thrift compiler generated for parquet 55.2.0 (`parquet::format`) read
+//! it by its declared type, whatever wire type its field header carries, and
+//! each element of a known list by its declared type, whatever element type
+//! the list header carries. They skip only an unknown id, by that field's own
+//! wire type. A known field with another wire type would make a decoder read
+//! other bytes, or other values, than the ones admission checked. Admission
+//! therefore refuses it as malformed wherever it occurs.
 //!
 //! A known field also occurs at most once. The native decoder keeps the last
 //! copy of a repeated field, as admission reads it, but writers never repeat
 //! a field, so admission refuses a repeated known field as malformed in every
 //! struct it walks.
 //!
-//! The native decoder also reserves room for every element a known list
-//! declares before it reads the first. The compact parser bounds a count only
+//! parquet 55.2.0's decoder also reserved room for every element a known list
+//! declares before it read the first. The compact parser bounds a count only
 //! by one byte per element, while one empty struct in a schema or key-value
-//! list takes one byte and reserves about 100 or 48 bytes. Admission
+//! list takes one byte and reserved about 100 or 48 bytes. Admission
 //! therefore refuses a list unless its bytes can hold the declared count at
-//! the fewest bytes the decoder accepts for each element, so that a
+//! the fewest bytes a decoder accepts for each element, so that a
 //! reservation never exceeds what decoding that many valid elements takes.
 //!
 //! Those minimums tie a reservation to the list's own bytes, not to any
@@ -40,9 +41,10 @@
 //! geospatial statistics, which it skips. Checking their types refuses only
 //! files that no writer produces.
 //!
-//! The walk also finds what the native decoder must be shown differently
-//! from the held bytes (`Presentation`), because parquet 55 refuses some
-//! files that the rules read or refuse otherwise:
+//! The walk also finds what parquet 55's decoder must be shown differently
+//! from the held bytes (`Presentation`, which only the differential harness
+//! applies), because parquet 55 refuses some files that the rules read or
+//! refuse otherwise:
 //!
 //! - It reads a skipped binary as UTF-8 text, and refuses one that is not.
 //!   Such a binary holds only metadata (PARQUET-10), so it is shown as zero
@@ -57,12 +59,14 @@
 //!   without the annotation, so the footer decodes to the types parquet 57
 //!   gave such a field, and the walk reports the element (`Checked`), whose
 //!   leaf the closed mapping then refuses. An annotation parquet 57 refused,
-//!   such as a geometry that is not a `BYTE_ARRAY`, stays for the native
-//!   decoder to refuse, as an invalid file (PARQUET-5).
+//!   such as a geometry that is not a `BYTE_ARRAY`, stays, and the decoder
+//!   refuses it as an invalid file (PARQUET-5).
+//!
+//! The native decoder reads the held bytes by those rules themselves.
 
+use super::closed_profile;
 use super::compact::{self, Cursor, Error, Value};
-use crate::storage_api::ENCODING_STATS;
-use std::{borrow::Cow, ops::Range};
+use std::ops::Range;
 use yamaa_core::limits::Limits;
 
 /// The most key-value metadata entries a footer, or a column chunk's
@@ -307,7 +311,7 @@ impl Shape {
     fn most(self, id: i16) -> Option<usize> {
         match (self, id) {
             (Shape::FileMetaData, 5) | (Shape::ColumnMetaData, 8) => Some(KEY_VALUES),
-            (Shape::ColumnMetaData, 13) => Some(ENCODING_STATS),
+            (Shape::ColumnMetaData, 13) => Some(closed_profile::encoding_statistics()),
             (Shape::GeospatialStatistics, 2) => Some(GEOSPATIAL_TYPES),
             // A level histogram holds one count for each level from zero to
             // the column's highest, which is below the schema depth that
@@ -347,8 +351,9 @@ impl Lists {
     }
 }
 
-/// The bytes the native decoder reads in place of a held struct, where they
-/// differ from it. Offsets count from the start of the struct.
+/// The bytes parquet 55's decoder reads in place of a held struct, where they
+/// differ from it, for the differential harness. Offsets count from the
+/// start of the struct.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(super) struct Presentation {
     /// Each skipped binary whose bytes are not UTF-8: shown as zero bytes.
@@ -359,10 +364,14 @@ pub(super) struct Presentation {
     pub splices: Vec<(Range<usize>, Vec<u8>)>,
 }
 
+#[cfg(test)]
 impl Presentation {
-    /// Show the native decoder `native`, the compact presentation of the held
-    /// struct (`compact::native_metadata`), with these edits.
-    pub(super) fn apply<'a>(&self, mut native: Cow<'a, [u8]>) -> Cow<'a, [u8]> {
+    /// Show parquet 55's decoder `native`, the compact presentation of the
+    /// held struct (`compact::native_metadata`), with these edits.
+    pub(super) fn apply<'a>(
+        &self,
+        mut native: std::borrow::Cow<'a, [u8]>,
+    ) -> std::borrow::Cow<'a, [u8]> {
         for range in &self.opaque {
             native.to_mut()[range.clone()].fill(0);
         }
@@ -377,7 +386,7 @@ impl Presentation {
             copied = range.end;
         }
         shown.extend_from_slice(&native[copied..]);
-        Cow::Owned(shown)
+        std::borrow::Cow::Owned(shown)
     }
 }
 
@@ -386,7 +395,7 @@ impl Presentation {
 pub(super) struct Checked {
     /// The declared lengths of the lists that framing bounds by the schema.
     pub lists: Lists,
-    /// How the native decoder is shown the struct.
+    /// How parquet 55's decoder is shown the struct.
     pub presentation: Presentation,
     /// Each schema element, by its position in the footer's schema list,
     /// whose variant, geometry or geography annotation the presentation
@@ -414,7 +423,7 @@ const TYPE_ORDER: [u8; 3] = [0x1c, 0, 0];
 /// whose held wire type is not the one the native decoder reads it with, a
 /// repeated known field, and a known list too short for the elements it
 /// declares or longer than its limit, at every depth the decoder reaches;
-/// and find how the native decoder must be shown the struct. Each byte is
+/// and find how parquet 55's decoder must be shown the struct. Each byte is
 /// read once, but for the rare schema element that a later logical type
 /// annotates.
 pub(super) fn check(value: Value<'_>, shape: Shape) -> Result<Checked, Error> {
@@ -531,7 +540,7 @@ fn walk(cursor: &mut Cursor<'_>, shape: Shape, state: &mut Walk) -> Result<Walke
 
 /// Skip the value, of wire type `kind`, of a field the native decoder does
 /// not know, and note each binary in it whose bytes are not UTF-8 (in
-/// `opaque`): the native decoder's skip reads each binary as text. A map or
+/// `opaque`): parquet 55's skip reads each binary as text. A map or
 /// UUID is shown to it as one opaque binary already
 /// (`compact::native_metadata`), so nothing inside one is noted.
 fn skip_unknown(
@@ -1239,7 +1248,7 @@ mod tests {
     /// file the engine reads holds, and one more is malformed.
     #[test]
     fn a_list_longer_than_any_file_the_engine_reads_is_malformed() {
-        use super::{Limits, ENCODING_STATS, GEOSPATIAL_TYPES, KEY_VALUES};
+        use super::{closed_profile, Limits, GEOSPATIAL_TYPES, KEY_VALUES};
         let list = |count, element: &[u8]| repeated(12, count, element, element);
         let entries = move |count| list(count, &[0x18, 0, 0]);
         let stats = move |count| list(count, &[0x15, 0, 0x15, 0, 0x15, 2, 0]);
@@ -1272,7 +1281,7 @@ mod tests {
             ),
             (
                 "encoding_stats",
-                ENCODING_STATS,
+                closed_profile::encoding_statistics(),
                 Box::new(move |n| file(&[7], At::Meta, |f| f.raw(13, 9, &stats(n)))),
             ),
             (
@@ -1912,7 +1921,7 @@ mod tests {
     /// as it can be, is admitted.
     #[test]
     fn a_list_too_short_for_the_elements_it_declares_is_malformed() {
-        use super::{Limits, ENCODING_STATS};
+        use super::{closed_profile, Limits};
         // As many key-value entries, schema leaves and empty groups as
         // admission allows.
         const N: usize = Limits::COLUMNS;
@@ -1964,10 +1973,12 @@ mod tests {
             ),
             (
                 "encoding_stats",
-                file(&[7], At::Meta, |f| f.raw(13, 9, &empty(ENCODING_STATS))),
+                file(&[7], At::Meta, |f| {
+                    f.raw(13, 9, &empty(closed_profile::encoding_statistics()))
+                }),
                 file(&[7], At::Meta, |f| {
                     let stats = [0x15, 0, 0x15, 0, 0x15, 2, 0];
-                    f.raw(13, 9, &list(ENCODING_STATS, &stats))
+                    f.raw(13, 9, &list(closed_profile::encoding_statistics(), &stats))
                 }),
             ),
         ];
