@@ -508,14 +508,14 @@ pub(crate) fn envelope_sources<E>(
         }
         reads.push(json!({"base_directory":id.base_directory,"path":source.read.source.path,"outcome":if source.read.captured {"captured"} else if partial && source.read.snapshots_created.is_none() {"attempted"} else {"failure"},"condition":source.read.failure.map(|failure| failure.code().definition().condition),"snapshots_created":source.read.snapshots_created}));
     }
-    Ok(StoredReport::with_tables(
+    StoredReport::with_tables(
         json!({"report_version":"0.3.0-draft","runtime":id.runtime,"backend":"rust","runtime_version":id.runtime_version,"engine_version":id.engine_version,"example":id.example,
         "outcome":"failure","artifacts":[],"diagnostics":[],"unsupported":[],"handler_counts":[],
         "nodes":[{"specification":id.specification,"outcome":"failure","diagnostics":[],"unsupported":[],"handler_counts":[]}],
         "tables":[],"verifications":[],"callbacks":[],
         "source_reads":reads,"error":null}),
         tables,
-    ))
+    )
 }
 /// Record every registered handler path and its count, in registration order.
 pub(crate) fn set_handler_counts(report: &mut Value, counts: &[HandlerCount]) {
