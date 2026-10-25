@@ -8239,6 +8239,45 @@
       "cancelled": "cannot read TEST: operation cancelled",
       "stream_taken": "cannot read TEST: the run's output stream has already been read [stream_taken]",
       "host_thread": "cannot read TEST: a run that can call project functions is built only on the thread that started it [host_thread]"
+    },
+    "progress": {
+      "specification_yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, report: report.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n",
+      "input_csv": "ID\n1\n2\n",
+      "events": [
+        {"name": "{path}", "phase": "preparation", "kind": "start", "outcome": null, "number": null, "rows": null},
+        {"name": "{path}", "phase": "preparation", "kind": "end", "outcome": "succeeded", "number": null, "rows": null},
+        {"name": "{path}", "phase": "input", "kind": "start", "outcome": null, "number": null, "rows": null},
+        {"name": "{path}", "phase": "input", "kind": "end", "outcome": "succeeded", "number": null, "rows": null},
+        {"name": "{path}", "phase": "admission", "kind": "start", "outcome": null, "number": null, "rows": null},
+        {"name": "{path}", "phase": "admission", "kind": "end", "outcome": "succeeded", "number": null, "rows": null},
+        {"name": "{path}", "phase": "derivation", "kind": "start", "outcome": null, "number": null, "rows": null},
+        {"name": "{path}", "phase": "derivation", "kind": "end", "outcome": "succeeded", "number": null, "rows": null},
+        {"name": "{path}", "phase": "output_keys", "kind": "start", "outcome": null, "number": null, "rows": null},
+        {"name": "{path}", "phase": "output_keys", "kind": "end", "outcome": "succeeded", "number": null, "rows": null},
+        {"name": "{path}", "phase": "verification", "kind": "start", "outcome": null, "number": null, "rows": null},
+        {"name": "{path}", "phase": "verification", "kind": "end", "outcome": "succeeded", "number": null, "rows": null},
+        {"name": "{path}", "phase": "output", "kind": "start", "outcome": null, "number": null, "rows": null},
+        {"name": "{path}", "phase": "output", "kind": "end", "outcome": "succeeded", "number": null, "rows": null}
+      ],
+      "timing_columns": ["name", "phase", "started_ms", "elapsed_ms", "outcome"],
+      "run_phases": ["preparation", "input", "admission", "derivation", "output_keys", "verification", "output"],
+      "check_phases": ["preparation"],
+      "failed_run_issues": [
+        {
+          "severity": "error",
+          "phase": "engine",
+          "condition": "engine_rejected",
+          "rule": null,
+          "spec_paths": [],
+          "file": null,
+          "line": null,
+          "column": null,
+          "message": "the engine refused the operation in its build step: host_progress_failure",
+          "context": "{\"code\":\"host_progress_failure\",\"step\":\"build\"}",
+          "source_span": null,
+          "operand_route": null
+        }
+      ]
     }
   }
 }
