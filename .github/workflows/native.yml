@@ -1070,11 +1070,12 @@ jobs:
     #   valgrind. check_r.py --valgrind runs the installation, examples and
     #   tests alone, as R-hub's image does, the examples and each test under
     #   valgrind's memcheck with the image's options, --track-origins=yes
-    #   --leak-check=full, and fails where memcheck counted an error, a
-    #   definite or indirect leak included, or did not run. A "possibly lost"
-    #   block, which Rust's process-lifetime state shows at every exit, is
-    #   printed and not counted. Under memcheck the tests run many times
-    #   slower than natively.
+    #   --leak-check=full, and fails where memcheck counted an error, a leak
+    #   that option reports included, or did not run. tools/commands/
+    #   memcheck.supp hides only the possibly lost blocks of three roots that
+    #   live as long as the process, and memcheck_control.c proves before the
+    #   check that every other leak still counts. Under memcheck the tests
+    #   run many times slower than natively.
     container: ghcr.io/r-hub/containers/${{ matrix.platform }}:latest
     timeout-minutes: ${{ matrix.platform == 'valgrind' && 240 || 60 }}
     strategy:

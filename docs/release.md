@@ -260,12 +260,13 @@ proxy that refuses connections and runs two Cargo jobs.
   `--track-origins=yes --leak-check=full`. It leaves out `--as-cran`, which
   turns `--extra-arch` off and reports every example slower than five
   seconds, as each is under valgrind. It fails where memcheck counted an
-  error, or did not run. It adds `--errors-for-leak-kinds=definite,indirect`,
-  so a definite or indirect leak counts as an error, and a "possibly lost"
-  block, one reached only by a pointer into its middle, does not: Rust's
-  process-lifetime state, such as a hash table reached through its control
-  bytes or an `Arc` through its data, shows as possibly lost at every exit
-  though nothing is lost. memcheck still prints those blocks.
+  error, a leak that `--leak-check=full` reports included, or did not run.
+  `tools/commands/memcheck.supp` hides the "possibly lost" blocks of three
+  roots that live as long as the process, which memcheck reaches only through
+  a pointer into a block's middle: extendr's ownership map, the R thread's
+  handle and the lazy caches of the shipped schemas' regexes. Before the
+  check, `tools/commands/memcheck_control.c` must show that a definite leak
+  at a listed root, and a possibly lost block at any other, still count.
   Under memcheck the tests run many times slower, so the job may take up to
   four hours.
 
