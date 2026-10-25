@@ -1,9 +1,0 @@
-{
-  "phase": "validation",
-  "condition": "invalid_field_type",
-  "rule": "CSV-6",
-  "spec_paths": ["output.decimals"],
-  "context": {
-    "expected": "an integer from 0 through 18"
-  }
-}

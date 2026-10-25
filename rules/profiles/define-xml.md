@@ -301,7 +301,7 @@ one identifier space, `def:leaf`, so a document identifier must not equal a
 dataset identifier.
 
 Fails: `duplicate_define_identifier`.
-Evidence: `negative-terminology-version-collision`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_document_identifier_equal_to_a_dataset_identifier_collides`, `rust/crates/yamaa-core/tests/diagnostics_aggregate.rs::sources_share_one_terminology_standard_and_another_with_its_publishing_set_is_refused`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::sources_citing_one_terminology_standard_share_its_one_definition`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/admission.json::independent_complete_sixteen_record_project_report_preserves_every_field_and_order`.
+Evidence: `negative-terminology-version-collision`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_document_identifier_equal_to_a_dataset_identifier_collides`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_later_release_of_a_cited_terminology_standard_is_refused_at_its_publishing_set`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::another_standard_name_under_a_cited_publishing_set_is_refused_at_its_publishing_set`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::sources_citing_one_terminology_standard_share_its_one_definition`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/admission.json::independent_complete_sixteen_record_project_report_preserves_every_field_and_order`.
 
 The shared `def:leaf` space is checked, not disambiguated. A duplicate dataset
 `id`, codelist `id` or document `id`, or a document `id` equal to a dataset

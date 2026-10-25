@@ -26,6 +26,29 @@ const DIFFERENCES: &[Difference] = &[
         domain: "result",
         class: Class::Q3,
     },
+    // A lookup key's str_pad width is the authored literal 0 (TEXT-2).
+    // Binding decides it independently of the source's type or presence;
+    // the old declaration pass leaves that refusal to run().
+    Difference {
+        case: "intermediates.json::a_padded_key_reports_its_width_then_its_unknown_source_then_the_read_that_depends_on_it",
+        domain: "out",
+        class: Class::Q3,
+    },
+    Difference {
+        case: "intermediates.json::a_padded_key_of_an_int_donor_column_reports_its_authored_type_first",
+        domain: "out",
+        class: Class::Q3,
+    },
+    Difference {
+        case: "intermediates.json::a_padded_key_of_a_column_its_donor_lacks_reports_the_donor_column_first",
+        domain: "out",
+        class: Class::Q3,
+    },
+    Difference {
+        case: "intermediates.json::a_padded_key_of_a_known_source_reports_only_its_width",
+        domain: "out",
+        class: Class::Q3,
+    },
 ];
 
 #[test]
