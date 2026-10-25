@@ -36,8 +36,8 @@
 //! meaning.
 //!
 //! [`abi`] holds the engine's C ABI, which `rust/crates/yamaa-engine`
-//! implements, and [`client`] the safe client through which both bindings
-//! reach it.
+//! implements, and [`client`] its safe client. Both are unused by the
+//! bindings, which call the facade directly, and leave in #3877's next steps.
 use std::fmt;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
