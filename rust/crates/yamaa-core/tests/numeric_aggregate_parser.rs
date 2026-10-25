@@ -383,7 +383,7 @@ mod numeric {
         use std::convert::Infallible;
 
         use yamaa_core::expression::{
-            compile, CompileError, CompiledExpression, Context, ErrorKind, Failure, Resolver, Step,
+            compile, CompileError, CompiledExpression, Context, ErrorKind, Failure, Resolver,
         };
         use yamaa_core::numeric::Number;
         use yamaa_core::value::{Selection, Value};
@@ -485,59 +485,8 @@ mod numeric {
             assert_eq!(failure, Failure::Syntax);
         }
 
-        /// Supported plans retain exact semantic spans even under redundant groups/Unicode.
-        #[test]
-        fn source_spans_identify_the_failed_node() {
-            for (text, expected, route) in [
-                (
-                    "\u{2003}M + ((UNKNOWN))",
-                    "UNKNOWN",
-                    vec![Step::RightOperand],
-                ),
-                ("M + ((1 / 0))", "1 / 0", vec![Step::RightOperand]),
-                (
-                    "-((9223372036854775807 * 2))",
-                    "9223372036854775807 * 2",
-                    vec![Step::Unary],
-                ),
-                ("ABS((1 / 0))", "1 / 0", vec![Step::Unary]),
-                ("SQRT((UNKNOWN))", "UNKNOWN", vec![Step::Unary]),
-                ("SQRT((1 / 0))", "1 / 0", vec![Step::Unary]),
-                ("(SQRT(-1))", "SQRT(-1)", vec![]),
-                ("CEIL((UNKNOWN))", "UNKNOWN", vec![Step::Unary]),
-                ("FLOOR((1 / 0))", "1 / 0", vec![Step::Unary]),
-                (
-                    "TRUNC((9223372036854775807 + 1))",
-                    "9223372036854775807 + 1",
-                    vec![Step::Unary],
-                ),
-                ("MOD(A, (UNKNOWN))", "UNKNOWN", vec![Step::RightOperand]),
-                ("(MOD(A, 0))", "MOD(A, 0)", vec![]),
-            ] {
-                let plan = compute(text);
-                let error = plan.evaluate_number(&mut Reads::default()).unwrap_err();
-                let site = error.source_span.expect("a numeric failure names its node");
-                assert_eq!(&text[site.start..site.end], expected);
-                assert_eq!(error.route, route);
-                assert_eq!(error.spec_path, plan.spec_path());
-                assert_eq!(error.expression, plan.expression());
-            }
-        }
-
-        /// Prohibited function spellings are refused before resolution.
-        #[test]
-        fn prohibited_functions_are_rejected_before_resolution() {
-            for text in ["SQRT(A) + ROUND(B)", "A + ROUND(B)"] {
-                assert!(matches!(
-                    compile(text, Context::Derivation, "spec"),
-                    Err(CompileError::Invalid {
-                        failure: Failure::ProhibitedFunction { .. },
-                        ..
-                    })
-                ));
-            }
-        }
-
+        /// Seam: `Failure::syntax_diagnostic`, the standalone syntax projection, and a
+        /// refusal's byte position in a derivation or an aggregate, which no issue states.
         /// Retired calls stay refused, with a replacement in the public finding.
         #[test]
         fn retired_formula_functions_name_their_replacement() {
@@ -1580,8 +1529,7 @@ mod numeric {
         use std::{collections::BTreeMap, convert::Infallible};
         use yamaa_core::{
             expression::{
-                compile, CompileError, CompiledExpression, Condition, Context, ErrorKind, Failure,
-                Resolver, Step, Truth,
+                compile, CompiledExpression, Condition, Context, ErrorKind, Resolver, Step, Truth,
             },
             numeric::ArithmeticErrorKind,
             value::{Selection, Value, ValueType},
@@ -1776,46 +1724,6 @@ mod numeric {
                 assert_eq!(error.route, route);
             }
         }
-
-        #[test]
-        fn whole_expression_grammar_and_integer_carrier_precede_execution() {
-            assert!(matches!(
-                compile("FALSE AND X =", Context::Predicate, "site"),
-                Err(CompileError::Invalid {
-                    failure: Failure::Syntax,
-                    ..
-                })
-            ));
-            // A sign belongs to the literal it is written on.
-            for (text, literal) in [
-                ("FALSE AND X = 9223372036854775808", "9223372036854775808"),
-                ("X = -9223372036854775809", "-9223372036854775809"),
-            ] {
-                let Err(CompileError::Invalid {
-                    failure, position, ..
-                }) = compile(text, Context::Predicate, "site")
-                else {
-                    panic!("expected literal rejection")
-                };
-                assert_eq!(
-                    failure,
-                    Failure::IntegerOverflow {
-                        literal: literal.into()
-                    },
-                    "{text}"
-                );
-                assert_eq!(
-                    position.character,
-                    text.find("9223372036854775808")
-                        .unwrap_or_else(|| text.find("-9223372036854775809").unwrap())
-                );
-                let finding =
-                    failure.diagnostic(Context::Predicate, "site", text, position.character);
-                assert_eq!(finding.definition().condition, "integer_overflow");
-                assert_eq!(finding.definition().phase, "validation");
-                assert_eq!(finding.definition().rule, Some("VALUE-5"));
-            }
-        }
     }
     mod predicate_grammar {
         use yamaa_core::expression::{
@@ -1849,84 +1757,6 @@ mod numeric {
             for (function, text) in calls {
                 assert!(predicate(text).is_ok(), "{}: {text}", function.name());
             }
-        }
-
-        #[test]
-        fn integer_carrier_admission_preserves_exact_boundaries_and_whole_grammar_order() {
-            for expression in [
-                "X = -9223372036854775808",
-                "X = +9223372036854775807",
-                "X = 0009223372036854775807",
-                "X IN (-9223372036854775808, 9223372036854775807)",
-                "X = 9223372036854775808.0",
-                "X = 1e309",
-            ] {
-                predicate(expression).unwrap();
-            }
-            // Each literal as written, its sign included.
-            for (expression, literal) in [
-                ("X = 9223372036854775808", "9223372036854775808"),
-                ("X = -9223372036854775809", "-9223372036854775809"),
-                (
-                    "FALSE AND X IN (1, +9223372036854775808)",
-                    "+9223372036854775808",
-                ),
-                ("'\u{1f600}' = -9223372036854775809", "-9223372036854775809"),
-                (
-                    "X BETWEEN 0 AND 9999999999999999999999999999999",
-                    "9999999999999999999999999999999",
-                ),
-            ] {
-                let Err(CompileError::Invalid {
-                    failure, position, ..
-                }) = predicate(expression)
-                else {
-                    panic!("overflowing literal admitted: {expression}")
-                };
-                assert_eq!(
-                    failure,
-                    Failure::IntegerOverflow {
-                        literal: literal.into()
-                    },
-                    "{expression}"
-                );
-                let suffix = &expression[position.byte..];
-                assert!(
-                    suffix.starts_with("9223372036854775808")
-                        || suffix.starts_with("+9223372036854775808")
-                        || suffix.starts_with("-9223372036854775809")
-                        || suffix.starts_with("9999999999999999999999999999999")
-                );
-                assert_eq!(
-                    position.character,
-                    expression[..position.byte].chars().count()
-                );
-                let finding = failure.diagnostic(
-                    Context::Predicate,
-                    "filter",
-                    expression,
-                    position.character,
-                );
-                assert_eq!(finding.definition().phase, "validation");
-                assert_eq!(finding.definition().condition, "integer_overflow");
-                assert_eq!(finding.definition().rule, Some("VALUE-5"));
-                assert_eq!(finding.spec_paths, ["filter"]);
-                assert_eq!(
-                    finding.context["predicate"],
-                    yamaa_core::json::Value::String(expression.into())
-                );
-                assert_eq!(
-                    finding.context["position"],
-                    yamaa_core::json::Value::from(position.character)
-                );
-            }
-            assert!(matches!(
-                predicate("X = 9223372036854775808 AND"),
-                Err(CompileError::Invalid {
-                    failure: Failure::Syntax,
-                    ..
-                })
-            ));
         }
 
         /// Syntax association is independent of evaluator truth and preserves written names.

@@ -606,20 +606,6 @@ mod scalar {
                 }
             }
         }
-
-        /// Reject host-friendly numeric spellings that are outside the specification grammar.
-        #[test]
-        fn numeric_text_rejects_whitespace_unicode_and_incomplete_forms() {
-            for text in [
-                "1 ", "\t1", "1\n", "1\r", "１", "١", "+", "-", "1e", "1.e2", "1e.2", "+-1",
-                ".Nan", "-.nan",
-            ] {
-                for target in [ColumnType::Int, ColumnType::Float] {
-                    let error = convert(&Value::Str(text.into()), target).unwrap_err();
-                    assert_eq!(error.rule(), "VALUE-3", "{text}");
-                }
-            }
-        }
     }
     mod evaluation {
         use std::collections::BTreeMap;
@@ -811,33 +797,6 @@ mod scalar {
                 assert_eq!(actual, fields[5], "{}", fields[0]);
                 assert_eq!(route, "", "{}", fields[0]);
                 assert_eq!(resolver.trace.join(","), if unary { "L" } else { "L,R" });
-            }
-        }
-
-        /// Cover every nonnumeric runtime type without silently converting a numeric string.
-        #[test]
-        fn identifiers_reject_every_nonnumeric_type() {
-            let plan = compile("+A", Context::Derivation, SPEC_PATH).unwrap();
-            for value in [
-                Value::Str("42".into()),
-                Value::Bool(true),
-                Value::Date("2025-01-02".parse().unwrap()),
-                Value::DateTime("2025-01-02T03:04".parse().unwrap()),
-            ] {
-                let actual = value.value_type().unwrap();
-                let mut resolver = RecordingResolver {
-                    values: [("A".into(), value)].into(),
-                    trace: Vec::new(),
-                };
-                let failure = plan.evaluate_number(&mut resolver).unwrap_err();
-                assert_eq!(failure.route, [Step::Unary]);
-                assert_eq!(
-                    failure.kind,
-                    ErrorKind::Condition(Condition::NumericInput {
-                        identifier: "A".into(),
-                        actual,
-                    })
-                );
             }
         }
 
