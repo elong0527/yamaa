@@ -469,7 +469,8 @@ def stage_text_case_truth(destination: Path):
 def stage_text_pad_truth(destination: Path):
     """Stage untouched independent captures and complete shared normative findings."""
     original = (
-        REPOSITORY / "rust/crates/yamaa-application/tests/fixtures/text_pad_reference.json"
+        REPOSITORY
+        / "rust/crates/yamaa-application/tests/fixtures/text_pad_reference.json"
     )
     shutil.copy2(original, destination / "text-pad-reference.json")
     capture = json.loads(original.read_text(encoding="utf-8"))
@@ -1224,7 +1225,8 @@ def stage(destination: Path):
         destination / "binding-diagnostics.tsv",
     )
     shutil.copy2(
-        REPOSITORY / "rust/crates/yamaa-application/tests/fixtures/window_diagnostics.tsv",
+        REPOSITORY
+        / "rust/crates/yamaa-application/tests/fixtures/window_diagnostics.tsv",
         destination / "window-diagnostics.tsv",
     )
     shutil.copy2(
@@ -1237,11 +1239,13 @@ def stage(destination: Path):
         destination / "source-capture.tsv",
     )
     shutil.copy2(
-        REPOSITORY / "rust/crates/yamaa-application/tests/fixtures/source_inspection.tsv",
+        REPOSITORY
+        / "rust/crates/yamaa-application/tests/fixtures/source_inspection.tsv",
         destination / "source-inspection.tsv",
     )
     shutil.copy2(
-        REPOSITORY / "rust/crates/yamaa-application/tests/fixtures/case_predicates.json",
+        REPOSITORY
+        / "rust/crates/yamaa-application/tests/fixtures/case_predicates.json",
         destination / "case-predicate-truth.json",
     )
     truth = json.loads((destination / "case-predicate-truth.json").read_text())

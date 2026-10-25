@@ -17,6 +17,7 @@ applies.
 | `rules/`, `yaml/` | Normative contracts, diagnostics, schemas and grammar fixtures. |
 | `rust/crates/yamaa-core/` | Specification admission, expressions, dataset execution, project lifecycle, verification and submission metadata composition. |
 | `rust/crates/yamaa-adapters/` | Codecs, storage formats, physical IO and filesystem environment capture. |
+| `rust/crates/yamaa-application/` | The application layer: for now its integration suite, the tests that run specifications, projects and saves through the file route, which the orchestration modules of `yamaa-adapters` join next (#3761). |
 | `rust/crates/yamaa-boundary/` | The interface handshake of both host bindings, the gate every native call passes and the census of live native handles. |
 | `rust/crates/yamaa-python/`, `rust/crates/yamaa-r/` | Host arguments, callbacks, scalar conversion and owned result views, over the facade. |
 | `rust/crates/yamaa-cli/` | The `yamaa` command line: its arguments, exit statuses and printed output, over the facade alone, with the third-party notices and component inventory of its release archives. |
@@ -32,10 +33,12 @@ results. Explicit Save publishes held bytes in contract order. Diagnostic codes
 belong to the shared registry. Resource policies and supported platforms have
 one owner in [release guidance](docs/release.md).
 
-The workspace has seven crates. `yamaa-core` owns preparation, project ports,
+The workspace has eight crates. `yamaa-core` owns preparation, project ports,
 activation and the complete build lifecycle; its dataset model owns execution.
 `yamaa-adapters` implements physical boundaries, and the `yamaa` facade
-composes the two. The two binding crates and the `yamaa-cli` command line
+composes the two. `yamaa-application`, between them, depends on the adapters
+and core alone, and holds the application layer's integration suite until its
+modules move there (#3761). The two binding crates and the `yamaa-cli` command line
 implement their host boundaries and depend on the facade; the bindings also
 depend on `yamaa-boundary`, which holds their interface handshake and depends
 on nothing else in the workspace (D281 on #3673 restores these edges of

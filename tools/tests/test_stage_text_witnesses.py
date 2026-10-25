@@ -59,7 +59,8 @@ class TextWitnessStaging(unittest.TestCase):
 
     def test_padding_witness_bytes_match_capture_under_windows_text_translation(self):
         source = (
-            ROOT / "rust/crates/yamaa-application/tests/fixtures/text_pad_reference.json"
+            ROOT
+            / "rust/crates/yamaa-application/tests/fixtures/text_pad_reference.json"
         )
         capture = json.loads(source.read_bytes())
         with tempfile.TemporaryDirectory() as directory:
