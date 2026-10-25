@@ -1,6 +1,11 @@
 //! Relations contracts: aggregate expressions, column dependencies, dataset
 //! count, declarative flags, dependency analysis, intermediate match values,
-//! intermediate reference and reference binding.
+//! intermediate reference and reference binding. Each test here proves a seam
+//! core's issue-only readers cannot reach, which its first comment names: a
+//! compiled plan, a value, an `analyze` or catalog error, or a kernel. The
+//! findings these families report are replay cases: an aggregate's
+//! evaluation in `aggregates.json`, a flag's declarations in `records.json`
+//! and a key's match values in `intermediates.json`.
 mod relations {
     mod aggregate_expressions {
         use yamaa_core::{
@@ -20,6 +25,8 @@ mod relations {
             calls: Vec<String>,
         }
 
+        /// Seam: the compiled plan's reductions, operands, expression and
+        /// path, over a generated tree of 512 reductions.
         #[test]
         fn all_retained_aggregate_plans_keep_the_complete_expression_and_authored_path() {
             let name = format!("D.{}", "A".repeat(60));
@@ -42,6 +49,8 @@ mod relations {
             assert_eq!(expression.matches("SUM(").count(), 512);
         }
 
+        /// Seam: the plan's result kind, the number its evaluation returns
+        /// and its ungrouped identifiers.
         #[test]
         fn a_bare_identifier_outside_reduction_uses_numeric_coercion() {
             let plan = compile_aggregate("A", "columns.VALUE.aggregate").unwrap();
@@ -65,7 +74,9 @@ mod relations {
             }
         }
 
-        /// Reductions reach the arithmetic as values, never as resolver names.
+        /// Seam: the numbers the plan's operand and aggregate evaluations
+        /// return and the names its resolver is asked for. Reductions reach
+        /// the arithmetic as values, never as resolver names.
         #[test]
         fn outer_and_per_record_arithmetic_share_the_numeric_evaluator_without_rewriting() {
             let expression = "POWER(SUM(EX.DOSE * 2), 2) + MAX(EX.DOSE)";
@@ -88,73 +99,8 @@ mod relations {
             assert_eq!(plan.expression(), expression);
         }
 
-        /// Arithmetic over a reduction or a grouping column whose value is not
-        /// a number fails under FORMULA-23 when it is evaluated, as the static
-        /// check refuses it wherever the declared types already show it. The
-        /// diagnostic locates the operand that failed: its byte extent in the
-        /// text and its route from the root, the left or right operand of `+`.
-        #[test]
-        fn arithmetic_over_a_text_reduction_or_grouping_column_fails_under_formula_23() {
-            use yamaa_core::{diagnostic::Definition, expression::SourceSpan, json::Value as Json};
-            struct Group;
-            impl ExpressionResolver for Group {
-                type Error = std::convert::Infallible;
-                fn resolve(&mut self, name: &str) -> Result<Selection, Self::Error> {
-                    assert_eq!(name, "KEY", "a grouping column");
-                    Ok(Selection::Present(Value::Str("a".into())))
-                }
-            }
-            for (expression, reductions, source, span, route) in [
-                (
-                    "MIN(EX.TEXT) + 1",
-                    Value::Str("a".into()),
-                    "MIN(EX.TEXT)",
-                    SourceSpan { start: 0, end: 12 },
-                    "left",
-                ),
-                (
-                    "SUM(EX.DOSE) + KEY",
-                    Value::Int(1),
-                    "KEY",
-                    SourceSpan { start: 15, end: 18 },
-                    "right",
-                ),
-            ] {
-                let plan = compile_aggregate(expression, "columns.X.aggregate").unwrap();
-                let error = plan
-                    .evaluate_aggregate(&mut Group, &[reductions])
-                    .unwrap_err();
-                let diagnostic = error.diagnostic().unwrap();
-                assert_eq!(
-                    (
-                        diagnostic.definition(),
-                        diagnostic.spec_paths,
-                        diagnostic.context,
-                        diagnostic.source_span,
-                        diagnostic.operand_route,
-                    ),
-                    (
-                        Definition {
-                            phase: "validation",
-                            condition: "incompatible_input_type",
-                            rule: Some("FORMULA-23"),
-                        },
-                        vec!["columns.X.aggregate".to_string()],
-                        [
-                            ("expr".into(), Json::String(expression.into())),
-                            ("source".into(), Json::String(source.into())),
-                            ("expected".into(), Json::String("numeric".into())),
-                            ("actual".into(), Json::String("str".into())),
-                        ]
-                        .into(),
-                        Some(span),
-                        Some(vec![route.to_string()]),
-                    ),
-                    "{expression}"
-                );
-            }
-        }
-
+        /// Seam: the plan's result kind, reduction operands, record
+        /// relations and ungrouped identifiers.
         #[test]
         fn bare_reducers_retain_typed_reads_and_record_stars() {
             let plan =
@@ -174,6 +120,8 @@ mod relations {
             assert_eq!(group.ungrouped_identifiers().collect::<Vec<_>>(), ["KEY"]);
         }
 
+        /// Seam: the evaluation error's expression, span and path, the
+        /// plan's identifiers, and the compile error's internal failure kind.
         #[test]
         fn failures_preserve_full_authored_expression_and_inner_span() {
             let expression = "SUM(A / 0) + 1";
@@ -211,7 +159,9 @@ mod relations {
             }
         }
 
-        /// Pin rule order, authored dependency/key order, and completed-phase scheduling.
+        /// Seam: `analyze`'s order and internal diagnostics, read from the
+        /// authored `column_dependencies.tsv`. Pin rule order, authored
+        /// dependency/key order, and completed-phase scheduling.
         #[test]
         fn shared_column_dependency_truth() {
             for line in include_str!("fixtures/column_dependencies.tsv")
@@ -265,7 +215,8 @@ mod relations {
             }
         }
 
-        /// Malformed metadata never poisons the next call.
+        /// Seam: `analyze`'s errors over malformed graph metadata. Malformed
+        /// metadata never poisons the next call.
         #[test]
         fn metadata_admission_and_reuse() {
             let graph = [Some(vec![1, 1, 99]), None];
@@ -295,7 +246,9 @@ mod relations {
             }
         }
 
-        /// Host path selection is explicit even where two failures share one condition.
+        /// Seam: the condition, rule, location and columns of each internal
+        /// diagnostic. Host path selection is explicit even where two
+        /// failures share one condition.
         #[test]
         fn portable_diagnostic_metadata() {
             let cases = [
@@ -357,6 +310,7 @@ mod relations {
             RowCountBound::new(value).unwrap()
         }
 
+        /// Seam: the RowCountBound kernel's ordering and count comparison.
         #[test]
         fn exact_count_bounds_preserve_decimal_order_and_machine_count_width() {
             let values = [
@@ -414,6 +368,7 @@ mod relations {
             }
         }
 
+        /// Seam: the RowCountBound kernel's admission and decimal spelling.
         #[test]
         fn wide_bound_ownership_is_exact_and_noncanonical_spellings_are_rejected() {
             for invalid in ["", "-", "+1", "-0", "00", "01", "-01", " 1", "1.0", "١"] {
@@ -439,12 +394,11 @@ mod relations {
         use yamaa_core::{
             bound_expression::Read,
             dataset::{Flag, FlagBinding, FlagError, FlagRead},
-            diagnostic::{ConditionCode as C, Diagnostic},
+            diagnostic::ConditionCode as C,
             expression::{
                 compile, Condition, Context, ErrorKind, EvaluationError, Step as Route, Truth,
             },
             schema::DocumentNode as N,
-            specification::BindError,
             table::{Column, TableSchema, ValueRef},
             value::{ColumnType, Value, ValueType},
         };
@@ -460,32 +414,9 @@ mod relations {
             }
             Tree::map(vec![("flag", Tree::map(fields))])
         }
-        /// What binding the specification of `columns` to a source of the
-        /// integer columns ID and EXTRA refuses with.
-        fn diagnostics(columns: Vec<(&str, &str, Tree)>) -> Vec<Diagnostic> {
-            let spec = specification(columns);
-            let prepared = prepare(&spec).unwrap();
-            let source = TableSchema::new(vec![
-                Column {
-                    name: "ID".into(),
-                    kind: ColumnType::Int,
-                },
-                Column {
-                    name: "EXTRA".into(),
-                    kind: ColumnType::Int,
-                },
-            ])
-            .unwrap();
-            let Err(BindError::Invalid(findings)) = prepared.bind(&source) else {
-                panic!("findings")
-            };
-            findings
-                .iter()
-                .flat_map(|f| f.diagnostics(prepared.source()).unwrap())
-                .collect()
-        }
+        /// Seam: the values a `Flag` takes for each truth, and `Flag::new`'s
+        /// refusals, which no declaration reaches.
         #[test]
-
         fn raw_truth_literals_presence_null_and_complete_name_map() {
             let plan = compile("ID = 1", Context::Predicate, "flag.condition").unwrap();
             let bindings = vec![FlagBinding {
@@ -519,77 +450,12 @@ mod relations {
                 Err(FlagError::Binding(_))
             ));
         }
+        /// Seam: the generic predicate condition's own rule beside the flag's
+        /// projection of a constructed evaluation error and its route; the
+        /// case
+        /// `records.json::a_flag_condition_reading_a_number_as_text_is_the_flag_s_input_type_refusal`
+        /// states the flag's refusal of a condition it evaluates.
         #[test]
-
-        fn semantic_flag_declarations_are_deferred_and_interleaved_before_name_binding() {
-            let f = diagnostics(vec![
-                ("A", "str", flag("ABSENT = 1", Some(Tree::text("N")), None)),
-                ("B", "str", flag("ID >> 1", Some(Tree::text("N")), None)),
-            ]);
-            assert_eq!(
-                f.iter().map(|d| d.code).collect::<Vec<_>>(),
-                [
-                    C::FlagMissingValueRequired,
-                    C::PredicateUnknownField,
-                    C::ExpressionInvalid,
-                    C::FlagMissingValueRequired
-                ]
-            );
-            assert_eq!(f[0].spec_paths, ["columns.A.derivation.flag.missing"]);
-            assert_eq!(f[1].spec_paths, ["columns.A.derivation.flag.condition"]);
-            let f = diagnostics(vec![(
-                "A",
-                "str",
-                flag("ABSENT = 1", Some(Tree::Scalar(N::Null)), None),
-            )]);
-            assert_eq!(f[0].code, C::FlagMissingValueRequired);
-        }
-        #[test]
-
-        fn nested_flag_declarations_precede_enclosing_case_reference_checkpoint() {
-            let case = Tree::map(vec![(
-                "case",
-                Tree::List(vec![
-                    Tree::map(vec![
-                        ("when", Tree::text("UNKNOWN = 1")),
-                        ("then", flag("ID >> 1", Some(Tree::text("N")), None)),
-                    ]),
-                    Tree::map(vec![("otherwise", Tree::text("'x'"))]),
-                ]),
-            )]);
-            assert_eq!(
-                diagnostics(vec![("F", "str", case)])
-                    .iter()
-                    .map(|d| d.code)
-                    .collect::<Vec<_>>(),
-                [
-                    C::ExpressionInvalid,
-                    C::FlagMissingValueRequired,
-                    C::PredicateUnknownField
-                ]
-            );
-        }
-        #[test]
-
-        fn independent_flag_admissions_keep_complete_deferred_grammar_and_name_findings() {
-            let first = diagnostics(vec![
-                ("A", "str", flag("ID >> 1", None, None)),
-                ("B", "str", flag("ABSENT = 1", None, None)),
-            ]);
-            let second = diagnostics(vec![
-                ("A", "str", flag("ID >> 1", None, None)),
-                ("B", "str", flag("ABSENT = 1", None, None)),
-            ]);
-            assert_eq!(first, second);
-            assert_eq!(
-                first.iter().map(|d| d.code).collect::<Vec<_>>(),
-                [C::ExpressionInvalid, C::PredicateUnknownField]
-            );
-            assert_eq!(first[0].spec_paths, ["columns.A.derivation.flag.condition"]);
-            assert_eq!(first[1].spec_paths, ["columns.B.derivation.flag.condition"]);
-        }
-        #[test]
-
         fn regex_input_type_is_flag_owned_without_changing_generic_predicate_mapping() {
             let condition = Condition::ContainsExpectedText {
                 actual: ValueType::Int,
@@ -607,8 +473,9 @@ mod relations {
             assert_eq!(diagnostic.definition().rule, Some("FORMULA-5"));
             assert_eq!(diagnostic.operand_route, Some(vec!["Value".into()]));
         }
+        /// Seam: the resolved plan's row templates and the values its 40
+        /// flags of 10,000-character literals take.
         #[test]
-
         fn all_unselected_literals_and_repeated_row_defaults_remain_complete() {
             use support::specification_with_rows;
             let names = (0..40).map(|i| format!("F{i}")).collect::<Vec<_>>();
@@ -652,8 +519,9 @@ mod relations {
                 assert_eq!(flag.value(Truth::Unknown), ValueRef::Missing);
             }
         }
+        /// Seam: the resolved plan's case operands and predicate bindings,
+        /// and the names its evaluation asks the resolver for.
         #[test]
-
         fn existing_between_case_binds_one_name_and_preserves_two_subject_occurrences() {
             let case = Tree::map(vec![(
                 "case",
@@ -707,7 +575,9 @@ mod relations {
             }
         }
 
-        /// Independent truth distinguishes first reachable cycles from globally earliest cycles.
+        /// Seam: the graph kernel's cycle and order, read from the authored
+        /// `dependency_analysis.tsv`. Independent truth distinguishes first
+        /// reachable cycles from globally earliest cycles.
         #[test]
         fn shared_dependency_graph_truth() {
             for line in include_str!("fixtures/dependency_analysis.tsv")
@@ -730,7 +600,8 @@ mod relations {
             }
         }
 
-        /// Invalid references remain distinct from a valid graph containing a cycle.
+        /// Seam: the graph kernel's errors. Invalid references remain
+        /// distinct from a valid graph containing a cycle.
         #[test]
         fn graph_shape_is_separate_from_cycles() {
             let graph = vec![vec![1, 1, 99], vec![]];
@@ -750,7 +621,9 @@ mod relations {
             );
         }
 
-        /// A deep graph does not consume the host stack, and reuse has fresh state.
+        /// Seam: the graph kernel over a generated chain of 4,096 nodes. A
+        /// deep graph does not consume the host stack, and reuse has fresh
+        /// state.
         #[test]
         fn deep_graphs_and_repeated_analysis_are_independent() {
             let count = 4096;
@@ -785,14 +658,16 @@ mod relations {
         }
     }
     mod intermediate_match_values {
-        //! Independent 1.0 lowering and preparation, with no engine or host effects.
+        //! Independent 1.0 lowering and preparation, with no engine or host
+        //! effects. The findings of a key's match values are the replay cases
+        //! of `intermediates.json` that read its `match` document.
         use crate::support::document::Tree;
         use crate::support::resolved;
         use crate::support::specification::{header, prepare};
         use yamaa_core::{
             dataset::{MatchRead, MatchValue},
             schema::{Document, DocumentNode as N},
-            specification::{BindError, PrepareError},
+            specification::PrepareError,
             table::{Column, TableSchema, ValueRef},
             value::{compare_present_refs, ColumnType as T, Value},
         };
@@ -885,18 +760,8 @@ mod relations {
                 ]),
             )])
         }
-        fn finding_ids(key: Tree) -> Vec<(String, Vec<String>)> {
-            let prepared = prepare(&doc(key)).unwrap();
-            let (src, tab) = schemas();
-            let Err(BindError::Invalid(findings)) = prepared.bind_sources(&[&src, &tab]) else {
-                panic!("invalid")
-            };
-            findings
-                .iter()
-                .flat_map(|f| f.diagnostics(prepared.source()).unwrap())
-                .map(|d| (d.code.definition().rule.unwrap().to_string(), d.spec_paths))
-                .collect()
-        }
+        /// Seam: the resolved plan's key columns, paths, match values and
+        /// reads.
         #[test]
         fn padding_and_source_values_have_no_destination_and_preserve_dependency_scope() {
             for source in ["N", "SRC.N"] {
@@ -931,119 +796,11 @@ mod relations {
                 MatchValue::Variable(MatchRead::Record { column: 1, .. })
             ));
         }
+        /// Seam: the resolved plan's literal match value. The case
+        /// `intermediates.json::a_boolean_key_of_an_int_donor_column_is_not_coerced`
+        /// states that a Boolean key is not coerced.
         #[test]
-        fn authored_type_donor_width_reference_then_dependent_read_failure_order() {
-            for (field, first) in [
-                ("K", None),
-                ("KINT", Some("LOOKUP-9")),
-                ("ABSENT", Some("LOOKUP-5")),
-            ] {
-                let actual = finding_ids(Tree::map(vec![(field, pad("SRC.ABSENT", "0"))]));
-                let mut expected = Vec::new();
-                if let Some(id) = first {
-                    expected.push((id.into(), vec!["intermediates.LOOK.key".into()]));
-                }
-                expected.extend([
-                    (
-                        "TEXT-2".into(),
-                        vec![format!("intermediates.LOOK.key.{field}.str_pad.width")],
-                    ),
-                    (
-                        "LOOKUP-5".into(),
-                        vec![format!("intermediates.LOOK.key.{field}")],
-                    ),
-                    ("NAME-3".into(), vec!["columns.V.derivation.source".into()]),
-                ]);
-                assert_eq!(actual, expected);
-            }
-            assert_eq!(
-                finding_ids(Tree::map(vec![("K", pad("SRC.N", "0"))])),
-                [(
-                    "TEXT-2".into(),
-                    vec!["intermediates.LOOK.key.K.str_pad.width".into()]
-                )]
-            );
-        }
-        /// LOOKUP-6 compares each key expression's result type (EXPR-14) with
-        /// its key column before matching: a fixed, parameter or input type
-        /// alike, and a type decided per value at run time.
-        #[test]
-        fn key_expressions_compare_by_their_one_result_type_before_matching() {
-            let compute = |expr: &str| Tree::text(expr);
-            let mapping = |entries: Vec<(&str, Tree)>| {
-                Tree::map(vec![(
-                    "mapping",
-                    Tree::map(vec![
-                        ("source", Tree::text("SRC.ID")),
-                        ("dict", Tree::map(entries)),
-                    ]),
-                )])
-            };
-            let greatest = |sources: &[&str]| {
-                Tree::map(vec![(
-                    "greatest",
-                    Tree::map(vec![(
-                        "sources",
-                        Tree::List(sources.iter().map(Tree::text).collect()),
-                    )]),
-                )])
-            };
-            let refused = |field: &str, value: Tree| {
-                let prepared = prepare(&doc(Tree::map(vec![(field, value)]))).unwrap();
-                let (src, tab) = schemas();
-                let Err(BindError::Invalid(findings)) = prepared.bind_sources(&[&src, &tab]) else {
-                    panic!("{field}: a key whose type cannot compare is refused")
-                };
-                let diagnostic = findings
-                    .iter()
-                    .flat_map(|f| f.diagnostics(prepared.source()).unwrap())
-                    .next()
-                    .unwrap();
-                (
-                    diagnostic.definition().condition,
-                    diagnostic.spec_paths,
-                    diagnostic.context["expected"].clone(),
-                    diagnostic.context["actual"].clone(),
-                )
-            };
-            let text = |value: &str| yamaa_core::json::Value::String(value.into());
-            for (field, value, expected) in [
-                ("K", compute("N + 1"), "int"),
-                ("K", compute("N / 2"), "float"),
-                ("K", mapping(vec![("one", Tree::integer(1))]), "int"),
-                ("K", greatest(&["N", "SRC.N"]), "int"),
-                ("KINT", mapping(vec![("one", Tree::text("1"))]), "str"),
-            ] {
-                assert_eq!(
-                    refused(field, value),
-                    (
-                        "incompatible_input_type",
-                        vec!["intermediates.LOOK.key".to_string()],
-                        text(expected),
-                        text(if field == "K" { "str" } else { "int" }),
-                    ),
-                    "{field}"
-                );
-            }
-            for (field, value) in [
-                ("KINT", compute("N + 1")),
-                ("KNUM", compute("N + 1")),
-                ("KNUM", greatest(&["N", "SRC.N"])),
-                // An int or a string, decided per value: compared when matched.
-                (
-                    "KINT",
-                    mapping(vec![("one", Tree::integer(1)), ("two", Tree::text("2"))]),
-                ),
-            ] {
-                let prepared = prepare(&doc(Tree::map(vec![(field, value)]))).unwrap();
-                let (src, tab) = schemas();
-                prepared
-                    .bind_sources(&[&src, &tab])
-                    .unwrap_or_else(|error| panic!("{field}: {error:?}"));
-            }
-        }
-        #[test]
-        fn literal_text_is_not_a_reference_and_boolean_family_is_not_coerced() {
+        fn literal_text_is_not_a_reference() {
             let prepared =
                 prepare(&doc(Tree::map(vec![("K", Tree::text("'SRC.ABSENT'"))]))).unwrap();
             let (src, tab) = schemas();
@@ -1052,11 +809,9 @@ mod relations {
                 resolved::intermediates(&plan)[0].keys[0].value,
                 MatchValue::Literal(Value::Str("SRC.ABSENT".into()))
             );
-            assert_eq!(
-                finding_ids(Tree::map(vec![("KINT", Tree::Scalar(N::Boolean(true)))]))[0].0,
-                "LOOKUP-9"
-            );
         }
+        /// Seam: `PrepareError::Limit`, which no reader returns, over
+        /// generated 64- and 65-key documents.
         #[test]
         fn fixed_intermediate_key_count_precedes_deferred_name_findings() {
             let keys = (0..65).map(|index| format!("K{index}")).collect::<Vec<_>>();
@@ -1085,6 +840,7 @@ mod relations {
             }
         }
 
+        /// Seam: `PrepareError::Unsupported`, which no reader returns.
         #[test]
         fn unsupported_operations_keep_the_authored_gate_path() {
             let (key, operation, path) = (
@@ -1102,6 +858,7 @@ mod relations {
                 .iter()
                 .any(|f| f.operation == operation && f.path == path));
         }
+        /// Seam: the value kernel's `compare_present_refs`.
         #[test]
         fn borrowed_equality_preserves_complete_integer_precision_and_missingness() {
             use std::cmp::Ordering::*;
@@ -1132,6 +889,8 @@ mod relations {
             assert!(compare_present_refs(ValueRef::Missing, ValueRef::Int(0)).is_err());
         }
 
+        /// Seam: the resolved plan's output columns, dependencies and the
+        /// bound expression of a key.
         #[test]
         fn scalar_keys_retain_all_current_operands_without_synthetic_dependencies_or_destinations()
         {
@@ -1234,7 +993,9 @@ mod relations {
             }
         }
 
-        /// LOOKUP-11 expectations come from authored visibility, not generated runtime results.
+        /// Seam: `validate_field`, an internal validator over an in-memory
+        /// catalog. LOOKUP-11 expectations come from authored visibility, not
+        /// generated runtime results.
         #[test]
         fn stored_derived_and_self_visibility() {
             let catalog = catalog();
@@ -1292,7 +1053,9 @@ mod relations {
             }
         }
 
-        /// Donor records expose stored and earlier-derived names; dependencies keep declaration order.
+        /// Seam: `validate_read`, an internal validator over an in-memory
+        /// catalog. Donor records expose stored and earlier-derived names;
+        /// dependencies keep declaration order.
         #[test]
         fn donor_scope_phase_and_priority() {
             let catalog = catalog();
@@ -1437,7 +1200,9 @@ mod relations {
             }
         }
 
-        /// Self-reads stay deferred to cycle analysis, and Unicode visibility has no shared state.
+        /// Seam: both internal validators over an in-memory catalog.
+        /// Self-reads stay deferred to cycle analysis, and Unicode visibility
+        /// has no shared state.
         #[test]
         fn self_reads_and_unicode_visibility_are_reusable() {
             let catalog = catalog();
@@ -1502,7 +1267,8 @@ mod relations {
             Catalog::compile(&outputs, &datasets).unwrap()
         }
 
-        /// Dataset spelling is exact; bare outputs win without implicit source or ODM resolution.
+        /// Seam: the catalog's bindings. Dataset spelling is exact; bare
+        /// outputs win without implicit source or ODM resolution.
         #[test]
         fn exact_names_and_declared_types() {
             let catalog = catalog();
@@ -1590,7 +1356,8 @@ mod relations {
             }
         }
 
-        /// Unknown names precede phase failures, which precede strict expected-type checks.
+        /// Seam: the catalog's internal output diagnostics. Unknown names
+        /// precede phase failures, which precede strict expected-type checks.
         #[test]
         fn output_conditions_and_suggestion_order() {
             let catalog = catalog();
@@ -1647,7 +1414,9 @@ mod relations {
             }
         }
 
-        /// Large candidate sets keep lexical selection, duplicate admission and per-query isolation.
+        /// Seam: the catalog's internal output diagnostics over 256 generated
+        /// datasets. Large candidate sets keep lexical selection, duplicate
+        /// admission and per-query isolation.
         #[test]
         fn large_candidate_membership_preserves_suggestions() {
             let names: Vec<_> = (0..256).rev().map(|index| format!("D{index:03}")).collect();
@@ -1683,7 +1452,8 @@ mod relations {
             );
         }
 
-        /// Invalid metadata keeps its structural cause and never poisons later catalogs.
+        /// Seam: the catalog's compile errors. Invalid metadata keeps its
+        /// structural cause and never poisons later catalogs.
         #[test]
         fn catalog_shape_and_reuse() {
             let outputs = [field("X", Int), field("X", Int)];
@@ -1729,7 +1499,8 @@ mod relations {
             );
         }
 
-        /// Bad context indices are metadata errors and never turn into a plausible name failure.
+        /// Seam: the catalog's query errors. Bad context indices are metadata
+        /// errors and never turn into a plausible name failure.
         #[test]
         fn query_admission_is_separate_and_stateless() {
             let catalog = catalog();
@@ -1766,7 +1537,9 @@ mod relations {
             assert_eq!(unicode.validate_output("é", None, None, &[]), Ok(None));
         }
 
-        /// Whole-relation binding preserves declaration indices, including empty schemas and exact Unicode names.
+        /// Seam: the catalog's relation bindings. Whole-relation binding
+        /// preserves declaration indices, including empty schemas and exact
+        /// Unicode names.
         #[test]
         fn relation_identity_is_not_a_stored_field() {
             let catalog = Catalog::compile(

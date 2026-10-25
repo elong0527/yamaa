@@ -1,17 +1,22 @@
 //! The findings of a qualified or row aggregate (LOOKUP-5, LOOKUP-9,
-//! LOOKUP-18, LOOKUP-19, FORMULA-20, FORMULA-22, FORMULA-23). Its derive
-//! bindings' refusals are preparation's, read by the shared `prepare`.
+//! LOOKUP-18, LOOKUP-19, FORMULA-20, FORMULA-22, FORMULA-23), before any
+//! record is read and when its arithmetic is evaluated over its reductions'
+//! values. Its derive bindings' refusals are preparation's, read by the
+//! shared `prepare`.
 use super::{column_type, text, value, value_type};
 use crate::support::diagnostic::json::Json;
+use std::convert::Infallible;
 use yamaa_core::{
     dataset::AggregatePhase,
     diagnostic::{AggregateContextCause as Cause, AggregateFinding as Finding, Diagnostic},
-    expression::{compile, Context},
+    expression::{compile, Context, Resolver},
     result_type::ResultType,
+    value::Selection,
 };
 
 pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
     Some(match operation {
+        "aggregate_evaluation" => aggregate_evaluation(input),
         "aggregate_finding" => vec![aggregate_finding(input)],
         "aggregate_types" => aggregate_types(input),
         _ => return None,
@@ -189,4 +194,45 @@ fn aggregate_types(input: &Json) -> Vec<Diagnostic> {
                 .expect("a complete context")
         })
         .collect()
+}
+
+/// What evaluating the aggregate `expression` at `path` over its
+/// reductions' values refuses with, `{expression, path, reductions,
+/// group}`: `reductions` gives each reduction's value, in the order the
+/// expression writes them, and `group` the value of each grouping column the
+/// expression reads outside its reductions. The evaluation reads no other
+/// name, so reading one fails the case.
+fn aggregate_evaluation(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&["expression", "path", "reductions", "group"]);
+    let (expression, path) = (text(input, "expression"), text(input, "path"));
+    let reductions = input
+        .field("reductions")
+        .items()
+        .iter()
+        .map(value)
+        .collect::<Vec<_>>();
+    let mut group = Group(input.field("group").members());
+    match compile(expression, Context::Aggregate, path)
+        .expect("an aggregate that compiles")
+        .evaluate_aggregate(&mut group, &reductions)
+    {
+        Ok(_) => Vec::new(),
+        Err(error) => vec![error.diagnostic().expect("a refusal with its diagnostic")],
+    }
+}
+
+/// The grouping columns an aggregate's evaluation reads, each with the value
+/// a case gives it.
+struct Group<'a>(&'a [(String, Json)]);
+
+impl Resolver for Group<'_> {
+    type Error = Infallible;
+    fn resolve(&mut self, name: &str) -> Result<Selection, Infallible> {
+        let (_, held) = self
+            .0
+            .iter()
+            .find(|(column, _)| column == name)
+            .unwrap_or_else(|| panic!("the evaluation reads {name:?}, which is no grouping column"));
+        Ok(Selection::Present(value(held)))
+    }
 }
