@@ -173,6 +173,21 @@ structural validation before then checks only the closed argument-leaf forms of
 [FUNC-6](#func-6). An unknown, missing required, or incorrectly typed argument
 or default fails with `invalid_function_argument`.
 
+Its context names the `function` and, for a fault of one argument, the
+`argument`, with a `cause`: `unknown_argument`, `duplicate_argument`,
+`missing_required_argument`, or `type_mismatch` with the parameter's
+`expected_type` and the argument's `actual_type`. A written value the engine
+cannot run with is a fault of its argument too: an integer outside the 64-bit
+range (`integer_range`), a `DATE` or `DATETIME` literal that names no day or
+second (`invalid_date`, `invalid_datetime`), or a value that is no scalar
+(`invalid_shape`), each naming the text it is written as in `value`, null when
+it is no scalar text. A call with other fields than `name` and `args`, or
+whose `args` are no mapping, fails as `invalid_shape` there, naming no
+argument. A run that passes a function an argument it does not accept fails
+in the derivation phase, its context naming the `function` and its `call`,
+and the `unknown` arguments, or the `argument`, with `expected_type` and
+`actual_type` for a type mismatch.
+
 A function file writes a `date` or `datetime` default, test argument or result
 as text, which the declared parameter or return type reads; text that type
 cannot read fails the file under [FUNC-2](#func-2). Each parameter name must be

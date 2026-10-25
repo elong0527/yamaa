@@ -1230,7 +1230,7 @@ mod diagnostics {
                 let Fact::Object(context) = &held["context"] else {
                     panic!("nested invocation")
                 };
-                assert_eq!(context["parameter"], Fact::Text("x"));
+                assert_eq!(context["argument"], Fact::Text("x"));
                 let row = [
                     Value::Int(i64::MIN),
                     Value::Int(i64::MAX),
