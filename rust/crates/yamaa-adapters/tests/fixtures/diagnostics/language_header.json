@@ -1,5 +1,13 @@
 {
-  "about": "A public check reads the language header (SCHEMA-2, SCHEMA-4, LAYER-2): a 1.0 entry's missing parent, an unquoted version and a file without a header. Moved from declaration_language_header.rs, whose tests compared the fields each case's compares names.",
+  "about": "A public call reads each file it is given by the language header it declares (SCHEMA-2, SCHEMA-4, LAYER-2, LAYER-4, PROJECT-1). The engine reads language 1.0 (#3030 D76): it refuses a newer version, and a file that declares schema_version, which is language 0.5 with yamaa beside it or not, as unsupported_language_version, and a file of another type as unexpected_file_type, each at the field that names the file: the entry's own yamaa or schema_version, a layer's parent (LAYER-4), a schema link (input.<name>.schema), a project's listing (<section>.specs[i]) or the project file's root, which names the project file as source and entry. A malformed header stays a finding in the file that declares it, as a layer's other findings do: a layer may leave out required fields, but a field it writes is checked and its keyed members are unique. Moved from declaration_language_header.rs, whose tests compared each issue's phase, condition, rule, spec paths and context, which compares names, or its whole row, span and operand route included; a test that read a few fields names those. A test that read an internal entry point (prepare_specification, check_references, document::decode) is a public check here: its rows add the phase and rule of each finding's cause, from the condition registry, and, for a finding in a layer, that layer as source and the entry as entry, which a check's refusal of a layer names. A listing that cannot be read has no name, so its cases find it by its index: a project check (listing_failure) and a project run (listing_step) report the same row for it, each naming the specification as its entry, and a submission that composes the section reports it without one, saving nothing.",
+  "documents": {
+    "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n",
+    "legacy": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n",
+    "base": "yamaa: \"1.0\"\ntype: spec\ninput: {SRC: input.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n",
+    "child": "yamaa: \"1.0\"\ntype: spec\nparent: base.yaml\ndomain: TEST\nkeys: [ID]\noutput: {path: output.csv, columns: [ID]}\n",
+    "listing_project": "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [dm.yaml, listed.yaml]\n",
+    "submission_project": "yamaa: \"1.0\"\ntype: project\nstudy: {id: S, name: S, description: A study, protocol_name: S-01}\nsdtm:\n  specs: [listed.yaml]\n  standards: [{name: SDTMIG, version: \"3.4\", status: Final}]\n  define: define.xml\n"
+  },
   "cases": [
     {
       "case": "a_missing_parent_fails_where_the_entry_names_it",
@@ -26,6 +34,435 @@
       "input": {"files": {"input.csv": "ID\n1\n", "spec.yaml": "domain: TEST\n"}, "specification": "spec.yaml"},
       "compares": ["condition", "spec_paths"],
       "issues": [{"condition": "missing_required_field", "spec_paths": ["yamaa"]}]
+    },
+    {
+      "case": "a_public_check_reads_a_1_0_specification",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "spec"}}, "specification": "spec.yaml"},
+      "issues": []
+    },
+    {
+      "case": "a_public_check_refuses_a_newer_language_version_whatever_the_file_holds",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": "yamaa: \"1.4\"\nanything: [1, 2]\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "SCHEMA-2", "spec_paths": ["yamaa"], "context": {"version": "1.4", "language_versions": ["1.0"]}}]
+    },
+    {
+      "case": "a_public_check_refuses_a_specification_that_declares_schema_version",
+      "operation": "check",
+      "input": {"files": {"input.csv": "ID\n1\n", "spec.yaml": {"base": "legacy"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "SCHEMA-2", "spec_paths": ["schema_version"], "context": {"version": "0.5", "language_versions": ["1.0"]}}]
+    },
+    {
+      "case": "a_public_check_refuses_schema_version_with_yamaa_beside_it",
+      "operation": "check",
+      "input": {
+        "files": {
+          "input.csv": "ID\n1\n",
+          "spec.yaml": {"base": "legacy", "edits": [{"from": "  - {name: ID, type: int, derivation: SRC.ID}\n", "to": "  - {name: ID, type: int, derivation: SRC.ID}\nyamaa: \"1.0\"\n"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "SCHEMA-2", "spec_paths": ["schema_version"], "context": {"version": "0.5", "language_versions": ["1.0"]}}]
+    },
+    {
+      "case": "a_1_0_project_file_checks_clean",
+      "operation": "check",
+      "input": {
+        "files": {"input.csv": "ID\n1\n", "spec.yaml": {"base": "spec"}, "project.yaml": "yamaa: \"1.0\"\ntype: project\n"},
+        "specification": "spec.yaml",
+        "project": "project.yaml"
+      },
+      "issues": []
+    },
+    {
+      "case": "a_project_file_that_declares_schema_version_is_refused_as_language_0_5",
+      "operation": "check",
+      "input": {
+        "files": {
+          "input.csv": "ID\n1\n",
+          "spec.yaml": {"base": "spec"},
+          "project.yaml": "schema_version: '1.0'\nenvironments: {python: python/environment.yaml}\n"
+        },
+        "specification": "spec.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "SCHEMA-2", "spec_paths": ["schema_version"], "context": {"version": "0.5", "language_versions": ["1.0"], "source": "{study}/project.yaml", "entry": "{study}/project.yaml", "environment_path": "$"}}]
+    },
+    {
+      "case": "a_project_file_that_declares_neither_header_declares_no_version",
+      "operation": "check",
+      "input": {
+        "files": {"input.csv": "ID\n1\n", "spec.yaml": {"base": "spec"}, "project.yaml": "environments: {python: {lock: uv.lock}}\n"},
+        "specification": "spec.yaml",
+        "project": "project.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "SCHEMA-13", "spec_paths": ["yamaa"], "context": {"field": "yamaa", "class": "project_class", "source": "{study}/project.yaml", "entry": "{study}/project.yaml", "environment_path": "$"}}]
+    },
+    {
+      "case": "a_schema_link_refuses_a_producer_of_a_newer_version_at_the_link",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "spec", "edits": [{"from": "input: {SRC: input.csv}", "to": "input: {SRC: {path: produced.csv, schema: producer.yaml}}"}]},
+          "producer.yaml": "yamaa: \"1.4\"\ntype: spec\nanything: [1, 2]\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "SCHEMA-2", "spec_paths": ["input.SRC.schema"], "context": {"source": "{study}/producer.yaml", "version": "1.4", "language_versions": ["1.0"]}}]
+    },
+    {
+      "case": "a_schema_link_refuses_a_producer_of_another_type_at_the_link",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "spec", "edits": [{"from": "input: {SRC: input.csv}", "to": "input: {SRC: {path: produced.csv, schema: producer.yaml}}"}]},
+          "producer.yaml": "yamaa: \"1.0\"\ntype: project\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unexpected_file_type", "rule": "SCHEMA-2", "spec_paths": ["input.SRC.schema"], "context": {"source": "{study}/producer.yaml", "type": "project", "expected": "spec"}}]
+    },
+    {
+      "case": "a_schema_link_refuses_a_producer_that_declares_schema_version_at_the_link",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "spec", "edits": [{"from": "input: {SRC: input.csv}", "to": "input: {SRC: {path: produced.csv, schema: producer.yaml}}"}]},
+          "producer.yaml": {"base": "legacy"}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "SCHEMA-2", "spec_paths": ["input.SRC.schema"], "context": {"source": "{study}/producer.yaml", "version": "0.5", "language_versions": ["1.0"]}}]
+    },
+    {
+      "case": "a_producer_with_an_unquoted_version_is_a_finding_in_the_producer",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "spec", "edits": [{"from": "input: {SRC: input.csv}", "to": "input: {SRC: {path: produced.csv, schema: producer.yaml}}"}]},
+          "producer.yaml": "yamaa: 1.0\ntype: spec\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["yamaa"], "context": {"actual": "float", "expected": "language_version", "source": "{study}/producer.yaml", "entry": "{study}/producer.yaml"}}]
+    },
+    {
+      "case": "a_producer_without_a_type_is_a_finding_in_the_producer",
+      "operation": ["check", "build"],
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "spec", "edits": [{"from": "input: {SRC: input.csv}", "to": "input: {SRC: {path: produced.csv, schema: producer.yaml}}"}]},
+          "producer.yaml": "yamaa: \"1.0\"\n"
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "SCHEMA-13", "spec_paths": ["type"], "context": {"class": "root_class", "field": "type", "source": "{study}/producer.yaml", "entry": "{study}/producer.yaml"}}]
+    },
+    {
+      "case": "a_listing_of_a_newer_version_is_refused_at_the_listing",
+      "operation": ["listing_failure", "listing_step"],
+      "input": {
+        "files": {
+          "input.csv": "ID\n1\n",
+          "dm.yaml": {"base": "spec", "edits": [{"from": "domain: TEST", "to": "domain: DM"}]},
+          "project.yaml": {"base": "listing_project"},
+          "listed.yaml": "yamaa: \"1.4\"\ntype: spec\nanything: [1, 2]\n"
+        },
+        "project": "project.yaml",
+        "listed": 1
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "SCHEMA-2", "spec_paths": ["sdtm.specs[1]"], "context": {"source": "{study}/listed.yaml", "version": "1.4", "language_versions": ["1.0"], "entry": "{study}/listed.yaml"}}]
+    },
+    {
+      "case": "a_listing_of_a_newer_version_leaves_the_sibling_listing_clean",
+      "operation": ["listing_failure", "listing_step"],
+      "input": {
+        "files": {
+          "input.csv": "ID\n1\n",
+          "dm.yaml": {"base": "spec", "edits": [{"from": "domain: TEST", "to": "domain: DM"}]},
+          "project.yaml": {"base": "listing_project"},
+          "listed.yaml": "yamaa: \"1.4\"\ntype: spec\nanything: [1, 2]\n"
+        },
+        "project": "project.yaml",
+        "listed": 0
+      },
+      "issues": []
+    },
+    {
+      "case": "a_submission_refuses_a_listed_specification_of_a_newer_version",
+      "operation": "define",
+      "input": {
+        "files": {"submission.yaml": {"base": "submission_project"}, "listed.yaml": "yamaa: \"1.4\"\ntype: spec\nanything: [1, 2]\n"},
+        "project": "submission.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "SCHEMA-2", "spec_paths": ["sdtm.specs[0]"], "context": {"source": "{study}/listed.yaml", "version": "1.4", "language_versions": ["1.0"]}}],
+      "saved": {}
+    },
+    {
+      "case": "a_listing_of_another_type_is_refused_at_the_listing",
+      "operation": ["listing_failure", "listing_step"],
+      "input": {
+        "files": {
+          "input.csv": "ID\n1\n",
+          "dm.yaml": {"base": "spec", "edits": [{"from": "domain: TEST", "to": "domain: DM"}]},
+          "project.yaml": {"base": "listing_project"},
+          "listed.yaml": "yamaa: \"1.0\"\ntype: codelists\ncodelists: []\n"
+        },
+        "project": "project.yaml",
+        "listed": 1
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unexpected_file_type", "rule": "SCHEMA-2", "spec_paths": ["sdtm.specs[1]"], "context": {"source": "{study}/listed.yaml", "type": "codelists", "expected": "spec", "entry": "{study}/listed.yaml"}}]
+    },
+    {
+      "case": "a_listing_of_another_type_leaves_the_sibling_listing_clean",
+      "operation": ["listing_failure", "listing_step"],
+      "input": {
+        "files": {
+          "input.csv": "ID\n1\n",
+          "dm.yaml": {"base": "spec", "edits": [{"from": "domain: TEST", "to": "domain: DM"}]},
+          "project.yaml": {"base": "listing_project"},
+          "listed.yaml": "yamaa: \"1.0\"\ntype: codelists\ncodelists: []\n"
+        },
+        "project": "project.yaml",
+        "listed": 0
+      },
+      "issues": []
+    },
+    {
+      "case": "a_submission_refuses_a_listed_specification_of_another_type",
+      "operation": "define",
+      "input": {
+        "files": {"submission.yaml": {"base": "submission_project"}, "listed.yaml": "yamaa: \"1.0\"\ntype: codelists\ncodelists: []\n"},
+        "project": "submission.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unexpected_file_type", "rule": "SCHEMA-2", "spec_paths": ["sdtm.specs[0]"], "context": {"source": "{study}/listed.yaml", "type": "codelists", "expected": "spec"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_listing_that_declares_schema_version_is_refused_at_the_listing",
+      "operation": ["listing_failure", "listing_step"],
+      "input": {
+        "files": {
+          "input.csv": "ID\n1\n",
+          "dm.yaml": {"base": "spec", "edits": [{"from": "domain: TEST", "to": "domain: DM"}]},
+          "project.yaml": {"base": "listing_project"},
+          "listed.yaml": {"base": "legacy"}
+        },
+        "project": "project.yaml",
+        "listed": 1
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "SCHEMA-2", "spec_paths": ["sdtm.specs[1]"], "context": {"source": "{study}/listed.yaml", "version": "0.5", "language_versions": ["1.0"], "entry": "{study}/listed.yaml"}}]
+    },
+    {
+      "case": "a_listing_that_declares_schema_version_leaves_the_sibling_listing_clean",
+      "operation": ["listing_failure", "listing_step"],
+      "input": {
+        "files": {
+          "input.csv": "ID\n1\n",
+          "dm.yaml": {"base": "spec", "edits": [{"from": "domain: TEST", "to": "domain: DM"}]},
+          "project.yaml": {"base": "listing_project"},
+          "listed.yaml": {"base": "legacy"}
+        },
+        "project": "project.yaml",
+        "listed": 0
+      },
+      "issues": []
+    },
+    {
+      "case": "a_submission_refuses_a_listed_specification_that_declares_schema_version",
+      "operation": "define",
+      "input": {
+        "files": {"submission.yaml": {"base": "submission_project"}, "listed.yaml": {"base": "legacy"}},
+        "project": "submission.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "SCHEMA-2", "spec_paths": ["sdtm.specs[0]"], "context": {"source": "{study}/listed.yaml", "version": "0.5", "language_versions": ["1.0"]}}],
+      "saved": {}
+    },
+    {
+      "case": "a_listing_with_a_malformed_header_is_not_refused_at_the_listing",
+      "operation": ["listing_failure", "listing_step"],
+      "input": {
+        "files": {
+          "input.csv": "ID\n1\n",
+          "dm.yaml": {"base": "spec", "edits": [{"from": "domain: TEST", "to": "domain: DM"}]},
+          "project.yaml": {"base": "listing_project"},
+          "listed.yaml": "yamaa: 1.0\ntype: spec\n"
+        },
+        "project": "project.yaml",
+        "listed": 1
+      },
+      "issues": []
+    },
+    {
+      "case": "a_listing_with_a_malformed_header_leaves_the_sibling_listing_clean",
+      "operation": ["listing_failure", "listing_step"],
+      "input": {
+        "files": {
+          "input.csv": "ID\n1\n",
+          "dm.yaml": {"base": "spec", "edits": [{"from": "domain: TEST", "to": "domain: DM"}]},
+          "project.yaml": {"base": "listing_project"},
+          "listed.yaml": "yamaa: 1.0\ntype: spec\n"
+        },
+        "project": "project.yaml",
+        "listed": 0
+      },
+      "issues": []
+    },
+    {
+      "case": "a_parent_of_a_newer_version_fails_at_parent",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "child"}, "base.yaml": {"base": "base", "edits": [{"from": "\"1.0\"", "to": "\"1.2\""}]}},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "LAYER-4", "spec_paths": ["parent"], "context": {"source": "{study}/base.yaml", "entry": "{study}/spec.yaml", "declaring_source": "{study}/spec.yaml", "version": "1.2", "language_versions": ["1.0"]}}]
+    },
+    {
+      "case": "a_parent_of_another_type_fails_at_parent",
+      "operation": "check",
+      "input": {
+        "files": {"spec.yaml": {"base": "child"}, "base.yaml": "yamaa: \"1.0\"\ntype: project\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unexpected_file_type", "rule": "LAYER-4", "spec_paths": ["parent"], "context": {"source": "{study}/base.yaml", "entry": "{study}/spec.yaml", "declaring_source": "{study}/spec.yaml", "type": "project", "expected": "spec"}}]
+    },
+    {
+      "case": "a_parent_that_declares_schema_version_fails_at_parent",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "child"}, "base.yaml": {"base": "legacy"}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "LAYER-4", "spec_paths": ["parent"], "context": {"source": "{study}/base.yaml", "entry": "{study}/spec.yaml", "declaring_source": "{study}/spec.yaml", "version": "0.5", "language_versions": ["1.0"]}}]
+    },
+    {
+      "case": "a_parent_without_a_header_fails_in_its_layer",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "child"}, "base.yaml": "domain: TEST\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.source", "context.entry"],
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "SCHEMA-13", "spec_paths": ["yamaa"], "context": {"source": "{study}/base.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "a_parent_with_an_unquoted_version_fails_in_its_layer",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "child"}, "base.yaml": "yamaa: 1.0\ntype: spec\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.source", "context.entry"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["yamaa"], "context": {"source": "{study}/base.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "a_parent_without_a_type_fails_in_its_layer",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "child"}, "base.yaml": "yamaa: \"1.0\"\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.source", "context.entry"],
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "SCHEMA-13", "spec_paths": ["type"], "context": {"source": "{study}/base.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "a_layer_is_a_fragment_whose_written_fields_are_checked",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "child"},
+          "base.yaml": {"base": "base", "edits": [{"from": "  - {name: ID, type: int, derivation: SRC.ID}\n", "to": "  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: ID, label: Again}\nunknown: 1\n"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.source", "context.entry"],
+      "issues": [
+        {"phase": "validation", "condition": "unknown_field", "rule": "SCHEMA-13", "spec_paths": ["unknown"], "context": {"source": "{study}/base.yaml", "entry": "{study}/spec.yaml"}},
+        {"phase": "validation", "condition": "duplicate_identifier", "rule": "LAYER-4", "spec_paths": ["columns.ID.name"], "context": {"source": "{study}/base.yaml", "entry": "{study}/spec.yaml"}}
+      ]
+    },
+    {
+      "case": "an_empty_parent_fails_schema_admission_in_its_layer",
+      "operation": "check",
+      "input": {"files": {"spec.yaml": {"base": "child", "edits": [{"from": "parent: base.yaml", "to": "parent: ''"}]}}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "minimum_length", "rule": "SCHEMA-12", "spec_paths": ["parent"], "context": {"minimum": 1, "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "a_list_of_parents_carries_the_one_parent_hint",
+      "operation": "check",
+      "input": {
+        "files": {
+          "base.yaml": {"base": "base"},
+          "spec.yaml": {"base": "child", "edits": [{"from": "parent: base.yaml", "to": "parent: [base.yaml, fragment.yaml]"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["parent"], "context": {"expected": "path", "actual": "sequence", "hint": "write at most one parent per file; replace parents: [organization.yaml, compound.yaml] with parent: compound.yaml in the entry and parent: organization.yaml in compound.yaml; organization.yaml has no parent; a fragment that several files share goes under include and names no parent", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "an_undeclared_parents_key_carries_the_one_parent_hint",
+      "operation": "check",
+      "input": {
+        "files": {
+          "base.yaml": {"base": "base"},
+          "spec.yaml": {"base": "child", "edits": [{"from": "parent: base.yaml", "to": "parents: [base.yaml, fragment.yaml]"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "SCHEMA-13", "spec_paths": ["parents"], "context": {"field": "parents", "class": "root_class", "identifier": "parents", "hint": "write at most one parent per file; replace parents: [organization.yaml, compound.yaml] with parent: compound.yaml in the entry and parent: organization.yaml in compound.yaml; organization.yaml has no parent; a fragment that several files share goes under include and names no parent", "source": "{study}/spec.yaml", "entry": "{study}/spec.yaml"}}]
+    },
+    {
+      "case": "schema_version_beside_a_1_0_header_is_refused_in_the_file_a_call_reads",
+      "operation": "check",
+      "input": {
+        "files": {
+          "base.yaml": {"base": "legacy", "edits": [{"from": "  - {name: ID, type: int, derivation: SRC.ID}\n", "to": "  - {name: ID, type: int, derivation: SRC.ID}\nyamaa: \"1.0\"\ntype: spec\n"}]}
+        },
+        "specification": "base.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "SCHEMA-2", "spec_paths": ["schema_version"], "context": {"version": "0.5", "language_versions": ["1.0"]}}]
+    },
+    {
+      "case": "schema_version_beside_a_1_0_header_is_refused_at_the_parent_that_names_it",
+      "operation": "check",
+      "input": {
+        "files": {
+          "spec.yaml": {"base": "child"},
+          "base.yaml": {"base": "legacy", "edits": [{"from": "  - {name: ID, type: int, derivation: SRC.ID}\n", "to": "  - {name: ID, type: int, derivation: SRC.ID}\nyamaa: \"1.0\"\ntype: spec\n"}]}
+        },
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "LAYER-4", "spec_paths": ["parent"], "context": {"source": "{study}/base.yaml", "entry": "{study}/spec.yaml", "declaring_source": "{study}/spec.yaml", "version": "0.5", "language_versions": ["1.0"]}}]
+    },
+    {
+      "case": "schema_version_beside_a_1_0_header_is_refused_at_the_schema_link_that_names_it",
+      "operation": "check",
+      "input": {
+        "files": {
+          "consumer.yaml": {"base": "spec", "edits": [{"from": "input: {SRC: input.csv}", "to": "input: {SRC: {path: dm.csv, schema: base.yaml}}"}]},
+          "base.yaml": {"base": "legacy", "edits": [{"from": "  - {name: ID, type: int, derivation: SRC.ID}\n", "to": "  - {name: ID, type: int, derivation: SRC.ID}\nyamaa: \"1.0\"\ntype: spec\n"}]}
+        },
+        "specification": "consumer.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "unsupported_language_version", "rule": "SCHEMA-2", "spec_paths": ["input.SRC.schema"], "context": {"source": "{study}/base.yaml", "version": "0.5", "language_versions": ["1.0"]}}]
     }
   ]
 }
