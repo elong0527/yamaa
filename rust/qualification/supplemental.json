@@ -19,7 +19,7 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/check_invalid_regex_truth.json",
+      "path": "rust/crates/yamaa-application/tests/fixtures/check_invalid_regex_truth.json",
       "family": "diagnostics",
       "level": "component",
       "consumers": [

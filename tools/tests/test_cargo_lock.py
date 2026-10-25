@@ -82,8 +82,14 @@ class BundleArchiveTests(unittest.TestCase):
     """Each host's source archive bundle, against a small checkout."""
 
     ENGINE = [
-        ("yamaa", "0.5.0", False, ["yamaa-adapters", "yamaa-core"]),
+        (
+            "yamaa",
+            "0.5.0",
+            False,
+            ["yamaa-adapters", "yamaa-application", "yamaa-core"],
+        ),
         ("yamaa-adapters", "0.5.0", False, ["parser", "yamaa-core"]),
+        ("yamaa-application", "0.5.0", False, ["yamaa-adapters", "yamaa-core"]),
         ("yamaa-core", "0.5.0", False, []),
         ("parser", "1.0.0", True, []),
     ]
@@ -119,6 +125,7 @@ class BundleArchiveTests(unittest.TestCase):
         crates = (
             "yamaa-core",
             "yamaa-adapters",
+            "yamaa-application",
             "yamaa",
             "yamaa-boundary",
             "yamaa-python",
