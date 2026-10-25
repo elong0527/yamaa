@@ -7,6 +7,7 @@ mod execution {
         use crate::support::Edit as _;
         use yamaa_core::application_observer::Scope;
 
+        /// Seam: a scripted capture port's classified failures, payload identity and call log.
         #[test]
         fn classified_capture_failures_retain_complete_reports_without_publication() {
             use yamaa_adapters::json;
@@ -216,6 +217,8 @@ mod execution {
             assert!(specification_report::build_result(&run, &attempt, metadata(), &[]).is_err());
         }
 
+        /// Seam: a scripted resolver's rebase of an inherited parent, and the written paths its
+        /// findings keep.
         #[test]
         fn resource_findings_use_written_inherited_paths_not_rebased_locations() {
             use yamaa_adapters::{
@@ -354,11 +357,13 @@ mod execution {
             }
         }
 
+        /// Already data: the authored reports of `fixtures/column_literals.json`.
         #[test]
         fn original_column_literals_match_complete_reference_reports_and_csv() {
             independent_scalar_reports(include_str!("fixtures/column_literals.json"), "literal", 4);
         }
 
+        /// Already data: the authored reports of `fixtures/original_conversion_handlers.json`.
         #[test]
         fn original_conversion_handlers_match_complete_reference_reports_and_csv() {
             independent_scalar_reports(
@@ -368,6 +373,7 @@ mod execution {
             );
         }
 
+        /// Already data: the authored reports of `fixtures/original_row_conversion_handlers.json`.
         #[test]
         fn original_row_conversion_handlers_match_complete_reference_reports_and_csv() {
             independent_scalar_reports(
@@ -377,6 +383,8 @@ mod execution {
             );
         }
 
+        /// Seam: a scripted port's inspection failures and the inputs it inspected, against
+        /// `fixtures/source_inspection.tsv`.
         #[test]
         fn metadata_inspection_reports_all_known_failures_before_any_study_read() {
             use yamaa_adapters::{
@@ -507,6 +515,7 @@ mod execution {
             }
         }
 
+        /// Already data: the authored reports of `fixtures/source_filters.json`.
         #[test]
         fn original_source_filters_match_complete_reports_and_exact_csv() {
             replay_source_selection_truth(
@@ -516,6 +525,7 @@ mod execution {
             );
         }
 
+        /// Already data: the authored reports of `fixtures/first_available.json`.
         #[test]
         fn original_first_available_matches_complete_reports_and_exact_csv() {
             replay_source_selection_truth(
@@ -525,6 +535,7 @@ mod execution {
             );
         }
 
+        /// Already data: the authored reports of `fixtures/original_assertions.json`.
         #[test]
         fn original_assertions_match_complete_reports_and_exact_csv() {
             replay_source_selection_truth(
@@ -534,6 +545,7 @@ mod execution {
             );
         }
 
+        /// Already data: the authored reports of `fixtures/original_all_or_none.json`.
         #[test]
         fn original_all_or_none_matches_complete_reports_and_exact_csv() {
             replay_source_selection_truth(
@@ -543,6 +555,7 @@ mod execution {
             );
         }
 
+        /// Already data: the authored reports of `fixtures/original_not_missing.json`.
         #[test]
         fn original_column_not_missing_matches_complete_reports_and_exact_csv() {
             replay_source_selection_truth(
@@ -552,6 +565,7 @@ mod execution {
             );
         }
 
+        /// Already data: the authored reports of `fixtures/row_filter_admission.json`.
         #[test]
         fn row_filter_carrier_failures_match_complete_normative_reports() {
             replay_source_selection_truth(
@@ -561,6 +575,9 @@ mod execution {
             );
         }
 
+        /// Seam: the observation record's verification records, the first check's identity and the
+        /// failure's log context, and the scripted port's read count, which `report.check` rows do
+        /// not state whole.
         #[test]
         fn exact_wide_count_bounds_preserve_empty_counts_and_completed_check_prefix() {
             use crate::support::ports::Sources;
@@ -614,6 +631,7 @@ mod execution {
             }
         }
 
+        /// Already data: the authored reports of `fixtures/row_filters.json`.
         #[test]
         fn row_filters_match_complete_independent_reports_and_exact_csv() {
             replay_source_selection_truth(
@@ -623,6 +641,7 @@ mod execution {
             );
         }
 
+        /// Already data: the authored reports of `fixtures/row_reductions.json`.
         #[test]
         fn row_reductions_match_complete_independent_reports_and_exact_csv() {
             replay_source_selection_truth(
@@ -632,6 +651,7 @@ mod execution {
             );
         }
 
+        /// Already data: the authored reports of `fixtures/correlated_aggregates.json`.
         #[test]
         fn aggregate_relations_match_complete_independent_reports_and_exact_csv() {
             replay_source_selection_truth(
@@ -641,11 +661,13 @@ mod execution {
             );
         }
 
+        /// Already data: the authored reports of `fixtures/odm_reads.json`.
         #[test]
         fn odm_reads_match_complete_independent_reports_and_exact_csv() {
             replay_source_selection_truth(include_str!("fixtures/odm_reads.json"), "odm", 14);
         }
 
+        /// Already data: the authored reports of `fixtures/odm_deferred.json`.
         #[test]
         fn deferred_odm_defaults_match_complete_independent_reports_and_exact_csv() {
             replay_source_selection_truth(
@@ -655,6 +677,7 @@ mod execution {
             );
         }
 
+        /// Already data: the authored findings of `fixtures/odm_preflight.json`.
         #[test]
         fn odm_preflight_matches_complete_independent_findings_before_source_authority() {
             let mut count = 0;
@@ -677,6 +700,7 @@ mod execution {
             assert_eq!(count, 8);
         }
 
+        /// Already data: the authored reports of `fixtures/row_column_checks.json`.
         #[test]
         fn row_column_checks_match_complete_independent_reports_and_exact_csv() {
             replay_source_selection_truth(
@@ -686,6 +710,7 @@ mod execution {
             );
         }
 
+        /// Already data: the authored reports of `fixtures/original_column_values.json`.
         #[test]
         fn original_column_values_match_complete_reports_and_exact_csv() {
             replay_source_selection_truth(
@@ -695,6 +720,7 @@ mod execution {
             );
         }
 
+        /// Already data: the authored reports of `fixtures/original_column_matches.json`.
         #[test]
         fn original_column_matches_match_complete_reports_and_exact_csv() {
             replay_source_selection_truth(
@@ -704,6 +730,8 @@ mod execution {
             );
         }
 
+        /// Seam: a preparation that admits a specification whose invalid patterns stay deferred,
+        /// whose issues no test authored; only its `missing_report` refusal names a row.
         #[test]
         fn deferred_column_findings_keep_vocabulary_and_report_admission() {
             use yamaa_adapters::specification_run::{Error, PreparedRun};
@@ -727,6 +755,7 @@ mod execution {
             }
         }
 
+        /// Already data: the authored findings of `fixtures/static_verification_checks.json`.
         #[test]
         fn static_verification_checks_match_complete_issues_without_study_authority() {
             let rows = fixture_rows(include_str!("fixtures/static_verification_checks.json"));
@@ -748,6 +777,7 @@ mod execution {
             }
         }
 
+        /// Already data: the authored reports of `fixtures/original_source_bindings.json`.
         #[test]
         fn original_source_bindings_match_complete_reports_and_exact_repeated_csv() {
             use crate::support::ports::Sources;
@@ -821,6 +851,7 @@ mod execution {
             assert_eq!(count, 12);
         }
 
+        /// Already data: the authored reports of `fixtures/original_mapping_cut.json`.
         #[test]
         fn original_mapping_cut_match_complete_reports_and_exact_repeated_csv() {
             use crate::support::ports::Sources;
@@ -899,30 +930,7 @@ mod execution {
             assert_eq!(count, 20);
         }
 
-        #[test]
-        fn source_condition_stays_unknown_under_the_normative_grammar() {
-            let raw=b"yamaa: '1.0'\ntype: spec\ndomain: TEST\nkeys: [ID]\ninput: {SRC: src.csv}\noutput: {path: result.csv, columns: [ID]}\ncolumns:\n  - name: ID\n    type: str\n    label: ID\n    derivation:\n      source: {variable: SRC.ID, condition: TRUE}\n";
-            let error = yamaa_adapters::shipped_schema::prepare(
-                Source {
-                    identity: "spec.yaml".into(),
-                    bytes: raw.to_vec(),
-                },
-                "spec.yaml".into(),
-                &mut crate::support::specification_run::EntryOnly,
-            )
-            .unwrap_err();
-            let findings = crate::support::findings(
-                yamaa_adapters::specification_diagnostics::inheritance_failure_ref(&error).unwrap(),
-            );
-            assert!(findings
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|issue| issue["condition"] == "unknown_field"
-                    && issue["spec_paths"]
-                        == yamaa_adapters::json!(["columns.ID.derivation.source.condition"])));
-        }
-
+        /// Already data: the authored findings of `fixtures/mapping_cut_admission.json`.
         #[test]
         fn original_mapping_cut_admission_has_complete_findings_before_study_ports() {
             for row in fixture_rows(include_str!("fixtures/mapping_cut_admission.json")) {

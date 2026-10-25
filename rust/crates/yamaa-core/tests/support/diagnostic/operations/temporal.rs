@@ -7,12 +7,13 @@ use crate::support::diagnostic::json::Json;
 use yamaa_core::{
     dataset::{
         completion_policy, CalendarUnit, Completion, DateBounds, DatePolicyError, DayDeclaration,
-        ElapsedUnit, FlagPart, Imputation, ImputationKind, Temporal, TemporalKind, TemporalType,
-        TimeRule,
+        ElapsedUnit, FlagPart, Imputation, ImputationKind, ImputationStep, Temporal, TemporalKind,
+        TemporalType, TimeRule,
     },
     date_forms::{DateForm, DateForms},
     diagnostic::Diagnostic,
     table::ValueRef,
+    value::Value,
 };
 
 pub(super) const FILES: &[File] = &[fixture!("temporal.json")];
@@ -20,6 +21,7 @@ pub(super) const FILES: &[File] = &[fixture!("temporal.json")];
 pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
     Some(match operation {
         "impute" => impute(input),
+        "impute_bounds" => impute_bounds(input),
         "impute_policy" => impute_policy(input),
         "temporal" => temporal(input),
         _ => return None,
@@ -27,14 +29,15 @@ pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
 }
 
 /// A date and time operation of `kind` at `path` applied to `values`, one
-/// for each of the operation's operands, each read from a source named as
-/// its operand, `{kind, path, values}`: `kind` is `"date_shift"`,
+/// for each of the operation's operands, each read from the source `sources`
+/// names at its position, or, without `sources`, from a source named as its
+/// operand, `{kind, path, sources, values}`: `kind` is `"date_shift"`,
 /// `"study_day"`, `"epoch_day"` or `"time_of_day"`, or one of
 /// `{"difference": <unit>, "bounds": ...}`, `{"datetime_difference":
 /// <unit>}`, `{"datetime_shift": <unit>}`, `{"duration_value": <unit>}`,
 /// `{"duration_text": <unit>}` and `{"date_text": <depth>}`.
 fn temporal(input: &Json) -> Vec<Diagnostic> {
-    let input = input.closed(&["kind", "path", "values"]);
+    let input = input.closed(&["kind", "path", "sources", "values"]);
     let elapsed = |unit: &Json| match unit.text() {
         "second" => ElapsedUnit::Second,
         "minute" => ElapsedUnit::Minute,
@@ -86,12 +89,16 @@ fn temporal(input: &Json) -> Vec<Diagnostic> {
             other => panic!("no date and time operation {other:?}"),
         },
     };
-    let operation = Temporal::new(
-        kind,
-        kind.fields().iter().map(|field| (*field).into()).collect(),
-        text(input, "path").into(),
-    )
-    .expect("an admitted operation");
+    let sources = match input.get("sources") {
+        Some(sources) => sources
+            .items()
+            .iter()
+            .map(|source| source.text().into())
+            .collect(),
+        None => kind.fields().iter().map(|field| (*field).into()).collect(),
+    };
+    let operation =
+        Temporal::new(kind, sources, text(input, "path").into()).expect("an admitted operation");
     let values = input
         .field("values")
         .items()
@@ -118,13 +125,84 @@ fn impute_policy(input: &Json) -> Vec<Diagnostic> {
     }
 }
 
-/// A completion operation applied to `value`, `{kind, source, path, value}`:
-/// `kind` is `{"impute": <policy>}`, `{"precision": <type>}`, `{"flag":
-/// <part>, "seconds_collected": ...}`, `"to_date"` or `{"date_text":
-/// [<form>, ...]}`.
+/// A completion operation applied to `value`, `{kind, source, path, value}`,
+/// with `kind` as [`imputation_kind`] reads it.
 fn impute(input: &Json) -> Vec<Diagnostic> {
     let input = input.closed(&["kind", "source", "path", "value"]);
-    let kind = match input.field("kind") {
+    let operation = Imputation::new(
+        imputation_kind(input.field("kind")),
+        text(input, "source").into(),
+        None,
+        None,
+        None,
+        text(input, "path").into(),
+        None,
+    )
+    .expect("an admitted operation");
+    let value = value(input.field("value"));
+    match operation.source_value(ValueRef::from(&value)) {
+        Ok(_) => Vec::new(),
+        Err(diagnostic) => vec![diagnostic],
+    }
+}
+
+/// A completion operation that declares its bounds or fallback, `{kind,
+/// source, path, not_before, not_after, fallback, value, operands}`, applied
+/// to its source's `value`: `kind` as [`imputation_kind`] reads it, and
+/// `not_before`, `not_after` and `fallback`, each optional, the source each
+/// declared operand reads, whose value `operands` gives by the operand's
+/// name, missing when it gives none. A source the policy completes is held
+/// between the bounds (TIME-9), and a missing source reads the fallback
+/// (TIME-13).
+fn impute_bounds(input: &Json) -> Vec<Diagnostic> {
+    let input = input.closed(&[
+        "kind",
+        "source",
+        "path",
+        "not_before",
+        "not_after",
+        "fallback",
+        "value",
+        "operands",
+    ]);
+    let declared = |name: &str| input.get(name).map(|source| source.text().to_owned());
+    let operation = Imputation::new(
+        imputation_kind(input.field("kind")),
+        text(input, "source").into(),
+        declared("not_before"),
+        declared("not_after"),
+        declared("fallback"),
+        text(input, "path").into(),
+        None,
+    )
+    .expect("an admitted operation");
+    let operands = input
+        .field("operands")
+        .closed(&["not_before", "not_after", "fallback"]);
+    let operand = |name: &str| operands.get(name).map_or(Value::Missing, value);
+    let source = value(input.field("value"));
+    let reached = match operation.source_value(ValueRef::from(&source)) {
+        Ok(ImputationStep::Bound(completed)) => {
+            let (lower, upper) = (operand("not_before"), operand("not_after"));
+            operation
+                .apply_bounds(completed, ValueRef::from(&lower), ValueRef::from(&upper))
+                .err()
+        }
+        Ok(ImputationStep::Missing) if operation.fallback().is_some() => operation
+            .fallback_value(ValueRef::from(&operand("fallback")))
+            .err(),
+        Ok(_) => None,
+        Err(diagnostic) => Some(diagnostic),
+    };
+    reached.into_iter().collect()
+}
+
+/// A completion operation's kind: `{"impute": <policy>}`, `{"precision":
+/// <type>}`, `{"flag": <part>, "seconds_collected": ...}`, `"to_date"` or
+/// `{"date_text": [<form>, ...]}`.
+#[track_caller]
+fn imputation_kind(kind: &Json) -> ImputationKind {
+    match kind {
         Json::String(kind) if kind == "to_date" => ImputationKind::ToDate,
         kind => match kind.members() {
             [(name, policy_input)] if name == "impute" => {
@@ -155,21 +233,6 @@ fn impute(input: &Json) -> Vec<Diagnostic> {
             }
             other => panic!("no completion operation {other:?}"),
         },
-    };
-    let operation = Imputation::new(
-        kind,
-        text(input, "source").into(),
-        None,
-        None,
-        None,
-        text(input, "path").into(),
-        None,
-    )
-    .expect("an admitted operation");
-    let value = value(input.field("value"));
-    match operation.source_value(ValueRef::from(&value)) {
-        Ok(_) => Vec::new(),
-        Err(diagnostic) => vec![diagnostic],
     }
 }
 
