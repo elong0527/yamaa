@@ -522,6 +522,63 @@ fn a_spec_path_is_checked_run_and_resolved_alone() {
     }
 }
 
+/// `--verbose` (#3762) leaves standard output as it is and writes to
+/// standard error each phase of the run as it starts and ends, the phases of
+/// a run without project functions in their documented order, then the
+/// timings table: its column names, then one row per phase with the run's
+/// path as given, its phase, two numbers of milliseconds and its outcome.
+#[test]
+fn verbose_writes_each_phase_and_then_the_timings_to_standard_error() {
+    let study = Study::new();
+    let plain = outcome(&yamaa_in(&study.0, &["run", "sdtm/dm.yaml"]));
+    let (status, stdout, stderr) =
+        outcome(&yamaa_in(&study.0, &["run", "sdtm/dm.yaml", "--verbose"]));
+    assert_eq!((status, stdout), (plain.0, plain.1), "standard output");
+    let phases = [
+        "preparation",
+        "input",
+        "admission",
+        "derivation",
+        "output_keys",
+        "verification",
+        "output",
+    ];
+    let events = phases
+        .iter()
+        .flat_map(|phase| {
+            [
+                format!("sdtm/dm.yaml: {phase} start"),
+                format!("sdtm/dm.yaml: {phase} end: succeeded"),
+            ]
+        })
+        .collect::<Vec<_>>();
+    let lines = stderr.lines().collect::<Vec<_>>();
+    assert_eq!(lines[..events.len()], events, "the progress events");
+    assert_eq!(
+        lines[events.len()],
+        "name\tphase\tstarted_ms\telapsed_ms\toutcome",
+        "the timings header"
+    );
+    let rows = lines[events.len() + 1..]
+        .iter()
+        .map(|line| {
+            let cells = line.split('\t').collect::<Vec<_>>();
+            let milliseconds = cells[2..4]
+                .iter()
+                .all(|cell| cell.parse::<f64>().is_ok_and(|value| value >= 0.0));
+            (cells[0], cells[1], milliseconds, cells[4])
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        rows,
+        phases
+            .iter()
+            .map(|phase| ("sdtm/dm.yaml", *phase, true, "succeeded"))
+            .collect::<Vec<_>>(),
+        "the timings rows"
+    );
+}
+
 /// A PATH that declares `type: project` is checked and run whole, as
 /// `p.check()` and `p.run()` then `save()` (D122). The check reports ADAE's
 /// finding. The run builds every section in order: DM succeeds, ADAE fails

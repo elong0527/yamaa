@@ -3,10 +3,13 @@
 //!
 //! Standard output carries what a command prints, as text or, with
 //! `--format json`, as one canonical JSON document; standard error carries
-//! only the refusals of exit status 2, with one exception (D142): a panic
-//! inside a `selftest` case fails that case, so the command exits 1, and
-//! Rust's default panic hook writes the panic message, which shows where the
-//! engine panicked, to standard error. The exit status is:
+//! only the refusals of exit status 2, with two exceptions. A panic inside a
+//! `selftest` case fails that case, so the command exits 1, and Rust's
+//! default panic hook writes the panic message, which shows where the engine
+//! panicked, to standard error (D142). And `check`, `run` and `submission`
+//! with `--verbose` write each progress event there as it happens, then,
+//! after what they print, the timings table of their result (#3762), so
+//! standard output is the same with or without it. The exit status is:
 //!
 //! - 0 when the command completed and succeeded, or `--help` or `--version`
 //!   printed its text;
@@ -109,9 +112,15 @@ fn run(
             match execution {
                 Execution::Ran {
                     stdout: text,
+                    stderr: timings,
                     status,
                 } => match print(stdout, stderr, &text) {
-                    SUCCEEDED => status,
+                    SUCCEEDED => {
+                        // Standard error is the last stream to report on, so a
+                        // failed write to it is not reported.
+                        let _ = stderr.write_all(timings.as_bytes());
+                        status
+                    }
                     failed => failed,
                 },
                 Execution::Refused(usage) => refuse(stderr, &usage),
