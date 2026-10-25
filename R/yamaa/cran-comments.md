@@ -17,48 +17,65 @@ package. `R CMD build` builds and includes its HTML.
 
 ## Test environments
 
-`R CMD check --as-cran` on the package's source tarball, with the settings of
-CRAN's incoming checks, two Cargo jobs and every network connection refused,
-without the remote checks and the PDF and HTML manuals. Cargo and rustc are
-1.82.0, the declared minimum, unless another version is named.
+These comments are a submission draft. Final release qualification and the
+maintainer's win-builder and macOS builder results are pending; replace this
+status with their results before submission.
 
-- Ubuntu 24.04 x86_64: R-devel (2026-10-22 r90748), R 4.6.1 and R 4.2.0, and
-  R-devel without the suggested packages (`_R_CHECK_DEPENDS_ONLY_=true`).
-- macOS 15 arm64: R-devel (2026-10-23 r90750), R 4.6.1 and R 4.2.0.
-- Windows Server 2025 x64: R-devel (2026-10-22 r90748 ucrt), R 4.6.1 and
-  R 4.2.0.
-- R-hub's `gcc16` container, CRAN's r-devel-linux-x86_64-fedora-gcc
-  configuration: R-devel (2026-10-21 r90732) built with GCC 16.2 on Fedora
-  44, with Fedora's Cargo and rustc 1.99.0.
-- R-hub's `clang-asan` container, the clang-ASAN configuration of CRAN's
-  additional checks: R-devel (2026-10-21 r90732) built with clang 23.1 and
-  libc++ on Ubuntu 26.04, which compiles the package's C, the bundled
-  ReadStat and zstd sources included, with AddressSanitizer and
-  UndefinedBehaviorSanitizer.
+The source package with the minimal vignette and vendored development-file
+exclusions has passed `R CMD check --as-cran --no-manual` on Ubuntu 24.04
+x86_64 with R 4.6.1 and Cargo/rustc 1.99.1. The local dependency-only check
+used CRAN's incoming-check settings, two Cargo jobs and no network, with
+remote checks and the PDF/HTML manuals disabled. The check rebuilt the
+vignette with knitr, rmarkdown and Pandoc available; arrow was unavailable.
+The full suggested-package R checks and all regression suites also passed
+pull-request CI on Ubuntu with R 4.6.1.
 
-The package is also installed with the network disabled on Linux x86_64 and
-aarch64, macOS and Windows. win-builder (R-devel, R-release and R-oldrel)
-and the macOS builder run when the maintainer prepares the submission.
+The builder-free dependency-only check sets `_R_CHECK_DEPENDS_ONLY_=true`
+and `_R_CHECK_FORCE_SUGGESTS_=false` and passes `--ignore-vignettes` while
+retaining the base-R smoke tests. This local check also passed with all four
+suggested packages unavailable. Normal checks validate the vignette with its
+builders installed.
+
+The final archive still needs the configured Linux, macOS and Windows
+checks with R-devel, R 4.6.1 and R 4.2.0 and the declared minimum Rust 1.82.0,
+the Linux noSuggests and manual checks, and R-hub's gcc16 and clang-asan
+checks. Earlier platform results predate the vignette and development-file
+exclusions and do not qualify this archive. The maintainer's external
+builders must check the unchanged final release tarball.
+
+## Size and timing
+
+The measured source archive is 9,411,757 bytes (9.41 MB), including
+7,514,532 bytes (7.51 MB) in `src/rust/vendor.tar.xz`, below the Repository
+Policy's 10 MB guideline. The installed package on the local Ubuntu/R 4.6.1
+check is 21.9 MB, including 21.5 MB in `libs`; platform/toolchain-specific
+sizes must be refreshed from final qualification.
+
+The most recent Windows checks before the vignette and development-file
+exclusions completed in 491 seconds with R-devel, 517 seconds with R 4.6.1,
+and 493 seconds with R 4.2.0 (8.2-8.6 minutes). These are the whole CRAN-check
+step times, including installation, rather than the workflow-job times that
+also include provisioning. All three were below the 10-minute target.
+Confirm these timings on the final archive and external builders.
 
 ## R CMD check results
 
-0 errors | 0 warnings | 1 note in each environment above with R-devel and
-R 4.6.1; R 4.2.0 also notes the installed size. The notes, and why they
-remain:
+The completed Ubuntu/R 4.6.1 checks reported `Status: OK` (0 errors,
+0 warnings, 0 notes). With remote checks disabled, CRAN's new-submission
+note is not produced. The local installed size and unavailable arrow were
+reported as INFO. Final platform results remain pending. The checker allows
+only the following notes, whose reasons are unchanged:
 
-- `checking CRAN incoming feasibility ... NOTE`: a new submission, and the
-  size of the tarball, about 11.0 MB. About 8.8 MB of it is
-  `src/rust/vendor.tar.xz`, the Rust crates that the package compiles, which
-  CRAN's guidance for packages that use Rust asks to be bundled rather than
-  downloaded. The Repository Policy allows a modestly increased size limit to
-  be requested for such bundled sources; we request a limit of 15 MB.
+- `checking CRAN incoming feasibility ... NOTE`: this is a new submission.
+  R versions may also note the tarball size. The current archive is within
+  the 10 MB guideline; most of it is the bundled Rust sources required for
+  offline installation. Under the Repository Policy's provision for a
+  modestly increased bundled-source allowance, we request a limit of 15 MB.
 - `checking installed package size ... NOTE` (R 4.2.0; R 4.6.1 and R-devel
-  report it as INFO): 25.2 MB on Linux, 20.4 MB on macOS and 17.7 MB on
-  Windows, almost all of it the shared object (24.8, 20.0 and 17.3 MB), which
-  links the Rust engine statically: most of it is machine code, and the
-  symbols and the debug information of the Rust standard library are kept, as
-  the policy asks. The inputs that the package's tests read are in `tests/`,
-  which R does not install.
+  report it as INFO): almost all of the installed size is the shared object,
+  which links the Rust engine statically. Most of it is machine code; the
+  symbols and Rust standard-library debug information are retained as the
+  policy asks. Test inputs stay in `tests/`, which R does not install.
 
 ## Rust
 

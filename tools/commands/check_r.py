@@ -12,8 +12,10 @@ too, since R passes a test that UndefinedBehaviorSanitizer reported on.
 The check leaves out the PDF and HTML manuals (--no-manual), which need LaTeX
 and HTML Tidy. With --manual it builds and validates them, as CRAN's incoming
 checks do, and fails unless R reports both of those checks OK.
+With --ignore-vignettes, the dependency-only check can run with no vignette
+builders installed. Other checks continue to validate and rebuild vignettes.
 
-    python -m tools.commands.check_r --archive <yamaa_X.Y.Z.tar.gz> --work-dir <new dir> [--manual]
+    python -m tools.commands.check_r --archive <yamaa_X.Y.Z.tar.gz> --work-dir <new dir> [--manual] [--ignore-vignettes]
     python -m tools.commands.check_r --log <yamaa.Rcheck/00check.log> [--manual]
 
 The second form compares the log of a check that ran elsewhere.
@@ -325,7 +327,7 @@ def sanitizer_reports(work):
     ]
 
 
-def check(archive, work, environment=None, manual=False):
+def check(archive, work, environment=None, manual=False, ignore_vignettes=False):
     archive, work = archive.resolve(), work.resolve()
     if work.is_relative_to(ROOT):
         raise ValueError("R package checks must run outside the checkout")
@@ -347,6 +349,7 @@ def check(archive, work, environment=None, manual=False):
         "check",
         "--as-cran",
         *([] if manual else ["--no-manual"]),
+        *(["--ignore-vignettes"] if ignore_vignettes else []),
         "--no-stop-on-test-error",
         str(archive),
     ]
@@ -389,6 +392,11 @@ def main():
         help="build and validate the PDF and HTML manuals, which needs LaTeX and "
         "HTML Tidy, and require both checks to report OK",
     )
+    parser.add_argument(
+        "--ignore-vignettes",
+        action="store_true",
+        help="omit vignette checks when the dependency-only lane has no builders",
+    )
     args = parser.parse_args()
     if args.log is not None:
         if args.archive is not None or args.work_dir is not None:
@@ -410,7 +418,7 @@ def main():
         parser.error(
             "R_LIBS must identify the installed package and dependency library"
         )
-    check(archive, work, manual=args.manual)
+    check(archive, work, manual=args.manual, ignore_vignettes=args.ignore_vignettes)
 
 
 if __name__ == "__main__":

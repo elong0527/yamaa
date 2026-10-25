@@ -807,8 +807,10 @@ class NativeWorkflowContract(unittest.TestCase):
                 chosen = {name: check["env"].get(name) for name in settings}
                 if job not in lanes:
                     self.assertEqual(chosen, dict.fromkeys(settings))
+                    self.assertNotIn("--ignore-vignettes", check["run"])
                     continue
                 self.assertEqual(chosen, settings)
+                self.assertIn("--ignore-vignettes", check["run"])
                 self.assertLess(
                     names.index("Confirm that no suggested package is installed"),
                     names.index("Check the R source package as CRAN does"),
@@ -1317,6 +1319,31 @@ class NativeWorkflowContract(unittest.TestCase):
                         for image, names in own.items()
                         for name in names
                     },
+                )
+
+    def test_cran_containers_install_declared_suggests_and_pandoc_before_checking(self):
+        # The workflow seam must supply builders from DESCRIPTION as its
+        # Suggests evolve, and provide Pandoc in each container's own OS.
+        for platform, install in (
+            ("gcc16", "dnf install -y cargo rust python3 pandoc"),
+            (
+                "clang-asan",
+                "apt-get install --yes --no-install-recommends python3 xz-utils pandoc",
+            ),
+        ):
+            steps = self.jobs[f"native-cran ({platform})"]["definitions"]
+            names = [step.get("name") for step in steps]
+            setup = steps[names.index("Install the package's Suggests")]["run"]
+            with self.subTest(platform=platform):
+                self.assertIn(install, "\n".join(s.get("run", "") for s in steps))
+                self.assertIn('read.dcf("R/yamaa/DESCRIPTION")', setup)
+                self.assertIn('"Suggests"', setup)
+                self.assertIn("pak::pkg_install(packages", setup)
+                self.assertIn("vapply(packages, requireNamespace", setup)
+                self.assertNotIn('c("arrow", "jsonlite")', setup)
+                self.assertLess(
+                    names.index("Install the package's Suggests"),
+                    names.index("Check the R source package as CRAN does"),
                 )
 
     def test_the_sanitizer_lane_builds_with_the_minimum_rust_from_its_installer(self):

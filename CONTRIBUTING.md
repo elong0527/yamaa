@@ -1017,19 +1017,22 @@ builds with the pruned bundle. Unknown versions keep their development files.
 The full R suites use the package's suggested packages, `arrow` and
 `jsonlite`, only where they are installed, as "Writing R Extensions" asks:
 a part that needs a missing one is skipped with a message. Native qualification's
-`native-cran (ubuntu-24.04, R devel, no Suggests)` job installs neither, as
+`native-cran (ubuntu-24.04, R devel, no Suggests)` job installs no Suggests, as
 CRAN's noSuggests check does. It sets `_R_CHECK_DEPENDS_ONLY_=true`, so the
 smoke checks see only the Depends and Imports, and `_R_CHECK_FORCE_SUGGESTS_=false`,
-so R reports the missing packages instead of stopping. Every other check
-installs them, and R stops there when one is missing. Repeat the job from the
-repository root, with libraries that hold neither package:
+so R reports the missing packages instead of stopping. It passes
+`--ignore-vignettes` to the owned checker because knitr and rmarkdown are
+absent too; the other CRAN checks rebuild and validate the vignette. R-hub
+containers install every package in DESCRIPTION's Suggests, and Pandoc.
+For a local dependency-only check, build the archive with the vignette tools
+available, then select libraries without suggested packages:
 
 ```sh
 python -m tools.staging.stage_r_package /tmp/yamaa-r-no-suggests/yamaa
 cd /tmp/yamaa-r-no-suggests && R CMD build --no-manual yamaa && mkdir library
-R_LIBS="$PWD/library" R_LIBS_USER="$PWD/library" _R_CHECK_DEPENDS_ONLY_=true \
+R_LIBS="$PWD/library" R_LIBS_USER="$PWD/library" R_LIBS_SITE="$PWD/library" _R_CHECK_DEPENDS_ONLY_=true \
   _R_CHECK_FORCE_SUGGESTS_=false python -m tools.commands.check_r \
-  --archive yamaa_*.tar.gz --work-dir check
+  --ignore-vignettes --archive yamaa_*.tar.gz --work-dir check
 ```
 
 Documentation deployment and Harbor evaluations have separate workflows.
