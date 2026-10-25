@@ -91,12 +91,28 @@ pub fn specification(columns: Vec<(&str, &str, Tree)>) -> Document {
 pub fn specification_with_rows(columns: Vec<(&str, &str, Tree)>, rows: Vec<Tree>) -> Document {
     specification_with_verifications(columns, rows, Vec::new(), None)
 }
+/// [`specification`], whose input declares `ID` as `int`, as a decoder that
+/// captures it so does: before capture, an undeclared field of the
+/// delimited input is `str` (INPUT-5).
+#[allow(dead_code)]
+pub fn typed_specification(columns: Vec<(&str, &str, Tree)>) -> Document {
+    build(columns, Vec::new(), Vec::new(), None, true)
+}
 #[allow(dead_code)]
 pub fn specification_with_verifications(
     columns: Vec<(&str, &str, Tree)>,
     rows: Vec<Tree>,
     verifications: Vec<Tree>,
     report: Option<&str>,
+) -> Document {
+    build(columns, rows, verifications, report, false)
+}
+fn build(
+    columns: Vec<(&str, &str, Tree)>,
+    rows: Vec<Tree>,
+    verifications: Vec<Tree>,
+    report: Option<&str>,
+    typed: bool,
 ) -> Document {
     let mut projection = vec![Tree::text("ID")];
     let mut declarations = vec![Tree::map(vec![
@@ -129,7 +145,11 @@ pub fn specification_with_verifications(
             "input",
             Tree::map(vec![(
                 "SRC",
-                Tree::map(vec![("path", Tree::text("input.csv"))]),
+                Tree::map(
+                    std::iter::once(("path", Tree::text("input.csv")))
+                        .chain(typed.then(|| ("types", Tree::map(vec![("ID", Tree::text("int"))]))))
+                        .collect(),
+                ),
             )]),
         ),
         ("keys", Tree::List(vec![Tree::text("ID")])),
