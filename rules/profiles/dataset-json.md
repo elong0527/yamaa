@@ -9,7 +9,8 @@ carrying the published dataset and the submission metadata the
 [Define-XML](define-xml.md) document is generated from. A domain build never
 writes Dataset-JSON. [JSON-1](#json-1), [JSON-2](#json-2),
 [JSON-3](#json-3), [JSON-5](#json-5) and [JSON-14](#json-14) also govern the
-files [SAS Transport](xpt.md) writes.
+files [SAS Transport](xpt.md) writes. [JSON-15](#json-15) states how a file
+this profile writes reads back as an input.
 
 ## Requesting a transport file
 
@@ -433,13 +434,30 @@ primary artifact and its report file. A failed publication fails under
 
 <a id="json-15"></a>
 
-### JSON-15. A Dataset-JSON file is never read as a source
+### JSON-15. A file this profile writes reads back through the Dataset-JSON source profiles as its published table
 
-Dataset-JSON is a transport profile that only a project submission writes
-([JSON-1](#json-1)). `.json` names no source profile under
-[INPUT-1](../inputs.md#input-1), so an input whose `path` ends in `.json`
-fails as `source_profile_unknown` during validation, as any other unmapped
-extension does.
+A file this profile writes, in either representation, is read as an input by
+the `dataset_json` or `dataset_ndjson` source profile its extension selects
+([INPUT-1](../inputs.md#input-1),
+[DSJSON-1](../reference/dataset-json.md#dsjson-1)). It reads back as its
+published table: the same fields in the same order, with the same types and
+values, under `empty_string: present`. A `str` column the document submits as
+`date` or `datetime` reads as that type unless the input declares it `str`
+([DSJSON-2](../reference/dataset-json.md#dsjson-2)).
 
-Fails: `source_profile_unknown`.
-Evidence: `negative-source-unknown-format`.
+Evidence: `rust/crates/yamaa-adapters/tests/table_dataset_json_source.rs::the_writers_output_for_a_published_table_reads_back_as_that_table`, `rust/crates/yamaa-adapters/tests/table_dataset_json_source.rs::a_written_empty_string_and_a_text_date_read_back_under_the_input_s_declarations`, `rust/crates/yamaa-adapters/tests/table_dataset_json_source.rs::every_dataset_json_golden_reads_back_as_its_published_rows`.
+
+Each `dataType` this profile writes ([JSON-10](#json-10)) supplies the type
+the column was written from under the closed table of
+[DSJSON-2](../reference/dataset-json.md#dsjson-2), and each value is written
+in the spelling its type fixes ([JSON-11](#json-11), [JSON-13](#json-13)),
+which [DSJSON-3](../reference/dataset-json.md#dsjson-3) reads back. A
+collected empty string is written `""`; under the default `empty_string`
+([INPUT-9](../inputs.md#input-9)) it reads back as missing, as from any
+source. A column of one of the collapsed date and time types is written as
+`string` and reads back as `str`.
+
+Reading a file back makes Dataset-JSON no artifact profile: the extension
+mapping of [OUTPUT-5](../output.md#output-5) stays closed at `.csv` and
+`.parquet`, and only a submission's `transport` writes Dataset-JSON
+([JSON-1](#json-1)).

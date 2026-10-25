@@ -1721,3 +1721,249 @@ fn partition_fields_are_the_fields_every_driver_template_copies_into_the_keys() 
         assert_eq!(plan.partition_fields(keys), expected, "{label}");
     }
 }
+
+/// The confinement gate (#3830), a seam no run's output shows: a run that
+/// holds one partition at a time reads together only what one partition
+/// holds, so the records a grouped template, the key grain or an ODM read
+/// reads together must sit in one partition. Under consecutive partitions
+/// the cut keeps whole the runs of the fields every such read shares
+/// (`ResolvedPlan::cut_fields`), none for a plan without one, and a plan
+/// whose reads share no field needs the whole table at the read that
+/// leaves none. Under key-bounded partitions
+/// the cut is by the partition fields, and a read whose fields omit one of
+/// them, or any read when the driver input does not hold every partition
+/// key, needs the whole table. Each expectation reads the keys [S, U, P]
+/// (an ODM plan's [STUDYID, USUBJID]), the group fields, the fields the
+/// keys copy and the ODM fields a read's scope names (`odm_source::FIELDS`);
+/// a grouped template names its `group_by` (`rows.<row>.group_by`), the key
+/// grain its `keys` and an ODM read its column's derivation.
+#[test]
+fn a_cross_record_read_is_confined_to_its_partition_or_needs_the_whole_table() {
+    let grouped = |fields: Vec<usize>| copies(RowMode::Groups(fields), false);
+    let named = |plan: DatasetPlan, rows: &[&str]| {
+        let contexts = rows
+            .iter()
+            .map(|&row| {
+                Some(crate::dataset::AggregateRowContext {
+                    row: row.into(),
+                    groups: Vec::new(),
+                })
+            })
+            .collect();
+        plan.with_row_contexts(contexts)
+    };
+    let literal = |column: usize| assign(column, Expression::Literal(Value::Str("k".into())));
+    let key_grain = |assignments: Vec<Assignment>| RowTemplate {
+        mode: RowMode::Keys,
+        assignments,
+        filter: None,
+    };
+    let sv = |fields: &[usize]| Some(fields.to_vec());
+    // R, which no template derives, completes in the column phase.
+    let r = || vec![assign(4, Expression::Literal(Value::Int(0)))];
+    // An ODM input's record template copying StudyOID and SubjectKey into
+    // the keys STUDYID and USUBJID, and VAL an ODM read of the input scoped
+    // by `scope`.
+    let odm = |scope: crate::dataset::OdmScope| {
+        use crate::dataset::{AggregatePhase, AggregateSource, BoundOdm, OdmRead};
+        let read = BoundOdm::new(OdmRead {
+            dataset: "ODM".into(),
+            item: "ODM.IT.VAL".into(),
+            item_oid: "IT.VAL".into(),
+            path: "columns.VAL.derivation.odm".into(),
+            row: None,
+            phase: AggregatePhase::Derivation,
+            scope,
+            source: Some(AggregateSource::Primary),
+            selectors: [None, None, None],
+            filter: None,
+        })
+        .unwrap();
+        let fields: Vec<_> = crate::odm_source::FIELDS
+            .iter()
+            .map(|&name| (name, ColumnType::Str))
+            .collect();
+        let text = ColumnType::Str;
+        DatasetPlan::new(
+            schema(&fields),
+            schema(&[("STUDYID", text), ("USUBJID", text), ("VAL", text)]),
+            vec![RowTemplate {
+                mode: RowMode::Records,
+                assignments: vec![
+                    assign(0, Expression::Source(0)),
+                    assign(1, Expression::Source(2)),
+                ],
+                filter: None,
+            }],
+            vec![assign(2, Expression::Odm(Box::new(read)))],
+            vec![0, 1],
+            vec![],
+        )
+    };
+    let hierarchy = || crate::dataset::OdmScope::Records;
+    let events = || crate::dataset::OdmScope::Groups(vec![3]);
+    // A label, the plan, its partition keys, the path of the step that
+    // refuses it and the fields its partitions are cut by.
+    type Case = (
+        &'static str,
+        DatasetPlan,
+        usize,
+        Option<&'static str>,
+        Option<Vec<usize>>,
+    );
+    let cases: [Case; 16] = [
+        (
+            "a record template, consecutive",
+            keyed_plan(vec![copies(RowMode::Records, false)], r()),
+            0,
+            None,
+            sv(&[]),
+        ),
+        (
+            "a template grouped by S and U, consecutive",
+            named(keyed_plan(vec![grouped(vec![0, 1])], r()), &["a"]),
+            0,
+            None,
+            sv(&[0, 1]),
+        ),
+        (
+            "a template grouped by S and U, by two keys",
+            named(keyed_plan(vec![grouped(vec![0, 1])], r()), &["a"]),
+            2,
+            None,
+            sv(&[0, 1]),
+        ),
+        (
+            "a template grouped by S and U, by three keys",
+            named(keyed_plan(vec![grouped(vec![0, 1])], r()), &["a"]),
+            3,
+            Some("rows.a.group_by"),
+            None,
+        ),
+        (
+            "templates grouped by S and U and by S, consecutive",
+            named(
+                keyed_plan(vec![grouped(vec![0, 1]), grouped(vec![0])], r()),
+                &["a", "b"],
+            ),
+            0,
+            None,
+            sv(&[0]),
+        ),
+        (
+            "templates grouped by S and U and by S, by one key",
+            named(
+                keyed_plan(vec![grouped(vec![0, 1]), grouped(vec![0])], r()),
+                &["a", "b"],
+            ),
+            1,
+            None,
+            sv(&[0]),
+        ),
+        (
+            "templates grouped by S and U and by S, by two keys",
+            named(
+                keyed_plan(vec![grouped(vec![0, 1]), grouped(vec![0])], r()),
+                &["a", "b"],
+            ),
+            2,
+            Some("rows.a.group_by"),
+            None,
+        ),
+        (
+            "templates grouped by S and by U, consecutive",
+            named(
+                keyed_plan(vec![grouped(vec![0]), grouped(vec![1])], r()),
+                &["a", "b"],
+            ),
+            0,
+            Some("rows.b.group_by"),
+            None,
+        ),
+        (
+            "the key grain of S, U and P",
+            keyed_plan(
+                vec![key_grain(copies(RowMode::Keys, false).assignments)],
+                r(),
+            ),
+            0,
+            None,
+            sv(&[0, 1, 2]),
+        ),
+        (
+            "the key grain of S, a literal U, and P",
+            keyed_plan(
+                vec![key_grain(copies(RowMode::Keys, true).assignments)],
+                r(),
+            ),
+            0,
+            None,
+            sv(&[0, 2]),
+        ),
+        (
+            "the key grain of S, a literal U, and P, by two keys",
+            keyed_plan(
+                vec![key_grain(copies(RowMode::Keys, true).assignments)],
+                r(),
+            ),
+            2,
+            Some("keys"),
+            None,
+        ),
+        (
+            "the key grain of literal keys",
+            keyed_plan(
+                vec![key_grain(vec![
+                    literal(0),
+                    literal(1),
+                    literal(2),
+                    assign(3, Expression::Source(3)),
+                ])],
+                r(),
+            ),
+            0,
+            Some("keys"),
+            None,
+        ),
+        (
+            "an ODM read scoped by its record's hierarchy, consecutive",
+            odm(hierarchy()),
+            0,
+            None,
+            sv(&[0, 2, 3, 4, 5, 6, 7, 8]),
+        ),
+        (
+            "an ODM read scoped by its record's hierarchy, by two keys",
+            odm(hierarchy()),
+            2,
+            None,
+            sv(&[0, 2]),
+        ),
+        (
+            "an ODM read scoped by StudyEventOID, consecutive",
+            odm(events()),
+            0,
+            None,
+            sv(&[3]),
+        ),
+        (
+            "an ODM read scoped by StudyEventOID, by two keys",
+            odm(events()),
+            2,
+            Some("columns.C2.derivation"),
+            sv(&[0, 2]),
+        ),
+    ];
+    for (label, plan, keys, refused, fields) in cases {
+        let plan = plan.resolve().unwrap();
+        assert_eq!(
+            (
+                plan.whole_table_step(keys)
+                    .map(|step| plan.step_path(step).into_owned()),
+                plan.cut_fields(keys)
+            ),
+            (refused.map(str::to_owned), fields),
+            "{label}"
+        );
+    }
+}

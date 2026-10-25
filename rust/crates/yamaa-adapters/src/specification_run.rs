@@ -33,6 +33,9 @@ pub enum Error {
     TypedSource(crate::typed_csv::Error),
     ParquetSource(crate::parquet_source::Error),
     SasSource(crate::sas_source::Error),
+    /// The Dataset-JSON profiles' read of a `.json` or `.ndjson` input
+    /// (DSJSON-1).
+    DatasetJsonSource(crate::dataset_json_source::Error),
     Ordinal(yamaa_core::source_ordinal::Error),
     OdmFields(Vec<yamaa_core::odm_source::SchemaError>),
     OdmValues(Vec<yamaa_core::odm_source::MissingValues>),
@@ -377,6 +380,19 @@ pub(crate) fn decode_source(
                 table
             }
         }
+        yamaa_core::specification::SourceProfile::DatasetJson
+        | yamaa_core::specification::SourceProfile::DatasetNdjson => {
+            // Each column's `dataType` types its field, which a `types`
+            // entry may narrow (DSJSON-2); the profile applies the
+            // empty-string convention as it reads each text (DSJSON-3).
+            let table = crate::dataset_json_source::parse(bytes, source)
+                .map_err(Error::DatasetJsonSource)?;
+            if odm {
+                project_odm(table)?
+            } else {
+                table
+            }
+        }
         yamaa_core::specification::SourceProfile::OdmXml => {
             // The fixed clinical-item table, whose fields the profile names
             // and types; an `odm` read binds its eleven fields (NAME-8).
@@ -639,7 +655,11 @@ pub(crate) fn scan_partitions(
             }
         }
         // Every other profile is read whole.
-        SourceProfile::Xport | SourceProfile::Sas7bdat | SourceProfile::OdmXml => return None,
+        SourceProfile::Xport
+        | SourceProfile::Sas7bdat
+        | SourceProfile::OdmXml
+        | SourceProfile::DatasetJson
+        | SourceProfile::DatasetNdjson => return None,
     };
     if let Some((_, error)) = first.0 {
         return Some(Err(error));
@@ -713,7 +733,11 @@ pub(crate) fn source_schema(
                 Err(_) => None,
             }
         }
-        SourceProfile::Xport | SourceProfile::Sas7bdat | SourceProfile::OdmXml => None,
+        SourceProfile::Xport
+        | SourceProfile::Sas7bdat
+        | SourceProfile::OdmXml
+        | SourceProfile::DatasetJson
+        | SourceProfile::DatasetNdjson => None,
     }
 }
 

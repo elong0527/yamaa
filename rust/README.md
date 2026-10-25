@@ -52,7 +52,7 @@ other configuration.
 | `readstat` | Bundled read-only C backend and direct `cc` build dependency for `.sas7bdat` and `.xpt` input. |
 | `odm` | The `quick-xml` tokenizer and the pure-Rust Gzip codec; reads CDISC ODM 1.3 and 2.0 XML clinical items from plain XML or plain/Gzip TAR files into the fixed clinical-item table, for `read_odm` and for a specification's `.xml` inputs. |
 | `arrow` | Not a format: the Arrow form of tables at the hosts' edge. The facade's re-exported Arrow types, `Table::columns`, `schema`, `batches` and `stream`, and `InputFrame::import`, plus `SpecRequest::stream` and its streamed-run types, through `arrow-array` and `arrow-schema`. `parquet` builds the adapter's Arrow code too. |
-| No optional features | The CSV route and the engine's own tables remain; a table has its rows and its preview, and `save_table` writes it. No YAML parser, Parquet codec, ODM XML reader, ReadStat, native compression build or Arrow crate is selected. |
+| No optional features | The CSV and Dataset-JSON routes and the engine's own tables remain; a table has its rows and its preview, and `save_table` writes it. No YAML parser, Parquet codec, ODM XML reader, ReadStat, native compression build or Arrow crate is selected. |
 
 The engine's own tables are columnar (`column_table.rs` over `columns.rs`):
 every source decodes into one, and a public table holds the same storage. Its
@@ -780,8 +780,13 @@ strategies:
   by those keys runs as one partition, and a specification that declares no
   key runs over consecutive partitions.
 
-Under either strategy, `Partitions::with_whole_table_fallback` runs a step
-that would refuse over the whole input instead.
+Under either strategy, the records one step reads together must sit in one
+partition (#3830): a grouped row template, the key grain or an ODM read whose
+records the partitions cannot keep whole, rows driven by an intermediate over
+the driver input and such an intermediate's `unique` check refuse the run too,
+and consecutive partitions end only between runs of the fields those reads
+share. `Partitions::with_whole_table_fallback` runs a step that would refuse
+over the whole input instead.
 
 ### Terminology: key groups vs. data partitions
 
