@@ -1,5 +1,10 @@
 //! Scalar contracts: aggregate reduction, arithmetic, conversion, evaluation,
 //! integral, predicate, predicate contains, reduction and scalar language.
+//! These are the seams the diagnostic replay cannot reach, each named in its
+//! test's first comment: the values and float bits the reduction,
+//! arithmetic and conversion kernels return, truth values with their
+//! resolver traces, the LIKE oracle and generated sizes. What evaluation and
+//! conversion refuse is `registry.json`'s.
 mod scalar {
     mod aggregate_reduction {
         use yamaa_core::{
@@ -16,6 +21,8 @@ mod scalar {
             quantile: 0.0,
         };
 
+        /// Seam: reduced values, and the kernel's `IncompatibleInputs` error, which is no issue
+        /// record.
         #[test]
         fn extrema_keep_exact_values_types_missingness_and_text_order() {
             let values = [
@@ -81,6 +88,8 @@ mod scalar {
             );
         }
 
+        /// Seam: reduced values, and the kernel's `MultipleRecords` error, which is no issue
+        /// record.
         #[test]
         fn only_counts_records_before_missing_handling_and_count_retains_empty_distinction() {
             assert_eq!(
@@ -117,6 +126,7 @@ mod scalar {
             ValueRef::Float(FiniteFloat::new(value).unwrap())
         }
 
+        /// Seam: joined text values, which no reader returns (core outcome).
         /// FORMULA-18: each present value as the text a `str` column converts
         /// it to (VALUE-3, VALUE-8, VALUE-17), in the order given, the
         /// separator between two of them, each text once with `distinct`, and
@@ -233,6 +243,7 @@ mod scalar {
             }
         }
 
+        /// Seam: distinct counts, values no reader returns (core outcome).
         /// FORMULA-18 and FORMULA-24: `COUNT(x)` with `distinct` counts the
         /// different present values, text scalar for scalar (VALUE-12),
         /// numbers by exact value (VALUE-19), dates on the day they name
@@ -313,6 +324,8 @@ mod scalar {
             }
         }
 
+        /// Seam: already data, the authored `arithmetic.tsv` vectors through the arithmetic kernel,
+        /// with float bits.
         #[test]
         /// Check shared hand-written values, float bits and complete arithmetic conditions.
         fn independently_specified_arithmetic_vectors() {
@@ -357,6 +370,7 @@ mod scalar {
             }
         }
 
+        /// Seam: the arithmetic kernel's values.
         #[test]
         /// Ensure a non-finite intermediate becomes missing before a later zero divisor.
         fn every_operator_normalizes_before_the_next_operator() {
@@ -369,6 +383,7 @@ mod scalar {
             );
         }
 
+        /// Seam: the arithmetic kernel's float bits.
         #[test]
         /// Protect the required left-to-right binary64 addition result from reassociation.
         fn ordered_float_addition_does_not_reassociate() {
@@ -381,6 +396,7 @@ mod scalar {
             assert_eq!(sum.get().to_bits(), 0x3fe3333333333334);
         }
 
+        /// Seam: the arithmetic kernel's values.
         #[test]
         /// Verify each primitive applies missing propagation before exceptional arithmetic.
         fn missing_propagates_for_every_operator_before_arithmetic() {
@@ -414,6 +430,8 @@ mod scalar {
         use yamaa_core::temporal::{Date, DateTime, Precision};
         use yamaa_core::value::{ColumnType, FiniteFloat, Value, ValueType};
 
+        /// Seam: a converted value and the conversion error's wide number, over generated
+        /// 5,000-digit text.
         /// Apply the grammar's number production without inheriting Python's configurable digit cap.
         #[test]
         fn long_integer_text_preserves_value_or_exact_range_diagnostic() {
@@ -457,6 +475,8 @@ mod scalar {
             }
         }
 
+        /// Seam: already data, the authored `conversion.tsv` vectors, with converted values and
+        /// float bits.
         /// Compare all successful matrix cells and portable failure data to hand-written truth.
         #[test]
         fn shared_conversion_vectors() {
@@ -510,6 +530,8 @@ mod scalar {
             }
         }
 
+        /// Seam: VALUE-3's table as a whole, each pair's success or failure in one matrix; the
+        /// cells' values and failures are `conversion.tsv`'s.
         /// Every scalar type/destination pairing has a declared result or a typed failure.
         #[test]
         fn complete_conversion_matrix() {
@@ -549,6 +571,7 @@ mod scalar {
             }
         }
 
+        /// Seam: converted temporal values and their collected precision.
         /// Identity retains collected precision while text round trips lose that provenance.
         #[test]
         fn temporal_precision_at_conversion_boundaries() {
@@ -577,6 +600,7 @@ mod scalar {
             assert_eq!(parsed.collected_precision(), Precision::Second);
         }
 
+        /// Seam: the `float_text` kernel's text.
         /// Probe the extreme binary64 exponent range without using either engine as truth.
         #[test]
         fn extreme_float_text_is_positional_and_shortest() {
@@ -591,6 +615,7 @@ mod scalar {
             assert_eq!(float_text(FiniteFloat::new(-0.0).unwrap()), "-0");
         }
 
+        /// Seam: a generated round trip of 20,000 floats through `float_text`.
         /// Check bit-preserving text round trips across a deterministic exponent/sign sample.
         #[test]
         fn sampled_floats_round_trip_without_exponent_notation() {
@@ -764,6 +789,8 @@ mod scalar {
             }
         }
 
+        /// Seam: already data, the authored `evaluation.tsv` vectors, with values, resolver traces
+        /// and routes.
         /// Replay independent results, call traces and structural failure paths.
         #[test]
         fn shared_evaluation_vectors() {
@@ -784,6 +811,8 @@ mod scalar {
             }
         }
 
+        /// Seam: already data, the authored `arithmetic.tsv` vectors through evaluation, with
+        /// resolver traces.
         /// Exercise the evaluator against every independently specified primitive case.
         #[test]
         fn shared_arithmetic_vectors_through_typed_evaluation() {
@@ -800,6 +829,7 @@ mod scalar {
             }
         }
 
+        /// Seam: a resolver's opaque failure and the resolver trace.
         /// Preserve opaque, non-Clone resolution errors with their own diagnostic payload.
         #[test]
         fn resolver_failure_is_retained_and_stops_following_operands() {
@@ -852,6 +882,7 @@ mod scalar {
             );
         }
 
+        /// Seam: evaluated values and the resolution count across plan reuse.
         /// Each occurrence and each plan execution reaches its resolver, without memoization.
         #[test]
         fn repeated_resolution_and_plan_reuse_do_not_cache_values() {
@@ -873,6 +904,8 @@ mod scalar {
             assert_eq!(resolver.0, 4);
         }
 
+        /// Seam: already data, the authored numeric function vectors, with values, resolver traces
+        /// and routes.
         /// Replay function values, eager traces and argument-level failures through compilation.
         #[test]
         fn shared_function_vectors() {
@@ -924,6 +957,7 @@ mod scalar {
             }
         }
 
+        /// Seam: the integral kernel compared bit for bit with the standard library's.
         /// Cover every finite exponent and adjacent significand boundaries under both signs,
         /// then sample deterministic binary64 patterns without a random-library dependency.
         #[test]
@@ -1025,6 +1059,7 @@ mod scalar {
             }
         }
 
+        /// Seam: truth tables and truth values.
         #[test]
         fn complete_three_valued_tables_and_null_tests() {
             use Truth::{False as F, True as T, Unknown as U};
@@ -1068,6 +1103,8 @@ mod scalar {
             }
         }
 
+        /// Seam: comparison truth values and resolver traces; its type refusals are evaluation
+        /// errors beside them.
         #[test]
         fn comparison_exact_mixed_order_missing_and_temporal_precision() {
             use Truth::{False as F, True as T};
@@ -1194,6 +1231,7 @@ mod scalar {
             }
         }
 
+        /// Seam: resolver traces and the routes of evaluation errors, and membership truth values.
         #[test]
         fn eager_boolean_and_membership_failure_order() {
             for (truth, and) in [(false, true), (true, false)] {
@@ -1257,6 +1295,7 @@ mod scalar {
             }
         }
 
+        /// Seam: the resolver trace of BETWEEN and its truth values.
         #[test]
         fn between_repeats_subject_before_comparisons() {
             let p = plan(vec![Node::Between {
@@ -1304,6 +1343,7 @@ mod scalar {
             }
         }
 
+        /// Seam: a resolver's opaque failure, and each `Condition`'s registry triple.
         #[test]
         fn opaque_resolution_and_condition_metadata() {
             let error = plan(vec![comparison(C::Equal)])
@@ -1358,6 +1398,7 @@ mod scalar {
             }])
         }
 
+        /// Seam: LIKE truth values and evaluation errors over literal operands.
         #[test]
         fn unicode_like_escape_and_missing_precedence() {
             for (value, pattern, escape, expected) in [
@@ -1459,6 +1500,7 @@ mod scalar {
             result
         }
 
+        /// Seam: LIKE truth compared with an exhaustive generated oracle.
         #[test]
         fn like_matches_independent_exhaustive_short_oracle() {
             for value in words(&['a', 'b', '\n', '\u{1f600}'], 3) {
@@ -1482,6 +1524,8 @@ mod scalar {
             }
         }
 
+        /// Seam: the depth limit, a resource refusal that is no issue, and a truth value at the
+        /// edge.
         #[test]
         fn empty_membership_and_fixed_semantic_depth_are_refused_before_values() {
             assert!(matches!(
@@ -1505,6 +1549,7 @@ mod scalar {
             ));
         }
 
+        /// Seam: truth values and resolver traces across plan reuse.
         #[test]
         fn repeated_like_and_text_comparisons_keep_the_original_truth_and_reads() {
             let p = like("abc", "%", None);
@@ -1559,6 +1604,8 @@ mod scalar {
             }
         }
 
+        /// Seam: already data, the authored `predicate_evaluation.tsv` vectors, with truth values
+        /// and traces.
         #[test]
         fn shared_reference_truth_and_occurrence_traces() {
             for line in include_str!("fixtures/predicate_evaluation.tsv")
@@ -1591,6 +1638,7 @@ mod scalar {
             }
         }
 
+        /// Seam: truth values and the resolver trace across plan reuse.
         #[test]
         fn repeated_plans_resolve_each_written_occurrence() {
             let p = plan(vec![comparison(C::Equal)]);
@@ -1624,6 +1672,7 @@ mod scalar {
             }
         }
 
+        /// Seam: the borrowed resolver port and its call count.
         #[test]
         fn borrowed_text_resolves_each_operand_without_owning_fallback() {
             let p = plan(vec![comparison(C::Equal)]);
@@ -1690,6 +1739,7 @@ mod scalar {
             }
         }
 
+        /// Seam: `str_contains` truth values, and the routes of its evaluation errors.
         #[test]
         fn contains_search_truth_missing_negation_and_type_requirement() {
             for (pattern, subject, expected) in [
@@ -1740,6 +1790,8 @@ mod scalar {
             }
         }
 
+        /// Seam: the `InvalidRegex` cause, which its issue does not name, and a generated text of
+        /// 512 pattern literals.
         /// Every pattern literal is compiled once with the text, before any value is read.
         #[test]
         fn contains_admits_every_literal_including_unreachable_nodes() {
@@ -1764,6 +1816,7 @@ mod scalar {
             compile(&terms[0], Context::Predicate, "p").unwrap();
         }
 
+        /// Seam: a resolver's opaque failure, the resolver trace and truth values.
         #[test]
         fn contains_eager_order_and_original_failure_precede_matching() {
             for (first, combine) in [(false, Node::And(0, 1)), (true, Node::Or(0, 1))] {
@@ -1794,6 +1847,7 @@ mod scalar {
             );
         }
 
+        /// Seam: truth values and resolver traces over a generated 100,000-character subject.
         #[test]
         fn contains_answers_catastrophic_patterns_and_keeps_small_matches_independent() {
             let single = plan(vec![contains("a+")]);
@@ -1831,6 +1885,7 @@ mod scalar {
             value::Value,
         };
 
+        /// Seam: count values, which no reader returns.
         /// Missing relations, missing values, empty text and false remain distinct.
         #[test]
         fn counts_are_exact_cardinalities_without_type_coercion() {
@@ -1852,6 +1907,7 @@ mod scalar {
             );
         }
 
+        /// Seam: the count kernel at `i64::MAX` records.
         /// Cardinality conversion is checked independently of allocating or visiting rows.
         #[test]
         fn record_count_capacity_does_not_wrap_into_a_negative_value() {
@@ -1893,6 +1949,8 @@ mod scalar {
             (reducer, quantile)
         }
 
+        /// Seam: already data, the authored `reduction.tsv` vectors, with reduced values and float
+        /// bits.
         #[test]
         /// Pin all shared values, exact float bits and portable failure facts:
         /// the ordered `SUM` and `MEAN` of FORMULA-19 and the statistical
@@ -1958,6 +2016,8 @@ mod scalar {
             assert_eq!(count, 85);
         }
 
+        /// Seam: the reduction kernel's `IncompatibleInputType` error and its argument index, which
+        /// is no issue record.
         #[test]
         /// Reject each nonnumeric type at its original position including missing slots.
         fn nonnumeric_arguments_keep_original_index_and_type() {
@@ -1992,6 +2052,7 @@ mod scalar {
             temporal::{Date, Precision},
             value::Value,
         };
+        /// Seam: the `replace_extreme` comparison kernel's answers.
         #[test]
         fn ties_preserve_first_type_and_precision_and_integer_comparison_is_exact() {
             for largest in [true, false] {

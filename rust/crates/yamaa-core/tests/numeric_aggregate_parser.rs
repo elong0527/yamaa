@@ -1,5 +1,11 @@
 //! Expression contracts: one grammar in its three contexts, its evaluation,
-//! and the function signatures and portable patterns it relies on.
+//! and the function signatures and portable patterns it relies on. These
+//! are the seams the diagnostic replay cannot reach, each named in its
+//! test's first comment: the parser's syntax tree and positions, the
+//! binder, evaluated values and truth with their resolver traces, the
+//! signature model, the math kernels and `portable_regex`. What an
+//! expression's text refuses is `grammar.json`'s, and what its evaluation
+//! reports is `registry.json`'s.
 mod numeric {
     mod aggregate_grammar {
         use yamaa_core::expression::{
@@ -22,6 +28,8 @@ mod numeric {
             }
         }
 
+        /// Seam: the parser's syntax tree, its node order and spans, and the compiled reductions
+        /// and names, which no reader returns.
         /// Distinguish fieldless record dependencies and ungrouped fields in written order.
         #[test]
         fn references_and_spans_preserve_written_context() {
@@ -82,6 +90,8 @@ mod numeric {
             );
         }
 
+        /// Seam: a refusal's byte position in an aggregate, which its issue does not state, and the
+        /// `Failure` facts behind it.
         /// Lexing and syntax precede the binder's construct, call and reduction checks.
         #[test]
         fn diagnostics_have_expression_requirements_and_exact_priority() {
@@ -139,6 +149,8 @@ mod numeric {
             ));
         }
 
+        /// Seam: a refusal's position and literal in an aggregate, which its issue does not state,
+        /// and a generated 5,000-digit literal.
         /// The integer carrier is checked once the whole text parses; a float
         /// literal, missing and names are never evaluated here.
         #[test]
@@ -166,6 +178,7 @@ mod numeric {
             assert_eq!(failure("SUM(9223372036854775808").2, Failure::Syntax);
         }
 
+        /// Seam: the depth limit, a resource refusal that is no issue, over generated texts.
         /// Fixed depth protects recursive descent and retained expression trees.
         #[test]
         fn fixed_semantic_depth_guards_aggregate_trees_without_a_breadth_counter() {
@@ -237,6 +250,8 @@ mod numeric {
                 bindings,
             )
         }
+        /// Seam: the binder's admission of bound names and its `BindingError` refusals, which
+        /// report no issue.
         #[test]
         fn numeric_names_are_complete_unique_and_sorted_before_scope_admission() {
             let admitted = numeric(
@@ -274,6 +289,7 @@ mod numeric {
             );
         }
 
+        /// Seam: the binder's `BindingError` refusals of a predicate, which report no issue.
         #[test]
         fn predicate_short_circuiting_does_not_skip_static_binding() {
             assert_eq!(
@@ -296,6 +312,7 @@ mod numeric {
             }
         }
 
+        /// Seam: a bound plan's reads on each evaluation, a resolver trace no reader returns.
         #[test]
         fn immutable_admission_preserves_deferred_failures_and_occurrences() {
             for text in ["A + A + 1 / 0", "A + A + 9223372036854775807 * 2"] {
@@ -325,6 +342,8 @@ mod numeric {
             ));
         }
 
+        /// Seam: the binder's contextual names and `BindingError` refusals, and 65,537 generated
+        /// bindings.
         #[test]
         fn contextual_case_names_do_not_expand_generic_filter_authority() {
             let original = predicate("case.when", vec![binding("A", Read::Source(0))]).unwrap();
@@ -414,6 +433,8 @@ mod numeric {
             }
         }
 
+        /// Seam: already data, the authored `numeric_literals.tsv` vectors, whose results are
+        /// values and float bits.
         /// Replay exact types and bits, and the integer carrier, from independent truth.
         #[test]
         fn shared_literal_vectors_through_compilation() {
@@ -450,6 +471,8 @@ mod numeric {
             }
         }
 
+        /// Seam: a refusal's byte position in a derivation, which its issue does not state, and
+        /// generated 5,000-digit literals.
         /// An integer literal outside int64 is refused before any name is resolved,
         /// wherever it is written, once the whole text parses.
         #[test]
@@ -560,6 +583,7 @@ mod numeric {
             }
         }
 
+        /// Seam: evaluated values and the resolver trace across plan reuse.
         /// Plan reuse resolves each original occurrence again.
         #[test]
         fn plan_reuse_resolves_every_occurrence_again() {
@@ -570,6 +594,7 @@ mod numeric {
             assert_eq!(reads.trace, ["A", "A", "A", "A"]);
         }
 
+        /// Seam: a resolver's opaque failure, which has no issue record.
         /// The compiled plan does not clone, stringify or reclassify resolver failures.
         #[test]
         fn opaque_non_clone_resolution_failure_keeps_span_and_payload() {
@@ -607,6 +632,7 @@ mod numeric {
             }
         }
 
+        /// Seam: evaluated values and the resolver trace across plan reuse.
         /// Unary function calls count identifier occurrences and resolve anew on every execution.
         #[test]
         fn unary_functions_resolve_again_when_plans_are_reused() {
@@ -649,6 +675,7 @@ mod numeric {
             }
         }
 
+        /// Seam: the parser's syntax tree and its node spans.
         /// Group spans must not overwrite the exact identifier or function-name extent.
         #[test]
         fn spans_and_identifier_order_preserve_original_text() {
@@ -690,6 +717,8 @@ mod numeric {
             assert_eq!(parsed.root(), parsed.nodes().len() - 1);
         }
 
+        /// Seam: a refusal's byte and character positions in a derivation, which its issue does not
+        /// state.
         /// Unicode scalar offsets match Python, while spans remain valid UTF-8 bytes.
         #[test]
         fn grammar_failures_preserve_context_and_both_coordinates() {
@@ -750,6 +779,7 @@ mod numeric {
             }
         }
 
+        /// Seam: each refusal's byte position in a derivation, which its issue does not state.
         /// Lexing precedes syntax, syntax precedes the binder, and call closure
         /// precedes function validation.
         #[test]
@@ -777,6 +807,7 @@ mod numeric {
             }
         }
 
+        /// Seam: the syntax tree's number nodes, and a generated 5,000-digit literal's position.
         /// Literals keep their written text, a sign included. The integer carrier
         /// is checked once the text parses; a float converts only when evaluated.
         #[test]
@@ -818,6 +849,7 @@ mod numeric {
             }
         }
 
+        /// Seam: the depth limit, a resource refusal that is no issue, over generated texts.
         /// Both recursion before node creation and left-associated tree depth are bounded.
         #[test]
         fn fixed_semantic_depth_guards_nesting_and_chains_without_a_breadth_counter() {
@@ -884,6 +916,7 @@ mod numeric {
                 call: "artifact.example".into(),
             }
         }
+        /// Seam: the function signature model's `PlanError` refusals, which report no issue.
         /// No accepted plan can carry duplicate names, invalid defaults or empty identity.
         #[test]
         fn plans_reject_invalid_normalized_signatures() {
@@ -931,6 +964,7 @@ mod numeric {
             }
         }
 
+        /// Seam: an admitted signature's parameters, identity and return type.
         #[test]
         fn signature_preserves_authored_order_and_missing_defaults() {
             let parameters = vec![
@@ -958,6 +992,7 @@ mod numeric {
             assert!(admitted.may_return_missing());
         }
 
+        /// Seam: the project signature model and its `PlanError` refusals.
         #[test]
         fn versionless_signature_reuses_exact_defaults_and_refuses_host_renaming() {
             use yamaa_core::function_signature::{ProjectFunctionIdentity, ProjectInvocationPlan};
@@ -998,6 +1033,7 @@ mod numeric {
             );
         }
 
+        /// Seam: signature equality over a signed zero default.
         #[test]
         fn versionless_default_identity_keeps_zero_sign_without_changing_value_comparison() {
             use yamaa_core::function_signature::{ProjectFunctionIdentity, ProjectInvocationPlan};
@@ -1053,6 +1089,7 @@ mod numeric {
             }
         }
 
+        /// Seam: evaluated float values and the resolver trace.
         /// The binder admits portable math before any resolver effects.
         #[test]
         fn current_numeric_vocabulary_compiles_directly() {
@@ -1074,6 +1111,7 @@ mod numeric {
             }
         }
 
+        /// Seam: the resolver trace before a failure, which no reader returns.
         /// Domain failures belong to calls; operand failures retain their exact inner span.
         #[test]
         fn math_failure_spans_and_order_are_preserved() {
@@ -1104,6 +1142,7 @@ mod numeric {
             }
         }
 
+        /// Seam: the `power` kernel's error and its float bits.
         /// Domain context preserves promoted arguments, including the sign of a zero base.
         #[test]
         fn invalid_power_retains_exact_promoted_diagnostic_arguments() {
@@ -1133,6 +1172,7 @@ mod numeric {
             );
         }
 
+        /// Seam: a resolver's opaque failure, which has no issue record.
         /// Portable math cannot discard a resolver's opaque failure even after a missing operand.
         #[test]
         fn portable_math_retains_opaque_resolver_failures() {
@@ -1223,6 +1263,7 @@ mod numeric {
                 fail: None,
             }
         }
+        /// Seam: truth values and resolver traces through the owned and borrowed ports.
         #[test]
         fn owned_and_borrowed_ports_preserve_truth_and_written_occurrences() {
             for (expr, values, truth, names) in [
@@ -1279,6 +1320,7 @@ mod numeric {
                 assert_eq!(new.trace, names);
             }
         }
+        /// Seam: truth values and the resolver trace over a generated 500,000-character subject.
         #[test]
         fn long_subject_searches_complete_and_keep_eager_resolution() {
             let plan = plan("str_contains(a, 'z') AND b = 1", "flag.condition");
@@ -1291,6 +1333,7 @@ mod numeric {
             assert_eq!(plan.evaluate_truth(&mut port).unwrap(), Truth::True);
             assert_eq!(port.trace, ["a", "b"]);
         }
+        /// Seam: LIKE truth values and the resolver trace.
         #[test]
         fn data_driven_like_keeps_scalar_truth_and_eager_resolution() {
             let plan = plan("a LIKE b AND c = 1", "flag.condition");
@@ -1307,6 +1350,7 @@ mod numeric {
             assert_eq!(plan.evaluate_truth(&mut port).unwrap(), Truth::True);
             assert_eq!(port.trace, ["a", "b", "c"]);
         }
+        /// Seam: LIKE truth values through both ports, and over generated long texts.
         #[test]
         fn like_preserves_full_scalar_truth_without_regex_syntax_or_line_rules() {
             let positive = plan("a LIKE b", "flag.condition");
@@ -1385,6 +1429,7 @@ mod numeric {
                 assert_eq!(positive.evaluate_truth(&mut port).unwrap(), Truth::True);
             }
         }
+        /// Seam: LIKE truth values, and evaluation errors beside their resolver traces.
         #[test]
         fn like_validates_complete_escape_spelling_and_preserves_missing_and_type_owners() {
             for (expression, value, pattern) in [
@@ -1456,6 +1501,7 @@ mod numeric {
             );
             assert_eq!(port.trace, ["a", "b"]);
         }
+        /// Seam: a resolver's opaque failure and its pointer identity.
         #[test]
         fn like_preserves_an_opaque_pattern_resolution_error_before_later_work() {
             struct Port {
@@ -1501,6 +1547,7 @@ mod numeric {
             assert!(Rc::ptr_eq(&marker, &retained));
             assert_eq!(port.trace, ["a", "b"]);
         }
+        /// Seam: a resolver's opaque failure and its pointer identity.
         #[test]
         fn opaque_error_moves_once_without_later_resolution_and_retains_site_route() {
             let plan = plan("a = 1 OR b = 2", "flag.condition");
@@ -1565,6 +1612,7 @@ mod numeric {
             }
         }
 
+        /// Seam: truth values, which no reader returns.
         #[test]
         fn original_predicate_forms_execute_with_independent_truth() {
             for (expression, truth) in [
@@ -1615,6 +1663,7 @@ mod numeric {
             }
         }
 
+        /// Seam: truth values and resolver traces across plan reuse.
         #[test]
         fn compilation_preserves_eager_order_and_repeated_occurrences() {
             for (text, truth, reads) in [
@@ -1645,6 +1694,7 @@ mod numeric {
             }
         }
 
+        /// Seam: truth values, and evaluation errors beside their resolver traces.
         /// Arithmetic in a comparison operand has the numeric semantics of
         /// expression-field text: an int stays exact, missing propagates to
         /// unknown, and a non-numeric or absent name or an arithmetic fault
@@ -1736,6 +1786,8 @@ mod numeric {
             compile(text, Context::Predicate, "filter")
         }
 
+        /// Seam: the grammar's function vocabulary, `Function::ALL`, against the calls the binder
+        /// reads.
         /// The binder reads a truth-valued call's arguments by the function
         /// it names (FORMULA-8), and refuses one it has not learned to read
         /// rather than read it as another function's. So each truth-valued
@@ -1759,6 +1811,7 @@ mod numeric {
             }
         }
 
+        /// Seam: the predicate syntax tree's association and number nodes.
         /// Syntax association is independent of evaluator truth and preserves written names.
         #[test]
         fn precedence_spelling_and_names() {
@@ -1803,6 +1856,8 @@ mod numeric {
             assert_eq!(p.text(comparison), "C * 2 = -D");
         }
 
+        /// Seam: the predicate syntax tree's comparison nodes; its refusals are asserted only as
+        /// refusals, with no field of their record.
         /// Every closed comparison and compound production admits only value operands.
         #[test]
         fn closed_vocabulary() {
@@ -1885,6 +1940,8 @@ mod numeric {
             }
         }
 
+        /// Seam: the syntax tree's decoded string node, and the `InvalidTemporal` cause, which its
+        /// issue does not name.
         /// Doubled quotes decode exactly once; other Unicode, backslash and NUL are literal.
         #[test]
         fn text_temporal_and_unbounded_number_syntax() {
@@ -1928,6 +1985,8 @@ mod numeric {
             }
         }
 
+        /// Seam: the syntax tree of admitted calls, a refusal's byte position and pattern byte, and
+        /// the regex size limit, a resource refusal.
         /// Regex admission uses portable grammar, including features rejected by the
         /// reference host, once the whole text parses.
         #[test]
@@ -1999,6 +2058,8 @@ mod numeric {
             assert_eq!(position.byte, 16);
         }
 
+        /// Seam: a refusal's byte position beside its character position, of which its issue states
+        /// only the character.
         /// Static ESCAPE defects have their owning rule and original literal site.
         #[test]
         fn escape_admission_and_unicode_positions() {
@@ -2027,6 +2088,8 @@ mod numeric {
             assert_eq!((position.byte, position.character), (9, 6));
         }
 
+        /// Seam: the depth limit, a resource refusal that is no issue, and the syntax tree's node
+        /// count.
         /// The sole parser bound protects semantic recursion, independently on each call.
         #[test]
         fn fixed_depth_and_fresh_retry() {
@@ -2049,6 +2112,7 @@ mod numeric {
             assert_eq!(compiled.syntax().nodes().len(), 1002);
         }
 
+        /// Seam: admission of a generated text that repeats one pattern 1,024 times.
         /// Repeated admitted regex literals do not share an invented request quota.
         #[test]
         fn repeated_regex_compilation_retains_each_admitted_pattern() {
@@ -2063,6 +2127,8 @@ mod numeric {
             predicate(&call).unwrap();
         }
 
+        /// Seam: the parser's production reason, `CompileError::Invalid`'s message, which no issue
+        /// record holds.
         /// Reasons belong to Rust productions, so host planning never reparses a failed input.
         #[test]
         fn grammar_messages_preserve_production_reason() {
@@ -2125,6 +2191,7 @@ mod numeric {
             portable_regex::{CompileError, Pattern, Resource},
         };
 
+        /// Seam: the `portable_regex` kernel's captures.
         /// A compiled pattern serves every later match unchanged.
         #[test]
         fn repeated_matches_reuse_the_compiled_pattern() {
@@ -2134,6 +2201,7 @@ mod numeric {
             }
         }
 
+        /// Seam: the `portable_regex` kernel's captures.
         /// Unicode subjects retain exact capture text in both matching modes.
         #[test]
         fn unicode_subjects_keep_exact_scalar_captures() {
@@ -2153,6 +2221,7 @@ mod numeric {
             pattern(text).search(subject).map(|m| m.groups)
         }
 
+        /// Seam: the `portable_regex` kernel's captures.
         /// Leftmost-first: earlier alternatives first, greedy (lazy) quantifiers
         /// prefer more (fewer) iterations; a full match continues past an
         /// alternative that stops early.
@@ -2177,6 +2246,7 @@ mod numeric {
             );
         }
 
+        /// Seam: the `portable_regex` kernel's captures.
         /// A capture inside a repetition keeps the last iteration that entered it;
         /// unentered and empty captures stay distinct.
         #[test]
@@ -2197,6 +2267,7 @@ mod numeric {
             assert_eq!(captures(r"^(a*)$", ""), Some(vec![Some(""), Some("")]));
         }
 
+        /// Seam: the `portable_regex` kernel's classes and captures.
         /// Scalar classes have the repository's exact whitespace/ASCII rules in both polarities.
         #[test]
         fn unicode_classes_and_escape_grammar() {
@@ -2235,6 +2306,7 @@ mod numeric {
             );
         }
 
+        /// Seam: the `portable_regex` kernel's refusals, which report no issue.
         /// Syntax outside the subset is a finding, never a no-match or a host dialect.
         #[test]
         fn invalid_patterns() {
@@ -2266,6 +2338,7 @@ mod numeric {
             }
         }
 
+        /// Seam: the `portable_regex` kernel's refusal bytes and reasons.
         /// Lookaround and backreferences are outside the subset, at their own byte.
         #[test]
         fn lookaround_and_backreferences_are_rejected_where_written() {
@@ -2297,6 +2370,7 @@ mod numeric {
             }
         }
 
+        /// Seam: the `portable_regex` kernel's captures, refusal bytes and reasons.
         /// Group names are ASCII identifiers: a letter or underscore, then
         /// letters, digits or underscores. Names only label numbered groups.
         #[test]
@@ -2343,6 +2417,8 @@ mod numeric {
             ));
         }
 
+        /// Seam: the `portable_regex` kernel's depth and size limits, and matches over generated
+        /// subjects.
         /// Compilation refuses only group nesting beyond the semantic depth and
         /// programs beyond the compiled size; matching has no step budget.
         #[test]
@@ -2400,6 +2476,8 @@ mod numeric {
             );
         }
 
+        /// Seam: the `portable_regex` kernel over a generated 3,000-character pattern and 1 MiB
+        /// subject.
         /// Flat patterns and long subjects keep their match results.
         #[test]
         fn large_flat_patterns_and_long_subjects_match() {
@@ -2412,6 +2490,7 @@ mod numeric {
             );
         }
 
+        /// Seam: the `portable_regex` kernel over every surrogate code point.
         /// TEXT-8 expands braced escapes to VALUE-11 scalars, excluding surrogates.
         #[test]
         fn braced_code_point_expansion_requires_a_scalar() {
@@ -2434,6 +2513,7 @@ mod numeric {
             }
         }
 
+        /// Seam: the `portable_regex` kernel over every generated three-symbol pattern.
         /// Every short pattern over the syntax alphabet either compiles or is
         /// refused with a finding: the lowering never hands the crate syntax it
         /// rejects.
