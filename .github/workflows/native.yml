@@ -1050,7 +1050,12 @@ jobs:
     # - gcc16: CRAN's r-devel-linux-x86_64-fedora-gcc flavor, R-devel built
     #   with GCC 16 on Fedora 44. The build uses the Cargo and rustc that
     #   Fedora packages, as CRAN's Linux check servers use their
-    #   distribution's.
+    #   distribution's, as do the other Fedora images, gcc-asan and valgrind.
+    # - gcc-asan: the gcc-ASAN configuration of CRAN's additional checks,
+    #   R-devel on Fedora 44, whose GCC instruments packages with
+    #   AddressSanitizer and UndefinedBehaviorSanitizer and whose R preloads
+    #   both runtimes. As on clang-asan, the Makevars give that compiler to
+    #   Cargo, and check_r.py fails on a sanitizer report.
     # - clang-asan: the clang-ASAN configuration of CRAN's additional checks,
     #   R-devel built with clang 23 and libc++ on Ubuntu 26.04, whose C
     #   compiler instruments packages with AddressSanitizer and
@@ -1061,12 +1066,19 @@ jobs:
     #   native-offline-toolchain does. UndefinedBehaviorSanitizer reports and
     #   carries on, so check_r.py also fails on a sanitizer report in the
     #   installation, example or test output.
+    # - valgrind: CRAN's valgrind check, R-devel on Fedora 44 built for
+    #   valgrind. check_r.py --valgrind runs the installation, examples and
+    #   tests alone, as R-hub's image does, the examples and each test under
+    #   valgrind's memcheck with the image's options, --track-origins=yes
+    #   --leak-check=full, and fails where memcheck counted an error, a leak
+    #   that option reports included, or did not run. Under memcheck the
+    #   tests run many times slower than natively.
     container: ghcr.io/r-hub/containers/${{ matrix.platform }}:latest
-    timeout-minutes: 60
+    timeout-minutes: ${{ matrix.platform == 'valgrind' && 240 || 60 }}
     strategy:
       fail-fast: false
       matrix:
-        platform: [gcc16, clang-asan]
+        platform: [gcc16, gcc-asan, clang-asan, valgrind]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1077,7 +1089,7 @@ jobs:
       # after growing pauses, five attempts over up to 7.5 minutes. The
       # refusing proxy applies to the check step alone.
       - name: Install Fedora's Cargo and rustc, and Python
-        if: matrix.platform == 'gcc16'
+        if: matrix.platform != 'clang-asan'
         run: |
           for pause in 30 60 120 240 stop; do
             dnf install -y cargo rust python3 pandoc && break
@@ -1086,7 +1098,7 @@ jobs:
             sleep "${pause}"
           done
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
-      # As on gcc16, with apt-get. xz unpacks the Rust installer. The image's
+      # As on Fedora, with apt-get. xz unpacks the Rust installer. The image's
       # newest llvm-symbolizer, when it has one, gives each sanitizer report
       # the functions, files and lines of its stack.
       - name: Install Python and xz, and name the symbolizer
@@ -1165,7 +1177,7 @@ jobs:
         run: |
           echo "directory=${RUNNER_TEMP}/cran-check" >> "${GITHUB_OUTPUT}"
           python3 -m tools.commands.check_r --archive "${RUNNER_TEMP}"/published/yamaa_*.tar.gz \
-            --work-dir "${RUNNER_TEMP}/cran-check"
+            --work-dir "${RUNNER_TEMP}/cran-check" ${{ matrix.platform == 'valgrind' && '--valgrind' || '' }}
       - name: Confirm that the build used the minimum Rust
         if: matrix.platform == 'clang-asan'
         run: |
@@ -1177,7 +1189,7 @@ jobs:
       # AddressSanitizer and UndefinedBehaviorSanitizer only from the C that
       # Cargo compiled with R's compiler.
       - name: Confirm that the sanitizers instrumented the crates' C
-        if: matrix.platform == 'clang-asan'
+        if: matrix.platform == 'gcc-asan' || matrix.platform == 'clang-asan'
         run: |
           nm -D --undefined-only "${RUNNER_TEMP}/cran-check/yamaa.Rcheck/yamaa/libs/yamaa.so" \
             > "${RUNNER_TEMP}/undefined-symbols.txt"

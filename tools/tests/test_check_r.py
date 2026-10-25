@@ -352,7 +352,13 @@ class FakeCheckTests(unittest.TestCase):
         self.archive.write_bytes(b"archive")
 
     def run_check(
-        self, returncode, outputs, manual=False, check_log=None, ignore_vignettes=False
+        self,
+        returncode,
+        outputs,
+        manual=False,
+        check_log=None,
+        ignore_vignettes=False,
+        valgrind=False,
     ):
         """Run check() against a fake R CMD check that writes `outputs`, by
         path below yamaa.Rcheck, and `check_log` or a log with the explained
@@ -384,7 +390,11 @@ class FakeCheckTests(unittest.TestCase):
         ):
             try:
                 check_r.check(
-                    self.archive, work, manual=manual, ignore_vignettes=ignore_vignettes
+                    self.archive,
+                    work,
+                    manual=manual,
+                    ignore_vignettes=ignore_vignettes,
+                    valgrind=valgrind,
                 )
                 failure = None
             except (check_r.subprocess.CalledProcessError, RuntimeError) as error:
@@ -569,6 +579,95 @@ class SanitizerReportsTests(FakeCheckTests):
             "===== end of selftest.Rout.fail =====\n",
         )
         self.assertEqual(failure.returncode, 1)
+
+
+# What memcheck prints as a process under valgrind ends, in the form of
+# valgrind's manual: a summary with no error, and an invalid read that it
+# counted. The log is that of a check with --extra-arch, which runs only the
+# installation, the examples and the tests.
+MEMCHECK_CLEAN = """\
+==4242== HEAP SUMMARY:
+==4242==     in use at exit: 51,840,129 bytes in 10,329 blocks
+==4242== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+"""
+MEMCHECK_ERROR = """\
+==4242== Invalid read of size 4
+==4242==    at 0x4C2F1A0: readstat_parse_sas7bdat (readstat_sas7bdat_read.c:512)
+==4242==  Address 0x10e3c5a0 is 0 bytes after a block of size 16 alloc'd
+==4242== ERROR SUMMARY: 1 errors from 1 contexts (suppressed: 0 from 0)
+"""
+RUNTIME_LOG = """\
+* using log directory '/tmp/check/yamaa.Rcheck'
+* using options '--extra-arch --use-valgrind --no-stop-on-test-error'
+* checking whether package 'yamaa' can be installed ... [458s/237s] OK
+* checking examples ... OK
+* checking tests ... OK
+  Running 'lint.R'
+* DONE
+Status: OK
+"""
+
+
+class ValgrindTests(FakeCheckTests):
+    """A valgrind check runs the examples and the tests under memcheck, whose
+    summary each of their outputs must hold, with no error."""
+
+    def test_a_valgrind_check_runs_only_the_installation_examples_and_tests(self):
+        commands, _, failure = self.run_check(
+            0, {"tests/lint.Rout": MEMCHECK_CLEAN}, check_log=RUNTIME_LOG, valgrind=True
+        )
+        command = [
+            "R",
+            "CMD",
+            "check",
+            "--extra-arch",
+            "--use-valgrind",
+            "--no-stop-on-test-error",
+            str(self.archive.resolve()),
+        ]
+        self.assertEqual((commands, failure), ([(command, False)], None))
+
+    def test_each_output_must_hold_a_memcheck_summary_with_no_error(self):
+        examples = f"> library(yamaa)\n{MEMCHECK_CLEAN}"
+        failed = f"> yamaa::yamaa_lint(path)\n{MEMCHECK_ERROR}"
+        for label, outputs, printed, failure in (
+            (
+                "no error",
+                {"yamaa-Ex.Rout": examples, "tests/lint.Rout": MEMCHECK_CLEAN},
+                "R CMD check --extra-arch --use-valgrind: every finding is one "
+                "that cran-comments.md explains\n"
+                "memcheck counted no error in the examples or the tests\n",
+                None,
+            ),
+            (
+                "an error in a test that R passed",
+                {"yamaa-Ex.Rout": examples, "tests/lint.Rout": failed},
+                f"===== lint.Rout =====\n{failed}===== end of lint.Rout =====\n",
+                "memcheck counted errors in these outputs of the check: "
+                "yamaa.Rcheck/tests/lint.Rout",
+            ),
+            (
+                "a test that valgrind did not run",
+                {"yamaa-Ex.Rout": examples, "tests/lint.Rout": "lint passed\n"},
+                "",
+                "these outputs of the check hold no memcheck summary, so valgrind "
+                "did not run there: yamaa.Rcheck/tests/lint.Rout",
+            ),
+            (
+                "no examples or tests",
+                {},
+                "",
+                "the valgrind check wrote no output of examples or tests",
+            ),
+        ):
+            with self.subTest(case=label):
+                _, output, error = self.run_check(
+                    0, outputs, check_log=RUNTIME_LOG, valgrind=True
+                )
+                self.assertEqual(
+                    (output, None if error is None else str(error)),
+                    (printed, failure),
+                )
 
 
 if __name__ == "__main__":

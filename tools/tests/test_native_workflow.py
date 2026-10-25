@@ -1287,21 +1287,28 @@ class NativeWorkflowContract(unittest.TestCase):
                     self.assertEqual(proxy & names, proxy if checks else set())
 
     def test_each_cran_container_runs_the_steps_of_its_own_image(self):
-        # The containers share one job. gcc16's image has Fedora's Rust;
-        # clang-asan's has none, so that lane installs the minimum Rust, and
-        # then confirms what the build used and what its sanitizers
-        # instrumented. A step for one image runs on that image alone.
+        # The containers share one job. The Fedora images, gcc16, gcc-asan
+        # and valgrind, get Fedora's Rust; clang-asan's Ubuntu image has none,
+        # so that lane installs the minimum Rust and confirms what the build
+        # used. Both sanitizer lanes confirm what their sanitizers
+        # instrumented. A step runs on the images named for it alone.
+        images = ["gcc16", "gcc-asan", "clang-asan", "valgrind"]
         own = {
-            "gcc16": ["Install Fedora's Cargo and rustc, and Python"],
-            "clang-asan": [
-                "Install Python and xz, and name the symbolizer",
-                "Install the minimum Rust from its standalone installer",
-                "Confirm that the build used the minimum Rust",
-                "Confirm that the sanitizers instrumented the crates' C",
-            ],
+            "Install Fedora's Cargo and rustc, and Python": {
+                "gcc16",
+                "gcc-asan",
+                "valgrind",
+            },
+            "Install Python and xz, and name the symbolizer": {"clang-asan"},
+            "Install the minimum Rust from its standalone installer": {"clang-asan"},
+            "Confirm that the build used the minimum Rust": {"clang-asan"},
+            "Confirm that the sanitizers instrumented the crates' C": {
+                "gcc-asan",
+                "clang-asan",
+            },
         }
-        self.assertEqual(self.coverage["cran_container"]["platform"], list(own))
-        for platform in own:
+        self.assertEqual(self.coverage["cran_container"]["platform"], images)
+        for platform in images:
             job = self.jobs[f"native-cran ({platform})"]
             conditions = {
                 step["name"]: step["if"]
@@ -1314,18 +1321,33 @@ class NativeWorkflowContract(unittest.TestCase):
                         name: evaluate(condition, job["context"])
                         for name, condition in conditions.items()
                     },
-                    {
-                        name: image == platform
-                        for image, names in own.items()
-                        for name in names
-                    },
+                    {name: platform in runs for name, runs in own.items()},
+                )
+
+    def test_only_the_valgrind_lane_checks_under_valgrind(self):
+        # check_r.py --valgrind runs the installation, examples and tests
+        # alone, the last two under valgrind's memcheck; every other CRAN
+        # lane runs R CMD check --as-cran.
+        for job in [name for name in self.jobs if name.startswith("native-cran ")]:
+            [check] = [
+                step
+                for step in self.jobs[job]["definitions"]
+                if step.get("name") == "Check the R source package as CRAN does"
+            ]
+            command = expand(check["run"], self.jobs[job]["context"]).split()
+            with self.subTest(job=job):
+                self.assertEqual(
+                    "--valgrind" in command, job == "native-cran (valgrind)"
                 )
 
     def test_cran_containers_install_declared_suggests_and_pandoc_before_checking(self):
         # The workflow seam must supply builders from DESCRIPTION as its
         # Suggests evolve, and provide Pandoc in each container's own OS.
+        fedora = "dnf install -y cargo rust python3 pandoc"
         for platform, install in (
-            ("gcc16", "dnf install -y cargo rust python3 pandoc"),
+            ("gcc16", fedora),
+            ("gcc-asan", fedora),
+            ("valgrind", fedora),
             (
                 "clang-asan",
                 "apt-get install --yes --no-install-recommends python3 xz-utils pandoc",
@@ -1396,7 +1418,8 @@ class NativeWorkflowContract(unittest.TestCase):
 
     def test_the_sanitizer_lane_confirms_that_both_sanitizers_reach_the_crates_c(self):
         # The Makevars give Cargo R's C compiler, which carries the image's
-        # -fsanitize flags. entrypoint.c calls neither sanitizer and the Rust
+        # -fsanitize flags, in the gcc-asan lane as in this one, which share
+        # this step. entrypoint.c calls neither sanitizer and the Rust
         # code is not instrumented, so calls to both in the installed shared
         # object show that the C of the crates was instrumented.
         steps = {
