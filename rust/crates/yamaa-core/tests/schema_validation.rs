@@ -1,4 +1,7 @@
-//! Schema contracts: schema validation.
+//! Schema contracts: schema validation. The cases that validate a document
+//! or a layer against a schema and compare its findings are
+//! `fixtures/diagnostics/schema.json`; each test here proves a seam the
+//! replay cannot reach, which its first comment names (#3798).
 mod schema {
     mod schema_validation {
         use yamaa_core::schema::{
@@ -40,6 +43,8 @@ mod schema {
             .unwrap()
         }
 
+        /// Seam: the schema's defaults state, `prepare_defaults` and the refusal
+        /// `normalize_root` keeps before and after it, which no reader's pass reports.
         #[test]
         fn invalid_default_preparation_never_bypasses_normalization_admission() {
             let mut schema = bundle(
@@ -90,6 +95,9 @@ mod schema {
                 .collect()
         }
 
+        /// Seam: the decoded kind a finding's `actual` holds
+        /// (`SchemaContext::ValueKind`) and `DocumentKind::name()`'s vocabulary, which
+        /// the readers' projection relabels.
         #[test]
         fn incompatible_decoded_values_keep_all_portable_kinds() {
             let schema = bundle(vec![field("value", "int"), field("text", "str")], vec![]);
@@ -118,383 +126,8 @@ mod schema {
             );
         }
 
-        #[test]
-        fn classes_keep_schema_then_input_order_in_a_complete_document() {
-            let schema = bundle(
-                vec![
-                    V::map(vec![(
-                        "needed",
-                        V::map(vec![
-                            ("type", V::text("str")),
-                            ("required", V::boolean(true)),
-                        ]),
-                    )]),
-                    field("count", "int"),
-                ],
-                vec![],
-            );
-            let invalid = |value: V| match schema.normalize_root(&document(value)) {
-                Err(NormalizationError::Invalid(found)) => found,
-                other => panic!("expected findings, got {other:?}"),
-            };
-            let result = invalid(V::map(vec![
-                ("unknown", V::Scalar(N::Null)),
-                ("count", V::boolean(true)),
-                ("yamaa", V::text("1.0")),
-            ]));
-            assert_eq!(
-                findings(&result),
-                [
-                    ("needed", "missing_required_field"),
-                    ("count", "invalid_field_type"),
-                    ("unknown", "unknown_field"),
-                ]
-            );
-            assert_eq!(
-                result[1].context,
-                [
-                    ("expected", C::Text("int".into())),
-                    ("actual", C::ValueKind(DocumentKind::Boolean))
-                ]
-            );
-            // The header reader refuses an empty root before this schema.
-            for value in [V::Scalar(N::Null), V::List(vec![])] {
-                assert_eq!(findings(&invalid(value)), [("$", "invalid_field_type")]);
-            }
-        }
-
-        #[test]
-        fn union_selects_success_then_matching_outer_type_and_recursion_is_value_local() {
-            let schema = bundle(
-                vec![
-                    V::map(vec![(
-                        "choice",
-                        V::map(vec![(
-                            "type",
-                            V::List(vec![V::text("int"), V::text("record")]),
-                        )]),
-                    )]),
-                    field("tree", "tree_value"),
-                ],
-                vec![
-                    (
-                        "record",
-                        V::List(vec![V::map(vec![(
-                            "id",
-                            V::map(vec![
-                                ("type", V::text("str")),
-                                ("required", V::boolean(true)),
-                            ]),
-                        )])]),
-                    ),
-                    (
-                        "tree_value",
-                        V::map(vec![(
-                            "type",
-                            V::List(vec![
-                                V::text("tree_value"),
-                                V::text("tree_branch"),
-                                V::text("str"),
-                            ]),
-                        )]),
-                    ),
-                    (
-                        "tree_branch",
-                        V::map(vec![("type", V::text("list[tree_value]"))]),
-                    ),
-                ],
-            );
-            assert!(validate(&schema, "choice", V::integer("1"), false).is_empty());
-            assert_eq!(
-                findings(&validate(&schema, "choice", V::map(vec![]), false)),
-                [("choice.id", "missing_required_field")]
-            );
-            assert_eq!(
-                validate(&schema, "choice", V::boolean(false), false)[0].context[0],
-                ("expected", C::Text("int".into()))
-            );
-            assert!(validate(
-                &schema,
-                "tree",
-                V::List(vec![V::text("leaf"), V::List(vec![V::text("nested")])]),
-                false
-            )
-            .is_empty());
-            let result = validate(
-                &schema,
-                "tree",
-                V::List(vec![V::text("leaf"), V::List(vec![V::boolean(true)])]),
-                false,
-            );
-            assert_eq!(findings(&result), [("tree[1][0]", "invalid_field_type")]);
-            assert_eq!(
-                result[0].context[0],
-                ("expected", C::Text("tree_value".into()))
-            );
-        }
-
-        fn required_field(name: &'static str, kind: &'static str) -> V {
-            V::map(vec![(
-                name,
-                V::map(vec![
-                    ("type", V::text(kind)),
-                    ("required", V::boolean(true)),
-                ]),
-            )])
-        }
-        fn operations_registry() -> Vec<(&'static str, V)> {
-            vec![
-                (
-                    "expression",
-                    V::map(vec![("registry", V::text("operations"))]),
-                ),
-                (
-                    "operations",
-                    V::map(vec![
-                        ("source", descriptor("str")),
-                        ("literal", descriptor("int")),
-                    ]),
-                ),
-            ]
-        }
-        fn handled_bundle() -> SchemaStructure {
-            let mut declarations = vec![
-                (
-                    "derivation",
-                    V::map(vec![(
-                        "type",
-                        V::List(vec![
-                            V::text("str"),
-                            V::text("expression"),
-                            V::text("handled_expression_class"),
-                        ]),
-                    )]),
-                ),
-                (
-                    "handled_expression_class",
-                    V::List(vec![
-                        required_field("value", "expression"),
-                        field("unconvertible", "int"),
-                    ]),
-                ),
-            ];
-            declarations.extend(operations_registry());
-            bundle(vec![field("derive", "derivation")], declarations)
-        }
-
-        #[test]
-        fn union_reports_inside_the_member_declaring_the_written_keys() {
-            // Handled derivation: the written keys belong to
-            // handled_expression_class, not to the expression registry
-            // member tried before it, so the finding lands inside `value`.
-            let schema = handled_bundle();
-            let result = validate(
-                &schema,
-                "derive",
-                V::map(vec![
-                    ("value", V::map(vec![("literal", V::text("x"))])),
-                    ("unconvertible", V::integer("0")),
-                ]),
-                false,
-            );
-            assert_eq!(
-                findings(&result),
-                [("derive.value.literal", "invalid_field_type")]
-            );
-
-            // Typed intermediate derivation: the written keys belong to
-            // intermediate_binding_class, not to the untyped member tried
-            // before it, so the finding lands inside `derivation`.
-            let mut declarations = vec![
-                (
-                    "intermediate_derivation",
-                    V::map(vec![(
-                        "type",
-                        V::List(vec![
-                            V::text("untyped_intermediate_derivation"),
-                            V::text("intermediate_binding_class"),
-                        ]),
-                    )]),
-                ),
-                (
-                    "untyped_intermediate_derivation",
-                    V::map(vec![(
-                        "type",
-                        V::List(vec![
-                            V::text("str"),
-                            V::text("expression"),
-                            V::text("intermediate_expression_class"),
-                        ]),
-                    )]),
-                ),
-                (
-                    "intermediate_expression_class",
-                    V::List(vec![required_field("value", "expression")]),
-                ),
-                (
-                    "intermediate_binding_class",
-                    V::List(vec![
-                        required_field("type", "str"),
-                        required_field("derivation", "untyped_intermediate_derivation"),
-                        field("unconvertible", "int"),
-                    ]),
-                ),
-            ];
-            declarations.extend(operations_registry());
-            let schema = bundle(
-                vec![field("binding", "intermediate_derivation")],
-                declarations,
-            );
-            let result = validate(
-                &schema,
-                "binding",
-                V::map(vec![
-                    ("type", V::text("str")),
-                    ("derivation", V::map(vec![("literal", V::text("x"))])),
-                ]),
-                false,
-            );
-            assert_eq!(
-                findings(&result),
-                [("binding.derivation.literal", "invalid_field_type")]
-            );
-        }
-
-        #[test]
-        fn union_keeps_the_previous_fallback_when_no_member_declares_the_keys() {
-            let schema = handled_bundle();
-            // An empty mapping declares no written keys.
-            assert_eq!(
-                findings(&validate(&schema, "derive", V::map(vec![]), false)),
-                [("derive", "invalid_operation_count")]
-            );
-            // A key that no member declares keeps the registry fallback.
-            assert_eq!(
-                findings(&validate(
-                    &schema,
-                    "derive",
-                    V::map(vec![("absent", V::Scalar(N::Null))]),
-                    false
-                )),
-                [("derive.absent", "unknown_operation")]
-            );
-        }
-
-        #[test]
-        fn case_otherwise_reports_inside_the_otherwise_member() {
-            let schema = case_bundle("expressions");
-            let result = validate(
-                &schema,
-                "derive",
-                case(vec![
-                    branch(V::integer(1)),
-                    otherwise(V::map(vec![("literal", V::text("x"))])),
-                ]),
-                false,
-            );
-            assert_eq!(
-                findings(&result),
-                [("derive.case[1].otherwise.literal", "invalid_field_type")]
-            );
-        }
-
-        #[test]
-        fn fragments_suppress_nested_requiredness_but_keep_type_and_unknown_field_checks() {
-            let schema = bundle(
-                vec![field("items", "list[record]")],
-                vec![(
-                    "record",
-                    V::List(vec![
-                        field("name", "str"),
-                        V::map(vec![(
-                            "id",
-                            V::map(vec![
-                                ("type", V::text("int")),
-                                ("required", V::boolean(true)),
-                            ]),
-                        )]),
-                    ]),
-                )],
-            );
-            assert_eq!(
-                findings(&validate(
-                    &schema,
-                    "items",
-                    V::List(vec![V::map(vec![("name", V::text("DM"))])]),
-                    false
-                )),
-                [("items.DM.id", "missing_required_field")]
-            );
-            assert!(validate(
-                &schema,
-                "items",
-                V::List(vec![V::map(vec![("name", V::text("DM"))])]),
-                true
-            )
-            .is_empty());
-            assert_eq!(
-                findings(&validate(
-                    &schema,
-                    "items",
-                    V::List(vec![V::map(vec![
-                        ("name", V::text("DM")),
-                        ("extra", V::Scalar(N::Null)),
-                        ("id", V::boolean(false))
-                    ])]),
-                    true
-                )),
-                [
-                    ("items.DM.id", "invalid_field_type"),
-                    ("items.DM.extra", "unknown_field"),
-                ]
-            );
-        }
-
-        #[test]
-        fn constraints_keep_order_unicode_lengths_and_alias_requirements_after_type_success() {
-            let schema = bundle(
-                vec![field("kind", "column_type"), field("number", "float")],
-                vec![(
-                    "column_type",
-                    V::map(vec![
-                        ("type", V::text("str")),
-                        ("values", V::List(vec![V::text("ok")])),
-                        ("pattern", V::text("[A-Z]+")),
-                        ("min_length", V::integer("2")),
-                    ]),
-                )],
-            );
-            let result = validate(&schema, "kind", V::text("\u{e9}"), false);
-            assert_eq!(
-                findings(&result),
-                [
-                    ("kind", "value_not_permitted"),
-                    ("kind", "pattern_mismatch"),
-                    ("kind", "minimum_length")
-                ]
-            );
-            // A type outside the closed list is VALUE-1's; the other
-            // constraints are the schema language's.
-            assert_eq!(
-                result
-                    .iter()
-                    .map(|d| d.definition().rule)
-                    .collect::<Vec<_>>(),
-                [Some("VALUE-1"), Some("SCHEMA-12"), Some("SCHEMA-12")]
-            );
-            let result = validate(&schema, "kind", V::boolean(true), false);
-            assert_eq!(findings(&result), [("kind", "invalid_field_type")]);
-            assert_eq!(result[0].definition().rule, Some("SCHEMA-12"));
-            assert!(validate(
-                &schema,
-                "number",
-                V::integer("99999999999999999999999999999999999999999999999999"),
-                false
-            )
-            .is_empty());
-            assert!(!validate(&schema, "number", V::boolean(false), false).is_empty());
-        }
-
+        /// Seam: `validate_defaults` and the index of the descriptor each of its
+        /// findings returns.
         #[test]
         fn defaults_resolve_forward_aliases_and_return_the_declaring_descriptor() {
             let schema = bundle(
@@ -532,216 +165,8 @@ mod schema {
             );
         }
 
-        #[test]
-        fn registry_and_bare_derivation_diagnostics_preserve_paths_and_context() {
-            let schema = bundle(
-                vec![field("derive", "derivation")],
-                vec![
-                    (
-                        "derivation",
-                        V::map(vec![(
-                            "type",
-                            V::List(vec![V::text("str"), V::text("expression")]),
-                        )]),
-                    ),
-                    (
-                        "expression",
-                        V::map(vec![("registry", V::text("operations"))]),
-                    ),
-                    (
-                        "operations",
-                        V::map(vec![
-                            ("source", descriptor("str")),
-                            ("literal", descriptor("int")),
-                        ]),
-                    ),
-                ],
-            );
-            assert!(validate(
-                &schema,
-                "derive",
-                V::map(vec![("literal", V::integer("4"))]),
-                false
-            )
-            .is_empty());
-            // The bare string is the only spelling of a plain source (EXPR-5).
-            let restated = validate(
-                &schema,
-                "derive",
-                V::map(vec![("source", V::text("DM.AGE"))]),
-                false,
-            );
-            assert_eq!(findings(&restated), [("derive", "redundant_long_form")]);
-            assert_eq!(
-                restated[0].context,
-                [
-                    ("field", C::Text("source".into())),
-                    ("shorthand", C::InputValue(1)),
-                ]
-            );
-            assert_eq!(restated[0].definition().rule, Some("SCHEMA-15"));
-            assert_eq!(
-                findings(&validate(&schema, "derive", V::map(vec![]), false)),
-                [("derive", "invalid_operation_count")]
-            );
-            assert_eq!(
-                findings(&validate(
-                    &schema,
-                    "derive",
-                    V::map(vec![("absent", V::Scalar(N::Null))]),
-                    false
-                )),
-                [("derive.absent", "unknown_operation")]
-            );
-        }
-
-        fn case_bundle(registry: &'static str) -> SchemaStructure {
-            let required = |kind: &'static str| {
-                V::map(vec![
-                    ("type", V::text(kind)),
-                    ("required", V::boolean(true)),
-                ])
-            };
-            bundle(
-                vec![field("derive", "expression")],
-                vec![
-                    ("expression", V::map(vec![("registry", V::text(registry))])),
-                    (
-                        registry,
-                        V::map(vec![
-                            ("case", descriptor("list[case_item_class]")),
-                            ("literal", descriptor("int")),
-                        ]),
-                    ),
-                    (
-                        "case_item_class",
-                        V::map(vec![(
-                            "type",
-                            V::List(vec![
-                                V::text("case_branch_class"),
-                                V::text("case_otherwise_class"),
-                            ]),
-                        )]),
-                    ),
-                    (
-                        "case_branch_class",
-                        V::List(vec![
-                            V::map(vec![("when", required("str"))]),
-                            V::map(vec![("then", required("case_result"))]),
-                        ]),
-                    ),
-                    (
-                        "case_otherwise_class",
-                        V::List(vec![V::map(vec![("otherwise", required("case_result"))])]),
-                    ),
-                    (
-                        "case_result",
-                        V::map(vec![(
-                            "type",
-                            V::List(vec![V::text("int"), V::text("expression")]),
-                        )]),
-                    ),
-                ],
-            )
-        }
-        fn branch(then: V) -> V {
-            V::map(vec![("when", V::text("AGE >= 65")), ("then", then)])
-        }
-        fn otherwise(value: V) -> V {
-            V::map(vec![("otherwise", value)])
-        }
-        fn case(items: Vec<V>) -> V {
-            V::map(vec![("case", V::List(items))])
-        }
-
-        #[test]
-        fn case_item_order_is_a_req_0339_finding_after_every_item_matched_its_class() {
-            let schema = case_bundle("expressions");
-            for items in [
-                vec![branch(V::integer(1)), otherwise(V::integer(0))],
-                vec![branch(V::integer(1))],
-                vec![
-                    branch(V::integer(1)),
-                    branch(V::integer(2)),
-                    otherwise(V::integer(0)),
-                ],
-            ] {
-                assert!(validate(&schema, "derive", case(items), false).is_empty());
-            }
-            let no_branch = "at least one when/then item";
-            let not_last = "otherwise only as the last item";
-            for (items, expected) in [
-                (
-                    vec![otherwise(V::integer(0))],
-                    vec![("derive.case", no_branch)],
-                ),
-                (vec![], vec![("derive.case", no_branch)]),
-                (
-                    vec![otherwise(V::integer(0)), branch(V::integer(1))],
-                    vec![("derive.case[0]", not_last)],
-                ),
-                (
-                    vec![
-                        branch(V::integer(1)),
-                        otherwise(V::integer(0)),
-                        otherwise(V::integer(2)),
-                    ],
-                    vec![("derive.case[1]", not_last)],
-                ),
-                (
-                    vec![otherwise(V::integer(0)), otherwise(V::integer(2))],
-                    vec![("derive.case", no_branch), ("derive.case[0]", not_last)],
-                ),
-                (
-                    vec![
-                        branch(case(vec![otherwise(V::integer(1))])),
-                        otherwise(V::integer(0)),
-                    ],
-                    vec![("derive.case[0].then.case", no_branch)],
-                ),
-            ] {
-                for fragment in [false, true] {
-                    let result = validate(&schema, "derive", case(items.clone()), fragment);
-                    let actual: Vec<_> = result
-                        .iter()
-                        .map(|d| {
-                            let definition = d.definition();
-                            assert_eq!(
-                                (definition.phase, definition.condition, definition.rule),
-                                ("validation", "invalid_field_type", Some("EXPR-7"))
-                            );
-                            let [("expected", C::Text(text))] = d.context.as_slice() else {
-                                panic!("expected context: {d:?}");
-                            };
-                            (d.path.as_str(), text.as_str())
-                        })
-                        .collect();
-                    assert_eq!(actual, expected, "fragment={fragment}");
-                }
-            }
-            // Item findings come first; the order rule waits for well-formed items.
-            let result = validate(
-                &schema,
-                "derive",
-                case(vec![otherwise(V::text("N"))]),
-                false,
-            );
-            assert!(!result.is_empty());
-            assert!(
-                result.iter().all(|d| d.definition().rule != Some("EXPR-7")),
-                "{result:?}"
-            );
-            // The rule belongs to the expression registry's case, not to a like-named entry.
-            let other = case_bundle("operations");
-            assert!(validate(
-                &other,
-                "derive",
-                case(vec![otherwise(V::integer(0))]),
-                false
-            )
-            .is_empty());
-        }
-
+        /// Seam: mapping keys that are not text (floats, integers, Booleans and null),
+        /// which a case's JSON document cannot write.
         #[test]
         fn typed_dictionary_keys_have_independent_key_and_value_paths() {
             let schema = bundle(vec![field("mapping", "dict[str, int]")], vec![]);
@@ -775,6 +200,8 @@ mod schema {
             }
         }
 
+        /// Seam: repeated passes over one value give one result; a case makes one
+        /// call.
         #[test]
         fn independent_union_attempts_do_not_publish_failed_alternative_findings() {
             let schema = bundle(
@@ -840,6 +267,8 @@ mod schema {
             compare(actual, actual.root(), &expected, expected.root());
         }
 
+        /// Seam: the bundle's admission issues (`BundleIssueKind`) and a normalized
+        /// document with its origins.
         #[test]
         fn single_or_list_unions_are_bundle_errors_and_lists_normalize_as_written() {
             // One spelling per meaning: a union may not offer a type and a list
@@ -913,6 +342,8 @@ mod schema {
             );
         }
 
+        /// Seam: the normalized document, the origin of each default it fills, and
+        /// normalization's own refusal at `<normalization>`.
         #[test]
         fn class_shorthand_materializes_defaults_but_fragments_keep_only_authored_values() {
             let schema = bundle(
@@ -1007,6 +438,7 @@ mod schema {
             }
         }
 
+        /// Seam: the normalized document a bare string expands to.
         #[test]
         fn bare_derivation_strings_are_source_references_never_calls() {
             let schema = bundle(
@@ -1099,6 +531,8 @@ mod schema {
             }
         }
 
+        /// Seam: normalization's depth limit, a resource refusal that is no finding,
+        /// and the normalized fragment.
         #[test]
         fn recursive_defaults_are_resource_refusals_instead_of_silently_truncated_objects() {
             let schema = bundle(
@@ -1129,6 +563,7 @@ mod schema {
             );
         }
 
+        /// Seam: which `NormalizationError` normalization refuses with.
         #[test]
         fn normalization_validates_written_constraints_and_defaults_before_allocating_output() {
             let schema = bundle(
@@ -1169,6 +604,8 @@ mod schema {
             ));
         }
 
+        /// Seam: repeated normalization gives equal results and leaves its input
+        /// unchanged.
         #[test]
         fn independent_normalization_keeps_complete_results_and_original_input() {
             let schema = bundle(
@@ -1204,6 +641,8 @@ mod schema {
             assert_value(&first.document, V::map(vec![("name", V::text("DM"))]));
         }
 
+        /// Seam: the normalized document and the provenance of each default node it
+        /// holds.
         #[test]
         fn whole_document_normalization_keeps_schema_order_and_nested_default_provenance() {
             let schema = bundle(
@@ -1299,6 +738,8 @@ mod schema {
                 .all(|origin| origin.source == SchemaSource::Input));
         }
 
+        /// Seam: the normalized document of a shorthand and normalization's refusal of
+        /// its written long form.
         #[test]
         fn shorthand_checks_the_written_member_without_reinterpreting_generated_fields() {
             let schema = bundle(
@@ -1337,103 +778,8 @@ mod schema {
             );
         }
 
-        #[test]
-        fn malformed_compound_names_and_ids_remain_ordered_validation_findings() {
-            let schema = bundle(
-                vec![field("items", "list[record]")],
-                vec![(
-                    "record",
-                    V::List(vec![field("name", "str"), field("id", "int")]),
-                )],
-            );
-            let result = validate(
-                &schema,
-                "items",
-                V::List(vec![
-                    V::map(vec![(
-                        "name",
-                        V::List(vec![
-                            V::text("DM"),
-                            V::integer("2"),
-                            V::boolean(true),
-                            V::Scalar(N::Null),
-                            V::float(-0.0),
-                        ]),
-                    )]),
-                    V::map(vec![(
-                        "id",
-                        V::map(vec![("inner", V::List(vec![V::text("value")]))]),
-                    )]),
-                    V::map(vec![("name", V::List(vec![])), ("id", V::integer("10"))]),
-                ]),
-                false,
-            );
-            assert_eq!(
-                findings(&result),
-                [
-                    (
-                        "items.['DM', 2, True, None, -0.0].name",
-                        "invalid_field_type"
-                    ),
-                    ("items.{'inner': ['value']}.id", "invalid_field_type"),
-                    ("items.[].name", "invalid_field_type"),
-                ]
-            );
-            assert_eq!(
-                result[0].context,
-                [
-                    ("expected", C::Text("str".into())),
-                    ("actual", C::ValueKind(DocumentKind::Sequence))
-                ]
-            );
-        }
-
-        #[test]
-        fn compound_path_quotes_escape_only_the_required_characters_without_normalization() {
-            let schema = bundle(
-                vec![field("items", "list[record]")],
-                vec![("record", V::List(vec![field("name", "str")]))],
-            );
-            let result = validate(
-                &schema,
-                "items",
-                V::List(vec![V::map(vec![(
-                    "name",
-                    V::List(vec![
-                        V::text("single'quote"),
-                        V::text("both'\"quotes"),
-                        V::text("\\\n\r\t\0"),
-                        V::text("\u{e9} e\u{301} \u{1f600}"),
-                        V::text("\u{a0}\u{2028}\u{202e}\u{e000}\u{0378}\u{10ffff}"),
-                    ]),
-                )])]),
-                false,
-            );
-            assert_eq!(findings(&result), [(
-        "items.[\"single'quote\", 'both\\'\"quotes', '\\\\\\n\\r\\t\\x00', '\u{e9} e\u{301} \u{1f600}', '\\xa0\\u2028\\u202e\\ue000\\u0378\\U0010ffff'].name",
-        "invalid_field_type",
-    )]);
-        }
-
-        #[test]
-        fn invalid_compound_labels_keep_the_complete_authored_path() {
-            let schema = bundle(
-                vec![field("items", "list[record]")],
-                vec![("record", V::List(vec![field("name", "str")]))],
-            );
-            let input = document(V::List(vec![V::map(vec![(
-                "name",
-                V::List(vec![V::text("oversized-label")]),
-            )])]));
-            let descriptor = schema.root_class().fields[1].descriptor;
-            let result = schema
-                .validate_descriptor(descriptor, &input, input.root(), "items", false)
-                .unwrap();
-            assert_eq!(result.len(), 1);
-            assert_eq!(result[0].definition().condition, "invalid_field_type");
-            assert_eq!(result[0].path, "items.['oversized-label'].name");
-        }
-
+        /// Seam: the spelling `quoted_diagnostic_text` returns, a function no pass
+        /// reports.
         #[test]
         fn quoted_diagnostic_text_preserves_each_complete_unicode_spelling() {
             use yamaa_core::schema::quoted_diagnostic_text;
