@@ -1,7 +1,11 @@
 #![cfg(feature = "yaml")]
 //! Project-scope contracts in the adapters: listed names, run-scope plans,
 //! held producer artifacts, report-only saves and the preflight of one save
-//! across results.
+//! across results. The tests that staged a project and compared what one
+//! question about its scope reports are cases of
+//! `tests/fixtures/diagnostics/project_scope.json` (#3798); the tests left
+//! compare the values of a listing, a plan or a save the replay does not
+//! state.
 use crate::support::ports::NoFunctions;
 use crate::support::Edit as _;
 use std::{fs, sync::Arc};
@@ -91,6 +95,11 @@ fn names(project: &Project, steps: impl IntoIterator<Item = usize>) -> Vec<Strin
         .collect()
 }
 
+/// Seam: a listing's record values (its name, listing path, section,
+/// identity and path), the sections and define sections a project reads, and
+/// the listing a name finds, which no reader returns: the replay states the
+/// issues of a question, and its `find_specification` and `duplicate_names`
+/// cases state the refusals.
 #[test]
 fn listings_follow_section_run_order_and_names_are_their_domains() {
     let study = study();
@@ -113,23 +122,9 @@ fn listings_follow_section_run_order_and_names_are_their_domains() {
     assert!(project.duplicates().is_empty());
 }
 
-#[test]
-fn an_unreadable_project_fails_as_a_check_reports_it() {
-    let study = Study::new();
-    let project = study.path("project.yaml");
-    // The caller's own path, named as given (FILE-7, #3321), as
-    // `project_scope.json` records; a check reports the same issues.
-    let issues = Project::read(&project, Some(Language::Python), None)
-        .err()
-        .unwrap();
-    let checked = yamaa_adapters::project_application::check(
-        &study.path("spec.yaml"),
-        &project,
-        Language::Python,
-    );
-    assert_eq!(checked, issues);
-}
-
+/// Seam: the order of a plan's steps and the producers each step reads,
+/// which are values, not issues; the replay's `plan_refusal` and
+/// `refused_step` cases state what refuses a plan or a step.
 #[test]
 fn plans_order_their_scope_producer_first() {
     let study = study();
@@ -147,81 +142,6 @@ fn plans_order_their_scope_producer_first() {
     // DM is outside the ADaM scope: ADSL has no run-scope producer.
     assert_eq!(adam.steps()[0].producers().count(), 0);
     assert!(project.plan(Some(Submission::Send)).steps().is_empty());
-}
-
-#[test]
-fn blocked_consumers_name_each_failed_producer() {
-    let study = study();
-    let project = read(&study);
-    let plan = project.plan(None);
-    let adae = &plan.steps()[2];
-    // A failed DM, which ADAE does not read, blocks nothing; a failed ADSL
-    // blocks it, as `project_scope.json` records.
-    let dm = 0;
-    assert!(adae.blocked(&project, |producer| producer == dm).is_empty());
-}
-
-#[test]
-fn unlinked_inputs_cycles_and_collisions_are_project_findings() {
-    let study = study();
-    // ADSL reads DM's artifact without a link; ADAE and ADXX link each other.
-    study.write(
-        "adam/adsl.yaml",
-        spec(
-            "ADSL",
-            "{path: ../out/dm.csv, types: {ID: int}}",
-            "../out/adsl.csv",
-        ),
-    );
-    study.write(
-        "adam/adae.yaml",
-        spec(
-            "ADAE",
-            "{path: ../out/adxx.csv, schema: adxx.yaml}",
-            "../out/adae.csv",
-        ),
-    );
-    study.write(
-        "adam/adxx.yaml",
-        spec(
-            "ADXX",
-            "{path: ../out/adae.csv, schema: adae.yaml}",
-            "../out/adxx.csv",
-        ),
-    );
-    study.write(
-        "project.yaml",
-        "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [sdtm/dm.yaml]\nadam:\n  specs: [adam/adsl.yaml, adam/adae.yaml, adam/adxx.yaml]\n",
-    );
-    let project = read(&study);
-    let plan = project.plan(None);
-    assert!(plan.refusal().is_empty());
-    let refused = |name: &str| {
-        let step = plan
-            .steps()
-            .iter()
-            .find(|step| project.listed()[step.listed()].name() == Some(name))
-            .unwrap();
-        step.refused().to_vec()
-    };
-    // ADSL reads DM's artifact without a link and ADAE and ADXX link each
-    // other: their refusals, and a project check's, are `project_scope.json`'s.
-    assert!(refused("DM").is_empty());
-    // In the ADaM scope alone, DM's file is an ordinary source.
-    let adam = project.plan(Some(Submission::Adam));
-    assert!(adam.steps().iter().any(|step| {
-        project.listed()[step.listed()].name() == Some("ADSL") && step.refused().is_empty()
-    }));
-
-    // Two run-scope files at one location refuse the whole run
-    // (`project_scope.json`), but outside the SDTM scope the collision is not
-    // part of the run.
-    study.write(
-        "adam/adsl.yaml",
-        spec("ADSL", RAW, "../out/dm.csv.report.csv"),
-    );
-    let project = read(&study);
-    assert!(project.plan(Some(Submission::Sdtm)).refusal().is_empty());
 }
 
 /// Build ADSL alone, offering `held` artifacts for its DM link. A link
@@ -272,6 +192,10 @@ fn saved_build(
     (issues.is_empty(), origin, issues)
 }
 
+/// Seam: a run scope holding in-memory artifacts (`HeldArtifacts`) and the
+/// origin of the source a link reads, generated or a resource, which no
+/// staged file states; the refusals without a saved artifact and with
+/// another header are cases of `project_scope.json`.
 #[test]
 fn saved_links_read_held_or_saved_artifacts_under_the_producer_contract() {
     let study = study();
@@ -315,6 +239,9 @@ fn domain(study: &Study, name: &str) -> Domain {
     .unwrap_or_else(|issues| panic!("{issues:?}"))
 }
 
+/// Seam: `Domain::save_report`, a save of the run report alone, which no
+/// operation makes, and the existence of the files it and a later save
+/// write.
 #[test]
 fn report_only_saves_write_the_report_file_and_no_primary_artifact() {
     let study = study();
@@ -342,6 +269,9 @@ fn report_only_saves_write_the_report_file_and_no_primary_artifact() {
     assert!(domain(&study, "sdtm/ae.yaml").save_report().is_err());
 }
 
+/// Seam: `publication::stage` over the files of several results, and the
+/// cause, file and commit count of the collision it refuses, which are not
+/// issues.
 #[test]
 fn the_preflight_refuses_two_results_that_write_one_file() {
     // The files one save of `results` writes, each result's report alone

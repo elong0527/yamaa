@@ -1,9 +1,13 @@
 {
-  "about": "One submission section composed and saved (DEFINE, SUB, JSON, PROJECT, CT, INPUT): what refuses a composition before any specification is read, what its metadata refutes, how it rechecks a published dataset, and where its save publishes each file. Moved from file_resources.rs's shared_define module. A case stages a benchmark's files and takes a published dataset from the benchmark's expected/ files, as the tests copied them; the two refusals that come before any specification is read stage the project file and the published dataset alone, since their tests deleted the specification. Each case compares what its test compared: rows found by their cause are among the issues, and a refused composition's saved is {}, the absent define.xml and transport file its test asserted. A document no authored file holds, such as the Define-XML of an edited or a metadata-only composition, is stated by the parts its test compared, each selected whole (select): an element from its start tag through its end tag, an attribute's value or a JSON value, and the complete list a path selects stands for a test's count or absence. The nine migrated document selections stage only the specification and project files their original tests copied, plus the published dataset where required. Raw input files remain unavailable, retaining the metadata-only tests' proof that composing metadata needs no raw study inputs. The unused-terminology API sidecar also proves that input and acrf.pdf remain absent, including empty directories. The tests that stay in file_resources.rs compare what a composition holds and reads between its preparation and its save, or stay by design. The three compositions that relocate the DM benchmark's dataset publish the benchmark's own documents: nothing either document writes depends on the specification's path, and each names the other relative to itself, the transport file beside the document (JSON-1).",
+  "about": "One submission section composed and saved (DEFINE, SUB, JSON, PROJECT, CT, INPUT): what refuses a composition before any specification is read, what its metadata refutes, how it rechecks a published dataset, and where its save publishes each file. Moved from file_resources.rs's shared_define module. A case stages a benchmark's files and takes a published dataset from the benchmark's expected/ files, as the tests copied them; the two refusals that come before any specification is read stage the project file and the published dataset alone, since their tests deleted the specification. Each case compares what its test compared: rows found by their cause are among the issues, and a refused composition's saved is {}, the absent define.xml and transport file its test asserted. A document no authored file holds, such as the Define-XML of an edited or a metadata-only composition, is stated by the parts its test compared, each selected whole (select): an element from its start tag through its end tag, an attribute's value or a JSON value, and the complete list a path selects stands for a test's count or absence. The nine migrated document selections stage only the specification and project files their original tests copied, plus the published dataset where required. Raw input files remain unavailable, retaining the metadata-only tests' proof that composing metadata needs no raw study inputs. The unused-terminology API sidecar also proves that input and acrf.pdf remain absent, including empty directories. The tests that stay in file_resources.rs compare what a composition holds and reads between its preparation and its save, or stay by design. The three compositions that relocate the DM benchmark's dataset publish the benchmark's own documents: nothing either document writes depends on the specification's path, and each names the other relative to itself, the transport file beside the document (JSON-1). The staleness cases, moved from submission_staleness.rs, compose a study whose project lists one DM specification over one raw input (PROJECT-15): a case whose test built and saved it before composing names it under built, which builds and saves it alone, with no project, as the test's run did; a case whose test then deleted or replaced a file stages the files the study held when it composed, the artifact its build wrote (the test's DM text) and no report, the replaced report or the changed artifact and input. The inherited output's build is also a build case, whose run report row names the entry-relative artifact its test read in the saved report's first row, its ARTIFACT and run KIND (CHECK-23, CHECK-24). Their stale findings compare the condition, the path and the whole context their tests compared; a composition their tests checked without reading its document states the leaf DEFINE-16 gives the artifact, relative to the document. The transport cases, moved from submission_transport.rs, stage sdtm-dm-xpt or adam-adsl-xpt as their tests staged it, with the published dataset from the benchmark's expected/ files and the converted ADSL project the test copied: the input moved to dm.xpt and the dataset without rows are the first issues their tests read (prefix); a dataset declared without data adds no length to DM (SUB-24), so DM's transport file is the benchmark's own, and its group carries neither archive location nor leaf (JSON-3, DEFINE-16); the ADaM Dataset-JSON columns and first row are the lines the test found, at the positions of the output columns, and its document is the benchmark's with adsl.json for adsl.xpt, as the test compared it.",
   "documents": {
     "study_lb": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: LB\nkeys: [USUBJID, LBTESTCD]\ninput: {RAW: raw.csv}\noutput: {path: lb.csv, columns: [USUBJID, LBTESTCD]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: RAW.USUBJID\n    submission: {core: Req, length: 20, origins: [{type: Assigned, source: Sponsor}]}\n  - name: LBTESTCD\n    type: str\n    label: Lab Test or Examination Short Name\n    derivation: RAW.LBTESTCD\n    submission: {core: Req, length: 8, origins: [{type: Assigned, source: Sponsor}]}\nsubmission: {label: Laboratory Test Results, class: FINDINGS, structure: One record per lab test per subject, repeating: true}\n",
     "study_adlb": "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADLB\nkeys: [USUBJID, PARAMCD]\ninput: {LB: lb.csv}\noutput: {path: adlb.csv, columns: [USUBJID, PARAMCD, SRCDOM]}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: LB.USUBJID\n    submission: {core: Req, mandatory: true, length: 20, origins: [{type: Predecessor, description: LB.USUBJID}]}\n  - name: PARAMCD\n    type: str\n    label: Parameter Code\n    derivation: LB.LBTESTCD\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Predecessor, description: LB.LBTESTCD}]}\n  - name: SRCDOM\n    type: str\n    label: Source Data\n    derivation: \"'LB'\"\n    submission: {core: Perm, mandatory: false, length: 8, inventory_vocabulary: true, origins: [{type: Assigned}]}\nsubmission: {label: Laboratory Analysis Dataset, class: BASIC DATA STRUCTURE, structure: One record per subject per parameter, repeating: true}\n",
-    "cross_section_project": "yamaa: \"1.0\"\ntype: project\nstudy: {id: STUDY, name: Study, description: Cross-section witness, protocol_name: Protocol}\nadam:\n  standards: [{name: ADaMIG, version: '1.3', status: Final}]\n  specs: [adlb.yaml]\n  define: define.xml\n  transport: dataset_json\n  source_system_version: '1.0'\nsdtm:\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  specs: [sdtm/lb.yaml]\n  define: sdtm/define.xml\n"
+    "cross_section_project": "yamaa: \"1.0\"\ntype: project\nstudy: {id: STUDY, name: Study, description: Cross-section witness, protocol_name: Protocol}\nadam:\n  standards: [{name: ADaMIG, version: '1.3', status: Final}]\n  specs: [adlb.yaml]\n  define: define.xml\n  transport: dataset_json\n  source_system_version: '1.0'\nsdtm:\n  standards: [{name: SDTMIG, version: '3.4', status: Final}]\n  specs: [sdtm/lb.yaml]\n  define: sdtm/define.xml\n",
+    "staleness_project": "yamaa: \"1.0\"\ntype: project\nstudy:\n  id: CATH\n  name: CATH\n  description: Example study submitting demographics\n  protocol_name: CATH-01\nsdtm:\n  standards:\n    - name: SDTMIG\n      version: \"3.4\"\n      status: Final\n  specs:\n    - dm.yaml\n  define: define.xml\n",
+    "staleness_dm": "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [STUDYID, USUBJID]\ninput:\n  RAW: raw.csv\noutput:\n  path: dm.csv\n  columns: [DOMAIN, STUDYID, USUBJID]\n  report: dm-report.csv\ncolumns:\n  - name: DOMAIN\n    type: str\n    label: Domain Abbreviation\n    derivation: \"'DM'\"\n    submission:\n      core: Req\n      role: Identifier\n      length: 2\n      origins:\n        - type: Assigned\n          source: Sponsor\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: RAW.STUDYID\n    submission:\n      core: Req\n      role: Identifier\n      length: 4\n      origins:\n        - type: Protocol\n          source: Sponsor\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: RAW.USUBJID\n    submission:\n      core: Req\n      role: Identifier\n      length: 9\n      origins:\n        - type: Assigned\n          source: Sponsor\nsubmission:\n  label: Demographics\n  class: SPECIAL PURPOSE\n  structure: One record per subject\n  repeating: false\n",
+    "staleness_raw": "STUDYID,USUBJID\nCATH,CATH-0001\nCATH,CATH-0002\n",
+    "staleness_artifact": "DOMAIN,STUDYID,USUBJID\nDM,CATH,CATH-0001\nDM,CATH,CATH-0002\n"
   },
   "cases": [
     {
@@ -861,6 +865,199 @@
           "/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.ADLB.PARAMCD']/Description/TranslatedText": ["<TranslatedText xml:lang=\"en\">Parameter Code</TranslatedText>"],
           "/ODM/Study/MetaDataVersion/ItemDef[@OID='IT.ADLB.PARAMCD']/def:Origin": ["<def:Origin Type=\"Predecessor\">\n          <Description>\n            <TranslatedText xml:lang=\"en\">LB.LBTESTCD</TranslatedText>\n          </Description>\n        </def:Origin>"]
         }}
+      }
+    },
+    {
+      "case": "a_matching_report_composes",
+      "operation": "define",
+      "input": {"files": {"project.yaml": {"base": "staleness_project"}, "dm.yaml": {"base": "staleness_dm"}, "raw.csv": {"base": "staleness_raw"}}, "built": ["dm.yaml"], "project": "project.yaml", "section": "sdtm", "created": "2026-09-11T00:00:00"},
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {
+          "/ODM/Study/MetaDataVersion/ItemGroupDef[@OID='IG.DM']/def:leaf/@xlink:href": ["dm.csv"]
+        }}
+      }
+    },
+    {
+      "case": "an_inherited_output_report_compares_the_entry_relative_output_path",
+      "operation": "define",
+      "input": {"files": {"project.yaml": {"base": "staleness_project"}, "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: base/parent.yaml\n", "raw.csv": {"base": "staleness_raw"}, "base/parent.yaml": {"base": "staleness_dm"}, "base/raw.csv": {"base": "staleness_raw"}}, "built": ["dm.yaml"], "project": "project.yaml", "section": "sdtm", "created": "2026-09-11T00:00:00"},
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {
+          "/ODM/Study/MetaDataVersion/ItemGroupDef[@OID='IG.DM']/def:leaf/@xlink:href": ["base/dm.csv"]
+        }}
+      }
+    },
+    {
+      "case": "an_inherited_output_s_run_report_names_its_entry_relative_path",
+      "operation": "build",
+      "input": {"files": {"project.yaml": {"base": "staleness_project"}, "dm.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: base/parent.yaml\n", "raw.csv": {"base": "staleness_raw"}, "base/parent.yaml": {"base": "staleness_dm"}, "base/raw.csv": {"base": "staleness_raw"}}, "specification": "dm.yaml"},
+      "issues": [],
+      "report": {"run": [["ARTIFACT"], ["base/dm.csv"]]}
+    },
+    {
+      "case": "a_specification_without_a_report_is_not_compared",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "staleness_project"},
+          "dm.yaml": {"base": "staleness_dm", "edits": [
+            {"from": "  report: dm-report.csv\n", "to": ""}
+          ]},
+          "raw.csv": "STUDYID,USUBJID\nCATH,CATH-0009\n",
+          "dm.csv": "DOMAIN,STUDYID,USUBJID\nDM,CATH,CATH-0009\n"
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "define.xml": {"select": {
+          "/ODM/Study/MetaDataVersion/ItemGroupDef[@OID='IG.DM']/def:leaf/@xlink:href": ["dm.csv"]
+        }}
+      }
+    },
+    {
+      "case": "a_dataset_declared_without_data_whose_report_counts_rows_is_stale",
+      "operation": "define",
+      "input": {
+        "files": {
+          "project.yaml": {"base": "staleness_project"},
+          "dm.yaml": {"base": "staleness_dm", "edits": [
+            {"from": "  repeating: false\n", "to": "  repeating: false\n  has_no_data: true\n  comment: No subject was enrolled.\n"}
+          ]},
+          "raw.csv": {"base": "staleness_raw"}
+        },
+        "built": ["dm.yaml"],
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "compares": ["condition", "spec_paths", "context"],
+      "issues": [
+        {"condition": "stale_artifact", "spec_paths": ["sdtm.specs[0].output.report"], "context": {"dataset": "DM", "report": "dm-report.csv", "reason": "has_no_data", "has_no_data": true, "actual": 2}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_dataset_not_declared_without_data_whose_report_counts_no_rows_is_stale",
+      "operation": "define",
+      "input": {"files": {"project.yaml": {"base": "staleness_project"}, "dm.yaml": {"base": "staleness_dm"}, "raw.csv": "STUDYID,USUBJID\n"}, "built": ["dm.yaml"], "project": "project.yaml", "section": "sdtm", "created": "2026-09-11T00:00:00"},
+      "compares": ["condition", "spec_paths", "context"],
+      "issues": [
+        {"condition": "stale_artifact", "spec_paths": ["sdtm.specs[0].output.report"], "context": {"dataset": "DM", "report": "dm-report.csv", "reason": "has_no_data", "has_no_data": false, "actual": 0}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_file_that_is_not_a_run_report_is_stale",
+      "operation": "define",
+      "input": {"files": {"project.yaml": {"base": "staleness_project"}, "dm.yaml": {"base": "staleness_dm"}, "raw.csv": {"base": "staleness_raw"}, "dm.csv": {"base": "staleness_artifact"}, "dm-report.csv": "ARTIFACT,KIND\ndm.csv,run\n"}, "project": "project.yaml", "section": "sdtm", "created": "2026-09-11T00:00:00"},
+      "compares": ["condition", "spec_paths", "context"],
+      "issues": [
+        {"condition": "stale_artifact", "spec_paths": ["sdtm.specs[0].output.report"], "context": {"dataset": "DM", "report": "dm-report.csv", "reason": "report_invalid"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_declared_report_that_is_absent_fails_as_a_missing_file",
+      "operation": "define",
+      "input": {"files": {"project.yaml": {"base": "staleness_project"}, "dm.yaml": {"base": "staleness_dm"}, "raw.csv": {"base": "staleness_raw"}, "dm.csv": {"base": "staleness_artifact"}}, "project": "project.yaml", "section": "sdtm", "created": "2026-09-11T00:00:00"},
+      "compares": ["condition", "spec_paths", "context.path"],
+      "issues": [
+        {"condition": "resource_path_missing", "spec_paths": ["sdtm.specs[0].output.report"], "context": {"path": "dm-report.csv"}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_transport_file_never_replaces_a_declared_input",
+      "operation": "define",
+      "input": {
+        "files": {
+          "spec.yaml": {"file": "benchmarks/sdtm-dm-xpt/spec.yaml", "edits": [
+            {"from": "DM_RAW: input/dm_raw.csv", "to": "DM_RAW: {path: dm.xpt, encoding: ascii}"}
+          ]},
+          "project.yaml": {"file": "benchmarks/sdtm-dm-xpt/project.yaml"},
+          "dm.xpt": {"file": "benchmarks/sdtm-dm-xpt/input/dm_raw.csv"},
+          "dm.csv": {"file": "benchmarks/sdtm-dm-xpt/expected/dm.csv"}
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "compares": ["condition", "spec_paths"],
+      "prefix": true,
+      "issues": [
+        {"condition": "transport_path_collision", "spec_paths": ["sdtm.specs[0].input.DM_RAW.path"]}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "a_dataset_declared_without_data_has_no_transport_file_and_no_leaf",
+      "operation": "define",
+      "input": {
+        "benchmark": "sdtm-dm-xpt",
+        "edits": {"project.yaml": [{"from": "  - spec.yaml", "to": "  - spec.yaml\n  - ae.yaml"}]},
+        "files": {
+          "dm.csv": {"file": "benchmarks/sdtm-dm-xpt/expected/dm.csv"},
+          "ae.yaml": {"file": "benchmarks/sdtm-dm-xpt/spec.yaml", "edits": [
+            {"from": "domain: DM", "to": "domain: AE"},
+            {"from": "path: dm.csv", "to": "path: ae.csv"},
+            {"from": "  repeating: false\n", "to": "  repeating: false\n  has_no_data: true\n  comment: No adverse events were collected.\n"}
+          ]}
+        },
+        "project": "project.yaml",
+        "section": "sdtm",
+        "created": "2026-09-11T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "dm.xpt": {"file": "benchmarks/sdtm-dm-xpt/expected/dm.xpt"},
+        "define.xml": {"select": {
+          "/ODM/Study/MetaDataVersion/ItemGroupDef[@OID='IG.AE']/@def:HasNoData": ["Yes"],
+          "/ODM/Study/MetaDataVersion/ItemGroupDef[@OID='IG.AE']/@def:ArchiveLocationID": [],
+          "/ODM/Study/MetaDataVersion/ItemGroupDef[@OID='IG.AE']/def:leaf": []
+        }}
+      }
+    },
+    {
+      "case": "a_dataset_without_rows_must_declare_it_has_no_data",
+      "operation": "define",
+      "input": {"benchmark": "sdtm-dm-xpt", "files": {"dm.csv": "DOMAIN,STUDYID,USUBJID,SUBJID,RFSTDTC,SITEID,AGE,AGEU,SEX,RACE,COUNTRY\n"}, "project": "project.yaml", "section": "sdtm", "created": "2026-09-11T00:00:00"},
+      "compares": ["phase", "condition", "spec_paths"],
+      "prefix": true,
+      "issues": [
+        {"phase": "output", "condition": "transport_dataset_empty", "spec_paths": ["datasets.DM.artifact"]}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "adam_dataset_json_targets_the_integer_its_document_submits",
+      "operation": "define",
+      "input": {
+        "files": {
+          "spec.yaml": {"file": "rust/crates/yamaa-adapters/tests/fixtures/converted/adam-adsl-xpt/spec.yaml"},
+          "project.yaml": {"file": "rust/crates/yamaa-adapters/tests/fixtures/converted/adam-adsl-xpt/project.yaml", "edits": [
+            {"from": "transport: xpt", "to": "transport: dataset_json"}
+          ]},
+          "input/adsl_raw.csv": {"file": "benchmarks/adam-adsl-xpt/input/adsl_raw.csv"},
+          "adsl.csv": {"file": "benchmarks/adam-adsl-xpt/expected/adsl.csv"}
+        },
+        "project": "project.yaml",
+        "section": "adam",
+        "created": "2026-09-11T00:00:00"
+      },
+      "issues": [],
+      "saved": {
+        "adsl.json": {"select": {
+          "/columns/3": ["{\"itemOID\": \"IT.ADSL.AGE\", \"name\": \"AGE\", \"label\": \"Age\", \"dataType\": \"integer\", \"length\": 3, \"displayFormat\": \"3.\"}"],
+          "/columns/5": ["{\"itemOID\": \"IT.ADSL.TRTSDT\", \"name\": \"TRTSDT\", \"label\": \"Date of First Exposure to Treatment\", \"dataType\": \"date\", \"targetDataType\": \"integer\", \"length\": 8, \"displayFormat\": \"DATE9.\"}"],
+          "/columns/6": ["{\"itemOID\": \"IT.ADSL.TRTSDTM\", \"name\": \"TRTSDTM\", \"label\": \"Datetime of First Exposure to Treatment\", \"dataType\": \"datetime\", \"targetDataType\": \"integer\", \"length\": 8, \"displayFormat\": \"DATETIME20.\"}"],
+          "/rows/0": ["[\"CATH\", \"CATH-UCSD-0001\", \"VITAMIN D3\", 34, 172.5, \"2025-01-08\", \"2025-01-08T08:30:00\"]"]
+        }},
+        "define.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ODM xmlns=\"http://www.cdisc.org/ns/odm/v1.3\" xmlns:def=\"http://www.cdisc.org/ns/def/v2.1\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" ODMVersion=\"1.3.2\" FileType=\"Snapshot\" FileOID=\"CATH.adam.Define-XML_2.1\" CreationDateTime=\"2026-09-11T00:00:00\" SourceSystem=\"yamaa\" SourceSystemVersion=\"1.0\" def:Context=\"Submission\">\n  <Study OID=\"STDY.CATH\">\n    <GlobalVariables>\n      <StudyName>CATH</StudyName>\n      <StudyDescription>Example study submitting subject-level analysis data in SAS transport</StudyDescription>\n      <ProtocolName>CATH-01</ProtocolName>\n    </GlobalVariables>\n    <MetaDataVersion OID=\"MDV.CATH.adam\" Name=\"CATH adam metadata\" def:DefineVersion=\"2.1.11\">\n      <def:Standards>\n        <def:Standard OID=\"STD.ADaMIG\" Name=\"ADaMIG\" Type=\"IG\" Version=\"1.3\" Status=\"Final\"/>\n      </def:Standards>\n      <ItemGroupDef OID=\"IG.ADSL\" Name=\"ADSL\" Purpose=\"Analysis\" SASDatasetName=\"ADSL\" Repeating=\"No\" IsReferenceData=\"No\" def:Structure=\"One record per subject\" def:ArchiveLocationID=\"LF.ADSL\" def:StandardOID=\"STD.ADaMIG\">\n        <Description>\n          <TranslatedText xml:lang=\"en\">Subject-Level Analysis Dataset</TranslatedText>\n        </Description>\n        <ItemRef ItemOID=\"IT.ADSL.STUDYID\" OrderNumber=\"1\" Mandatory=\"Yes\" KeySequence=\"1\"/>\n        <ItemRef ItemOID=\"IT.ADSL.USUBJID\" OrderNumber=\"2\" Mandatory=\"Yes\" KeySequence=\"2\"/>\n        <ItemRef ItemOID=\"IT.ADSL.TRT01A\" OrderNumber=\"3\" Mandatory=\"Yes\"/>\n        <ItemRef ItemOID=\"IT.ADSL.AGE\" OrderNumber=\"4\" Mandatory=\"Yes\"/>\n        <ItemRef ItemOID=\"IT.ADSL.HEIGHTBL\" OrderNumber=\"5\" Mandatory=\"No\"/>\n        <ItemRef ItemOID=\"IT.ADSL.TRTSDT\" OrderNumber=\"6\" Mandatory=\"No\" MethodOID=\"MT.ADSL.TRTSDT\"/>\n        <ItemRef ItemOID=\"IT.ADSL.TRTSDTM\" OrderNumber=\"7\" Mandatory=\"No\"/>\n        <def:Class Name=\"SUBJECT LEVEL ANALYSIS DATASET\"/>\n        <def:leaf ID=\"LF.ADSL\" xlink:href=\"adsl.json\">\n          <def:title>adsl.json</def:title>\n        </def:leaf>\n      </ItemGroupDef>\n      <ItemDef OID=\"IT.ADSL.STUDYID\" Name=\"STUDYID\" DataType=\"text\" Length=\"4\" SASFieldName=\"STUDYID\">\n        <Description>\n          <TranslatedText xml:lang=\"en\">Study Identifier</TranslatedText>\n        </Description>\n        <def:Origin Type=\"Predecessor\">\n          <Description>\n            <TranslatedText xml:lang=\"en\">ADSL_RAW.STUDYID</TranslatedText>\n          </Description>\n        </def:Origin>\n      </ItemDef>\n      <ItemDef OID=\"IT.ADSL.USUBJID\" Name=\"USUBJID\" DataType=\"text\" Length=\"16\" SASFieldName=\"USUBJID\">\n        <Description>\n          <TranslatedText xml:lang=\"en\">Unique Subject Identifier</TranslatedText>\n        </Description>\n        <def:Origin Type=\"Predecessor\">\n          <Description>\n            <TranslatedText xml:lang=\"en\">ADSL_RAW.USUBJID</TranslatedText>\n          </Description>\n        </def:Origin>\n      </ItemDef>\n      <ItemDef OID=\"IT.ADSL.TRT01A\" Name=\"TRT01A\" DataType=\"text\" Length=\"11\" SASFieldName=\"TRT01A\">\n        <Description>\n          <TranslatedText xml:lang=\"en\">Actual Treatment for Period 01</TranslatedText>\n        </Description>\n        <def:Origin Type=\"Predecessor\">\n          <Description>\n            <TranslatedText xml:lang=\"en\">ADSL_RAW.TRT01A</TranslatedText>\n          </Description>\n        </def:Origin>\n      </ItemDef>\n      <ItemDef OID=\"IT.ADSL.AGE\" Name=\"AGE\" DataType=\"integer\" Length=\"3\" SASFieldName=\"AGE\" def:DisplayFormat=\"3.\">\n        <Description>\n          <TranslatedText xml:lang=\"en\">Age</TranslatedText>\n        </Description>\n        <def:Origin Type=\"Predecessor\">\n          <Description>\n            <TranslatedText xml:lang=\"en\">ADSL_RAW.AGE</TranslatedText>\n          </Description>\n        </def:Origin>\n      </ItemDef>\n      <ItemDef OID=\"IT.ADSL.HEIGHTBL\" Name=\"HEIGHTBL\" DataType=\"float\" Length=\"5\" SignificantDigits=\"1\" SASFieldName=\"HEIGHTBL\" def:DisplayFormat=\"5.1\">\n        <Description>\n          <TranslatedText xml:lang=\"en\">Baseline Height (cm)</TranslatedText>\n        </Description>\n        <def:Origin Type=\"Predecessor\">\n          <Description>\n            <TranslatedText xml:lang=\"en\">ADSL_RAW.HEIGHTBL</TranslatedText>\n          </Description>\n        </def:Origin>\n      </ItemDef>\n      <ItemDef OID=\"IT.ADSL.TRTSDT\" Name=\"TRTSDT\" DataType=\"integer\" Length=\"8\" SASFieldName=\"TRTSDT\" def:DisplayFormat=\"DATE9.\">\n        <Description>\n          <TranslatedText xml:lang=\"en\">Date of First Exposure to Treatment</TranslatedText>\n        </Description>\n        <def:Origin Type=\"Derived\" Source=\"Sponsor\"/>\n      </ItemDef>\n      <ItemDef OID=\"IT.ADSL.TRTSDTM\" Name=\"TRTSDTM\" DataType=\"integer\" Length=\"8\" SASFieldName=\"TRTSDTM\" def:DisplayFormat=\"DATETIME20.\">\n        <Description>\n          <TranslatedText xml:lang=\"en\">Datetime of First Exposure to Treatment</TranslatedText>\n        </Description>\n        <def:Origin Type=\"Predecessor\">\n          <Description>\n            <TranslatedText xml:lang=\"en\">ADSL_RAW.TRTSDTC</TranslatedText>\n          </Description>\n        </def:Origin>\n      </ItemDef>\n      <MethodDef OID=\"MT.ADSL.TRTSDT\" Name=\"ADSL.TRTSDT\" Type=\"Computation\">\n        <Description>\n          <TranslatedText xml:lang=\"en\">Date part of TRTSDTM.</TranslatedText>\n        </Description>\n      </MethodDef>\n    </MetaDataVersion>\n  </Study>\n</ODM>\n"
       }
     }
   ]

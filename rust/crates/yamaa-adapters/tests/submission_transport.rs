@@ -4,7 +4,10 @@
 //! Every benchmark whose `benchmark.yaml` declares `define` runs that call over
 //! its independently authored published artifacts. A positive case must hold and
 //! save exactly the bytes of `expected/`; a negative case must fail with the first
-//! issue `expected/error.yaml` asserts and write nothing.
+//! issue `expected/error.yaml` asserts and write nothing. The tests that staged a
+//! benchmark, composed it once and compared its issues, its document or its
+//! Dataset-JSON are define cases of `tests/fixtures/diagnostics/shared_define.json`
+//! (#3798); the tests left walk the benchmarks or read saved transport bytes.
 mod transport {
     use crate::support::Edit as _;
     use std::{
@@ -139,6 +142,8 @@ mod transport {
             .collect()
     }
 
+    /// Already data: every define benchmark's own `expected/` files and
+    /// `error.yaml`, for both hosts.
     #[test]
     fn every_define_benchmark_matches_its_independent_truth_in_both_hosts() {
         let cases = define_cases();
@@ -235,8 +240,10 @@ mod transport {
         }
     }
 
-    /// The written transport files read back through the repository's own
-    /// SAS Transport reader profile as the published values.
+    /// Seam: the saved SAS Transport bytes read back through
+    /// `sas_source::parse`, which no reader of the replay calls. The written
+    /// transport files read back through the repository's own SAS Transport
+    /// reader profile as the published values.
     #[cfg(feature = "readstat")]
     #[test]
     fn written_transport_files_read_back_through_the_xport_reader() {
@@ -307,8 +314,10 @@ mod transport {
         }
     }
 
-    /// XPT-9 and TIME-20: an analysis time is a numeric variable carrying its
-    /// declared `TIME8.` in its NAMESTR, and reads back as its seconds.
+    /// Seam: byte offsets of a NAMESTR in saved SAS Transport bytes, and their
+    /// values read back through `sas_source::parse`. XPT-9 and TIME-20: an
+    /// analysis time is a numeric variable carrying its declared `TIME8.` in
+    /// its NAMESTR, and reads back as its seconds.
     #[test]
     fn an_analysis_time_is_a_numeric_variable_with_its_time_format() {
         use yamaa_core::{
@@ -363,40 +372,8 @@ mod transport {
         );
     }
 
-    /// JSON-9 and JSON-10: under `adam` a date or datetime keeps its ISO value
-    /// in Dataset-JSON and asks for the integer the document submits.
-    #[test]
-    fn adam_dataset_json_targets_the_integer_its_document_submits() {
-        let case = benchmarks().join("adam-adsl-xpt");
-        let temp = stage(&case);
-        convert("adam-adsl-xpt", &temp);
-        let project = temp.0.join("project.yaml");
-        let text = fs::read_to_string(&project)
-            .unwrap()
-            .edit("transport: xpt", "transport: dataset_json");
-        fs::write(&project, text).unwrap();
-        let result = run(&case, &temp);
-        assert!(result.issues().is_empty(), "{:?}", result.issues());
-        let artifacts: Vec<_> = result.artifacts().collect();
-        assert_eq!(artifacts[0].0, "adsl.json");
-        let json = std::str::from_utf8(artifacts[0].1).unwrap();
-        for line in [
-            r#"{"itemOID": "IT.ADSL.AGE", "name": "AGE", "label": "Age", "dataType": "integer", "length": 3, "displayFormat": "3."}"#,
-            r#"{"itemOID": "IT.ADSL.TRTSDT", "name": "TRTSDT", "label": "Date of First Exposure to Treatment", "dataType": "date", "targetDataType": "integer", "length": 8, "displayFormat": "DATE9."}"#,
-            r#"{"itemOID": "IT.ADSL.TRTSDTM", "name": "TRTSDTM", "label": "Datetime of First Exposure to Treatment", "dataType": "datetime", "targetDataType": "integer", "length": 8, "displayFormat": "DATETIME20."}"#,
-            r#"["CATH", "CATH-UCSD-0001", "VITAMIN D3", 34, 172.5, "2025-01-08", "2025-01-08T08:30:00"]"#,
-        ] {
-            assert!(json.contains(line), "{line}\n{json}");
-        }
-        // The document is unchanged by the transport it names.
-        let xml = std::str::from_utf8(artifacts[1].1).unwrap();
-        let expected = fs::read_to_string(case.join("expected/define.xml"))
-            .unwrap()
-            .replace("adsl.xpt", "adsl.json");
-        assert_eq!(xml, expected);
-    }
-
-    /// JSON-4 and JSON-13: the newline-delimited form of a dataset is the
+    /// Already data: each define benchmark's single-object Dataset-JSON
+    /// golden. JSON-4 and JSON-13: the newline-delimited form of a dataset is the
     /// single-object form's object without `rows` on its first line, then one
     /// row per line, so the two representations carry one value. The byte
     /// goldens fix each form; this proves the seam between them, which no
@@ -466,8 +443,11 @@ mod transport {
         assert!(checked >= 2, "{checked} datasets compared");
     }
 
-    /// SUB-24: one column name has one length across the section's datasets,
-    /// and a SUPP-- dataset is measured on its own.
+    /// Seam: the composition writes SAS Transport files for datasets no
+    /// benchmark publishes, which a case's `saved` states only by their whole
+    /// bytes, and no authored file holds them. SUB-24: one column name has one
+    /// length across the section's datasets, and a SUPP-- dataset is measured
+    /// on its own.
     #[test]
     fn shared_column_lengths_span_datasets_and_supplemental_datasets_stand_alone() {
         let case = benchmarks().join("sdtm-dm-xpt");
@@ -521,73 +501,5 @@ mod transport {
                 "{element}"
             );
         }
-    }
-
-    /// JSON-3: a dataset declared to have no data has no transport file and no
-    /// leaf, and a dataset without rows that does not declare it is refused.
-    #[test]
-    fn datasets_without_data_have_no_file_and_empty_ones_must_declare_it() {
-        let case = benchmarks().join("sdtm-dm-xpt");
-        let temp = stage(&case);
-        let spec = fs::read_to_string(temp.0.join("spec.yaml")).unwrap();
-        fs::write(
-            temp.0.join("ae.yaml"),
-            spec.edit("domain: DM", "domain: AE")
-                .edit("path: dm.csv", "path: ae.csv")
-                .edit(
-                    "  repeating: false\n",
-                    "  repeating: false\n  has_no_data: true\n  comment: No adverse events were collected.\n",
-                ),
-        )
-        .unwrap();
-        let project = temp.0.join("project.yaml");
-        let text = fs::read_to_string(&project)
-            .unwrap()
-            .edit("  - spec.yaml", "  - spec.yaml\n  - ae.yaml");
-        fs::write(&project, text).unwrap();
-        let mut result = run(&case, &temp);
-        assert!(result.issues().is_empty(), "{:?}", result.issues());
-        let names: Vec<_> = result.artifacts().map(|(name, _, _)| name).collect();
-        assert_eq!(names, ["dm.xpt", "define.xml"]);
-        let xml = std::str::from_utf8(result.artifacts().nth(1).unwrap().1).unwrap();
-        let begin = xml.find("<ItemGroupDef OID=\"IG.AE\"").unwrap();
-        let group = &xml[begin..begin + xml[begin..].find("</ItemGroupDef>").unwrap()];
-        assert!(group.contains("def:HasNoData=\"Yes\""), "{group}");
-        assert!(!group.contains("def:ArchiveLocationID"), "{group}");
-        assert!(!group.contains("<def:leaf"), "{group}");
-        assert!(result.save().unwrap());
-        assert!(!temp.0.join("ae.xpt").exists());
-        // The same dataset without the declaration and without rows fails.
-        let temp = stage(&case);
-        let header = fs::read_to_string(temp.0.join("dm.csv")).unwrap();
-        let header = header.lines().next().unwrap();
-        fs::write(temp.0.join("dm.csv"), format!("{header}\n")).unwrap();
-        let mut result = run(&case, &temp);
-        let issue = &result.issues()[0];
-        assert_eq!(
-            (issue.phase(), issue.condition()),
-            ("output", "transport_dataset_empty")
-        );
-        assert_eq!(issue.spec_paths, ["datasets.DM.artifact"]);
-        assert!(result.save().is_err());
-        assert!(!temp.0.join("dm.xpt").exists());
-    }
-
-    /// JSON-2: a transport file never replaces a declared input.
-    #[test]
-    fn a_transport_file_never_replaces_a_declared_input() {
-        let case = benchmarks().join("sdtm-dm-xpt");
-        let temp = stage(&case);
-        fs::rename(temp.0.join("input/dm_raw.csv"), temp.0.join("dm.xpt")).unwrap();
-        let spec = fs::read_to_string(temp.0.join("spec.yaml")).unwrap().edit(
-            "DM_RAW: input/dm_raw.csv",
-            "DM_RAW: {path: dm.xpt, encoding: ascii}",
-        );
-        fs::write(temp.0.join("spec.yaml"), spec).unwrap();
-        let mut result = run(&case, &temp);
-        let issue = &result.issues()[0];
-        assert_eq!(issue.condition(), "transport_path_collision");
-        assert_eq!(issue.spec_paths, ["sdtm.specs[0].input.DM_RAW.path"]);
-        assert!(result.save().is_err());
     }
 }

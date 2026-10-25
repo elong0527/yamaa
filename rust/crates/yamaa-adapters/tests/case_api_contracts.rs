@@ -339,7 +339,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
     let contracts = replay::object(replay::field(&routes, "cases"));
     assert_eq!(
         contracts.len(),
-        482,
+        483,
         "every original API contract is authored"
     );
     let mut seen = BTreeSet::new();
@@ -504,12 +504,14 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         contracts.keys().cloned().collect::<BTreeSet<_>>(),
         "every authored API case still exists"
     );
-    assert_eq!((domains, preparation, either, checks), (294, 22, 56, 110));
-    assert_eq!((accepted_saves, refused_saves, no_save), (179, 64, 239));
+    assert_eq!((domains, preparation, either, checks), (295, 22, 56, 110));
+    assert_eq!((accepted_saves, refused_saves, no_save), (180, 64, 239));
 }
 
 /// Seam: the composition's save return, held artifact order, capture counter
 /// and absent directories are independent of the replay's saved-file delta.
+/// A case's `built` specifications are built and saved first, as the replay's
+/// `define` builds them, and a refused composition plans no file to save.
 #[test]
 fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
     let authored = resource_contracts();
@@ -527,11 +529,17 @@ fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
             &["save", "empty_artifacts", "artifacts", "absent"],
         );
         let study = operations::study(&case.input);
+        let host =
+            crate::support::host(case.input.get("host").map(replay::text).unwrap_or("python"));
+        operations::build_first(
+            &study,
+            case.input.get("built").map_or(&[][..], replay::items),
+            None,
+            host,
+        );
         let staged = operations::state(&study);
         let project = study.identity(replay::text(replay::field(&case.input, "project")));
         let section = operations::section(replay::field(&case.input, "section"));
-        let host =
-            crate::support::host(case.input.get("host").map(replay::text).unwrap_or("python"));
         let mut define = yamaa_adapters::file_define::Define::prepare(
             &project,
             section,
@@ -571,6 +579,7 @@ fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
             );
         }
         let reads = define.capture_reads();
+        let planned = define.plan().is_some();
         let result = define.save();
         match replay::field(expected, "save") {
             Value::Bool(true) => {
@@ -584,6 +593,11 @@ fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
             }
             Value::Bool(false) => {
                 refused += 1;
+                assert!(
+                    !planned,
+                    "{}: a refused composition plans no file to save",
+                    case.label
+                );
                 assert!(
                     result.is_err(),
                     "{}: refused composition must fail its save, got {result:?}",
@@ -620,7 +634,7 @@ fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
     );
     assert_eq!(
         (accepted, refused, artifact_contracts, ordered_artifacts),
-        (7, 23, 3, 3)
+        (11, 29, 3, 5)
     );
 }
 
