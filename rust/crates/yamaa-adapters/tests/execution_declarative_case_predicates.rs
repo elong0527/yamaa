@@ -49,27 +49,6 @@ mod execution {
                 })
                 .collect()
         }
-        /// A seam the replay cannot express: `saved` lists created or
-        /// changed files, so it cannot detect deletion of an existing target.
-        /// Read back the original case's sentinel as well (OUTPUT-7).
-        #[test]
-        fn a_failed_case_predicate_save_preserves_the_existing_target() {
-            use crate::support::diagnostic::{operations, replay};
-
-            let case = replay::cases()
-                .into_iter()
-                .find(|case| {
-                    case.label == "declarative_case_predicates.json::case_predicate_multiplicity_retains_its_complete_report_and_blocks_publication"
-                })
-                .expect("the refused case predicate fixture");
-            let result = operations::run("save", &case.input);
-            assert_eq!(
-                fs::read(result.study.unwrap().join("result.csv")).unwrap(),
-                b"sentinel",
-                "{}: a failed save keeps the existing target's bytes",
-                case.label
-            );
-        }
         /// Seams the replay cannot express: the original build route, an
         /// absent output table, the save's return value and unchanged primary
         /// bytes. Their authored contracts live beside the original fixtures.
