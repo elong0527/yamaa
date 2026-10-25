@@ -18,7 +18,7 @@ use crate::support::diagnostic::{
     form::{self, Outcome},
     replay::{closed, field, items, text},
 };
-use yamaa_adapters::file_define::Define;
+use yamaa_application::file_define::Define;
 use yamaa_core::json::Value;
 
 pub(super) const FILES: &[File] = &[fixture!("shared_define.json")];

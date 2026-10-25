@@ -21,10 +21,14 @@ arrow = ["yamaa-adapters/arrow"]
 [dependencies]
 yamaa-adapters = { path = "../yamaa-adapters", default-features = false }
 yamaa-core = { path = "../yamaa-core" }
+# The application measurements' and resolved artifacts' JSON records, at the
+# adapters' releases.
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { version = "1.0.145", features = ["raw_value"] }
 
-# The integration suite reads JSON and Parquet as the adapters' suite does,
-# at the adapters' releases: the test support writes Parquet inputs at test
-# time (tests/support/parquet_files.rs, the adapters' module copied), with the
+# The integration suite reads Parquet as the adapters' suite does, at the
+# adapters' releases: the test support writes Parquet inputs at test time
+# (tests/support/parquet_files.rs, the adapters' module copied), with the
 # features of the adapters' differential oracle; no package builds Parquet
 # (#3878).
 [dev-dependencies]
@@ -35,8 +39,6 @@ arrow-schema = { version = "=55.2.0", default-features = false }
 base64 = "0.22.1"
 flatbuffers = { version = "=25.12.19", default-features = false }
 parquet = { version = "=55.2.0", default-features = false, features = ["arrow", "snap", "brotli", "flate2", "lz4", "zstd"] }
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = { version = "1.0.145", features = ["raw_value"] }
 
 # A test holds a directory lock as another process would.
 [target.'cfg(unix)'.dev-dependencies]

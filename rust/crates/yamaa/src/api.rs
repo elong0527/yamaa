@@ -846,7 +846,7 @@ fn resolved_value(
     let tree = tree.ok_or_else(|| {
         Failure::from_issues(
             Action::Resolve(specification),
-            &yamaa_adapters::file_application::rejected(
+            &yamaa_application::file_application::rejected(
                 Step::Resolve,
                 Fault::ArtifactRepresentation,
             ),
@@ -860,7 +860,7 @@ fn resolved_value(
 /// as `cannot select <section>`, with `unknown_section` naming the sections
 /// the project declares (PROJECT-14).
 fn select(
-    read: &yamaa_adapters::project_scope::Project,
+    read: &yamaa_application::project_scope::Project,
     section: Option<&str>,
 ) -> Result<Option<Section>, Failure> {
     let Some(key) = section else {
@@ -989,7 +989,7 @@ impl ProjectRun {
             .filter_map(|member| member.run()?.report().map(Table::public))
             .collect::<Vec<_>>();
         Table::from_public(
-            yamaa_adapters::project_scope::stack_reports(&reports)
+            yamaa_application::project_scope::stack_reports(&reports)
                 .expect("every run report has the run report columns"),
         )
     }
@@ -1450,7 +1450,7 @@ impl<'a> ProjectRequest<'a> {
         let created = options
             .created
             .clone()
-            .or_else(yamaa_adapters::file_define::current_time);
+            .or_else(yamaa_application::file_define::current_time);
         let outcome =
             self.compose_sections(created.as_deref(), &options.installed_version, &token)?;
         Ok(Submission {

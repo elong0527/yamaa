@@ -47,9 +47,9 @@ use crate::support::diagnostic::{
 use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 use yamaa_adapters::{
     callback::CallbackError,
-    file_application::{self, Classification},
     project_lock::{Finding, Reason},
 };
+use yamaa_application::file_application::{self, Classification};
 use yamaa_core::{
     application_observer::{Event, Observer, Phase, Scope},
     domain_entry::Request,
@@ -104,7 +104,7 @@ pub(super) fn logged(operation: &str, input: &Value) -> Option<(Reported, Vec<St
     let staged = saves.then(|| contents(&study));
     let (issues, outcome) = match file_application::select(Some(host(input)), request, None) {
         Err(error) => (
-            file_application::collect(yamaa_adapters::project_application::selection_failure(
+            file_application::collect(yamaa_application::project_application::selection_failure(
                 &error,
             )),
             Outcome::default(),

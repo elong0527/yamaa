@@ -37,7 +37,8 @@ use crate::{
     file_resources::Resources,
     host_resources::Resolver,
     public_table::PublicTable,
-    publication::{self, AnchoredTarget, Cause},
+    publication::{self, Cause},
+    publisher::AnchoredTarget,
 };
 
 /// Save `table` to the file `written` names and return the path written:

@@ -45,7 +45,8 @@ class MinimalBuilds(unittest.TestCase):
 
     def test_each_selection_compiles_the_adapter_unit_tests(self):
         # A unit test behind a disabled reader, such as the sas_source
-        # refusal without readstat, builds in no other job.
+        # refusal without readstat, builds in no other job; so does one of
+        # the application layer's.
         for selection, enabled in format_features.FORMATS.items():
             features = ["--no-default-features"]
             if enabled:
@@ -57,6 +58,8 @@ class MinimalBuilds(unittest.TestCase):
                         "--locked",
                         "-p",
                         "yamaa-adapters",
+                        "-p",
+                        "yamaa-application",
                         *features,
                         "--lib",
                         "--no-run",

@@ -12,9 +12,9 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use yamaa_adapters::file_application::Admitted;
-use yamaa_adapters::project_scope::identify;
-use yamaa_adapters::publication::{self, Cause};
+use yamaa_application::file_application::Admitted;
+use yamaa_application::project_scope::identify;
+use yamaa_application::publication::{self, Cause};
 use yamaa_core::diagnostic::Diagnostic;
 
 use crate::api::{Run, Status};
@@ -121,7 +121,7 @@ impl Member {
 /// member of a [`crate::Submission`]. Only the save of the submission that
 /// holds it writes, through the resolver.
 pub(crate) struct DefineBuild {
-    inner: yamaa_adapters::file_define::Define,
+    inner: yamaa_application::file_define::Define,
     /// The issues of the composition as it was made: a later save's refusal
     /// joins its issues, never these.
     composed: Vec<Diagnostic>,
@@ -141,7 +141,7 @@ impl DefineBuild {
         created: Option<&str>,
         installed: &str,
     ) -> Self {
-        let inner = yamaa_adapters::file_define::Define::prepare(
+        let inner = yamaa_application::file_define::Define::prepare(
             project,
             section,
             created,
@@ -417,7 +417,7 @@ pub(crate) fn save(
         Some(_) => None,
         None => Some(publication::stage_with(&files, |_, _| {
             if token.is_cancelled() {
-                Err(publication::Interruption::Cancelled)
+                Err(yamaa_adapters::publisher::Interruption::Cancelled)
             } else {
                 Ok(())
             }

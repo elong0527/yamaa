@@ -30,7 +30,7 @@ use crate::support::diagnostic::{
     form::Outcome,
     replay::{closed, field, items, text},
 };
-use yamaa_adapters::project_scope::{self, Project};
+use yamaa_application::project_scope::{self, Project};
 use yamaa_core::json::Value;
 
 pub(super) const FILES: &[File] = &[fixture!("project_scope.json")];
@@ -50,7 +50,7 @@ pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
     let study = study(input);
     let project = path(&study, text(field(input, "project")));
     if operation == "project_check" {
-        let issues = yamaa_adapters::project_application::check(
+        let issues = yamaa_application::project_application::check(
             &path(&study, text(field(input, "specification"))),
             &project,
             host(input),

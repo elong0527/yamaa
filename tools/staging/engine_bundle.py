@@ -52,7 +52,7 @@ from tools.packaging import check_minimum_rust
 from tools.paths import ROOT, WORKSPACE
 from tools.staging import vendor_crates
 
-ENGINE = ("yamaa-core", "yamaa-adapters", "yamaa")
+ENGINE = ("yamaa-core", "yamaa-adapters", "yamaa-application", "yamaa")
 # The facade crate, which embeds the selftest cases.
 FACADE = "yamaa"
 # The adapters crate's directories of the data it embeds with include_str!,

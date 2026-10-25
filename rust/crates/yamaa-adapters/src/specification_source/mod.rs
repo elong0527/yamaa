@@ -63,7 +63,7 @@ impl CapturedFindings {
     /// prepared as the entry of its own preparation: each names that file as
     /// its `source` and `entry`, as every finding further into it does, so
     /// that it is located there (SCHEMA-2, P-ISSUE-1).
-    pub(crate) fn name_file(&mut self) {
+    pub fn name_file(&mut self) {
         self.named = true;
     }
     /// The provenance each finding names: the named file as `source` and
@@ -282,7 +282,7 @@ pub(crate) fn prepare_versioned<P: Resolver>(
 /// [`prepare_versioned`] of a fragment checked on the parent a caller names
 /// (#3694). A fragment that declares `parent` or `include` refuses that
 /// parent (LAYER-4).
-pub(crate) fn prepare_fragment<P: Resolver>(
+pub fn prepare_fragment<P: Resolver>(
     source: Source,
     display_path: String,
     parent: yamaa_core::inheritance::CallerParent<'_>,
@@ -332,7 +332,7 @@ impl PreparedDocument {
     /// The identity of each file this document holds besides its entry: its
     /// parent layers and included fragments in first-capture order, then its
     /// dictionary files.
-    pub(crate) fn held(&self) -> impl Iterator<Item = &str> {
+    pub fn held(&self) -> impl Iterator<Item = &str> {
         self.parents
             .iter()
             .map(CapturedParent::source)
@@ -343,7 +343,7 @@ impl PreparedDocument {
     /// names, when this document holds that occurrence: its `parent` or an
     /// `include` entry, naming `declaring` as `source`, or a dictionary path.
     /// Resolved identities never replace the authored field or path.
-    pub(crate) fn resource_diagnostic(
+    pub fn resource_diagnostic(
         &self,
         declaring: &str,
         written: &str,
@@ -392,13 +392,10 @@ impl PreparedDocument {
     }
     /// Keep the spellings that located each file this document holds, once
     /// every one of them was captured again.
-    pub(crate) fn retain_resource_aliases(
-        &mut self,
-        aliases: yamaa_core::file_preparation::Aliases,
-    ) {
+    pub fn retain_resource_aliases(&mut self, aliases: yamaa_core::file_preparation::Aliases) {
         self.resource_aliases = aliases;
     }
-    pub(crate) fn resource_diagnostic_for_identity(
+    pub fn resource_diagnostic_for_identity(
         &self,
         identity: &str,
         failure: yamaa_core::resource::ResourceFailure,
@@ -573,7 +570,7 @@ impl PreparedDocument {
         self.written_output_field_origin("path")
     }
     /// Every governed output field retains its original atomic output layer.
-    pub(crate) fn written_output_field_origin(
+    pub fn written_output_field_origin(
         &self,
         field: &str,
     ) -> Option<yamaa_core::resource::WrittenPath<'_>> {
@@ -618,9 +615,7 @@ fn entry_relative(document: &yamaa_core::schema::Document, node: usize) -> bool 
 
 /// A port that holds only the entry: every parent and dictionary it names
 /// is unavailable, and every path keeps the spelling its layer wrote.
-#[cfg(test)]
-pub(crate) struct EntryOnly;
-#[cfg(test)]
+pub struct EntryOnly;
 impl yamaa_core::resolver::Resolver for EntryOnly {
     type Error = ();
     fn inspect(

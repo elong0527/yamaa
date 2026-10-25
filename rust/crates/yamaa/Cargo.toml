@@ -11,21 +11,23 @@ autotests = false
 [features]
 default = ["yaml", "parquet", "readstat", "odm", "arrow"]
 # Document syntax admission; owned core documents do not require this parser.
-yaml = ["yamaa-adapters/yaml"]
+yaml = ["yamaa-adapters/yaml", "yamaa-application/yaml"]
 # Source and artifact codecs share one edge, including native Zstd compression.
-parquet = ["yamaa-adapters/parquet"]
+parquet = ["yamaa-adapters/parquet", "yamaa-application/parquet"]
 # SAS binary input only; disabling this feature omits the bundled ReadStat build.
-readstat = ["yamaa-adapters/readstat"]
+readstat = ["yamaa-adapters/readstat", "yamaa-application/readstat"]
 # ODM XML clinical items from plain XML or plain/gzip TAR input; pure Rust.
-odm = ["yamaa-adapters/odm"]
+odm = ["yamaa-adapters/odm", "yamaa-application/odm"]
 # The Arrow form of tables, which is not a format: the re-exported Arrow
 # types, a table's record batches and C stream, and InputFrame::import.
-arrow = ["yamaa-adapters/arrow", "dep:arrow-array", "dep:arrow-schema"]
+arrow = ["yamaa-adapters/arrow", "yamaa-application/arrow", "dep:arrow-array", "dep:arrow-schema"]
 
 [dependencies]
 # The forwarded format features above are the only admission edges: without
-# them adapters builds with no physical reader, leaving the CSV route.
+# them adapters builds with no physical reader, leaving the CSV route. The
+# application layer forwards the same features to the adapters.
 yamaa-adapters = { path = "../yamaa-adapters", default-features = false }
+yamaa-application = { path = "../yamaa-application", default-features = false }
 yamaa-core = { path = "../yamaa-core" }
 # The Arrow form of tables at the hosts' edge (the arrow feature). These edges
 # select no physical reader; format admission stays behind the features above.

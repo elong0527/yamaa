@@ -75,7 +75,7 @@ mod tests {
                 empty_string_present: false,
                 ordinal: None,
             };
-            let failure = crate::specification_run::decode_source(
+            let failure = crate::source_decoding::decode_source(
                 &source,
                 b"unused",
                 yamaa_core::specification::SourceInterpretation::Ordinary,
@@ -86,14 +86,14 @@ mod tests {
                 !crate::decoder::Decoder::<std::convert::Infallible>::default()
                     .continue_after(&failure)
             );
-            let crate::specification_run::Error::SasSource(error) = failure else {
+            let crate::source_decoding::Error::SasSource(error) = failure else {
                 panic!("SAS capability refusal must keep its source boundary");
             };
             assert!(matches!(error, Error::Unavailable));
             assert!(error.finding("RAW", path).is_none());
             let crate::specification_diagnostics::Rejection::Fault(issue) =
                 crate::specification_diagnostics::failure(
-                    &crate::specification_run::Error::SasSource(error),
+                    &crate::source_decoding::Error::SasSource(error),
                     Some(&source),
                 )
             else {

@@ -306,7 +306,7 @@ fn declared_read_issue(
         E::Limit(bound) => Err(resource_limit(*bound, declaration)),
         error => match crate::file_resources::resource_failure(error) {
             Some(failure) => Ok(failure.field_diagnostic(declaration, written)),
-            None => Err(Error::Resource(crate::file_application::resource_fault(
+            None => Err(Error::Resource(crate::file_resources::resource_fault(
                 error,
             ))),
         },

@@ -1,5 +1,5 @@
-//! The supported Rust API: a small facade over `yamaa-adapters` and
-//! `yamaa-core`.
+//! The supported Rust API: a small facade over `yamaa-application`,
+//! `yamaa-adapters` and `yamaa-core`.
 //!
 //! An embedder configures one [`Engine`] and calls its use cases: check, run
 //! and save, submission and resolve through the request [`Engine::spec`] or
@@ -22,10 +22,10 @@
 //! project functions exchange, and [`host::functions`] and
 //! [`host::resolver`] every other type the two ports take and return.
 //!
-//! Adapters and core may change in any release without notice; their `pub`
-//! items are visibility for the workspace, not a public API. Every public
-//! type here is facade-owned, and adapters or core types are converted at the
-//! boundary. Core keeps its boundary (no I/O, no `unsafe`, no Arrow).
+//! The application layer, the adapters and core may change in any release
+//! without notice; their `pub` items are visibility for the workspace, not a
+//! public API. Every public type here is facade-owned, and their types are
+//! converted at the boundary. Core keeps its boundary (no I/O, no `unsafe`, no Arrow).
 //!
 //! The facade forwards the `yaml`, `parquet`, `readstat` and `odm` format
 //! features to `yamaa-adapters`, all on by default, and builds with any

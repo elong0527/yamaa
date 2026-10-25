@@ -137,9 +137,9 @@ fn complete_template_findings_precede_zero_rows_and_inherited_row_defaults() {
         let document = crate::support::specification_run::prepare(
             yamaa_adapters::json_wire::encode(&spec).as_bytes(),
         );
-        let Err(yamaa_adapters::specification_run::Error::Prepare(
+        let Err(yamaa_application::specification_run::Error::Prepare(
             yamaa_core::specification::PrepareError::Invalid(findings),
-        )) = yamaa_adapters::specification_run::PreparedRun::prepare(document)
+        )) = yamaa_application::specification_run::PreparedRun::prepare(document)
         else {
             panic!("all malformed templates must retain their language findings")
         };
@@ -214,7 +214,7 @@ fn cumulative_template_queries_admit_and_compute_every_projected_value() {
     let document = crate::support::specification_run::prepare(
         yamaa_adapters::json_wire::encode(&spec).as_bytes(),
     );
-    assert!(yamaa_adapters::specification_run::PreparedRun::prepare(document).is_ok());
+    assert!(yamaa_application::specification_run::PreparedRun::prepare(document).is_ok());
     let study = crate::support::study::Study::new("str-template");
     study.write("spec.yaml", yamaa_adapters::json_wire::encode(&spec));
     study.write("input.csv", b"ID,A,B,N\n");

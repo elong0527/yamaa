@@ -200,7 +200,7 @@ pub fn selection_failure(error: &crate::file_workflow::SelectionError) -> Failur
 fn workflow_failure(error: &crate::file_workflow::Error) -> Failure {
     use crate::file_workflow::Error as W;
     match error {
-        W::Caller { path, error } => vec![file_application::caller_read_failure(path, error)],
+        W::Caller { path, error } => vec![crate::file_resources::caller_read_failure(path, error)],
         W::Schema(_) => file_application::rejected(Step::Prepare, Fault::ShippedSchema),
         W::Environment(environment) => project_failure(environment.error()),
         W::Entry(entry) => entry_failure(entry.error()),
@@ -212,7 +212,7 @@ fn workflow_failure(error: &crate::file_workflow::Error) -> Failure {
 fn entry_failure(error: &crate::file_entry::Error) -> Failure {
     use crate::{file_entry::Error as E, file_preparation::Error as D};
     match error {
-        E::Caller { path, error } => vec![file_application::caller_read_failure(path, error)],
+        E::Caller { path, error } => vec![crate::file_resources::caller_read_failure(path, error)],
         E::Document(D::Entry(error) | D::Resource(error)) => {
             file_application::resource_failure(Step::Prepare, error)
         }

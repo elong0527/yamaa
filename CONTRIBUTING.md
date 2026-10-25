@@ -16,8 +16,8 @@ applies.
 | --- | --- |
 | `rules/`, `yaml/` | Normative contracts, diagnostics, schemas and grammar fixtures. |
 | `rust/crates/yamaa-core/` | Specification admission, expressions, binding (one walk, which `run()` takes over the captured input schemas and `check()` over the declared ones), dataset execution, project lifecycle, verification and submission metadata composition. |
-| `rust/crates/yamaa-adapters/` | Codecs, storage formats, physical IO and filesystem environment capture. |
-| `rust/crates/yamaa-application/` | The application layer: for now its integration suite, the tests that run specifications, projects and saves through the file route, which the orchestration modules of `yamaa-adapters` join next (#3761). |
+| `rust/crates/yamaa-adapters/` | Codecs, storage formats, physical IO, the resolver and publisher ports' implementations and filesystem environment capture. |
+| `rust/crates/yamaa-application/` | The application layer: the use cases that prepare, bind, execute, report and save over core's ports, through the adapters, and the integration suite that runs them on the file route. |
 | `rust/crates/yamaa-boundary/` | The interface handshake of both host bindings, the gate every native call passes and the census of live native handles. |
 | `rust/crates/yamaa-python/`, `rust/crates/yamaa-r/` | Host arguments, callbacks, scalar conversion and owned result views, over the facade. |
 | `rust/crates/yamaa-cli/` | The `yamaa` command line: its arguments, exit statuses and printed output, over the facade alone, with the third-party notices and component inventory of its release archives. |
@@ -35,12 +35,12 @@ one owner in [release guidance](docs/release.md).
 
 The workspace has eight crates. `yamaa-core` owns preparation, project ports,
 activation and the complete build lifecycle; its dataset model owns execution.
-`yamaa-adapters` implements physical boundaries, and the `yamaa` facade
-composes the two. `yamaa-application`, between them, depends on the adapters
-and core alone, and holds the application layer's integration suite until its
-modules move there (#3761). The two binding crates and the `yamaa-cli` command line
-implement their host boundaries and depend on the facade; the bindings also
-depend on `yamaa-boundary`, which holds their interface handshake and depends
+`yamaa-adapters` implements physical boundaries. `yamaa-application`, the
+application layer, orchestrates prepare, bind, execute and publish over core's
+ports through the adapters and depends on those two alone (#3761), and the
+`yamaa` facade composes the three. The two binding crates and the `yamaa-cli`
+command line implement their host boundaries and depend on the facade; the
+bindings also depend on `yamaa-boundary`, which holds their interface handshake and depends
 on nothing else in the workspace (D281 on #3673 restores these edges of
 #3030 section 2.10, which D225 had amended). Core may use
 `std` but holds no file or format code: it keeps the formats' metadata models,
@@ -161,9 +161,9 @@ any more. From `rust/`,
 pulls a crate in.
 
 The same file's `[unconditional.<engine crate>]` tables say why an engine crate
-(`yamaa-core`, `yamaa-adapters` or `yamaa`) depends, without a feature, on a
-crate that #3030 section 2.9 scopes to the features and adapters that need it:
-an Arrow crate, `flatbuffers`, `serde_json` or `toml`. The same check reads the
+(`yamaa-core`, `yamaa-adapters`, `yamaa-application` or `yamaa`) depends,
+without a feature, on a crate that #3030 section 2.9 scopes to the features and
+adapters that need it: an Arrow crate, `flatbuffers`, `serde_json` or `toml`. The same check reads the
 engine crates' manifests and fails while such a dependency has no reason, or a
 reason names a dependency that is optional or gone, so the change that moves a
 crate behind a feature also removes its reason.

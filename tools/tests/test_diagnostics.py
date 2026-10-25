@@ -1730,7 +1730,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
 
     def publication_unit_module(self):
         self.write(
-            "rust/crates/yamaa-adapters/src/file_define/mod.rs",
+            "rust/crates/yamaa-application/src/file_define/mod.rs",
             "#[cfg(test)]\nmod publication_failure_tests;\n",
         )
         self.write(
@@ -1745,7 +1745,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
     def test_unit_source_loaded_without_test_cfg_remains_production(self):
         self.publication_unit_module()
         self.write(
-            "rust/crates/yamaa-adapters/src/file_define/mod.rs",
+            "rust/crates/yamaa-application/src/file_define/mod.rs",
             "mod publication_failure_tests;\n",
         )
         self.assertReported("new diagnostic literal site")
@@ -1767,7 +1767,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
             '#[path = "file_define"]\nmod live {\n    mod publication_failure_tests;\n}\n',
         ):
             with self.subTest(alias=alias):
-                self.write("rust/crates/yamaa-adapters/src/lib.rs", alias)
+                self.write("rust/crates/yamaa-application/src/lib.rs", alias)
                 self.assertEqual(
                     self.errors(),
                     [

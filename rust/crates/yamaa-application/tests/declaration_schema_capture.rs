@@ -527,9 +527,9 @@ mod declaration {
         use yamaa_adapters::{
             document::Closures,
             project_source::{self, Kind},
-            specification_run::PreparedRun,
             specification_source::Source,
         };
+        use yamaa_application::specification_run::PreparedRun;
         use yamaa_core::project_function::Language;
         use yamaa_core::resolver::{Captured, Failure, File, Located, Name, Resolver};
 

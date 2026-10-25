@@ -672,10 +672,10 @@ mod table {
         // compare what no case states.
         use crate::support::ports::{NoFunctions, Sources};
         use crate::support::Edit as _;
-        use yamaa_adapters::{
+        use yamaa_adapters::specification_source::Source;
+        use yamaa_application::{
             specification_report::{self, Identity},
             specification_run::PreparedRun,
-            specification_source::Source,
         };
         use yamaa_core::application_observer::Scope;
 
@@ -1262,10 +1262,10 @@ mod table {
         //! `fixtures/predicate_context_diagnostics.tsv`, with the scripted
         //! port's captured inputs.
         use crate::support::ports::NoFunctions;
-        use yamaa_adapters::{
+        use yamaa_adapters::specification_source::Source;
+        use yamaa_application::{
             specification_report::{self, Identity},
             specification_run::PreparedRun,
-            specification_source::Source,
         };
         use yamaa_core::application_observer::Scope;
 

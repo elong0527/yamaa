@@ -204,16 +204,21 @@ operation of #3765.
 ### Facade location and boundary
 
 The supported API lives in one new crate, `rust/crates/yamaa` (package name
-`yamaa`), a small facade over `yamaa-adapters` and `yamaa-core`. The owner
-decided this on 2026-10-16: a separate facade crate, not a module inside
-`yamaa-adapters`. Host crates depend only on the facade (plus their language
-runtime, and for the two bindings `yamaa-boundary`, which holds their
-interface handshake and no engine code; D281 on #3673), so the compiler
-enforces the boundary: the 69 `pub mod`s of
-`yamaa-adapters` and the 107 of `yamaa-core` stay internal and cannot be
-reached past the facade. The facade re-exports no adapters or core type; every
-public type below is facade-owned, and adapters/core types are converted at
-the boundary. Core keeps its current boundary (no I/O, no `unsafe`, no Arrow).
+`yamaa`), a small facade over `yamaa-application`, `yamaa-adapters` and
+`yamaa-core`. The owner decided this on 2026-10-16: a separate facade crate,
+not a module inside `yamaa-adapters`. Beneath the facade, `yamaa-application`
+holds the application layer, the use cases that prepare, bind, execute, report
+and publish over core's ports, and `yamaa-adapters` holds what they run
+through: the physical readers and writers, the resolver and publisher ports'
+implementations, the Arrow bridge and the shipped schema (#3761). Host crates
+depend only on the facade (plus their language runtime, and for the two
+bindings `yamaa-boundary`, which holds their interface handshake and no engine
+code; D281 on #3673), so the compiler enforces the boundary: the 24 `pub mod`s
+of `yamaa-application`, the 42 of `yamaa-adapters` and the 102 of
+`yamaa-core` stay internal and cannot be reached past the facade. The facade
+re-exports no application, adapters or core type; every public type below is
+facade-owned, and the internal crates' types are converted at the boundary.
+Core keeps its current boundary (no I/O, no `unsafe`, no Arrow).
 
 The Python and R hosts are the first clients (#2657 and #2689 target this one
 definition). When a host needs something the facade lacks, that is a gap to
@@ -650,7 +655,8 @@ command line catches Ctrl+C, cancels its token and ends by the signal
 
 ### Features
 
-The facade forwards the existing format features to `yamaa-adapters`:
+The facade forwards the existing format features to `yamaa-adapters`, and
+through `yamaa-application`, which forwards them unchanged:
 `yaml`, `parquet`, `readstat` and `odm`, all on by default, and it builds with any
 combination of them and of `arrow`, also on by default. Release compatibility
 smoke-tests no optional features and YAML + Parquet alongside the
@@ -664,9 +670,9 @@ native dependencies of its own.
 
 ### Stability policy
 
-- The facade is the only supported Rust surface. Adapters and core may change
-  in any release without notice; their `pub` items are visibility for the
-  workspace, not a public API.
+- The facade is the only supported Rust surface. The application layer,
+  the adapters and core may change in any release without notice; their `pub`
+  items are visibility for the workspace, not a public API.
 - All public enums and option/request structs are `#[non_exhaustive]`.
 - Between 0.x minor versions the facade may add types, variants and fields.
   It may not remove, rename or change the signature of a public item, except
@@ -676,7 +682,8 @@ native dependencies of its own.
 - A committed API inventory of the facade crate is generated (for example
   with `cargo public-api`) and checked in CI (#2734): a surface change
   without a regenerated, reviewed inventory in the same change fails the
-  check. There is deliberately still no inventory for adapters or core.
+  check. There is deliberately still no inventory for the application
+  layer, adapters or core.
 - The minimum Rust version is the workspace `rust-version` (1.82 today, the
   release CRAN's two-year-old cargo rule allows on any submission date). CI
   checks and lints the workspace with that release and builds the R source
@@ -714,11 +721,13 @@ git/path is the distribution route.
 Every adapters or core module the two host crates used before they moved onto
 the facade (24 adapters modules and 11 core modules, counted from the host
 sources on 2026-10-16, less the removed producer-route modules) maps to a facade
-item or is marked internal. The Python and R bindings depend on the facade and
-`yamaa-boundary`; the command line depends on the facade alone. None uses these
-modules directly. The facade itself uses 29 adapters modules and 17 core
-modules, counted from `crates/yamaa/src` after the producer route was removed.
-Any module not listed here is internal by default.
+item or is marked internal; the orchestration modules among them have since
+moved to `yamaa-application` (#3761). The Python and R bindings depend on the
+facade and `yamaa-boundary`; the command line depends on the facade alone.
+None uses these modules directly. The facade itself uses 13 application
+modules, 18 adapters modules and 21 core modules, counted from
+`crates/yamaa/src` after the application layer moved. Any module not listed
+here is internal by default.
 
 | Module the hosts used | Facade disposition |
 | --- | --- |

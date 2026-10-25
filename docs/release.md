@@ -314,7 +314,8 @@ starts at 1.0.0 (#3030 D1).
   flags, exit statuses and `--format json` keys.
 - The Rust facade: the public items of the `yamaa` crate, as
   `rust/crates/yamaa/public-api.txt` lists them. The internal crates
-  `yamaa-core`, `yamaa-adapters` and `yamaa-boundary` are not covered, nor
+  `yamaa-core`, `yamaa-adapters`, `yamaa-application` and `yamaa-boundary`
+  are not covered, nor
   are the native modules (`yamaa._native` and the R package's registered
   routines), which are internal (#3679).
 - Saved artifacts: the bytes each profile writes (CSV, Parquet, SAS Transport
@@ -901,7 +902,7 @@ notices remain in the distributed `LICENSE-YAML.txt`.
 
 `tools/staging/engine_bundle.py` stages each host's engine source bundle,
 from which both source packages build (#3030 D55). The bundle holds the
-engine crates `yamaa-core`, `yamaa-adapters` and `yamaa` with `yamaa-boundary`
+engine crates `yamaa-core`, `yamaa-adapters`, `yamaa-application` and `yamaa` with `yamaa-boundary`
 and that host's binding crate; the canonical workspace manifest with `crates/*` as its
 members, which in the bundle are exactly those crates, and with the profiles
 that the host builds with, so that the R bundle's leaves out

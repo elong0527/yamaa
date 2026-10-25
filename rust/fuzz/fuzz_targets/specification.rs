@@ -7,9 +7,8 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use yamaa_adapters::{
-    shipped_schema, specification_run::PreparedRun, specification_source::Source,
-};
+use yamaa_adapters::{shipped_schema, specification_source::Source};
+use yamaa_application::specification_run::PreparedRun;
 use yamaa_core::language::FileType;
 use yamaa_core::resolver::{Captured, Failure, Located, Name, Resolver};
 use yamaa_core::resource::ResourceFailure;

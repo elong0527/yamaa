@@ -313,7 +313,7 @@ mod tests {
         let issues = [Step::Resolve, Step::Execute]
             .into_iter()
             .flat_map(|step| {
-                yamaa_adapters::file_application::rejected(step, Fault::ArtifactRepresentation)
+                yamaa_application::file_application::rejected(step, Fault::ArtifactRepresentation)
             })
             .collect::<Vec<_>>();
         let read = |subject| Action::Read(subject);

@@ -102,7 +102,7 @@ pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
     let identity = crate::support::study::identity("diagnostics", &specification);
     let (issues, outcome) = match operation {
         "check" => (
-            yamaa_adapters::file_application::check(
+            yamaa_application::file_application::check(
                 host,
                 Request {
                     specification: &specification,
@@ -114,7 +114,7 @@ pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
         ),
         "check_resources" => {
             let root = path(&study, "");
-            let selected = yamaa_adapters::file_workflow::select_with_resources(
+            let selected = yamaa_application::file_workflow::select_with_resources(
                 yamaa_adapters::file_resources::Resources::new(&root, &root, &[]).unwrap(),
                 text(field(input, "specification")),
                 text(field(input, "project")),
@@ -122,8 +122,8 @@ pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
                 yamaa_adapters::document::Closures::shipped().unwrap(),
             );
             let issues = match selected {
-                Ok(prepared) => yamaa_adapters::specification_check::issues(prepared.run()),
-                Err(error) => yamaa_adapters::project_application::selection_failure(&error),
+                Ok(prepared) => yamaa_application::specification_check::issues(prepared.run()),
+                Err(error) => yamaa_application::project_application::selection_failure(&error),
             };
             (issues, Outcome::default())
         }
