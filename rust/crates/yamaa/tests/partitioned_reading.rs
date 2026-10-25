@@ -152,15 +152,15 @@ fn saved_output(run: &mut yamaa::Run) -> String {
     run.save(&token).unwrap().pop().unwrap()
 }
 
-/// Run each partition-safe shape `chosen` keeps over `records` generated
+/// Run each partition-safe shape over `records` generated
 /// driver records, in partitions of `rows`: for its first and its last
 /// subjects, the output holds the rows a whole-table run of only their
 /// records gives, and its saved file holds a header and a line for every
 /// subject, the last ones those of the whole-table run's saved file.
-fn check_shapes(records: usize, rows_per_partition: usize, chosen: impl Fn(&Shape) -> bool) {
+fn check_shapes(records: usize, rows_per_partition: usize) {
     const EDGE: usize = 3;
     let partitions = Partitions::new(NonZeroUsize::new(rows_per_partition).unwrap());
-    for shape in shapes().into_iter().filter(|shape| chosen(shape)) {
+    for shape in shapes() {
         let subjects = records.div_ceil(shape.records);
         let case = format!(
             "{} over {} records",
@@ -202,16 +202,16 @@ fn check_shapes(records: usize, rows_per_partition: usize, chosen: impl Fn(&Shap
 /// whole-table run's.
 #[test]
 fn every_partition_safe_shape_reads_its_input_by_partition() {
-    check_shapes(10_002, 1_000, |_| true);
+    check_shapes(10_002, 1_000);
 }
 
 /// An input of 10,000,002 driver records, beyond the row limit, in
-/// partitions of 1,000,000 (#3792): the grouped shape runs. Each shape with
-/// a row for every record saves its output a partition at a time (#3793),
-/// but holds it whole in memory with its observations, some 12 GB at this
-/// size, more than a native runner has, so its output beyond the row limit
-/// is `partitioned_publication.rs`'s, over one column. The input and the run
-/// take several gigabytes and minutes unoptimized, so the test runs in the
+/// partitions of 1,000,000 (#3792): every shape runs, each with a row for
+/// every record included (#3870). The run holds its output once, a column
+/// at a time in the executor's buffers, beside its host view and its encoded
+/// bytes, and its observations encode the output only when they are
+/// serialized, so a native runner holds it. The input and the run take
+/// several gigabytes and minutes unoptimized, so the test runs in the
 /// optimized `release-test` profile, as the native lane runs every test, and
 /// no other test beyond the row limit runs beside it
 /// (`support::beyond_the_row_limit`).
@@ -220,12 +220,59 @@ fn every_partition_safe_shape_reads_its_input_by_partition() {
     debug_assertions,
     ignore = "10,000,002-record inputs run in the optimized release-test profile"
 )]
-fn a_driver_input_beyond_the_row_limit_runs_by_partition_on_the_grouped_shape() {
+fn every_partition_safe_shape_reads_a_driver_input_beyond_the_row_limit_by_partition() {
     let _alone = crate::support::beyond_the_row_limit();
-    check_shapes(
-        yamaa_core::limits::Limits::TABLE_ROWS + 2,
-        1_000_000,
-        |shape| shape.records > 1,
+    check_shapes(yamaa_core::limits::Limits::TABLE_ROWS + 2, 1_000_000);
+}
+
+/// A subject-keyed window over 10,000,001 records, beyond the row limit,
+/// runs over key-bounded partitions of at most 1,000,000 records (#3870):
+/// each subject's ten records, SEQ 1 to 10 in order, number 1 to 10, and
+/// the last record is a subject of its own. The output holds a row for
+/// every record, in input order, and its saved file a header and a line for
+/// each, the last three those of the subjects 00999999 and 01000000. It runs
+/// in the optimized `release-test` profile, alone, as the test above does.
+#[test]
+#[cfg_attr(
+    debug_assertions,
+    ignore = "10,000,001-record inputs run in the optimized release-test profile"
+)]
+fn a_subject_keyed_window_beyond_the_row_limit_runs_by_key_bounded_partition() {
+    const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: TEST\nkeys: [ID, SEQ]\ninput: {SRC: {path: input.csv, types: {SEQ: int}}}\noutput: {path: out.csv, columns: [ID, SEQ, RN]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: RN, type: int, derivation: {row_number: {window: {group_by: [ID], order_by: [SEQ]}}}}\n";
+    let _alone = crate::support::beyond_the_row_limit();
+    let records = yamaa_core::limits::Limits::TABLE_ROWS + 1;
+    let scratch = Scratch::new("partitioned-reading-window");
+    scratch.write("spec.yaml", SPEC);
+    let mut file =
+        std::io::BufWriter::new(std::fs::File::create(scratch.join("input.csv")).unwrap());
+    writeln!(file, "ID,SEQ").unwrap();
+    for record in 0..records {
+        writeln!(file, "{:08},{}", record / 10, record % 10 + 1).unwrap();
+    }
+    file.flush().unwrap();
+    drop(file);
+    let spec = scratch.join("spec.yaml");
+    let partitions = Partitions::by_keys(NonZeroUsize::MIN, NonZeroUsize::new(1_000_000).unwrap());
+    let mut run = engine(Some(partitions))
+        .spec(spec.to_str().unwrap())
+        .run()
+        .unwrap();
+    let rows = run
+        .output()
+        .unwrap_or_else(|| panic!("{:?}", run.diagnostics()))
+        .rows();
+    assert_eq!(rows, records, "a row for every record");
+    assert_eq!(
+        tail(&saved_output(&mut run), 3),
+        (
+            records + 1,
+            vec![
+                "00999999,9,9".to_owned(),
+                "00999999,10,10".to_owned(),
+                "01000000,1,1".to_owned(),
+            ]
+        ),
+        "the saved file"
     );
 }
 

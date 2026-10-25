@@ -342,3 +342,50 @@ impl<K: Ord + Borrow<Q>, Q: Ord + ?Sized, V> std::ops::Index<&Q> for Map<K, V> {
         self.get(key).expect("no entry found for key")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Map;
+    use std::collections::BTreeMap;
+
+    /// The map answers every operation as a `BTreeMap` does, the container
+    /// it replaces: its entries in key order whatever the insertion order, a
+    /// replaced value returned and its key kept, the last of repeated keys
+    /// collected, and entries found, changed and removed by key.
+    #[test]
+    fn the_map_answers_as_a_btree_map_does() {
+        let keys = ["m", "b", "z", "b", "a", "m", "q"];
+        let (mut map, mut tree) = (Map::new(), BTreeMap::new());
+        for (value, &key) in keys.iter().enumerate() {
+            assert_eq!(
+                map.insert(key.to_owned(), value),
+                tree.insert(key.to_owned(), value),
+                "insert {key}"
+            );
+        }
+        let entries = |map: &Map<String, usize>| map.iter().map(|(k, v)| (k.clone(), *v)).collect::<Vec<_>>();
+        let reference = |tree: &BTreeMap<String, usize>| tree.iter().map(|(k, v)| (k.clone(), *v)).collect::<Vec<_>>();
+        assert_eq!(entries(&map), reference(&tree), "the entries in key order");
+        *map.entry("c".into()).or_insert(0) += 7;
+        *tree.entry("c".into()).or_insert(0) += 7;
+        *map.entry("z".into()).or_default() += 1;
+        *tree.entry("z".into()).or_default() += 1;
+        assert_eq!(map.remove("m"), tree.remove("m"), "remove m");
+        assert_eq!(map.remove("y"), tree.remove("y"), "remove an absent key");
+        map.retain(|key, _| key != "q");
+        tree.retain(|key, _| key != "q");
+        assert_eq!(entries(&map), reference(&tree), "after entry, remove and retain");
+        assert_eq!(
+            (map.get("b"), map.contains_key("a"), map.len()),
+            (tree.get("b"), tree.contains_key("a"), tree.len()),
+            "lookups"
+        );
+        let collected: Map<&str, usize> = [("k", 1), ("j", 2), ("k", 3)].into_iter().collect();
+        let reference: BTreeMap<&str, usize> = [("k", 1), ("j", 2), ("k", 3)].into_iter().collect();
+        assert_eq!(
+            collected.into_iter().collect::<Vec<_>>(),
+            reference.into_iter().collect::<Vec<_>>(),
+            "the last of repeated keys collected"
+        );
+    }
+}
