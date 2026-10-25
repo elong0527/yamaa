@@ -1,6 +1,13 @@
 #![cfg(feature = "odm")]
-//! ODM XML clinical-item contracts. Every case of the retained Python reader
-//! suite is ported here, followed by refusals that suite did not cover.
+//! ODM XML clinical-item contracts, from the retained Python reader suite and
+//! refusals that suite did not cover. The reader's refusals of text files
+//! are the cases of `tests/fixtures/diagnostics/odm_reads_xml.json` (#3798).
+//! The tests left here are the positive reads, which compare some columns of
+//! the clinical-item table and move once a case can state those columns
+//! alone (#3798), and seams the replay cannot reach, each named in its first
+//! comment: archives and gzip streams built in the test, bytes that are not
+//! UTF-8 text, generated bounds and batches, resolver doubles, links and Unix
+//! file names, the upstream tokenizer's messages and the table's Arrow types.
 use crate::support;
 
 use support::odm_files::{cell, column, gzip, ordinals, Header, Tar};
@@ -106,107 +113,6 @@ fn some(values: &[&str]) -> Vec<Option<String>> {
 mod python_reader_suite {
     use super::*;
 
-    /// Each case writes an element or value where ODM's supported layout has
-    /// none; the reader refuses it rather than dropping or misplacing it.
-    #[test]
-    fn elements_and_values_outside_the_supported_layout_are_refused() {
-        // The case, its base document, the edits that place the element, and
-        // the refusal's condition and message.
-        type Case<'a> = (&'a str, &'a str, &'a [(&'a str, &'a str)], &'a str, &'a str);
-        let cases: [Case<'_>; 12] = [
-            (
-                "nested clinical data is rejected",
-                ODM_13,
-                &[(r#"<ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13">"#, r#"<ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13"><ClinicalData StudyOID="EVIL" MetaDataVersionOID="EVIL.M">"#), ("</ClinicalData>\n</ODM>", "</ClinicalData></ClinicalData>\n</ODM>")][..],
-                "source_odm_layout_unsupported",
-                "nested ClinicalData is not supported",
-            ),
-            (
-                "nested study is rejected",
-                ODM_13,
-                &[(r#"<Study OID="S.13">"#, r#"<Study OID="S.13"><Study OID="EVIL">"#), ("</Study>\n  <ClinicalData", "</Study></Study>\n  <ClinicalData")][..],
-                "source_odm_layout_unsupported",
-                "nested Study is not supported",
-            ),
-            (
-                "nested metadata version is rejected",
-                ODM_13,
-                &[(r#"<MetaDataVersion OID="M.13" Name="Metadata">"#, r#"<MetaDataVersion OID="M.13" Name="Metadata"><MetaDataVersion OID="EVIL.M">"#), ("</MetaDataVersion>", "</MetaDataVersion></MetaDataVersion>")][..],
-                "source_odm_layout_unsupported",
-                "nested MetaDataVersion is not supported",
-            ),
-            (
-                "nested study inside clinical data is rejected",
-                ODM_13,
-                &[(r#"<Study OID="S.13">"#, r#"<Study OID="S.13"><ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13"><Study OID="EVIL"></Study></ClinicalData>"#)][..],
-                "source_odm_layout_unsupported",
-                "nested Study is not supported",
-            ),
-            (
-                "nested metadata version inside clinical data is rejected",
-                ODM_13,
-                &[(r#"<MetaDataVersion OID="M.13" Name="Metadata">"#, r#"<MetaDataVersion OID="M.13" Name="Metadata"><ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13"><MetaDataVersion OID="EVIL.M"></MetaDataVersion></ClinicalData>"#)][..],
-                "source_odm_layout_unsupported",
-                "nested MetaDataVersion is not supported",
-            ),
-            (
-                "nested item data is rejected",
-                ODM_13,
-                &[(r#"<ItemData ItemOID="I.DATE" Value="2026-01-02"/>"#, r#"<ItemData ItemOID="I.DATE" Value="outer"><ItemData ItemOID="I.EMPTY" Value="inner"/></ItemData>"#)][..],
-                "source_odm_layout_unsupported",
-                "nested ItemData is not supported",
-            ),
-            (
-                "item data nested below a group inside item data is rejected",
-                ODM_13,
-                &[(r#"<ItemData ItemOID="I.DATE" Value="2026-01-02"/>"#, r#"<ItemData ItemOID="I.DATE" Value="outer"><ItemGroupData ItemGroupOID="G.13"><ItemData ItemOID="I.EMPTY" Value="inner"/></ItemGroupData></ItemData>"#)][..],
-                "source_odm_layout_unsupported",
-                "nested ItemData is not supported",
-            ),
-            (
-                "subject data inside item data is rejected",
-                ODM_13,
-                &[(r#"<SubjectData SubjectKey="SUBJECT-1""#, r#"<ItemData ItemOID="I.DATE" Value="rogue"><SubjectData SubjectKey="ROGUE"/></ItemData><SubjectData SubjectKey="SUBJECT-1""#)][..],
-                "source_odm_layout_unsupported",
-                "SubjectData inside ItemData",
-            ),
-            (
-                "unsupported group depth is rejected",
-                ODM_20,
-                &[(r#"<ItemGroupData ItemGroupOID="IG.20" ItemGroupRepeatKey="3">"#, r#"<ItemGroupData ItemGroupOID="IG.20" ItemGroupRepeatKey="3"><ItemGroupData ItemGroupOID="EXTRA">"#), ("</ItemGroupData>\n        </ItemGroupData>", "</ItemGroupData></ItemGroupData>\n        </ItemGroupData>")][..],
-                "source_odm_layout_unsupported",
-                "requires FormData plus one",
-            ),
-            (
-                "items need subject and event context",
-                ODM_13,
-                &[("<SubjectData SubjectKey=\"SUBJECT-1\" oc:StudySubjectID=\"DISPLAY-1\"\n                 oc:Status=\"Available\">", "<ItemGroupData ItemGroupOID=\"X\"><ItemGroupData ItemGroupOID=\"Y\"><ItemData ItemOID=\"I\" Value=\"v\"/></ItemGroupData></ItemGroupData><SubjectData SubjectKey=\"SUBJECT-1\">")][..],
-                "source_odm_layout_unsupported",
-                "ItemData requires subject and event context",
-            ),
-            (
-                "item cannot be null and contain a value",
-                ODM_13,
-                &[(r#"<ItemData ItemOID="I.NULL" IsNull="Yes"/>"#, r#"<ItemData ItemOID="I.NULL" IsNull="Yes" Value="unexpected"/>"#)][..],
-                "source_odm_value_unsupported",
-                "null and contains a value",
-            ),
-            (
-                "namespaced value attribute is rejected not dropped",
-                ODM_13,
-                &[(r#"<ItemData ItemOID="I.DATE" Value="2026-01-02"/>"#, r#"<ItemData ItemOID="I.DATE" oc:Value="2026-01-02"/>"#)][..],
-                "source_odm_value_unsupported",
-                "Value attribute is in an unsupported namespace",
-            ),
-        ];
-        for (case, base, edits, condition, message) in cases {
-            let document = edits.iter().fold(base.to_owned(), |document, (from, to)| {
-                edit(&document, from, to)
-            });
-            refused_case(case, read_document(&document), condition, message);
-        }
-    }
-
     #[test]
     fn odm13_preserves_values_and_enriches_exact_metadata() {
         let table = rows(ODM_13);
@@ -260,6 +166,8 @@ mod python_reader_suite {
         assert_eq!(cell(&table, "ValuePresent", 1).as_deref(), Some("true"));
     }
 
+    /// Seam: the Arrow type and nullability of each field, which a case's cells
+    /// do not carry.
     #[test]
     fn read_odm_returns_the_fixed_schema_table() {
         let table = rows(ODM_20);
@@ -314,70 +222,6 @@ mod python_reader_suite {
     }
 
     #[test]
-    fn element_child_inside_value_is_rejected_not_truncated() {
-        for value in [
-            "<Value>PD<Sub>L1</Sub></Value>",
-            r#"<Value>PD<x:B xmlns:x="urn:example">-MID-</x:B>L1</Value>"#,
-            "<Value>PD<Value>inner</Value>-L1</Value>",
-        ] {
-            refused(
-                read_document(&edit(
-                    ODM_20,
-                    r#"<ItemData ItemOID="I.TEST"><Value>PD-L1</Value></ItemData>"#,
-                    &format!(r#"<ItemData ItemOID="I.TEST">{value}</ItemData>"#),
-                )),
-                "source_odm_value_unsupported",
-                "Value contains child elements",
-            );
-        }
-    }
-
-    #[test]
-    fn value_child_in_foreign_namespace_is_rejected_not_dropped() {
-        for value in [
-            r#"<x:Value xmlns:x="urn:example">PD-L1</x:Value>"#,
-            r#"<Value xmlns="">PD-L1</Value>"#,
-        ] {
-            refused(
-                read_document(&edit(
-                    ODM_20,
-                    r#"<ItemData ItemOID="I.TEST"><Value>PD-L1</Value></ItemData>"#,
-                    &format!(r#"<ItemData ItemOID="I.TEST">{value}</ItemData>"#),
-                )),
-                "source_odm_value_unsupported",
-                "Value child is in an unsupported namespace",
-            );
-        }
-    }
-
-    #[test]
-    fn item_data_text_content_is_rejected_not_dropped() {
-        for (document, original, replacement) in [
-            (
-                ODM_13,
-                r#"<ItemData ItemOID="I.DATE" Value="2026-01-02"/>"#,
-                r#"<ItemData ItemOID="I.DATE">2026-01-02</ItemData>"#,
-            ),
-            (
-                ODM_20,
-                r#"<ItemData ItemOID="I.TEST"><Value>PD-L1</Value></ItemData>"#,
-                r#"<ItemData ItemOID="I.TEST">PD-L1</ItemData>"#,
-            ),
-            (
-                ODM_20,
-                r#"<ItemData ItemOID="I.TEST"><Value>PD-L1</Value></ItemData>"#,
-                r#"<ItemData ItemOID="I.TEST"><Value>PD-L1</Value>stray</ItemData>"#,
-            ),
-        ] {
-            refused(
-                read_document(&edit(document, original, replacement)),
-                "source_odm_value_unsupported",
-                "contains text outside its value",
-            );
-        }
-    }
-
-    #[test]
     fn whitespace_around_value_child_is_not_text_content() {
         let table = rows(&edit(
             ODM_20,
@@ -388,35 +232,6 @@ mod python_reader_suite {
     }
 
     const UNICODE_SPACES: [&str; 5] = ["\u{a0}", "\u{85}", "\u{2003}", "\u{2028}", "\u{3000}"];
-
-    #[test]
-    fn unicode_space_outside_value_is_rejected() {
-        for text in UNICODE_SPACES {
-            for (document, original, replacement) in [
-                (
-                    ODM_13,
-                    r#"<ItemData ItemOID="I.DATE" Value="2026-01-02"/>"#,
-                    format!(r#"<ItemData ItemOID="I.DATE">{text}</ItemData>"#),
-                ),
-                (
-                    ODM_20,
-                    r#"<ItemData ItemOID="I.TEST"><Value>PD-L1</Value></ItemData>"#,
-                    format!(r#"<ItemData ItemOID="I.TEST">{text}<Value>PD-L1</Value></ItemData>"#),
-                ),
-                (
-                    ODM_20,
-                    r#"<ItemData ItemOID="I.TEST"><Value>PD-L1</Value></ItemData>"#,
-                    format!(r#"<ItemData ItemOID="I.TEST"><Value>PD-L1</Value>{text}</ItemData>"#),
-                ),
-            ] {
-                refused(
-                    read_document(&edit(document, original, &replacement)),
-                    "source_odm_value_unsupported",
-                    "contains text outside its value",
-                );
-            }
-        }
-    }
 
     #[test]
     fn unicode_space_inside_value_is_preserved() {
@@ -453,31 +268,6 @@ mod python_reader_suite {
             assert_eq!(
                 values(&table),
                 [Some("2026-01-02".into()), Some(String::new()), None]
-            );
-        }
-    }
-
-    #[test]
-    fn odm_version_with_junk_suffix_is_rejected() {
-        for (document, bad) in [
-            (ODM_13, "1.3junk"),
-            (ODM_13, "1.31"),
-            (ODM_13, "1.3.junk"),
-            (ODM_13, "1.3."),
-            (ODM_20, "2.0junk"),
-            (ODM_20, "2.01"),
-            (ODM_20, "2.0.x"),
-            (ODM_20, "2.0.1a"),
-        ] {
-            let base = if document == ODM_13 { "1.3" } else { "2.0" };
-            refused(
-                read_document(&edit(
-                    document,
-                    &format!(r#"ODMVersion="{base}""#),
-                    &format!(r#"ODMVersion="{bad}""#),
-                )),
-                "source_odm_document_unsupported",
-                "conflicts with namespace",
             );
         }
     }
@@ -532,35 +322,8 @@ mod python_reader_suite {
         assert_eq!(cell(&table, "SubjectKey", 3).as_deref(), Some("SUBJECT-2"));
     }
 
-    #[test]
-    fn container_inside_item_data_is_rejected_not_leaked() {
-        for (container, message) in [
-            (
-                r#"<ItemGroupData ItemGroupOID="LEAKED"/>"#,
-                "ItemGroupData inside ItemData",
-            ),
-            (
-                r#"<FormData FormOID="EVIL.F"/>"#,
-                "FormData inside ItemData",
-            ),
-        ] {
-            let document = edit(
-                &edit(
-                    &edit(ODM_13, r#"<FormData FormOID="F.13">"#, ""),
-                    "</FormData>",
-                    "",
-                ),
-                r#"<ItemData ItemOID="I.DATE" Value="2026-01-02"/>"#,
-                &format!(r#"<ItemData ItemOID="I.DATE" Value="2026-01-02">{container}</ItemData>"#),
-            );
-            refused(
-                read_document(&document),
-                "source_odm_layout_unsupported",
-                message,
-            );
-        }
-    }
-
+    /// Seam: a gzip TAR archive built in the test, which a case's text files
+    /// cannot hold.
     #[test]
     fn archive_with_one_xml_member_is_selected_automatically() {
         let archive = gzip(
@@ -574,6 +337,8 @@ mod python_reader_suite {
         assert_eq!(column(&table, "ItemOID"), some(&["I.TEST", "I.RESULT"]));
     }
 
+    /// Seam: a gzip TAR archive built in the test, which a case's text files
+    /// cannot hold.
     #[test]
     fn archive_ignores_macosx_metadata_member() {
         let archive = gzip(
@@ -586,6 +351,8 @@ mod python_reader_suite {
         assert_eq!(column(&table, "ItemOID"), some(&["I.TEST", "I.RESULT"]));
     }
 
+    /// Seam: a gzip TAR archive built in the test, which a case's text files
+    /// cannot hold.
     #[test]
     fn archive_member_selects_one_of_multiple_xml_files() {
         let archive = gzip(
@@ -611,6 +378,8 @@ mod python_reader_suite {
         );
     }
 
+    /// Seam: a gzip TAR archive built in the test, which a case's text files
+    /// cannot hold.
     #[test]
     fn archive_member_count_at_bound_is_read() {
         let archive = gzip(
@@ -632,6 +401,7 @@ mod python_reader_suite {
         );
     }
 
+    /// Seam: a TAR archive of twenty generated members built in the test.
     #[test]
     fn archive_member_count_above_bound_is_rejected() {
         let tar = (0..20).fold(Tar::new(), |tar, index| {
@@ -648,19 +418,8 @@ mod python_reader_suite {
         );
     }
 
-    #[test]
-    fn public_readers_reject_invalid_archive_member_bound() {
-        let options = Options {
-            max_archive_members: 0,
-            ..Options::default()
-        };
-        refused(
-            read_bytes("odm20.xml", ODM_20.as_bytes(), &options),
-            "value_not_permitted",
-            "max_archive_members must be at least 1",
-        );
-    }
-
+    /// Seam: a gzip TAR archive built in the test, which a case's text files
+    /// cannot hold.
     #[test]
     fn archive_rejects_non_regular_xml_member() {
         let archive = gzip(
@@ -675,6 +434,7 @@ mod python_reader_suite {
         );
     }
 
+    /// Seam: a gzip TAR archive built in the test and cut at byte offsets.
     #[test]
     fn truncated_compressed_archive_has_helper_error() {
         let archive = gzip(&Tar::new().file("study/odm.xml", ODM_20.as_bytes()).finish());
@@ -686,20 +446,12 @@ mod python_reader_suite {
             );
         }
     }
-
-    #[test]
-    fn malformed_xml_has_helper_error() {
-        refused(
-            read_document(r#"<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3">"#),
-            "source_odm_xml_malformed",
-            "malformed ODM XML",
-        );
-    }
 }
 
 mod table {
     use super::*;
 
+    /// Seam: the table's record batches, which a case's rows do not show.
     #[test]
     fn documents_without_items_produce_the_complete_schema() {
         let document = edit(
@@ -746,76 +498,6 @@ mod snapshots {
         assert_eq!(rows(&snapshot_20).rows(), 2);
     }
 
-    /// A transactional root is refused when the root starts, so nothing after
-    /// it is read, not even a malformed element.
-    #[test]
-    fn a_transactional_file_is_refused_before_any_item() {
-        let transactional = edit(
-            ODM_13,
-            r#"ODMVersion="1.3""#,
-            r#"ODMVersion="1.3" FileType="Transactional""#,
-        );
-        refused(
-            read_document(&transactional),
-            "source_odm_transactional",
-            "ODM declares FileType Transactional, so the document is not a snapshot",
-        );
-        let broken = edit(&transactional, "</ClinicalData>", "</Clinical>");
-        refused(
-            read_document(&broken),
-            "source_odm_transactional",
-            "FileType Transactional",
-        );
-    }
-
-    #[test]
-    fn a_removal_on_any_element_read_is_refused() {
-        for element in ["SubjectData", "StudyEventData", "FormData"] {
-            let opening = format!("<{element} ");
-            let document = edit(
-                ODM_13,
-                &opening,
-                &format!("{opening}TransactionType=\"Remove\" "),
-            );
-            refused(
-                read_document(&document),
-                "source_odm_transactional",
-                &format!("{element} declares TransactionType Remove"),
-            );
-        }
-        // The fixture's item group declares Insert.
-        let group = edit(
-            ODM_13,
-            r#"TransactionType="Insert""#,
-            r#"TransactionType="Remove""#,
-        );
-        refused(
-            read_document(&group),
-            "source_odm_transactional",
-            "ItemGroupData declares TransactionType Remove",
-        );
-        let item = edit(
-            ODM_13,
-            r#"<ItemData ItemOID="I.EMPTY" Value=""/>"#,
-            r#"<ItemData ItemOID="I.EMPTY" Value="" TransactionType="Remove"/>"#,
-        );
-        refused(
-            read_document(&item),
-            "source_odm_transactional",
-            "ItemData declares TransactionType Remove",
-        );
-        let group_20 = edit(
-            ODM_20,
-            r#"<ItemGroupData ItemGroupOID="IG.20""#,
-            r#"<ItemGroupData TransactionType="Remove" ItemGroupOID="IG.20""#,
-        );
-        refused(
-            read_document(&group_20),
-            "source_odm_transactional",
-            "ItemGroupData declares TransactionType Remove",
-        );
-    }
-
     /// Insert, Update, Upsert and Context read as the present value; the item
     /// group's keeps its column.
     #[test]
@@ -839,32 +521,6 @@ mod snapshots {
             assert_eq!(values(&table), expected, "{value}");
             assert_eq!(cell(&table, "TransactionType", 0).as_deref(), Some(value));
         }
-    }
-
-    /// A value ODM does not define is not read as either: values compare
-    /// exactly, as XML attribute values do.
-    #[test]
-    fn undefined_file_and_transaction_types_are_invalid_attributes() {
-        let file_type = edit(
-            ODM_13,
-            r#"ODMVersion="1.3""#,
-            r#"ODMVersion="1.3" FileType="snapshot""#,
-        );
-        refused(
-            read_document(&file_type),
-            "source_odm_attribute_invalid",
-            "unsupported FileType value \"snapshot\" on ODM",
-        );
-        let transaction = edit(
-            ODM_13,
-            r#"TransactionType="Insert""#,
-            r#"TransactionType="remove""#,
-        );
-        refused(
-            read_document(&transaction),
-            "source_odm_attribute_invalid",
-            "unsupported TransactionType value \"remove\" on ItemGroupData",
-        );
     }
 
     /// Skipped elements give no row, and nothing inside them is checked as
@@ -898,80 +554,6 @@ mod snapshots {
         let table = rows(&skipped);
         assert_eq!(values(&table), expected);
         assert_eq!(ordinals(&table), [1, 2, 3]);
-    }
-
-    /// Skipped content is still read as XML, within the read limits.
-    #[test]
-    fn skipped_content_is_still_checked_as_xml() {
-        let malformed = edit(
-            ODM_13,
-            "  <ClinicalData",
-            "<AdminData><User OID=\"U\"></AdminData>\n  <ClinicalData",
-        );
-        refused(
-            read_document(&malformed),
-            "source_odm_xml_malformed",
-            "malformed ODM XML",
-        );
-        let deep = edit(
-            ODM_13,
-            "  <ClinicalData",
-            &format!(
-                "<AdminData>{}{}</AdminData>\n  <ClinicalData",
-                "<e>".repeat(8),
-                "</e>".repeat(8)
-            ),
-        );
-        refused(
-            read_bytes(
-                "deep.xml",
-                deep.as_bytes(),
-                &Options {
-                    max_xml_depth: 8,
-                    ..Options::default()
-                },
-            ),
-            "source_odm_limit_exceeded",
-            "XML depth exceeds 8",
-        );
-    }
-
-    /// A document without `ClinicalData`, such as a define.xml or a
-    /// metadata-only export, is refused once it has been read whole; one
-    /// inside a skipped element does not count.
-    #[test]
-    fn a_document_without_clinical_data_is_refused() {
-        let metadata = edit(
-            ODM_13,
-            &ODM_13[ODM_13.find("  <ClinicalData").unwrap()..ODM_13.find("</ODM>").unwrap()],
-            "",
-        );
-        refused(
-            read_document(&metadata),
-            "source_odm_no_clinical_data",
-            "the document has no ClinicalData",
-        );
-        refused(
-            read_document(r#"<ODM xmlns="http://www.cdisc.org/ns/odm/v2.0"/>"#),
-            "source_odm_no_clinical_data",
-            "no ClinicalData",
-        );
-        let hidden = edit(
-            &metadata,
-            "</ODM>",
-            r#"<AdminData><ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13"/></AdminData></ODM>"#,
-        );
-        refused(
-            read_document(&hidden),
-            "source_odm_no_clinical_data",
-            "no ClinicalData",
-        );
-        // Whatever the document lacks, a malformed one is refused as XML.
-        refused(
-            read_document(&metadata.edit("</ODM>", "")),
-            "source_odm_xml_malformed",
-            "premature end of data",
-        );
     }
 
     #[test]
@@ -1038,6 +620,7 @@ mod snapshots {
         }
     }
 
+    /// Seam: the engine's own table and schema, read by column index.
     #[test]
     fn the_table_is_an_ordinary_engine_input() {
         let table = rows(ODM_13);
@@ -1053,6 +636,7 @@ mod snapshots {
         }
     }
 
+    /// Seam: 65,537 generated items and the record batches they split into.
     #[test]
     fn large_documents_split_into_engine_batches_in_source_order() {
         let items = (0..65_537)
@@ -1115,38 +699,6 @@ mod snapshots {
 
 mod metadata {
     use super::*;
-
-    #[test]
-    fn conflicting_definition_names_are_refused() {
-        for (kind, original, replacement) in [
-            (
-                "event",
-                r#"<StudyEventDef OID="E.13" Name="Screening"/>"#,
-                r#"<StudyEventDef OID="E.13" Name="Screening"/><StudyEventDef OID="E.13" Name="Baseline"/>"#,
-            ),
-            (
-                "form",
-                r#"<FormDef OID="F.13" Name="Demographics"/>"#,
-                r#"<FormDef OID="F.13" Name="Demographics"/><FormDef OID="F.13"/>"#,
-            ),
-            (
-                "group",
-                r#"<ItemGroupDef OID="G.13" Name="Subject details"/>"#,
-                r#"<ItemGroupDef OID="G.13" Name="Subject details"/><ItemGroupDef OID="G.13" Name="Other"/>"#,
-            ),
-            (
-                "item",
-                r#"<ItemDef OID="I.DATE" Name="Collection date" DataType="text"/>"#,
-                r#"<ItemDef OID="I.DATE" Name="Collection date" DataType="text"/><ItemDef OID="I.DATE" Name="Visit date"/>"#,
-            ),
-        ] {
-            refused(
-                read_document(&edit(ODM_13, original, replacement)),
-                "source_odm_metadata_conflict",
-                &format!("conflicting {kind} definition for S.13/M.13/"),
-            );
-        }
-    }
 
     #[test]
     fn repeated_identical_definitions_and_other_versions_are_admitted() {
@@ -1234,50 +786,6 @@ mod metadata {
         assert_eq!(
             cell(&table, "ItemName", 1).as_deref(),
             Some("Collected empty")
-        );
-    }
-
-    #[test]
-    fn ambiguous_namespaced_attributes_are_refused() {
-        refused(
-            read_document(&edit(
-                ODM_13,
-                r#"oc:Status="Available""#,
-                r#"oc:Status="Available" xmlns:v="urn:vendor" v:Status="Removed""#,
-            )),
-            "source_odm_attribute_ambiguous",
-            r#"multiple namespaced attributes have local name "Status""#,
-        );
-        refused(
-            read_document(&edit(
-                ODM_13,
-                r#"<ItemData ItemOID="I.DATE" Value="2026-01-02"/>"#,
-                r#"<ItemData ItemOID="I.DATE" Value="2026-01-02" oc:ItemName="a" xml:ItemName="b"/>"#,
-            )),
-            "source_odm_attribute_ambiguous",
-            "ItemName",
-        );
-    }
-
-    #[test]
-    fn definitions_need_their_study_and_metadata_version() {
-        refused(
-            read_document(&edit(
-                ODM_13,
-                "  <Study OID=\"S.13\">\n    <MetaDataVersion",
-                "  <MetaDataVersion OID=\"X\"/><Study OID=\"S.13\">\n    <MetaDataVersion",
-            )),
-            "source_odm_layout_unsupported",
-            "MetaDataVersion appears outside Study",
-        );
-        refused(
-            read_document(&edit(
-                ODM_13,
-                "  <Study OID=\"S.13\">",
-                "  <ItemDef OID=\"X\"/><Study OID=\"S.13\">",
-            )),
-            "source_odm_layout_unsupported",
-            "ItemDef appears outside MetaDataVersion",
         );
     }
 }
@@ -1416,91 +924,6 @@ mod layout {
             some(&["G.13", "G.13", "G.13"])
         );
     }
-
-    #[test]
-    fn required_attributes_must_be_present_and_non_empty() {
-        for (original, replacement, message) in [
-            (
-                r#"ItemData ItemOID="I.DATE""#,
-                r#"ItemData ItemOID="""#,
-                "ItemData requires non-empty @ItemOID",
-            ),
-            (
-                r#"ClinicalData StudyOID="S.13""#,
-                "ClinicalData",
-                "ClinicalData requires non-empty @StudyOID",
-            ),
-            (
-                r#"SubjectData SubjectKey="SUBJECT-1""#,
-                "SubjectData",
-                "SubjectData requires non-empty @SubjectKey",
-            ),
-            (
-                r#"StudyEventData StudyEventOID="E.13""#,
-                "StudyEventData",
-                "StudyEventData requires non-empty @StudyEventOID",
-            ),
-            (
-                r#"FormData FormOID="F.13""#,
-                r#"FormData FormOID="""#,
-                "FormData requires non-empty @FormOID",
-            ),
-            (
-                r#"ItemGroupData ItemGroupOID="G.13""#,
-                "ItemGroupData",
-                "ItemGroupData requires non-empty @ItemGroupOID",
-            ),
-            (
-                r#"Study OID="S.13""#,
-                "Study",
-                "Study requires non-empty @OID",
-            ),
-            (
-                r#"ItemDef OID="I.NULL""#,
-                "ItemDef",
-                "ItemDef requires non-empty @OID",
-            ),
-        ] {
-            refused(
-                read_document(&edit(ODM_13, original, replacement)),
-                "source_odm_attribute_missing",
-                message,
-            );
-        }
-    }
-
-    #[test]
-    fn root_namespace_and_nesting_are_checked() {
-        refused(
-            read_document(r#"<Study xmlns="http://www.cdisc.org/ns/odm/v1.3"/>"#),
-            "source_odm_document_unsupported",
-            "document root must be ODM",
-        );
-        refused(
-            read_document("<ODM/>"),
-            "source_odm_document_unsupported",
-            "unsupported ODM namespace (none)",
-        );
-        refused(
-            read_document(r#"<ODM xmlns="http://www.cdisc.org/ns/odm/v1.2"/>"#),
-            "source_odm_document_unsupported",
-            r#"unsupported ODM namespace "http://www.cdisc.org/ns/odm/v1.2""#,
-        );
-        refused(
-            read_document(&edit(
-                ODM_13,
-                "  <Study OID=\"S.13\">",
-                "  <ODM/><Study OID=\"S.13\">",
-            )),
-            "source_odm_document_unsupported",
-            "document contains a nested ODM element",
-        );
-        refused(
-            read_document(&edit(ODM_20, r#"ODMVersion="2.0""#, r#"ODMVersion="1.3""#)),
-            "source_odm_document_unsupported",
-            r#"ODMVersion "1.3" conflicts with namespace"#,
-        );
-    }
 }
 
 mod xml_strictness {
@@ -1515,90 +938,16 @@ mod xml_strictness {
         )
     }
 
-    #[test]
-    fn doctype_and_entities_are_refused() {
-        refused(
-            read_document(&format!("<!DOCTYPE ODM [<!ENTITY e \"x\">]>\n{}", wrap(""))),
-            "source_odm_xml_unsupported",
-            "DOCTYPE declarations are not supported",
-        );
-        let scratch = Scratch::new("external");
-        let secret = scratch.write("secret.txt", "secret");
-        refused(
-            read_document(&format!(
-                "<!DOCTYPE ODM [<!ENTITY e SYSTEM \"file://{}\">]>{}",
-                secret.display(),
-                wrap("&e;")
-            )),
-            "source_odm_xml_unsupported",
-            "DOCTYPE",
-        );
-        refused(
-            read_document(&wrap("&e;")),
-            "source_odm_xml_malformed",
-            "entity &e; is not defined",
-        );
-        refused(
-            read_document(r#"<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" FileOID="&e;"/>"#),
-            "source_odm_xml_malformed",
-            "entity &e; is not defined",
-        );
-    }
-
+    /// Seam: messages the upstream XML tokenizer writes, which the repository
+    /// does not author, so each is checked by a part of its text, where a case
+    /// compares a reason whole. Every other well-formedness refusal is a case
+    /// of `odm_reads_xml.json`.
     #[test]
     fn well_formedness_follows_xml_1_0() {
         for (document, message) in [
-            (
-                format!("{}<ODM/>", wrap("")),
-                "extra content after the root element",
-            ),
-            (
-                format!("{} text", wrap("")),
-                "content is not allowed outside the root element",
-            ),
-            (
-                format!("x{}", wrap("")),
-                "content is not allowed outside the root element",
-            ),
-            (
-                format!(" {}", "<?xml version=\"1.0\"?><ODM/>"),
-                "XML declaration allowed only at the start",
-            ),
             (wrap("<a></b>"), "expected `</a>`"),
-            (wrap("<a b=\"1\" b=\"2\"/>"), "attribute b is repeated"),
-            (
-                wrap("<a b=\"1\"c=\"2\"/>"),
-                "whitespace is required between attributes",
-            ),
-            (wrap("<a b=1/>"), "value must be quoted"),
-            (wrap("<a b=\"<\"/>"), "unescaped '<'"),
-            (wrap("]]>"), "sequence ']]>' is not allowed"),
-            (wrap("&#1;"), "not a valid XML character"),
-            (wrap("&#xD800;"), "not a valid XML character"),
-            (wrap("&#X41;"), "malformed character reference"),
-            (wrap("&#x;"), "malformed character reference"),
-            (wrap("&#99999999999;"), "not a valid XML character"),
-            (wrap("&#x110000;"), "not a valid XML character"),
-            (wrap("&a b;"), "malformed reference"),
             (wrap("& "), "reference"),
             (wrap("<!-- a -- b -->"), "`--`"),
-            (wrap("<?XML x?>"), "target xml is reserved"),
-            (wrap("<?p:i x?>"), "invalid processing instruction target"),
-            (wrap("<1a/>"), "invalid element name"),
-            (wrap("<a:b:c xmlns:a=\"urn:a\"/>"), "invalid element name"),
-            (String::new(), "document has no root element"),
-            (
-                "<?xml version=\"1.0\"?>".into(),
-                "document has no root element",
-            ),
-            (
-                "<?xml version=\"2.0\"?><ODM/>".into(),
-                "XML version must be 1.x",
-            ),
-            (
-                "<?xml version=\"1.0\" standalone=\"maybe\"?><ODM/>".into(),
-                "standalone must be yes or no",
-            ),
         ] {
             refused(
                 read_document(&document),
@@ -1690,6 +1039,7 @@ mod xml_strictness {
         assert_eq!(values(&prefixed), some(&["PD-L1", ""]));
     }
 
+    /// Seam: 4,095 and 4,096 generated namespace declarations.
     #[test]
     fn namespace_bindings_in_scope_are_bounded() {
         let declarations = |count: usize| {
@@ -1705,6 +1055,9 @@ mod xml_strictness {
         );
     }
 
+    /// Seam: bytes that are not UTF-8 text (UTF-16, an invalid UTF-8 byte),
+    /// which a case's text files cannot hold, beside the characters around
+    /// them.
     #[test]
     fn characters_and_encodings_are_utf8_xml_only() {
         let utf16 = wrap("")
@@ -1789,6 +1142,8 @@ mod xml_strictness {
         assert_eq!(cell(&controls, "Value", 0).as_deref(), Some("\u{7f}\u{85}"));
     }
 
+    /// Seam: generated tokens at and over the ten-megabyte and 50,000-byte
+    /// bounds.
     #[test]
     fn text_attribute_and_name_sizes_stay_within_libxml2_bounds() {
         let at_bound = "x".repeat(9_999_999);
@@ -1846,6 +1201,8 @@ mod xml_strictness {
         assert!(read_document(&wrap(&format!("<{}/>", "a".repeat(50_000)))).is_ok());
     }
 
+    /// Seam: generated nesting at and over the option's and the reader's depth
+    /// bounds.
     #[test]
     fn depth_counts_every_element_within_the_option_and_libxml2_bound() {
         let nested = |depth: usize| {
@@ -1882,39 +1239,8 @@ mod xml_strictness {
 mod inputs {
     use super::*;
 
-    /// The source is a caller's own path, so one that reaches no regular
-    /// file fails as any caller's path does, naming the path as given and
-    /// no spec path (FILE-7, FILE-11), before any option is checked.
-    #[test]
-    fn missing_paths_and_directories_fail_as_any_caller_path_does() {
-        let scratch = Scratch::new("missing");
-        let missing = scratch.path().join("absent.xml");
-        let shown = missing.display().to_string();
-        let refusal = issue(odm_xml::read(&missing, &Options::default()), &shown);
-        assert_eq!(
-            (refusal.condition(), refusal.rule()),
-            ("resource_path_missing", Some("FILE-7"))
-        );
-        assert!(refusal.spec_paths.is_empty());
-        assert_eq!(
-            refusal.context,
-            [(
-                "path".to_owned(),
-                yamaa_core::json::Value::String(shown.clone())
-            )]
-            .into()
-        );
-        let folder = scratch.path().display().to_string();
-        let refusal = issue(odm_xml::read(scratch.path(), &Options::default()), &folder);
-        assert_eq!(refusal.condition(), "resource_path_not_regular_file");
-        let unsatisfiable = Options {
-            max_expanded_bytes: 0,
-            ..Options::default()
-        };
-        let refusal = issue(odm_xml::read(&missing, &unsatisfiable), &shown);
-        assert_eq!(refusal.condition(), "resource_path_missing");
-    }
-
+    /// Seam: a symbolic link, which a case does not stage.
+    ///
     /// The file is a caller path read through the local file resolver: a
     /// link in its place is refused as a symbolic link (FILE-8).
     #[cfg(unix)]
@@ -1937,6 +1263,8 @@ mod inputs {
         assert_eq!(read_with(&target, &Options::default()).unwrap().rows(), 3);
     }
 
+    /// Seam: a caller's resolver double.
+    ///
     /// A caller's resolver serves the source under its own name; what it
     /// reports instead of a regular file fails as FILE-7 says.
     #[test]
@@ -2008,6 +1336,9 @@ mod inputs {
         );
     }
 
+    /// Seam: a resolver double that counts its requests, and a sparse file over
+    /// the source bound.
+    ///
     /// Options are checked once the source is found and before any of it is
     /// read: a file whose content would be refused, or a resolver asked for
     /// nothing, reports the option.
@@ -2058,6 +1389,9 @@ mod inputs {
         assert_eq!(*resolver.0.lock().unwrap(), 0);
     }
 
+    /// Seam: a resolver double that reports an oversized capture, and a sparse
+    /// file over the source bound.
+    ///
     /// A source over the capture's bound is over the read's limit, not an
     /// I/O failure, whether the local file resolver or a caller's resolver
     /// refuses it. A caller's resolver holds a source whole under the
@@ -2117,6 +1451,9 @@ mod inputs {
         }
     }
 
+    /// Seam: Unix file names holding `:` or `\`, which not every host can
+    /// stage.
+    ///
     /// A caller's own file name is a host name, not a written path: a `:`, or
     /// a backslash on Unix, reads as any other name.
     #[cfg(unix)]
@@ -2133,15 +1470,14 @@ mod inputs {
         }
     }
 
+    /// Seam: a gzip stream built in the test, which a case's text files cannot
+    /// hold.
+    ///
+    /// A gzip stream named as no archive is read as XML, whose first byte is
+    /// not an XML character. An archive name that holds no archive is a case
+    /// of `odm_reads_xml.json`.
     #[test]
-    fn archive_names_without_archives_are_refused() {
-        for name in ["odm.tar", "ODM.TAR.GZ", "odm.tgz"] {
-            refused(
-                read_bytes(name, ODM_13.as_bytes(), &Options::default()),
-                "source_odm_archive_invalid",
-                "not a TAR archive",
-            );
-        }
+    fn a_gzipped_xml_file_is_read_as_xml() {
         let gzipped_xml = gzip(ODM_13.as_bytes());
         refused(
             read_bytes("odm.xml.gz", &gzipped_xml, &Options::default()),
@@ -2150,6 +1486,7 @@ mod inputs {
         );
     }
 
+    /// Seam: the magic bytes of other compressions, which are not UTF-8 text.
     #[test]
     fn other_compressed_archives_are_refused_with_their_format() {
         for (magic, format) in [
@@ -2182,6 +1519,7 @@ mod archives {
         }
     }
 
+    /// Seam: TAR archives built in the test.
     #[test]
     fn plain_archives_and_header_layouts_are_read() {
         let plain = Tar::new()
@@ -2215,6 +1553,7 @@ mod archives {
         assert_eq!(read_tar(&global, &Options::default()).unwrap().rows(), 3);
     }
 
+    /// Seam: TAR archives built in the test.
     #[test]
     fn selection_counts_exact_names_and_candidates() {
         let none = Tar::new().file("notes.txt", b"x").finish();
@@ -2252,6 +1591,7 @@ mod archives {
         );
     }
 
+    /// Seam: TAR archives built in the test, some with patched headers.
     #[test]
     fn unsafe_irregular_and_sparse_members_are_refused() {
         for name in ["../odm.xml", "/abs/odm.xml", "study/../../odm.xml"] {
@@ -2327,6 +1667,7 @@ mod archives {
         assert_eq!(read_tar(&skipped, &Options::default()).unwrap().rows(), 3);
     }
 
+    /// Seam: plain and gzip TAR archives built in the test.
     #[test]
     fn member_and_expansion_bounds_apply() {
         let archive = Tar::new()
@@ -2375,6 +1716,8 @@ mod archives {
         );
     }
 
+    /// Seam: sparse plain and gzip TAR files over the source bound.
+    ///
     /// A local archive streams from its file: only the members a pass
     /// reaches are read, so an archive extended past the ten-gigabyte source
     /// bound reads its one member. The sparse tail lies after the block that
@@ -2403,6 +1746,8 @@ mod archives {
         }
     }
 
+    /// Seam: TAR archives and gzip streams built in the test and damaged at
+    /// byte offsets.
     #[test]
     fn damaged_archives_are_refused() {
         let valid = Tar::new()

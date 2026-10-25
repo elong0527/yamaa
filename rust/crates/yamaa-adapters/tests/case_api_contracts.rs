@@ -50,17 +50,20 @@ fn check_call(
     (study, checked)
 }
 
+/// The check and the build of a case's input, each with the project it
+/// names if any; the build publishes nothing.
 fn calls(input: &Value, host: Language, label: &str) -> Calls {
-    // The build below names no project, so neither call does.
-    assert!(input.get("project").is_none());
     let (study, checked) = check_call(input, host, label);
     let staged = operations::state(&study);
     let specification = study.identity(replay::text(replay::field(input, "specification")));
+    let project = input
+        .get("project")
+        .map(|name| study.identity(replay::text(name)));
     let built = crate::support::study::domain(
         host,
         Request {
             specification: &specification,
-            environment: None,
+            environment: project.as_deref(),
         },
         crate::support::study::identity("diagnostics", &specification),
     );
@@ -267,7 +270,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
     let contracts = replay::object(replay::field(&routes, "cases"));
     assert_eq!(
         contracts.len(),
-        288,
+        363,
         "every original API contract is authored"
     );
     let mut seen = BTreeSet::new();
@@ -338,6 +341,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
             // returned refused domain also retains FailedBuild (CHECK-2).
             if let Some(save) = save.or((!accepted_output).then_some(false)) {
                 let before = operations::state(&study);
+                let rows = crate::support::rows(&domain.issues());
                 let result = domain.save();
                 if save {
                     assert!(
@@ -351,7 +355,9 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
                         saved_bytes(&study, expected, &case.label);
                         // Save owns completed bytes, even after source inputs
                         // change. Expectations still come from the fixture.
-                        for name in replay::object(replay::field(&case.input, "files")).keys() {
+                        // A benchmark's staged files are not the input's own.
+                        let files = case.input.get("files").map(replay::object);
+                        for name in files.into_iter().flat_map(|files| files.keys()) {
                             if name.ends_with(".csv") && !expected.contains_key(name) {
                                 fs::write(study.join(name), "changed after build").unwrap();
                             }
@@ -364,27 +370,60 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
                         );
                         saved_bytes(&study, expected, &case.label);
                     } else {
-                        assert_eq!(
-                            case.label,
-                            "row_scopes.json::when_binds_groups_without_changing_the_fraction_denominator",
-                            "an authored positive save states its bytes"
+                        // A test that saved only to read its report back
+                        // states the report's rows, and its case builds.
+                        assert!(
+                            case.stated.report.is_some(),
+                            "{}: an authored positive save states its bytes",
+                            case.label
                         );
                         assert_eq!(
                             case.operations,
                             ["build"],
-                            "the return-value-only case builds without saving in the replay"
+                            "{}: the return-value-only case builds without saving in the replay",
+                            case.label
                         );
                     }
                 } else {
-                    assert!(
-                        matches!(result, Err(file_application::FailedBuild)),
-                        "{}: expected FailedBuild, got {result:?}",
-                        case.label
-                    );
+                    // A failed build refuses every save alike (CHECK-2): each
+                    // of two saves returns FailedBuild and leaves the build's
+                    // complete issue rows as they were. The first publishes
+                    // only the declared report (OUTPUT-10), the bytes its
+                    // case states as saved, whose whole delta the replay
+                    // compares; without one, every staged path stays. The
+                    // second leaves the study as the first left it.
+                    let refused = |result: Result<bool, file_application::FailedBuild>,
+                                   domain: &file_application::Domain,
+                                   attempt: &str| {
+                        assert!(
+                            matches!(result, Err(file_application::FailedBuild)),
+                            "{}: {attempt} refused save: expected FailedBuild, got {result:?}",
+                            case.label
+                        );
+                        assert_eq!(
+                            crate::support::rows(&domain.issues()),
+                            rows,
+                            "{}: the {attempt} refused save keeps the build's issues",
+                            case.label
+                        );
+                    };
+                    refused(result, &domain, "first");
+                    match case.stated.saved.as_ref().filter(|saved| !saved.is_empty()) {
+                        Some(report) => saved_bytes(&study, report, &case.label),
+                        None => assert_eq!(
+                            operations::state(&study),
+                            before,
+                            "{}: a refused save preserves every staged path",
+                            case.label
+                        ),
+                    }
+                    let published = operations::state(&study);
+                    let again = domain.save();
+                    refused(again, &domain, "repeated");
                     assert_eq!(
                         operations::state(&study),
-                        before,
-                        "{}: a refused save preserves every staged path",
+                        published,
+                        "{}: repeated refused save preserves the report and every staged path",
                         case.label
                     );
                 }
@@ -396,8 +435,8 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         contracts.keys().cloned().collect::<BTreeSet<_>>(),
         "every authored API case still exists"
     );
-    assert_eq!((domains, preparation, either, checks), (178, 1, 4, 105));
-    assert_eq!((accepted_saves, refused_saves, no_save), (113, 30, 145));
+    assert_eq!((domains, preparation, either, checks), (241, 13, 4, 105));
+    assert_eq!((accepted_saves, refused_saves, no_save), (154, 46, 163));
 }
 
 /// Seam: the composition's save return, held artifact set and capture counter

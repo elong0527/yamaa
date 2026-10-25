@@ -1,32 +1,65 @@
 //! Native half of the host API: specification operations, their results and
 //! one error type. The Python facade keeps paths in lazy objects and calls
-//! these functions, which reach the engine through the boundary's client;
-//! behavior, validation and messages stay in Rust.
+//! these functions, which call the `yamaa` facade; behavior, validation and
+//! messages stay in Rust.
+//!
+//! The facade engine of every call is built in one place, [`engine`], from
+//! the Python host, the running interpreter's version and, for a call that
+//! may run project functions, the installed functions' port.
 use pyo3::{exceptions::PyException, exceptions::PyRuntimeError, prelude::*, types::PyDict};
-use yamaa_boundary::client::{Call, Engine, Info, Language, OdmOptions, Owned, Refused};
+use std::sync::{Arc, Mutex, MutexGuard};
+use yamaa::{
+    CancellationToken, EngineOptions, Failure, FailureKind, HostLanguage, ProjectRequest,
+    SpecRequest, SubmissionOptions,
+};
+use yamaa_boundary::{HandleKind, Live};
 
 use crate::arrow_bridge::Table;
-use crate::interface::gate;
+use crate::interface::{gate, CENSUS};
 use crate::project_activation::Port;
 
 pyo3::create_exception!(yamaa, _Error, PyException);
 
+/// Why a call answered no value.
+pub(crate) enum Refused {
+    /// The engine refused the operation: D39's text, the issues that explain
+    /// it and the files a refused save wrote.
+    Engine(Failure),
+    /// The binding refused the call, for this reason.
+    Boundary(String),
+    /// The call was cancelled: the interrupt it kept is raised instead.
+    Cancelled,
+}
+
+/// A facade failure: a cancelled one answers the cancellation, and any other
+/// the refusal, with its message, issues and paths.
+impl From<Failure> for Refused {
+    fn from(failure: Failure) -> Self {
+        match failure.kind {
+            FailureKind::Cancelled => Refused::Cancelled,
+            _ => Refused::Engine(failure),
+        }
+    }
+}
+
+/// A streamed run's refusal of a reader or of its result (#3697), whose text
+/// is the failure's, `cannot read <subject>: ...`: a binding refusal, as a
+/// busy handle's is.
+pub(crate) fn streamed(failure: Failure) -> Refused {
+    Refused::Boundary(failure.message)
+}
+
 /// Raise `_Error` carrying the issues that explain it as an `issues` table,
 /// and the files a refused save wrote before it stopped as `paths`; a
-/// boundary refusal is a `RuntimeError`, as a busy handle's is.
-fn raise(py: Python<'_>, refusal: Refused) -> PyErr {
+/// binding refusal is a `RuntimeError`, as a busy handle's is.
+pub(crate) fn raise(py: Python<'_>, refusal: Refused) -> PyErr {
     match refusal {
-        Refused::Engine {
-            message,
-            issues,
-            paths,
-        } => {
-            let error = _Error::new_err(message);
+        Refused::Engine(failure) => {
+            let error = _Error::new_err(failure.message);
             let value = error.value(py);
-            let issues = issues.map(Table::new);
             match value
-                .setattr("issues", issues)
-                .and_then(|()| value.setattr("paths", paths))
+                .setattr("issues", Table::from(&failure.issues))
+                .and_then(|()| value.setattr("paths", failure.paths))
             {
                 Ok(()) => error,
                 Err(setattr) => setattr,
@@ -46,131 +79,217 @@ fn runtime(py: Python<'_>) -> String {
     py.version().to_owned()
 }
 
-/// Run a call of the engine with the interpreter's interrupts and project
-/// functions behind its callbacks.
+/// The facade engine of one call: the Python host on the interpreter of
+/// `version`, with the installed project functions when `functions`. Every
+/// call builds its engine here.
+fn engine(version: &str, functions: bool) -> yamaa::Engine {
+    let options = EngineOptions::new(HostLanguage::Python, "python".into(), version.into());
+    yamaa::Engine::new(match functions {
+        true => options.with_functions(Arc::new(Port)),
+        false => options,
+    })
+}
+
+/// Run a cancellable call of the engine with the interpreter's interrupts
+/// behind its token. Once the call returns the token is polled once more,
+/// so an interrupt that arrived as it returned still cancels it (D186).
 fn called<T>(
     py: Python<'_>,
     functions: bool,
-    run: impl FnOnce(Engine, &Call<'_>) -> Result<T, Refused>,
+    run: impl FnOnce(&yamaa::Engine, &CancellationToken) -> Result<T, Refused>,
 ) -> PyResult<T> {
-    let engine = gate()?;
+    gate()?;
     let version = runtime(py);
     crate::interrupt::run(py, |state| {
-        let host = Port::new(state);
-        let call = Call::new(Language::Python, "python", &version).with(&host, functions);
-        run(engine, &call).map_err(|refusal| raise(py, refusal))
+        let token = crate::interrupt::token(state);
+        let answer = run(&engine(&version, functions), &token);
+        let answer = if token.is_cancelled() {
+            Err(Refused::Cancelled)
+        } else {
+            answer
+        };
+        answer.map_err(|refusal| raise(py, refusal))
     })
 }
 
 /// Run a call of the engine that reads files and calls no project function.
-fn plain<T>(
-    py: Python<'_>,
-    run: impl FnOnce(Engine, &Call<'_>) -> Result<T, Refused>,
-) -> PyResult<T> {
-    let engine = gate()?;
-    let version = runtime(py);
-    let call = Call::new(Language::Python, "python", &version);
-    run(engine, &call).map_err(|refusal| raise(py, refusal))
+fn plain<T>(py: Python<'_>, run: impl FnOnce(&yamaa::Engine) -> Result<T, Refused>) -> PyResult<T> {
+    gate()?;
+    run(&engine(&runtime(py), false)).map_err(|refusal| raise(py, refusal))
 }
 
 /// A result's accessor, which reaches only the result itself.
-fn read<T>(
-    py: Python<'_>,
-    result: &Owned,
-    read: impl FnOnce(Engine) -> Result<T, Refused>,
-) -> PyResult<T> {
-    crate::interrupt::run(py, |_| {
-        read(result.engine()).map_err(|refusal| raise(py, refusal))
-    })
+fn read<T>(py: Python<'_>, read: impl FnOnce() -> Result<T, Refused>) -> PyResult<T> {
+    crate::interrupt::run(py, |_| read().map_err(|refusal| raise(py, refusal)))
 }
 
-/// Save a result, with the interpreter's interrupts behind the call's probe.
-fn save(py: Python<'_>, result: &Owned) -> PyResult<Vec<String>> {
-    let version = runtime(py);
+/// A result, unless another call holds it (D258): `noun` names its kind in
+/// words.
+fn locked<'a, T>(value: &'a Mutex<T>, noun: &str) -> Result<MutexGuard<'a, T>, Refused> {
+    value
+        .try_lock()
+        .map_err(|_| Refused::Boundary(format!("{noun} handle is in use or poisoned")))
+}
+
+/// Save a result with `save`, with the interpreter's interrupts behind the
+/// call's token.
+fn save(
+    py: Python<'_>,
+    save: impl FnOnce(&CancellationToken) -> Result<Vec<String>, Refused>,
+) -> PyResult<Vec<String>> {
     crate::interrupt::run(py, |state| {
-        let host = Port::new(state);
-        let call = Call::new(Language::Python, "python", &version).with(&host, false);
-        let saved = result.engine().save(&call, result.handle());
+        let token = crate::interrupt::token(state);
+        let saved = save(&token);
+        let saved = if token.is_cancelled() {
+            Err(Refused::Cancelled)
+        } else {
+            saved
+        };
         saved.map_err(|refusal| raise(py, refusal))
     })
 }
 
+/// The request of `specification`, read with `project` when one is given.
+fn spec_request<'a>(
+    engine: &'a yamaa::Engine,
+    specification: &'a str,
+    project: Option<&'a str>,
+) -> SpecRequest<'a> {
+    let request = engine.spec(specification);
+    match project {
+        Some(project) => request.project(project),
+        None => request,
+    }
+}
+
+/// The request of `project`, its run and submission scoped to `section`
+/// when one is given.
+fn project_request<'a>(
+    engine: &'a yamaa::Engine,
+    project: &'a str,
+    section: Option<&'a str>,
+) -> ProjectRequest<'a> {
+    let request = engine.project(project);
+    match section {
+        Some(section) => request.section(section),
+        None => request,
+    }
+}
+
+/// A run built whole, or a streamed run (#3697), whose result is known once
+/// it ran whole.
+enum Held {
+    Built(Mutex<yamaa::Run>),
+    Streamed(Arc<yamaa::Streamed>),
+}
+
 #[pyclass(frozen, module = "yamaa._native", name = "_Run")]
 pub struct Run {
-    run: Owned,
+    held: Held,
+    _live: Live,
+}
+
+impl Run {
+    fn new(held: Held) -> Self {
+        Self {
+            held,
+            _live: CENSUS.hold(HandleKind::Run),
+        }
+    }
+
+    /// Read the run's result with `read`. A streamed run nobody started to
+    /// read runs whole first; one whose stream has not ended, or that was
+    /// cancelled, refuses.
+    fn result<T>(&self, py: Python<'_>, read: impl FnOnce(&yamaa::Run) -> T) -> PyResult<T> {
+        self::read(py, || match &self.held {
+            Held::Built(run) => Ok(read(&*locked(run, "run")?)),
+            Held::Streamed(run) => Ok(read(&*run.run().map_err(streamed)?)),
+        })
+    }
 }
 
 #[pymethods]
 impl Run {
-    fn status(&self, py: Python<'_>) -> PyResult<String> {
-        read(py, &self.run, |engine| {
-            engine.status(self.run.handle(), None)
-        })
+    fn status(&self, py: Python<'_>) -> PyResult<&'static str> {
+        self.result(py, |run| run.status().as_str())
     }
+    /// The output: a table, none for a failed run, or for a streamed run a
+    /// table over its stream until it ran whole.
     fn output(&self, py: Python<'_>) -> PyResult<Option<Table>> {
-        let output = read(py, &self.run, |engine| {
-            engine.output(self.run.handle(), None)
-        })?;
-        Ok(output.map(Table::new))
+        let Held::Streamed(run) = &self.held else {
+            return self.result(py, |run| run.output().map(Table::from));
+        };
+        read(py, || {
+            if let yamaa::StreamProgress::Cancelled | yamaa::StreamProgress::Ended = run.progress()
+            {
+                // A cancelled run's result refuses as cancelled.
+                let built = run.run().map_err(streamed)?;
+                if built.output().is_some() || built.status() == yamaa::Status::Failed {
+                    return Ok(built.output().map(Table::from));
+                }
+            }
+            Ok(Some(Table::stream(Arc::clone(run))))
+        })
     }
     fn issues(&self, py: Python<'_>) -> PyResult<Table> {
-        read(py, &self.run, |engine| {
-            engine.issues(self.run.handle(), None)
-        })
-        .map(Table::new)
+        self.result(py, |run| Table::from(&run.issues()))
     }
     fn report(&self, py: Python<'_>) -> PyResult<Option<Table>> {
-        let report = read(py, &self.run, |engine| {
-            engine.report(self.run.handle(), None)
-        })?;
-        Ok(report.map(Table::new))
+        self.result(py, |run| run.report().map(Table::from))
     }
     fn save(&self, py: Python<'_>) -> PyResult<Vec<String>> {
-        save(py, &self.run)
+        save(py, |token| match &self.held {
+            Held::Built(run) => Ok(locked(run, "run")?.save(token)?),
+            Held::Streamed(run) => Ok(run.run().map_err(streamed)?.save(token)?),
+        })
     }
     /// The printed text (D37), which `repr()` returns.
     fn summary(&self, py: Python<'_>) -> PyResult<String> {
-        let lines = read(py, &self.run, |engine| {
-            engine.summary(self.run.handle(), None)
-        })?;
-        Ok(lines.join("\n"))
+        self.result(py, |run| run.summary().to_string())
     }
     /// Private installed-run evidence for qualification suites.
     #[pyo3(signature=(include_measurements=false))]
     fn observations(&self, py: Python<'_>, include_measurements: bool) -> PyResult<Option<String>> {
-        read(py, &self.run, |engine| {
-            engine.observations(self.run.handle(), include_measurements)
+        self.result(py, |run| match include_measurements {
+            true => Some(run.measured_observations()),
+            false => run.observations(),
         })
     }
 }
 
-/// The static check of a specification or a project (D36, D37): the engine's
+/// The static check of a specification or a project (D36, D37): the facade's
 /// result, whose status, issues and printed text the public class returns as
 /// they are.
 #[pyclass(frozen, module = "yamaa._native", name = "_Check")]
 pub struct Check {
-    check: Owned,
+    check: Mutex<yamaa::Check>,
+    _live: Live,
+}
+
+impl Check {
+    fn new(check: yamaa::Check) -> Self {
+        Self {
+            check: Mutex::new(check),
+            _live: CENSUS.hold(HandleKind::Check),
+        }
+    }
+
+    fn result<T>(&self, py: Python<'_>, read: impl FnOnce(&yamaa::Check) -> T) -> PyResult<T> {
+        self::read(py, || Ok(read(&*locked(&self.check, "check")?)))
+    }
 }
 
 #[pymethods]
 impl Check {
-    fn status(&self, py: Python<'_>) -> PyResult<String> {
-        read(py, &self.check, |engine| {
-            engine.status(self.check.handle(), None)
-        })
+    fn status(&self, py: Python<'_>) -> PyResult<&'static str> {
+        self.result(py, |check| check.status().as_str())
     }
     fn issues(&self, py: Python<'_>) -> PyResult<Table> {
-        read(py, &self.check, |engine| {
-            engine.issues(self.check.handle(), None)
-        })
-        .map(Table::new)
+        self.result(py, |check| Table::from(&check.issues()))
     }
     /// The printed text (D37), which `repr()` returns.
     fn summary(&self, py: Python<'_>) -> PyResult<String> {
-        let lines = read(py, &self.check, |engine| {
-            engine.summary(self.check.handle(), None)
-        })?;
-        Ok(lines.join("\n"))
+        self.result(py, |check| check.summary().to_string())
     }
 }
 
@@ -184,40 +303,48 @@ pub fn _spec_check(
     project: Option<&str>,
     parent: Option<&str>,
 ) -> PyResult<Check> {
-    let check = called(py, true, |engine, call| match parent {
-        Some(parent) => engine.spec_check_on(call, specification, project, parent),
-        None => engine.spec_check(call, specification, project),
+    let check = called(py, true, |engine, token| {
+        let request = spec_request(engine, specification, project).cancel_with(token);
+        Ok(match parent {
+            Some(parent) => request.check_on(parent)?,
+            None => request.check()?,
+        })
     })?;
-    Ok(Check { check })
+    Ok(Check::new(check))
 }
 
 /// The printed text of a lazy specification object, which has read nothing
 /// (D37): `yamaa spec <path>`, with the path as given.
 #[pyfunction]
-pub fn _spec_summary(py: Python<'_>, specification: &str) -> PyResult<String> {
-    let lines = plain(py, |engine, _| engine.spec_summary(specification))?;
-    Ok(lines.join("\n"))
+pub fn _spec_summary(specification: &str) -> PyResult<String> {
+    gate()?;
+    Ok(yamaa::Summary::spec(specification).to_string())
 }
 
 /// The printed text of a lazy project object: `yamaa project <path>`.
 #[pyfunction]
-pub fn _project_summary(py: Python<'_>, project: &str) -> PyResult<String> {
-    let lines = plain(py, |engine, _| engine.project_summary(project))?;
-    Ok(lines.join("\n"))
+pub fn _project_summary(project: &str) -> PyResult<String> {
+    gate()?;
+    Ok(yamaa::Summary::project(project).to_string())
 }
 
 /// The compiled plans one lazy specification or project object keeps between
-/// its runs (#2821), an engine plans holder.
+/// its runs (#2821); see `yamaa::Plans`. A holder is shared without a lock,
+/// so a run started from a project function can use it too.
 #[pyclass(frozen, module = "yamaa._native", name = "_Plans")]
 pub struct Plans {
-    plans: Owned,
+    plans: yamaa::Plans,
+    _live: Live,
 }
 
 /// An empty holder for one lazy object. Creating it reads nothing.
 #[pyfunction]
-pub fn _plans(py: Python<'_>) -> PyResult<Plans> {
-    let plans = plain(py, |engine, _| engine.plans())?;
-    Ok(Plans { plans })
+pub fn _plans() -> PyResult<Plans> {
+    gate()?;
+    Ok(Plans {
+        plans: yamaa::Plans::new(),
+        _live: CENSUS.hold(HandleKind::Plans),
+    })
 }
 
 /// A run of one specification: built now, or with `stream` built as its
@@ -231,23 +358,36 @@ pub fn _spec_run(
     plans: Option<PyRef<'_, Plans>>,
     stream: bool,
 ) -> PyResult<Run> {
-    let plans = plans.as_deref().map_or(0, |plans| plans.plans.handle());
+    let plans = plans.as_deref().map(|plans| &plans.plans);
     if stream {
-        let engine = gate()?;
+        gate()?;
         let version = runtime(py);
+        let token = crate::interrupt::stream_token();
         let run = crate::interrupt::run(py, |_| {
-            let call =
-                Call::new(Language::Python, "python", &version).with_owned(Port::streamed(), true);
-            engine
-                .spec_stream(call, specification, project, plans)
-                .map_err(|refusal| raise(py, refusal))
+            let engine = engine(&version, true);
+            let request = spec_request(&engine, specification, project).cancel_with(&token);
+            let run = match plans {
+                Some(plans) => request.reusing(plans),
+                None => request,
+            }
+            .stream();
+            // As a built run's call, the start polls its token once more.
+            if token.is_cancelled() {
+                return Err(raise(py, Refused::Cancelled));
+            }
+            run.map_err(|failure| raise(py, failure.into()))
         })?;
-        return Ok(Run { run });
+        return Ok(Run::new(Held::Streamed(Arc::new(run))));
     }
-    let run = called(py, true, |engine, call| {
-        engine.spec_run(call, specification, project, plans)
+    let run = called(py, true, |engine, token| {
+        let request = spec_request(engine, specification, project).cancel_with(token);
+        Ok(match plans {
+            Some(plans) => request.reusing(plans),
+            None => request,
+        }
+        .run()?)
     })?;
-    Ok(Run { run })
+    Ok(Run::new(Held::Built(Mutex::new(run))))
 }
 
 #[pyfunction]
@@ -257,8 +397,8 @@ pub fn _spec_resolve<'py>(
     specification: &str,
     project: Option<&str>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let value = plain(py, |engine, call| {
-        engine.spec_resolve(call, specification, project)
+    let value = plain(py, |engine| {
+        Ok(spec_request(engine, specification, project).resolve()?)
     })?;
     crate::context_values::context_value(py, &value)
 }
@@ -275,14 +415,15 @@ pub fn _read_odm(
 ) -> PyResult<Table> {
     // The shared option validation refuses limits below its minimums, so
     // every host reports the same refusal.
-    let limit = |value: usize| u64::try_from(value).unwrap_or(u64::MAX);
-    let options = OdmOptions {
-        archive_member: archive_member.as_deref(),
-        max_archive_members: limit(max_archive_members),
-        max_expanded_bytes: limit(max_expanded_bytes),
-        max_xml_depth: limit(max_xml_depth),
-    };
-    plain(py, |engine, call| engine.read_odm(call, source, &options)).map(Table::new)
+    let mut options = yamaa::OdmOptions::new()
+        .with_max_archive_members(max_archive_members)
+        .with_max_expanded_bytes(u64::try_from(max_expanded_bytes).unwrap_or(u64::MAX))
+        .with_max_xml_depth(max_xml_depth);
+    if let Some(member) = archive_member {
+        options = options.with_archive_member(member);
+    }
+    let items = plain(py, |engine| Ok(engine.read_odm(source, &options)?))?;
+    Ok(Table::from(&items))
 }
 
 /// The lint table of every file `paths` names, fixing them first when `fix`
@@ -290,56 +431,47 @@ pub fn _read_odm(
 #[pyfunction]
 #[pyo3(signature=(paths, fix=false))]
 pub fn _lint(py: Python<'_>, paths: Vec<String>, fix: bool) -> PyResult<Table> {
-    plain(py, |engine, _| engine.lint(&paths, fix)).map(Table::new)
+    plain(py, |_| Ok(Table::from(&yamaa::lint(&paths, fix)?.table())))
 }
 
 /// The JSON Schema of a file type as canonical JSON text (#3030 D149); a
 /// type the facade does not know raises `_Error`.
 #[pyfunction]
 pub fn _schema(py: Python<'_>, file_type: &str) -> PyResult<String> {
-    plain(py, |engine, _| engine.schema(file_type))
+    plain(py, |_| Ok(yamaa::schema(file_type)?))
 }
 
 /// The condition catalogue (#3700): every condition the engine may report,
 /// and every condition a release retired, as a table.
 #[pyfunction]
-pub fn _conditions(py: Python<'_>) -> PyResult<Table> {
-    plain(py, |engine, _| engine.conditions()).map(Table::new)
+pub fn _conditions() -> PyResult<Table> {
+    gate()?;
+    Ok(Table::from(&yamaa::conditions().table()))
 }
 
-/// The installation self-test (#3030 D28, D119): the engine's result, whose
+/// The installation self-test (#3030 D28, D119): the facade's result, whose
 /// status, cases, engine information and printed report the public class
 /// returns as they are.
 #[pyclass(frozen, module = "yamaa._native", name = "_SelfTest")]
 pub struct SelfTest {
-    selftest: Owned,
+    selftest: yamaa::SelfTest,
+    _live: Live,
 }
 
 #[pymethods]
 impl SelfTest {
-    fn status(&self, py: Python<'_>) -> PyResult<String> {
-        read(py, &self.selftest, |engine| {
-            engine.status(self.selftest.handle(), None)
-        })
+    fn status(&self) -> &'static str {
+        self.selftest.status().as_str()
     }
-    fn cases(&self, py: Python<'_>) -> PyResult<Table> {
-        read(py, &self.selftest, |engine| {
-            engine.cases(self.selftest.handle())
-        })
-        .map(Table::new)
+    fn cases(&self) -> Table {
+        Table::from(&self.selftest.table())
     }
     /// The engine information that ran the cases, as `info()` gives it.
     fn info<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let info = read(py, &self.selftest, |engine| {
-            engine.selftest_info(self.selftest.handle())
-        })?;
-        info_dict(py, &info)
+        info_dict(py, self.selftest.info())
     }
-    fn summary(&self, py: Python<'_>) -> PyResult<String> {
-        let lines = read(py, &self.selftest, |engine| {
-            engine.summary(self.selftest.handle(), None)
-        })?;
-        Ok(lines.join("\n"))
+    fn summary(&self) -> String {
+        self.selftest.summary().to_string()
     }
 }
 
@@ -358,12 +490,12 @@ fn python_version(py: Python<'_>) -> String {
 
 /// The engine information as a dict keyed in the facade's field order: the
 /// one construction that `info()` and a selftest's `info` share (D41).
-fn info_dict<'py>(py: Python<'py>, info: &Info) -> PyResult<Bound<'py, PyDict>> {
+fn info_dict<'py>(py: Python<'py>, info: &yamaa::Info) -> PyResult<Bound<'py, PyDict>> {
     let fields = PyDict::new(py);
-    fields.set_item("version", &info.version)?;
+    fields.set_item("version", info.version)?;
     fields.set_item("language_versions", &info.language_versions)?;
     fields.set_item("features", &info.features)?;
-    fields.set_item("host", &info.host)?;
+    fields.set_item("host", info.host.as_str())?;
     fields.set_item("host_version", info.host_version.as_deref())?;
     fields.set_item("platform", &info.platform)?;
     Ok(fields)
@@ -373,145 +505,144 @@ fn info_dict<'py>(py: Python<'py>, info: &Info) -> PyResult<Bound<'py, PyDict>> 
 /// interpreter (D41, P-INFO-1).
 #[pyfunction]
 pub fn _info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
-    let engine = gate()?;
+    gate()?;
     let version = python_version(py);
-    let info = engine.info(&Call::new(Language::Python, "python", &version));
-    info_dict(py, &info.map_err(|refusal| raise(py, refusal))?)
+    info_dict(py, &yamaa::info(yamaa::Host::Python, Some(&version)))
 }
 
 /// Run every selftest case through this engine as the Python host, with the
 /// running interpreter's version.
 #[pyfunction]
 pub fn _selftest(py: Python<'_>) -> PyResult<SelfTest> {
-    let engine = gate()?;
+    gate()?;
     let version = python_version(py);
-    let selftest = engine.selftest(&Call::new(Language::Python, "python", &version));
-    let selftest = selftest.map_err(|refusal| raise(py, refusal))?;
-    Ok(SelfTest { selftest })
+    Ok(SelfTest {
+        selftest: yamaa::selftest(yamaa::Host::Python, Some(&version)),
+        _live: CENSUS.hold(HandleKind::SelfTest),
+    })
 }
 
 #[pyclass(frozen, module = "yamaa._native", name = "_ProjectRun")]
 pub struct ProjectRun {
-    runs: Owned,
+    runs: Mutex<yamaa::ProjectRun>,
+    _live: Live,
+}
+
+impl ProjectRun {
+    fn result<T>(
+        &self,
+        py: Python<'_>,
+        read: impl FnOnce(&yamaa::ProjectRun) -> Result<T, Refused>,
+    ) -> PyResult<T> {
+        self::read(py, || read(&*locked(&self.runs, "project run")?))
+    }
+
+    /// Read the member `name` of the project run with `read`.
+    fn member<T>(
+        &self,
+        py: Python<'_>,
+        name: &str,
+        read: impl FnOnce(&yamaa::Run) -> T,
+    ) -> PyResult<T> {
+        self.result(py, |runs| Ok(read(runs.member(name)?)))
+    }
 }
 
 #[pymethods]
 impl ProjectRun {
-    fn status(&self, py: Python<'_>) -> PyResult<String> {
-        read(py, &self.runs, |engine| {
-            engine.status(self.runs.handle(), None)
-        })
+    fn status(&self, py: Python<'_>) -> PyResult<&'static str> {
+        self.result(py, |runs| Ok(runs.status().as_str()))
     }
     fn names(&self, py: Python<'_>) -> PyResult<Vec<String>> {
-        read(py, &self.runs, |engine| engine.names(self.runs.handle()))
+        self.result(py, |runs| Ok(runs.names()))
     }
-    fn member_status(&self, py: Python<'_>, name: &str) -> PyResult<String> {
-        read(py, &self.runs, |engine| {
-            engine.status(self.runs.handle(), Some(name))
-        })
+    fn member_status(&self, py: Python<'_>, name: &str) -> PyResult<&'static str> {
+        self.member(py, name, |run| run.status().as_str())
     }
     fn output(&self, py: Python<'_>, name: &str) -> PyResult<Option<Table>> {
-        let output = read(py, &self.runs, |engine| {
-            engine.output(self.runs.handle(), Some(name))
-        })?;
-        Ok(output.map(Table::new))
+        self.member(py, name, |run| run.output().map(Table::from))
     }
     fn member_issues(&self, py: Python<'_>, name: &str) -> PyResult<Table> {
-        read(py, &self.runs, |engine| {
-            engine.issues(self.runs.handle(), Some(name))
-        })
-        .map(Table::new)
+        self.member(py, name, |run| Table::from(&run.issues()))
     }
     fn member_report(&self, py: Python<'_>, name: &str) -> PyResult<Option<Table>> {
-        let report = read(py, &self.runs, |engine| {
-            engine.report(self.runs.handle(), Some(name))
-        })?;
-        Ok(report.map(Table::new))
+        self.member(py, name, |run| run.report().map(Table::from))
     }
     /// One member's printed text, its run's under its name (D37).
     fn member_summary(&self, py: Python<'_>, name: &str) -> PyResult<String> {
-        let lines = read(py, &self.runs, |engine| {
-            engine.summary(self.runs.handle(), Some(name))
-        })?;
-        Ok(lines.join("\n"))
+        self.member(py, name, |run| run.summary().to_string())
     }
     fn issues(&self, py: Python<'_>) -> PyResult<Table> {
-        read(py, &self.runs, |engine| {
-            engine.issues(self.runs.handle(), None)
-        })
-        .map(Table::new)
+        self.result(py, |runs| Ok(Table::from(&runs.issues())))
     }
     fn report(&self, py: Python<'_>) -> PyResult<Table> {
-        let report = read(py, &self.runs, |engine| {
-            engine.report(self.runs.handle(), None)
-        })?;
-        report
-            .map(Table::new)
-            .ok_or_else(|| PyRuntimeError::new_err("a project run has a report"))
+        self.result(py, |runs| Ok(Table::from(&runs.report())))
     }
     fn save(&self, py: Python<'_>) -> PyResult<Vec<String>> {
-        save(py, &self.runs)
+        save(py, |token| {
+            Ok(locked(&self.runs, "project run")?.save(token)?)
+        })
     }
     /// The printed text with one line per member (D37).
     fn summary(&self, py: Python<'_>) -> PyResult<String> {
-        let lines = read(py, &self.runs, |engine| {
-            engine.summary(self.runs.handle(), None)
-        })?;
-        Ok(lines.join("\n"))
+        self.result(py, |runs| Ok(runs.summary().to_string()))
     }
 }
 
 #[pyclass(frozen, module = "yamaa._native", name = "_Submission")]
 pub struct Submission {
-    submission: Owned,
+    submission: Mutex<yamaa::Submission>,
+    _live: Live,
+}
+
+impl Submission {
+    fn result<T>(&self, py: Python<'_>, read: impl FnOnce(&yamaa::Submission) -> T) -> PyResult<T> {
+        self::read(py, || Ok(read(&*locked(&self.submission, "submission")?)))
+    }
 }
 
 #[pymethods]
 impl Submission {
-    fn status(&self, py: Python<'_>) -> PyResult<String> {
-        read(py, &self.submission, |engine| {
-            engine.status(self.submission.handle(), None)
-        })
+    fn status(&self, py: Python<'_>) -> PyResult<&'static str> {
+        self.result(py, |submission| submission.status().as_str())
     }
     /// The creation time the documents carry (D69, D129).
     fn created(&self, py: Python<'_>) -> PyResult<String> {
-        read(py, &self.submission, |engine| {
-            engine.created(self.submission.handle())
-        })
+        self.result(py, |submission| submission.created().to_owned())
     }
     fn issues(&self, py: Python<'_>) -> PyResult<Table> {
-        read(py, &self.submission, |engine| {
-            engine.issues(self.submission.handle(), None)
-        })
-        .map(Table::new)
+        self.result(py, |submission| Table::from(&submission.issues()))
     }
     fn save(&self, py: Python<'_>) -> PyResult<Vec<String>> {
-        save(py, &self.submission)
+        save(py, |token| {
+            Ok(locked(&self.submission, "submission")?.save(token)?)
+        })
     }
     /// The printed text (D37).
     fn summary(&self, py: Python<'_>) -> PyResult<String> {
-        let lines = read(py, &self.submission, |engine| {
-            engine.summary(self.submission.handle(), None)
-        })?;
-        Ok(lines.join("\n"))
+        self.result(py, |submission| submission.summary().to_string())
     }
 }
 
 #[pyfunction]
 pub fn _project_spec(py: Python<'_>, project: &str, name: &str) -> PyResult<String> {
-    plain(py, |engine, call| engine.project_spec(call, project, name))
+    plain(py, |engine| {
+        Ok(engine.project(project).spec(name)?.path().to_owned())
+    })
 }
 
 /// The listed specifications' names in run order, read without data (D45).
 #[pyfunction]
 pub fn _project_names(py: Python<'_>, project: &str) -> PyResult<Vec<String>> {
-    plain(py, |engine, call| engine.project_names(call, project))
+    plain(py, |engine| Ok(engine.project(project).names()?))
 }
 
 #[pyfunction]
 pub fn _project_check(py: Python<'_>, project: &str) -> PyResult<Check> {
-    let check = called(py, true, |engine, call| engine.project_check(call, project))?;
-    Ok(Check { check })
+    let check = called(py, true, |engine, token| {
+        Ok(engine.project(project).cancel_with(token).check()?)
+    })?;
+    Ok(Check::new(check))
 }
 
 #[pyfunction]
@@ -522,11 +653,20 @@ pub fn _project_run(
     section: Option<&str>,
     plans: Option<PyRef<'_, Plans>>,
 ) -> PyResult<ProjectRun> {
-    let plans = plans.as_deref().map_or(0, |plans| plans.plans.handle());
-    let runs = called(py, true, |engine, call| {
-        engine.project_run(call, project, section, plans)
+    let plans = plans.as_deref().map(|plans| &plans.plans);
+    let runs = called(py, true, |engine, token| {
+        let request = project_request(engine, project, section).cancel_with(token);
+        // Only an unknown section refuses the call with issues.
+        Ok(match plans {
+            Some(plans) => request.reusing(plans),
+            None => request,
+        }
+        .run()?)
     })?;
-    Ok(ProjectRun { runs })
+    Ok(ProjectRun {
+        runs: Mutex::new(runs),
+        _live: CENSUS.hold(HandleKind::ProjectRun),
+    })
 }
 
 #[pyfunction]
@@ -537,8 +677,15 @@ pub fn _project_submission(
     section: Option<&str>,
     created: Option<&str>,
 ) -> PyResult<Submission> {
-    let submission = called(py, true, |engine, call| {
-        engine.project_submission(call, project, section, created)
+    let mut options = SubmissionOptions::new(yamaa::VERSION);
+    options.created = created.map(str::to_owned);
+    let submission = called(py, true, |engine, token| {
+        Ok(project_request(engine, project, section)
+            .cancel_with(token)
+            .submission(&options)?)
     })?;
-    Ok(Submission { submission })
+    Ok(Submission {
+        submission: Mutex::new(submission),
+        _live: CENSUS.hold(HandleKind::Submission),
+    })
 }

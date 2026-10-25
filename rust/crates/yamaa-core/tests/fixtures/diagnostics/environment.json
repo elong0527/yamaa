@@ -1,5 +1,5 @@
 {
-  "about": "A project environment's findings, each at its own path: the independent findings of two invalid codelists (CT-1, CT-3 to CT-6), an alias on an extended item (CT-6), a format name whose dollar sign disagrees with its codelist's data type (CT-12), a function file's findings beside a lock of another host (FUNC-2, FUNC-3), a function file value its declared type cannot read (FUNC-2) and a lock that is no packaging lock (FUNC-2, FUNC-3). A case whose table compared a record in part names those fields, or those keys of its context, in compares.",
+  "about": "A project environment's findings, each at its own path: the independent findings of two invalid codelists (CT-1, CT-3 to CT-6), an alias on an extended item (CT-6), a format name whose dollar sign disagrees with its codelist's data type (CT-12), a function file's findings beside a lock of another host (FUNC-2, FUNC-3), every finding a function definition can hold, each at its path in the function file with the names and values it concerns (FUNC-2), a lock of another host alone and environments that need no finding (FUNC-3), a function file value its declared type cannot read (FUNC-2) and a lock that is no packaging lock (FUNC-2, FUNC-3). A case whose table compared a record in part names those fields, or those keys of its context, in compares.",
   "cases": [
     {
       "case": "each_independent_finding_of_two_invalid_codelists_is_reported_in_order_at_its_path",
@@ -17,24 +17,23 @@
           }
         ]
       },
-      "compares": ["phase", "condition", "rule", "spec_paths", "source_span", "operand_route"],
       "issues": [
-        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-3", "spec_paths": ["codelists[0].codelists[0]"]},
-        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[0].items[0].value"]},
-        {"phase": "validation", "condition": "codelist_extension_not_admitted", "rule": "CT-6", "spec_paths": ["codelists[0].codelists[0].items[0].extended"]},
-        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[0].items[1].value"]},
-        {"phase": "validation", "condition": "codelist_duplicate_value", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[0].items[1].value"]},
-        {"phase": "validation", "condition": "codelist_partial_item_field", "rule": "CT-5", "spec_paths": ["codelists[0].codelists[0]"]},
-        {"phase": "validation", "condition": "codelist_partial_item_field", "rule": "CT-5", "spec_paths": ["codelists[0].codelists[0]"]},
-        {"phase": "validation", "condition": "duplicate_define_identifier", "rule": "CT-1", "spec_paths": ["codelists[0].codelists[1].id"]},
-        {"phase": "validation", "condition": "duplicate_define_identifier", "rule": "CT-1", "spec_paths": ["codelists[0].codelists[1].name"]},
-        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-3", "spec_paths": ["codelists[0].codelists[1]"]},
-        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[1].items[0].value"]},
-        {"phase": "validation", "condition": "codelist_extension_not_admitted", "rule": "CT-6", "spec_paths": ["codelists[0].codelists[1].items[0].extended"]},
-        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[1].items[1].value"]},
-        {"phase": "validation", "condition": "codelist_duplicate_value", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[1].items[1].value"]},
-        {"phase": "validation", "condition": "codelist_partial_item_field", "rule": "CT-5", "spec_paths": ["codelists[0].codelists[1]"]},
-        {"phase": "validation", "condition": "codelist_partial_item_field", "rule": "CT-5", "spec_paths": ["codelists[0].codelists[1]"]}
+        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-3", "spec_paths": ["codelists[0].codelists[0]"], "context": {"codelist": "SEX"}},
+        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[0].items[0].value"], "context": {"codelist": "SEX", "value": true}},
+        {"phase": "validation", "condition": "codelist_extension_not_admitted", "rule": "CT-6", "spec_paths": ["codelists[0].codelists[0].items[0].extended"], "context": {"codelist": "SEX"}},
+        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[0].items[1].value"], "context": {"codelist": "SEX", "value": true}},
+        {"phase": "validation", "condition": "codelist_duplicate_value", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[0].items[1].value"], "context": {"codelist": "SEX", "value": true}},
+        {"phase": "validation", "condition": "codelist_partial_item_field", "rule": "CT-5", "spec_paths": ["codelists[0].codelists[0]"], "context": {"codelist": "SEX", "field": "decode"}},
+        {"phase": "validation", "condition": "codelist_partial_item_field", "rule": "CT-5", "spec_paths": ["codelists[0].codelists[0]"], "context": {"codelist": "SEX", "field": "rank"}},
+        {"phase": "validation", "condition": "duplicate_define_identifier", "rule": "CT-1", "spec_paths": ["codelists[0].codelists[1].id"], "context": {"codelist": "SEX", "field": "id", "identifier": "SEX"}},
+        {"phase": "validation", "condition": "duplicate_define_identifier", "rule": "CT-1", "spec_paths": ["codelists[0].codelists[1].name"], "context": {"codelist": "SEX", "field": "name", "name": "Sex", "identifier": "Sex"}},
+        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-3", "spec_paths": ["codelists[0].codelists[1]"], "context": {"codelist": "SEX"}},
+        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[1].items[0].value"], "context": {"codelist": "SEX", "value": true}},
+        {"phase": "validation", "condition": "codelist_extension_not_admitted", "rule": "CT-6", "spec_paths": ["codelists[0].codelists[1].items[0].extended"], "context": {"codelist": "SEX"}},
+        {"phase": "validation", "condition": "codelist_shape_invalid", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[1].items[1].value"], "context": {"codelist": "SEX", "value": true}},
+        {"phase": "validation", "condition": "codelist_duplicate_value", "rule": "CT-4", "spec_paths": ["codelists[0].codelists[1].items[1].value"], "context": {"codelist": "SEX", "value": true}},
+        {"phase": "validation", "condition": "codelist_partial_item_field", "rule": "CT-5", "spec_paths": ["codelists[0].codelists[1]"], "context": {"codelist": "SEX", "field": "decode"}},
+        {"phase": "validation", "condition": "codelist_partial_item_field", "rule": "CT-5", "spec_paths": ["codelists[0].codelists[1]"], "context": {"codelist": "SEX", "field": "rank"}}
       ]
     },
     {
@@ -98,6 +97,86 @@
         {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["implementations.r"], "context": {"function": "id", "language": "r", "reason": "invalid_callable"}},
         {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["name"], "context": {"function": "id", "reason": "duplicate_function"}},
         {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["implementations"], "context": {"function": "constant", "reason": "missing_implementation"}}
+      ]
+    },
+    {
+      "case": "every_function_field_route_preserves_authored_indices_and_exact_scalar_kinds",
+      "operation": "project_environment",
+      "input": {
+        "language": "python",
+        "lock": {"written": "uv.lock", "kind": "uv"},
+        "functions": [
+          {"name": "id", "description": "Identity", "params": [{"name": "x", "type": "int"}], "returns": "int", "implementations": [["python", "project.id"]], "tests": [{"id": "ordinary", "covers": ["normal"], "args": {"x": -9223372036854775808}, "result": 9223372036854775807}]}
+        ],
+        "codelists": [],
+        "findings": [
+          {"function": 0, "finding": "invalid_name"},
+          {"function": 0, "finding": "missing_implementation"},
+          {"function": 0, "finding": "invalid_implementation", "language": "r"},
+          {"function": 0, "finding": "empty_description"},
+          {"function": 0, "finding": "negative_comparison_decimals"},
+          {"function": 0, "finding": "invalid_parameter_name", "parameter": 0},
+          {"function": 0, "finding": "duplicate_parameter", "parameter": 0},
+          {"function": 0, "finding": "required_default", "parameter": 0},
+          {"function": 0, "finding": "missing_default", "parameter": 0},
+          {"function": 0, "finding": "invalid_default", "parameter": 0},
+          {"function": 0, "finding": "invalid_case_id", "case": 0},
+          {"function": 0, "finding": "duplicate_case_id", "case": 0},
+          {"function": 0, "finding": "empty_coverage", "case": 0},
+          {"function": 0, "finding": "duplicate_coverage", "case": 0, "tag": 0},
+          {"function": 0, "finding": "invalid_coverage", "case": 0, "tag": 0},
+          {"function": 0, "finding": "unsupported_evidence", "case": 0, "tag": 0},
+          {"function": 0, "finding": "duplicate_argument", "case": 0, "argument": 0},
+          {"function": 0, "finding": "unknown_argument", "case": 0, "argument": 0},
+          {"function": 0, "finding": "missing_required_argument", "case": 0, "parameter": 0},
+          {"function": 0, "finding": "argument_type", "case": 0, "argument": 0},
+          {"function": 0, "finding": "invalid_result", "case": 0},
+          {"function": 0, "finding": "missing_obligation", "obligation": "boundary"}
+        ]
+      },
+      "issues": [
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["name"], "context": {"function": "id", "reason": "invalid_function_name"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["implementations"], "context": {"function": "id", "reason": "missing_implementation"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["implementations.r"], "context": {"function": "id", "reason": "invalid_callable", "language": "r"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["description"], "context": {"function": "id", "reason": "empty_description"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["comparison_decimals"], "context": {"function": "id", "reason": "negative_comparison_decimals"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["params[0].name"], "context": {"function": "id", "reason": "invalid_parameter_name", "parameter": "x"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["params[0].name"], "context": {"function": "id", "reason": "duplicate_parameter", "parameter": "x"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["params[0].default"], "context": {"function": "id", "reason": "required_parameter_default", "parameter": "x"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["params[0].default"], "context": {"function": "id", "reason": "missing_parameter_default", "parameter": "x"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["params[0].default"], "context": {"function": "id", "reason": "invalid_parameter_default", "parameter": "x"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].id"], "context": {"function": "id", "reason": "invalid_case_id", "case": "ordinary"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].id"], "context": {"function": "id", "reason": "duplicate_case_id", "case": "ordinary"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].covers"], "context": {"function": "id", "reason": "empty_coverage", "case": "ordinary"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].covers[0]"], "context": {"function": "id", "reason": "duplicate_coverage", "case": "ordinary", "tag": "normal"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].covers[0]"], "context": {"function": "id", "reason": "invalid_coverage", "case": "ordinary", "tag": "normal"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].covers[0]"], "context": {"function": "id", "reason": "unsupported_coverage_evidence", "case": "ordinary", "tag": "normal"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].args.x"], "context": {"function": "id", "reason": "duplicate_case_argument", "case": "ordinary", "argument": "x", "value": -9223372036854775808}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].args.x"], "context": {"function": "id", "reason": "unknown_case_argument", "case": "ordinary", "argument": "x", "value": -9223372036854775808}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].args.x"], "context": {"function": "id", "reason": "missing_required_case_argument", "case": "ordinary", "argument": "x"}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].args.x"], "context": {"function": "id", "reason": "invalid_case_argument_type", "case": "ordinary", "argument": "x", "value": -9223372036854775808}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests[0].result"], "context": {"function": "id", "reason": "invalid_case_result", "case": "ordinary", "value": 9223372036854775807}},
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["tests"], "context": {"function": "id", "reason": "missing_coverage_obligation", "obligation": "boundary"}}
+      ]
+    },
+    {
+      "case": "present_empty_functions_without_a_lock_need_no_finding",
+      "operation": "project_environment",
+      "input": {"language": "python", "lock": null, "functions": [], "codelists": []},
+      "issues": []
+    },
+    {
+      "case": "a_project_without_an_environment_for_the_host_needs_no_finding",
+      "operation": "project_environment",
+      "input": {"language": null, "lock": null, "functions": null, "codelists": []},
+      "issues": []
+    },
+    {
+      "case": "retained_admission_reports_the_captured_lock_syntax_against_the_host_language",
+      "operation": "project_environment",
+      "input": {"language": "r", "lock": {"written": "uv.lock", "kind": "uv"}, "functions": null, "codelists": []},
+      "issues": [
+        {"phase": "validation", "condition": "function_file_invalid", "rule": "FUNC-2", "spec_paths": ["environments.r.lock"], "context": {"actual_lock_kind": "uv", "language": "r", "reason": "lock_kind_mismatch"}}
       ]
     },
     {
