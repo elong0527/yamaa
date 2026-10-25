@@ -1,5 +1,5 @@
 {
-  "about": "The source readers' refusals as core classifies them: the SAS reader's (SAS-7), the CSV profile's and typing's (CSV-10, CSV-16, INPUT-6, INPUT-7), Parquet's (PARQUET-5 to PARQUET-9) and the YAML source's (SPEC-8, SCHEMA-3, VALUE-11). The adapters' suites pin which bytes give which refusal.",
+  "about": "The source readers' refusals as core classifies them: the SAS reader's (SAS-7), the Dataset-JSON reader's (DSJSON-3, DSJSON-5), the CSV profile's and typing's (CSV-10, CSV-16, INPUT-6, INPUT-7), Parquet's (PARQUET-5 to PARQUET-9) and the YAML source's (SPEC-8, SCHEMA-3, VALUE-11). The adapters' suites pin which bytes give which refusal.",
   "cases": [
     {
       "case": "a_sas_transport_file_that_breaks_its_framing_is_invalid",
@@ -18,6 +18,84 @@
       "operation": "sas_source",
       "input": {"dataset": "SRC", "path": "source.sas7bdat", "cause": "deleted_records"},
       "issues": [{"phase": "ingest", "condition": "source_sas_invalid", "rule": "SAS-7", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "source.sas7bdat", "cause": "deleted_records", "hint": "rewrite the SAS dataset first, for example with PROC COPY or a DATA step, to remove the records deleted in place"}}]
+    },
+    {
+      "case": "a_dataset_json_file_that_is_not_its_json_text_is_malformed",
+      "operation": "dataset_json_source",
+      "input": {"dataset": "SRC", "path": "source.json", "cause": "malformed"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "source.json", "cause": "malformed"}}]
+    },
+    {
+      "case": "a_dataset_json_file_of_another_version_is_refused",
+      "operation": "dataset_json_source",
+      "input": {"dataset": "SRC", "path": "source.json", "cause": "version"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "source.json", "cause": "version"}}]
+    },
+    {
+      "case": "a_dataset_json_file_without_a_member_it_reads_names_the_member",
+      "operation": "dataset_json_source",
+      "input": {"dataset": "SRC", "path": "source.json", "cause": "member", "member": "records"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "source.json", "cause": "member", "member": "records"}}]
+    },
+    {
+      "case": "a_dataset_json_column_without_a_member_it_reads_names_the_column_position",
+      "operation": "dataset_json_source",
+      "input": {"dataset": "SRC", "path": "source.json", "cause": "member", "member": "dataType", "field": 2},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "source.json", "cause": "member", "member": "dataType", "field": 2}}]
+    },
+    {
+      "case": "an_empty_dataset_json_column_name_names_its_position",
+      "operation": "dataset_json_source",
+      "input": {"dataset": "SRC", "path": "source.json", "cause": "field_name", "field": 2},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "source.json", "cause": "field_name", "field": 2}}]
+    },
+    {
+      "case": "a_repeated_dataset_json_column_name_names_the_name",
+      "operation": "dataset_json_source",
+      "input": {"dataset": "SRC", "path": "source.json", "cause": "field_name", "field": "USUBJID"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "source.json", "cause": "field_name", "field": "USUBJID"}}]
+    },
+    {
+      "case": "a_dataset_json_data_type_that_names_no_type_names_the_field_and_data_type",
+      "operation": "dataset_json_source",
+      "input": {"dataset": "SRC", "path": "source.json", "cause": "data_type", "field": "SAFFL", "data_type": "boolean"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "source.json", "cause": "data_type", "field": "SAFFL", "data_type": "boolean"}}]
+    },
+    {
+      "case": "a_types_entry_a_dataset_json_data_type_does_not_admit_is_refused_at_the_entry",
+      "operation": "dataset_json_source",
+      "input": {"dataset": "SRC", "path": "source.json", "cause": "field_type", "field": "AGE", "data_type": "integer", "type": "float"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.types.AGE"], "context": {"dataset": "SRC", "path": "source.json", "cause": "field_type", "field": "AGE", "data_type": "integer", "type": "float"}}]
+    },
+    {
+      "case": "dataset_json_rows_that_records_does_not_count_are_refused",
+      "operation": "dataset_json_source",
+      "input": {"dataset": "SRC", "path": "source.json", "cause": "records"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "source.json", "cause": "records"}}]
+    },
+    {
+      "case": "a_dataset_json_row_of_another_width_names_its_record",
+      "operation": "dataset_json_source",
+      "input": {"dataset": "SRC", "path": "source.json", "cause": "row_width", "record": 3},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "source.json", "cause": "row_width", "record": 3}}]
+    },
+    {
+      "case": "a_dataset_json_value_of_another_json_kind_names_its_record_and_field",
+      "operation": "dataset_json_source",
+      "input": {"dataset": "SRC", "path": "source.json", "cause": "cell", "record": 2, "field": "AGE"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "source.json", "cause": "cell", "record": 2, "field": "AGE"}}]
+    },
+    {
+      "case": "a_dataset_json_value_its_data_type_does_not_parse_fails_at_the_input_path",
+      "operation": "dataset_json_value",
+      "input": {"dataset": "SRC", "field": "AGE", "type": "int", "value": "41.5", "record": 2, "declared": false},
+      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "DSJSON-3", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "field": "AGE", "type": "int", "value": "41.5", "record": 2}}]
+    },
+    {
+      "case": "a_dataset_json_value_its_types_entry_does_not_parse_fails_at_the_entry",
+      "operation": "dataset_json_value",
+      "input": {"dataset": "SRC", "field": "VISITNUM", "type": "int", "value": "2.5", "record": 1, "declared": true},
+      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "DSJSON-3", "spec_paths": ["input.SRC.types.VISITNUM"], "context": {"dataset": "SRC", "field": "VISITNUM", "type": "int", "value": "2.5", "record": 1}}]
     },
     {
       "case": "a_csv_source_without_a_header_is_refused",

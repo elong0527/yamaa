@@ -38,6 +38,7 @@ pub(super) const FILES: &[File] = &[
     fixture!("check_unknown_reads.json"),
     fixture!("check_variable_forms.json"),
     fixture!("completed_intermediates.json"),
+    fixture!("dataset_json_sources.json"),
     fixture!("declarative_case_predicates.json"),
     fixture!("declarative_self.json"),
     fixture!("inheritance.json"),

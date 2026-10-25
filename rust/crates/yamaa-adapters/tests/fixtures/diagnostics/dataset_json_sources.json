@@ -1,0 +1,228 @@
+{
+  "about": "The Dataset-JSON source profiles read through the file route (DSJSON-1 to DSJSON-5, INPUT-1, INPUT-3, INPUT-9): a .json input is the single-object representation and an .ndjson input the newline-delimited one; each column's dataType types its field through the closed table, which a types entry may only narrow; members the profile does not read are skipped; and each closed cause, and a value that does not parse, reports its complete issue. Every input file was written by hand from the standard's schema, and every expected row and byte was derived by hand from the rule cards: CSV-5 writes each value read, a decimal's text reads as a number under VALUE-6, and a datetime without seconds is written with them (VALUE-15, VALUE-17).",
+  "documents": {
+    "spec": "yamaa: \"1.0\"\ntype: spec\ndomain: VS\nkeys: [USUBJID]\ninput: {SRC: input/vs.json}\noutput: {path: out.csv, columns: [USUBJID, VISITNUM, VSSTRESN, VSORRES, WEIGHT, VSDT, VSDTM, VSTM, VSLINK]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: SRC.USUBJID}\n  - {name: VISITNUM, type: int, derivation: SRC.VISITNUM}\n  - {name: VSSTRESN, type: float, derivation: SRC.VSSTRESN}\n  - {name: VSORRES, type: float, derivation: SRC.VSORRES}\n  - {name: WEIGHT, type: float, derivation: SRC.WEIGHT}\n  - {name: VSDT, type: date, derivation: SRC.VSDT}\n  - {name: VSDTM, type: datetime, derivation: SRC.VSDTM}\n  - {name: VSTM, type: str, derivation: SRC.VSTM}\n  - {name: VSLINK, type: str, derivation: SRC.VSLINK}\n",
+    "vs_json": "{\n  \"datasetJSONCreationDateTime\": \"2026-10-24T09:00:00\",\n  \"datasetJSONVersion\": \"1.1.0\",\n  \"fileOID\": \"F.VS\",\n  \"sourceSystem\": {\"name\": \"an EDC\", \"version\": \"4\"},\n  \"itemGroupOID\": \"IG.VS\",\n  \"records\": 2,\n  \"name\": \"VS\",\n  \"label\": \"Vital Signs\",\n  \"columns\": [\n    {\"itemOID\": \"IT.VS.USUBJID\", \"name\": \"USUBJID\", \"label\": \"Unique Subject Identifier\", \"dataType\": \"string\", \"length\": 8, \"keySequence\": 1},\n    {\"itemOID\": \"IT.VS.VISITNUM\", \"name\": \"VISITNUM\", \"label\": \"Visit Number\", \"dataType\": \"integer\"},\n    {\"itemOID\": \"IT.VS.VSSTRESN\", \"name\": \"VSSTRESN\", \"label\": \"Numeric Result in Standard Units\", \"dataType\": \"float\"},\n    {\"itemOID\": \"IT.VS.VSORRES\", \"name\": \"VSORRES\", \"label\": \"Result as Collected\", \"dataType\": \"decimal\", \"targetDataType\": \"decimal\"},\n    {\"itemOID\": \"IT.VS.WEIGHT\", \"name\": \"WEIGHT\", \"label\": \"Weight\", \"dataType\": \"double\"},\n    {\"itemOID\": \"IT.VS.VSDT\", \"name\": \"VSDT\", \"label\": \"Date of Measurement\", \"dataType\": \"date\", \"targetDataType\": \"integer\", \"displayFormat\": \"DATE9.\"},\n    {\"itemOID\": \"IT.VS.VSDTM\", \"name\": \"VSDTM\", \"label\": \"Datetime of Measurement\", \"dataType\": \"datetime\"},\n    {\"itemOID\": \"IT.VS.VSTM\", \"name\": \"VSTM\", \"label\": \"Time of Measurement\", \"dataType\": \"time\"},\n    {\"itemOID\": \"IT.VS.VSLINK\", \"name\": \"VSLINK\", \"label\": \"Source Document\", \"dataType\": \"URI\"}\n  ],\n  \"rows\": [\n    [\"S-01\", 1, 120.5, \"120.50\", 70, \"2026-01-05\", \"2026-01-05T08:30\", \"08:30\", \"https://example.org/s-01\"],\n    [\"S-02\", 2, -0.25, \"1e2\", 81.125, null, null, null, \"\"]\n  ]\n}\n",
+    "vs_ndjson": "{\"datasetJSONCreationDateTime\": \"2026-10-24T09:00:00\", \"datasetJSONVersion\": \"1.1.0\", \"fileOID\": \"F.VS\", \"sourceSystem\": {\"name\": \"an EDC\", \"version\": \"4\"}, \"itemGroupOID\": \"IG.VS\", \"records\": 2, \"name\": \"VS\", \"label\": \"Vital Signs\", \"columns\": [{\"itemOID\": \"IT.VS.USUBJID\", \"name\": \"USUBJID\", \"label\": \"Unique Subject Identifier\", \"dataType\": \"string\", \"length\": 8, \"keySequence\": 1}, {\"itemOID\": \"IT.VS.VISITNUM\", \"name\": \"VISITNUM\", \"label\": \"Visit Number\", \"dataType\": \"integer\"}, {\"itemOID\": \"IT.VS.VSSTRESN\", \"name\": \"VSSTRESN\", \"label\": \"Numeric Result in Standard Units\", \"dataType\": \"float\"}, {\"itemOID\": \"IT.VS.VSORRES\", \"name\": \"VSORRES\", \"label\": \"Result as Collected\", \"dataType\": \"decimal\", \"targetDataType\": \"decimal\"}, {\"itemOID\": \"IT.VS.WEIGHT\", \"name\": \"WEIGHT\", \"label\": \"Weight\", \"dataType\": \"double\"}, {\"itemOID\": \"IT.VS.VSDT\", \"name\": \"VSDT\", \"label\": \"Date of Measurement\", \"dataType\": \"date\", \"targetDataType\": \"integer\", \"displayFormat\": \"DATE9.\"}, {\"itemOID\": \"IT.VS.VSDTM\", \"name\": \"VSDTM\", \"label\": \"Datetime of Measurement\", \"dataType\": \"datetime\"}, {\"itemOID\": \"IT.VS.VSTM\", \"name\": \"VSTM\", \"label\": \"Time of Measurement\", \"dataType\": \"time\"}, {\"itemOID\": \"IT.VS.VSLINK\", \"name\": \"VSLINK\", \"label\": \"Source Document\", \"dataType\": \"URI\"}]}\n[\"S-01\", 1, 120.5, \"120.50\", 70, \"2026-01-05\", \"2026-01-05T08:30\", \"08:30\", \"https://example.org/s-01\"]\n[\"S-02\", 2, -0.25, \"1e2\", 81.125, null, null, null, \"\"]\n",
+    "narrow_spec": "yamaa: \"1.0\"\ntype: spec\ndomain: NR\nkeys: [CODE]\ninput:\n  SRC:\n    path: input/nr.json\n    types: {CODE: int, SEQ: int, ORRES: str, DT: str, DTC: str, TXT: date}\noutput: {path: out.csv, columns: [CODE, SEQ, ORRES, DT, DTC, TXT]}\ncolumns:\n  - {name: CODE, type: int, derivation: SRC.CODE}\n  - {name: SEQ, type: int, derivation: SRC.SEQ}\n  - {name: ORRES, type: str, derivation: SRC.ORRES}\n  - {name: DT, type: str, derivation: SRC.DT}\n  - {name: DTC, type: str, derivation: SRC.DTC}\n  - {name: TXT, type: date, derivation: SRC.TXT}\n",
+    "nr_json": "{\n  \"datasetJSONCreationDateTime\": \"2026-10-24T09:00:00\",\n  \"datasetJSONVersion\": \"1.1\",\n  \"itemGroupOID\": \"IG.NR\",\n  \"records\": 1,\n  \"name\": \"NR\",\n  \"label\": \"Narrowed Fields\",\n  \"columns\": [\n    {\"itemOID\": \"IT.NR.CODE\", \"name\": \"CODE\", \"label\": \"Code\", \"dataType\": \"string\"},\n    {\"itemOID\": \"IT.NR.SEQ\", \"name\": \"SEQ\", \"label\": \"Sequence\", \"dataType\": \"float\"},\n    {\"itemOID\": \"IT.NR.ORRES\", \"name\": \"ORRES\", \"label\": \"Result\", \"dataType\": \"decimal\"},\n    {\"itemOID\": \"IT.NR.DT\", \"name\": \"DT\", \"label\": \"Date\", \"dataType\": \"date\"},\n    {\"itemOID\": \"IT.NR.DTC\", \"name\": \"DTC\", \"label\": \"Datetime\", \"dataType\": \"datetime\"},\n    {\"itemOID\": \"IT.NR.TXT\", \"name\": \"TXT\", \"label\": \"Text\", \"dataType\": \"string\"}\n  ],\n  \"rows\": [\n    [\"7\", 3, \"12.50\", \"2026-01-05\", \"2026-01-05T08:30\", \"2026-02-01\"]\n  ]\n}\n",
+    "ordinal_spec": "yamaa: \"1.0\"\ntype: spec\ndomain: VS\nkeys: [VSREC]\ninput: {SRC: {path: input/vs.ndjson, ordinal: VSREC}}\noutput: {path: out.csv, columns: [VSREC, USUBJID]}\ncolumns:\n  - {name: VSREC, type: int, derivation: SRC.VSREC}\n  - {name: USUBJID, type: str, derivation: SRC.USUBJID}\n",
+    "one_column_spec": "yamaa: \"1.0\"\ntype: spec\ndomain: VS\nkeys: [USUBJID]\ninput: {SRC: input/vs.json}\noutput: {path: out.csv, columns: [USUBJID]}\ncolumns:\n  - {name: USUBJID, type: str, derivation: SRC.USUBJID}\n"
+  },
+  "cases": [
+    {
+      "case": "a_single_object_file_reads_each_data_type_as_the_type_its_table_gives",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": {"base": "vs_json"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "report": {"input": [["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"], ["out.csv", "input.SRC", "SRC", null, null, null, null, null, null, 2, null, null, "{\"bytes\":1515,\"path\":\"input/vs.json\",\"profile\":\"dataset_json\"}"]]},
+      "saved": {"out.csv": "USUBJID,VISITNUM,VSSTRESN,VSORRES,WEIGHT,VSDT,VSDTM,VSTM,VSLINK\nS-01,1,120.5,120.5,70,2026-01-05,2026-01-05T08:30:00,08:30,https://example.org/s-01\nS-02,2,-0.25,100,81.125,,,,\n"}
+    },
+    {
+      "case": "a_newline_delimited_file_reads_its_first_line_and_one_row_per_line",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "input: {SRC: input/vs.json}", "to": "input: {SRC: input/vs.ndjson}"}]}, "input/vs.ndjson": {"base": "vs_ndjson"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "report": {"input": [["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"], ["out.csv", "input.SRC", "SRC", null, null, null, null, null, null, 2, null, null, "{\"bytes\":1429,\"path\":\"input/vs.ndjson\",\"profile\":\"dataset_ndjson\"}"]]},
+      "saved": {"out.csv": "USUBJID,VISITNUM,VSSTRESN,VSORRES,WEIGHT,VSDT,VSDTM,VSTM,VSLINK\nS-01,1,120.5,120.5,70,2026-01-05,2026-01-05T08:30:00,08:30,https://example.org/s-01\nS-02,2,-0.25,100,81.125,,,,\n"}
+    },
+    {
+      "case": "newline_delimited_lines_may_end_in_a_carriage_return_and_the_last_newline_may_be_omitted",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "input: {SRC: input/vs.json}", "to": "input: {SRC: input/vs.ndjson}"}]}, "input/vs.ndjson": "{\"datasetJSONCreationDateTime\": \"2026-10-24T09:00:00\", \"datasetJSONVersion\": \"1.1.0\", \"fileOID\": \"F.VS\", \"sourceSystem\": {\"name\": \"an EDC\", \"version\": \"4\"}, \"itemGroupOID\": \"IG.VS\", \"records\": 2, \"name\": \"VS\", \"label\": \"Vital Signs\", \"columns\": [{\"itemOID\": \"IT.VS.USUBJID\", \"name\": \"USUBJID\", \"label\": \"Unique Subject Identifier\", \"dataType\": \"string\", \"length\": 8, \"keySequence\": 1}, {\"itemOID\": \"IT.VS.VISITNUM\", \"name\": \"VISITNUM\", \"label\": \"Visit Number\", \"dataType\": \"integer\"}, {\"itemOID\": \"IT.VS.VSSTRESN\", \"name\": \"VSSTRESN\", \"label\": \"Numeric Result in Standard Units\", \"dataType\": \"float\"}, {\"itemOID\": \"IT.VS.VSORRES\", \"name\": \"VSORRES\", \"label\": \"Result as Collected\", \"dataType\": \"decimal\", \"targetDataType\": \"decimal\"}, {\"itemOID\": \"IT.VS.WEIGHT\", \"name\": \"WEIGHT\", \"label\": \"Weight\", \"dataType\": \"double\"}, {\"itemOID\": \"IT.VS.VSDT\", \"name\": \"VSDT\", \"label\": \"Date of Measurement\", \"dataType\": \"date\", \"targetDataType\": \"integer\", \"displayFormat\": \"DATE9.\"}, {\"itemOID\": \"IT.VS.VSDTM\", \"name\": \"VSDTM\", \"label\": \"Datetime of Measurement\", \"dataType\": \"datetime\"}, {\"itemOID\": \"IT.VS.VSTM\", \"name\": \"VSTM\", \"label\": \"Time of Measurement\", \"dataType\": \"time\"}, {\"itemOID\": \"IT.VS.VSLINK\", \"name\": \"VSLINK\", \"label\": \"Source Document\", \"dataType\": \"URI\"}]}\r\n[\"S-01\", 1, 120.5, \"120.50\", 70, \"2026-01-05\", \"2026-01-05T08:30\", \"08:30\", \"https://example.org/s-01\"]\r\n[\"S-02\", 2, -0.25, \"1e2\", 81.125, null, null, null, \"\"]"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,VISITNUM,VSSTRESN,VSORRES,WEIGHT,VSDT,VSDTM,VSTM,VSLINK\nS-01,1,120.5,120.5,70,2026-01-05,2026-01-05T08:30:00,08:30,https://example.org/s-01\nS-02,2,-0.25,100,81.125,,,,\n"}
+    },
+    {
+      "case": "members_the_profile_does_not_read_are_skipped_and_members_may_come_in_any_order",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "one_column_spec"}, "input/vs.json": "{\"rows\": [[\"S-01\"]], \"columns\": [{\"dataType\": \"string\", \"label\": \"Unique Subject Identifier\", \"name\": \"USUBJID\", \"itemOID\": \"IT.VS.USUBJID\"}], \"label\": \"Vital Signs\", \"name\": \"VS\", \"records\": 1, \"itemGroupOID\": \"IG.VS\", \"datasetJSONVersion\": \"1.1.12\", \"datasetJSONCreationDateTime\": \"2026-10-24T09:00:00\", \"studyOID\": \"S.1\"}\n"}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID\nS-01\n"}
+    },
+    {
+      "case": "types_narrow_text_and_numbers_and_read_a_decimal_or_temporal_value_as_its_text",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "narrow_spec"}, "input/nr.json": {"base": "nr_json"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "CODE,SEQ,ORRES,DT,DTC,TXT\n7,3,12.50,2026-01-05,2026-01-05T08:30,2026-02-01\n"}
+    },
+    {
+      "case": "an_empty_string_the_input_declares_present_is_the_collected_empty_string",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "input: {SRC: input/vs.json}", "to": "input: {SRC: {path: input/vs.json, empty_string: present}}"}]}, "input/vs.json": {"base": "vs_json"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,VISITNUM,VSSTRESN,VSORRES,WEIGHT,VSDT,VSDTM,VSTM,VSLINK\nS-01,1,120.5,120.5,70,2026-01-05,2026-01-05T08:30:00,08:30,https://example.org/s-01\nS-02,2,-0.25,100,81.125,,,,\"\"\n"}
+    },
+    {
+      "case": "a_generated_ordinal_counts_the_rows_from_one",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "ordinal_spec"}, "input/vs.ndjson": {"base": "vs_ndjson"}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "VSREC,USUBJID\n1,S-01\n2,S-02\n"}
+    },
+    {
+      "case": "an_integral_number_written_with_a_fraction_reads_as_an_int",
+      "operation": "save",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": {"base": "vs_json", "edits": [{"from": "\"S-02\", 2,", "to": "\"S-02\", 2.0,"}]}}, "specification": "spec.yaml"},
+      "issues": [],
+      "saved": {"out.csv": "USUBJID,VISITNUM,VSSTRESN,VSORRES,WEIGHT,VSDT,VSDTM,VSTM,VSLINK\nS-01,1,120.5,120.5,70,2026-01-05,2026-01-05T08:30:00,08:30,https://example.org/s-01\nS-02,2,-0.25,100,81.125,,,,\n"}
+    },
+    {
+      "case": "a_file_that_is_not_one_json_object_is_malformed",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": "{\"datasetJSONVersion\": \"1.1.0\",\n"}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.json", "cause": "malformed"}}]
+    },
+    {
+      "case": "a_single_object_written_over_several_lines_is_no_newline_delimited_file",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "input: {SRC: input/vs.json}", "to": "input: {SRC: input/vs.ndjson}"}]}, "input/vs.ndjson": {"base": "vs_json"}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.ndjson", "cause": "malformed"}}]
+    },
+    {
+      "case": "a_blank_line_between_rows_is_malformed",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "input: {SRC: input/vs.json}", "to": "input: {SRC: input/vs.ndjson}"}]}, "input/vs.ndjson": {"base": "vs_ndjson", "edits": [{"from": "\"https://example.org/s-01\"]\n", "to": "\"https://example.org/s-01\"]\n\n"}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.ndjson", "cause": "malformed"}}]
+    },
+    {
+      "case": "a_string_whose_escape_names_no_unicode_scalar_value_is_malformed",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": {"base": "vs_json", "edits": [{"from": "\"https://example.org/s-01\"]", "to": "\"\\ud800\"]"}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.json", "cause": "malformed"}}]
+    },
+    {
+      "case": "a_dataset_json_1_0_file_is_refused_for_its_version",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": {"base": "vs_json", "edits": [{"from": "\"datasetJSONVersion\": \"1.1.0\"", "to": "\"datasetJSONVersion\": \"1.0.0\""}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.json", "cause": "version"}}]
+    },
+    {
+      "case": "a_version_that_only_begins_like_1_1_is_refused",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": {"base": "vs_json", "edits": [{"from": "\"datasetJSONVersion\": \"1.1.0\"", "to": "\"datasetJSONVersion\": \"1.10\""}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.json", "cause": "version"}}]
+    },
+    {
+      "case": "a_file_without_records_names_the_member",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": {"base": "vs_json", "edits": [{"from": "  \"records\": 2,\n", "to": ""}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.json", "cause": "member", "member": "records"}}]
+    },
+    {
+      "case": "a_member_written_twice_names_the_member",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": {"base": "vs_json", "edits": [{"from": "  \"records\": 2,\n", "to": "  \"records\": 2,\n  \"records\": 2,\n"}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.json", "cause": "member", "member": "records"}}]
+    },
+    {
+      "case": "a_column_without_its_data_type_names_the_member_and_the_column_position",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": {"base": "vs_json", "edits": [{"from": "\"label\": \"Visit Number\", \"dataType\": \"integer\"", "to": "\"label\": \"Visit Number\""}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.json", "cause": "member", "member": "dataType", "field": 2}}]
+    },
+    {
+      "case": "columns_that_are_not_an_array_name_the_member",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": {"base": "vs_json", "edits": [{"from": "\"columns\": [", "to": "\"columns\": {\"of\": ["}, {"from": "\n  ],\n  \"rows\"", "to": "\n  ]},\n  \"rows\""}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.json", "cause": "member", "member": "columns"}}]
+    },
+    {
+      "case": "a_newline_delimited_first_line_holding_rows_names_the_member",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "input: {SRC: input/vs.json}", "to": "input: {SRC: input/vs.ndjson}"}]}, "input/vs.ndjson": {"base": "vs_ndjson", "edits": [{"from": "{\"datasetJSONCreationDateTime\"", "to": "{\"rows\": [], \"datasetJSONCreationDateTime\""}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.ndjson", "cause": "member", "member": "rows"}}]
+    },
+    {
+      "case": "a_column_name_written_twice_names_the_name",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": {"base": "vs_json", "edits": [{"from": "\"name\": \"VISITNUM\"", "to": "\"name\": \"USUBJID\""}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.json", "cause": "field_name", "field": "USUBJID"}}]
+    },
+    {
+      "case": "an_empty_column_name_names_its_position",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": {"base": "vs_json", "edits": [{"from": "\"name\": \"VISITNUM\"", "to": "\"name\": \"\""}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.json", "cause": "field_name", "field": 2}}]
+    },
+    {
+      "case": "a_boolean_column_names_no_type",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": {"base": "vs_json", "edits": [{"from": "\"dataType\": \"time\"", "to": "\"dataType\": \"boolean\""}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.json", "cause": "data_type", "field": "VSTM", "data_type": "boolean"}}]
+    },
+    {
+      "case": "a_data_type_outside_the_standard_names_no_type",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": {"base": "vs_json", "edits": [{"from": "\"dataType\": \"time\"", "to": "\"dataType\": \"Time\""}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.json", "cause": "data_type", "field": "VSTM", "data_type": "Time"}}]
+    },
+    {
+      "case": "a_types_entry_widening_an_integer_is_refused_at_the_entry",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "input: {SRC: input/vs.json}", "to": "input: {SRC: {path: input/vs.json, types: {VISITNUM: float}}}"}]}, "input/vs.json": {"base": "vs_json"}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.types.VISITNUM"], "context": {"dataset": "SRC", "path": "input/vs.json", "cause": "field_type", "field": "VISITNUM", "data_type": "integer", "type": "float"}}]
+    },
+    {
+      "case": "a_types_entry_naming_no_stored_field_is_an_unknown_field",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "input: {SRC: input/vs.json}", "to": "input: {SRC: {path: input/vs.json, types: {VSSEQ: int}}}"}]}, "input/vs.json": {"base": "vs_json"}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "INPUT-6", "spec_paths": ["input.SRC.types.VSSEQ"], "context": {"dataset": "SRC", "field": "VSSEQ", "identifier": "VSSEQ"}}]
+    },
+    {
+      "case": "fewer_rows_than_records_counts_are_refused",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": {"base": "vs_json", "edits": [{"from": "\"records\": 2", "to": "\"records\": 3"}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.json", "cause": "records"}}]
+    },
+    {
+      "case": "a_row_beyond_the_ones_records_counts_is_refused",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "input: {SRC: input/vs.json}", "to": "input: {SRC: input/vs.ndjson}"}]}, "input/vs.ndjson": {"base": "vs_ndjson", "edits": [{"from": "\"records\": 2", "to": "\"records\": 1"}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.ndjson", "cause": "records"}}]
+    },
+    {
+      "case": "a_row_with_a_value_too_few_names_its_record",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": {"base": "vs_json", "edits": [{"from": "null, null, null, \"\"]", "to": "null, null, \"\"]"}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.json", "cause": "row_width", "record": 2}}]
+    },
+    {
+      "case": "a_row_that_is_not_an_array_names_its_record",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec", "edits": [{"from": "input: {SRC: input/vs.json}", "to": "input: {SRC: input/vs.ndjson}"}]}, "input/vs.ndjson": {"base": "vs_ndjson", "edits": [{"from": "[\"S-01\", 1, 120.5, \"120.50\", 70, \"2026-01-05\", \"2026-01-05T08:30\", \"08:30\", \"https://example.org/s-01\"]", "to": "{\"USUBJID\": \"S-01\"}"}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.ndjson", "cause": "row_width", "record": 1}}]
+    },
+    {
+      "case": "an_integer_written_as_a_json_string_names_its_record_and_field",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": {"base": "vs_json", "edits": [{"from": "\"S-02\", 2,", "to": "\"S-02\", \"2\","}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.json", "cause": "cell", "record": 2, "field": "VISITNUM"}}]
+    },
+    {
+      "case": "a_boolean_value_names_its_record_and_field",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": {"base": "vs_json", "edits": [{"from": "\"https://example.org/s-01\"]", "to": "true]"}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "source_dataset_json_invalid", "rule": "DSJSON-5", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "input/vs.json", "cause": "cell", "record": 1, "field": "VSLINK"}}]
+    },
+    {
+      "case": "an_integer_with_a_fraction_does_not_parse_as_int_at_the_input_path",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": {"base": "vs_json", "edits": [{"from": "\"S-02\", 2,", "to": "\"S-02\", 2.5,"}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "DSJSON-3", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "field": "VISITNUM", "type": "int", "value": "2.5", "record": 2}}]
+    },
+    {
+      "case": "a_date_outside_the_calendar_does_not_parse_as_date_at_the_input_path",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "spec"}, "input/vs.json": {"base": "vs_json", "edits": [{"from": "\"2026-01-05\",", "to": "\"2026-02-30\","}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "DSJSON-3", "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "field": "VSDT", "type": "date", "value": "2026-02-30", "record": 1}}]
+    },
+    {
+      "case": "a_narrowed_value_that_does_not_parse_fails_at_its_types_entry",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": {"base": "narrow_spec"}, "input/nr.json": {"base": "nr_json", "edits": [{"from": "[\"7\", 3,", "to": "[\"7a\", 3,"}]}}, "specification": "spec.yaml"},
+      "issues": [{"phase": "ingest", "condition": "field_parse_failed", "rule": "DSJSON-3", "spec_paths": ["input.SRC.types.CODE"], "context": {"dataset": "SRC", "field": "CODE", "type": "int", "value": "7a", "record": 1}}]
+    }
+  ]
+}

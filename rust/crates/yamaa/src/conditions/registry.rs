@@ -146,6 +146,7 @@ pub(super) const REGISTERED: &[(&str, &[&str], Option<&str>)] = &[
     ("sas_name_too_long", &["validation"], None),
     ("source_byte_order_mark", &["ingest"], None),
     ("source_carriage_return", &["ingest"], None),
+    ("source_dataset_json_invalid", &["ingest"], None),
     ("source_encoding_required", &["validation"], None),
     ("source_field_name_duplicate", &["ingest"], None),
     ("source_field_name_empty", &["ingest"], None),
