@@ -15,10 +15,10 @@ and license, as CRAN's Repository Policy asks.
 
 inst/ holds only AUTHORS, the license notices and the component inventory of
 the R bundle (tools/packaging/generate_component_inventory.py), which R
-installs with the package. The inputs that the R suites read sit in tests/,
-which R CMD check copies and runs from but R never installs (#3105).
-stage_test_inputs stages them there, and tools.commands.installed stages the
-same inputs beside the suites that native qualification runs.
+installs with the package. tests/ carries the small CRAN smoke suite and its
+project study. The full supplemental suites and their inputs stay in the
+checkout: tools.commands.installed stages them outside it for CI to run
+against the installed package, independently of R CMD check.
 """
 
 import argparse
@@ -29,7 +29,6 @@ import tempfile
 from pathlib import Path
 
 import yaml
-from tools.conformance import supplemental_inventory as inventory
 from tools.packaging import generate_third_party_notices as notices
 from tools.paths import ROOT, WORKSPACE
 from tools.staging import engine_bundle, vendor_crates
@@ -39,6 +38,9 @@ VENDOR_ARCHIVE = "src/rust/vendor.tar.xz"
 VENDOR_CONFIG = "src/rust/vendor-config.toml"
 VENDOR_SCRIPT = "tools/vendor_crates.py"
 AUTHORS = "inst/AUTHORS"
+# Only these suites ship in the source archive. Discovery still includes
+# every R/yamaa/tests/*.R in installed-package qualification.
+CRAN_TESTS = ("smoke.R",)
 AUTHORS_PREAMBLE = (
     "The yamaa R source package bundles the Rust crates below. The crates.io "
     f"crates that src/rust/Cargo.lock selects are in {VENDOR_ARCHIVE}, as "
@@ -302,32 +304,39 @@ def stage_test_inputs(tests: Path) -> None:
             shutil.copytree(staged / name, tests / name)
 
 
+def stage_cran_tests(tests: Path) -> None:
+    """Stage the smoke suite and only the project study that it reads.
+
+    Reuse the installed suites' base-R project and lock staging; the larger
+    regression inputs are never copied into the source package.
+    """
+    tests.mkdir()
+    for name in CRAN_TESTS:
+        shutil.copyfile(REPOSITORY / "R/yamaa/tests" / name, tests / name)
+    with tempfile.TemporaryDirectory(prefix="yamaa-r-smoke-") as scratch:
+        projects = Path(scratch) / "projects"
+        stage_projects(projects)
+        shutil.copytree(projects / "base-round", tests / "project-base/base-round")
+
+
 def stage(destination: Path):
-    """Copy shared sources into a new archive tree, the suites' inputs beside them."""
+    """Copy shared sources and a small smoke suite into a new archive tree."""
     # A source package must never generate its own dependency resolution.
     if not (WORKSPACE / "Cargo.lock").is_file():
         raise FileNotFoundError("canonical Cargo.lock is missing")
     # copytree rejects an existing destination, protecting previous builds.
-    # The authored project studies arrive with the other test inputs below.
+    # Full supplemental suites are CI inputs, not CRAN's test payload.
     shutil.copytree(
         REPOSITORY / "R/yamaa",
         destination,
         ignore=lambda directory, names: [
-            name for name in names if Path(directory, name) == PROJECTS
+            name
+            for name in names
+            if Path(directory, name) == REPOSITORY / "R/yamaa/tests"
         ],
     )
     crates = bundle_rust(destination)
-    tests = destination / "tests"
-    stage_test_inputs(tests)
-    catalog = inventory.load_catalog(
-        REPOSITORY, WORKSPACE / "qualification/supplemental.json"
-    )
-    for name, relative in inventory.host_fixture_files(catalog):
-        # host_fixtures.py is the Python suites' codec of the shared truth.
-        if relative.startswith("host-fixtures/"):
-            target = tests / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(REPOSITORY / name, target)
+    stage_cran_tests(destination / "tests")
     listed = notices.committed_entries(
         (destination / "inst" / notices.NOTICES).read_text(encoding="utf-8")
     )

@@ -107,9 +107,14 @@ see the [contributor guide](../../CONTRIBUTING.md).
 | `R/`, `man/`, `NAMESPACE`, `DESCRIPTION` | R facade, help, native registration and package metadata | Yes; R converts code and help to its installed formats |
 | `src/` | C entry point, build rules, and in `rust/` the engine, boundary and R binding crates with their workspace manifest and trimmed Cargo lock, the locked crates.io crates in `rust/vendor.tar.xz` with their source replacement, the vendored YAML parser and ReadStat C sources | Compiled into `libs/yamaa.so` or `libs/yamaa.dll`; sources are not ordinarily installed |
 | `inst/` | License notices, the component inventory `COMPONENTS.tsv` and `AUTHORS` | Yes; copied to the package root |
-| `tests/` | Installed-host regression scripts, beside the specification, grammar, project, Define-XML and host test fixtures that they read | Used by `R CMD check`; not ordinarily installed |
+| `tests/` | A base-R smoke script and its small project study; it runs the embedded format selftest and checks public R calls, callbacks and saved bytes | Used by `R CMD check`; not ordinarily installed |
 | `configure`, `configure.win`, `cleanup`, `cleanup.win` | Run `tools/configure.R` to find and check Cargo and rustc, write `src/Makevars` from `src/Makevars.in` (or the Windows pair) and add the Rust standard library that rustc links to `inst/COMPONENTS.tsv`; remove what it writes | No |
 | `tools/` | `configure.R`, and `vendor_crates.py`, the script that wrote `src/rust/vendor.tar.xz` | No |
+
+The full regression suites and their inputs stay in the repository. `make
+test-r`, pull-request CI and native qualification run them separately against
+the installed package; reducing CRAN's test payload does not reduce that
+release gate. The smoke script needs no suggested packages.
 
 `src/rust` holds the engine crates, the boundary crate and the R binding
 crate, without their tests, and a Cargo lock trimmed from the repository's to

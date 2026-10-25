@@ -1,4 +1,4 @@
-"""Build, install and check the R package as CRAN does, in a fresh external directory.
+"""Build the R package, run its full installed suites, and check it as CRAN does.
 
 The package is installed twice, by R CMD INSTALL and by R CMD check. When
 YAMAA_R_CARGO_TARGET_DIR names a directory, as in CI's r job, both build the
@@ -12,7 +12,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+from tools.commands import installed
 from tools.commands.check_r import check
+from tools.conformance import supplemental_inventory as inventory
 from tools.packaging.check_cargo_lock import check_bundle_archive
 from tools.paths import ROOT
 from tools.staging.stage_r_package import stage
@@ -112,11 +114,44 @@ def check_install(archive, environment, work):
         check_shared_build(log.read_text(encoding="utf-8"))
 
 
+def run_installed_suites(work, environment):
+    """Run every cataloged R suite on the fresh install, outside the checkout.
+
+    The CRAN archive carries only smoke checks. Ordinary CI and make test-r
+    retain the full suite denominator, with the same installed package and
+    dependency library that R CMD check uses. Report every failing suite.
+    """
+    catalog = inventory.load_catalog(
+        ROOT, ROOT / "rust/qualification/supplemental.json"
+    )
+    installed.stage("r", work)
+    failed = []
+    for suite in catalog["suites"]:
+        if suite["runtime"] != "r":
+            continue
+        path = suite["staged_path"]
+        result = subprocess.run(
+            ["Rscript", "--vanilla", path],
+            cwd=work,
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        print(f"== {path}", flush=True)
+        print(result.stdout, end="", flush=True)
+        if result.returncode:
+            failed.append(path)
+    if failed:
+        raise RuntimeError(f"installed R suites failed: {', '.join(failed)}")
+
+
 def main():
     test_configure()
     with tempfile.TemporaryDirectory(prefix="yamaa-r-check-") as directory:
         work = Path(directory)
         archive, environment = install(work)
+        run_installed_suites(work / "suites", environment)
         check_install(archive, environment, work / "check")
 
 
