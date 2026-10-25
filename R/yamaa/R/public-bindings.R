@@ -7,12 +7,13 @@
   object$.handle <- native
   .read_only(object, "status", function() .reply(.native_check_status(native)))
   .read_only(object, "issues", function() .reply(.native_check_issues(native)))
+  .read_only(object, "timings", function() .reply(.native_check_timings(native)))
   .object(object, "yamaa_check")
 }
 
-names.yamaa_check <- function(x) c("status", "issues")
+names.yamaa_check <- function(x) c("status", "issues", "timings")
 
-length.yamaa_check <- function(x) 2L
+length.yamaa_check <- function(x) 3L
 
 print.yamaa_check <- function(x, ...) {
   cat(format(x), sep = "\n")
@@ -32,13 +33,14 @@ format.yamaa_check <- function(x, ...) {
   .read_only(object, "output", function() .reply(.native_run_output(native)))
   .read_only(object, "issues", function() .reply(.native_run_issues(native)))
   .read_only(object, "report", function() .reply(.native_run_report(native)))
+  .read_only(object, "timings", function() .reply(.native_run_timings(native)))
   object$save <- function() invisible(.reply(.native_run_save(native)))
   .object(object, "yamaa_run")
 }
 
-names.yamaa_run <- function(x) c("status", "output", "issues", "report", "save")
+names.yamaa_run <- function(x) c("status", "output", "issues", "report", "timings", "save")
 
-length.yamaa_run <- function(x) 5L
+length.yamaa_run <- function(x) 6L
 
 print.yamaa_run <- function(x, ...) {
   cat(format(x), sep = "\n")
@@ -65,12 +67,13 @@ format.yamaa_run <- function(x, ...) {
   .read_only(object, "output", function() .reply(.native_project_run_output(native, name)))
   .read_only(object, "issues", function() .reply(.native_project_run_member_issues(native, name)))
   .read_only(object, "report", function() .reply(.native_project_run_member_report(native, name)))
+  .read_only(object, "timings", function() .reply(.native_project_run_member_timings(native, name)))
   .object(object, "yamaa_member_run")
 }
 
-names.yamaa_member_run <- function(x) c("status", "output", "issues", "report")
+names.yamaa_member_run <- function(x) c("status", "output", "issues", "report", "timings")
 
-length.yamaa_member_run <- function(x) 4L
+length.yamaa_member_run <- function(x) 5L
 
 print.yamaa_member_run <- function(x, ...) {
   cat(format(x), sep = "\n")
@@ -91,6 +94,7 @@ format.yamaa_member_run <- function(x, ...) {
   .read_only(object, "names", function() .reply(.native_project_run_names(native)))
   .read_only(object, "issues", function() .reply(.native_project_run_issues(native)))
   .read_only(object, "report", function() .reply(.native_project_run_report(native)))
+  .read_only(object, "timings", function() .reply(.native_project_run_timings(native)))
   object$save <- function() invisible(.reply(.native_project_run_save(native)))
   .object(object, "yamaa_project_run")
 }
@@ -128,13 +132,14 @@ format.yamaa_project_run <- function(x, ...) {
   .read_only(object, "status", function() .reply(.native_submission_status(native)))
   .read_only(object, "created", function() .reply(.native_submission_created(native)))
   .read_only(object, "issues", function() .reply(.native_submission_issues(native)))
+  .read_only(object, "timings", function() .reply(.native_submission_timings(native)))
   object$save <- function() invisible(.reply(.native_submission_save(native)))
   .object(object, "yamaa_submission")
 }
 
-names.yamaa_submission <- function(x) c("status", "created", "issues", "save")
+names.yamaa_submission <- function(x) c("status", "created", "issues", "timings", "save")
 
-length.yamaa_submission <- function(x) 4L
+length.yamaa_submission <- function(x) 5L
 
 print.yamaa_submission <- function(x, ...) {
   cat(format(x), sep = "\n")
@@ -152,13 +157,17 @@ format.yamaa_submission <- function(x, ...) {
   plans <- NULL
   object <- new.env(parent = emptyenv())
   object$.path <- path
-  object$check <- function(parent = NULL) {
-    .check(.reply(.native_spec_check(path, project, .optional_text(parent, "parent"), .version())))
+  object$check <- function(parent = NULL, progress = NULL) {
+    .check(.reply(.native_spec_check(
+      path, project, .optional_text(parent, "parent"), .version(), .progress(progress, "progress")
+    )))
   }
   object$resolve <- function() .reply(.native_spec_resolve(path, project, .version()))
-  object$run <- function(stream = FALSE) {
+  object$run <- function(stream = FALSE, progress = NULL) {
     plans <<- .reply(.native_plans(plans))
-    .run(.reply(.native_spec_run(path, project, .version(), .capabilities(), plans, stream)))
+    .run(.reply(.native_spec_run(
+      path, project, .version(), .capabilities(), plans, stream, .progress(progress, "progress")
+    )))
   }
   .object(object, "yamaa_spec")
 }
@@ -182,16 +191,27 @@ format.yamaa_spec <- function(x, ...) {
     .spec(.text(.reply(.native_project_spec(path, .text(name, "name"), .version())), "path"), path)
   }
   .read_only(object, "names", function() .reply(.native_project_names(path, .version())))
-  object$check <- function() .check(.reply(.native_project_check(path, .version())))
-  object$run <- function(section = NULL) {
+  object$check <- function(progress = NULL) {
+    .check(.reply(.native_project_check(path, .version(), .progress(progress, "progress"))))
+  }
+  object$run <- function(section = NULL, progress = NULL) {
     plans <<- .reply(.native_plans(plans))
     .project_run(.reply(.native_project_run(
-      path, .optional_text(section, "section"), .version(), .capabilities(), plans
+      path,
+      .optional_text(section, "section"),
+      .version(),
+      .capabilities(),
+      plans,
+      .progress(progress, "progress")
     )))
   }
-  object$submission <- function(section = NULL, created = NULL) {
+  object$submission <- function(section = NULL, created = NULL, progress = NULL) {
     .submission(.reply(.native_project_submission(
-      path, .optional_text(section, "section"), .optional_text(created, "created"), .version()
+      path,
+      .optional_text(section, "section"),
+      .optional_text(created, "created"),
+      .version(),
+      .progress(progress, "progress")
     )))
   }
   .object(object, "yamaa_project")

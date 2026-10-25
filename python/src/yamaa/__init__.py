@@ -137,6 +137,11 @@ class Check:
     def issues(self) -> Table:
         return self._native.issues()
 
+    @property
+    def timings(self) -> Table:
+        """The time each specification's preparation took."""
+        return self._native.timings()
+
     def __repr__(self) -> str:
         return self._native.summary()
 
@@ -166,6 +171,11 @@ class Run:
     def report(self) -> Table | None:
         """What the run read, counted and checked."""
         return self._native.report()
+
+    @property
+    def timings(self) -> Table:
+        """The time each phase of the run took, in the order the phases started."""
+        return self._native.timings()
 
     def save(self) -> list[str]:
         """Write the declared report file, then the output dataset; return the paths written."""
@@ -198,6 +208,10 @@ class MemberRun:
     @property
     def report(self) -> Table | None:
         return _call(self._native.member_report, self._name)
+
+    @property
+    def timings(self) -> Table:
+        return _call(self._native.member_timings, self._name)
 
     def __repr__(self) -> str:
         return self._native.member_summary(self._name)
@@ -243,6 +257,11 @@ class ProjectRun:
     def report(self) -> Table:
         return self._native.report()
 
+    @property
+    def timings(self) -> Table:
+        """The time each phase of each specification's run took, in run order."""
+        return self._native.timings()
+
     def save(self) -> list[str]:
         """Write each report file, then each output unless a run failed; return the paths written."""
         return _call(self._native.save)
@@ -271,6 +290,11 @@ class Submission:
     def issues(self) -> Table:
         return self._native.issues()
 
+    @property
+    def timings(self) -> Table:
+        """The time each section's composition took."""
+        return self._native.timings()
+
     def save(self) -> list[str]:
         """Write each section's transport files, then its define.xml; return the paths written."""
         return _call(self._native.save)
@@ -287,11 +311,15 @@ class Spec(_Lazy):
         self._project = project
         self._plans = _native._plans()
 
-    def check(self, parent=None) -> Check:
-        """Report problems without reading study data or running project code; with `parent`, check this fragment as if the specification at that path were its parent."""
+    def check(self, parent=None, *, progress=None) -> Check:
+        """Report problems without reading study data or running project code; with `parent`, check this fragment as if the specification at that path were its parent; `progress` is called with each progress event."""
         return Check(
             _call(
-                _native._spec_check, self._path, self._project, _optional_fspath(parent)
+                _native._spec_check,
+                self._path,
+                self._project,
+                _optional_fspath(parent),
+                progress,
             )
         )
 
@@ -299,10 +327,17 @@ class Spec(_Lazy):
         """The specification after its layers are composed."""
         return _call(_native._spec_resolve, self._path, self._project)
 
-    def run(self, *, stream: bool = False) -> Run:
-        """Build the dataset in memory, or with stream as its output is read."""
+    def run(self, *, stream: bool = False, progress=None) -> Run:
+        """Build the dataset in memory, or with stream as its output is read; `progress` is called with each progress event."""
         return Run(
-            _call(_native._spec_run, self._path, self._project, self._plans, stream)
+            _call(
+                _native._spec_run,
+                self._path,
+                self._project,
+                self._plans,
+                stream,
+                progress,
+            )
         )
 
     def __repr__(self) -> str:
@@ -325,18 +360,20 @@ class Project(_Lazy):
         """The listed specifications by `domain` name, in run order, read without study data."""
         return _call(_native._project_names, self._path)
 
-    def check(self) -> Check:
-        return Check(_call(_native._project_check, self._path))
+    def check(self, *, progress=None) -> Check:
+        return Check(_call(_native._project_check, self._path, progress))
 
-    def run(self, section: str | None = None) -> ProjectRun:
+    def run(self, section: str | None = None, *, progress=None) -> ProjectRun:
         """Build every specification of one section, or of all sections."""
-        return ProjectRun(_call(_native._project_run, self._path, section, self._plans))
+        return ProjectRun(
+            _call(_native._project_run, self._path, section, self._plans, progress)
+        )
 
     def submission(
-        self, section: str | None = None, *, created: str | None = None
+        self, section: str | None = None, *, created: str | None = None, progress=None
     ) -> Submission:
         return Submission(
-            _call(_native._project_submission, self._path, section, created)
+            _call(_native._project_submission, self._path, section, created, progress)
         )
 
     def __repr__(self) -> str:

@@ -53,3 +53,21 @@
   class(object) <- class
   object
 }
+
+# A progress callback (#3762): `NULL`, or the user's function wrapped so it
+# replies with a closed envelope and no R error crosses Rust: list(0L, NULL)
+# when it returned, list(1L, condition) when it signalled an error, which
+# fails the result, and list(3L, condition) for an interrupt, which cancels
+# the call. Rust gives it one named list per progress event.
+.progress <- function(progress, what) {
+  if (is.null(progress)) return(NULL)
+  if (!is.function(progress)) {
+    stop(sprintf("`%s` must be a function or NULL", what), call. = FALSE)
+  }
+  force(progress)
+  function(event) tryCatch({
+    progress(event)
+    list(0L, NULL)
+  }, interrupt = function(condition) list(3L, condition),
+  error = function(condition) list(1L, condition))
+}

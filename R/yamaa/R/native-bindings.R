@@ -5,8 +5,8 @@
   .Call(wrap__core_version)
 }
 
-.native_spec_check <- function(specification, project, parent, version) {
-  .Call(wrap__spec_check, specification, project, parent, version)
+.native_spec_check <- function(specification, project, parent, version, progress) {
+  .Call(wrap__spec_check, specification, project, parent, version, progress)
 }
 
 .native_check_status <- function(handle) {
@@ -15,6 +15,10 @@
 
 .native_check_issues <- function(handle) {
   .Call(wrap__check_issues, handle)
+}
+
+.native_check_timings <- function(handle) {
+  .Call(wrap__check_timings, handle)
 }
 
 .native_check_summary <- function(handle) {
@@ -29,8 +33,8 @@
   .Call(wrap__plans, handle)
 }
 
-.native_spec_run <- function(specification, project, version, capabilities, plans, stream) {
-  .Call(wrap__spec_run, specification, project, version, capabilities, plans, stream)
+.native_spec_run <- function(specification, project, version, capabilities, plans, stream, progress) {
+  .Call(wrap__spec_run, specification, project, version, capabilities, plans, stream, progress)
 }
 
 .native_spec_resolve <- function(specification, project, version) {
@@ -57,6 +61,10 @@
   .Call(wrap__run_report, handle)
 }
 
+.native_run_timings <- function(handle) {
+  .Call(wrap__run_timings, handle)
+}
+
 .native_run_save <- function(handle) {
   .Call(wrap__run_save, handle)
 }
@@ -81,12 +89,12 @@
   .Call(wrap__project_names, project, version)
 }
 
-.native_project_check <- function(project, version) {
-  .Call(wrap__project_check, project, version)
+.native_project_check <- function(project, version, progress) {
+  .Call(wrap__project_check, project, version, progress)
 }
 
-.native_project_run <- function(project, section, version, capabilities, plans) {
-  .Call(wrap__project_run, project, section, version, capabilities, plans)
+.native_project_run <- function(project, section, version, capabilities, plans, progress) {
+  .Call(wrap__project_run, project, section, version, capabilities, plans, progress)
 }
 
 .native_project_run_status <- function(handle) {
@@ -113,6 +121,10 @@
   .Call(wrap__project_run_member_report, handle, name)
 }
 
+.native_project_run_member_timings <- function(handle, name) {
+  .Call(wrap__project_run_member_timings, handle, name)
+}
+
 .native_project_run_member_summary <- function(handle, name) {
   .Call(wrap__project_run_member_summary, handle, name)
 }
@@ -125,6 +137,10 @@
   .Call(wrap__project_run_report, handle)
 }
 
+.native_project_run_timings <- function(handle) {
+  .Call(wrap__project_run_timings, handle)
+}
+
 .native_project_run_save <- function(handle) {
   .Call(wrap__project_run_save, handle)
 }
@@ -133,8 +149,8 @@
   .Call(wrap__project_run_summary, handle)
 }
 
-.native_project_submission <- function(project, section, created, version) {
-  .Call(wrap__project_submission, project, section, created, version)
+.native_project_submission <- function(project, section, created, version, progress) {
+  .Call(wrap__project_submission, project, section, created, version, progress)
 }
 
 .native_submission_status <- function(handle) {
@@ -147,6 +163,10 @@
 
 .native_submission_issues <- function(handle) {
   .Call(wrap__submission_issues, handle)
+}
+
+.native_submission_timings <- function(handle) {
+  .Call(wrap__submission_timings, handle)
 }
 
 .native_submission_save <- function(handle) {
