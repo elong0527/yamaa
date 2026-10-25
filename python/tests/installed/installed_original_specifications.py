@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pyarrow as pa
+from host_fixtures import first_difference
 from host_fixtures import load as load_truth
 
 import yamaa
@@ -322,7 +323,9 @@ class ParquetOriginalOutput(unittest.TestCase):
                 write(path)
                 self.assertEqual(pq.ParquetFile(path).metadata.num_row_groups, rows)
                 stored = pq.read_table(path)
-                self.assertEqual(stored["V"].to_pylist(), values)
+                # The 32,769 values of each column are compared as a summary of
+                # their first difference (#3882).
+                self.assertIsNone(first_difference(stored["V"].to_pylist(), values))
                 source = {
                     "yamaa": "1.0",
                     "type": "spec",
@@ -337,8 +340,12 @@ class ParquetOriginalOutput(unittest.TestCase):
                 }
                 result = self.build(source, {})
                 self.assertEqual(result.issues.num_rows, 0, result.issues)
-                self.assertEqual(result.output.to_polars()["ID"].to_list(), ids)
-                self.assertEqual(result.output.to_polars()["V"].to_list(), values)
+                self.assertIsNone(
+                    first_difference(result.output.to_polars()["ID"].to_list(), ids)
+                )
+                self.assertIsNone(
+                    first_difference(result.output.to_polars()["V"].to_list(), values)
+                )
 
     def test_parquet_signed_integer_fields_read_as_int(self):
         # pyarrow and Polars store int8 and int16 columns as INT32 annotated
@@ -500,7 +507,9 @@ class ParquetOriginalOutput(unittest.TestCase):
         expected = self.expected_original(name, artifacts=True)
         for read in expected["source_reads"]:
             read["path"] = "input/lb.parquet"
-        self.assertEqual(self.observe(result), dict(expected, artifacts=[]))
+        self.assertIsNone(
+            first_difference(self.observe(result), dict(expected, artifacts=[]))
+        )
         self.assertIsNotNone(result.output)
         self.entry.unlink()
         (self.root / "input/lb.parquet").unlink()
@@ -511,7 +520,7 @@ class ParquetOriginalOutput(unittest.TestCase):
                 (self.root / "adlb.csv").read_bytes(),
                 (case / "expected/adlb.csv").read_bytes(),
             )
-            self.assertEqual(self.observe(result), expected)
+            self.assertIsNone(first_difference(self.observe(result), expected))
 
     def test_parquet_declarations_fail_before_any_host_source_authority(self):
         source = (
@@ -644,11 +653,15 @@ class ParquetOriginalOutput(unittest.TestCase):
         self.assertNotEqual(source, raw)
         expected = self.expected_original(name, artifacts=True)
         result = self.build(source, {"input/lb.csv": case / "input/lb.csv"})
-        self.assertEqual(self.observe(result), dict(expected, artifacts=[]))
+        self.assertIsNone(
+            first_difference(self.observe(result), dict(expected, artifacts=[]))
+        )
         self.assertIsNotNone(result.output)
         result.save()
         report = self.observe(result)
-        self.assertEqual(dict(report, artifacts=[]), dict(expected, artifacts=[]))
+        self.assertIsNone(
+            first_difference(dict(report, artifacts=[]), dict(expected, artifacts=[]))
+        )
 
         import pyarrow.parquet as pq
 
@@ -2111,7 +2124,9 @@ columns:
                     for record in observed_expected[group]:
                         record["specification"] = str(entry)
                 unsaved = dict(observed_expected, artifacts=[])
-                self.assertEqual(json.loads(result._native.observations()), unsaved)
+                self.assertIsNone(
+                    first_difference(json.loads(result._native.observations()), unsaved)
+                )
                 # The issues carry the authored diagnostics whole, geometry
                 # included where the failure site recorded it.
                 expected_rows = [
@@ -2158,7 +2173,11 @@ columns:
                     self.assertIsNone(result.output)
                     with self.assertRaises(yamaa.Error):
                         result.save()
-                    self.assertEqual(json.loads(result._native.observations()), unsaved)
+                    self.assertIsNone(
+                        first_difference(
+                            json.loads(result._native.observations()), unsaved
+                        )
+                    )
                     self.record_public_report(result, name, entry)
                     continue
                 artifact = expected["artifacts"][0]
@@ -2206,8 +2225,11 @@ columns:
                 for _ in range(2):
                     result.save()
                     self.assertEqual(saved.read_bytes(), original)
-                    self.assertEqual(
-                        json.loads(result._native.observations()), observed_expected
+                    self.assertIsNone(
+                        first_difference(
+                            json.loads(result._native.observations()),
+                            observed_expected,
+                        )
                     )
                 self.assertEqual(result.output.to_polars().rows(), rows)
                 self.record_public_report(result, name, entry)

@@ -25,9 +25,6 @@ outputs:
   workflow_lint:
     description: Lint every workflow
     value: ${{ steps.paths.outputs.workflow_lint }}
-  loaded:
-    description: Check both hosts in the test-only loaded mode
-    value: ${{ steps.paths.outputs.loaded }}
 runs:
   using: composite
   steps:

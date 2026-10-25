@@ -1,0 +1,503 @@
+{
+  "about": "What schema expansion and the specification compiler refuse, and admit, before any record is read: a window reference's expansion (WINDOW-1), an aggregate derive binding that is a window operation (LOOKUP-22), grammar findings binding keeps at their authored paths (FORMULA-1), integer literals outside int's range in conversion handlers and filters (VALUE-5), redundant Parquet field types (INPUT-6), verification declarations (CHECK-4) and a qualified aggregate grouped by no output key (LOOKUP-19). The window cases expand a schema whose `windows` declare complete definitions and whose columns' derivations take a `row_number` window, written inline or by name; an unused malformed definition is found in either mode, and only `strict` reports a surviving unknown reference. The specification `value` derives the int column VALUE from SRC, read from input.csv with the schema ID, int, and each case writes VALUE's derivation, type or verifications, its row templates or its input; `aggregate_derive` derives VALUE with an aggregate whose derive binding V reads SRC.ID, and each of its cases writes V's derivation or adds a binding. A case whose table compared part of a record compares those fields, and an `among` case finds its record by cause among the others.",
+  "documents": {
+    "value": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "input": {"SRC": {"path": "input.csv"}},
+      "keys": ["ID"],
+      "columns": [
+        {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+        {"name": "VALUE", "type": "int", "derivation": {"value": 1}}
+      ],
+      "output": {"path": "result.csv", "columns": ["ID", "VALUE"]}
+    },
+    "aggregate_derive": {
+      "yamaa": "1.0",
+      "type": "spec",
+      "domain": "TEST",
+      "input": {"SRC": {"path": "input.csv"}},
+      "keys": ["ID"],
+      "columns": [
+        {"name": "ID", "type": "int", "derivation": {"value": "SRC.ID"}},
+        {"name": "VALUE", "type": "int", "derivation": {"value": {"aggregate": {"derivations": {"V": {"type": "int", "derivation": {"value": "SRC.ID"}}}, "expr": "SUM(V)"}}}}
+      ],
+      "output": {"path": "result.csv", "columns": ["ID", "VALUE"]}
+    }
+  },
+  "cases": [
+    {
+      "case": "a_strict_expansion_admits_references_that_each_name_a_definition",
+      "operation": "schema_windows",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"windows": {"type": "dict[str, window_spec]"}}, {"columns": {"type": "list[column_class]"}}, {"metadata": {"type": "dict"}}],
+          "column_class": [{"name": {"type": "str"}}, {"derivation": {"type": "handled_expression_class"}}],
+          "handled_expression_class": [{"value": {"type": "expression"}}],
+          "expression": {"registry": "expressions"},
+          "expressions": {"row_number": [{"window": {"type": "window_selection"}}]},
+          "window_selection": {"type": ["str", "window_spec"]},
+          "window_spec": [{"group_by": {"type": "list[str]"}}, {"order_by": {"type": "list[str]"}}]
+        }},
+        "document": {
+          "windows": {"VISITS": {"order_by": ["SEQ"]}},
+          "columns": [{"name": "LIVE", "derivation": {"value": {"row_number": {"window": "VISITS"}}}}],
+          "metadata": {"window": "UNKNOWN"}
+        },
+        "strict": true
+      },
+      "issues": []
+    },
+    {
+      "case": "an_unused_malformed_definition_is_refused_by_a_non_strict_expansion",
+      "operation": "schema_windows",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"windows": {"type": "dict[str, window_spec]"}}, {"columns": {"type": "list[column_class]"}}, {"metadata": {"type": "dict"}}],
+          "column_class": [{"name": {"type": "str"}}, {"derivation": {"type": "handled_expression_class"}}],
+          "handled_expression_class": [{"value": {"type": "expression"}}],
+          "expression": {"registry": "expressions"},
+          "expressions": {"row_number": [{"window": {"type": "window_selection"}}]},
+          "window_selection": {"type": ["str", "window_spec"]},
+          "window_spec": [{"group_by": {"type": "list[str]"}}, {"order_by": {"type": "list[str]"}}]
+        }},
+        "document": {
+          "windows": {"UNUSED": "VISITS"},
+          "columns": [{"name": "A", "derivation": {"value": {"row_number": {"window": "UNKNOWN"}}}}]
+        },
+        "strict": false
+      },
+      "compares": ["condition", "spec_paths"],
+      "issues": [{"condition": "invalid_field_type", "spec_paths": ["windows.UNUSED"]}]
+    },
+    {
+      "case": "an_unused_malformed_definition_is_refused_before_strict_reference_errors",
+      "operation": "schema_windows",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"windows": {"type": "dict[str, window_spec]"}}, {"columns": {"type": "list[column_class]"}}, {"metadata": {"type": "dict"}}],
+          "column_class": [{"name": {"type": "str"}}, {"derivation": {"type": "handled_expression_class"}}],
+          "handled_expression_class": [{"value": {"type": "expression"}}],
+          "expression": {"registry": "expressions"},
+          "expressions": {"row_number": [{"window": {"type": "window_selection"}}]},
+          "window_selection": {"type": ["str", "window_spec"]},
+          "window_spec": [{"group_by": {"type": "list[str]"}}, {"order_by": {"type": "list[str]"}}]
+        }},
+        "document": {
+          "windows": {"UNUSED": "VISITS"},
+          "columns": [{"name": "A", "derivation": {"value": {"row_number": {"window": "UNKNOWN"}}}}]
+        },
+        "strict": true
+      },
+      "compares": ["condition", "spec_paths"],
+      "prefix": true,
+      "issues": [{"condition": "invalid_field_type", "spec_paths": ["windows.UNUSED"]}]
+    },
+    {
+      "case": "strict_unknown_window_references_keep_column_declaration_order",
+      "operation": "schema_windows",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"windows": {"type": "dict[str, window_spec]"}}, {"columns": {"type": "list[column_class]"}}, {"metadata": {"type": "dict"}}],
+          "column_class": [{"name": {"type": "str"}}, {"derivation": {"type": "handled_expression_class"}}],
+          "handled_expression_class": [{"value": {"type": "expression"}}],
+          "expression": {"registry": "expressions"},
+          "expressions": {"row_number": [{"window": {"type": "window_selection"}}]},
+          "window_selection": {"type": ["str", "window_spec"]},
+          "window_spec": [{"group_by": {"type": "list[str]"}}, {"order_by": {"type": "list[str]"}}]
+        }},
+        "document": {
+          "columns": [
+            {"name": "Z", "derivation": {"value": {"row_number": {"window": "SECOND"}}}},
+            {"name": "A", "derivation": {"value": {"row_number": {"window": "FIRST"}}}}
+          ]
+        },
+        "strict": true
+      },
+      "issues": [
+        {"phase": "validation", "condition": "unknown_window", "rule": "WINDOW-1", "spec_paths": ["columns.Z.derivation.row_number.window"], "context": {"window": "SECOND"}},
+        {"phase": "validation", "condition": "unknown_window", "rule": "WINDOW-1", "spec_paths": ["columns.A.derivation.row_number.window"], "context": {"window": "FIRST"}}
+      ]
+    },
+    {
+      "case": "a_derive_binding_refuses_row_number_over_a_qualified_order",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"row_number": {"window": {"order_by": ["SRC.ID"]}}}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.row_number"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_row_number_over_a_qualified_order_in_a_case_then",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"case": [{"when": "SRC.ID >= 0", "then": {"row_number": {"window": {"order_by": ["SRC.ID"]}}}}, {"otherwise": 0}]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.case[0].then.row_number"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_row_number_over_a_qualified_order_in_a_case_otherwise",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"case": [{"when": "SRC.ID >= 0", "then": 0}, {"otherwise": {"row_number": {"window": {"order_by": ["SRC.ID"]}}}}]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.case[1].otherwise.row_number"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_row_number_over_a_column_order",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"row_number": {"window": {"order_by": ["ID"]}}}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.row_number"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_row_number_over_a_column_order_in_a_case_then",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"case": [{"when": "SRC.ID >= 0", "then": {"row_number": {"window": {"order_by": ["ID"]}}}}, {"otherwise": 0}]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.case[0].then.row_number"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_row_number_over_a_column_order_in_a_case_otherwise",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"case": [{"when": "SRC.ID >= 0", "then": 0}, {"otherwise": {"row_number": {"window": {"order_by": ["ID"]}}}}]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.case[1].otherwise.row_number"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_rank_over_a_qualified_order",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"rank": {"window": {"order_by": ["SRC.ID"]}}}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.rank"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_rank_over_a_qualified_order_in_a_case_then",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"case": [{"when": "SRC.ID >= 0", "then": {"rank": {"window": {"order_by": ["SRC.ID"]}}}}, {"otherwise": 0}]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.case[0].then.rank"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_rank_over_a_qualified_order_in_a_case_otherwise",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"case": [{"when": "SRC.ID >= 0", "then": 0}, {"otherwise": {"rank": {"window": {"order_by": ["SRC.ID"]}}}}]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.case[1].otherwise.rank"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_rank_over_a_column_order",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"rank": {"window": {"order_by": ["ID"]}}}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.rank"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_rank_over_a_column_order_in_a_case_then",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"case": [{"when": "SRC.ID >= 0", "then": {"rank": {"window": {"order_by": ["ID"]}}}}, {"otherwise": 0}]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.case[0].then.rank"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_rank_over_a_column_order_in_a_case_otherwise",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"case": [{"when": "SRC.ID >= 0", "then": 0}, {"otherwise": {"rank": {"window": {"order_by": ["ID"]}}}}]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.case[1].otherwise.rank"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_row_value_over_a_qualified_order",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"row_value": {"window": {"order_by": ["SRC.ID"]}, "source": "SRC.ID", "offset": -1}}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.row_value"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_row_value_over_a_qualified_order_in_a_case_then",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"case": [{"when": "SRC.ID >= 0", "then": {"row_value": {"window": {"order_by": ["SRC.ID"]}, "source": "SRC.ID", "offset": -1}}}, {"otherwise": 0}]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.case[0].then.row_value"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_row_value_over_a_qualified_order_in_a_case_otherwise",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"case": [{"when": "SRC.ID >= 0", "then": 0}, {"otherwise": {"row_value": {"window": {"order_by": ["SRC.ID"]}, "source": "SRC.ID", "offset": -1}}}]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.case[1].otherwise.row_value"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_row_value_over_a_column_order",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"row_value": {"window": {"order_by": ["ID"]}, "source": "ID", "offset": -1}}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.row_value"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_row_value_over_a_column_order_in_a_case_then",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"case": [{"when": "SRC.ID >= 0", "then": {"row_value": {"window": {"order_by": ["ID"]}, "source": "ID", "offset": -1}}}, {"otherwise": 0}]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.case[0].then.row_value"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_row_value_over_a_column_order_in_a_case_otherwise",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"case": [{"when": "SRC.ID >= 0", "then": 0}, {"otherwise": {"row_value": {"window": {"order_by": ["ID"]}, "source": "ID", "offset": -1}}}]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.case[1].otherwise.row_value"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_locf_over_a_qualified_order",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"locf": {"window": {"order_by": ["SRC.ID"]}, "source": "SRC.ID"}}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.locf"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_locf_over_a_qualified_order_in_a_case_then",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"case": [{"when": "SRC.ID >= 0", "then": {"locf": {"window": {"order_by": ["SRC.ID"]}, "source": "SRC.ID"}}}, {"otherwise": 0}]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.case[0].then.locf"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_locf_over_a_qualified_order_in_a_case_otherwise",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"case": [{"when": "SRC.ID >= 0", "then": 0}, {"otherwise": {"locf": {"window": {"order_by": ["SRC.ID"]}, "source": "SRC.ID"}}}]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.case[1].otherwise.locf"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_locf_over_a_column_order",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"locf": {"window": {"order_by": ["ID"]}, "source": "ID"}}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.locf"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_locf_over_a_column_order_in_a_case_then",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"case": [{"when": "SRC.ID >= 0", "then": {"locf": {"window": {"order_by": ["ID"]}, "source": "ID"}}}, {"otherwise": 0}]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.case[0].then.locf"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_locf_over_a_column_order_in_a_case_otherwise",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"case": [{"when": "SRC.ID >= 0", "then": 0}, {"otherwise": {"locf": {"window": {"order_by": ["ID"]}, "source": "ID"}}}]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.case[1].otherwise.locf"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_baseline_flag_over_a_qualified_order",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"baseline_flag": {"window": {"order_by": ["SRC.ID"]}, "date": "SRC.ID", "reference": "SRC.ID", "source": "SRC.ID"}}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.baseline_flag"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_baseline_flag_over_a_qualified_order_in_a_case_then",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"case": [{"when": "SRC.ID >= 0", "then": {"baseline_flag": {"window": {"order_by": ["SRC.ID"]}, "date": "SRC.ID", "reference": "SRC.ID", "source": "SRC.ID"}}}, {"otherwise": 0}]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.case[0].then.baseline_flag"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_baseline_flag_over_a_qualified_order_in_a_case_otherwise",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"case": [{"when": "SRC.ID >= 0", "then": 0}, {"otherwise": {"baseline_flag": {"window": {"order_by": ["SRC.ID"]}, "date": "SRC.ID", "reference": "SRC.ID", "source": "SRC.ID"}}}]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.case[1].otherwise.baseline_flag"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_baseline_flag_over_a_column_order",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"baseline_flag": {"window": {"order_by": ["ID"]}, "date": "ID", "reference": "ID", "source": "ID"}}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.baseline_flag"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_baseline_flag_over_a_column_order_in_a_case_then",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"case": [{"when": "SRC.ID >= 0", "then": {"baseline_flag": {"window": {"order_by": ["ID"]}, "date": "ID", "reference": "ID", "source": "ID"}}}, {"otherwise": 0}]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.case[0].then.baseline_flag"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    },
+    {
+      "case": "a_derive_binding_refuses_baseline_flag_over_a_column_order_in_a_case_otherwise",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "V", "derivation", "value"], "to": {"case": [{"when": "SRC.ID >= 0", "then": 0}, {"otherwise": {"baseline_flag": {"window": {"order_by": ["ID"]}, "date": "ID", "reference": "ID", "source": "ID"}}}]}}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.reason"],
+      "issues": [{"phase": "validation", "condition": "invalid_derive_step", "rule": "LOOKUP-22", "spec_paths": ["columns.VALUE.derivation.aggregate.derivations.V.derivation.case[1].otherwise.baseline_flag"], "context": {"reason": "a derive binding cannot use a window operation"}}]
+    }
+,
+    {
+      "case": "aggregate_derive_window_names_in_literals_remain_literals",
+      "operation": "prepare",
+      "input": {"base": "aggregate_derive", "edits": [{"set": ["columns", "1", "derivation", "value", "aggregate", "derivations", "TAG"], "to": {"type": "str", "derivation": {"value": "'row_value'"}}}]},
+      "issues": []
+    },
+    {
+      "case": "a_case_when_grammar_finding_retains_its_nested_path",
+      "operation": "bind",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": {"case": [{"when": "ID >", "then": "1"}, {"otherwise": 1}]}}}], "sources": {"SRC": [["ID", "int"]]}},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["columns.VALUE.derivation.case[0].when"]}]
+    },
+    {
+      "case": "a_case_then_grammar_finding_retains_its_nested_path",
+      "operation": "bind",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": {"case": [{"when": "ID > 0", "then": "ID +"}, {"otherwise": 1}]}}}], "sources": {"SRC": [["ID", "int"]]}},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["columns.VALUE.derivation.case[0].then"]}]
+    },
+    {
+      "case": "a_column_derivation_grammar_finding_is_a_binding_finding_at_its_derivation",
+      "operation": "bind",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": "ID +"}}], "sources": {"SRC": [["ID", "int"]]}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.expr"],
+      "issues": [{"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["columns.VALUE.derivation"], "context": {"expr": "ID +"}}]
+    },
+    {
+      "case": "parquet_type_declarations_keep_all_semantic_findings",
+      "operation": "prepare",
+      "input": {"base": "value", "edits": [{"set": ["input", "SRC"], "to": {"path": "source.parquet", "types": {"ID": "int", "VALUE": "float"}}}, {"set": ["columns", "1", "derivation"], "to": {"value": "ID + 1"}}]},
+      "issues": [
+        {"phase": "validation", "condition": "redundant_field_type", "rule": "INPUT-6", "spec_paths": ["input.SRC.types.ID"], "context": {"dataset": "SRC", "field": "ID", "type": "int"}},
+        {"phase": "validation", "condition": "redundant_field_type", "rule": "INPUT-6", "spec_paths": ["input.SRC.types.VALUE"], "context": {"dataset": "SRC", "field": "VALUE", "type": "float"}}
+      ]
+    },
+    {
+      "case": "null_rows_prepare_without_internal_error",
+      "operation": "prepare",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": "ID + 1"}}, {"set": ["rows"], "to": null}]},
+      "issues": []
+    },
+    {
+      "case": "wide_recovery_literal_fails_validation_before_source_binding",
+      "operation": "prepare",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": true, "unconvertible": 9223372036854775808}}]},
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.VALUE.derivation.unconvertible"], "context": {"actual": 9223372036854775808, "value": "9223372036854775808", "minimum": -9223372036854775808, "maximum": 9223372036854775807}}]
+    },
+    {
+      "case": "wide_row_recovery_fails_validation_at_its_authored_path_before_binding",
+      "operation": "prepare",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": true}}, {"set": ["rows"], "to": [{"id": "override", "derivations": {"VALUE": {"value": true, "unconvertible": 9223372036854775808}}}]}]},
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["rows.override.derivations.VALUE.unconvertible"], "context": {"actual": 9223372036854775808, "value": "9223372036854775808", "minimum": -9223372036854775808, "maximum": 9223372036854775807}}]
+    },
+    {
+      "case": "a_row_filter_literal_overflow_remains_normative_in_a_dead_and_branch",
+      "operation": "bind",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": 2}}, {"set": ["rows"], "to": [{"id": "first", "filter": "FALSE AND ID = 9223372036854775808", "derivations": {"ID": {"value": "SRC.ID"}, "VALUE": {"value": 2}}}]}], "sources": {"SRC": [["ID", "int"]]}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["rows.first.filter"], "context": {"expr": "FALSE AND ID = 9223372036854775808", "predicate": "FALSE AND ID = 9223372036854775808", "position": 15, "value": "9223372036854775808", "actual": 9223372036854775808, "minimum": -9223372036854775808, "maximum": 9223372036854775807}}]
+    },
+    {
+      "case": "a_row_filter_literal_overflow_remains_normative_in_a_dead_or_branch",
+      "operation": "bind",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": 2}}, {"set": ["rows"], "to": [{"id": "first", "filter": "TRUE OR ID = -9223372036854775809", "derivations": {"ID": {"value": "SRC.ID"}, "VALUE": {"value": 2}}}]}], "sources": {"SRC": [["ID", "int"]]}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["rows.first.filter"], "context": {"expr": "TRUE OR ID = -9223372036854775809", "predicate": "TRUE OR ID = -9223372036854775809", "position": 13, "value": "-9223372036854775809", "actual": -9223372036854775809, "minimum": -9223372036854775808, "maximum": 9223372036854775807}}]
+    },
+    {
+      "case": "row_filters_retain_both_deferred_grammar_findings",
+      "operation": "bind",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": 2}}, {"set": ["rows"], "to": [{"id": "first", "filter": "ID >", "derivations": {"ID": {"value": "SRC.ID"}, "VALUE": {"value": 2}}}, {"id": "second", "filter": "ID >", "derivations": {"ID": {"value": "SRC.ID"}, "VALUE": {"value": 2}}}]}], "sources": {"SRC": [["ID", "int"]]}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.predicate"],
+      "issues": [
+        {"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["rows.first.filter"], "context": {"predicate": "ID >"}},
+        {"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["rows.second.filter"], "context": {"predicate": "ID >"}}
+      ]
+    },
+    {
+      "case": "a_source_filter_of_valid_text_binds",
+      "operation": "bind",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": {"source": {"variable": "SRC.ID", "filter": "SRC.ID = 1"}}}}], "sources": {"SRC": [["ID", "int"]]}},
+      "issues": []
+    },
+    {
+      "case": "a_source_filter_literal_overflow_remains_a_deferred_normative_finding",
+      "operation": "bind",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": {"source": {"variable": "SRC.ID", "filter": "SRC.ID = 9223372036854775808"}}}}], "sources": {"SRC": [["ID", "int"]]}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.VALUE.derivation.source.filter"], "context": {"expr": "SRC.ID = 9223372036854775808", "predicate": "SRC.ID = 9223372036854775808", "position": 9, "value": "9223372036854775808", "actual": 9223372036854775808, "minimum": -9223372036854775808, "maximum": 9223372036854775807}}]
+    },
+    {
+      "case": "selection_filters_retain_their_decorated_operand_path",
+      "operation": "bind",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "derivation"], "to": {"value": {"first_available": {"sources": [{"variable": "SRC.ID", "filter": "SRC.ID ="}]}}}}], "sources": {"SRC": [["ID", "int"]]}},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.predicate"],
+      "issues": [{"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-1", "spec_paths": ["columns.VALUE.derivation.first_available.sources[0].filter"], "context": {"predicate": "SRC.ID ="}}]
+    },
+    {
+      "case": "a_root_assert_when_that_is_not_text_is_a_declaration_finding",
+      "operation": "verification_declarations",
+      "input": {"base": "value", "edits": [{"set": ["verifications"], "to": [{"assert": {"when": true, "require": "VALUE > 0"}}]}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_declaration", "rule": "CHECK-4", "spec_paths": ["verifications[0].assert.when"], "context": {"reason": "a predicate must be text"}}]
+    },
+    {
+      "case": "a_root_assert_when_that_is_not_text_keeps_its_runtime_checkpoint",
+      "operation": "bind",
+      "input": {"base": "value", "edits": [{"set": ["verifications"], "to": [{"assert": {"when": true, "require": "VALUE > 0"}}]}], "sources": {"SRC": [["ID", "int"]]}},
+      "issues": []
+    },
+    {
+      "case": "a_range_bound_that_is_not_numeric_is_a_declaration_finding",
+      "operation": "verification_declarations",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "verifications"], "to": [{"range": {"min": false, "max": 7}}]}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_declaration", "rule": "CHECK-4", "spec_paths": ["columns.VALUE.verifications[0].range"], "context": {"reason": "a range bound is numeric"}}]
+    },
+    {
+      "case": "a_range_bound_that_is_not_numeric_keeps_its_runtime_checkpoint",
+      "operation": "bind",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "verifications"], "to": [{"range": {"min": false, "max": 7}}]}], "sources": {"SRC": [["ID", "int"]]}},
+      "issues": []
+    },
+    {
+      "case": "a_range_on_a_str_column_is_a_column_type_finding",
+      "operation": "verification_declarations",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "type"], "to": "str"}, {"set": ["columns", "1", "verifications"], "to": [{"range": {"min": false}}]}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_declaration", "rule": "CHECK-4", "spec_paths": ["columns.VALUE.verifications[0].range"], "context": {"reason": "a str column does not admit this verification"}}]
+    },
+    {
+      "case": "a_range_on_a_str_column_keeps_its_runtime_checkpoint",
+      "operation": "bind",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "type"], "to": "str"}, {"set": ["columns", "1", "verifications"], "to": [{"range": {"min": false}}]}], "sources": {"SRC": [["ID", "int"]]}},
+      "issues": []
+    },
+    {
+      "case": "allowed_values_that_are_not_int_values_are_a_column_type_finding",
+      "operation": "verification_declarations",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "verifications"], "to": [{"allowed_values": {"values": [null, false]}}]}]},
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_declaration", "rule": "CHECK-4", "spec_paths": ["columns.VALUE.verifications[0].allowed_values"], "context": {"reason": "listed value None is not a int value"}}]
+    },
+    {
+      "case": "allowed_values_that_are_not_int_values_keep_their_runtime_checkpoint",
+      "operation": "bind",
+      "input": {"base": "value", "edits": [{"set": ["columns", "1", "verifications"], "to": [{"allowed_values": {"values": [null, false]}}]}], "sources": {"SRC": [["ID", "int"]]}},
+      "issues": []
+    },
+    {
+      "case": "a_qualified_aggregate_group_by_column_must_be_an_output_key",
+      "operation": "bind",
+      "input": {"base": "value", "edits": [{"set": ["input", "SRC", "key"], "to": ["ID"]}, {"set": ["columns", "1", "derivation"], "to": {"value": {"aggregate": {"expr": "SUM(SRC.V)", "group_by": ["SRC.PARAM"]}}}}], "sources": {"SRC": [["ID", "int"], ["PARAM", "int"], ["V", "int"]]}},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "among": true,
+      "issues": [{"phase": "validation", "condition": "invalid_aggregate_context", "rule": "LOOKUP-19", "spec_paths": ["columns.VALUE.derivation.aggregate.group_by"]}]
+    },
+    {
+      "case": "a_qualified_aggregate_grouped_by_the_output_key_binds",
+      "operation": "bind",
+      "input": {"base": "value", "edits": [{"set": ["input", "SRC", "key"], "to": ["ID"]}, {"set": ["columns", "1", "derivation"], "to": {"value": {"aggregate": {"expr": "SUM(SRC.V)", "group_by": ["SRC.ID"]}}}}], "sources": {"SRC": [["ID", "int"], ["PARAM", "int"], ["V", "int"]]}},
+      "issues": []
+    }
+  ]
+}

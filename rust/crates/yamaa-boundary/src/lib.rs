@@ -36,16 +36,13 @@
 //! meaning.
 //!
 //! [`abi`] holds the engine's C ABI, which `rust/crates/yamaa-engine`
-//! implements, [`client`] the safe client through which both bindings reach
-//! it, and, with the `loader` feature, [`loader`] the test-only loaded mode's
-//! engine loader.
+//! implements, and [`client`] the safe client through which both bindings
+//! reach it.
 use std::fmt;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub mod abi;
 pub mod client;
-#[cfg(feature = "loader")]
-pub mod loader;
 
 /// The boundary version, which the generated layers of both hosts request.
 /// It moves with any change to what crosses the boundary that an older side
@@ -230,15 +227,6 @@ impl EngineFacts {
                 .map(|version| version.as_ref().to_owned())
                 .collect(),
         }
-    }
-
-    /// The same facts without the identifiers `withheld`: an engine that
-    /// lacks a capability or a format, as the loading tests' fixture engines
-    /// do.
-    pub fn withholding(mut self, withheld: &[&str]) -> Self {
-        self.supported
-            .retain(|identifier| !withheld.contains(&identifier.as_str()));
-        self
     }
 
     /// Every identifier the engine supports, in the boundary's order.

@@ -222,8 +222,8 @@ def tarball_problem(size):
     )
 
 
-def report(log, checkbashisms=True, manual=False, expected=EXPECTED_NOTES):
-    """Print the check's findings; fail on any that `expected` lacks, and
+def report(log, checkbashisms=True, manual=False):
+    """Print the check's findings; fail on any that EXPECTED_NOTES lacks, and
     with `manual` unless the manuals were built and validated."""
     found = findings(log)[0]
     for finding in found:
@@ -231,9 +231,7 @@ def report(log, checkbashisms=True, manual=False, expected=EXPECTED_NOTES):
             print(f"{finding.status}: checking {finding.check}")
             for line in finding.lines:
                 print(f"    {line}")
-    problems = unexpected(
-        log, expected=expected, checkbashisms=checkbashisms, manual=manual
-    )
+    problems = unexpected(log, checkbashisms=checkbashisms, manual=manual)
     if problems:
         raise RuntimeError(
             "R CMD check --as-cran found what R/yamaa/cran-comments.md does not "
@@ -327,7 +325,7 @@ def sanitizer_reports(work):
     ]
 
 
-def check(archive, work, environment=None, manual=False, expected=EXPECTED_NOTES):
+def check(archive, work, environment=None, manual=False):
     archive, work = archive.resolve(), work.resolve()
     if work.is_relative_to(ROOT):
         raise ValueError("R package checks must run outside the checkout")
@@ -374,7 +372,6 @@ def check(archive, work, environment=None, manual=False, expected=EXPECTED_NOTES
         logs[0].read_text(encoding="utf-8"),
         checkbashisms=has_checkbashisms(environment),
         manual=manual,
-        expected=expected,
     )
 
 

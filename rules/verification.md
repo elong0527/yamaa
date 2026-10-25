@@ -18,7 +18,7 @@ infers its declared column and runs after that column's derivation and
 conversion. Dataset verifications run after all column work, output-key
 validation, and column verifications finish.
 
-Evidence: `schema-verification-log`, `negative-single-verification`, `rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.json`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::a_not_missing_when_waits_for_the_later_column_it_reads`.
+Evidence: `schema-verification-log`, `negative-single-verification`, `rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.json`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/run_report.json::a_not_missing_when_waits_for_the_later_column_it_reads`.
 
 A column's `verifications` and the dataset's `verifications` are each a list
 of checks, and a single check is written as a one-item list. A check written
@@ -398,7 +398,7 @@ writes the report file for a failed run too; the report is diagnostic output,
 never an accepted artifact.
 
 Fails: `missing_report`.
-Evidence: `schema-adsl-age-quality`, `schema-verification-log`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_warning_verification_needs_a_report_file`, `python/tests/installed/installed_run_report.py::test_fatal_check_saves_only_the_report_and_keeps_original_issues`, `rust/crates/yamaa-adapters/tests/specification_sources.rs::verification_declarations_preserve_completed_prefix_and_phase_precedence`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::an_intermediate_warning_needs_a_report_file`.
+Evidence: `schema-adsl-age-quality`, `schema-verification-log`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/preflight.json::a_warning_verification_needs_a_report_file`, `python/tests/installed/installed_run_report.py::test_fatal_check_saves_only_the_report_and_keeps_original_issues`, `rust/crates/yamaa-adapters/tests/specification_sources.rs::verification_declarations_preserve_completed_prefix_and_phase_precedence`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/run_report.json::an_intermediate_warning_needs_a_report_file`.
 
 A specification declaring a `warning` without `output.report` fails validation
 with `missing_report`, a `warning` on an intermediate's `unique`
@@ -440,7 +440,7 @@ registration order, zero counts included; one `column` row per output column in
 evaluated check in execution order. An intermediate's `error` checks have no
 row, and a check a stopped run never reached has none.
 
-Evidence: `schema-verification-log`, `schema-row-count-fractions`, `schema-lookup-intermediate-unique-warning`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::intermediate_warning_checks_lead_the_check_rows_in_declaration_order`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::failed_runs_report_the_prefix_they_reached_and_no_columns`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::handler_rows_register_every_path_at_zero_in_one_order`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::a_row_template_s_handler_rows_name_their_column_and_cite_their_surface_s_rule`.
+Evidence: `schema-verification-log`, `schema-row-count-fractions`, `schema-lookup-intermediate-unique-warning`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/run_report.json::intermediate_warning_checks_lead_the_check_rows_in_declaration_order`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/run_report.json::failed_runs_report_the_prefix_they_reached_and_no_columns`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/run_report.json::handler_rows_register_every_path_at_zero_in_one_order`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/run_report.json::a_row_template_s_handler_rows_name_their_column_and_cite_their_surface_s_rule`.
 
 `SPEC_PATH` names each row's stable specification item and is unique within
 the report:
@@ -485,7 +485,7 @@ those [Values](values.md) types. A kind leaves missing each column the table
 gives it no value for. The report carries no version and no timestamp: the
 same specification and inputs give the same report bytes.
 
-Evidence: `schema-verification-log`, `schema-parquet`, `schema-adsl-age-quality`, `schema-row-count-fractions`, `schema-not-missing-share`, `schema-lookup-intermediate-unique-warning`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::date_and_time_data_types_check_each_completed_value_against_their_form`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::a_row_template_s_handler_rows_name_their_column_and_cite_their_surface_s_rule`.
+Evidence: `schema-verification-log`, `schema-parquet`, `schema-adsl-age-quality`, `schema-row-count-fractions`, `schema-not-missing-share`, `schema-lookup-intermediate-unique-warning`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::date_and_time_data_types_check_each_completed_value_against_their_form`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/run_report.json::a_row_template_s_handler_rows_name_their_column_and_cite_their_surface_s_rule`.
 
 | Column | Type | Value |
 |---|---|---|

@@ -13,7 +13,7 @@ use yamaa_core::{
     table::{Column, TableSchema},
 };
 
-pub(super) const FILES: &[File] = &[fixture!("result_types.json")];
+pub(super) const FILES: &[File] = &[fixture!("compiler.json"), fixture!("result_types.json")];
 
 pub(super) fn run(operation: &str, input: &Json) -> Option<Vec<Diagnostic>> {
     Some(match operation {

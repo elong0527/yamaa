@@ -1,30 +1,49 @@
 {
-  "about": "The schema language's own findings in a pass over a document or a layer (SCHEMA-7, SCHEMA-12, SCHEMA-13, SCHEMA-15, EXPR-7, VALUE-1, TIME-10, LAYER-4, LAYER-9, WINDOW-1). Each case's schema is one module, schema.yaml, whose entry class is root_class. Most cases find each finding by its cause among those the pass reports; a value that fails a descriptor's values, pattern and minimum length reports exactly those three findings, in the order constraints are checked (values, pattern, minimum length, then exact size). Both compare each finding as its phase, condition, rule and path. A long form restating its shorthand and a layer's covering clear entry are the pass's one finding, compared whole.",
+  "about": "The schema language's own findings in a pass over a complete document or a layer (SCHEMA-5, SCHEMA-7, SCHEMA-9, SCHEMA-12, SCHEMA-13, SCHEMA-15, EXPR-7, VALUE-1, TIME-10, LAYER-4, LAYER-9, WINDOW-1). Each case's schema is one module, schema.yaml, whose entry class is root_class. `schema_document` reads a complete document as an author wrote it, a list member named by the text of its `name` or `id` and otherwise by a rendering of what it holds; `schema_layer` reads a layer, inside each member of a keyed collection (`input`, `windows`, `columns`, `rows`, `intermediates`) as a fragment whose requiredness waits for the resolved specification. A case that names both operations states that a fragment reports what the complete document reports. A case compares a complete list where its source stated every finding, and otherwise finds each finding by its cause among those the pass reports; its rows compare phase, condition, rule and path, with the context or the `expected` of the context where its source stated them. A value that fails a descriptor's values, pattern and minimum length reports exactly those three findings, in the order constraints are checked (values, pattern, minimum length, then exact size). The rows from the Rust tests of schema_validation.rs and schema_references.rs keep those tests' paths, conditions and context; each phase is the registry's (yaml/conditions.yaml) and each rule the one the cause cites in the condition table.",
   "cases": [
     {
-      "case": "a_class_value_refuses_a_wrong_type_and_an_undeclared_field",
+      "case": "classes_keep_schema_then_input_order_in_a_complete_document",
       "operation": "schema_document",
       "input": {
-        "schema": {"schema.yaml": {"version": "1.0", "root_class": [{"needed": {"type": "int", "required": true}}]}},
-        "document": {"needed": true, "extra": "x"}
+        "schema": {"schema.yaml": {"version": "1.0", "root_class": [{"yamaa": {"type": "str"}}, {"needed": {"type": "str", "required": true}}, {"count": {"type": "int"}}]}},
+        "document": {"unknown": null, "count": true, "yamaa": "1.0"}
       },
       "compares": ["phase", "condition", "rule", "spec_paths"],
-      "among": true,
       "issues": [
-        {"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["needed"]},
-        {"phase": "validation", "condition": "unknown_field", "rule": "SCHEMA-13", "spec_paths": ["extra"]}
+        {"phase": "validation", "condition": "missing_required_field", "rule": "SCHEMA-13", "spec_paths": ["needed"]},
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["count"]},
+        {"phase": "validation", "condition": "unknown_field", "rule": "SCHEMA-13", "spec_paths": ["unknown"]}
       ]
     },
     {
-      "case": "a_class_value_that_omits_a_required_field_is_missing_it",
+      "case": "a_class_field_of_the_wrong_type_names_the_type_it_expects",
       "operation": "schema_document",
       "input": {
-        "schema": {"schema.yaml": {"version": "1.0", "root_class": [{"needed": {"type": "int", "required": true}}]}},
-        "document": {"extra": "x"}
+        "schema": {"schema.yaml": {"version": "1.0", "root_class": [{"yamaa": {"type": "str"}}, {"needed": {"type": "str", "required": true}}, {"count": {"type": "int"}}]}},
+        "document": {"needed": "x", "count": true, "yamaa": "1.0"}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.expected"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["count"], "context": {"expected": "int"}}]
+    },
+    {
+      "case": "a_complete_document_whose_root_is_null_is_refused_at_its_root",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {"version": "1.0", "root_class": [{"yamaa": {"type": "str"}}, {"needed": {"type": "str", "required": true}}, {"count": {"type": "int"}}]}},
+        "document": null
       },
       "compares": ["phase", "condition", "rule", "spec_paths"],
-      "among": true,
-      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "SCHEMA-13", "spec_paths": ["needed"]}]
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["$"]}]
+    },
+    {
+      "case": "a_complete_document_whose_root_is_a_list_is_refused_at_its_root",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {"version": "1.0", "root_class": [{"yamaa": {"type": "str"}}, {"needed": {"type": "str", "required": true}}, {"count": {"type": "int"}}]}},
+        "document": []
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["$"]}]
     },
     {
       "case": "a_written_long_form_holding_only_its_shorthand_s_field_restates_it",
@@ -41,20 +60,49 @@
       "issues": [{"phase": "validation", "condition": "redundant_long_form", "rule": "SCHEMA-15", "spec_paths": ["item"], "context": {"field": "name", "shorthand": "DM"}}]
     },
     {
+      "case": "a_registry_value_naming_one_keyword_with_its_payload_is_admitted",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"derive": {"type": "derivation"}}],
+          "derivation": {"type": ["str", "expression"]},
+          "expression": {"registry": "operations"},
+          "operations": {"source": {"type": "str"}, "literal": {"type": "int"}}
+        }},
+        "document": {"derive": {"literal": 4}}
+      },
+      "issues": []
+    },
+    {
+      "case": "a_derivation_s_source_long_form_restates_the_bare_string_source",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"derive": {"type": "derivation"}}],
+          "derivation": {"type": ["str", "expression"]},
+          "expression": {"registry": "operations"},
+          "operations": {"source": {"type": "str"}, "literal": {"type": "int"}}
+        }},
+        "document": {"derive": {"source": "DM.AGE"}}
+      },
+      "issues": [{"phase": "validation", "condition": "redundant_long_form", "rule": "SCHEMA-15", "spec_paths": ["derive"], "context": {"field": "source", "shorthand": "DM.AGE"}}]
+    },
+    {
       "case": "a_registry_value_naming_no_keyword_declares_no_operation",
       "operation": "schema_document",
       "input": {
         "schema": {"schema.yaml": {
           "version": "1.0",
-          "root_class": [{"derive": {"type": "derivation", "required": false}}],
+          "root_class": [{"derive": {"type": "derivation"}}],
           "derivation": {"type": ["str", "expression"]},
           "expression": {"registry": "operations"},
-          "operations": {"literal": {"type": "int"}}
+          "operations": {"source": {"type": "str"}, "literal": {"type": "int"}}
         }},
         "document": {"derive": {}}
       },
       "compares": ["phase", "condition", "rule", "spec_paths"],
-      "among": true,
       "issues": [{"phase": "validation", "condition": "invalid_operation_count", "rule": "SCHEMA-7", "spec_paths": ["derive"]}]
     },
     {
@@ -63,35 +111,263 @@
       "input": {
         "schema": {"schema.yaml": {
           "version": "1.0",
-          "root_class": [{"derive": {"type": "derivation", "required": false}}],
+          "root_class": [{"derive": {"type": "derivation"}}],
           "derivation": {"type": ["str", "expression"]},
           "expression": {"registry": "operations"},
-          "operations": {"literal": {"type": "int"}}
+          "operations": {"source": {"type": "str"}, "literal": {"type": "int"}}
         }},
-        "document": {"derive": {"absent": 1}}
+        "document": {"derive": {"absent": null}}
       },
       "compares": ["phase", "condition", "rule", "spec_paths"],
-      "among": true,
       "issues": [{"phase": "validation", "condition": "unknown_operation", "rule": "SCHEMA-7", "spec_paths": ["derive.absent"]}]
     },
     {
-      "case": "a_case_holding_only_its_otherwise_member_is_refused_under_expr_7",
+      "case": "a_union_value_that_a_member_admits_and_a_nested_recursive_value_are_admitted",
       "operation": "schema_document",
       "input": {
         "schema": {"schema.yaml": {
           "version": "1.0",
-          "root_class": [{"derive": {"type": "expression", "required": false}}],
-          "expression": {"registry": "expressions"},
-          "expressions": {"case": {"type": "list[case_item_class]"}},
-          "case_item_class": {"type": ["case_branch_class", "case_otherwise_class"]},
-          "case_branch_class": [{"when": {"type": "str", "required": true}}, {"then": {"type": "int", "required": true}}],
-          "case_otherwise_class": [{"otherwise": {"type": "int", "required": true}}]
+          "root_class": [{"choice": {"type": ["int", "record"]}}, {"tree": {"type": "tree_value"}}],
+          "record": [{"id": {"type": "str", "required": true}}],
+          "tree_value": {"type": ["tree_value", "tree_branch", "str"]},
+          "tree_branch": {"type": "list[tree_value]"}
         }},
-        "document": {"derive": {"case": [{"otherwise": 0}]}}
+        "document": {"choice": 1, "tree": ["leaf", ["nested"]]}
+      },
+      "issues": []
+    },
+    {
+      "case": "a_union_reports_inside_the_class_member_whose_outer_type_a_mapping_matches",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"choice": {"type": ["int", "record"]}}, {"tree": {"type": "tree_value"}}],
+          "record": [{"id": {"type": "str", "required": true}}],
+          "tree_value": {"type": ["tree_value", "tree_branch", "str"]},
+          "tree_branch": {"type": "list[tree_value]"}
+        }},
+        "document": {"choice": {}}
       },
       "compares": ["phase", "condition", "rule", "spec_paths"],
-      "among": true,
-      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "EXPR-7", "spec_paths": ["derive.case"]}]
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "SCHEMA-13", "spec_paths": ["choice.id"]}]
+    },
+    {
+      "case": "a_union_value_of_no_member_s_outer_type_is_refused_expecting_its_first_member",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"choice": {"type": ["int", "record"]}}, {"tree": {"type": "tree_value"}}],
+          "record": [{"id": {"type": "str", "required": true}}],
+          "tree_value": {"type": ["tree_value", "tree_branch", "str"]},
+          "tree_branch": {"type": "list[tree_value]"}
+        }},
+        "document": {"choice": false}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.expected"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["choice"], "context": {"expected": "int"}}]
+    },
+    {
+      "case": "a_recursive_union_reports_the_nested_value_it_refuses_where_it_is_written",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"choice": {"type": ["int", "record"]}}, {"tree": {"type": "tree_value"}}],
+          "record": [{"id": {"type": "str", "required": true}}],
+          "tree_value": {"type": ["tree_value", "tree_branch", "str"]},
+          "tree_branch": {"type": "list[tree_value]"}
+        }},
+        "document": {"tree": ["leaf", [true]]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.expected"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["tree[1][0]"], "context": {"expected": "tree_value"}}]
+    },
+    {
+      "case": "union_reports_inside_the_member_declaring_the_written_keys",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"derive": {"type": "derivation"}}],
+          "derivation": {"type": ["str", "expression", "handled_expression_class"]},
+          "handled_expression_class": [{"value": {"type": "expression", "required": true}}, {"unconvertible": {"type": "int"}}],
+          "expression": {"registry": "operations"},
+          "operations": {"source": {"type": "str"}, "literal": {"type": "int"}}
+        }},
+        "document": {"derive": {"value": {"literal": "x"}, "unconvertible": 0}}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["derive.value.literal"]}]
+    },
+    {
+      "case": "a_typed_intermediate_derivation_reports_inside_the_binding_class_declaring_its_keys",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"binding": {"type": "intermediate_derivation"}}],
+          "intermediate_derivation": {"type": ["untyped_intermediate_derivation", "intermediate_binding_class"]},
+          "untyped_intermediate_derivation": {"type": ["str", "expression", "intermediate_expression_class"]},
+          "intermediate_expression_class": [{"value": {"type": "expression", "required": true}}],
+          "intermediate_binding_class": [{"type": {"type": "str", "required": true}}, {"derivation": {"type": "untyped_intermediate_derivation", "required": true}}, {"unconvertible": {"type": "int"}}],
+          "expression": {"registry": "operations"},
+          "operations": {"source": {"type": "str"}, "literal": {"type": "int"}}
+        }},
+        "document": {"binding": {"type": "str", "derivation": {"literal": "x"}}}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["binding.derivation.literal"]}]
+    },
+    {
+      "case": "a_union_mapping_that_writes_no_key_keeps_the_registry_s_operation_count",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"derive": {"type": "derivation"}}],
+          "derivation": {"type": ["str", "expression", "handled_expression_class"]},
+          "handled_expression_class": [{"value": {"type": "expression", "required": true}}, {"unconvertible": {"type": "int"}}],
+          "expression": {"registry": "operations"},
+          "operations": {"source": {"type": "str"}, "literal": {"type": "int"}}
+        }},
+        "document": {"derive": {}}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "invalid_operation_count", "rule": "SCHEMA-7", "spec_paths": ["derive"]}]
+    },
+    {
+      "case": "a_union_mapping_whose_key_no_member_declares_keeps_the_registry_s_unknown_operation",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"derive": {"type": "derivation"}}],
+          "derivation": {"type": ["str", "expression", "handled_expression_class"]},
+          "handled_expression_class": [{"value": {"type": "expression", "required": true}}, {"unconvertible": {"type": "int"}}],
+          "expression": {"registry": "operations"},
+          "operations": {"source": {"type": "str"}, "literal": {"type": "int"}}
+        }},
+        "document": {"derive": {"absent": null}}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "unknown_operation", "rule": "SCHEMA-7", "spec_paths": ["derive.absent"]}]
+    },
+    {
+      "case": "case_otherwise_reports_inside_the_otherwise_member",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"derive": {"type": "expression"}}],
+          "expression": {"registry": "expressions"},
+          "expressions": {"case": {"type": "list[case_item_class]"}, "literal": {"type": "int"}},
+          "case_item_class": {"type": ["case_branch_class", "case_otherwise_class"]},
+          "case_branch_class": [{"when": {"type": "str", "required": true}}, {"then": {"type": "case_result", "required": true}}],
+          "case_otherwise_class": [{"otherwise": {"type": "case_result", "required": true}}],
+          "case_result": {"type": ["int", "expression"]}
+        }},
+        "document": {"derive": {"case": [{"when": "AGE >= 65", "then": 1}, {"otherwise": {"literal": "x"}}]}}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["derive.case[1].otherwise.literal"]}]
+    },
+    {
+      "case": "a_case_list_of_branches_ending_in_at_most_one_otherwise_is_admitted",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"columns": {"type": "list[record]"}}],
+          "record": [{"name": {"type": "str", "required": true}}, {"derive": {"type": "expression"}}],
+          "expression": {"registry": "expressions"},
+          "expressions": {"case": {"type": "list[case_item_class]"}, "literal": {"type": "int"}},
+          "case_item_class": {"type": ["case_branch_class", "case_otherwise_class"]},
+          "case_branch_class": [{"when": {"type": "str", "required": true}}, {"then": {"type": "case_result", "required": true}}],
+          "case_otherwise_class": [{"otherwise": {"type": "case_result", "required": true}}],
+          "case_result": {"type": ["int", "expression"]}
+        }},
+        "document": {"columns": [
+          {"name": "A", "derive": {"case": [{"when": "AGE >= 65", "then": 1}, {"otherwise": 0}]}},
+          {"name": "B", "derive": {"case": [{"when": "AGE >= 65", "then": 1}]}},
+          {"name": "C", "derive": {"case": [{"when": "AGE >= 65", "then": 1}, {"when": "AGE >= 65", "then": 2}, {"otherwise": 0}]}}
+        ]}
+      },
+      "issues": []
+    },
+    {
+      "case": "a_case_list_without_a_branch_or_with_an_otherwise_before_its_end_is_refused_under_expr_7",
+      "operation": ["schema_document", "schema_layer"],
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"columns": {"type": "list[record]"}}],
+          "record": [{"name": {"type": "str", "required": true}}, {"derive": {"type": "expression"}}],
+          "expression": {"registry": "expressions"},
+          "expressions": {"case": {"type": "list[case_item_class]"}, "literal": {"type": "int"}},
+          "case_item_class": {"type": ["case_branch_class", "case_otherwise_class"]},
+          "case_branch_class": [{"when": {"type": "str", "required": true}}, {"then": {"type": "case_result", "required": true}}],
+          "case_otherwise_class": [{"otherwise": {"type": "case_result", "required": true}}],
+          "case_result": {"type": ["int", "expression"]}
+        }},
+        "document": {"columns": [
+          {"name": "A", "derive": {"case": [{"otherwise": 0}]}},
+          {"name": "B", "derive": {"case": []}},
+          {"name": "C", "derive": {"case": [{"otherwise": 0}, {"when": "AGE >= 65", "then": 1}]}},
+          {"name": "D", "derive": {"case": [{"when": "AGE >= 65", "then": 1}, {"otherwise": 0}, {"otherwise": 2}]}},
+          {"name": "E", "derive": {"case": [{"otherwise": 0}, {"otherwise": 2}]}},
+          {"name": "F", "derive": {"case": [{"when": "AGE >= 65", "then": {"case": [{"otherwise": 1}]}}, {"otherwise": 0}]}}
+        ]}
+      },
+      "issues": [
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "EXPR-7", "spec_paths": ["columns.A.derive.case"], "context": {"expected": "at least one when/then item"}},
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "EXPR-7", "spec_paths": ["columns.B.derive.case"], "context": {"expected": "at least one when/then item"}},
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "EXPR-7", "spec_paths": ["columns.C.derive.case[0]"], "context": {"expected": "otherwise only as the last item"}},
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "EXPR-7", "spec_paths": ["columns.D.derive.case[1]"], "context": {"expected": "otherwise only as the last item"}},
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "EXPR-7", "spec_paths": ["columns.E.derive.case"], "context": {"expected": "at least one when/then item"}},
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "EXPR-7", "spec_paths": ["columns.E.derive.case[0]"], "context": {"expected": "otherwise only as the last item"}},
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "EXPR-7", "spec_paths": ["columns.F.derive.case[0].then.case"], "context": {"expected": "at least one when/then item"}}
+      ]
+    },
+    {
+      "case": "a_case_item_s_own_finding_comes_before_and_instead_of_the_order_rule",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"columns": {"type": "list[record]"}}],
+          "record": [{"name": {"type": "str", "required": true}}, {"derive": {"type": "expression"}}],
+          "expression": {"registry": "expressions"},
+          "expressions": {"case": {"type": "list[case_item_class]"}, "literal": {"type": "int"}},
+          "case_item_class": {"type": ["case_branch_class", "case_otherwise_class"]},
+          "case_branch_class": [{"when": {"type": "str", "required": true}}, {"then": {"type": "case_result", "required": true}}],
+          "case_otherwise_class": [{"otherwise": {"type": "case_result", "required": true}}],
+          "case_result": {"type": ["int", "expression"]}
+        }},
+        "document": {"columns": [{"name": "A", "derive": {"case": [{"otherwise": "N"}]}}]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.A.derive.case[0].otherwise"]}]
+    },
+    {
+      "case": "a_like_named_case_entry_of_another_registry_is_not_held_to_expr_7",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"columns": {"type": "list[record]"}}],
+          "record": [{"name": {"type": "str", "required": true}}, {"derive": {"type": "expression"}}],
+          "expression": {"registry": "operations"},
+          "operations": {"case": {"type": "list[case_item_class]"}, "literal": {"type": "int"}},
+          "case_item_class": {"type": ["case_branch_class", "case_otherwise_class"]},
+          "case_branch_class": [{"when": {"type": "str", "required": true}}, {"then": {"type": "case_result", "required": true}}],
+          "case_otherwise_class": [{"otherwise": {"type": "case_result", "required": true}}],
+          "case_result": {"type": ["int", "expression"]}
+        }},
+        "document": {"columns": [{"name": "A", "derive": {"case": [{"otherwise": 0}]}}]}
+      },
+      "issues": []
     },
     {
       "case": "a_descriptor_s_values_pattern_and_minimum_length_each_refuse_under_schema_12",
@@ -120,7 +396,7 @@
           "root_class": [{"v": {"type": "column_type", "required": false}}],
           "column_type": {"type": "str", "values": ["OK", "OK"], "pattern": "[A-Z]+", "min_length": 2}
         }},
-        "document": {"v": "x"}
+        "document": {"v": "\u00e9"}
       },
       "compares": ["phase", "condition", "rule", "spec_paths"],
       "issues": [
@@ -210,6 +486,117 @@
       "issues": [{"phase": "validation", "condition": "invalid_size", "rule": "SCHEMA-12", "spec_paths": ["v"]}]
     },
     {
+      "case": "a_constrained_value_of_the_wrong_type_is_refused_by_its_type_alone",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"kind": {"type": "column_type"}}, {"number": {"type": "float"}}],
+          "column_type": {"type": "str", "values": ["ok"], "pattern": "[A-Z]+", "min_length": 2}
+        }},
+        "document": {"kind": true}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["kind"]}]
+    },
+    {
+      "case": "a_float_field_admits_an_integer_beyond_the_exact_range_of_a_float",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"kind": {"type": "column_type"}}, {"number": {"type": "float"}}],
+          "column_type": {"type": "str", "values": ["ok"], "pattern": "[A-Z]+", "min_length": 2}
+        }},
+        "document": {"number": 99999999999999999999999999999999999999999999999999}
+      },
+      "issues": []
+    },
+    {
+      "case": "a_float_field_refuses_a_boolean",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [{"kind": {"type": "column_type"}}, {"number": {"type": "float"}}],
+          "column_type": {"type": "str", "values": ["ok"], "pattern": "[A-Z]+", "min_length": 2}
+        }},
+        "document": {"number": false}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["number"]}]
+    },
+    {
+      "case": "a_complete_document_requires_the_required_field_of_a_list_member",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {"version": "1.0", "root_class": [{"columns": {"type": "list[record]"}}], "record": [{"name": {"type": "str"}}, {"id": {"type": "int", "required": true}}]}},
+        "document": {"columns": [{"name": "DM"}]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "SCHEMA-13", "spec_paths": ["columns.DM.id"]}]
+    },
+    {
+      "case": "fragments_suppress_nested_requiredness_but_keep_type_and_unknown_field_checks",
+      "operation": "schema_layer",
+      "input": {
+        "schema": {"schema.yaml": {"version": "1.0", "root_class": [{"columns": {"type": "list[record]"}}], "record": [{"name": {"type": "str"}}, {"id": {"type": "int", "required": true}}]}},
+        "document": {"columns": [{"name": "DM"}]}
+      },
+      "issues": []
+    },
+    {
+      "case": "a_fragment_keeps_the_type_and_unknown_field_findings_of_a_complete_document",
+      "operation": ["schema_document", "schema_layer"],
+      "input": {
+        "schema": {"schema.yaml": {"version": "1.0", "root_class": [{"columns": {"type": "list[record]"}}], "record": [{"name": {"type": "str"}}, {"id": {"type": "int", "required": true}}]}},
+        "document": {"columns": [{"name": "DM", "extra": null, "id": false}]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.DM.id"]},
+        {"phase": "validation", "condition": "unknown_field", "rule": "SCHEMA-13", "spec_paths": ["columns.DM.extra"]}
+      ]
+    },
+    {
+      "case": "malformed_compound_names_and_ids_remain_ordered_validation_findings",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {"version": "1.0", "root_class": [{"items": {"type": "list[record]"}}], "record": [{"name": {"type": "str"}}, {"id": {"type": "int"}}]}},
+        "document": {"items": [
+          {"name": ["DM", 2, true, null, -0.0]},
+          {"id": {"inner": ["value"]}},
+          {"name": [], "id": 10}
+        ]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.expected"],
+      "issues": [
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["items.['DM', 2, True, None, -0.0].name"], "context": {"expected": "str"}},
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["items.{'inner': ['value']}.id"], "context": {"expected": "int"}},
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["items.[].name"], "context": {"expected": "str"}}
+      ]
+    },
+    {
+      "case": "compound_path_quotes_escape_only_the_required_characters_without_normalization",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {"version": "1.0", "root_class": [{"items": {"type": "list[record]"}}], "record": [{"name": {"type": "str"}}]}},
+        "document": {"items": [{"name": ["single'quote", "both'\"quotes", "\\\n\r\t\u0000", "\u00e9 e\u0301 \ud83d\ude00", "\u00a0\u2028\u202e\ue000\u0378\udbff\udfff"]}]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["items.[\"single'quote\", 'both\\'\"quotes', '\\\\\\n\\r\\t\\x00', '\u00e9 e\u0301 \ud83d\ude00', '\\xa0\\u2028\\u202e\\ue000\\u0378\\U0010ffff'].name"]}]
+    },
+    {
+      "case": "invalid_compound_labels_keep_the_complete_authored_path",
+      "operation": "schema_document",
+      "input": {
+        "schema": {"schema.yaml": {"version": "1.0", "root_class": [{"items": {"type": "list[record]"}}], "record": [{"name": {"type": "str"}}]}},
+        "document": {"items": [{"name": ["oversized-label"]}]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["items.['oversized-label'].name"]}]
+    },
+    {
       "case": "a_layer_clear_entry_that_covers_an_earlier_entry_is_refused_naming_the_field_it_ends_at",
       "operation": "schema_layer",
       "input": {
@@ -238,6 +625,99 @@
       "compares": ["phase", "condition", "rule", "spec_paths"],
       "among": true,
       "issues": [{"phase": "validation", "condition": "duplicate_identifier", "rule": "LAYER-4", "spec_paths": ["columns.X.name"]}]
+    },
+    {
+      "case": "collects_all_field_errors_in_schema_order_before_normalization",
+      "operation": "schema_layer",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [
+            {"yamaa": {"type": "str", "required": false}}, {"type": {"type": "str", "required": false}}, {"parent": {"type": "str", "required": false}},
+            {"input": {"type": "dict[identifier, dataset_source]", "required": false}}, {"columns": {"type": "list[column_class]", "required": false}},
+            {"rows": {"type": "list[row_class]", "required": false}}, {"intermediates": {"type": "list[intermediate_class]", "required": false}},
+            {"settings": {"type": "options_class", "required": false}}, {"output": {"type": "str", "required": true}}
+          ],
+          "identifier": {"type": "str"},
+          "project_path": {"type": "str"},
+          "dataset_source": {"type": ["project_path", "dataset_class"]},
+          "column_type": {"type": "str"},
+          "column_class": [{"name": {"type": "str", "required": true}}, {"type": {"type": "column_type", "required": true}}, {"label": {"type": "str", "required": false}}, {"options": {"type": "options_class", "required": false}}],
+          "dataset_class": [{"path": {"type": "project_path", "required": true}}, {"options": {"type": "options_class", "required": false}}],
+          "row_class": [{"id": {"type": "str", "required": true}}, {"options": {"type": "options_class", "required": false}}],
+          "intermediate_class": [{"id": {"type": "str", "required": true}}, {"options": {"type": "options_class", "required": false}}],
+          "options_class": [{"needed": {"type": "str", "required": true}}, {"defaulted": {"type": "str", "default": "DEFAULT"}}]
+        }},
+        "document": {"yamaa": "1.0", "type": "spec", "columns": [{"label": 2, "name": "X", "type": 1}]}
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context.expected"],
+      "issues": [
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.X.type"], "context": {"expected": "column_type"}},
+        {"phase": "validation", "condition": "invalid_field_type", "rule": "SCHEMA-12", "spec_paths": ["columns.X.label"], "context": {"expected": "str"}}
+      ]
+    },
+    {
+      "case": "keyed_member_fragments_defer_nested_requiredness_but_root_values_do_not",
+      "operation": "schema_layer",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [
+            {"yamaa": {"type": "str", "required": false}}, {"type": {"type": "str", "required": false}}, {"parent": {"type": "str", "required": false}},
+            {"input": {"type": "dict[identifier, dataset_source]", "required": false}}, {"columns": {"type": "list[column_class]", "required": false}},
+            {"rows": {"type": "list[row_class]", "required": false}}, {"intermediates": {"type": "list[intermediate_class]", "required": false}},
+            {"settings": {"type": "options_class", "required": false}}, {"output": {"type": "str", "required": true}}
+          ],
+          "identifier": {"type": "str"},
+          "project_path": {"type": "str"},
+          "dataset_source": {"type": ["project_path", "dataset_class"]},
+          "column_type": {"type": "str"},
+          "column_class": [{"name": {"type": "str", "required": true}}, {"type": {"type": "column_type", "required": true}}, {"label": {"type": "str", "required": false}}, {"options": {"type": "options_class", "required": false}}],
+          "dataset_class": [{"path": {"type": "project_path", "required": true}}, {"options": {"type": "options_class", "required": false}}],
+          "row_class": [{"id": {"type": "str", "required": true}}, {"options": {"type": "options_class", "required": false}}],
+          "intermediate_class": [{"id": {"type": "str", "required": true}}, {"options": {"type": "options_class", "required": false}}],
+          "options_class": [{"needed": {"type": "str", "required": true}}, {"defaulted": {"type": "str", "default": "DEFAULT"}}]
+        }},
+        "document": {
+          "yamaa": "1.0", "type": "spec",
+          "input": {"SRC": {"options": {}}},
+          "columns": [{"name": "X", "options": {}}],
+          "rows": [{"id": "R", "options": {}}],
+          "intermediates": [{"id": "I", "options": {}}],
+          "settings": {}
+        }
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "missing_required_field", "rule": "SCHEMA-13", "spec_paths": ["settings.needed"]}]
+    },
+    {
+      "case": "a_dataset_mapping_holding_only_its_path_restates_the_path_shorthand",
+      "operation": "schema_layer",
+      "input": {
+        "schema": {"schema.yaml": {
+          "version": "1.0",
+          "root_class": [
+            {"yamaa": {"type": "str", "required": false}}, {"type": {"type": "str", "required": false}}, {"parent": {"type": "str", "required": false}},
+            {"input": {"type": "dict[identifier, dataset_source]", "required": false}}, {"columns": {"type": "list[column_class]", "required": false}},
+            {"rows": {"type": "list[row_class]", "required": false}}, {"intermediates": {"type": "list[intermediate_class]", "required": false}},
+            {"settings": {"type": "options_class", "required": false}}, {"output": {"type": "str", "required": true}}
+          ],
+          "identifier": {"type": "str"},
+          "project_path": {"type": "str"},
+          "dataset_source": {"type": ["project_path", "dataset_class"]},
+          "column_type": {"type": "str"},
+          "column_class": [{"name": {"type": "str", "required": true}}, {"type": {"type": "column_type", "required": true}}, {"label": {"type": "str", "required": false}}, {"options": {"type": "options_class", "required": false}}],
+          "dataset_class": [{"path": {"type": "project_path", "required": true}}, {"options": {"type": "options_class", "required": false}}],
+          "row_class": [{"id": {"type": "str", "required": true}}, {"options": {"type": "options_class", "required": false}}],
+          "intermediate_class": [{"id": {"type": "str", "required": true}}, {"options": {"type": "options_class", "required": false}}],
+          "options_class": [{"needed": {"type": "str", "required": true}}, {"defaulted": {"type": "str", "default": "DEFAULT"}}]
+        }},
+        "document": {
+          "yamaa": "1.0", "type": "spec",
+          "input": {"DM": {"path": "dm.csv"}, "AE": {"path": "ae.csv", "options": {"needed": "yes"}}, "LB": "lb.csv"}
+        }
+      },
+      "issues": [{"phase": "validation", "condition": "redundant_long_form", "rule": "SCHEMA-15", "spec_paths": ["input.DM"], "context": {"field": "path", "shorthand": "dm.csv"}}]
     },
     {
       "case": "a_window_reference_that_names_no_definition_is_unknown",
