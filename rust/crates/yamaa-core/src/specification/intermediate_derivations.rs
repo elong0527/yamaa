@@ -123,6 +123,8 @@ pub(super) struct Lookup<'a> {
     pub declarations: &'a [Derivation],
     pub dataset: &'a str,
     pub stored: &'a TableSchema,
+    /// Each stored field's kind, where the schema source decides it.
+    pub stored_kinds: &'a [Option<ColumnType>],
     pub stored_available: Option<&'a [usize]>,
 }
 
@@ -153,14 +155,12 @@ fn resolve_field_kinds(
         previous,
         ..
     } = cx;
-    let binder::Inputs {
-        sources, schemas, ..
-    } = inputs;
     let Lookup {
         reader,
         declarations,
         dataset,
         stored,
+        stored_kinds,
         ..
     } = lookup;
     let scope = tree.donor(reader)?;
@@ -179,7 +179,7 @@ fn resolve_field_kinds(
                     .position(|column| column.name == field)
                     .map_or(ResultType::UNKNOWN, |column| {
                         if column < stored.columns().len() {
-                            fields[column].kind.into()
+                            ResultType::declared(stored_kinds[column])
                         } else {
                             field_types
                                 .get(column - stored.columns().len())
@@ -191,21 +191,14 @@ fn resolve_field_kinds(
                 ResultType::declared(previous.get(index).and_then(Option::as_ref).and_then(
                     |item| {
                         let column = item.source_column(&original_secondary, field)?;
-                        item.source_kind(&original_secondary, column)
+                        inputs.source_kind(item, &original_secondary, column)
                     },
                 ))
             } else {
                 ResultType::declared(
-                    sources
-                        .iter()
-                        .position(|source| source.name == owner)
-                        .and_then(|index| {
-                            schemas[index]
-                                .columns()
-                                .iter()
-                                .find(|column| column.name == field)
-                        })
-                        .map(|column| column.kind),
+                    inputs
+                        .schema(owner)
+                        .and_then(|schema| schema.kind(schema.position(field)?)),
                 )
             }
         };
@@ -219,7 +212,16 @@ fn resolve_field_kinds(
             finding.text("identifier", &format!("{dataset}.{}", declaration.name));
             finding.text("intermediate", reader);
             finding.text("derivation", &declaration.name);
-            findings.push(BindFinding::Lookup(finding));
+            // A donor field only read, which the input may not store, leaves
+            // the repetition undecided.
+            let finding = BindFinding::Lookup(finding);
+            findings.push(
+                if inputs.decides_through(named, dataset, &declaration.name) {
+                    finding
+                } else {
+                    BindFinding::Withheld(std::boxed::Box::new(finding))
+                },
+            );
             continue;
         }
         fields.push(Column {
@@ -271,13 +273,7 @@ fn collect_current_fields(cx: intermediates::Context<'_>, lookup: Lookup<'_>) ->
         }
         if let Some((source, column)) = sources.iter().enumerate().find_map(|(index, source)| {
             (source.name == owner)
-                .then(|| {
-                    schemas[index]
-                        .columns()
-                        .iter()
-                        .position(|column| column.name == field)
-                        .map(|column| (index, column))
-                })
+                .then(|| schemas[index].position(field).map(|column| (index, column)))
                 .flatten()
         }) {
             current.push(CurrentField {
@@ -311,7 +307,9 @@ fn build_catalog_context(
         driver,
     } = inputs;
     let Lookup {
-        dataset, stored, ..
+        dataset,
+        stored_kinds,
+        ..
     } = lookup;
     let donor = sources.iter().position(|source| source.name == dataset);
     if donor.is_none() && dataset != "SELF" {
@@ -323,8 +321,15 @@ fn build_catalog_context(
         .filter(|&(index, _)| Some(index) != donor)
         .map(|(index, source)| SecondarySource {
             name: source.name.clone(),
-            schema: schemas[index].clone(),
+            schema: schemas[index].layout().clone(),
         })
+        .collect::<Vec<_>>();
+    // The record's kinds: each stored field's, each derived field's, then
+    // each current read's.
+    let mut source_kinds = stored_kinds
+        .iter()
+        .chain(result_kinds)
+        .copied()
         .collect::<Vec<_>>();
     let mut source_fields = output.columns().to_vec();
     for (index, field) in current.iter().enumerate() {
@@ -340,8 +345,9 @@ fn build_catalog_context(
         };
         source_fields.push(Column {
             name: format!("\\0current{index}"),
-            kind: schemas[original].columns()[column].kind,
+            kind: schemas[original].layout().columns()[column].kind,
         });
+        source_kinds.push(schemas[original].kind(column));
     }
     let source = TableSchema::new(source_fields).map_err(|_| BindError::Internal)?;
     let outputs = output
@@ -349,7 +355,7 @@ fn build_catalog_context(
         .iter()
         .map(|column| reference_binding::Field {
             name: &column.name,
-            column_type: column.kind,
+            column_type: Some(column.kind),
         })
         .collect::<Vec<_>>();
     let mut dataset_fields = Vec::new();
@@ -365,7 +371,7 @@ fn build_catalog_context(
             .columns()
             .iter()
             .enumerate()
-            .map(|(index, column)| (format!("\\0slot{index}"), column.kind))
+            .map(|(index, _)| (format!("\\0slot{index}"), source_kinds[index]))
             .collect::<Vec<_>>();
         if declaration == dataset {
             for (index, column) in output.columns().iter().enumerate() {
@@ -402,22 +408,24 @@ fn build_catalog_context(
     let catalog = Catalog::compile(&outputs, &datasets)
         .map_err(BindError::Catalog)?
         .with_record_derivation()
-        .with_record_kinds(
-            stored
-                .columns()
-                .iter()
-                .map(|column| Some(column.kind))
-                .chain(result_kinds.iter().copied())
-                .collect(),
-        );
+        .with_record_kinds(stored_kinds.iter().chain(result_kinds).copied().collect());
     Ok((donor, secondary, source, catalog))
 }
 
 type EarlierSelection = (
     Vec<Option<Intermediate>>,
-    std::collections::BTreeMap<usize, String>,
+    std::collections::BTreeMap<usize, Unavailable>,
     Catalog,
 );
+
+/// The name a lookup reads that a donor record cannot answer, and whether
+/// the schemas decide that it cannot: a field the donor's input may store,
+/// which its schema leaves open, does not (#3805).
+#[derive(Clone, Debug)]
+struct Unavailable {
+    identifier: String,
+    decided: bool,
+}
 
 fn select_earlier(
     cx: intermediates::Context<'_>,
@@ -499,7 +507,7 @@ fn select_earlier(
             .map(|(column, field)| {
                 (
                     field.name.clone(),
-                    (column, item.source_kind(secondary, column)),
+                    (column, cx.inputs.source_kind(item, secondary, column)),
                 )
             })
             .collect();
@@ -542,6 +550,7 @@ pub(super) fn bind(
         dataset,
         stored,
         stored_available,
+        ..
     } = lookup;
     if declarations.is_empty() {
         return Ok(None);
@@ -585,6 +594,7 @@ pub(super) fn bind(
                 named: &contextual_names,
                 secondary: &secondary,
                 items: &earlier,
+                inputs: cx.inputs,
             },
             catalog: &catalog,
             output: &output,
@@ -656,10 +666,10 @@ pub(super) fn bind(
         output,
         rows,
         assignments,
-        stored
-            .columns()
+        lookup
+            .stored_kinds
             .iter()
-            .map(|column| Some(column.kind))
+            .copied()
             .chain(result_kinds)
             .collect(),
     )
@@ -684,9 +694,19 @@ fn donor_scope_findings(
     findings: &mut [BindFinding],
     reader: &str,
     named: &intermediates::Declarations,
-    unavailable: &BTreeMap<usize, String>,
+    unavailable: &BTreeMap<usize, Unavailable>,
 ) {
     for finding in findings {
+        // The donor's own cause replaces a withheld one, whose wording it
+        // does not keep, so it is decided.
+        if matches!(finding, BindFinding::Withheld(inner) if matches!(
+            **inner,
+            BindFinding::UnknownReference { .. }
+                | BindFinding::OutputReference { .. }
+                | BindFinding::QualifiedReference { .. }
+        )) {
+            finding.release();
+        }
         let reference = match finding {
             BindFinding::UnknownReference { path, name }
             | BindFinding::OutputReference { path, name, .. }
@@ -703,20 +723,25 @@ fn donor_scope_findings(
         };
         if let Some((path, reference)) = reference {
             if let Some((index, _)) = named.reference(reference) {
-                if let Some(identifier) = unavailable.get(&index) {
+                if let Some(missing) = unavailable.get(&index) {
                     let mut result = LookupFinding::new(
                         path,
                         crate::diagnostic::ConditionCode::IntermediateDerivationDependency,
                     );
                     result.text("intermediate", reader);
-                    result.text("identifier", identifier);
+                    result.text("identifier", &missing.identifier);
                     result.text(
                         "read",
                         reference
                             .split_once('.')
                             .map_or(reference, |(owner, _)| owner),
                     );
-                    *finding = BindFinding::Lookup(result);
+                    let result = BindFinding::Lookup(result);
+                    *finding = if missing.decided {
+                        result
+                    } else {
+                        BindFinding::Withheld(std::boxed::Box::new(result))
+                    };
                     continue;
                 }
             }
@@ -817,7 +842,7 @@ fn rebase(
     plan: DonorPlan<'_>,
     required: &std::collections::BTreeSet<usize>,
     direct: &std::collections::BTreeSet<usize>,
-    unavailable: &mut BTreeMap<usize, String>,
+    unavailable: &mut BTreeMap<usize, Unavailable>,
     catalog: &Catalog,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Vec<Option<Intermediate>>, BindError> {
@@ -849,6 +874,16 @@ fn rebase(
         }
     };
     let donor_field = |name: &str| output.columns().iter().position(|field| field.name == name);
+    // Whether `identifier`, written bare or qualified by the donor, names a
+    // field of the donor's input that its schema leaves open.
+    let open = |identifier: &str| {
+        let field = identifier
+            .strip_prefix(&format!("{donor_name}."))
+            .or_else(|| (!identifier.contains('.')).then_some(identifier));
+        field
+            .zip(donor.and_then(|donor| schemas.get(donor)))
+            .is_some_and(|(field, schema)| schema.stores(field).is_none())
+    };
     let current_field = |field: &CurrentField| -> Result<CurrentField, BindError> {
         let read = match field.read {
             CurrentRead::Record {
@@ -869,7 +904,7 @@ fn rebase(
                             .columns()
                             .iter()
                             .position(|field| {
-                                field.name == schemas[authored].columns()[column].name
+                                field.name == schemas[authored].layout().columns()[column].name
                             })
                             .ok_or(BindError::Internal)?
                     } else {
@@ -914,6 +949,10 @@ fn rebase(
             .source_schema(&original_secondary)
             .ok_or(BindError::Internal)?
             .clone();
+        let decided = |identifier: String| Unavailable {
+            decided: !open(&identifier),
+            identifier,
+        };
         let missing = item
             .current_fields()
             .find_map(|field| match field.read {
@@ -921,16 +960,19 @@ fn rebase(
                     .columns()
                     .iter()
                     .any(|field| field.name == outer.columns()[column].name))
-                .then(|| field.identifier.clone()),
+                .then(|| decided(field.identifier.clone())),
                 CurrentRead::Intermediate { index, .. } => unavailable.get(&index).cloned(),
                 // A donor read gives the donor record alone (LOOKUP-16): the
                 // record of any other input names no value of it.
                 CurrentRead::Record { source: owner, .. } => authored(owner)
                     .is_ok_and(|authored| Some(authored) != donor)
-                    .then(|| field.identifier.clone()),
+                    .then(|| Unavailable {
+                        identifier: field.identifier.clone(),
+                        decided: true,
+                    }),
                 CurrentRead::Contextual => donor_field(&field.identifier)
                     .is_none()
-                    .then(|| field.identifier.clone()),
+                    .then(|| decided(field.identifier.clone())),
             })
             .or_else(|| {
                 // A lookup a range value reads runs for the donor record too,
@@ -949,6 +991,7 @@ fn rebase(
                         )
                     })
                     .flatten()
+                    .map(decided)
             });
         if let Some(identifier) = missing {
             // Retain the unavailable name until its actual read is bound, so
@@ -1097,9 +1140,12 @@ fn rebase_keys(
                     phase: crate::reference_scope::Phase::Row { group_by: None },
                     project,
                     tree,
-                    named,
-                    secondary,
-                    intermediates: previous,
+                    donors: binder::Donors {
+                        named,
+                        secondary,
+                        items: previous,
+                        inputs,
+                    },
                 },
             )?;
             // A declaration finding already owns this refusal. Do not
@@ -1156,7 +1202,7 @@ fn rebase_keys(
                                 .columns()
                                 .iter()
                                 .position(|field| {
-                                    field.name == schemas[authored].columns()[column].name
+                                    field.name == schemas[authored].layout().columns()[column].name
                                 })
                                 .ok_or(BindError::Internal)?,
                             identifier,

@@ -2159,11 +2159,10 @@ mod project {
 
         /// A seam the case form cannot state: the table compared the first
         /// finding's condition and path and the second's `cause` alone. A
-        /// case's `compares` applies to every row, and no authored record gives
-        /// the rest of the second's context, so the test keeps both rather
-        /// than fill one in or drop it. Its out-of-range literal is the one
-        /// that `projects.json::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`
-        /// compares without its context.
+        /// case's `compares` applies to every row, so this single-call test
+        /// keeps its mixed-field assertions. The separate three-call case,
+        /// `projects.json::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`,
+        /// compares complete contexts, including this out-of-range cause.
         #[test]
         fn unknown_function_is_retained_alongside_an_invalid_scalar_in_the_same_call() {
             let spec = specification(vec![(

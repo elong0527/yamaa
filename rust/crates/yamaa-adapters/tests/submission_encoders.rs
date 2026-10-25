@@ -1,6 +1,9 @@
 //! Encoder contracts: the Define-XML document and the transport files the
 //! adapters write over a composed study, and the refusals only an encoder
-//! raises (DEFINE-24, DEFINE-25, XPT-10).
+//! raises (DEFINE-24, DEFINE-25, XPT-10). Each test calls an encoder over a
+//! study composed in memory, the seam its first comment names; the define
+//! route's cases (`fixtures/diagnostics/shared_define.json`) reach the
+//! encoders only through a project's whole composition from files (#3778).
 mod submission_encoders {
     /// Studies composed from independently authored trees, as core's
     /// composition tests compose them.
@@ -187,8 +190,11 @@ mod submission_encoders {
             &finding.context["detail"]
         }
 
-        /// DEFINE-24: a tab in a column label is refused where the label is
-        /// written, naming the label's spec path.
+        /// Seam: the Define-XML encoder's own finding over a study composed
+        /// in memory; the define route's issue for such a label is the
+        /// `public-define` host fixture's `column-label` case. DEFINE-24: a
+        /// tab in a column label is refused where the label is written,
+        /// naming the label's spec path.
         #[test]
         fn a_tab_in_generated_text_is_untransportable_at_the_field_that_holds_it() {
             let mut spec = specification();
@@ -211,8 +217,12 @@ mod submission_encoders {
             assert_eq!(finding.context.len(), 2);
         }
 
-        /// DEFINE-25: a creation time outside the schema's whole-second civil
-        /// datetime is refused before any byte is written.
+        /// Seam: the encoder's schema check over a composed study whose
+        /// creation time the define route refuses before it composes
+        /// (`shared_define.json::a_creation_date_without_its_time_is_refused`),
+        /// so no case reaches it. DEFINE-25: a creation time outside the
+        /// schema's whole-second civil datetime is refused before any byte is
+        /// written.
         #[test]
         fn a_creation_time_outside_the_schema_facet_is_a_schema_violation() {
             let empty = ct::Catalogue::admit(vec![]).unwrap();
@@ -233,7 +243,10 @@ mod submission_encoders {
             );
         }
 
-        /// DEFINE-9 and DEFINE-10: sources that cite one terminology standard
+        /// Seam: the encoder over a study composed in memory against a
+        /// catalogue admitted from in-memory sources, which a project file's
+        /// composition does not build. DEFINE-9 and DEFINE-10: sources that
+        /// cite one terminology standard
         /// share its one `def:Standard`, which each codelist bound from them
         /// references, and a source the document binds nothing from is not
         /// written.
@@ -309,7 +322,9 @@ mod submission_encoders {
 
     /// Value-level metadata as the document writes it (DEFINE-27): one
     /// value list per column, its ordered item and where-clause references,
-    /// and identifiers that survive reordering.
+    /// and identifiers that survive reordering. Each test renders a study
+    /// composed in memory from a document tree (`submission_composition`),
+    /// not a project's composition from files, which is the define route's.
     mod value_level {
         use yamaa_core::{
             front_end::v1,
@@ -570,6 +585,8 @@ mod submission_encoders {
             .unwrap()
         }
 
+        /// Seam: the encoder over a study composed in memory, as `render`
+        /// composes it.
         #[test]
         fn an_entry_label_describes_its_definition() {
             let xml = render("labelled");
@@ -580,6 +597,9 @@ mod submission_encoders {
             let item = &xml[start..start + xml[start..].find("</ItemDef>").unwrap()];
             assert!(item.contains(">Original units</TranslatedText>"));
         }
+        /// Seam: the encoder over a study composed in memory, as `render`
+        /// composes it; it also compares the order of elements of different
+        /// names, which no `select` path states.
         #[test]
         fn fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references() {
             let xml = render("valid");
@@ -617,6 +637,8 @@ mod submission_encoders {
             let item = &xml[start..start + xml[start..].find("</ItemDef>").unwrap()];
             assert!(item.find("<def:Origin ").unwrap() < item.find("<def:ValueListRef ").unwrap());
         }
+        /// Seam: the encoder over a study composed in memory, as `render`
+        /// composes it.
         #[test]
         fn several_values_are_a_membership_and_several_columns_one_range_check_each() {
             let xml = render("membership");
@@ -641,6 +663,8 @@ mod submission_encoders {
             )));
         }
 
+        /// Seam: the encoder over three studies composed in memory, as
+        /// `render` composes them.
         #[test]
         fn value_identifiers_survive_unrelated_insertion_and_entry_reordering() {
             let original = render("stable values");
@@ -664,6 +688,8 @@ mod submission_encoders {
             assert!(inserted.contains("ItemOID=\"IT.LB.LBORRESU.ALB\" OrderNumber=\"1\""));
         }
 
+        /// Seam: the encoder over a study composed in memory, as `render`
+        /// composes it.
         #[test]
         fn where_values_keep_their_text_with_xml_escaping() {
             let xml = render("escaped value");
@@ -684,6 +710,9 @@ mod submission_encoders {
             value::{ColumnType, Value},
         };
 
+        /// Seam: the transport encoder's admission over held rows, and over
+        /// a table double declaring rows enough for five billion bytes, which
+        /// no staged file holds.
         #[test]
         fn a_blank_last_row_or_a_file_past_five_billion_bytes_is_refused_before_writing() {
             let empty = ct::Catalogue::admit(vec![]).unwrap();

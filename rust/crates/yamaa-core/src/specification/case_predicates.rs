@@ -18,6 +18,11 @@ pub(super) fn retain_reference_owner(
     catalog: &Catalog,
 ) -> Result<(), BindError> {
     for finding in findings {
+        // A withheld finding keeps its cause, so it stays withheld.
+        let finding = match finding {
+            BindFinding::Withheld(inner) => &mut **inner,
+            finding => finding,
+        };
         let replacement = match finding {
             BindFinding::UnknownReference { path, name }
             | BindFinding::OutputReference {
@@ -134,6 +139,7 @@ fn implicit_predicate(
         named,
         secondary,
         items,
+        ..
     } = cx.donors;
     let start = cx.findings.len();
     let mut bindings = Vec::new();
@@ -202,20 +208,32 @@ fn implicit_predicate(
                 read,
             });
         } else {
-            if !name.contains('.') {
-                if let Some(owner) = catalog.unique_field_owner(name) {
+            // Which input stores a bare name decides its cause, so the cause is
+            // withheld unless every relation's schema decides it.
+            let decided = name.contains('.')
+                || catalog
+                    .relation_names()
+                    .all(|relation| cx.donors.decides(relation, name));
+            let finding = match catalog
+                .unique_field_owner(name)
+                .filter(|_| !name.contains('.'))
+            {
+                Some(owner) => {
                     let mut finding = LookupFinding::new(
                         plan.spec_path(),
                         crate::diagnostic::ConditionCode::PredicateUnresolvableName,
                     );
                     finding.text("identifier", name);
                     finding.text("suggestion", &format!("{owner}.{name}"));
-                    cx.findings
-                        .push(BindFinding::Predicate(finding.diagnostic()));
-                    continue;
+                    BindFinding::Predicate(finding.diagnostic())
                 }
-            }
-            cx.findings.push(unknown(plan.spec_path(), name));
+                None => unknown(plan.spec_path(), name),
+            };
+            cx.findings.push(if decided {
+                finding
+            } else {
+                BindFinding::Withheld(std::boxed::Box::new(finding))
+            });
         }
     }
     let captured = cx.captured();

@@ -1,6 +1,8 @@
 //! Admission of held Parquet framing before the general codec sees metadata.
 //! No decompression or semantic type decisions occur here.
+use super::closed_profile;
 use super::compact::{self, Sequence, Value};
+use super::format::PageType;
 use super::wire::{self, Shape};
 
 #[derive(Debug)]
@@ -285,8 +287,9 @@ pub(super) fn admit_partitioned(
                     .extend(opaque.map(|range| offset + range.start..offset + range.end));
                 let uncompressed = count(header.field(2)?)?;
                 let compressed = count(header.field(3)?)?;
-                let payload = match integer(header.field(1)?)? {
-                    0 => {
+                let kind = closed_profile::page(integer(header.field(1)?)?);
+                let payload = match kind.ok_or(Error::Malformed)? {
+                    PageType::DataPage => {
                         let detail = header.field(5)?.ok_or(Error::Malformed)?;
                         Payload::DataV1 {
                             encoding: integer(detail.field(2)?)?,
@@ -295,15 +298,15 @@ pub(super) fn admit_partitioned(
                             repetition_encoding: integer(detail.field(4)?)?,
                         }
                     }
-                    1 => Payload::Index,
-                    2 => {
+                    PageType::IndexPage => Payload::Index,
+                    PageType::DictionaryPage => {
                         let detail = header.field(7)?.ok_or(Error::Malformed)?;
                         Payload::Dictionary {
                             encoding: integer(detail.field(2)?)?,
                             values: count(detail.field(1)?)?,
                         }
                     }
-                    3 => {
+                    PageType::DataPageV2 => {
                         let detail = header.field(8)?.ok_or(Error::Malformed)?;
                         Payload::DataV2 {
                             encoding: integer(detail.field(4)?)?,
@@ -313,7 +316,6 @@ pub(super) fn admit_partitioned(
                             repetition_bytes: count(detail.field(6)?)?,
                         }
                     }
-                    _ => return Err(Error::Malformed),
                 };
                 let v2 = if matches!(payload, Payload::DataV2 { .. }) {
                     header.field(8)?

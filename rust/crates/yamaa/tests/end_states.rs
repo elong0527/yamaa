@@ -287,14 +287,13 @@ fn before_start_a_refused_partitioned_run_publishes_only_its_report() {
 /// Mid-partition, cancelled: whichever poll of a partitioned run finds its
 /// token cancelled, at a checkpoint or between two partitions, the call
 /// returns no result and no issue, and nothing is staged or published. An
-/// uncancelled partitioned run polls more often than a whole-table run: once
-/// before each partition of a divided unit after its first. Both
-/// specifications have no rows, so each builds the key grain. Over three
-/// one-record partitions, SPEC's key derivation and its column W each
-/// divide, with two polls between partitions. Over key-bounded partitions
-/// of one subject each (#3763), SUBJECTS divides its three subjects in its
-/// key derivation, its window RN, grouped by the partition key, and its
-/// column W.
+/// uncancelled partitioned run polls more often than a whole-table run: each
+/// partition's run polls at every checkpoint of its derivation (#3830).
+/// Both specifications have no rows, so each builds the key grain. Over
+/// three one-record partitions, SPEC's four derivation checkpoints, its
+/// intermediates', its first key's, its key grain's and its column W's,
+/// are polled twice more. Over key-bounded partitions of one subject each
+/// (#3763), SUBJECTS' five, its window RN's included, are polled twice more.
 #[test]
 fn mid_partition_a_cancelled_run_returns_no_result_and_publishes_nothing() {
     let polls = Arc::new(AtomicUsize::new(0));
@@ -307,8 +306,8 @@ fn mid_partition_a_cancelled_run_returns_no_result_and_publishes_nothing() {
     };
     let [consecutive, key_bounded] = strategies();
     for ((label, partitions), spec, input, between) in [
-        (consecutive, SPEC, INPUT, 4),
-        (key_bounded, SUBJECTS, VISITS, 6),
+        (consecutive, SPEC, INPUT, 8),
+        (key_bounded, SUBJECTS, VISITS, 10),
     ] {
         polls.store(0, Ordering::SeqCst);
         let whole = Engine::new(

@@ -4,9 +4,14 @@
 //! return values. Inputs and first-issue expectations remain
 //! owned by the migrated fixtures. Authored route contracts also retain the
 //! original domain/preparation distinction, output and save results, staged
-//! file preservation and completed bytes across repeated saves.
+//! file preservation and completed bytes across repeated saves, and the
+//! calls a scripted host-functions port received, in order
+//! (`fixtures/function_call_contracts.json`).
 use crate::support::diagnostic::{form, operations, replay};
-use std::{collections::BTreeSet, fs};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+};
 use yamaa_adapters::file_application;
 use yamaa_core::{
     diagnostic::Diagnostic, domain_entry::Request, json::Value, project_function::Language,
@@ -240,6 +245,68 @@ fn lookup_model_keeps_first_findings_and_successful_save_returns() {
     assert_eq!((count, first_issues, parity, saves), (95, 4, 38, 30));
 }
 
+/// Seam: the R-host calls of the tests that moved into `case_item_order.json`
+/// and `check_output_validation.json`, which ran each specification for the
+/// Python and the R host. The host is read only for a project's environment,
+/// functions or lock, and no case of the two names one, so the replay states
+/// each specification once, for the default host. This seam makes the R
+/// calls those tests made: the check and the build publish nothing, each
+/// operation a case names reports its rows, and a save returns `Ok(true)` and
+/// writes the bytes its case states.
+#[test]
+fn moved_two_host_families_keep_their_r_host_calls() {
+    const FAMILIES: [&str; 2] = ["case_item_order.json", "check_output_validation.json"];
+    let mut counts = [0; 2];
+    for case in replay::cases() {
+        let family = case.label.split_once("::").unwrap().0;
+        let Some(index) = FAMILIES.iter().position(|name| *name == family) else {
+            continue;
+        };
+        counts[index] += 1;
+        assert!(
+            case.input.get("host").is_none() && case.input.get("project").is_none(),
+            "{}: a case of these families is stated once, for every host",
+            case.label
+        );
+        let label = format!("{} (R)", case.label);
+        let Calls {
+            study,
+            checked,
+            mut built,
+        } = calls(&case.input, Language::R, &label);
+        for operation in &case.operations {
+            match operation.as_str() {
+                "check" => replay::compare_issues(&case, &checked, Some(&study), &label),
+                "build" => {
+                    let issues = match &built {
+                        Ok(domain) => domain.issues(),
+                        Err(issues) => issues.clone(),
+                    };
+                    replay::compare_issues(&case, &issues, Some(&study), &label);
+                }
+                "save" => {
+                    let domain = built
+                        .as_mut()
+                        .unwrap_or_else(|issues| panic!("{label}: a save builds: {issues:?}"));
+                    replay::compare_issues(&case, &domain.issues(), Some(&study), &label);
+                    let saved = domain.save();
+                    assert!(
+                        matches!(saved, Ok(true)),
+                        "{label}: expected Ok(true), got {saved:?}"
+                    );
+                    saved_bytes(&study, case.stated.saved.as_ref().unwrap(), &label);
+                }
+                other => panic!("{label}: no R call for {other}"),
+            }
+        }
+    }
+    assert_eq!(
+        counts,
+        [10, 67],
+        "every moved two-host case makes its R calls"
+    );
+}
+
 /// The original Rust route/save requirements; fixture inputs and expected
 /// diagnostic/output bytes retain their existing owner.
 fn api_routes() -> Value {
@@ -250,17 +317,19 @@ fn api_routes() -> Value {
     routes
 }
 
-fn saved_bytes(study: &crate::support::Scratch, expected: &form::Saved, label: &str) {
+fn saved_bytes(
+    study: &crate::support::Scratch,
+    expected: &BTreeMap<String, form::Expected>,
+    label: &str,
+) {
     assert!(!expected.is_empty(), "{label}: authored saved files");
-    for (name, bytes) in expected {
-        let bytes = bytes
-            .as_ref()
-            .unwrap_or_else(|| panic!("{label}: an accepted save retains {name}"));
-        assert_eq!(
-            fs::read(study.join(name)).unwrap(),
-            *bytes,
-            "{label}: saved {name}"
+    for (name, stated) in expected {
+        assert!(
+            *stated != form::Expected::Removed,
+            "{label}: an accepted save retains {name}"
         );
+        let bytes = fs::read(study.join(name)).unwrap();
+        stated.compare(name, Some(&bytes), &format!("{label}: saved"));
     }
 }
 
@@ -270,7 +339,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
     let contracts = replay::object(replay::field(&routes, "cases"));
     assert_eq!(
         contracts.len(),
-        395,
+        442,
         "every original API contract is authored"
     );
     let mut seen = BTreeSet::new();
@@ -435,24 +504,28 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
         contracts.keys().cloned().collect::<BTreeSet<_>>(),
         "every authored API case still exists"
     );
-    assert_eq!((domains, preparation, either, checks), (267, 19, 4, 105));
-    assert_eq!((accepted_saves, refused_saves, no_save), (154, 46, 195));
+    assert_eq!((domains, preparation, either, checks), (275, 22, 39, 106));
+    assert_eq!((accepted_saves, refused_saves, no_save), (160, 47, 235));
 }
 
-/// Seam: the composition's save return, held artifact set and capture counter
-/// are independent of the replay's issue rows and saved-file delta.
+/// Seam: the composition's save return, held artifact order, capture counter
+/// and absent directories are independent of the replay's saved-file delta.
 #[test]
 fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
     let authored = resource_contracts();
     let contracts = replay::object(replay::field(&authored, "define"));
     let mut seen = BTreeSet::new();
     let (mut accepted, mut refused, mut artifact_contracts) = (0, 0, 0);
+    let mut ordered_artifacts = 0;
     for case in replay::cases() {
         let Some(expected) = contracts.get(&case.label) else {
             continue;
         };
         assert!(seen.insert(case.label.clone()));
-        replay::closed(expected, &["save", "empty_artifacts", "absent"]);
+        replay::closed(
+            expected,
+            &["save", "empty_artifacts", "artifacts", "absent"],
+        );
         let study = operations::study(&case.input);
         let staged = operations::state(&study);
         let project = study.identity(replay::text(replay::field(&case.input, "project")));
@@ -479,6 +552,21 @@ fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
                 &Value::Bool(define.artifacts().len() == 0),
                 empty,
                 "{}: the authored held-artifact contract",
+                case.label
+            );
+        }
+        if let Some(artifacts) = expected.get("artifacts") {
+            ordered_artifacts += 1;
+            assert_eq!(
+                define
+                    .artifacts()
+                    .map(|(path, _, _)| path)
+                    .collect::<Vec<_>>(),
+                replay::items(artifacts)
+                    .iter()
+                    .map(replay::text)
+                    .collect::<Vec<_>>(),
+                "{}: the authored held-artifact order and cardinality",
                 case.label
             );
         }
@@ -530,7 +618,10 @@ fn migrated_define_cases_keep_save_artifact_and_target_contracts() {
         contracts.keys().cloned().collect(),
         "every define API case remains present"
     );
-    assert_eq!((accepted, refused, artifact_contracts), (3, 23, 3));
+    assert_eq!(
+        (accepted, refused, artifact_contracts, ordered_artifacts),
+        (7, 23, 3, 3)
+    );
 }
 
 /// Seam: a refused written path has no accepted output and cannot publish,
@@ -580,4 +671,50 @@ fn migrated_written_paths_keep_output_and_publication_contracts() {
         "every written-path API case remains present"
     );
     assert_eq!(seen.len(), 9);
+}
+
+/// Seam: the calls a scripted host-functions port received, and where the
+/// run started reading its study input, which no issue row, table or saved
+/// file states (`operations::calls`).
+#[test]
+fn host_function_cases_keep_the_calls_their_port_received() {
+    let authored =
+        yamaa_adapters::json_wire::decode(include_str!("fixtures/function_call_contracts.json"))
+            .unwrap();
+    replay::closed(&authored, &["about", "cases"]);
+    let contracts = replay::object(replay::field(&authored, "cases"));
+    let mut seen = BTreeSet::new();
+    for case in replay::cases() {
+        let host = case
+            .operations
+            .iter()
+            .any(|operation| operation.starts_with("host_"));
+        let Some(expected) = contracts.get(&case.label) else {
+            assert!(
+                !host,
+                "{}: a scripted host's case states its calls",
+                case.label
+            );
+            continue;
+        };
+        assert!(seen.insert(case.label.clone()));
+        let expected = replay::items(expected)
+            .iter()
+            .map(|entry| replay::text(entry).to_owned())
+            .collect::<Vec<_>>();
+        for operation in &case.operations {
+            assert_eq!(
+                operations::calls(operation, &case.input),
+                expected,
+                "{} ({operation}): the calls its port received",
+                case.label
+            );
+        }
+    }
+    assert_eq!(
+        seen,
+        contracts.keys().cloned().collect(),
+        "every case with authored calls remains present"
+    );
+    assert_eq!(seen.len(), 32);
 }

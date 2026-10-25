@@ -1,5 +1,5 @@
 {
-  "about": "The causes the registry walk reaches through one core entry point each, with no specification: an application's refusals (OUTPUT-8, FUNC-3 and the engine's own), a resource path that an input or a save target refuses (FILE-5, FILE-7, FILE-8, FILE-10), numeric evaluation (FORMULA-9, FORMULA-12, FORMULA-15, VALUE-5), value conversion (VALUE-3, VALUE-7, VALUE-15), the column checks of a verification (CHECK-5 to CHECK-9, SUB-11, SUB-13, SUB-26, CT-7), an invalid pattern (TEXT-6), rounding (FORMULA-16) and the extremes of sources that cannot be compared (VALUE-19). A case whose walk compared a record in part names those fields, or those keys of its context, in compares.",
+  "about": "The causes the registry walk reaches through one core entry point each, with no specification: an application's refusals (OUTPUT-8, FUNC-3 and the engine's own), a resource path that an input or a save target refuses (FILE-5, FILE-7, FILE-8, FILE-10), numeric evaluation (FORMULA-9, FORMULA-12, FORMULA-15, VALUE-5), value conversion (VALUE-3, VALUE-7, VALUE-15), the column checks of a verification (CHECK-5 to CHECK-9, SUB-11, SUB-13, SUB-26, CT-7), an invalid pattern (TEXT-6), rounding (FORMULA-16) and the extremes of sources that cannot be compared (VALUE-19). A numeric evaluation that fails names the failed node by its bytes in the expression, past any group around it, and by the operand steps that reach it; numeric text that VALUE-6 does not admit fails conversion to `int` and to `float` alike. A case whose walk compared a record in part names those fields, or those keys of its context, in compares.",
   "cases": [
     {
       "case": "a_failed_publication_names_its_target_at_the_output_path",
@@ -132,6 +132,102 @@
       "issues": [{"phase": "derivation", "condition": "invalid_power", "rule": "FORMULA-15", "spec_paths": ["columns.X"], "context": {"expr": "POWER(-1, 0.5)"}}]
     },
     {
+      "case": "an_unbound_name_in_redundant_groups_after_a_wide_space_names_its_own_bytes",
+      "operation": "evaluate_number",
+      "input": {"expression": "\u2003M + ((UNKNOWN))", "path": "columns.RESULT.derivation", "bindings": {"M": null}},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "FORMULA-9", "spec_paths": ["columns.RESULT.derivation"], "context": {"expr": "\u2003M + ((UNKNOWN))", "identifier": "UNKNOWN"}, "source_span": {"start": 9, "end": 16}, "operand_route": ["right"]}]
+    },
+    {
+      "case": "a_division_by_zero_in_redundant_groups_beside_a_missing_operand_names_the_division",
+      "operation": "evaluate_number",
+      "input": {"expression": "M + ((1 / 0))", "path": "columns.RESULT.derivation", "bindings": {"M": null}},
+      "issues": [{"phase": "derivation", "condition": "division_by_zero", "rule": "FORMULA-15", "spec_paths": ["columns.RESULT.derivation"], "context": {"expr": "M + ((1 / 0))"}, "source_span": {"start": 6, "end": 11}, "operand_route": ["right"]}]
+    },
+    {
+      "case": "an_overflowing_product_under_a_sign_names_the_product",
+      "operation": "evaluate_number",
+      "input": {"expression": "-((9223372036854775807 * 2))", "path": "columns.RESULT.derivation", "bindings": {}},
+      "issues": [{"phase": "derivation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.RESULT.derivation"], "context": {"expr": "-((9223372036854775807 * 2))", "value": "18446744073709551614", "minimum": -9223372036854775808, "maximum": 9223372036854775807}, "source_span": {"start": 3, "end": 26}, "operand_route": ["unary"]}]
+    },
+    {
+      "case": "a_division_by_zero_inside_abs_names_the_division",
+      "operation": "evaluate_number",
+      "input": {"expression": "ABS((1 / 0))", "path": "columns.RESULT.derivation", "bindings": {}},
+      "issues": [{"phase": "derivation", "condition": "division_by_zero", "rule": "FORMULA-15", "spec_paths": ["columns.RESULT.derivation"], "context": {"expr": "ABS((1 / 0))"}, "source_span": {"start": 5, "end": 10}, "operand_route": ["unary"]}]
+    },
+    {
+      "case": "an_unbound_name_inside_sqrt_names_the_name",
+      "operation": "evaluate_number",
+      "input": {"expression": "SQRT((UNKNOWN))", "path": "columns.RESULT.derivation", "bindings": {}},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "FORMULA-9", "spec_paths": ["columns.RESULT.derivation"], "context": {"expr": "SQRT((UNKNOWN))", "identifier": "UNKNOWN"}, "source_span": {"start": 6, "end": 13}, "operand_route": ["unary"]}]
+    },
+    {
+      "case": "a_division_by_zero_inside_sqrt_names_the_division",
+      "operation": "evaluate_number",
+      "input": {"expression": "SQRT((1 / 0))", "path": "columns.RESULT.derivation", "bindings": {}},
+      "issues": [{"phase": "derivation", "condition": "division_by_zero", "rule": "FORMULA-15", "spec_paths": ["columns.RESULT.derivation"], "context": {"expr": "SQRT((1 / 0))"}, "source_span": {"start": 6, "end": 11}, "operand_route": ["unary"]}]
+    },
+    {
+      "case": "the_square_root_of_a_negative_number_in_a_group_names_the_call",
+      "operation": "evaluate_number",
+      "input": {"expression": "(SQRT(-1))", "path": "columns.RESULT.derivation", "bindings": {}},
+      "issues": [{"phase": "derivation", "condition": "sqrt_of_negative", "rule": "FORMULA-15", "spec_paths": ["columns.RESULT.derivation"], "context": {"expr": "(SQRT(-1))"}, "source_span": {"start": 1, "end": 9}, "operand_route": []}]
+    },
+    {
+      "case": "an_unbound_name_inside_ceil_names_the_name",
+      "operation": "evaluate_number",
+      "input": {"expression": "CEIL((UNKNOWN))", "path": "columns.RESULT.derivation", "bindings": {}},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "FORMULA-9", "spec_paths": ["columns.RESULT.derivation"], "context": {"expr": "CEIL((UNKNOWN))", "identifier": "UNKNOWN"}, "source_span": {"start": 6, "end": 13}, "operand_route": ["unary"]}]
+    },
+    {
+      "case": "a_division_by_zero_inside_floor_names_the_division",
+      "operation": "evaluate_number",
+      "input": {"expression": "FLOOR((1 / 0))", "path": "columns.RESULT.derivation", "bindings": {}},
+      "issues": [{"phase": "derivation", "condition": "division_by_zero", "rule": "FORMULA-15", "spec_paths": ["columns.RESULT.derivation"], "context": {"expr": "FLOOR((1 / 0))"}, "source_span": {"start": 7, "end": 12}, "operand_route": ["unary"]}]
+    },
+    {
+      "case": "an_overflowing_sum_inside_trunc_names_the_sum",
+      "operation": "evaluate_number",
+      "input": {"expression": "TRUNC((9223372036854775807 + 1))", "path": "columns.RESULT.derivation", "bindings": {}},
+      "issues": [{"phase": "derivation", "condition": "integer_overflow", "rule": "VALUE-5", "spec_paths": ["columns.RESULT.derivation"], "context": {"expr": "TRUNC((9223372036854775807 + 1))", "value": "9223372036854775808", "minimum": -9223372036854775808, "maximum": 9223372036854775807}, "source_span": {"start": 7, "end": 30}, "operand_route": ["unary"]}]
+    },
+    {
+      "case": "an_unbound_divisor_of_mod_names_the_name",
+      "operation": "evaluate_number",
+      "input": {"expression": "MOD(A, (UNKNOWN))", "path": "columns.RESULT.derivation", "bindings": {"A": 1}},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "FORMULA-9", "spec_paths": ["columns.RESULT.derivation"], "context": {"expr": "MOD(A, (UNKNOWN))", "identifier": "UNKNOWN"}, "source_span": {"start": 8, "end": 15}, "operand_route": ["right"]}]
+    },
+    {
+      "case": "a_mod_by_zero_in_a_group_names_the_call",
+      "operation": "evaluate_number",
+      "input": {"expression": "(MOD(A, 0))", "path": "columns.RESULT.derivation", "bindings": {"A": 1}},
+      "issues": [{"phase": "derivation", "condition": "division_by_zero", "rule": "FORMULA-15", "spec_paths": ["columns.RESULT.derivation"], "context": {"expr": "(MOD(A, 0))"}, "source_span": {"start": 1, "end": 10}, "operand_route": []}]
+    },
+    {
+      "case": "a_signed_name_holding_text_is_an_incompatible_input_at_the_name",
+      "operation": "evaluate_number",
+      "input": {"expression": "+A", "path": "columns.A.derivation", "bindings": {"A": "42"}},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-12", "spec_paths": ["columns.A.derivation"], "context": {"expr": "+A", "source": "A", "expected": "numeric", "actual": "str"}, "source_span": {"start": 1, "end": 2}, "operand_route": ["unary"]}]
+    },
+    {
+      "case": "a_signed_name_holding_a_boolean_is_an_incompatible_input_at_the_name",
+      "operation": "evaluate_number",
+      "input": {"expression": "+A", "path": "columns.A.derivation", "bindings": {"A": true}},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-12", "spec_paths": ["columns.A.derivation"], "context": {"expr": "+A", "source": "A", "expected": "numeric", "actual": "bool"}, "source_span": {"start": 1, "end": 2}, "operand_route": ["unary"]}]
+    },
+    {
+      "case": "a_signed_name_holding_a_date_is_an_incompatible_input_at_the_name",
+      "operation": "evaluate_number",
+      "input": {"expression": "+A", "path": "columns.A.derivation", "bindings": {"A": {"date": "2025-01-02"}}},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-12", "spec_paths": ["columns.A.derivation"], "context": {"expr": "+A", "source": "A", "expected": "numeric", "actual": "date"}, "source_span": {"start": 1, "end": 2}, "operand_route": ["unary"]}]
+    },
+    {
+      "case": "a_signed_name_holding_a_datetime_is_an_incompatible_input_at_the_name",
+      "operation": "evaluate_number",
+      "input": {"expression": "+A", "path": "columns.A.derivation", "bindings": {"A": {"datetime": "2025-01-02T03:04"}}},
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-12", "spec_paths": ["columns.A.derivation"], "context": {"expr": "+A", "source": "A", "expected": "numeric", "actual": "datetime"}, "source_span": {"start": 1, "end": 2}, "operand_route": ["unary"]}]
+    },
+    {
       "case": "a_boolean_does_not_convert_to_an_integer",
       "operation": "convert",
       "input": {"value": true, "to": "int", "path": "columns.X"},
@@ -151,6 +247,174 @@
       "input": {"value": "2026-02-30", "to": "date", "path": "columns.X"},
       "compares": ["phase", "condition", "rule", "spec_paths", "context.value", "source_span", "operand_route"],
       "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-15", "spec_paths": ["columns.X"], "context": {"value": "2026-02-30"}}]
+    },
+    {
+      "case": "numeric_text_with_a_trailing_space_does_not_convert_to_an_int",
+      "operation": "convert",
+      "input": {"value": "1 ", "to": "int", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "int", "value": "1 "}}]
+    },
+    {
+      "case": "numeric_text_with_a_trailing_space_does_not_convert_to_a_float",
+      "operation": "convert",
+      "input": {"value": "1 ", "to": "float", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "float", "value": "1 "}}]
+    },
+    {
+      "case": "numeric_text_after_a_tab_does_not_convert_to_an_int",
+      "operation": "convert",
+      "input": {"value": "\t1", "to": "int", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "int", "value": "\t1"}}]
+    },
+    {
+      "case": "numeric_text_after_a_tab_does_not_convert_to_a_float",
+      "operation": "convert",
+      "input": {"value": "\t1", "to": "float", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "float", "value": "\t1"}}]
+    },
+    {
+      "case": "numeric_text_before_a_line_feed_does_not_convert_to_an_int",
+      "operation": "convert",
+      "input": {"value": "1\n", "to": "int", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "int", "value": "1\n"}}]
+    },
+    {
+      "case": "numeric_text_before_a_line_feed_does_not_convert_to_a_float",
+      "operation": "convert",
+      "input": {"value": "1\n", "to": "float", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "float", "value": "1\n"}}]
+    },
+    {
+      "case": "numeric_text_before_a_carriage_return_does_not_convert_to_an_int",
+      "operation": "convert",
+      "input": {"value": "1\r", "to": "int", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "int", "value": "1\r"}}]
+    },
+    {
+      "case": "numeric_text_before_a_carriage_return_does_not_convert_to_a_float",
+      "operation": "convert",
+      "input": {"value": "1\r", "to": "float", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "float", "value": "1\r"}}]
+    },
+    {
+      "case": "a_fullwidth_digit_does_not_convert_to_an_int",
+      "operation": "convert",
+      "input": {"value": "\uff11", "to": "int", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "int", "value": "\uff11"}}]
+    },
+    {
+      "case": "a_fullwidth_digit_does_not_convert_to_a_float",
+      "operation": "convert",
+      "input": {"value": "\uff11", "to": "float", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "float", "value": "\uff11"}}]
+    },
+    {
+      "case": "an_arabic_indic_digit_does_not_convert_to_an_int",
+      "operation": "convert",
+      "input": {"value": "\u0661", "to": "int", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "int", "value": "\u0661"}}]
+    },
+    {
+      "case": "an_arabic_indic_digit_does_not_convert_to_a_float",
+      "operation": "convert",
+      "input": {"value": "\u0661", "to": "float", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "float", "value": "\u0661"}}]
+    },
+    {
+      "case": "a_plus_sign_alone_does_not_convert_to_an_int",
+      "operation": "convert",
+      "input": {"value": "+", "to": "int", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "int", "value": "+"}}]
+    },
+    {
+      "case": "a_plus_sign_alone_does_not_convert_to_a_float",
+      "operation": "convert",
+      "input": {"value": "+", "to": "float", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "float", "value": "+"}}]
+    },
+    {
+      "case": "a_minus_sign_alone_does_not_convert_to_an_int",
+      "operation": "convert",
+      "input": {"value": "-", "to": "int", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "int", "value": "-"}}]
+    },
+    {
+      "case": "a_minus_sign_alone_does_not_convert_to_a_float",
+      "operation": "convert",
+      "input": {"value": "-", "to": "float", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "float", "value": "-"}}]
+    },
+    {
+      "case": "an_exponent_marker_without_digits_does_not_convert_to_an_int",
+      "operation": "convert",
+      "input": {"value": "1e", "to": "int", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "int", "value": "1e"}}]
+    },
+    {
+      "case": "an_exponent_marker_without_digits_does_not_convert_to_a_float",
+      "operation": "convert",
+      "input": {"value": "1e", "to": "float", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "float", "value": "1e"}}]
+    },
+    {
+      "case": "a_point_without_fraction_digits_does_not_convert_to_an_int",
+      "operation": "convert",
+      "input": {"value": "1.e2", "to": "int", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "int", "value": "1.e2"}}]
+    },
+    {
+      "case": "a_point_without_fraction_digits_does_not_convert_to_a_float",
+      "operation": "convert",
+      "input": {"value": "1.e2", "to": "float", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "float", "value": "1.e2"}}]
+    },
+    {
+      "case": "an_exponent_with_a_fraction_does_not_convert_to_an_int",
+      "operation": "convert",
+      "input": {"value": "1e.2", "to": "int", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "int", "value": "1e.2"}}]
+    },
+    {
+      "case": "an_exponent_with_a_fraction_does_not_convert_to_a_float",
+      "operation": "convert",
+      "input": {"value": "1e.2", "to": "float", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "float", "value": "1e.2"}}]
+    },
+    {
+      "case": "two_signs_does_not_convert_to_an_int",
+      "operation": "convert",
+      "input": {"value": "+-1", "to": "int", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "int", "value": "+-1"}}]
+    },
+    {
+      "case": "two_signs_does_not_convert_to_a_float",
+      "operation": "convert",
+      "input": {"value": "+-1", "to": "float", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "float", "value": "+-1"}}]
+    },
+    {
+      "case": "a_nan_spelling_of_no_listed_case_does_not_convert_to_an_int",
+      "operation": "convert",
+      "input": {"value": ".Nan", "to": "int", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "int", "value": ".Nan"}}]
+    },
+    {
+      "case": "a_nan_spelling_of_no_listed_case_does_not_convert_to_a_float",
+      "operation": "convert",
+      "input": {"value": ".Nan", "to": "float", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "float", "value": ".Nan"}}]
+    },
+    {
+      "case": "a_signed_nan_spelling_does_not_convert_to_an_int",
+      "operation": "convert",
+      "input": {"value": "-.nan", "to": "int", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "int", "value": "-.nan"}}]
+    },
+    {
+      "case": "a_signed_nan_spelling_does_not_convert_to_a_float",
+      "operation": "convert",
+      "input": {"value": "-.nan", "to": "float", "path": "columns.X"},
+      "issues": [{"phase": "convert", "condition": "conversion_failed", "rule": "VALUE-3", "spec_paths": ["columns.X"], "context": {"from": "str", "to": "float", "value": "-.nan"}}]
     },
     {
       "case": "a_missing_input_path_names_its_dataset_and_the_path_as_written",

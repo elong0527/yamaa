@@ -57,11 +57,7 @@ pub(super) fn bind(
                         .iter()
                         .position(|source| source.name == dataset)
                         .and_then(|index| {
-                            schemas[index]
-                                .columns()
-                                .iter()
-                                .position(|column| column.name == field)
-                                .map(|column| (index, column))
+                            schemas[index].position(field).map(|column| (index, column))
                         })
                 })
                 .map(|(index, column)| {
@@ -97,13 +93,25 @@ pub(super) fn bind(
                 .enumerate()
                 .any(|(column, metadata)| metadata.name == bare && admits(column))
                 .then(|| format!("{donor_name}.{bare}"));
-            findings.push(BindFinding::Lookup(LookupFinding::reference(
+            // The suggestion names a field of the donor, so it is withheld
+            // unless the donor's schema decides whether it stores it, or the
+            // lookup derives it.
+            let derived = suggestion.is_some()
+                && inputs
+                    .schema(donor_name)
+                    .is_some_and(|schema| schema.position(bare).is_none());
+            let finding = BindFinding::Lookup(LookupFinding::reference(
                 plan.spec_path(),
                 name,
                 Some(intermediate),
                 ReferenceCause::Selection,
                 suggestion,
-            )));
+            ));
+            findings.push(if derived || inputs.decides(donor_name, bare) {
+                finding
+            } else {
+                BindFinding::Withheld(std::boxed::Box::new(finding))
+            });
         }
     }
     // A type refusal still retains the donor's bound fields for later checks.
@@ -111,8 +119,8 @@ pub(super) fn bind(
     let references_resolved = findings.len() == before;
     let kind = |name: &str| -> Option<crate::value::ValueType> {
         let binding = bindings.iter().find(|binding| binding.name == name)?;
-        let (schema, column) = match binding.read {
-            Read::Source(column) => return donor_kind(column).map(Into::into),
+        match binding.read {
+            Read::Source(column) => donor_kind(column).map(Into::into),
             Read::Column(slot) => {
                 let CurrentRead::Record { source, column } = current.get(slot)?.read else {
                     return None;
@@ -124,14 +132,10 @@ pub(super) fn bind(
                 } else {
                     source
                 };
-                (*schemas.get(index)?, column)
+                schemas.get(index)?.kind(column).map(Into::into)
             }
-            _ => return None,
-        };
-        schema
-            .columns()
-            .get(column)
-            .map(|column| column.kind.into())
+            _ => None,
+        }
     };
     let type_findings = types::predicate_kinds(plan, kind);
     if static_filter_types {

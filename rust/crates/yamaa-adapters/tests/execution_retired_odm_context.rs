@@ -109,7 +109,7 @@ mod execution {
                 .iter()
                 .map(|column| Field {
                     name: &column.name,
-                    column_type: column.kind,
+                    column_type: Some(column.kind),
                 })
                 .collect::<Vec<_>>();
             let fields = source
@@ -117,7 +117,7 @@ mod execution {
                 .iter()
                 .map(|column| Field {
                     name: &column.name,
-                    column_type: column.kind,
+                    column_type: Some(column.kind),
                 })
                 .collect::<Vec<_>>();
             let catalog = Catalog::compile(
@@ -132,7 +132,7 @@ mod execution {
                 catalog.bind("LBDTC"),
                 Some(Binding::Output {
                     column: 7,
-                    column_type: ColumnType::Date
+                    column_type: Some(ColumnType::Date)
                 })
             );
             assert_eq!(
@@ -140,7 +140,7 @@ mod execution {
                 Some(Binding::Dataset {
                     dataset: 0,
                     field: 0,
-                    column_type: ColumnType::Str
+                    column_type: Some(ColumnType::Str)
                 })
             );
             for name in ["UNKNOWN", "OTHER.Value", "ODM.IT.LB.LBDTC", "ODM.AGE"] {

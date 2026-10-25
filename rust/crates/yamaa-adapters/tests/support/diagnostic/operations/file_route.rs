@@ -32,7 +32,9 @@ use yamaa_core::{domain_entry::Request, json::Value};
 
 pub(super) const FILES: &[File] = &[
     fixture!("aggregate_record_operations.json"),
+    fixture!("case_item_order.json"),
     fixture!("check_keyless_donor.json"),
+    fixture!("check_output_validation.json"),
     fixture!("check_row_phase_boundaries.json"),
     fixture!("check_row_scopes.json"),
     fixture!("check_unknown_reads.json"),
@@ -41,6 +43,7 @@ pub(super) const FILES: &[File] = &[
     fixture!("dataset_json_sources.json"),
     fixture!("declarative_case_predicates.json"),
     fixture!("declarative_self.json"),
+    fixture!("file_origins.json"),
     fixture!("inheritance.json"),
     fixture!("integer_literals.json"),
     fixture!("language_header.json"),

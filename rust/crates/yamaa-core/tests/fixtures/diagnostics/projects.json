@@ -163,11 +163,11 @@
         },
         "project": {"language": "python", "functions": {"id": {"python": "project.id"}}}
       },
-      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
       "issues": [
-        {"phase": "validation", "condition": "unknown_project_function", "rule": "FUNC-4", "spec_paths": ["columns.A.derivation.function.name"]},
-        {"phase": "validation", "condition": "invalid_function_argument", "rule": "FUNC-5", "spec_paths": ["columns.B.derivation.function.args.x"]},
-        {"phase": "validation", "condition": "invalid_function_argument", "rule": "FUNC-5", "spec_paths": ["columns.C.derivation.function.args.x"]}
+        {"phase": "validation", "condition": "unknown_project_function", "rule": "FUNC-4", "spec_paths": ["columns.A.derivation.function.name"], "context": {"function": "unknown"}},
+        {"phase": "validation", "condition": "invalid_function_argument", "rule": "FUNC-5", "spec_paths": ["columns.B.derivation.function.args.x"], "context": {"function": "id", "argument": "x", "cause": "type_mismatch", "expected_type": "int", "actual_type": "float"}},
+        {"phase": "validation", "condition": "invalid_function_argument", "rule": "FUNC-5", "spec_paths": ["columns.C.derivation.function.args.x"], "context": {"function": "id", "cause": "integer_range"}}
       ]
     },
     {

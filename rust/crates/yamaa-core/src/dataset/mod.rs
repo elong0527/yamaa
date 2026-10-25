@@ -81,6 +81,7 @@ pub use cut::PartitionCut;
 pub mod resolved;
 pub use resolved::{ResolutionError, ResolvedPlan};
 mod columnar;
+pub use columnar::PartitionSource;
 
 /// Already bound expressions; no host joins or lookup fallback are implicit.
 #[derive(Clone, Debug, PartialEq)]
