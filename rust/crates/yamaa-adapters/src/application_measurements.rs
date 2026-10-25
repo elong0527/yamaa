@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::{sync::Mutex, time::Instant};
 use yamaa_core::{
     application_observer::{CallStage, Event, Observer, Outcome, Phase},
-    dataset::ExecutionPhase,
+    dataset::{Division, ExecutionPhase},
 };
 
 fn phase_name(phase: Phase) -> &'static str {
@@ -63,6 +63,39 @@ struct Refusal {
 fn resource_name(resource: yamaa_core::dataset::Resource) -> &'static str {
     crate::resource_diagnostics::resource_name(resource)
 }
+/// How the run divided its driver input (#3794): `whole_table`, or
+/// `key_bounded` or `consecutive` partitions, with the leading keys they keep
+/// whole, the most records each holds and how many there were.
+#[derive(Serialize)]
+struct Partitions {
+    strategy: &'static str,
+    keys: usize,
+    rows: Option<usize>,
+    count: usize,
+}
+impl Partitions {
+    fn new(division: Division, rows: Option<std::num::NonZeroUsize>) -> Self {
+        let rows = rows.map(std::num::NonZeroUsize::get);
+        match division {
+            Division::Whole => Self {
+                strategy: "whole_table",
+                keys: 0,
+                rows: None,
+                count: 1,
+            },
+            Division::Partitions { keys, count } => Self {
+                strategy: if keys == 0 {
+                    "consecutive"
+                } else {
+                    "key_bounded"
+                },
+                keys,
+                rows,
+                count,
+            },
+        }
+    }
+}
 
 struct State {
     records: Vec<Record>,
@@ -74,6 +107,7 @@ struct State {
     save_attempts: u64,
     refusals: Vec<Refusal>,
     plan: Option<&'static str>,
+    partitions: Option<Partitions>,
 }
 pub struct Measurements {
     origin: Instant,
@@ -98,6 +132,7 @@ impl Measurements {
                 save_attempts: 0,
                 refusals: Vec::new(),
                 plan: None,
+                partitions: None,
             }),
         }
     }
@@ -194,7 +229,7 @@ impl Measurements {
             "types":{"offsets":"uint64 nanoseconds since owner origin","function_counts":"uint64 actual calls","resource_counts":"usize; required null preserves original overflow/absence"},
             "classified_refusals":state.refusals,
             "admitted":state.refused.is_none() && state.finished && state.accepted.is_some() && state.saves.iter().all(|save|save.completed_ns.is_some()),"refusal":state.refused,"original_execution_finished":state.finished,"build_accepted":state.accepted,
-            "stages":state.records,"function_calls":callback_counts,"save_attempts":state.save_attempts,"saves":state.saves,"plan":state.plan})
+            "stages":state.records,"function_calls":callback_counts,"save_attempts":state.save_attempts,"saves":state.saves,"plan":state.plan,"partitions":state.partitions})
     }
     pub fn envelope(&self, report: Option<String>) -> String {
         #[derive(Serialize)]
@@ -291,6 +326,9 @@ impl Observer for Measurements {
                     limit: refusal.limit,
                     required: refusal.required,
                 });
+            }
+            Event::Divided { division, rows } => {
+                state.partitions = Some(Partitions::new(division, rows));
             }
         }
     }

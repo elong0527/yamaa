@@ -10,8 +10,6 @@
 //! original-document preflight and output declarations. Other families retain their existing error types
 //! until their semantics and provenance migrate here.
 
-use std::collections::BTreeMap;
-
 use crate::expression::SourceSpan;
 
 mod dataset;
@@ -641,7 +639,7 @@ conditions! {
 }
 
 /// JSON context retains arbitrary-width integer numbers and ordered sequences.
-pub type Context = BTreeMap<String, crate::json::Value>;
+pub type Context = crate::json::Map<String, crate::json::Value>;
 
 /// The one diagnostic record, from the failure site to the edge: the
 /// registered cause, the specification paths in authored order, the

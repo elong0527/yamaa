@@ -394,6 +394,28 @@ fn table_observation<T: TableAccess>(
     })
 }
 
+/// The observation of the run's output, whose records divide into
+/// `partitions` of these sizes (#3870): each admitted now, on its own, and
+/// the rows encoded only when the observations are serialized, so the run
+/// holds no copy of them.
+fn deferred_observation(
+    table: &yamaa_core::dataset::Dataset,
+    id: &Identity<'_>,
+    stage: &str,
+    name: &str,
+    partitions: Vec<usize>,
+) -> Result<StoredTable, Error> {
+    crate::report_storage::admit_partitions(table.schema().columns().len(), &partitions)?;
+    let metadata = table_metadata(table.schema(), id, stage, name);
+    let table = table.clone();
+    Ok(StoredTable {
+        metadata,
+        rows: Rows::Deferred(std::sync::Arc::new(move || {
+            crate::report_storage::encode_partitions(&table, &partitions)
+        })),
+    })
+}
+
 /// The report metadata of a table of `schema`.
 fn table_metadata(
     schema: &yamaa_core::table::TableSchema,
@@ -926,12 +948,13 @@ fn prepare_output(
             vec!["output.path".into()],
         ))
     })?;
+    let bytes: std::sync::Arc<[u8]> = bytes.into();
     let report = artifact_report(run, id, observations, execution, &projection, &bytes)?;
     Ok(PreparedOutput {
         report,
         artifact: Some(Artifact {
             path: compiled.output_path().into(),
-            bytes: bytes.into(),
+            bytes,
             partitions,
             projection,
         }),
@@ -1084,58 +1107,83 @@ pub(crate) fn artifact_report(
     mut report: StoredReport,
     execution: &yamaa_core::dataset::Execution,
     projection: &[usize],
-    bytes: &[u8],
+    bytes: &std::sync::Arc<[u8]>,
 ) -> Result<StoredReport, Error> {
     let table = &execution.dataset;
     let profile = run
         .compiled()
         .output_profile()
         .ok_or(Error::InvalidObservation)?;
-
-    let (content, records) = if profile == "csv" {
-        let content = std::str::from_utf8(bytes).map_err(|_| Error::InvalidObservation)?;
-
-        let records = content
-            .strip_suffix('\n')
-            .ok_or(Error::InvalidObservation)?
-            .split('\n')
-            .map(String::from)
-            .collect::<Vec<_>>();
-        (content, records)
+    // The artifact's records and content are the output's, encoded only when
+    // the observations are serialized, so the run holds no copy of them
+    // (#3870); what could refuse them is checked now.
+    let encode: crate::report_storage::ArtifactContent = if profile == "csv" {
+        std::str::from_utf8(bytes)
+            .ok()
+            .and_then(|content| content.strip_suffix('\n'))
+            .ok_or(Error::InvalidObservation)?;
+        let bytes = std::sync::Arc::clone(bytes);
+        crate::report_storage::ArtifactContent {
+            name: run.compiled().output_name().into(),
+            encode: std::sync::Arc::new(move || {
+                let content = std::str::from_utf8(&bytes).map_err(|_| Error::InvalidObservation)?;
+                let records = content
+                    .strip_suffix('\n')
+                    .ok_or(Error::InvalidObservation)?
+                    .split('\n')
+                    .collect::<Vec<_>>();
+                Ok((raw(&records)?, raw(content)?))
+            }),
+        }
     } else {
-        let records = crate::parquet_artifact::records(table, projection, execution.partition_rows)
-            .map_err(|error| match error {
-                crate::parquet_artifact::Error::Limit {
-                    resource,
-                    limit,
-                    actual,
-                } => Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
-                    resource,
-                    limit,
-                    actual,
-                    vec!["output.path".into()],
-                )),
-                _ => Error::InvalidObservation,
-            })?;
-        ("", records)
+        yamaa_core::limits::Limits::partitioned(
+            table.row_count(),
+            execution.partition_rows,
+            projection.len(),
+        )
+        .map_err(|error| {
+            Error::ResourceLimit(crate::resource_diagnostics::Refusal::new(
+                error.resource,
+                error.limit,
+                error.actual,
+                vec!["output.path".into()],
+            ))
+        })?;
+        let (table, projection, partition) =
+            (table.clone(), projection.to_vec(), execution.partition_rows);
+        crate::report_storage::ArtifactContent {
+            name: run.compiled().output_name().into(),
+            encode: std::sync::Arc::new(move || {
+                let records = crate::parquet_artifact::records(&table, &projection, partition)
+                    .map_err(|_| Error::InvalidObservation)?;
+                Ok((raw(&records)?, raw("")?))
+            }),
+        }
     };
-    report["artifacts"] = json!([{"name":run.compiled().output_name(),"profile":profile,"columns":run.compiled().projection(),"types":projection.iter().map(|&c|specification_diagnostics::type_name(table.schema().columns()[c].kind)).collect::<Vec<_>>(),"row_count":table.row_count(),"records":records,"byte_length":bytes.len(),"content":content}]);
-    // The output observed as it is held: whole, or a partition at a time.
+    report["artifacts"] = json!([{"name":run.compiled().output_name(),"profile":profile,"columns":run.compiled().projection(),"types":projection.iter().map(|&c|specification_diagnostics::type_name(table.schema().columns()[c].kind)).collect::<Vec<_>>(),"row_count":table.row_count(),"records":null,"byte_length":bytes.len(),"content":null}]);
+    report.defer_content(encode);
+    // The output observed as it is held: whole, or a partition at a time,
+    // its rows encoded only when the observations are serialized (#3870).
     let partitions = execution
         .output_partitions()
         .iter()
         .map(|rows| rows.len())
         .collect::<Vec<_>>();
-    report.push_table(table_observation(
-        table,
-        id,
-        "derived",
-        "output",
-        &partitions,
+    report.push_table(deferred_observation(
+        table, id, "derived", "output", partitions,
     )?)?;
     report["outcome"] = json!("success");
     report["nodes"][0]["outcome"] = json!("success");
     Ok(report)
+}
+
+/// `value` as JSON text.
+fn raw<T: serde::Serialize + ?Sized>(
+    value: &T,
+) -> Result<std::sync::Arc<serde_json::value::RawValue>, Error> {
+    serde_json::value::to_raw_value(value)
+        .map(std::sync::Arc::from)
+        .map_err(|_| Error::InvalidObservation)
 }
 
 #[cfg(test)]

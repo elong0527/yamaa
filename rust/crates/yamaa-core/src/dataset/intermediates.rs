@@ -38,7 +38,7 @@ impl IntermediateUnique {
     ) -> crate::diagnostic::Diagnostic {
         use crate::diagnostic::{ConditionCode, Diagnostic};
         use crate::json::Value as JsonValue;
-        let mut context = std::collections::BTreeMap::from([
+        let mut context = crate::json::Map::from([
             (
                 "intermediate".into(),
                 JsonValue::String(item.identifier.clone()),
