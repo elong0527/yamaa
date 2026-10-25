@@ -1074,16 +1074,23 @@
       "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-14", "spec_paths": ["intermediates.EXP.derivations.EXENDT.shift.days"], "context": {"source": "SELECTED", "expected": "int", "actual": "float"}}]
     },
     {
-      "case": "nullif_over_an_int_and_a_float_checks_clean_as_integer_days",
+      "case": "nullif_over_an_int_and_a_float_is_refused_as_integer_days_before_data",
       "operation": "check",
       "input": {"files": {"spec.yaml": {"base": "kinds_shift", "edits": [{"from": "DERIVATION", "to": "'NULLIF(EXINT, EXFLOAT)'"}]}}, "specification": "spec.yaml"},
-      "issues": []
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-14", "spec_paths": ["intermediates.EXP.derivations.EXENDT.shift.days"], "context": {"source": "SELECTED", "expected": "int", "actual": "float"}}]
     },
     {
       "case": "nullif_over_an_int_and_a_float_is_refused_as_integer_days_when_bound",
       "operation": "build",
       "input": {"files": {"spec.yaml": {"base": "kinds_shift", "edits": [{"from": "DERIVATION", "to": "'NULLIF(EXINT, EXFLOAT)'"}]}, "ex.csv": "USUBJID,EXSTDTC,EXENDTC,EXINT,EXFLOAT\nS01,2024-01-01,,1,\n"}, "specification": "spec.yaml"},
       "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TIME-14", "spec_paths": ["intermediates.EXP.derivations.EXENDT.shift.days"], "context": {"source": "SELECTED", "expected": "int", "actual": "float"}}]
+    },
+    {
+      "case": "a_lookup_placeholder_of_another_lookup_s_field_is_typed",
+      "operation": "build",
+      "input": {"files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADVS\nkeys: [STUDYID, USUBJID, VSDY]\ninput:\n  VS: {path: vs.csv, types: {VSDTC: date, VSDY: int, SYSBP: float}}\n  PLAN: {path: plan.csv, key: [STUDYID, USUBJID], types: {DOSENUM: int, PLANDOSE: float, FIRST: int, LAST: int}}\nbase: VS\nintermediates:\n  - {id: Q, dataset: PLAN, key: [USUBJID]}\n  - {id: P, dataset: PLAN, key: [USUBJID], derivations: {D: {str_template: \"{Q.FIRST}\"}}}\noutput: {path: out.csv, columns: [STUDYID, USUBJID, VSDY, X, C, N]}\ncolumns:\n  - {name: STUDYID, type: str, derivation: VS.STUDYID}\n  - {name: USUBJID, type: str, derivation: VS.USUBJID}\n  - {name: VSDY, type: int, derivation: VS.VSDY}\n  - {name: X, type: float, derivation: 0.0}\n  - {name: C, type: str, derivation: P.D}\n  - {name: N, type: int, derivation: 0}\n", "vs.csv": "STUDYID,USUBJID,VSTESTCD,VSDTC,VSDY,SYSBP\nS,S-1,SYSBP,2025-01-01,1,120\n", "plan.csv": "STUDYID,USUBJID,DOSENUM,PLANDOSE,FIRST,LAST,METHOD\nS,S-1,1,10,1,2,AUTO\n"}, "specification": "spec.yaml"},
+      "compares": ["phase", "condition", "rule", "spec_paths"],
+      "issues": [{"phase": "validation", "condition": "incompatible_input_type", "rule": "TEXT-1", "spec_paths": ["intermediates.P.derivations.D.str_template.template"]}]
     },
     {
       "case": "nullif_of_an_int_and_a_float_column_checks_clean",

@@ -18,13 +18,14 @@ use extendr_api::prelude::*;
 use std::{
     cell::{Cell, RefCell},
     collections::BTreeMap,
+    num::NonZeroUsize,
     panic::{catch_unwind, AssertUnwindSafe},
     rc::{Rc, Weak},
     sync::{Arc, Mutex, MutexGuard},
 };
 use yamaa::{
-    CancellationToken, EngineOptions, Failure, FailureKind, HostLanguage, ProjectRequest,
-    SpecRequest, SubmissionOptions,
+    CancellationToken, EngineOptions, Failure, FailureKind, HostLanguage, Partitions,
+    ProjectRequest, SpecRequest, SubmissionOptions,
 };
 use yamaa_boundary::{HandleKind, Live};
 
@@ -170,11 +171,20 @@ fn parse_capabilities(parsed: List) -> std::result::Result<Functions, Refusal> {
     ))
 }
 
-/// The facade engine of one call: the R host on R's `version`, with the
-/// installed project functions when `functions` are given. Every call builds
-/// its engine here.
+/// The partitions every build runs over (#3794, D264): key-bounded over the
+/// specification's two leading declared keys, of at most 624,640 driver
+/// records each, with the whole-table fallback. The binding depends on the
+/// facade alone, so it spells core's `Limits::PARTITION_KEYS` and
+/// `Limits::PARTITION_ROWS`, which the facade's `client_partitions.rs` checks.
+const PARTITIONS: [usize; 2] = [2, 624_640];
+
+/// The facade engine of one call: the R host on R's `version`, over
+/// [`PARTITIONS`], with the installed project functions when `functions` are
+/// given. Every call builds its engine here.
 fn engine(version: &str, functions: Option<Functions>) -> yamaa::Engine {
-    let options = EngineOptions::new(HostLanguage::R, "r".into(), version.into());
+    let [keys, rows] = PARTITIONS.map(|count| NonZeroUsize::new(count).expect("nonzero"));
+    let options = EngineOptions::new(HostLanguage::R, "r".into(), version.into())
+        .with_partitions(Partitions::by_keys(keys, rows).with_whole_table_fallback());
     yamaa::Engine::new(match functions {
         Some(functions) => options.with_functions(Arc::new(functions)),
         None => options,

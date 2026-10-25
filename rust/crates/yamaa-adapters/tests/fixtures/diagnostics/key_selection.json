@@ -1,0 +1,314 @@
+{
+  "about": "How a run reads the records behind a value, moved from execution_key_selection_semantics.rs and execution_filtered_mapping_source.rs at 144fc5559. The first file's tests compared each issue at its phase, condition, rule, spec paths and context, the saved out.csv, the run's handler counts as the report's handler rows name them (SPEC_PATH, NAME, COUNT), and the check rows of a failed run's saved report; the second file's compared complete issue rows and the saved bytes. A pattern read from data is checked on every row or record its predicate is asked about (FORMULA-7, CHECK-12, COLUMN-2), and the report keeps the row count check that held before it (CHECK-23). Without row templates, a column counts the distinct raw readings of a key's records (COLUMN-2); records missing a key stay apart until the output gate (OUTPUT-3); a source's order_by and keep keep one present reading, ties in record order, counting one choice per key (COLUMN-12, COLUMN-14, VALUE-22, VALUE-23). A lookup evaluates every match value before it reads a record (LOOKUP-25) and compares calendar values and numbers exactly (VALUE-19, VALUE-21). A mapping, cut or first_available source carries the filter, order_by and keep of a plain source binding, and an unpaired order_by or keep is refused (LOOKUP-10). No engine output supplied these values.",
+  "documents": {
+    "ordered": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput: {SRC: {path: src.csv, types: {ID: int, ORDER: int}}}\noutput: {path: out.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: V\n    type: int\n    derivation:\n      source:\n        variable: SRC.V\n        order_by: [{variable: SRC.ORDER, direction: asc, nulls: last}]\n        keep: first\n",
+    "records": "ID,V,ORDER\n1,7,9007199254740993\n1,8,9007199254740992\n1,9,\n1,,\n",
+    "padded": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput:\n  SRC: {path: src.csv, types: {N: int}}\n  TAB: {path: tab.csv, types: {KINT: int, KNUM: float}}\noutput: {path: out.csv, columns: [ID, V, V2]}\nintermediates:\n  - id: LOOK\n    dataset: TAB\n    key: {KNUM: null, K: {str_pad: {source: SRC.N, width: 8}}}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: V, type: str, derivation: LOOK.VAL}\n  - {name: V2, type: str, derivation: LOOK.VAL}\n",
+    "adsl": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [STUDYID, USUBJID]\ninput: {DM: {path: dm.csv, types: {SEQ: int}}}\noutput: {path: adsl.csv, columns: [STUDYID, USUBJID, SEX]}\ncolumns:\n  - {name: STUDYID, type: str, derivation: DM.STUDYID}\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: SEX, type: str, derivation: {mapping: {source: {variable: DM.SEX, filter: \"DM.SEQ >= 1\", order_by: [DM.SEQ], keep: first}, case_sensitive: false, dict: {M: Male, F: Female, Male: Male, Female: Female, Intersex: Intersex}, unmapped: null}}}\n",
+    "visits": "STUDYID,USUBJID,SEQ,VISIT,SEX\nS1,001,0,JUNK,U\nS1,001,1,SCREENING,m\nS1,001,2,BASELINE,f\nS1,002,0,JUNK,U\nS1,002,1,SCREENING,F\nS1,002,2,BASELINE,M\n"
+  },
+  "cases": [
+    {
+      "case": "a_require_pattern_read_from_data_fails_although_when_exempts_the_row",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput: {SRC: {path: src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID, P], report: report.csv}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: P, type: str, derivation: SRC.P}\nverifications:\n  - row_count: {min: 2, max: 2}\n  - assert: {when: 'FALSE', require: \"'text' LIKE P ESCAPE '!'\"}\n", "src.csv": "ID,P\n1,ok\n2,tail!\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-7", "spec_paths": ["verifications[1].assert.require"], "context": {"expr": "'text' LIKE P ESCAPE '!'", "reason": "LIKE pattern has a dangling escape"}}],
+      "report": {
+        "check": [
+          ["ARTIFACT", "SPEC_PATH", "NAME", "ID", "TARGET", "RULE", "SEVERITY", "OUTCOME", "CONDITION", "COUNT", "TOTAL", "KEYS", "DETAILS"],
+          ["out.csv", "verifications[0].row_count", "row_count", null, null, "CHECK-13", "error", "held", null, 0, 1, null, "{}"]
+        ]
+      }
+    },
+    {
+      "case": "a_source_filter_is_asked_about_every_record_of_the_key",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput: {SRC: {path: src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - name: V\n    type: str\n    derivation:\n      source: {variable: SRC.V, filter: \"'x' LIKE SRC.P ESCAPE '!'\"}\n", "src.csv": "ID,V,P\n1,unread,%\n1,unread,!\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-7", "spec_paths": ["columns.V.derivation.source.filter"], "context": {"expr": "'x' LIKE SRC.P ESCAPE '!'", "reason": "LIKE pattern has a dangling escape"}}],
+      "saved": {}
+    },
+    {
+      "case": "a_key_counts_every_distinct_raw_reading_before_conversion",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput: {SRC: {path: src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: V, type: int, derivation: SRC.V}\n", "src.csv": "ID,V\n1,07\n1,7\n1,8\n1,\n1,8\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "derivation", "condition": "multiple_values_per_key", "rule": "COLUMN-2", "spec_paths": ["columns.V.derivation.source"], "context": {"identifier": "SRC.V", "value_count": 3, "keys": [{"ID": 1}]}}],
+      "saved": {}
+    },
+    {
+      "case": "records_missing_a_key_reach_the_output_gate_without_collapsing",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [TAG, ID]\ninput: {SRC: src.csv}\noutput: {path: out.csv, columns: [ID, TAG, V]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: TAG, type: str, derivation: SRC.TAG}\n  - {name: V, type: int, derivation: SRC.V}\n", "src.csv": "ID,TAG,V\n1,__missing_key__,7\n,present,8\n,present,9\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [
+        {"phase": "output", "condition": "missing_key", "rule": "OUTPUT-3", "spec_paths": ["keys[1]"], "context": {"column": "ID", "missing_count": 2, "keys": [{"TAG": "present", "ID": null}, {"TAG": "present", "ID": null}]}},
+        {"phase": "output", "condition": "duplicate_key", "rule": "OUTPUT-3", "spec_paths": ["keys"], "context": {"duplicate_count": 1, "keys": [{"TAG": "present", "ID": null}]}}
+      ],
+      "saved": {}
+    },
+    {
+      "case": "source_order_asc_nulls_last_keeps_the_first_present_reading",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered"}, "src.csv": {"base": "records"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.V.derivation.source.multiple_matches", "multiple_matches", 1]
+        ]
+      },
+      "saved": {"out.csv": "ID,V\n1,8\n"}
+    },
+    {
+      "case": "source_order_asc_nulls_last_keeps_the_last_present_reading",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "keep: first", "to": "keep: last"}]}, "src.csv": {"base": "records"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.V.derivation.source.multiple_matches", "multiple_matches", 1]
+        ]
+      },
+      "saved": {"out.csv": "ID,V\n1,9\n"}
+    },
+    {
+      "case": "source_order_desc_nulls_last_keeps_the_first_present_reading",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "direction: asc, nulls: last", "to": "direction: desc, nulls: last"}]}, "src.csv": {"base": "records"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.V.derivation.source.multiple_matches", "multiple_matches", 1]
+        ]
+      },
+      "saved": {"out.csv": "ID,V\n1,7\n"}
+    },
+    {
+      "case": "source_order_desc_nulls_last_keeps_the_last_present_reading",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "direction: asc, nulls: last", "to": "direction: desc, nulls: last"}, {"from": "keep: first", "to": "keep: last"}]}, "src.csv": {"base": "records"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.V.derivation.source.multiple_matches", "multiple_matches", 1]
+        ]
+      },
+      "saved": {"out.csv": "ID,V\n1,9\n"}
+    },
+    {
+      "case": "source_order_asc_nulls_first_keeps_the_first_present_reading",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "direction: asc, nulls: last", "to": "direction: asc, nulls: first"}]}, "src.csv": {"base": "records"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.V.derivation.source.multiple_matches", "multiple_matches", 1]
+        ]
+      },
+      "saved": {"out.csv": "ID,V\n1,9\n"}
+    },
+    {
+      "case": "source_order_asc_nulls_first_keeps_the_last_present_reading",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "direction: asc, nulls: last", "to": "direction: asc, nulls: first"}, {"from": "keep: first", "to": "keep: last"}]}, "src.csv": {"base": "records"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.V.derivation.source.multiple_matches", "multiple_matches", 1]
+        ]
+      },
+      "saved": {"out.csv": "ID,V\n1,7\n"}
+    },
+    {
+      "case": "source_order_desc_nulls_first_keeps_the_first_present_reading",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "direction: asc, nulls: last", "to": "direction: desc, nulls: first"}]}, "src.csv": {"base": "records"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.V.derivation.source.multiple_matches", "multiple_matches", 1]
+        ]
+      },
+      "saved": {"out.csv": "ID,V\n1,9\n"}
+    },
+    {
+      "case": "source_order_desc_nulls_first_keeps_the_last_present_reading",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "direction: asc, nulls: last", "to": "direction: desc, nulls: first"}, {"from": "keep: first", "to": "keep: last"}]}, "src.csv": {"base": "records"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.V.derivation.source.multiple_matches", "multiple_matches", 1]
+        ]
+      },
+      "saved": {"out.csv": "ID,V\n1,8\n"}
+    },
+    {
+      "case": "source_order_counts_one_choice_per_key",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "keep: first", "to": "keep: last"}]}, "src.csv": "ID,V,ORDER\n1,7,9007199254740993\n1,8,9007199254740992\n1,9,\n1,,\n2,10,0\n2,11,1\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.V.derivation.source.multiple_matches", "multiple_matches", 2]
+        ]
+      },
+      "saved": {"out.csv": "ID,V\n1,9\n2,11\n"}
+    },
+    {
+      "case": "records_tied_on_source_order_keep_their_record_order_under_keep_first",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "direction: asc, nulls: last", "to": "direction: desc, nulls: first"}]}, "src.csv": "ID,V,ORDER\n1,7,0\n1,8,0\n1,9,0\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,V\n1,7\n"}
+    },
+    {
+      "case": "records_tied_on_source_order_keep_their_record_order_under_keep_last",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "ordered", "edits": [{"from": "direction: asc, nulls: last", "to": "direction: desc, nulls: first"}, {"from": "keep: first", "to": "keep: last"}]}, "src.csv": "ID,V,ORDER\n1,7,0\n1,8,0\n1,9,0\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,V\n1,9\n"}
+    },
+    {
+      "case": "match_values_compare_as_calendar_values_and_exact_numbers",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput:\n  SRC: {path: src.csv, types: {ID: int, F: float}}\n  TAB: {path: tab.csv, types: {DAY: date, MOMENT: datetime, NUM: float}}\noutput: {path: out.csv, columns: [ID, FROM_YEAR, FROM_DAY, FROM_ZERO]}\nintermediates:\n  - id: YEARLY\n    dataset: TAB\n    key: {DAY: {impute: {type: date, source: SRC.YEAR, month: 1, day: first}}}\n  - id: DAILY\n    dataset: TAB\n    key: {MOMENT: {impute: {type: datetime, source: SRC.DAY, time: first}}}\n  - id: SIGNED\n    dataset: TAB\n    key: {NUM: SRC.F}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: FROM_YEAR, type: str, derivation: YEARLY.VAL}\n  - {name: FROM_DAY, type: str, derivation: DAILY.VAL}\n  - {name: FROM_ZERO, type: str, derivation: SIGNED.VAL}\n", "src.csv": "ID,YEAR,DAY,F\n1,2025,2025-01-01,-0.0\n", "tab.csv": "DAY,MOMENT,NUM,VAL\n2025-01-01,2025-01-01T00:00:00,0,7\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,FROM_YEAR,FROM_DAY,FROM_ZERO\n1,7,7,7\n"}
+    },
+    {
+      "case": "a_missing_first_match_value_seeks_no_record_and_every_row_answers_absent",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "padded"}, "src.csv": "ID,N\na,7\nb,259\nc,\n", "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "report": {
+        "handler": [
+          ["SPEC_PATH", "NAME", "COUNT"],
+          ["columns.V.derivation.source.absent", "absent", 3],
+          ["columns.V2.derivation.source.absent", "absent", 3]
+        ]
+      },
+      "saved": {"out.csv": "ID,V,V2\na,,\nb,,\nc,,\n"}
+    },
+    {
+      "case": "a_missing_first_match_value_does_not_skip_evaluating_a_later_one",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "padded", "edits": [{"from": "width: 8}", "to": "width: 999999999999999999999999999999999999999999999999999999999999999999999999999999999}"}]}, "src.csv": "ID,N\na,7\nb,259\nc,\n", "tab.csv": "K,KINT,KNUM,VAL\n\"       7\",7,7,A\n\"     259\",259,259,B\n"},
+        "specification": "spec.yaml"
+      },
+      "compares": ["phase", "condition", "rule", "spec_paths", "context"],
+      "issues": [{"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": [], "context": {"code": "result_projection", "step": "build"}}],
+      "saved": {}
+    },
+    {
+      "case": "mapping_source_with_filter_and_selection_replaces_the_helper_column",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": {"base": "adsl"}, "dm.csv": {"base": "visits"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"adsl.csv": "STUDYID,USUBJID,SEX\nS1,001,Male\nS1,002,Female\n"}
+    },
+    {
+      "case": "mapping_source_order_by_without_keep_is_rejected",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"base": "adsl", "edits": [{"from": "{variable: DM.SEX, filter: \"DM.SEQ >= 1\", order_by: [DM.SEQ], keep: first}", "to": "{variable: DM.SEX, order_by: [DM.SEQ]}"}]}, "dm.csv": {"base": "visits"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "unpaired_fields", "rule": "LOOKUP-10", "spec_paths": ["columns.SEX.derivation.mapping.source"], "context": {"operation": "source", "declared": ["order_by"], "missing": ["keep"]}}]
+    },
+    {
+      "case": "mapping_source_keep_without_order_by_is_rejected",
+      "operation": "build",
+      "input": {
+        "files": {"spec.yaml": {"base": "adsl", "edits": [{"from": "{variable: DM.SEX, filter: \"DM.SEQ >= 1\", order_by: [DM.SEQ], keep: first}", "to": "{variable: DM.SEX, keep: first}"}]}, "dm.csv": {"base": "visits"}},
+        "specification": "spec.yaml"
+      },
+      "issues": [{"phase": "validation", "condition": "unpaired_fields", "rule": "LOOKUP-10", "spec_paths": ["columns.SEX.derivation.mapping.source"], "context": {"operation": "source", "declared": ["keep"], "missing": ["order_by"]}}]
+    },
+    {
+      "case": "cut_source_with_a_filter_reads_only_the_selected_records",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: OUT\nkeys: [ID]\ninput: {SRC: {path: src.csv, types: {AGE: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: str, derivation: {cut: {source: {variable: SRC.AGE, filter: \"SRC.KIND = 'age'\"}, breaks: [65], labels: ['<65', '>=65'], missing: UNKNOWN}}}\n", "src.csv": "ID,KIND,AGE\n001,sex,\n001,age,34\n002,sex,\n002,age,71\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"out.csv": "ID,VALUE\n001,<65\n002,>=65\n"}
+    },
+    {
+      "case": "first_available_source_with_a_selection_reads_the_ordered_match",
+      "operation": "save",
+      "input": {
+        "files": {"spec.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [STUDYID, USUBJID]\ninput: {DM: {path: dm.csv, types: {SEQ: int}}}\noutput: {path: adsl.csv, columns: [STUDYID, USUBJID, SEX]}\ncolumns:\n  - {name: STUDYID, type: str, derivation: DM.STUDYID}\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n  - {name: SEX, type: str, derivation: {first_available: {sources: [{variable: DM.SEX, order_by: [DM.SEQ], keep: last}], missing: U}}}\n", "dm.csv": "STUDYID,USUBJID,SEQ,SEX\nS1,001,1,M\nS1,001,2,Female\nS1,002,1,F\nS1,002,2,Male\n"},
+        "specification": "spec.yaml"
+      },
+      "issues": [],
+      "saved": {"adsl.csv": "STUDYID,USUBJID,SEX\nS1,001,Female\nS1,002,Male\n"}
+    }
+  ]
+}

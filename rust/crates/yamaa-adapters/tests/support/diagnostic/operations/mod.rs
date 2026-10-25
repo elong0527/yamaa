@@ -124,6 +124,28 @@ pub fn study(input: &Value) -> Scratch {
     study
 }
 
+/// Build and save, in order, each specification of `study` that `built`
+/// names, for the `host`, with the project file `environment` names as each
+/// request's environment, if any: each must build without an issue and save.
+/// A reader whose input names `built` calls this before its own call, and so
+/// does a sidecar that repeats that call.
+pub fn build_first(study: &Scratch, built: &[Value], environment: Option<&str>, host: Language) {
+    for name in built {
+        let built = path(study, text(name));
+        let mut domain = crate::support::study::domain(
+            host,
+            yamaa_core::domain_entry::Request {
+                specification: &built,
+                environment,
+            },
+            crate::support::study::identity("diagnostics", &built),
+        )
+        .unwrap_or_else(|issues| panic!("{built} is refused: {issues:?}"));
+        assert!(domain.issues().is_empty(), "{built}: {:?}", domain.issues());
+        assert!(domain.save().unwrap(), "{built} saves");
+    }
+}
+
 /// The submission section `name` names: `sdtm`, `adam` or `send`.
 pub fn section(name: &Value) -> Submission {
     match text(name) {
@@ -142,7 +164,7 @@ fn path(study: &Scratch, name: &str) -> String {
 
 /// Every file of `study` and its bytes, by its path there with forward
 /// slashes.
-fn contents(study: &Scratch) -> Files {
+pub fn contents(study: &Scratch) -> Files {
     state(study).files
 }
 

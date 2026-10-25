@@ -56,7 +56,7 @@ impl RelationRangeTypes {
             ValueType::DateTime => "datetime",
         };
         let text = |value: &str| JsonValue::String(value.into());
-        let mut context = BTreeMap::from([("value_type".into(), text(name(self.value)))]);
+        let mut context = crate::json::Map::from([("value_type".into(), text(name(self.value)))]);
         if let Some(intermediate) = intermediate {
             context.insert("intermediate".into(), text(intermediate));
         }

@@ -13,6 +13,12 @@
       "issues": []
     },
     {
+      "case": "a_consumer_check_refuses_a_field_its_linked_producer_does_not_output",
+      "operation": "check",
+      "input": {"files": {"raw/raw.csv": {"base": "raw"}, "producer/p.yaml": {"base": "producer"}, "consumer/root.yaml": {"base": "consumer", "edits": [{"from": "SOURCE_COUNT: FIRST.VALUE", "to": "SOURCE_COUNT: FIRST.MISSING"}]}}, "specification": "consumer/root.yaml"},
+      "issues": [{"phase": "validation", "condition": "unknown_field", "rule": "NAME-3", "spec_paths": ["rows.counted.derivations.SOURCE_COUNT.source"], "context": {"identifier": "FIRST.MISSING"}}]
+    },
+    {
       "case": "a_consumer_of_a_parquet_artifact_checks_against_its_producers_specification_without_data",
       "operation": "check",
       "input": {

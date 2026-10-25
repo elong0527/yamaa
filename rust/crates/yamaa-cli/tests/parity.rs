@@ -6,7 +6,7 @@
 //! equal one truth, so they equal each other.
 //!
 //! - **Issues.** Each case of `diagnostic-parity` and `project-parity`, and
-//!   the contained panic of `parquet-containment`, writes its files and makes
+//!   the invalid files of `parquet-containment`, writes its files and makes
 //!   its call, or each of its calls: `check` or `run` of `spec.yaml`, given as
 //!   that relative path, or `check`, `run` or `submission` of a project. Every
 //!   issue the document holds is compared with the case's rows in report
@@ -657,29 +657,34 @@ fn each_issue_locations_case_prints_its_first_issue_where_both_hosts_locate_it()
     }
 }
 
-/// `parquet-containment`: the panic of the native decoder on the first file
-/// is contained as the one issue row that both hosts return, and nothing
-/// reaches standard error; the second file builds, with no issue, and saves
-/// the CSV that both hosts save.
+/// `parquet-containment`: each invalid file, one whose INT96 column statistic
+/// holds 13 bytes rather than 12 and one whose two row groups name one page
+/// whose header holds fields parquet 55 could not skip, is refused as the one
+/// issue row that both hosts return, and nothing reaches standard error; the
+/// readable file builds, with no issue, and saves the CSV that both hosts save.
 #[test]
-fn a_contained_parquet_panic_prints_the_issue_row_both_hosts_return() {
+fn an_invalid_parquet_file_prints_the_issue_row_both_hosts_return() {
     let truth = family("parquet-containment");
-    let contained = Scratch::new("parity");
-    let readable = Scratch::new("parity");
-    for (directory, file) in [
-        (&contained, "contained_panic_parquet"),
-        (&readable, "readable_parquet"),
-    ] {
+    let write = |directory: &Scratch, file: &str| {
         directory.write("spec.yaml", text(truth, "specification_yaml"));
         directory.write("input.parquet", bytes(&truth[file]));
-    }
+    };
     let document_of =
         |directory: &Scratch, case: &str| document(directory, &["run", "spec.yaml"], case);
-    assert_eq!(
-        printed_rows(&document_of(&contained, "contained"), "contained"),
-        truth_rows(&truth["issues"], &contained, &[]),
-        "the contained panic"
-    );
+    for file in [
+        "long_int96_statistic_parquet",
+        "shared_presented_page_parquet",
+    ] {
+        let invalid = Scratch::new("parity");
+        write(&invalid, file);
+        assert_eq!(
+            printed_rows(&document_of(&invalid, file), file),
+            truth_rows(&truth["issues"], &invalid, &[]),
+            "{file}"
+        );
+    }
+    let readable = Scratch::new("parity");
+    write(&readable, "readable_parquet");
     assert_eq!(
         printed_rows(&document_of(&readable, "readable"), "readable"),
         Vec::<Row>::new(),

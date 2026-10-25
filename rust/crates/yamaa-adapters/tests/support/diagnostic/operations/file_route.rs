@@ -31,6 +31,7 @@ use crate::support::diagnostic::{
 use yamaa_core::{domain_entry::Request, json::Value};
 
 pub(super) const FILES: &[File] = &[
+    fixture!("aggregate_key_reads.json"),
     fixture!("aggregate_record_operations.json"),
     fixture!("case_item_order.json"),
     fixture!("check_keyless_donor.json"),
@@ -51,6 +52,7 @@ pub(super) const FILES: &[File] = &[
     fixture!("inheritance.json"),
     fixture!("integer_literals.json"),
     fixture!("intermediate_driver_columns.json"),
+    fixture!("key_selection.json"),
     fixture!("language_header.json"),
     fixture!("layer_composition.json"),
     fixture!("local_paths.json"),
@@ -71,13 +73,17 @@ pub(super) const FILES: &[File] = &[
     fixture!("specification_runs.json"),
     fixture!("static_declarations.json"),
     fixture!("submission.json"),
+    fixture!("suppressed_lookup_reads.json"),
     fixture!("temporal.json"),
     fixture!("temporal_imputation.json"),
     fixture!("text_case.json"),
     fixture!("text_extract.json"),
     fixture!("text_pad.json"),
+    fixture!("text_replace.json"),
     fixture!("typed_csv_sources.json"),
+    fixture!("value_semantics.json"),
     fixture!("verification.json"),
+    fixture!("window_drivers.json"),
     fixture!("windows.json"),
     fixture!("workflow.json"),
 ];
@@ -122,20 +128,12 @@ pub(super) fn run(operation: &str, input: &Value) -> Option<Reported> {
             (issues, Outcome::default())
         }
         _ => {
-            for name in input.get("built").map_or(&[][..], items) {
-                let built = path(&study, text(name));
-                let mut domain = crate::support::study::domain(
-                    host,
-                    Request {
-                        specification: &built,
-                        environment: project.as_deref(),
-                    },
-                    crate::support::study::identity("diagnostics", &built),
-                )
-                .unwrap_or_else(|issues| panic!("{built} is refused: {issues:?}"));
-                assert!(domain.issues().is_empty(), "{built}: {:?}", domain.issues());
-                assert!(domain.save().unwrap(), "{built} saves");
-            }
+            super::build_first(
+                &study,
+                input.get("built").map_or(&[][..], items),
+                project.as_deref(),
+                host,
+            );
             let saves = operation == "save";
             // The directory as the case staged it, which what the request
             // did is read against, whether it is refused or not.

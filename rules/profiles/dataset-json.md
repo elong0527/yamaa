@@ -55,7 +55,7 @@ validation, as does a published artifact equal to the document, reporting the
 conflicting paths.
 
 Fails: `transport_path_collision`, `artifact_path_collision`.
-Evidence: `rust/crates/yamaa-adapters/tests/file_resources.rs::transport_targets_equal_after_lowercasing_are_refused_before_overwriting_a_sentinel`, `rust/crates/yamaa-adapters/tests/submission_transport.rs::a_transport_file_never_replaces_a_declared_input`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::two_listings_writing_one_transport_file_collide`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::two_listings_writing_one_artifact_collide`.
+Evidence: `rust/crates/yamaa-adapters/tests/file_resources.rs::transport_targets_equal_after_lowercasing_are_refused_before_overwriting_a_sentinel`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::a_transport_file_never_replaces_a_declared_input`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::two_listings_writing_one_transport_file_collide`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::two_listings_writing_one_artifact_collide`.
 
 A transport file equal to another transport file or to a declared input path
 fails with `transport_path_collision`, reporting the specification or the
@@ -76,7 +76,7 @@ artifact has no rows and that does not declare `has_no_data` fails, reporting
 the dataset and the artifact.
 
 Fails: `transport_dataset_empty`.
-Evidence: `rust/crates/yamaa-adapters/tests/submission_transport.rs::datasets_without_data_have_no_file_and_empty_ones_must_declare_it`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_published_dataset_without_rows_must_declare_it`, `negative-transport-empty-dataset`.
+Evidence: `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::a_dataset_declared_without_data_has_no_transport_file_and_no_leaf`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::a_dataset_without_rows_must_declare_it_has_no_data`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/submission.json::a_published_dataset_without_rows_must_declare_it`, `negative-transport-empty-dataset`.
 
 The document still describes a dataset with no data, with `def:HasNoData`; it
 names no file for it ([DEFINE-15](define-xml.md#define-15)). The failure
@@ -273,7 +273,7 @@ collapsed types are carried as text and keep their submission type in the
 `date` or `datetime` and `targetDataType` `integer`. No other column carries
 `targetDataType`, and `boolean`, `decimal` and `double` are never written.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/submission_transport.rs::adam_dataset_json_targets_the_integer_its_document_submits`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::adam_dataset_json_targets_the_integer_its_document_submits`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
 
 | Submission data type | `dataType` |
 |---|---|

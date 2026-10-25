@@ -117,7 +117,7 @@ impl Donors<'_> {
 /// rows. Built once where binding starts and carried as this one value to
 /// every layer that reads an input's schema, and to the catalogs and
 /// secondary ports built from it: `run()` binds the captured schemas, and
-/// the oracle beside the checks pass the declared ones (#3805).
+/// `check()` the declared ones (#3805).
 #[derive(Clone, Copy)]
 pub(super) struct Inputs<'a> {
     pub sources: &'a [SourceDeclaration],
@@ -886,7 +886,7 @@ impl<'a> BindContext<'a, '_> {
             items,
             ..
         } = self.donors;
-        checks::declared::qualified_numeric_findings(compiled, &text_path, named, self.findings);
+        qualified_numeric_findings(compiled, &text_path, named, self.findings);
         let mut bindings = Vec::new();
         for name in compiled
             .identifiers()
@@ -1109,5 +1109,25 @@ impl<'a> BindContext<'a, '_> {
         Ok(Some(Expression::FirstAvailable(std::boxed::Box::new(
             crate::dataset::FirstAvailable::new(path.into(), operands, selection.missing.clone()),
         ))))
+    }
+}
+
+/// FORMULA-9: a qualified formula name must name a declared record lookup.
+/// The test reads declarations alone.
+fn qualified_numeric_findings(
+    compiled: &CompiledExpression,
+    path: &str,
+    intermediates: &intermediates::Declarations,
+    findings: &mut Vec<BindFinding>,
+) {
+    for identifier in compiled
+        .identifiers()
+        .filter(|name| name.contains('.') && intermediates.reference(name).is_none())
+    {
+        findings.push(BindFinding::QualifiedNumericReference {
+            path: path.into(),
+            expression: compiled.expression().into(),
+            identifier: identifier.into(),
+        });
     }
 }
