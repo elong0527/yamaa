@@ -1,8 +1,8 @@
 //! The decoder port's one implementation. A parent layer or a dictionary
 //! file decodes with the shared YAML reader, keeping the position of each
 //! node; a file a project names decodes and admits against the 1.0 closure
-//! of its type; and an input's bytes decode by its profile (CSV, Parquet, SAS or
-//! ODM) into a table that keeps a caller's opaque error. A CSV or Parquet
+//! of its type; and an input's bytes decode by its profile (CSV, Parquet,
+//! SAS, ODM or Dataset-JSON) into a table that keeps a caller's opaque error. A CSV or Parquet
 //! input also decodes by partition (#3792), into a snapshot of its
 //! partitions' tables. Snapshot cells remain infallible; the error type is
 //! only the engine's shared callback boundary. This grants no host access or
@@ -160,7 +160,7 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
     /// A profile, typing, ordinal, metadata or document finding in one input
     /// lets the remaining inputs decode; any other failure ends the attempt.
     fn continue_after(&self, error: &Error) -> bool {
-        use crate::{csv_source, parquet_source, sas_source};
+        use crate::{csv_source, dataset_json_source, parquet_source, sas_source};
         use yamaa_core::{source_ordinal, typed_csv};
         matches!(
             error,
@@ -180,6 +180,11 @@ impl<E> yamaa_core::decoder::Decoder for Decoder<E> {
                 | Error::ProducerMetadata(_)
                 | Error::OdmFields(_)
                 | Error::SasSource(sas_source::Error::Invalid(_) | sas_source::Error::Typing(_))
+                | Error::DatasetJsonSource(
+                    dataset_json_source::Error::Invalid(_)
+                        | dataset_json_source::Error::Value { .. }
+                        | dataset_json_source::Error::UnknownField { .. }
+                )
                 | Error::OdmValues(_)
         ) || matches!(error, Error::OdmSource(error) if error.refuses_document())
     }

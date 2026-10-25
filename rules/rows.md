@@ -39,7 +39,7 @@ column type ([EXPR-14](expressions.md#expr-14)). A pair relation
 inputs through its sides, and its `key` matches its sides, not the current row.
 
 Fails: `invalid_intermediate_driver`, `unknown_intermediate_driver_type`.
-Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::an_intermediate_that_drives_row_templates_declares_no_key`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::a_driving_intermediate_field_whose_type_is_decided_per_value_has_no_layout`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs::a_driving_intermediate_exposes_each_derived_field_as_its_one_result_type`, `rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json`, `rust/crates/yamaa-adapters/tests/project_run.rs::callback_derived_fields_expose_their_declared_result_type_to_row_drivers`, `schema-intermediate-driver-columns`, `schema-lookup-inner-join-pairs`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::an_intermediate_that_drives_row_templates_declares_no_key`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/intermediates.json::a_driving_intermediate_field_whose_type_is_decided_per_value_has_no_layout`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs::a_driving_intermediate_exposes_each_derived_field_as_its_one_result_type`, `rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/project_functions.json::a_callback_derived_field_drives_rows_with_its_declared_result_type`, `schema-intermediate-driver-columns`, `schema-lookup-inner-join-pairs`.
 
 The intermediate's `columns` list, when present, limits the fields the row
 template may read; otherwise all stored and derived fields are visible. Its
@@ -95,7 +95,7 @@ then the `filter`, when present, reads the candidate's completed unqualified
 columns, and the candidate is appended only when the result is `TRUE`.
 
 Fails: `invalid_field_type`, `unknown_field`.
-Evidence: `schema-row-templates`, `schema-lifecycle`, `rust/crates/yamaa-adapters/tests/specification_sources.rs::row_group_declarations_and_shared_scope_keep_authored_diagnostics`.
+Evidence: `schema-row-templates`, `schema-lifecycle`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/specification_runs.json::row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_an_empty_group`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/specification_runs.json::row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_a_repeated_variable`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/specification_runs.json::row_group_declarations_and_shared_scope_keep_authored_diagnostics_for_an_unqualified_variable`.
 
 [Values](values.md) defines equality for strings. Groups follow the
 position of their first driver record, and driver order is kept within each

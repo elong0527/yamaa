@@ -400,8 +400,8 @@ mod service {
                     RECORDS,
                     partitions(6_000_000, None, false),
                     End::Cancelled,
-                    vec!["header", "partitioned", "partition", "partition"],
-                    "partitions of 6,000,000 and 5,000,000 records, each admitted, then decoded",
+                    vec!["header", "partitioned", "partition"],
+                    "partitions of 6,000,000 and 5,000,000 records, each admitted, the first decoded",
                 ),
                 (
                     &["SRC"],
@@ -448,7 +448,7 @@ mod service {
                     RECORDS,
                     partitions(6_000_000, Some(1), false),
                     End::Cancelled,
-                    vec!["header", "partitioned", "partition", "partition"],
+                    vec!["header", "partitioned", "partition"],
                     "a key-bounded window reads by partition, cut between the runs of its key",
                 ),
                 (

@@ -32,7 +32,7 @@ mod inheritance;
 pub use inheritance::InheritanceFinding;
 
 mod source;
-pub use source::{source_diagnostics, ParquetFinding, SourceFinding};
+pub use source::{source_diagnostics, DatasetJsonCause, ParquetFinding, SourceFinding};
 
 mod inherited_dependencies;
 pub use inherited_dependencies::inheritance_dependency_diagnostics;
@@ -340,6 +340,10 @@ conditions! {
     SourceUnknownProfile => ("validation", "source_profile_unknown", Some("INPUT-1")),
     SasSourceEncoding => ("validation", "source_encoding_required", Some("SAS-2")),
     SasInvalid => ("ingest", "source_sas_invalid", Some("SAS-7")),
+    // A Dataset-JSON input's refusal with its closed cause (DSJSON-5), and a
+    // cell that does not parse as its field's type (DSJSON-3).
+    DatasetJsonInvalid => ("ingest", "source_dataset_json_invalid", Some("DSJSON-5")),
+    DatasetJsonFieldParse => ("ingest", "field_parse_failed", Some("DSJSON-3")),
     SourceOrdinalCollision => ("validation", "ordinal_field_collision", Some("INPUT-4")),
     SourceEmptyStringPresentUnsupported => ("validation", "empty_string_present_unsupported", Some("INPUT-9")),
     ProducerInvalidContract => ("validation", "invalid_producer_contract", Some("INPUT-10")),
