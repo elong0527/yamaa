@@ -537,6 +537,7 @@ fn migrated_execution_cases_keep_their_authored_api_contracts() {
     );
     assert_eq!((domains, preparation, either, checks), (357, 23, 44, 110));
     assert_eq!((accepted_saves, refused_saves, no_save), (226, 62, 246));
+    assert_eq!(published_reports, 2, "every published report is authored");
 }
 
 /// Seam: the composition's save return, held artifact order, capture counter
