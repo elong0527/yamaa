@@ -48,8 +48,10 @@ pub struct EngineOptions {
 }
 
 /// Partitioned execution: each run divides its driver input into partitions
-/// and runs every partition-safe step over one partition at a time. A run
-/// polls its token between partitions as well. Its result, output, issues
+/// and runs each partition through every derivation step before it decodes
+/// the next, holding one decoded partition at a time (#3830); the output
+/// keys, checks and order then run once over every partition's rows. A run
+/// polls its token in every partition as well. Its result, output, issues
 /// and run report are the whole-table run's, and the partition boundaries
 /// change none of them.
 ///
