@@ -1,0 +1,113 @@
+yamaa: "1.0"
+type: spec
+model: SDTM
+domain: SUPPMH
+keys: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
+input:
+  MH_RAW: input/mh_raw.csv
+
+output:
+  path: suppmh.csv
+  columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL,
+            QORIG, QEVAL]
+  order_by: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: MH_RAW.STUDYID
+
+  - name: RDOMAIN
+    type: str
+    label: Related Domain Abbreviation
+    derivation: "'MH'"
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: MH_RAW.USUBJID
+
+  - name: IDVAR
+    type: str
+    label: Identifying Variable
+    derivation: "'MHSEQ'"
+
+  - name: IDVARVAL
+    type: str
+    label: Identifying Variable Value
+    derivation: MH_RAW.MHSEQ
+
+  # The reported term is held in pieces of at most 200 characters, each
+  # broken after the last whole word that fits. The first piece stays on
+  # the MH record; the second and third continue it here. They are not
+  # published.
+  - name: TERM2
+    type: str
+    label: Reported Term Second Piece
+    derivation:
+      str_substr: {source: MH_RAW.MHTERM, length: 200, piece: 2}
+
+  - name: TERM3
+    type: str
+    label: Reported Term Third Piece
+    derivation:
+      str_substr: {source: MH_RAW.MHTERM, length: 200, piece: 3}
+
+  # A term that needs a fourth piece stops the run instead of losing its
+  # end. Not published.
+  - name: TERM4
+    type: str
+    label: Reported Term Fourth Piece
+    derivation:
+      str_substr: {source: MH_RAW.MHTERM, length: 200, piece: 4}
+
+  - name: QNAM
+    type: str
+    label: Qualifier Variable Name
+    verifications:
+      - allowed_values:
+          values: [MHTERM1, MHTERM2]
+
+  - name: QLABEL
+    type: str
+    label: Qualifier Variable Label
+
+  - name: QVAL
+    type: str
+    label: Data Value
+    verifications:
+      - not_missing
+      - max_length: {max: 200}
+
+  - name: QORIG
+    type: str
+    label: Origin
+    derivation: "'Collected'"
+
+  - name: QEVAL
+    type: str
+    label: Evaluator
+    derivation: null
+
+# One row template per continuation piece. Each writes a row only for an
+# MH record whose term reaches that piece.
+rows:
+  - id: second_piece
+    filter: "TERM2 IS NOT NULL"
+    derivations:
+      QNAM: "'MHTERM1'"
+      QLABEL: "'Reported Term for the Medical History 1'"
+      QVAL: TERM2
+
+  - id: third_piece
+    filter: "TERM3 IS NOT NULL"
+    derivations:
+      QNAM: "'MHTERM2'"
+      QLABEL: "'Reported Term for the Medical History 2'"
+      QVAL: TERM3
+
+verifications:
+  - assert:
+      id: term-fits-three-pieces
+      require: "TERM4 IS NULL"
