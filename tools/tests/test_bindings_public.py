@@ -55,13 +55,13 @@ class RenderingTests(unittest.TestCase):
     def test_python_delegates_each_member_to_its_operation(self):
         text = self.public.render_python([])
         for expected in (
-            "_call(_native._spec_run, self._path, self._project, self._plans, stream)",
+            "                self._plans,\n                stream,\n                progress,\n",
             "return Spec(_call(_native._project_spec, self._path, name), self._path)",
             "return _call(self._native.output, self._name)",
             "        return _call(self._native.save)\n",
             "            _call(self._native.member_issues, name)  # raises",
             "        return MemberRun(self._native, name)",
-            "        return Check(_call(_native._project_check, self._path))",
+            "        return Check(_call(_native._project_check, self._path, progress))",
             "class Spec(_Lazy):",
             "    def __init__(self, path, project=None):",
             "    def __init__(self, native, name: str):",
@@ -193,12 +193,12 @@ class RenderingTests(unittest.TestCase):
         # Its properties and methods in declaration order, never the handle.
         self.assertIn(
             'names.yamaa_run <- function(x) c("status", "output", "issues", '
-            '"report", "save")\n\nlength.yamaa_run <- function(x) 5L\n',
+            '"report", "timings", "save")\n\nlength.yamaa_run <- function(x) 6L\n',
             r,
         )
         self.assertIn(
             'names.yamaa_submission <- function(x) c("status", "created", '
-            '"issues", "save")\n',
+            '"issues", "timings", "save")\n',
             r,
         )
         # A container names its keys, as its names member gives them.
@@ -319,7 +319,9 @@ class RenderingTests(unittest.TestCase):
         text = public.Public(candidate).render_python([])
         self.assertIn(
             "return Check(\n"
-            "            _native._spec_check(self._path, self._project, _optional_fspath(parent))\n"
+            "            _native._spec_check(\n"
+            "                self._path, self._project, _optional_fspath(parent), progress\n"
+            "            )\n"
             "        )",
             text,
         )
@@ -646,7 +648,10 @@ class ValidationTests(unittest.TestCase):
                 "returns _Check, not Run",
                 lambda d: member(d, "Spec", "run").update(
                     calls="spec_check",
-                    args={"parent": "optional_path = None"},
+                    args={
+                        "parent": "optional_path = None",
+                        "progress": "progress = None",
+                    },
                     keyword_only=[],
                 ),
             ),
@@ -686,7 +691,7 @@ class ManifestTests(unittest.TestCase):
             "public.classes.Spec.summary: printing; python __repr__; r print, format",
             "public.r.s3methods.yamaa_spec.format",
             "public.classes.ProjectRun.length: protocol; python __len__",
-            "public.r.s3methods.yamaa_check.names: status, issues",
+            "public.r.s3methods.yamaa_check.names: status, issues, timings",
             "public.r.s3methods.yamaa_check.length",
             "public.r.s3methods.yamaa_project_run.names: keys of names",
             "public.types.polars_frame: python polars.DataFrame",

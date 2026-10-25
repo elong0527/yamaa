@@ -10,8 +10,6 @@
 
 use std::sync::Arc;
 
-use yamaa_application::application_measurements::Measurements;
-
 use crate::cancel::CancellationToken;
 use crate::diagnostic::Report;
 use crate::engine::Build;
@@ -64,10 +62,10 @@ impl Plan {
         self.compiled.state.name()
     }
 
-    /// This plan without the compiling engine's project functions, as a
-    /// [`Plans`](crate::Plans) holder keeps it: a kept plan runs through the
-    /// calling engine's, so holding the compiling call's host callbacks would
-    /// only keep them alive.
+    /// This plan without the compiling engine's project functions and
+    /// progress callback, as a [`Plans`](crate::Plans) holder keeps it: a kept
+    /// plan runs through the calling engine's, so holding the compiling call's
+    /// host callbacks would only keep them alive.
     pub(crate) fn detached(&self) -> Plan {
         Plan {
             shared: Arc::new(EngineShared {
@@ -77,6 +75,7 @@ impl Plan {
                 runtime_version: self.shared.runtime_version.clone(),
                 functions: None,
                 partitioning: self.shared.partitioning,
+                progress: None,
             }),
             compiled: Arc::clone(&self.compiled),
         }
@@ -99,7 +98,7 @@ impl Plan {
         &self,
         shared: &EngineShared,
         held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
-        measurements: &Arc<Measurements>,
+        observed: &crate::progress::Observed<'_>,
         token: &CancellationToken,
     ) -> Build {
         crate::internal::run(
@@ -107,7 +106,7 @@ impl Plan {
             &self.compiled.specification,
             &self.compiled.state,
             held,
-            measurements,
+            observed,
             token,
         )
     }
@@ -120,7 +119,7 @@ impl Plan {
     pub(crate) fn stream_through(
         &self,
         shared: &EngineShared,
-        measurements: &Arc<Measurements>,
+        observed: &crate::progress::Observed<'_>,
         token: &CancellationToken,
         rows: std::num::NonZeroUsize,
     ) -> (Build, Option<crate::internal::PublicBatches>) {
@@ -128,7 +127,7 @@ impl Plan {
             shared,
             &self.compiled.specification,
             &self.compiled.state,
-            measurements,
+            observed,
             token,
             rows,
         )

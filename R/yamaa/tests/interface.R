@@ -168,28 +168,29 @@ check_gate <- function() {
   on.exit(unlink(work, recursive = TRUE))
   path <- charToRaw("missing.yaml")
   r_version <- charToRaw(as.character(getRversion()))
-  handles <- c("check_status", "check_issues", "check_summary", "plans", "run_status", "run_output",
-    "run_issues", "run_report", "run_save", "run_summary", "project_run_status", "project_run_names",
-    "project_run_issues", "project_run_report", "project_run_save", "project_run_summary",
-    "submission_status", "submission_created", "submission_issues", "submission_save",
+  handles <- c("check_status", "check_issues", "check_timings", "check_summary", "plans", "run_status",
+    "run_output", "run_issues", "run_report", "run_timings", "run_save", "run_summary",
+    "project_run_status", "project_run_names", "project_run_issues", "project_run_report",
+    "project_run_timings", "project_run_save", "project_run_summary", "submission_status",
+    "submission_created", "submission_issues", "submission_timings", "submission_save",
     "submission_summary", "selftest_status", "selftest_cases", "selftest_info", "selftest_summary")
   members <- c("project_run_member_status", "project_run_output", "project_run_member_issues",
-    "project_run_member_report", "project_run_member_summary")
+    "project_run_member_report", "project_run_member_timings", "project_run_member_summary")
   arguments <- c(
     setNames(rep(list(list(NULL)), length(handles)), handles),
     setNames(rep(list(list(NULL, charToRaw("TEST"))), length(members)), members),
     list(run_observations = list(NULL, FALSE),
-      spec_check = list(path, NULL, NULL, r_version),
+      spec_check = list(path, NULL, NULL, r_version, NULL),
       spec_summary = list(path),
-      spec_run = list(path, NULL, r_version, list(), NULL, FALSE),
+      spec_run = list(path, NULL, r_version, list(), NULL, FALSE, NULL),
       spec_resolve = list(path, NULL, r_version),
       read_odm = list(charToRaw("missing.xml"), NULL, 10000, 268435456, 64),
       project_spec = list(path, charToRaw("TEST"), r_version),
       project_summary = list(path),
       project_names = list(path, r_version),
-      project_check = list(path, r_version),
-      project_run = list(path, NULL, r_version, list(), NULL),
-      project_submission = list(path, NULL, NULL, r_version),
+      project_check = list(path, r_version, NULL),
+      project_run = list(path, NULL, r_version, list(), NULL, NULL),
+      project_submission = list(path, NULL, NULL, r_version, NULL),
       lint = list(list(path), FALSE),
       schema = list(charToRaw("spec")),
       conditions = list(),

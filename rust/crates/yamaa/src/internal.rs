@@ -13,7 +13,6 @@
 use std::convert::Infallible;
 use std::sync::Arc;
 
-use yamaa_application::application_measurements::Measurements;
 use yamaa_application::file_application::Domain;
 use yamaa_application::specification_report::HostView;
 use yamaa_core::host_functions::{Empty, HostFunctions, Lock};
@@ -30,6 +29,7 @@ use crate::host::resolver::{
     ResolverFailure, ResolverKind, ResolverOperation, ResolverReply, ResolverRequest,
     ResourceResolver,
 };
+use crate::progress::Observed;
 use crate::scalar::{Scalar, ScalarRef};
 use crate::text::Action;
 
@@ -89,6 +89,8 @@ pub(crate) struct EngineShared {
     pub functions: Option<Arc<dyn ProjectFunctions>>,
     /// How each run divides its driver input (#3697).
     pub partitioning: Option<yamaa_core::dataset::Partitioning>,
+    /// The callback every operation reports its progress to (#3762).
+    pub progress: Option<crate::progress::ProgressCallback>,
 }
 
 impl EngineShared {
@@ -105,6 +107,7 @@ impl EngineShared {
             // claims none has no function to call: its port stays empty.
             functions: options.host_language.and(options.functions.clone()),
             partitioning: options.partitions.map(crate::engine::Partitions::into_core),
+            progress: options.progress.clone(),
         }
     }
 
@@ -296,18 +299,25 @@ pub(crate) fn run_check(
     shared: &EngineShared,
     specification: &str,
     environment: Option<&str>,
+    observed: &Observed<'_>,
     token: &CancellationToken,
 ) -> Result<(Vec<yamaa_core::diagnostic::Diagnostic>, Arc<Locator>), Cancelled> {
     if token.is_cancelled() {
         return Err(Cancelled);
     }
-    let (issues, locator) = yamaa_application::file_application::check_located(
-        shared.language,
-        yamaa_core::domain_entry::Request {
-            specification,
-            environment,
+    let (issues, locator) = observed.phase(
+        yamaa_core::application_observer::Phase::Preparation,
+        || {
+            yamaa_application::file_application::check_located(
+                shared.language,
+                yamaa_core::domain_entry::Request {
+                    specification,
+                    environment,
+                },
+                resolver_bridge(shared),
+            )
         },
-        resolver_bridge(shared),
+        |(issues, _)| crate::outcome::fails(issues),
     );
     Ok((issues, Arc::new(locator)))
 }
@@ -320,22 +330,34 @@ pub(crate) fn run_check_on(
     specification: &str,
     environment: Option<&str>,
     parent: &str,
+    observed: &Observed<'_>,
     token: &CancellationToken,
 ) -> Result<(Vec<yamaa_core::diagnostic::Diagnostic>, Arc<Locator>), Failure> {
     let action = Action::Read(specification);
     if token.is_cancelled() {
         return Err(Failure::cancelled(action));
     }
-    let (issues, locator) = yamaa_application::file_application::check_fragment_located(
-        shared.language,
-        yamaa_core::domain_entry::Request {
-            specification,
-            environment,
-        },
-        parent,
-        resolver_bridge(shared),
-    )
-    .map_err(|refusal| Failure::from_issues(action, &refusal))?;
+    let (issues, locator) = observed
+        .phase(
+            yamaa_core::application_observer::Phase::Preparation,
+            || {
+                yamaa_application::file_application::check_fragment_located(
+                    shared.language,
+                    yamaa_core::domain_entry::Request {
+                        specification,
+                        environment,
+                    },
+                    parent,
+                    resolver_bridge(shared),
+                )
+            },
+            |checked| {
+                checked
+                    .as_ref()
+                    .map_or(true, |(issues, _)| crate::outcome::fails(issues))
+            },
+        )
+        .map_err(|refusal| Failure::from_issues(action, &refusal))?;
     Ok((issues, Arc::new(locator)))
 }
 
@@ -410,8 +432,8 @@ pub(crate) fn compile(
 }
 
 /// The Build and Finished half: one run of a compiled request in its own
-/// resource scope, whose phase and stage events reach `measurements`, which
-/// the build keeps. A refused compilation's run returns its held refusal and performs
+/// resource scope, whose phase and stage events reach `observed`, whose
+/// measurements the build keeps. A refused compilation's run returns its held refusal and performs
 /// no resource, activation or study work. A run offers its `held` artifacts
 /// to the inputs whose `schema` links name their producers, divides its
 /// driver input as the engine's partitions ask (#3697), and polls `token` at
@@ -422,19 +444,10 @@ pub(crate) fn run(
     specification: &str,
     compiled: &Compiled,
     held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
-    measurements: &Arc<Measurements>,
+    observed: &Observed<'_>,
     token: &CancellationToken,
 ) -> Build {
-    run_with(
-        shared,
-        specification,
-        compiled,
-        held,
-        measurements,
-        token,
-        None,
-    )
-    .0
+    run_with(shared, specification, compiled, held, observed, token, None).0
 }
 
 /// One run of a compiled request whose output is read as a stream (#3697):
@@ -446,7 +459,7 @@ pub(crate) fn run_streamed(
     shared: &EngineShared,
     specification: &str,
     compiled: &Compiled,
-    measurements: &Arc<Measurements>,
+    observed: &Observed<'_>,
     token: &CancellationToken,
     rows: std::num::NonZeroUsize,
 ) -> (Build, Option<PublicBatches>) {
@@ -455,7 +468,7 @@ pub(crate) fn run_streamed(
         specification,
         compiled,
         None,
-        measurements,
+        observed,
         token,
         Some(rows),
     )
@@ -473,27 +486,21 @@ fn run_with(
     specification: &str,
     compiled: &Compiled,
     held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
-    measurements: &Arc<Measurements>,
+    observed: &Observed<'_>,
     token: &CancellationToken,
     rows: Option<std::num::NonZeroUsize>,
 ) -> (Build, Option<PublicBatches>) {
     let cancelled = || token.is_cancelled();
-    let scope = yamaa_core::application_observer::Scope::new(&**measurements)
+    let scope = yamaa_core::application_observer::Scope::new(observed)
         .cancellable(&cancelled)
         .partitioned(shared.partitioning);
-    let measurements = Arc::clone(measurements);
+    let measured = observed.measured().clone();
     let locator = Arc::clone(compiled.locator());
     let prepared = match compiled {
         Compiled::Ready(prepared, _) => prepared,
         Compiled::Refused { issues, .. } => {
             yamaa_core::domain_entry::finish(scope);
-            let build = Build::new(
-                Err(issues.clone()),
-                Vec::new(),
-                measurements,
-                shared,
-                locator,
-            );
+            let build = Build::new(Err(issues.clone()), Vec::new(), measured, shared, locator);
             return (build, None);
         }
     };
@@ -515,7 +522,7 @@ fn run_with(
         Ok(built) => built,
         Err(never) => match never {},
     };
-    let build = Build::new(result, failures, measurements, shared, locator);
+    let build = Build::new(result, failures, measured, shared, locator);
     #[cfg(feature = "arrow")]
     let mut build = build;
     #[cfg(feature = "arrow")]

@@ -20,10 +20,6 @@
 //! (PARQUET-7), and the stored type of a refused field still names the type
 //! the file names (`parquet_source::type_name`).
 //!
-//! Logical timestamp types are struct variants on 55, with the time unit a
-//! union of empty structs (later releases wrap them in tuple variants with
-//! constructors), so the writer's construction of one also lives here.
-//!
 //! Importing a C stream also lives here (`StreamReader`): 55's
 //! `ArrowArrayStreamReader` unwraps the producer's callbacks and its
 //! last-error message, which the C stream interface lets be NULL, and builds
@@ -32,8 +28,6 @@
 //! placed them, while the interface only recommends alignment, so the reader
 //! copies any under-aligned buffer before typed arrays read it (later
 //! releases align on import).
-#[cfg(feature = "parquet")]
-use parquet::basic::{LogicalType, TimeUnit};
 #[cfg(feature = "parquet")]
 use std::sync::Arc;
 
@@ -464,14 +458,6 @@ mod stream {
             }
         }
         ArrowError::CDataInterface(message)
-    }
-}
-
-#[cfg(feature = "parquet")]
-pub(crate) fn timestamp_micros(utc: bool) -> LogicalType {
-    LogicalType::Timestamp {
-        is_adjusted_to_u_t_c: utc,
-        unit: TimeUnit::MICROS(Default::default()),
     }
 }
 

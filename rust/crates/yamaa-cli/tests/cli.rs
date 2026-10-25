@@ -168,9 +168,9 @@ fn help_prints_every_command_and_wins_over_other_arguments() {
          yamaa --version [--format text|json]\n       yamaa --help\n"
     ));
     for synopsis in [
-        "  check PATH [--spec NAME | --parent PATH]\n",
-        "  run PATH [--spec NAME | --section SECTION]\n",
-        "  submission PATH [--section SECTION] [--created TIME]\n",
+        "  check PATH [--spec NAME | --parent PATH] [--verbose]\n",
+        "  run PATH [--spec NAME | --section SECTION] [--verbose]\n",
+        "  submission PATH [--section SECTION] [--created TIME] [--verbose]\n",
         "  resolve PATH [--spec NAME]\n",
         "  read-odm SOURCE OUT [--archive-member NAME] [--max-archive-members N] \
          [--max-expanded-bytes N] [--max-xml-depth N]\n",
@@ -520,6 +520,73 @@ fn a_spec_path_is_checked_run_and_resolved_alone() {
             "{format}"
         );
     }
+}
+
+/// `--verbose` (#3762) leaves standard output as it is and writes to
+/// standard error each phase of the run as it starts and ends, the phases of
+/// a run without project functions in their documented order; then how the
+/// run divided its driver input (#3794); then the timings table: its column
+/// names, then one row per phase with the run's path as given, its phase,
+/// two numbers of milliseconds and its outcome. The command line runs
+/// key-bounded over the two leading declared keys, in partitions of at most
+/// 624,640 records (D264): DM declares one key and its input holds two
+/// records, so the run derives one key-bounded partition of 2 records.
+#[test]
+fn verbose_writes_each_phase_the_division_and_then_the_timings_to_standard_error() {
+    let study = Study::new();
+    let plain = outcome(&yamaa_in(&study.0, &["run", "sdtm/dm.yaml"]));
+    let (status, stdout, stderr) =
+        outcome(&yamaa_in(&study.0, &["run", "sdtm/dm.yaml", "--verbose"]));
+    assert_eq!((status, stdout), (plain.0, plain.1), "standard output");
+    let phases = [
+        "preparation",
+        "input",
+        "admission",
+        "derivation",
+        "output_keys",
+        "verification",
+        "output",
+    ];
+    let events = phases
+        .iter()
+        .flat_map(|phase| {
+            let partition = (*phase == "derivation")
+                .then(|| "sdtm/dm.yaml: derivation partition 1 (2 records)".to_owned());
+            std::iter::once(format!("sdtm/dm.yaml: {phase} start"))
+                .chain(partition)
+                .chain([format!("sdtm/dm.yaml: {phase} end: succeeded")])
+        })
+        .chain(["sdtm/dm.yaml: partitions key_bounded 1".to_owned()])
+        .collect::<Vec<_>>();
+    let lines = stderr.lines().collect::<Vec<_>>();
+    assert_eq!(
+        lines[..events.len()],
+        events,
+        "the progress events and the division"
+    );
+    assert_eq!(
+        lines[events.len()],
+        "name\tphase\tstarted_ms\telapsed_ms\toutcome",
+        "the timings header"
+    );
+    let rows = lines[events.len() + 1..]
+        .iter()
+        .map(|line| {
+            let cells = line.split('\t').collect::<Vec<_>>();
+            let milliseconds = cells[2..4]
+                .iter()
+                .all(|cell| cell.parse::<f64>().is_ok_and(|value| value >= 0.0));
+            (cells[0], cells[1], milliseconds, cells[4])
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        rows,
+        phases
+            .iter()
+            .map(|phase| ("sdtm/dm.yaml", *phase, true, "succeeded"))
+            .collect::<Vec<_>>(),
+        "the timings rows"
+    );
 }
 
 /// A PATH that declares `type: project` is checked and run whole, as

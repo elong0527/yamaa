@@ -30,6 +30,7 @@ use crate::engine::{Build, Engine, Request};
 use crate::error::Failure;
 use crate::outcome::{fails, DefineBuild, Member, Outcome, Work};
 use crate::plan::Plan;
+use crate::progress::{Measured, Reporter, Timings};
 #[cfg(feature = "arrow")]
 use crate::stream::Streamed;
 use crate::table::Table;
@@ -93,10 +94,13 @@ pub struct Check {
 impl Check {
     /// The check of the one specification at `subject`, the path as given,
     /// whose `issues` `locator` locates.
+    /// `measured` holds the time its preparation took, and `reporter` says
+    /// whether its progress callback failed.
     fn of(
         subject: &str,
-        issues: Vec<yamaa_core::diagnostic::Diagnostic>,
-        locator: Arc<Locator>,
+        (issues, locator): (Vec<yamaa_core::diagnostic::Diagnostic>, Arc<Locator>),
+        measured: Measured,
+        reporter: &Reporter,
     ) -> Self {
         Self {
             outcome: Outcome {
@@ -104,8 +108,9 @@ impl Check {
                     name: None,
                     identity: None,
                     work: Work::Checked(issues, locator),
+                    measured: Some(measured),
                 }],
-                issues: Vec::new(),
+                issues: progress_failure(reporter, Step::Check),
                 locator: Arc::new(Locator::none()),
             },
             subject: subject.to_owned(),
@@ -126,6 +131,12 @@ impl Check {
     /// `succeeded` when the check found no error-severity issue.
     pub fn status(&self) -> Status {
         self.outcome.status()
+    }
+
+    /// The time each specification's preparation took, in the order the
+    /// check read them (#3762).
+    pub fn timings(&self) -> Timings {
+        self.outcome.timings()
     }
 
     /// The printed text (D37, P-PRINT-1): `yamaa check of <path>: <status>,
@@ -176,6 +187,13 @@ impl Run {
         self.build.status()
     }
 
+    /// The time each phase of the run took, in the order the phases started
+    /// (#3762): from `preparation`, which a run of a kept plan skips, to
+    /// `output`. No saved file holds them.
+    pub fn timings(&self) -> Timings {
+        self.build.timings()
+    }
+
     /// The printed text (D37, P-PRINT-1): `yamaa run of <subject>: <status>,
     /// <size>, <n> issues`, then the first issue. The subject is a project
     /// run member's name as [`ProjectRun::members`] gives it, or the dataset
@@ -218,6 +236,15 @@ impl Run {
     /// part of the interface.
     pub fn measured_observations(&self) -> String {
         self.build.measured_observations()
+    }
+}
+
+/// The issue that fails an operation whose progress callback failed, at its
+/// `step`, or none (#3762).
+fn progress_failure(reporter: &Reporter, step: Step) -> Vec<Diagnostic> {
+    match reporter.failed() {
+        true => vec![Reporter::failure(step)],
+        false => Vec::new(),
     }
 }
 
@@ -375,11 +402,13 @@ impl Engine {
     /// build. Only cancellation fails the call: `token` is polled before
     /// each member and as each builds, and a user interrupt in project code
     /// cancels the call too (D46), so no later member builds or calls
-    /// project code.
+    /// project code. Each build reports its progress to `reporter`, and once
+    /// its callback has failed no later member builds (#3762).
     fn run_graph(
         &self,
         nodes: Vec<Node<'_>>,
         plans: &Plans,
+        reporter: &Reporter,
         token: &CancellationToken,
     ) -> Result<Outcome, Cancelled> {
         let mut held = yamaa_adapters::file_resources::HeldArtifacts::new();
@@ -395,16 +424,21 @@ impl Engine {
                 .filter(|(producer, _)| !succeeded[*producer])
                 .map(|(_, finding)| finding)
                 .collect::<Vec<_>>();
+            if reporter.failed() {
+                break;
+            }
             let build = if !node.refused.is_empty() {
                 self.refused_build(node.refused, node.request.specification, node.locator)
             } else if !blocked.is_empty() {
                 self.refused_build(blocked, node.request.specification, node.locator)
             } else {
+                let name = node.label.as_deref().unwrap_or(node.request.specification);
                 self.build_reusing(
                     plans,
                     &node.request,
                     node.plan,
                     Some(Arc::new(held.clone())),
+                    &reporter.observe(name),
                     token,
                 )?
             };
@@ -422,6 +456,7 @@ impl Engine {
                 name: node.name,
                 identity: node.identity,
                 work: Work::Built(Box::new(Run { build })),
+                measured: None,
             });
         }
         Ok(Outcome {
@@ -507,6 +542,11 @@ impl<'a> SpecRequest<'a> {
         self.token.cloned().unwrap_or_default()
     }
 
+    /// The progress of one operation, reported to the engine's callback.
+    fn reporter(&self) -> Reporter {
+        Reporter::new(self.engine.shared().progress.clone())
+    }
+
     /// Check the specification without reading study data or running project
     /// code, with the project's codelists and functions when the request
     /// names a project. Admission and preparation failures are the check's
@@ -540,14 +580,22 @@ impl<'a> SpecRequest<'a> {
     /// }
     /// ```
     pub fn check(&self) -> Result<Check, Failure> {
-        let (issues, locator) = crate::internal::run_check(
+        let reporter = self.reporter();
+        let observed = reporter.observe(&self.path);
+        let checked = crate::internal::run_check(
             self.engine.shared(),
             &self.path,
             self.project,
+            &observed,
             &self.token(),
         )
         .map_err(|Cancelled| self.cancelled())?;
-        Ok(Check::of(&self.path, issues, locator))
+        Ok(Check::of(
+            &self.path,
+            checked,
+            observed.measured().clone(),
+            &reporter,
+        ))
     }
 
     /// [`SpecRequest::check`] of a fragment, a specification that declares
@@ -563,14 +611,22 @@ impl<'a> SpecRequest<'a> {
     /// `cannot read <path>`, with `value_not_permitted` at `parent`
     /// (LAYER-4). Otherwise only cancellation fails the call.
     pub fn check_on(&self, parent: &str) -> Result<Check, Failure> {
-        let (issues, locator) = crate::internal::run_check_on(
+        let reporter = self.reporter();
+        let observed = reporter.observe(&self.path);
+        let checked = crate::internal::run_check_on(
             self.engine.shared(),
             &self.path,
             self.project,
             parent,
+            &observed,
             &self.token(),
         )?;
-        Ok(Check::of(&self.path, issues, locator))
+        Ok(Check::of(
+            &self.path,
+            checked,
+            observed.measured().clone(),
+            &reporter,
+        ))
     }
 
     /// Build the specification in memory; nothing is written until `save`.
@@ -650,9 +706,10 @@ impl<'a> SpecRequest<'a> {
             artifact: None,
             locator: Arc::new(Locator::none()),
         };
+        let reporter = self.reporter();
         let outcome = self
             .engine
-            .run_graph(vec![node], plans, &self.token())
+            .run_graph(vec![node], plans, &reporter, &self.token())
             .map_err(|Cancelled| self.cancelled())?;
         let member = outcome
             .members
@@ -660,7 +717,13 @@ impl<'a> SpecRequest<'a> {
             .next()
             .expect("a graph of one member builds it");
         match member.work {
-            Work::Built(run) => Ok(*run),
+            Work::Built(mut run) => {
+                let failure = progress_failure(&reporter, Step::Build);
+                if !failure.is_empty() {
+                    run.build.fail(failure);
+                }
+                Ok(*run)
+            }
             Work::Checked(..) | Work::Composed(..) => unreachable!("a graph builds its members"),
         }
     }
@@ -727,19 +790,21 @@ impl<'a> SpecRequest<'a> {
         let identity = crate::internal::request_identity(self.engine.shared(), &request);
         // As a run reusing the holder keeps only this specification's plan.
         plans.retain(|kept| identity.as_ref() == Some(kept));
-        let measurements =
-            Arc::new(yamaa_application::application_measurements::Measurements::new());
+        let reporter = Arc::new(self.reporter());
+        let observed = reporter.observe(&self.path);
         let (plan, compiled) =
             self.engine
-                .plan_reusing(plans, &request, identity.as_ref(), &measurements);
+                .plan_reusing(plans, &request, identity.as_ref(), &observed);
         if compiled {
             self.engine.keep(plans, &request, identity, &plan);
         }
+        let measured = observed.measured().clone();
+        drop(observed);
         Ok(Streamed::new(
             self.engine,
             plan,
             &self.path,
-            measurements,
+            (measured, reporter),
             &token,
         ))
     }
@@ -935,6 +1000,13 @@ impl ProjectRun {
         self.outcome.status()
     }
 
+    /// The time each phase of each specification's run took, the
+    /// specifications in run order, each named as [`ProjectRun::members`]
+    /// names it (#3762). A specification that did not run adds none.
+    pub fn timings(&self) -> Timings {
+        self.outcome.timings()
+    }
+
     /// Save the run as one save (PROJECT-12, D38, D74) and return the
     /// absolute paths written, with forward slashes, in publication order.
     ///
@@ -1013,6 +1085,12 @@ impl Submission {
     /// project finding refused the submission.
     pub fn status(&self) -> Status {
         self.outcome.status()
+    }
+
+    /// The time each section's composition took, in section order, each
+    /// named by its section (#3762).
+    pub fn timings(&self) -> Timings {
+        self.outcome.timings()
     }
 
     /// The creation time the documents carry, as ISO 8601 text (D69, #3030
@@ -1115,6 +1193,11 @@ impl<'a> ProjectRequest<'a> {
         self.token.cloned().unwrap_or_default()
     }
 
+    /// The progress of one operation, reported to the engine's callback.
+    fn reporter(&self) -> Reporter {
+        Reporter::new(self.engine.shared().progress.clone())
+    }
+
     /// The cancellation of an operation that reads the project file:
     /// `cannot read <path>: operation cancelled`.
     fn cancelled(&self) -> Failure {
@@ -1208,27 +1291,46 @@ impl<'a> ProjectRequest<'a> {
                 })
             }
         };
+        let reporter = self.reporter();
         let mut members = Vec::with_capacity(read.listed().len());
         for listed in read.listed() {
             if token.is_cancelled() {
                 return Err(self.cancelled());
             }
-            let (issues, locator) = if listed.failure().is_empty() {
-                crate::internal::run_check(shared, listed.path(), Some(project), &token)
-                    .map_err(|Cancelled| self.cancelled())?
+            // Once the progress callback failed, no later specification is read.
+            if reporter.failed() {
+                break;
+            }
+            let (checked, measured) = if listed.failure().is_empty() {
+                let observed = reporter.observe(listed.name().unwrap_or(listed.written()));
+                let checked = crate::internal::run_check(
+                    shared,
+                    listed.path(),
+                    Some(project),
+                    &observed,
+                    &token,
+                )
+                .map_err(|Cancelled| self.cancelled())?;
+                (checked, Some(observed.measured().clone()))
             } else {
-                (listed.failure().to_vec(), Arc::clone(read.locator()))
+                (
+                    (listed.failure().to_vec(), Arc::clone(read.locator())),
+                    None,
+                )
             };
             members.push(Member {
                 name: listed.name().map(str::to_owned),
                 identity: Some(listed.identity().to_owned()),
-                work: Work::Checked(issues, locator),
+                work: Work::Checked(checked.0, checked.1),
+                measured,
             });
         }
+        let mut issues = read.check_findings();
+        issues.extend(progress_failure(&reporter, Step::Check));
         Ok(Check {
             outcome: Outcome {
                 members,
-                issues: read.check_findings(),
+                issues,
                 locator: Arc::clone(read.locator()),
             },
             subject: project.to_owned(),
@@ -1317,13 +1419,15 @@ impl<'a> ProjectRequest<'a> {
                 }
             })
             .collect();
-        Ok(ProjectRun {
-            outcome: self
-                .engine
-                .run_graph(nodes, plans, &token)
-                .map_err(|Cancelled| self.cancelled())?,
-            subject,
-        })
+        let reporter = self.reporter();
+        let mut outcome = self
+            .engine
+            .run_graph(nodes, plans, &reporter, &token)
+            .map_err(|Cancelled| self.cancelled())?;
+        // A failed progress callback refuses the whole run, so its save
+        // writes nothing (#3762).
+        outcome.issues = progress_failure(&reporter, Step::Build);
+        Ok(ProjectRun { outcome, subject })
     }
 
     /// One define.xml for the request's section, or for every declared
@@ -1378,21 +1482,35 @@ impl<'a> ProjectRequest<'a> {
             Some(section) => vec![section],
             None => read.define_sections().collect(),
         };
+        let reporter = self.reporter();
         let mut members = Vec::with_capacity(sections.len());
         for section in sections {
             if token.is_cancelled() {
                 return Err(self.cancelled());
             }
-            let define = DefineBuild::compose(shared, project, section, created, installed_version);
+            // Once the progress callback failed, no later section composes.
+            if reporter.failed() {
+                break;
+            }
+            let key = yamaa_core::project_scope::key(section);
+            let observed = reporter.observe(key);
+            let define = observed.phase(
+                yamaa_core::application_observer::Phase::Composition,
+                || DefineBuild::compose(shared, project, section, created, installed_version),
+                |define| fails(define.composed()),
+            );
             members.push(Member {
-                name: Some(yamaa_core::project_scope::key(section).to_owned()),
+                name: Some(key.to_owned()),
                 identity: None,
                 work: Work::Composed(Box::new(define)),
+                measured: Some(observed.measured().clone()),
             });
         }
         Ok(Outcome {
             members,
-            issues: Vec::new(),
+            // A failed progress callback refuses the whole submission, so its
+            // save writes nothing (#3762).
+            issues: progress_failure(&reporter, Step::Define),
             locator: Arc::clone(read.locator()),
         })
     }

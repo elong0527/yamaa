@@ -66,6 +66,7 @@ mod project {
                     Event::Exit { phase, outcome } => Stage::Exit(phase, outcome),
                     Event::FunctionReturn { stage, outcome } => Stage::Return(stage, outcome),
                     Event::Refusal { phase, refusal } => Stage::Refusal(phase, refusal),
+                    Event::Partition { .. } => unreachable!("a whole-table run has no partition"),
                     Event::Divided { division, .. } => Stage::Divided(division),
                 });
             }
