@@ -4,31 +4,25 @@
 //! with the workspace's minimum Rust. Adapting another release changes this
 //! module, rather than the readers, writer or core type policy.
 //!
-//! Keep schema conversion fallible: 55 has only `fb_to_schema`, which
-//! unwraps the field list and panics on a verified but semantically
-//! malformed schema, so `ipc_schema` refuses the missing field list and
-//! contains any remaining conversion panic.
+//! A Parquet file's embedded Arrow schema is an Arrow IPC message, which
+//! `arrow-ipc` verifies and gives access to. Its fields convert here
+//! (`ipc_schema`), as Arrow 55's own conversion (`fb_to_schema`) converted
+//! them, with one difference: where that conversion panicked on a verified
+//! but semantically malformed schema, such as a missing field list, name or
+//! child, or a type parameter outside the type's range, this one refuses
+//! the schema.
 //!
 //! Arrow 55 has no 32- or 64-bit decimal, and its IPC conversion reads no
 //! list view, all of which later Arrow writers name in a Parquet file's
 //! embedded schema. So `ipc_schema` holds each as its nearest Arrow 55 type
 //! (a 128-bit decimal, a list or a large list) and returns where it did
-//! (`LaterType`), and `arrow_schema` gives the native schema conversion the
-//! held schema in place of the file's. An embedded schema chooses a layout,
-//! never a field type (PARQUET-7), and the stored type of a refused field
-//! still names the type the file names (`parquet_source::type_name`).
+//! (`LaterType`). An embedded schema chooses a layout, never a field type
+//! (PARQUET-7), and the stored type of a refused field still names the type
+//! the file names (`parquet_source::type_name`).
 //!
-//! The row-group reader construction also lives here: on 55 the constructor
-//! takes the group's `Option<&[OffsetIndexMetaData]>` sliced from
-//! `ParquetMetaData::offset_index` (later releases take a
-//! `RowGroupPageIndex` instead). Callers must not construct a
-//! `SerializedRowGroupReader` directly.
-//!
-//! Logical timestamp and integer types are struct variants on 55, with the
-//! time unit a union of empty structs (later releases wrap them in tuple
-//! variants with constructors), so their construction and inspection also
-//! live here, as does reading a column descriptor's logical type, which 55
-//! returns as an owned copy.
+//! Logical timestamp types are struct variants on 55, with the time unit a
+//! union of empty structs (later releases wrap them in tuple variants with
+//! constructors), so the writer's construction of one also lives here.
 //!
 //! Importing a C stream also lives here (`StreamReader`): 55's
 //! `ArrowArrayStreamReader` unwraps the producer's callbacks and its
@@ -38,32 +32,8 @@
 //! placed them, while the interface only recommends alignment, so the reader
 //! copies any under-aligned buffer before typed arrays read it (later
 //! releases align on import).
-//!
-//! 55 decodes footers and page headers with the readers the Thrift compiler
-//! generated (`parquet::format`). The compact protocol it reads a footer with
-//! indexes eight bytes for a double without checking that they are there, and
-//! its statistics conversion asserts that INT96 statistics hold exactly 12
-//! bytes, for the footer's column chunks and for each data page header, so a
-//! malformed footer or page header can panic inside the Parquet crate. Each native Parquet or
-//! Arrow call on admitted input runs through `contain_decode`, which also
-//! keeps the panic it contains off stderr.
-//!
-//! 55 converts a page type and an encoding only from their known values
-//! (`parquet::format`), which bound a column chunk's encoding statistics
-//! (`ENCODING_STATS`).
 #[cfg(feature = "parquet")]
-use crate::parquet_source::format::{Logical, TimeUnit as Unit};
-#[cfg(feature = "parquet")]
-use parquet::{
-    basic::{LogicalType, TimeUnit},
-    errors::ParquetError,
-    file::{
-        metadata::{ParquetMetaData, RowGroupMetaData},
-        properties::ReaderProperties,
-        serialized_reader::SerializedRowGroupReader,
-    },
-    schema::types::ColumnDescriptor,
-};
+use parquet::basic::{LogicalType, TimeUnit};
 #[cfg(feature = "parquet")]
 use std::sync::Arc;
 
@@ -87,18 +57,18 @@ pub(crate) enum LaterType {
 #[cfg(feature = "parquet")]
 pub(crate) type LaterTypes = Vec<(Vec<usize>, LaterType)>;
 
+/// A verified IPC schema that does not convert to an Arrow schema.
+#[cfg(feature = "parquet")]
+#[derive(Debug, PartialEq)]
+pub(crate) struct Unconvertible;
+
 /// Convert a verified IPC schema to Arrow 55's types, holding each later
 /// type as its nearest one, and say where it held one.
 #[cfg(feature = "parquet")]
 pub(crate) fn ipc_schema(
     schema: arrow_ipc::Schema<'_>,
-) -> Result<(arrow_schema::Schema, LaterTypes), arrow_schema::ArrowError> {
-    let malformed = || {
-        arrow_schema::ArrowError::ParseError("IPC schema is not a valid Arrow schema".to_string())
-    };
-    let Some(fields) = schema.fields() else {
-        return Err(malformed());
-    };
+) -> Result<(arrow_schema::Schema, LaterTypes), Unconvertible> {
+    let fields = schema.fields().ok_or(Unconvertible)?;
     // 55 refuses a big-endian decimal, as later releases do.
     let little = schema.endianness() == arrow_ipc::Endianness::Little;
     if little && fields.iter().any(names_later) {
@@ -108,12 +78,21 @@ pub(crate) fn ipc_schema(
             .enumerate()
             .map(|(index, field)| hold(field, &mut vec![index], &mut later))
             .collect::<Option<Vec<_>>>()
-            .ok_or_else(malformed)?;
+            .ok_or(Unconvertible)?;
         return Ok((arrow_schema::Schema::new(held), later));
     }
-    contain_decode(|| arrow_ipc::convert::fb_to_schema(schema))
-        .ok_or_else(malformed)
-        .map(|schema| (schema, Vec::new()))
+    let fields = fields
+        .iter()
+        .map(|field| {
+            // Arrow 55 converts no decimal field of a big-endian schema.
+            if !little && field.type_type() == arrow_ipc::Type::Decimal {
+                return None;
+            }
+            ipc_field(field)
+        })
+        .collect::<Option<Vec<_>>>()
+        .ok_or(Unconvertible)?;
+    Ok((arrow_schema::Schema::new(fields), Vec::new()))
 }
 
 /// Whether `field`'s type, or a type below it, is a later one.
@@ -147,7 +126,7 @@ fn hold(
     use arrow_ipc::Type;
     use arrow_schema::DataType;
     if !names_later(field) {
-        return contain_decode(|| arrow_schema::Field::from(field));
+        return ipc_field(field);
     }
     if field.dictionary().is_some() {
         return None;
@@ -203,27 +182,181 @@ fn hold(
     ))
 }
 
-/// The Arrow schema the native conversion gives the file `metadata`, with
-/// its embedded schema's hints, or with `held` in their place: the embedded
-/// schema as `ipc_schema` held it, when it names a later type.
+/// An IPC field as Arrow 55 converts it (`From<arrow_ipc::Field>`): its
+/// name, type and nullability, and a dictionary's ordering; `None` where
+/// that conversion panics. Its custom metadata, which nothing reads, is
+/// left out.
 #[cfg(feature = "parquet")]
-pub(crate) fn arrow_schema(
-    metadata: &ParquetMetaData,
-    held: Option<&arrow_schema::Schema>,
-) -> Result<arrow_schema::Schema, ParquetError> {
-    use parquet::{
-        arrow::{encode_arrow_schema, parquet_to_arrow_schema, ARROW_SCHEMA_META_KEY},
-        file::metadata::KeyValue,
-    };
-    let schema = metadata.file_metadata().schema_descr();
-    match held {
-        Some(held) => {
-            let hint = encode_arrow_schema(held);
-            let held = vec![KeyValue::new(ARROW_SCHEMA_META_KEY.to_string(), hint)];
-            parquet_to_arrow_schema(schema, Some(&held))
-        }
-        None => parquet_to_arrow_schema(schema, metadata.file_metadata().key_value_metadata()),
+fn ipc_field(field: arrow_ipc::Field<'_>) -> Option<arrow_schema::Field> {
+    let name = field.name()?;
+    let data_type = ipc_type(field, true)?;
+    let ordered = field
+        .dictionary()
+        .is_some_and(|dictionary| dictionary.isOrdered());
+    Some(arrow_schema::Field::new(name, data_type, field.nullable()).with_dict_is_ordered(ordered))
+}
+
+/// An IPC field's type as Arrow 55 converts it (`get_data_type`), or `None`
+/// where that conversion panics: a type it does not know, a missing type
+/// table, child or index type, a width, unit or mode it does not know, a
+/// decimal's precision or scale out of range, or a union's repeated type id.
+#[cfg(feature = "parquet")]
+fn ipc_type(field: arrow_ipc::Field<'_>, dictionary: bool) -> Option<arrow_schema::DataType> {
+    use arrow_ipc::{DateUnit, IntervalUnit as Interval, Precision, TimeUnit as Time, Type};
+    use arrow_schema::{DataType, IntervalUnit, TimeUnit, UnionFields, UnionMode};
+    if let (Some(encoding), true) = (field.dictionary(), dictionary) {
+        let index = encoding.indexType()?;
+        let index = integer(index.bitWidth(), index.is_signed())?;
+        return Some(DataType::Dictionary(
+            Box::new(index),
+            Box::new(ipc_type(field, false)?),
+        ));
     }
+    let unit = |unit: Time| match unit {
+        Time::SECOND => Some(TimeUnit::Second),
+        Time::MILLISECOND => Some(TimeUnit::Millisecond),
+        Time::MICROSECOND => Some(TimeUnit::Microsecond),
+        Time::NANOSECOND => Some(TimeUnit::Nanosecond),
+        _ => None,
+    };
+    let children = || field.children();
+    let only = || match children()? {
+        children if children.len() == 1 => ipc_field(children.get(0)).map(Arc::new),
+        _ => None,
+    };
+    Some(match field.type_type() {
+        Type::Null => DataType::Null,
+        Type::Bool => DataType::Boolean,
+        Type::Int => {
+            let int = field.type_as_int()?;
+            integer(int.bitWidth(), int.is_signed())?
+        }
+        Type::Binary => DataType::Binary,
+        Type::BinaryView => DataType::BinaryView,
+        Type::LargeBinary => DataType::LargeBinary,
+        Type::Utf8 => DataType::Utf8,
+        Type::Utf8View => DataType::Utf8View,
+        Type::LargeUtf8 => DataType::LargeUtf8,
+        Type::FixedSizeBinary => {
+            DataType::FixedSizeBinary(field.type_as_fixed_size_binary()?.byteWidth())
+        }
+        Type::FloatingPoint => match field.type_as_floating_point()?.precision() {
+            Precision::HALF => DataType::Float16,
+            Precision::SINGLE => DataType::Float32,
+            Precision::DOUBLE => DataType::Float64,
+            _ => return None,
+        },
+        Type::Date => match field.type_as_date()?.unit() {
+            DateUnit::DAY => DataType::Date32,
+            DateUnit::MILLISECOND => DataType::Date64,
+            _ => return None,
+        },
+        Type::Time => {
+            let time = field.type_as_time()?;
+            match (time.bitWidth(), unit(time.unit())?) {
+                (32, unit @ (TimeUnit::Second | TimeUnit::Millisecond)) => DataType::Time32(unit),
+                (64, unit @ (TimeUnit::Microsecond | TimeUnit::Nanosecond)) => {
+                    DataType::Time64(unit)
+                }
+                _ => return None,
+            }
+        }
+        Type::Timestamp => {
+            let timestamp = field.type_as_timestamp()?;
+            let zone = timestamp.timezone().map(Into::into);
+            DataType::Timestamp(unit(timestamp.unit())?, zone)
+        }
+        Type::Interval => match field.type_as_interval()?.unit() {
+            Interval::YEAR_MONTH => DataType::Interval(IntervalUnit::YearMonth),
+            Interval::DAY_TIME => DataType::Interval(IntervalUnit::DayTime),
+            Interval::MONTH_DAY_NANO => DataType::Interval(IntervalUnit::MonthDayNano),
+            _ => return None,
+        },
+        Type::Duration => DataType::Duration(unit(field.type_as_duration()?.unit())?),
+        Type::List => DataType::List(only()?),
+        Type::LargeList => DataType::LargeList(only()?),
+        Type::FixedSizeList => {
+            let child = only()?;
+            DataType::FixedSizeList(child, field.type_as_fixed_size_list()?.listSize())
+        }
+        Type::Struct_ => DataType::Struct(match children() {
+            Some(children) => children.iter().map(ipc_field).collect::<Option<_>>()?,
+            None => arrow_schema::Fields::empty(),
+        }),
+        Type::RunEndEncoded => match children()? {
+            children if children.len() == 2 => DataType::RunEndEncoded(
+                Arc::new(ipc_field(children.get(0))?),
+                Arc::new(ipc_field(children.get(1))?),
+            ),
+            _ => return None,
+        },
+        Type::Map => {
+            let sorted = field.type_as_map()?.keysSorted();
+            DataType::Map(only()?, sorted)
+        }
+        Type::Decimal => {
+            let decimal = field.type_as_decimal()?;
+            let precision = u8::try_from(decimal.precision()).ok()?;
+            let scale = i8::try_from(decimal.scale()).ok()?;
+            match decimal.bitWidth() {
+                128 => DataType::Decimal128(precision, scale),
+                256 => DataType::Decimal256(precision, scale),
+                _ => return None,
+            }
+        }
+        Type::Union => {
+            let union = field.type_as_union()?;
+            let mode = match union.mode() {
+                arrow_ipc::UnionMode::Dense => UnionMode::Dense,
+                arrow_ipc::UnionMode::Sparse => UnionMode::Sparse,
+                _ => return None,
+            };
+            let fields = children()
+                .into_iter()
+                .flatten()
+                .map(ipc_field)
+                .collect::<Option<Vec<_>>>()?;
+            // Each type id once, as Arrow 55's union fields check them: its
+            // bit in a 128-bit set, the shift wrapping as a release build's
+            // does. Without ids, the fields take 0, 1 and so on, as many as
+            // an `i8` counts their number.
+            let ids: Vec<i8> = match union.typeIds() {
+                Some(ids) => ids.iter().map(|id| id as i8).collect(),
+                None => (0..fields.len() as i8).collect(),
+            };
+            let mut seen = 0u128;
+            for &id in &ids {
+                let bit = 1u128.wrapping_shl(i32::from(id) as u32);
+                if seen & bit != 0 {
+                    return None;
+                }
+                seen |= bit;
+            }
+            let fields: UnionFields = ids
+                .into_iter()
+                .zip(fields.into_iter().map(Arc::new))
+                .collect();
+            DataType::Union(fields, mode)
+        }
+        _ => return None,
+    })
+}
+
+/// An IPC integer type of `bits` bits, signed or not, as Arrow 55 knows one.
+#[cfg(feature = "parquet")]
+fn integer(bits: i32, signed: bool) -> Option<arrow_schema::DataType> {
+    use arrow_schema::DataType;
+    Some(match (bits, signed) {
+        (8, true) => DataType::Int8,
+        (8, false) => DataType::UInt8,
+        (16, true) => DataType::Int16,
+        (16, false) => DataType::UInt16,
+        (32, true) => DataType::Int32,
+        (32, false) => DataType::UInt32,
+        (64, true) => DataType::Int64,
+        (64, false) => DataType::UInt64,
+        _ => return None,
+    })
 }
 
 #[cfg(feature = "arrow")]
@@ -334,160 +467,11 @@ mod stream {
     }
 }
 
-/// Run one native Arrow or Parquet call on admitted input with its panic
-/// contained and silent; `None` reports that the call panicked on a malformed
-/// footer, page header, page or embedded schema. Wrap only the call into the
-/// Arrow or Parquet crate: a panic in yamaa's own code around it is a bug,
-/// which must print and reach the caller's own boundary rather than read as
-/// malformed input.
-///
-/// The process's panic hook prints every panic, caught or not. So the first
-/// call wraps the hook installed at that moment, once for the process
-/// (`quiet::install`). The wrapper prints nothing for the panic of a call
-/// inside `contain_decode`, and passes every other panic to the hook it wraps.
-/// That includes a further panic on the same thread while the contained one
-/// unwinds, such as a destructor that panics, after which the process aborts:
-/// so the abort keeps its message. A hook installed later replaces the
-/// wrapper. A `panic = "abort"` build cannot contain a panic, so it keeps the
-/// hook it has.
-#[cfg(feature = "parquet")]
-pub(crate) fn contain_decode<T>(decode: impl FnOnce() -> T) -> Option<T> {
-    quiet::install();
-    let _inside = quiet::Inside::enter();
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(decode)).ok()
-}
-
-/// The most encoding statistics a column chunk lists in a file that 55's
-/// decoder reads. Each entry counts the pages of one page type and encoding,
-/// so a chunk lists each pair at most once, and 55 converts a page type and
-/// an encoding only from their known values.
-#[cfg(feature = "parquet")]
-pub(crate) const ENCODING_STATS: usize =
-    parquet::format::PageType::ENUM_VALUES.len() * parquet::format::Encoding::ENUM_VALUES.len();
-
-/// The panic hook wrapper that keeps contained panics silent.
-#[cfg(feature = "parquet")]
-mod quiet {
-    use std::{cell::Cell, panic, sync::Once};
-
-    thread_local! {
-        /// How many `contain_decode` calls the current thread is inside.
-        #[cfg(not(all(windows, target_env = "gnu")))]
-        static DEPTH: Cell<usize> = const { Cell::new(0) };
-        // Windows GNU uses the lazy TLS backend even for const initializers.
-        // Default keeps that backend's expansion out of Clippy's const hint.
-        #[cfg(all(windows, target_env = "gnu"))]
-        static DEPTH: Cell<usize> = Cell::default();
-        /// Whether the panic of the innermost `contain_decode` call on the
-        /// current thread is unwinding.
-        #[cfg(not(all(windows, target_env = "gnu")))]
-        static UNWINDING: Cell<bool> = const { Cell::new(false) };
-        #[cfg(all(windows, target_env = "gnu"))]
-        static UNWINDING: Cell<bool> = Cell::default();
-    }
-
-    /// Whether the current thread is inside `contain_decode`.
-    pub(super) fn contained() -> bool {
-        DEPTH.try_with(|depth| depth.get() > 0).unwrap_or(false)
-    }
-
-    /// Whether the wrapper keeps the panic being reported silent: the first
-    /// panic of the innermost `contain_decode` call on the current thread. A
-    /// panic while that one unwinds is reported, since the runtime then
-    /// aborts the process.
-    pub(super) fn silent() -> bool {
-        contained()
-            && !UNWINDING
-                .try_with(|unwinding| unwinding.replace(true))
-                .unwrap_or(true)
-    }
-
-    /// Wrap the installed panic hook, once for the process.
-    ///
-    /// Stable Rust has no atomic hook update (`std::panic::update_hook` is
-    /// unstable), so this takes the installed hook and then sets the wrapper,
-    /// in two steps. A panic on another thread between the two is reported
-    /// by Rust's default hook, and a hook that another thread sets between
-    /// them is replaced.
-    pub(super) fn install() {
-        static WRAPPED: Once = Once::new();
-        // `take_hook` panics on a thread that is already panicking.
-        if cfg!(panic = "unwind") && !std::thread::panicking() {
-            WRAPPED.call_once(|| {
-                let previous = panic::take_hook();
-                panic::set_hook(Box::new(move |info| {
-                    if !silent() {
-                        previous(info);
-                    }
-                }));
-            });
-        }
-    }
-
-    /// Marks the current thread inside `contain_decode` until it is dropped.
-    pub(super) struct Inside {
-        /// Whether an enclosing call's panic was unwinding when this call
-        /// began, as when a destructor run by that unwind calls in again.
-        enclosing: bool,
-    }
-
-    impl Inside {
-        pub(super) fn enter() -> Self {
-            DEPTH.with(|depth| depth.set(depth.get() + 1));
-            Self {
-                enclosing: UNWINDING.with(|unwinding| unwinding.replace(false)),
-            }
-        }
-    }
-
-    impl Drop for Inside {
-        fn drop(&mut self) {
-            UNWINDING.with(|unwinding| unwinding.set(self.enclosing));
-            DEPTH.with(|depth| depth.set(depth.get() - 1));
-        }
-    }
-}
-
-#[cfg(feature = "parquet")]
-pub(crate) fn row_group_reader<'a>(
-    source: Arc<bytes::Bytes>,
-    group: &'a RowGroupMetaData,
-    metadata: &'a ParquetMetaData,
-    row_group: usize,
-    properties: Arc<ReaderProperties>,
-) -> Result<SerializedRowGroupReader<'a, bytes::Bytes>, ParquetError> {
-    SerializedRowGroupReader::new(
-        source,
-        group,
-        metadata
-            .offset_index()
-            .and_then(|groups| groups.get(row_group))
-            .map(Vec::as_slice),
-        properties,
-    )
-}
-
 #[cfg(feature = "parquet")]
 pub(crate) fn timestamp_micros(utc: bool) -> LogicalType {
     LogicalType::Timestamp {
         is_adjusted_to_u_t_c: utc,
         unit: TimeUnit::MICROS(Default::default()),
-    }
-}
-
-#[cfg(all(test, feature = "parquet"))]
-pub(crate) fn timestamp_millis(utc: bool) -> LogicalType {
-    LogicalType::Timestamp {
-        is_adjusted_to_u_t_c: utc,
-        unit: TimeUnit::MILLIS(Default::default()),
-    }
-}
-
-#[cfg(all(test, feature = "parquet"))]
-pub(crate) fn integer(bits: i8, signed: bool) -> LogicalType {
-    LogicalType::Integer {
-        bit_width: bits,
-        is_signed: signed,
     }
 }
 
@@ -499,99 +483,4 @@ pub(crate) fn writer_properties_max_rows(
     parquet::file::properties::WriterProperties::builder()
         .set_max_row_group_size(rows)
         .build()
-}
-
-#[cfg(feature = "parquet")]
-pub(crate) fn column_logical(descriptor: &ColumnDescriptor) -> Option<Logical> {
-    descriptor.logical_type().as_ref().map(logical_type)
-}
-
-/// A logical type as the reader names it (`parquet_source::format`).
-#[cfg(feature = "parquet")]
-pub(crate) fn logical_type(logical: &LogicalType) -> Logical {
-    let unit = |unit: &TimeUnit| match unit {
-        TimeUnit::MILLIS(_) => Unit::Millis,
-        TimeUnit::MICROS(_) => Unit::Micros,
-        TimeUnit::NANOS(_) => Unit::Nanos,
-    };
-    match logical {
-        LogicalType::String => Logical::String,
-        LogicalType::Map => Logical::Map,
-        LogicalType::List => Logical::List,
-        LogicalType::Enum => Logical::Enum,
-        LogicalType::Decimal { scale, precision } => Logical::Decimal {
-            scale: *scale,
-            precision: *precision,
-        },
-        LogicalType::Date => Logical::Date,
-        LogicalType::Time {
-            is_adjusted_to_u_t_c,
-            unit: time,
-        } => Logical::Time {
-            utc: *is_adjusted_to_u_t_c,
-            unit: unit(time),
-        },
-        LogicalType::Timestamp {
-            is_adjusted_to_u_t_c,
-            unit: time,
-        } => Logical::Timestamp {
-            utc: *is_adjusted_to_u_t_c,
-            unit: unit(time),
-        },
-        LogicalType::Integer {
-            bit_width,
-            is_signed,
-        } => Logical::Integer {
-            bits: *bit_width,
-            signed: *is_signed,
-        },
-        LogicalType::Unknown => Logical::Unknown,
-        LogicalType::Json => Logical::Json,
-        LogicalType::Bson => Logical::Bson,
-        LogicalType::Uuid => Logical::Uuid,
-        LogicalType::Float16 => Logical::Float16,
-    }
-}
-
-#[cfg(all(test, feature = "parquet"))]
-mod tests {
-    use super::{
-        contain_decode,
-        quiet::{contained, silent},
-    };
-
-    #[test]
-    fn only_a_thread_inside_contain_decode_is_silent() {
-        assert!(!contained());
-        // A nested call that panics leaves the outer call silent; another
-        // thread is outside. Nothing asserts inside, where a failure would
-        // be contained too.
-        let inside = contain_decode(|| {
-            let nested = contain_decode::<()>(|| panic!("a nested contained panic"));
-            let other = std::thread::spawn(contained).join().unwrap();
-            (nested.is_none(), contained(), other, silent())
-        });
-        assert_eq!(inside, Some((true, true, false, true)));
-        assert!(!contained());
-    }
-
-    /// The wrapper asks `silent` once per panic it reports. Each call here
-    /// stands for one report.
-    #[test]
-    fn only_the_first_panic_of_a_contained_call_is_silent() {
-        assert!(!silent());
-        let inside = contain_decode(|| {
-            // The call's own panic, then another while that one unwinds.
-            let first = (silent(), silent());
-            // A call that a destructor of that unwind makes starts afresh,
-            // and the enclosing call's panic is still unwinding after it.
-            let nested = contain_decode(|| (silent(), silent()));
-            (first, nested, silent())
-        });
-        assert_eq!(inside, Some(((true, false), Some((true, false)), false)));
-        // Each call starts afresh, and a thread outside is never silent.
-        assert_eq!(contain_decode(silent), Some(true));
-        assert_eq!(contain_decode(silent), Some(true));
-        assert!(!silent());
-    }
 }

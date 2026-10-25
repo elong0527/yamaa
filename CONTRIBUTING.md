@@ -15,7 +15,7 @@ applies.
 | Area | Responsibility |
 | --- | --- |
 | `rules/`, `yaml/` | Normative contracts, diagnostics, schemas and grammar fixtures. |
-| `rust/crates/yamaa-core/` | Specification admission, expressions, dataset execution, project lifecycle, verification and submission metadata composition. |
+| `rust/crates/yamaa-core/` | Specification admission, expressions, binding (one walk, which `run()` takes over the captured input schemas and `check()` over the declared ones), dataset execution, project lifecycle, verification and submission metadata composition. |
 | `rust/crates/yamaa-adapters/` | Codecs, storage formats, physical IO and filesystem environment capture. |
 | `rust/crates/yamaa-boundary/` | The interface handshake of both host bindings, the gate every native call passes and the census of live native handles. |
 | `rust/crates/yamaa-python/`, `rust/crates/yamaa-r/` | Host arguments, callbacks, scalar conversion and owned result views, over the facade. |

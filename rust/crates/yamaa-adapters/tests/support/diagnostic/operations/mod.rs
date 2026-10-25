@@ -162,7 +162,7 @@ fn path(study: &Scratch, name: &str) -> String {
 
 /// Every file of `study` and its bytes, by its path there with forward
 /// slashes.
-fn contents(study: &Scratch) -> Files {
+pub fn contents(study: &Scratch) -> Files {
     state(study).files
 }
 
