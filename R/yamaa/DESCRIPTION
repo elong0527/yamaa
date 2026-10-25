@@ -1,5 +1,5 @@
 Package: yamaa
-Title: Clinical Data Specifications with the Shared 'Rust' Engine
+Title: Clinical Data Standardization Using 'YAML' Specifications
 Version: 0.6.0
 Authors@R: c(
     person("Yilong", "Zhang", email = "elong0527@gmail.com", role = c("aut", "cre")),
@@ -11,12 +11,14 @@ Authors@R: c(
            comment = "listed in inst/AUTHORS"),
     person("Evan Miller and the ReadStat authors", role = c("ctb", "cph"),
            comment = "bundled ReadStat C sources, inst/LICENSE-READSTAT.txt"))
-Description: Builds clinical data specifications, checks declarations, and
-    renders submission metadata through the shared 'Rust' engine. Returns
-    owned data frames of plain R values and structured diagnostics, with
-    explicit publication of retained outputs. The specification language is
-    documented at <https://elong0527.github.io/yamaa/>.
+Description: Builds standardized clinical trial datasets using 'YAML'
+    specifications. Supports the Study Data Tabulation Model (SDTM) and
+    Analysis Data Model (ADaM), with specification checks, data derivations,
+    and structured diagnostics. Generates submission metadata in
+    'Define-XML' format.
 License: MIT + file LICENSE
+URL: https://elong0527.github.io/yamaa/, https://github.com/elong0527/yamaa
+BugReports: https://github.com/elong0527/yamaa/issues
 Copyright: The yamaa contributors; for the bundled and linked third-party
     code and data, the holders that inst/AUTHORS lists and that
     inst/LICENSE-THIRD-PARTY.txt, inst/LICENSE-READSTAT.txt,
