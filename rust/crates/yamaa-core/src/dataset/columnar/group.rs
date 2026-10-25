@@ -3,8 +3,8 @@
 //! text is exact; temporal precision and float zero signs do not affect
 //! equality, as `table_grouping::Key` defines it. Each row is hashed once
 //! and compared with its group's first row, so no key is copied. A
-//! partitioned run (#3697) groups each partition, then merges the
-//! partitions' groups: the key groups are its combine state.
+//! partitioned run (#3830) groups each partition on its own: its partitions
+//! never split a group (`ResolvedPlan::cut_fields`).
 use crate::table::ValueRef;
 use crate::table_grouping::Key;
 use std::collections::hash_map::{DefaultHasher, Entry};
@@ -135,121 +135,10 @@ pub(super) fn partition<'v>(
     Ok(Groups { offsets, members })
 }
 
-/// The combine step of key groups across partitions (#3697): merge the
-/// groups of consecutive partitions, each formed by [`partition`] over its
-/// own items and naming them by their position in the whole input, into the
-/// groups of the whole input. Equal keys, as `table_grouping::Key` compares
-/// them, join one group across partition boundaries; a group keeps the place
-/// of its first occurrence, and its members stay in item order because later
-/// partitions hold later items. `value(item, position)` reads an item's key
-/// value at a key position, for `width` positions.
-pub(super) fn merge<'v>(
-    parts: &[Vec<Vec<usize>>],
-    width: usize,
-    value: impl Fn(usize, usize) -> ValueRef<'v>,
-) -> Result<Groups, TryReserveError> {
-    let mut first: HashMap<u64, usize> = HashMap::new();
-    let mut chain: Vec<usize> = Vec::new();
-    let mut merged: Vec<Vec<usize>> = Vec::new();
-    let equal = |left: usize, right: usize| {
-        (0..width)
-            .all(|position| Key::from(value(left, position)) == Key::from(value(right, position)))
-    };
-    for groups in parts {
-        for members in groups {
-            let representative = members[0];
-            let mut hasher = DefaultHasher::new();
-            for position in 0..width {
-                Key::from(value(representative, position)).hash(&mut hasher);
-            }
-            let group = match first.entry(hasher.finish()) {
-                Entry::Vacant(entry) => {
-                    entry.insert(merged.len());
-                    chain.push(usize::MAX);
-                    merged.try_reserve(1)?;
-                    merged.push(Vec::new());
-                    merged.len() - 1
-                }
-                Entry::Occupied(entry) => {
-                    let mut group = *entry.get();
-                    loop {
-                        if equal(merged[group][0], representative) {
-                            break group;
-                        }
-                        if chain[group] == usize::MAX {
-                            chain.push(usize::MAX);
-                            merged.try_reserve(1)?;
-                            merged.push(Vec::new());
-                            chain[group] = merged.len() - 1;
-                            break merged.len() - 1;
-                        }
-                        group = chain[group];
-                    }
-                }
-            };
-            merged[group].try_reserve(members.len())?;
-            merged[group].extend_from_slice(members);
-        }
-    }
-    let mut offsets = Vec::new();
-    offsets.try_reserve_exact(merged.len() + 1)?;
-    offsets.push(0);
-    let mut members = Vec::new();
-    members.try_reserve_exact(merged.iter().map(Vec::len).sum())?;
-    for group in merged {
-        members.extend(group);
-        offsets.push(members.len());
-    }
-    Ok(Groups { offsets, members })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::value::FiniteFloat;
-
-    /// Groups formed over each partition and merged equal the groups of
-    /// the whole input, for every way of dividing it: a group that spans
-    /// partitions keeps its first occurrence's place and every member in
-    /// order, and equality is `Key`'s (missing equal to missing, float zero
-    /// signs equal, text exact) across partition boundaries too.
-    #[test]
-    fn merged_partition_groups_equal_the_groups_of_the_whole_input() {
-        let values = [
-            ValueRef::Int(2),
-            ValueRef::Missing,
-            ValueRef::Float(FiniteFloat::new(-0.0).unwrap()),
-            ValueRef::Int(2),
-            ValueRef::Missing,
-            ValueRef::Float(FiniteFloat::new(0.0).unwrap()),
-            ValueRef::Str("2"),
-            ValueRef::Int(2),
-        ];
-        // Authored: first occurrences 0, 1, 2 and 6, members in item order.
-        let whole = vec![vec![0, 3, 7], vec![1, 4], vec![2, 5], vec![6]];
-        for bounds in [
-            vec![0, 8],
-            vec![0, 1, 2, 3, 4, 5, 6, 7, 8],
-            vec![0, 3, 3, 8],
-            vec![0, 5, 8],
-            vec![0, 0, 2, 7, 8, 8],
-        ] {
-            let parts: Vec<Vec<Vec<usize>>> = bounds
-                .windows(2)
-                .map(|range| {
-                    let (start, end) = (range[0], range[1]);
-                    partition(end - start, 1, |item, _| values[start + item])
-                        .unwrap()
-                        .into_vecs()
-                        .into_iter()
-                        .map(|members| members.into_iter().map(|item| start + item).collect())
-                        .collect()
-                })
-                .collect();
-            let merged = merge(&parts, 1, |item, _| values[item]).unwrap();
-            assert_eq!(merged.into_vecs(), whole, "partition bounds {bounds:?}");
-        }
-    }
 
     #[test]
     fn groups_follow_first_occurrence_and_key_equality() {
