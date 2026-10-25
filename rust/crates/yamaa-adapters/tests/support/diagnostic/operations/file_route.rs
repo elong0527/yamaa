@@ -31,6 +31,7 @@ use crate::support::diagnostic::{
 use yamaa_core::{domain_entry::Request, json::Value};
 
 pub(super) const FILES: &[File] = &[
+    fixture!("aggregate_key_reads.json"),
     fixture!("aggregate_record_operations.json"),
     fixture!("case_item_order.json"),
     fixture!("check_keyless_donor.json"),
