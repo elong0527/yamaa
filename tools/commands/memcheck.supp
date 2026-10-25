@@ -5,11 +5,12 @@
 # a pointer into the block's middle: a hash table through its control bytes,
 # an Arc through its data. An entry names the allocating function and, where
 # that function serves other callers too, the caller that the native check
-# showed. A definite or indirect leak at the same root, the same function
-# reached from another caller, and a possibly lost block at any other root
-# still count as errors; memcheck_control.c proves each before every
-# valgrind check. Patterns match a Rust function's demangled and mangled
-# names alike.
+# showed. A definite leak at the same root, the same function reached from
+# another caller, and a possibly lost block at any other root still count as
+# errors; memcheck_control.c proves each before every valgrind check.
+# memcheck's default does not count an indirectly lost block, which only a
+# definitely lost one reaches, and that block counts. Patterns match a Rust
+# function's demangled and mangled names alike.
 
 # extendr-api's `static OWNERSHIP: Lazy<Mutex<Ownership>>`, the protection
 # map that the R binding's first call to R fills (ownership.rs).
