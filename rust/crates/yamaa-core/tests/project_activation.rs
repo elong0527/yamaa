@@ -1,6 +1,13 @@
-//! Project contracts: project activation, project call binding, project call
-//! document, project calls, project codelist binding, project codelist checks,
-//! project codelist diagnostics and project collections.
+//! Project contracts: the seams of project activation, project call
+//! binding, the call document, project calls, codelist binding, codelist
+//! checks, codelist diagnostics and project collections that the
+//! diagnostic replay cannot reach, each named in its test's first comment:
+//! a scripted host-function port with its effect trace and observations,
+//! the internal call binder, call decoder and `ProjectCalls::admit`, the
+//! codelist checks a binding returns and their equality kernel, projections
+//! of hand-built check records, and generated capacity. What a
+//! specification's codelist bindings refuse is
+//! `tests/fixtures/diagnostics/codelist_binding.json`'s (#3798).
 mod project {
     mod project_activation {
         use crate::support::roots::{Case, Definition, Parameter};
@@ -161,6 +168,9 @@ mod project {
             }
         }
 
+        /// A seam the replay cannot reach: a scripted host-function port's
+        /// effect trace and the activation's observations without a packaging
+        /// lock.
         #[test]
         fn absent_packaging_lock_still_binds_and_runs_every_conformance_case() {
             use yamaa_core::project_activation::{
@@ -223,6 +233,9 @@ mod project {
             port.trace.push("study.read".into());
             Ok(bindings)
         }
+        /// A seam the replay cannot reach: a scripted host-function port's
+        /// effect trace, repeated before each build's study read, and the cases
+        /// it ran.
         #[test]
         fn every_successful_build_repeats_lock_binding_and_all_cases_before_study() {
             let functions = [function("identity")];
@@ -254,6 +267,8 @@ mod project {
                     .collect::<Vec<_>>()
             );
         }
+        /// A seam the replay cannot reach: a scripted port's lock and binding
+        /// failures and the effects they stop.
         #[test]
         fn lock_and_binding_failures_precede_code_tests_and_all_study_reads() {
             let functions = [function("first"), function("second")];
@@ -277,6 +292,8 @@ mod project {
                 vec!["lock:yamaa+called-packages", "bind:first", "bind:second"]
             );
         }
+        /// A seam the replay cannot reach: the case mismatches an activation
+        /// collects and a scripted port's original opaque failures.
         #[test]
         fn all_mismatches_and_original_opaque_failures_collect_before_study() {
             let functions = [function("identity")];
@@ -336,6 +353,8 @@ mod project {
             }
             assert!(!port.trace.iter().any(|event| event == "study.read"));
         }
+        /// A seam the replay cannot reach: the cases each function runs after
+        /// an ordinary test failure, in a scripted port's effect trace.
         #[test]
         fn every_called_function_runs_every_case_even_after_ordinary_test_failure() {
             let functions = [function("first"), function("second")];
@@ -373,6 +392,8 @@ mod project {
                     .collect::<Vec<_>>()
             );
         }
+        /// A seam the replay cannot reach: every binding failure of a scripted
+        /// port, collected before any test or study invocation.
         #[test]
         fn all_binding_failures_collect_without_any_test_or_study_invocation() {
             let functions = [function("first"), function("second"), function("third")];
@@ -401,6 +422,8 @@ mod project {
                 ]
             );
         }
+        /// A seam the replay cannot reach: a user interrupt's original payload,
+        /// and the cases and functions a scripted port never runs after it.
         #[test]
         fn user_interrupt_preserves_original_payload_and_stops_remaining_cases_and_functions() {
             let functions = [function("first"), function("second")];
@@ -428,6 +451,8 @@ mod project {
                 ]
             );
         }
+        /// A seam the replay cannot reach: an empty or duplicate selection
+        /// leaves a scripted port untouched.
         #[test]
         fn no_calls_do_no_activation_work_and_duplicate_selection_has_no_effects() {
             let mut port = Port::new();
@@ -443,6 +468,8 @@ mod project {
             assert!(port.trace.is_empty());
         }
 
+        /// A seam the replay cannot reach: the activation's internal language
+        /// and lock-kind failures, before any effect of a scripted port.
         #[test]
         fn language_and_lock_kind_cannot_escape_static_admission_before_any_port() {
             let functions = [function("identity")];
@@ -484,6 +511,9 @@ mod project {
             assert!(port.trace.is_empty());
         }
 
+        /// A seam the replay cannot reach: the activation's internal language
+        /// failure, before any port effect.
+        ///
         /// The empty port keeps no project functions (#3030 D110), and an
         /// engine that claims no host language selects none (D123): either
         /// refuses the first function before any port effect. A function such
@@ -541,6 +571,8 @@ mod project {
             assert!(port.trace.is_empty());
         }
 
+        /// A seam the replay cannot reach: the functions a borrowed selection
+        /// activates, the cases they run and a scripted port's effect trace.
         #[test]
         fn borrowed_compiler_selection_activates_only_held_definitions_and_repeats_cases() {
             use yamaa_core::project_activation::activate_references;
@@ -603,6 +635,8 @@ mod project {
             );
         }
 
+        /// A seam the replay cannot reach: a borrowed selection's empty and
+        /// duplicate gates leave a scripted port untouched.
         #[test]
         fn borrowed_selection_keeps_empty_and_duplicate_gates_before_ports() {
             use yamaa_core::project_activation::activate_references;
@@ -709,6 +743,8 @@ mod project {
                     observations,
                 )
             }
+            /// A seam the replay cannot reach: the activation observations kept
+            /// beside a later case failure.
             #[test]
             fn later_case_failure_keeps_prior_successes_and_all_short_circuit_observations() {
                 let functions = [function("first"), function("second")];
@@ -763,6 +799,8 @@ mod project {
                 );
                 assert_eq!(port.inner.trace.len(), 6); // lock, two bindings, three successful delegations
             }
+            /// A seam the replay cannot reach: the binding observations of a
+            /// scripted port, with no invented test record.
             #[test]
             fn binding_failures_keep_successful_bindings_without_inventing_test_records() {
                 let functions = [function("first"), function("second"), function("third")];
@@ -788,6 +826,8 @@ mod project {
                 assert!(observations.tests.is_empty());
                 assert_eq!(port.inner.trace.len(), 4);
             }
+            /// A seam the replay cannot reach: the observations an original
+            /// interrupt keeps, and those it stops.
             #[test]
             fn original_interrupt_keeps_completed_cases_and_stops_future_observations() {
                 let functions = [function("first"), function("second")];
@@ -823,6 +863,8 @@ mod project {
                     .iter()
                     .all(|case| case.outcome == TestOutcome::Passed));
             }
+            /// A seam the replay cannot reach: the observations of a scripted
+            /// port's opaque invocation failures, with no invented result.
             #[test]
             fn ordinary_opaque_invocation_failures_collect_with_zero_invented_results() {
                 let functions = [function("first")];
@@ -846,6 +888,8 @@ mod project {
                     ]
                 );
             }
+            /// A seam the replay cannot reach: the original errors of lock and
+            /// binding interrupts, and the bindings attempted before them.
             #[test]
             fn lock_and_binding_interrupts_keep_original_errors_and_only_attempted_bindings() {
                 let functions = [function("first"), function("second"), function("third")];
@@ -883,6 +927,8 @@ mod project {
                     assert!(observations.tests.is_empty());
                 }
             }
+            /// A seam the replay cannot reach: the stage and callback entry an
+            /// unwinding scripted port leaves in the observations.
             #[test]
             fn boundary_unwind_keeps_attempted_stage_and_actual_callback_entry() {
                 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -926,6 +972,8 @@ mod project {
                 }
             }
 
+            /// A seam the replay cannot reach: a repeated lock refusal and an
+            /// empty selection clear the observations before them.
             #[test]
             fn repeated_lock_refusal_and_empty_selection_clear_previous_evidence() {
                 let functions = [function("first")];
@@ -1062,6 +1110,8 @@ mod project {
             }
         }
 
+        /// A seam the replay cannot reach: the internal call binder's argument
+        /// inputs and dependencies over a hand-built catalogue.
         #[test]
         fn stored_arguments_collect_for_key_grain_values_and_read_for_records() {
             let calls = prepared(Input::Reference("SRC.X".into()));
@@ -1087,6 +1137,8 @@ mod project {
             );
         }
 
+        /// A seam the replay cannot reach: the internal call binder's output
+        /// dependency and its internal phase finding.
         #[test]
         fn bare_output_arguments_create_dependencies_and_respect_row_phase_availability() {
             let calls = prepared(Input::Reference("OUT".into()));
@@ -1111,6 +1163,8 @@ mod project {
             );
         }
 
+        /// A seam the replay cannot reach: the internal call binder's scope and
+        /// type findings for one argument.
         #[test]
         fn grouping_fault_keeps_independent_exact_type_fault_for_the_same_argument() {
             let calls = prepared(Input::Reference("SRC.X".into()));
@@ -1148,6 +1202,8 @@ mod project {
             );
         }
 
+        /// A seam the replay cannot reach: the internal call binder's findings
+        /// for an unresolved bare name and for another driver's name.
         #[test]
         fn unresolved_bare_and_wrong_driver_references_keep_existing_diagnostic_priority() {
             let catalog = catalog(ColumnType::Float);
@@ -1172,6 +1228,8 @@ mod project {
             assert_eq!(findings[0].kind, Kind::Scope(ScopeFinding::DriverMismatch));
         }
 
+        /// A seam the replay cannot reach: the literal inputs the internal call
+        /// binder binds without a reference, and its refusal of a call index.
         #[test]
         fn missing_and_full_width_literals_need_no_reference_bindings() {
             let empty = Catalog::compile(&[], &[]).unwrap();
@@ -1257,6 +1315,8 @@ mod project {
             .unwrap()
         }
 
+        /// A seam the replay cannot reach: the call decoder's arguments, with
+        /// their exact kinds, order and source nodes.
         #[test]
         fn references_and_explicit_literals_retain_exact_kinds_order_and_origins() {
             let d = document(call_tree(
@@ -1327,6 +1387,8 @@ mod project {
             }
         }
 
+        /// A seam the replay cannot reach: the call decoder's tagged temporal
+        /// literals and its internal findings.
         #[test]
         fn original_tagged_temporal_literals_keep_kind_and_calendar_admission() {
             // These are the six original validator operands, now observed directly
@@ -1371,6 +1433,8 @@ mod project {
             }
         }
 
+        /// A seam the replay cannot reach: the call decoder's internal
+        /// findings, each at its authored node, and no partial call.
         #[test]
         fn independent_invalid_scalars_keep_all_authored_nodes_without_partial_calls() {
             let d = document(call_tree(
@@ -1423,6 +1487,8 @@ mod project {
             );
         }
 
+        /// A seam the replay cannot reach: a decoded call's internal binding
+        /// findings against its function's metadata.
         #[test]
         fn metadata_checks_all_reference_types_after_explicit_missing() {
             let d = document(call_tree(
@@ -1462,6 +1528,8 @@ mod project {
             );
         }
 
+        /// A seam the replay cannot reach: the call decoder's internal findings
+        /// for retired fields and non-text literal wrappers, by node.
         #[test]
         fn retired_call_fields_and_non_text_literal_wrappers_never_enter_the_model() {
             let d = document(Tree::map(vec![
@@ -1591,6 +1659,8 @@ mod project {
             call(name, vec![("x", Input::Literal(Value::Int(7)))])
         }
 
+        /// A seam the replay cannot reach: the selection and slots
+        /// `ProjectCalls::admit` returns.
         #[test]
         fn slots_follow_environment_order_and_occurrences_keep_their_authored_order() {
             let functions = vec![function("alpha"), function("beta"), function("unused")];
@@ -1630,6 +1700,8 @@ mod project {
             }
         }
 
+        /// A seam the replay cannot reach: the internal findings
+        /// `ProjectCalls::admit` retains.
         #[test]
         fn all_unknown_name_and_independent_argument_faults_are_retained() {
             let functions = vec![function("id")];
@@ -1668,6 +1740,8 @@ mod project {
             );
         }
 
+        /// A seam the replay cannot reach: the calls `ProjectCalls::admit`
+        /// admits without a type fault, and their inputs.
         #[test]
         fn missing_literals_and_unbound_reference_types_do_not_invent_type_faults() {
             let functions = vec![function("id")];
@@ -1685,6 +1759,7 @@ mod project {
             ));
         }
 
+        /// A seam the replay cannot reach: an inherited call's activation slot.
         #[test]
         fn inherited_calls_keep_the_original_activation_slot() {
             let functions = vec![function("id")];
@@ -1700,6 +1775,8 @@ mod project {
             assert_eq!(admitted.calls()[0].slot(), Some(0));
         }
 
+        /// A seam the replay cannot reach: the selection, plans and slots of a
+        /// fully overridden call, and the binder's refusal of an inactive call.
         #[test]
         fn fully_overridden_calls_are_validated_once_without_activation_or_binding() {
             let functions = vec![function("id")];
@@ -1747,6 +1824,8 @@ mod project {
             );
         }
 
+        /// A seam the replay cannot reach: the internal refusal of invalid use
+        /// counts by `ProjectCalls::admit`.
         #[test]
         fn invalid_use_metadata_fails_closed() {
             let functions = vec![function("id")];
@@ -1762,6 +1841,8 @@ mod project {
             ));
         }
 
+        /// A seam the replay cannot reach: an empty admission's selection and
+        /// the internal refusal of duplicate definitions.
         #[test]
         fn empty_calls_select_no_functions_and_duplicate_definitions_never_ambiguously_bind() {
             let f = function("id");
@@ -1778,10 +1859,9 @@ mod project {
     }
     mod project_codelist_binding {
         use crate::support::roots::{Codelist, CodelistType, External, Item, Source};
-        use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             dataset::Check,
-            project_codelist_binding::{bind, Binding, Cause},
+            project_codelist_binding::{bind, Binding},
             project_terminology::Catalogue,
             value::{ColumnType, Value},
         };
@@ -1838,58 +1918,12 @@ mod project {
                 allowed_values,
             }
         }
+        /// A seam the replay cannot reach: the bound codelist check, its
+        /// values as authored, bit for bit. That every verification restating
+        /// the value set is refused is
+        /// `codelist_binding.json::a_fixed_binding_rejects_every_verification_that_restates_its_value_set`.
         #[test]
-        fn complete_static_findings_preserve_all_bindings_and_name_the_redundant_verification() {
-            let cat = catalogue(
-                CodelistType::Text,
-                vec![Value::Str("F".into()), Value::Str("M\0🙂".into())],
-                false,
-                false,
-            );
-            let allowed = ["columns.VALUE.verifications[0].allowed_values"];
-            let Err(findings) = bind(
-                &cat,
-                &[
-                    binding("UNKNOWN", ColumnType::Str, &[]),
-                    binding("CODE", ColumnType::Int, &allowed),
-                ],
-            ) else {
-                panic!("complete rejection")
-            };
-            assert_eq!(findings.len(), 3);
-            for (finding, condition, rule) in [
-                (&findings[0], "unknown_codelist", "CT-1"),
-                (&findings[1], "codelist_type_mismatch", "CT-8"),
-                (&findings[2], "redundant_declaration", "CT-9"),
-            ] {
-                let d = finding.diagnostic();
-                assert_eq!(
-                    (
-                        d.definition().phase,
-                        d.definition().condition,
-                        d.definition().rule
-                    ),
-                    ("validation", condition, Some(rule))
-                );
-                assert_eq!(d.context["column"], JsonValue::String("VALUE".into()));
-            }
-            let d = findings[2].diagnostic();
-            assert_eq!(d.spec_paths, allowed);
-            assert_eq!(
-                d.context["stated_by"],
-                JsonValue::String("columns.VALUE.submission.codelist".into())
-            );
-            assert_eq!(d.context["codelist"], JsonValue::String("CODE".into()));
-            assert!(matches!(
-                findings[1].cause(),
-                Cause::TypeMismatch {
-                    expected: ColumnType::Str,
-                    actual: ColumnType::Int
-                }
-            ));
-        }
-        #[test]
-        fn fixed_binding_keeps_numeric_authorship_and_rejects_every_restating_verification() {
+        fn fixed_binding_keeps_numeric_authorship() {
             let cat = catalogue(
                 CodelistType::Float,
                 vec![Value::Int(9_007_199_254_740_993), Value::float(-0.0)],
@@ -1908,22 +1942,14 @@ mod project {
                 panic!("authored float")
             };
             assert_eq!(zero.get().to_bits(), (-0.0f64).to_bits());
-            // Equal or different, a second statement of the value set is redundant.
-            let allowed = ["first", "second"];
-            let Err(findings) = bind(&cat, &[binding("CODE", ColumnType::Float, &allowed)]) else {
-                panic!("redundant verifications")
-            };
-            assert_eq!(
-                findings
-                    .iter()
-                    .map(|finding| finding.diagnostic().spec_paths)
-                    .collect::<Vec<_>>(),
-                [["first"], ["second"]]
-            );
         }
+        /// A seam the replay cannot reach: the codelist checks a binding
+        /// returns, the listed values of an extensible list and none for an
+        /// external dictionary. What each refuses beside an allowed values
+        /// verification, or a column of another type, is
+        /// `codelist_binding.json`'s.
         #[test]
-        fn extensible_lists_are_enforced_and_external_dictionaries_leave_verifications_independent()
-        {
+        fn extensible_lists_are_enforced_and_external_dictionaries_bind_no_check() {
             let extensible = catalogue(
                 CodelistType::Text,
                 vec![Value::Str("F".into())],
@@ -1935,17 +1961,11 @@ mod project {
                 &checks[0].verification.check,
                 Check::Codelist { values, .. } if values == &[Value::Str("F".into())]
             ));
-            assert!(
-                matches!(bind(&extensible, &[binding("CODE", ColumnType::Str, &["allowed"])]), Err(f) if f.len() == 1)
-            );
             let external = catalogue(CodelistType::Text, vec![], false, true);
             assert!(
                 bind(&external, &[binding("CODE", ColumnType::Str, &["allowed"])])
                     .unwrap()
                     .is_empty()
-            );
-            assert!(
-                matches!(bind(&external, &[binding("CODE", ColumnType::Int, &["allowed"])]), Err(f) if f.len() == 1)
             );
         }
     }
@@ -1956,6 +1976,8 @@ mod project {
             value::Value,
         };
 
+        /// A seam the replay cannot reach: the codelist equality kernel's
+        /// offending rows, and the finding it makes.
         #[test]
         fn numeric_codes_compare_exactly_across_integer_binary64_and_zero_representations() {
             let check = Check::Codelist {
@@ -1993,6 +2015,8 @@ mod project {
                 ("verification", "allowed_values_failed", Some("CT-7"))
             );
         }
+        /// A seam the replay cannot reach: the codelist equality kernel's
+        /// offending rows over text, and no finding for an empty list.
         #[test]
         fn text_codes_use_scalar_equality_and_empty_fixed_lists_only_admit_missing() {
             let check = Check::Codelist {
@@ -2066,6 +2090,8 @@ mod project {
                 denominator: None,
             }
         }
+        /// A seam the replay cannot reach: the projection of a hand-built check
+        /// record, whose context borrows its keys and values.
         #[test]
         fn complete_context_borrows_exact_keys_values_and_selected_metadata() {
             let compiled = compiled();
@@ -2109,6 +2135,8 @@ mod project {
                 result
             );
         }
+        /// A seam the replay cannot reach: the projection's internal refusal of
+        /// an invalid hand-built observation.
         #[test]
         fn late_invalid_observations_refuse_the_complete_report() {
             let compiled = compiled();
@@ -2137,6 +2165,8 @@ mod project {
             ));
         }
 
+        /// A seam the replay cannot reach: the projection's internal refusal of
+        /// a hand-built record of another condition.
         #[test]
         fn same_condition_with_a_different_typed_owner_refuses_codelist_projection() {
             let compiled = compiled();
@@ -2181,6 +2211,8 @@ mod project {
                 }],
             }
         }
+        /// A seam the replay cannot reach: an admitted function's description
+        /// bytes.
         #[test]
         fn function_metadata_keeps_exact_utf8_and_nul_bytes() {
             let function =
@@ -2191,6 +2223,8 @@ mod project {
             );
         }
 
+        /// A seam the replay cannot reach: the enforced items of a generated
+        /// 10,000-item catalogue, values and not issues.
         #[test]
         fn large_ordered_codelists_preserve_every_admitted_value() {
             let source = Source {
@@ -2228,6 +2262,8 @@ mod project {
                 .eq(values.iter()));
         }
 
+        /// A seam the replay cannot reach: the admission of 200 generated
+        /// function files.
         #[test]
         fn many_small_functions_retain_independent_admission() {
             use yamaa_core::project_environment::{LockKind, LockReference};

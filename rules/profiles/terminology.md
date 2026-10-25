@@ -24,7 +24,7 @@ codelist its project file declares, fails validation, and so does any binding
 checked or run without a project file ([CT-13](#ct-13)).
 
 Fails: `duplicate_define_identifier`, `unknown_codelist`, `project_binding_missing`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::global_duplicates_across_sources_have_no_override`, `rust/crates/yamaa-core/tests/project_execution.rs::compiler_projects_unknown_type_and_redundant_sets_as_static_preflight_causes`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::global_duplicates_across_sources_have_no_override`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/codelist_binding.json::a_binding_of_a_codelist_the_project_does_not_declare_is_unknown_when_prepared`.
 
 `id` and `name` are separate: `id` is what a specification writes, and `name`
 is what a reader sees. [Submission metadata](submission.md)'s `codelist` names
@@ -255,7 +255,7 @@ a `float` codelist to a `float` column. A binding whose codelist `data_type` the
 column's declared type does not admit fails validation.
 
 Fails: `codelist_type_mismatch`.
-Evidence: `rust/crates/yamaa-core/tests/project_execution.rs::compiler_projects_unknown_type_and_redundant_sets_as_static_preflight_causes`, `rust/crates/yamaa-core/tests/project_execution.rs::binding_checks_exact_column_type_and_rejects_restated_item_sets`, `rust/crates/yamaa-adapters/tests/file_resources.rs::integer_terminology_items_admit_equal_float_published_values`.
+Evidence: `rust/crates/yamaa-core/tests/fixtures/diagnostics/codelist_binding.json::a_codelist_whose_data_type_its_column_does_not_admit_is_refused_when_prepared`, `rust/crates/yamaa-core/tests/project_execution.rs::binding_checks_exact_column_type_and_rejects_restated_item_sets`, `rust/crates/yamaa-adapters/tests/file_resources.rs::integer_terminology_items_admit_equal_float_published_values`.
 
 A coded value a column could never hold is a defect in the specification rather
 than a constraint that never fires.
@@ -273,7 +273,7 @@ A value-level binding governs only its own rows and leaves the column's
 verification standing.
 
 Fails: `redundant_declaration`.
-Evidence: `negative-allowed-values-beside-codelist`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::an_allowed_values_check_beside_its_codelist_is_redundant`, `rust/crates/yamaa-core/tests/project_execution.rs::extensible_catalogue_is_enforced_and_states_the_value_set_once`.
+Evidence: `negative-allowed-values-beside-codelist`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/shared_define.json::an_allowed_values_check_beside_its_codelist_is_redundant`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/codelist_binding.json::an_extensible_catalogue_states_the_value_set_once`.
 
 The failure reports the verification's path and, in `stated_by`, the binding's
 path, with the column and the codelist. A binding's items are known where a

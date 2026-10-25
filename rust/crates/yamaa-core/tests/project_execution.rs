@@ -1,7 +1,13 @@
-//! Project contracts: project function execution, project function result,
-//! project lock diagnostics, project terminology, specification codelist
-//! execution, specification project codelists and specification project
-//! functions.
+//! Project contracts: the seams of project function execution, function
+//! results, lock diagnostics, terminology, codelist execution and a
+//! specification's project codelists and functions that the diagnostic
+//! replay cannot reach, each named in its test's first comment: scripted
+//! resolver, decoder, table and host-function ports with their effect traces
+//! and observations, the result comparison kernel, the terminology
+//! validator's internal findings, the resolved plan and executed rows. What
+//! a coded specification refuses is
+//! `tests/fixtures/diagnostics/codelist_binding.json`'s, and what a
+//! specification's project calls refuse is `projects.json`'s (#3798).
 mod project {
     mod project_function_execution {
         //! Shared capture executes compiler-owned calls with already activated bindings.
@@ -209,6 +215,9 @@ mod project {
                 },
             )
         }
+        /// A seam the replay cannot reach: the effect trace of a scripted
+        /// resolver, decoder and function port, and the held snapshot two
+        /// builds share.
         #[test]
         fn checked_calls_execute_through_shared_capture_and_repeat_on_held_snapshots() {
             let trace = Rc::new(RefCell::new(vec![]));
@@ -265,6 +274,9 @@ mod project {
                 &["inspect", "capture", "decode", "call", "inspect", "capture", "decode", "call"]
             );
         }
+        /// A seam the replay cannot reach: the application observer's events
+        /// around each call through scripted ports, and the original failure a
+        /// call raises.
         #[test]
         fn observer_counts_actual_calls_and_preserves_signature_short_circuit_and_original_failure()
         {
@@ -443,6 +455,9 @@ mod project {
             }
         }
 
+        /// A seam the replay cannot reach: a function port without the call's
+        /// signature fails the execution before a scripted resolver, decoder or
+        /// table is touched.
         #[test]
         fn unmatched_activation_signatures_fail_before_every_study_port_and_keep_static_failures_early(
         ) {
@@ -483,6 +498,8 @@ mod project {
             assert_eq!(port.reads, 0);
         }
 
+        /// A seam the replay cannot reach: a nested call's signature is
+        /// admitted before any access to a scripted table.
         #[test]
         fn nested_function_signature_is_admitted_before_any_table_access() {
             struct Untouched;
@@ -535,6 +552,9 @@ mod project {
             assert!(attempt.handler_counts.is_empty() && attempt.retained_verifications.is_empty());
             assert!(trace.borrow().is_empty());
         }
+        /// A seam the replay cannot reach: a scripted table's failing cell
+        /// read, its original payload, and the handler counts an execution
+        /// returns.
         #[test]
         fn compiled_first_available_preserves_operand_cell_failure_without_fallback() {
             struct FailingTable {
@@ -627,6 +647,8 @@ mod project {
             assert!(!source.reads.borrow().contains(&2));
         }
 
+        /// A seam the replay cannot reach: a scripted function port's original
+        /// failure payload and the source observations of the build it fails.
         #[test]
         fn callback_failures_preserve_original_payload_and_source_observations_without_retry() {
             let trace = Rc::new(RefCell::new(vec![]));
@@ -794,6 +816,9 @@ mod project {
                     function("id").definition().clone(),
                 ]
             }
+            /// A seam the replay cannot reach: the owned environment's
+            /// definitions and cases keep their allocations through a rejected
+            /// and an accepted check.
             #[test]
             fn owning_check_preserves_definitions_and_cases_on_rejection_and_success() {
                 let environment = environment(Some(definitions()));
@@ -821,6 +846,8 @@ mod project {
                 assert_eq!(checked.compiled().called_functions(), [1]);
                 assert!(checked.check_diagnostics().is_empty());
             }
+            /// A seam the replay cannot reach: a scripted host-function port's
+            /// activation effects, repeated before each cached study capture.
             #[test]
             fn owned_environment_repeats_selected_activation_before_cached_study_capture() {
                 let environment = environment(Some(definitions()));
@@ -908,6 +935,9 @@ mod project {
                 assert_eq!(&*trace.borrow(), &["lock"]);
                 assert_eq!(port.reads, 1);
             }
+            /// A seam the replay cannot reach: the lock, binding, case and
+            /// interrupt failures of a scripted host-function port, and the
+            /// study ports they never enter.
             #[test]
             fn lock_binding_case_and_original_interrupt_failures_never_enter_study_ports() {
                 let environment = environment(Some(definitions()));
@@ -987,6 +1017,9 @@ mod project {
                     .contains(stage)));
                 }
             }
+            /// A seam the replay cannot reach: the activation observations an
+            /// owned build keeps after an execution failure and resets on
+            /// retry.
             #[test]
             fn owned_observed_build_retains_activation_after_execution_failure_and_resets_on_retry()
             {
@@ -1089,6 +1122,9 @@ mod project {
                 ));
                 assert_eq!(port.reads, 1);
             }
+            /// A seam the replay cannot reach: the passing case observations a
+            /// borrowed build keeps beside a late case failure or the host's
+            /// original failure.
             #[test]
             fn borrowed_observed_build_keeps_earlier_passes_after_late_case_or_original_host_failure(
             ) {
@@ -1154,6 +1190,8 @@ mod project {
                     assert_eq!(cells.get(), 0);
                 }
             }
+            /// A seam the replay cannot reach: the application observer's
+            /// activation events, and none for an empty selection.
             #[test]
             fn owning_application_observer_attributes_actual_activation_and_preserves_empty_selection(
             ) {
@@ -1228,6 +1266,8 @@ mod project {
                     assert_eq!(source.reads, 1);
                 }
             }
+            /// A seam the replay cannot reach: the effect trace and rows of a
+            /// build that calls no function, with no lock or code effect.
             #[test]
             fn empty_selection_runs_study_without_lock_or_code_effects_for_absent_and_present_functions(
             ) {
@@ -1276,6 +1316,8 @@ mod project {
             temporal::{Date, Precision},
             value::Value,
         };
+        /// A seam the replay cannot reach: the result comparison kernel,
+        /// `results_match`, on binary64 ties and near ties.
         #[test]
         fn ties_and_near_ties_go_away_from_zero_with_the_one_rounding_interval() {
             for (actual, expected, decimals, matches) in [
@@ -1304,6 +1346,8 @@ mod project {
                 );
             }
         }
+        /// A seam the replay cannot reach: `results_match` at the subnormal and
+        /// precision extremes.
         #[test]
         fn minimum_subnormal_and_huge_precision_are_bounded_and_do_not_coalesce() {
             let smallest = Value::float(f64::from_bits(1));
@@ -1320,6 +1364,8 @@ mod project {
                 ));
             }
         }
+        /// A seam the replay cannot reach: `results_match` leaves the bits and
+        /// text of the values it compares as they are.
         #[test]
         fn comparison_never_mutates_runtime_bits_or_normalizes_text() {
             let actual = Value::float(1.23445);
@@ -1345,6 +1391,8 @@ mod project {
                 4
             ));
         }
+        /// A seam the replay cannot reach: `results_match` over every other
+        /// value type and missing.
         #[test]
         fn all_other_values_use_exact_type_and_missing_equality() {
             for digits in [0, 4, i64::MAX] {
@@ -1460,6 +1508,9 @@ mod project {
             )
             .unwrap()
         }
+        /// A seam the replay cannot reach: a scripted lock port's opaque
+        /// original error keeps its identity, and the provider is never
+        /// retried.
         #[test]
         fn non_clone_non_debug_non_send_lock_error_retains_identity_without_provider_retry() {
             let original = Opaque {
@@ -1578,6 +1629,8 @@ mod project {
             source
         }
 
+        /// A seam the replay cannot reach: the terminology validator's internal
+        /// findings, each a source, a codelist and a `Fault`.
         #[test]
         fn global_duplicates_across_sources_have_no_override() {
             let first = source(list());
@@ -1598,6 +1651,8 @@ mod project {
                 ]
             );
         }
+        /// A seam the replay cannot reach: every internal `Fault` the
+        /// terminology validator keeps beside an invalid shape, by item.
         #[test]
         fn complete_independent_item_findings_survive_invalid_shape() {
             let mut list = list();
@@ -1631,6 +1686,9 @@ mod project {
                 ]
             );
         }
+        /// A seam the replay cannot reach: the terminology validator's internal
+        /// `Fault` for an extended item, over each combination of a standard
+        /// and extensibility.
         #[test]
         fn extensions_require_both_a_published_source_and_an_extensible_list() {
             for extensible in [false, true] {
@@ -1650,6 +1708,8 @@ mod project {
                 }
             }
         }
+        /// A seam the replay cannot reach: the terminology validator's internal
+        /// `Fault` for an extended item's alias.
         #[test]
         fn extended_items_carry_no_published_alias() {
             // A sponsor addition has no published code: the published item
@@ -1670,6 +1730,8 @@ mod project {
                 vec![&Fault::ExtendedAlias { item: 1 }]
             );
         }
+        /// A seam the replay cannot reach: the terminology validator's internal
+        /// finding for a format name's dollar sign, for each data type.
         #[test]
         fn format_names_begin_with_a_dollar_sign_exactly_for_text_codelists() {
             // A text codelist names a character format, so `$` leads its
@@ -1704,6 +1766,8 @@ mod project {
                 }
             }
         }
+        /// A seam the replay cannot reach: the terminology validator's internal
+        /// duplicate `Fault`s at the i64 and binary64 boundaries.
         #[test]
         fn numeric_equality_is_exact_at_i64_and_binary64_boundaries() {
             let mut list = list();
@@ -1726,6 +1790,8 @@ mod project {
                 ]
             );
         }
+        /// A seam the replay cannot reach: an admitted catalogue's sources and
+        /// enforced items, values and not issues.
         #[test]
         fn text_keeps_nul_unicode_normalization_and_authored_order() {
             let mut list = list();
@@ -1740,6 +1806,8 @@ mod project {
             assert_eq!(catalogue.sources(), &[expected]);
             assert_eq!(catalogue.enforced_items("SEX").unwrap().len(), 4);
         }
+        /// A seam the replay cannot reach: the catalogue's internal
+        /// `BindingFinding`s and the items it enforces.
         #[test]
         fn binding_checks_exact_column_type_and_rejects_restated_item_sets() {
             let catalogue = Catalogue::admit(vec![source(list())]).unwrap();
@@ -1779,6 +1847,8 @@ mod project {
             assert!(catalogue.bind("SEX", ColumnType::Str, true).is_empty());
             assert_eq!(catalogue.enforced_items("SEX"), None);
         }
+        /// A seam the replay cannot reach: the terminology validator's internal
+        /// `Fault` for each item value a data type refuses.
         #[test]
         fn invalid_shapes_and_missing_boolean_fractional_item_types_are_rejected() {
             let mut shape = list();
@@ -1843,6 +1913,8 @@ mod project {
             }
         }
 
+        /// A seam the replay cannot reach: the verification records an
+        /// execution returns and the cells of a scripted table it read.
         #[test]
         fn owned_checked_environment_executes_fixed_codelists_before_later_cells_in_both_plan_forms(
         ) {
@@ -1886,6 +1958,8 @@ mod project {
                 assert!(table.reads.borrow().iter().all(|&(_, column)| column < 2));
             }
         }
+        /// A seam the replay cannot reach: the rows and check observations two
+        /// executions of one plan return.
         #[test]
         fn missing_cells_pass_repeated_compiled_builds_and_keep_complete_check_observations() {
             let checked =
@@ -1929,7 +2003,11 @@ mod project {
         use crate::support::resolved;
         use crate::support::specification::prepare_in;
         use support::{environment, schema, spec};
-        use yamaa_core::{dataset::Check, specification::PrepareError, value::Value};
+        use yamaa_core::{dataset::Check, value::Value};
+        /// A seam the replay cannot reach: the verification target and
+        /// identity a preparation returns, and the codelist check the bound
+        /// plan holds in either plan form. What a coded specification refuses
+        /// is `codelist_binding.json`'s.
         #[test]
         fn fixed_column_checkpoint_is_compiled_for_ordinary_and_row_plans_without_activation() {
             for rows in [false, true] {
@@ -1955,47 +2033,13 @@ mod project {
                 );
             }
         }
+        /// A seam the replay cannot reach: the one codelist check of its
+        /// listed values that an extensible catalogue binds, a value of the
+        /// bound plan. That an allowed values verification beside it states the
+        /// value set again is
+        /// `codelist_binding.json::an_extensible_catalogue_states_the_value_set_once`.
         #[test]
-        fn compiler_projects_unknown_type_and_redundant_sets_as_static_preflight_causes() {
-            for (doc, condition, rule, path) in [
-                (
-                    spec("UNKNOWN", "str", None, false, None),
-                    "unknown_codelist",
-                    "CT-1",
-                    "columns.CODE.submission.codelist",
-                ),
-                (
-                    spec("SEX", "int", None, false, None),
-                    "codelist_type_mismatch",
-                    "CT-8",
-                    "columns.CODE.submission.codelist",
-                ),
-                (
-                    spec("SEX", "str", Some("F"), false, None),
-                    "redundant_declaration",
-                    "CT-9",
-                    "columns.CODE.verifications[0].allowed_values",
-                ),
-            ] {
-                let Err(PrepareError::Invalid(findings)) = prepare_in(&doc, &environment(false))
-                else {
-                    panic!("static rejection")
-                };
-                assert_eq!(findings.len(), 1);
-                let d = findings[0].diagnostic();
-                assert_eq!(
-                    (
-                        d.definition().phase,
-                        d.definition().condition,
-                        d.definition().rule
-                    ),
-                    ("validation", condition, Some(rule))
-                );
-                assert_eq!(d.spec_paths, [path]);
-            }
-        }
-        #[test]
-        fn extensible_catalogue_is_enforced_and_states_the_value_set_once() {
+        fn extensible_catalogue_is_enforced_as_its_listed_values() {
             let prepared =
                 prepare_in(&spec("SEX", "str", None, false, None), &environment(true)).unwrap();
             let plan = prepared.bind(&schema()).unwrap();
@@ -2004,129 +2048,25 @@ mod project {
             assert!(
                 matches!(groups[0].1[0],Check::Codelist {id,values} if id=="SEX" && values==&[Value::Str("F".into())])
             );
-            let Err(PrepareError::Invalid(findings)) = prepare_in(
-                &spec("SEX", "str", Some("M"), false, None),
-                &environment(true),
-            ) else {
-                panic!("allowed values beside a listing codelist")
-            };
-            assert_eq!(findings.len(), 1);
-            let d = findings[0].diagnostic();
-            assert_eq!(d.definition().condition, "redundant_declaration");
-            assert_eq!(
-                d.spec_paths,
-                ["columns.CODE.verifications[0].allowed_values"]
-            );
-            assert_eq!(
-                d.context["stated_by"],
-                yamaa_core::json::Value::String("columns.CODE.submission.codelist".into())
-            );
-        }
-        #[test]
-        fn submission_claims_are_admitted_and_reserved_metadata_has_a_registered_cause() {
-            for rows in [false, true] {
-                let Err(PrepareError::Invalid(findings)) = prepare_in(
-                    &spec("SEX", "str", None, rows, Some("metadata")),
-                    &environment(false),
-                ) else {
-                    panic!("reserved column metadata")
-                };
-                let diagnostics = findings
-                    .iter()
-                    .map(|finding| finding.diagnostic())
-                    .collect::<Vec<_>>();
-                assert_eq!(diagnostics.len(), 1);
-                assert_eq!(
-                    diagnostics[0].code,
-                    yamaa_core::diagnostic::ConditionCode::SubmissionReservedMetadata
-                );
-                assert_eq!(
-                    diagnostics[0].spec_paths,
-                    ["columns.CODE.metadata.codelist"]
-                );
-            }
-        }
-        #[test]
-        fn root_metadata_rejects_the_governed_has_no_data_key() {
-            let doc = spec("SEX", "str", None, false, Some("root_metadata"));
-            let Err(PrepareError::Invalid(findings)) = prepare_in(&doc, &environment(false)) else {
-                panic!("root metadata.has_no_data must be rejected");
-            };
-            let diagnostics = findings
-                .iter()
-                .map(|finding| finding.diagnostic())
-                .collect::<Vec<_>>();
-            assert_eq!(diagnostics.len(), 1);
-            assert_eq!(
-                diagnostics[0].code,
-                yamaa_core::diagnostic::ConditionCode::SubmissionReservedMetadata
-            );
-            assert_eq!(diagnostics[0].spec_paths, ["metadata.has_no_data"]);
         }
     }
     mod specification_project_functions {
         use crate::support::id_source_schema as source;
         use crate::support::project_call_compiler as support;
         use crate::support::resolved;
-        use crate::support::specification::{prepare, prepare_in};
+        use crate::support::specification::prepare_in;
         use support::{call, environment as with_functions, specification, Tree};
         use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             bound_expression::Read,
             dataset::{resolved::Op, FunctionInput},
             schema::DocumentNode as N,
-            specification::{
-                BindError, BindFinding, FunctionCause, PreflightFinding, PrepareError,
-            },
-            table::{Column, TableSchema},
-            value::ColumnType,
+            specification::PrepareError,
         };
-        /// A nested call is refused at its name: as unknown against an empty
-        /// function catalogue (FUNC-4), and without a project as a binding
-        /// only a project supplies (CT-13).
-        #[test]
-        fn a_nested_call_is_refused_at_its_name_with_or_without_a_function_catalogue() {
-            let spec = specification(vec![(
-                "A",
-                "int",
-                Tree::map(vec![(
-                    "case",
-                    Tree::List(vec![Tree::map(vec![
-                        ("when", Tree::text("ID > 0")),
-                        ("then", call("unknown", vec![("x", Tree::text("ID"))])),
-                    ])]),
-                )]),
-            )]);
-            let findings = |result| {
-                let Err(PrepareError::Invalid(findings)) = result else {
-                    panic!("static function admission")
-                };
-                findings
-                    .into_iter()
-                    .map(|finding| {
-                        let PreflightFinding::ProjectFunction(finding) = finding else {
-                            panic!("function cause")
-                        };
-                        finding.diagnostic()
-                    })
-                    .collect::<Vec<_>>()
-            };
-            for (findings, condition) in [
-                (
-                    findings(prepare_in(&spec, &with_functions(&[]))),
-                    "unknown_project_function",
-                ),
-                (findings(prepare(&spec)), "project_binding_missing"),
-            ] {
-                assert_eq!(findings.len(), 1);
-                assert_eq!(findings[0].definition().condition, condition);
-                assert_eq!(
-                    findings[0].spec_paths,
-                    ["columns.A.derivation.case[0].then.function.name"]
-                );
-            }
-        }
-
+        /// A seam the replay cannot reach: the functions the compiled
+        /// specification calls and the callable the environment selects,
+        /// values and not issues.
+        ///
         /// A project's function files are language-neutral and read by every
         /// engine, so one that claims no host language compiles a call of a
         /// function with no callable for any host and misses no implementation
@@ -2160,6 +2100,8 @@ mod project {
             assert_eq!(neutral.functions()[0].call(), "");
         }
 
+        /// A seam the replay cannot reach: the environment slot each call binds
+        /// and the column its argument reads, in the resolved plan.
         #[test]
         fn compiler_selects_environment_slots_and_lowers_output_argument_dependencies() {
             let spec = specification(vec![
@@ -2190,109 +2132,11 @@ mod project {
             }
         }
 
+        /// A seam the replay cannot reach: the resolved plan collects a stored
+        /// field argument that is not a key. That a stored field of another
+        /// type than its parameter is refused at binding is `projects.json`'s.
         #[test]
-        fn complete_static_faults_are_projected_in_authored_call_order_without_source_binding() {
-            let spec = specification(vec![
-                (
-                    "A",
-                    "int",
-                    call("unknown", vec![("x", Tree::Scalar(N::Integer("7".into())))]),
-                ),
-                (
-                    "B",
-                    "int",
-                    call("id", vec![("x", Tree::Scalar(N::Float(7.0)))]),
-                ),
-                (
-                    "C",
-                    "int",
-                    call(
-                        "id",
-                        vec![("x", Tree::Scalar(N::Integer("9223372036854775808".into())))],
-                    ),
-                ),
-            ]);
-            let Err(PrepareError::Invalid(findings)) = prepare_in(&spec, &with_functions(&["id"]))
-            else {
-                panic!("complete static findings")
-            };
-            assert_eq!(findings.len(), 3);
-            let diagnostics = findings.iter().map(|f| f.diagnostic()).collect::<Vec<_>>();
-            assert_eq!(
-                diagnostics
-                    .iter()
-                    .map(|d| d.spec_paths[0].as_str())
-                    .collect::<Vec<_>>(),
-                [
-                    "columns.A.derivation.function.name",
-                    "columns.B.derivation.function.args.x",
-                    "columns.C.derivation.function.args.x",
-                ]
-            );
-            for (d, condition, rule) in [
-                (&diagnostics[0], "unknown_project_function", "FUNC-4"),
-                (&diagnostics[1], "invalid_function_argument", "FUNC-5"),
-                (&diagnostics[2], "invalid_function_argument", "FUNC-5"),
-            ] {
-                assert_eq!(
-                    (
-                        d.definition().phase,
-                        d.definition().condition,
-                        d.definition().rule
-                    ),
-                    ("validation", condition, Some(rule))
-                );
-            }
-            assert_eq!(
-                diagnostics[1].context["expected_type"],
-                JsonValue::String("int".into())
-            );
-            assert_eq!(
-                diagnostics[1].context["actual_type"],
-                JsonValue::String("float".into())
-            );
-            assert_eq!(
-                diagnostics[2].context["cause"],
-                JsonValue::String("integer_range".into())
-            );
-        }
-
-        #[test]
-        fn declared_output_reference_types_and_unknown_names_fail_during_prepare() {
-            let spec = specification(vec![
-                ("F", "float", Tree::Scalar(N::Float(1.0))),
-                ("A", "int", call("id", vec![("x", Tree::text("F"))])),
-                (
-                    "B",
-                    "int",
-                    call("id", vec![("x", Tree::text("UNDECLARED"))]),
-                ),
-            ]);
-            let Err(PrepareError::Invalid(findings)) = prepare_in(&spec, &with_functions(&["id"]))
-            else {
-                panic!("static reference findings")
-            };
-            assert_eq!(findings.len(), 2);
-            assert_eq!(
-                findings[0].diagnostic().spec_paths,
-                ["columns.A.derivation.function.args.x"]
-            );
-            assert_eq!(
-                findings[0].diagnostic().definition().condition,
-                "invalid_function_argument"
-            );
-            assert_eq!(
-                findings[1].diagnostic().definition().condition,
-                "unknown_field"
-            );
-            assert_eq!(
-                findings[1].diagnostic().context["identifier"],
-                JsonValue::String("UNDECLARED".into())
-            );
-        }
-
-        #[test]
-        fn stored_field_kinds_bind_exactly_and_nonkey_arguments_use_collection() {
+        fn nonkey_stored_field_arguments_use_collection() {
             let spec = specification(vec![(
                 "A",
                 "int",
@@ -2311,118 +2155,15 @@ mod project {
                     identifier: "SRC.ID".into()
                 }
             );
-            let wrong = TableSchema::new(vec![Column {
-                name: "ID".into(),
-                kind: ColumnType::Float,
-            }])
-            .unwrap();
-            let Err(BindError::Invalid(findings)) = prepared.bind(&wrong) else {
-                panic!("exact argument type")
-            };
-            let finding = findings
-                .iter()
-                .find_map(|f| match f {
-                    BindFinding::ProjectFunction(f) => Some(f),
-                    _ => None,
-                })
-                .unwrap();
-            assert!(matches!(finding.cause, FunctionCause::ArgumentType { .. }));
-            assert_eq!(finding.diagnostic().definition().rule, Some("FUNC-5"));
-            assert_eq!(
-                finding.diagnostic().spec_paths,
-                ["columns.A.derivation.function.args.x"]
-            );
         }
 
-        #[test]
-        fn missing_stored_fields_and_unknown_relations_keep_authored_argument_diagnostics() {
-            let spec = specification(vec![
-                ("A", "int", call("id", vec![("x", Tree::text("SRC.TYPO"))])),
-                ("B", "int", call("id", vec![("x", Tree::text("OTHER.ID"))])),
-            ]);
-            let prepared = prepare_in(&spec, &with_functions(&["id"])).unwrap();
-            let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
-                panic!("complete source-reference findings")
-            };
-            assert_eq!(findings.len(), 2);
-            for (finding, column, name) in [
-                (&findings[0], "A", "SRC.TYPO"),
-                (&findings[1], "B", "OTHER.ID"),
-            ] {
-                let diagnostics = finding
-                    .diagnostics(prepared.source())
-                    .expect("authored diagnostic");
-                assert_eq!(diagnostics.len(), 1);
-                let diagnostic = &diagnostics[0];
-                assert_eq!(diagnostic.definition().condition, "unknown_field");
-                assert_eq!(diagnostic.definition().rule, Some("NAME-3"));
-                assert_eq!(
-                    diagnostic.spec_paths,
-                    [format!("columns.{column}.derivation.function.args.x")]
-                );
-                assert_eq!(
-                    diagnostic.context["identifier"],
-                    JsonValue::String(name.into())
-                );
-                assert_eq!(diagnostic.context.len(), 1);
-                assert_eq!(diagnostic.source_span, None);
-                assert_eq!(diagnostic.operand_route, None);
-            }
-        }
-
-        #[test]
-        fn calls_keep_dependency_cycles_and_absent_catalogue_static_causes() {
-            let spec = specification(vec![
-                ("A", "int", call("id", vec![("x", Tree::text("B"))])),
-                ("B", "int", call("id", vec![("x", Tree::text("A"))])),
-            ]);
-            // Without a project, each call binds nothing (CT-13).
-            let Err(PrepareError::Invalid(findings)) = prepare(&spec) else {
-                panic!("an absent project refuses every call")
-            };
-            assert_eq!(findings.len(), 2);
-            for finding in findings {
-                let PreflightFinding::ProjectFunction(finding) = finding else {
-                    panic!("function cause")
-                };
-                assert_eq!(finding.cause, FunctionCause::NoProject);
-            }
-            let prepared = prepare_in(&spec, &with_functions(&["id"])).unwrap();
-            let Err(BindError::Invalid(findings)) = prepared.bind(&source()) else {
-                panic!("dependency findings")
-            };
-            assert!(findings
-                .iter()
-                .any(|f| matches!(f, BindFinding::Dependencies { .. })));
-        }
-
-        #[test]
-        fn retired_fields_and_malformed_literals_are_complete_static_findings() {
-            let retired = Tree::map(vec![(
-                "function",
-                Tree::map(vec![
-                    ("name", Tree::text("id")),
-                    ("contract_version", Tree::text("1")),
-                    (
-                        "args",
-                        Tree::map(vec![(
-                            "x",
-                            Tree::map(vec![("literal", Tree::Scalar(N::Integer("7".into())))]),
-                        )]),
-                    ),
-                ]),
-            )]);
-            let spec = specification(vec![("A", "int", retired)]);
-            let Err(PrepareError::Invalid(findings)) = prepare_in(&spec, &with_functions(&["id"]))
-            else {
-                panic!("closed calls")
-            };
-            assert_eq!(findings.len(), 2);
-            assert!(findings
-                .iter()
-                .all(|f| matches!(f, PreflightFinding::ProjectFunction(_))));
-        }
-
+        /// A seam the case form cannot state: the table compared the first
+        /// finding's condition and path and the second's `cause` alone. A
+        /// case's `compares` applies to every row, and no authored record gives
+        /// the rest of the second's context, so the test keeps both rather
+        /// than fill one in or drop it. Its out-of-range literal is the one
+        /// that `projects.json::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`
+        /// compares without its context.
         #[test]
         fn unknown_function_is_retained_alongside_an_invalid_scalar_in_the_same_call() {
             let spec = specification(vec![(

@@ -46,7 +46,7 @@ rejects every dataset metadata field name, and a column's `metadata` rejects
 every column metadata field name.
 
 Fails: `reserved_metadata_key`.
-Evidence: `schema-column-composition`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_reserved_metadata_key_is_refused_before_study_access`, `rust/crates/yamaa-core/tests/project_execution.rs::submission_claims_are_admitted_and_reserved_metadata_has_a_registered_cause`, `rust/crates/yamaa/tests/language_header.rs::a_1_0_root_metadata_reserves_standard`.
+Evidence: `schema-column-composition`, `rust/crates/yamaa-adapters/tests/fixtures/diagnostics/submission.json::a_reserved_metadata_key_is_refused_before_study_access`, `rust/crates/yamaa-core/tests/fixtures/diagnostics/codelist_binding.json::submission_claims_are_admitted_and_reserved_metadata_has_a_registered_cause`, `rust/crates/yamaa/tests/language_header.rs::a_1_0_root_metadata_reserves_standard`.
 
 A study moves governed facts from the map to submission metadata. A reserved
 key fails validation with `reserved_metadata_key`, reporting the key. A
