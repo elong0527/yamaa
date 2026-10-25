@@ -34,13 +34,16 @@
 //! issues alone, so a core case that states one of them fails, naming the
 //! operation that reports no such thing.
 //!
+//! The cases run in parallel ([`form::in_parallel`]), and the causes they
+//! render count as rendered on the thread that runs the replay.
+//!
 //! Every row was authored: in the Rust table it moved from, or from the rule
 //! card, registry entry or sibling record its pull request names. No run
 //! wrote one.
 use super::{
     form::{self, Outcome, Stated},
     json::{self, Json},
-    operations, rendered,
+    operations, rendered, rendered_for_this_thread,
 };
 use std::{collections::BTreeSet, path::Path};
 use yamaa_core::{
@@ -73,6 +76,13 @@ pub struct Case {
     pub issues: Vec<Value>,
     /// The tables and files the case states beside its issues.
     pub stated: Stated,
+}
+
+impl Case {
+    /// The case's label, which names it in a failure.
+    pub fn label(&self) -> &str {
+        &self.label
+    }
 }
 
 /// Every case of every fixture file, by file name and then as written. A
@@ -235,8 +245,8 @@ pub fn row(diagnostic: &Diagnostic) -> Value {
 /// message from its own record (P-MSG-1), and the causes the cases reach are
 /// returned.
 pub fn replay() -> BTreeSet<ConditionCode> {
-    let mut reached = BTreeSet::new();
-    for case in cases() {
+    let reached = form::in_parallel(&cases(), Case::label, |case| {
+        let mut reached = BTreeSet::new();
         let mut reported = Vec::new();
         for operation in &case.operations {
             let label = match case.operations.len() {
@@ -272,7 +282,10 @@ pub fn replay() -> BTreeSet<ConditionCode> {
             reported.push((operation.as_str(), complete));
         }
         form::same_issues(&reported, &case.label);
-    }
+        reached
+    });
+    let reached = reached.into_iter().flatten().collect();
+    rendered_for_this_thread(&reached);
     reached
 }
 

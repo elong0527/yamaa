@@ -1088,3 +1088,71 @@ fn texts(texts: &[String]) -> String {
     let quoted = texts.iter().map(|text| format!("{text:?}"));
     quoted.collect::<Vec<_>>().join("\n")
 }
+
+/// Run `replay` on each of `cases`, on as many threads as the machine runs
+/// at once, each taking the next case no thread has taken, so that a replay
+/// takes about the time of its slowest cases rather than the sum of them
+/// all (#3866); each case writes its own study directory. Return what each
+/// case returned, in the cases' order. A case that fails does not stop the
+/// others: once every case has run, the replay fails, naming each case that
+/// failed by `label`, in the cases' order, with its own failure message,
+/// which names the operation and the first row that differs.
+pub fn in_parallel<C: Sync, R: Send>(
+    cases: &[C],
+    label: impl Fn(&C) -> &str + Sync,
+    replay: impl Fn(&C) -> R + Sync,
+) -> Vec<R> {
+    use std::{
+        panic::{catch_unwind, AssertUnwindSafe},
+        sync::atomic::{AtomicUsize, Ordering},
+        thread,
+    };
+    let next = AtomicUsize::new(0);
+    let threads = thread::available_parallelism()
+        .map_or(1, usize::from)
+        .min(cases.len());
+    let mut ran = thread::scope(|scope| {
+        let workers = (0..threads)
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut ran = Vec::new();
+                    loop {
+                        let at = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(case) = cases.get(at) else {
+                            return ran;
+                        };
+                        ran.push((at, catch_unwind(AssertUnwindSafe(|| replay(case)))));
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        workers
+            .into_iter()
+            .flat_map(|worker| worker.join().expect("each case's failure is caught"))
+            .collect::<Vec<_>>()
+    });
+    ran.sort_by_key(|(at, _)| *at);
+    let mut returned = Vec::with_capacity(cases.len());
+    let mut failed = Vec::new();
+    for (at, outcome) in ran {
+        match outcome {
+            Ok(value) => returned.push(value),
+            Err(payload) => {
+                let message = payload
+                    .downcast_ref::<String>()
+                    .map(String::as_str)
+                    .or_else(|| payload.downcast_ref::<&str>().copied())
+                    .unwrap_or("a panic with no message");
+                failed.push(format!("{}:\n{message}", label(&cases[at])));
+            }
+        }
+    }
+    assert!(
+        failed.is_empty(),
+        "{} of {} cases failed:\n\n{}",
+        failed.len(),
+        cases.len(),
+        failed.join("\n\n")
+    );
+    returned
+}

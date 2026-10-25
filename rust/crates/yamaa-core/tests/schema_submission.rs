@@ -1,5 +1,8 @@
 //! Schema contracts: specification submission document, submission composition,
-//! submission document and submission values.
+//! submission document and submission values. The cases that compose a
+//! study's value-level entries and compare its findings are
+//! `fixtures/diagnostics/submission.json`; each test here proves a seam the
+//! replay cannot reach, which its first comment names (#3798).
 mod schema {
     mod specification_submission_document {
         use yamaa_core::{
@@ -87,6 +90,9 @@ mod schema {
             &owner.columns().unwrap().value
         }
 
+        /// Seam: the values, kinds and paths the raw
+        /// `specification_submission_document` decoder returns, which no reader
+        /// states.
         #[test]
         fn locations_borrow_original_ordered_occurrences_without_accepting_nulls() {
             let mut a = Arena::default();
@@ -117,6 +123,9 @@ mod schema {
                 2
             );
         }
+        /// Seam: the values, kinds and paths the raw
+        /// `specification_submission_document` decoder returns, which no reader
+        /// states.
         #[test]
         fn locations_keep_every_column_and_original_submission_occurrence() {
             let mut a = Arena::default();
@@ -140,6 +149,9 @@ mod schema {
             assert_eq!(locations.columns()[1].submission.node, Some(two));
         }
 
+        /// Seam: the values, kinds and paths the raw
+        /// `specification_submission_document` decoder returns, which no reader
+        /// states.
         #[test]
         fn locations_absence_and_original_shapes_remain_distinct() {
             let empty = Document::new(vec![N::Mapping(vec![])], 0).unwrap();
@@ -165,6 +177,9 @@ mod schema {
                 Cause::Shape { node: scalar }
             );
         }
+        /// Seam: the values, kinds and paths the raw
+        /// `specification_submission_document` decoder returns, which no reader
+        /// states.
         #[test]
         fn absent_submission_remains_absent_and_preserves_ordinary_column_declarations() {
             let mut a = Arena::default();
@@ -197,6 +212,9 @@ mod schema {
             );
             assert!(columns(&owner).iter().all(|v| v.submission.is_none()));
         }
+        /// Seam: the values, kinds and paths the raw
+        /// `specification_submission_document` decoder returns, which no reader
+        /// states.
         #[test]
         fn dataset_defaults_and_comment_survive_original_document_drop() {
             let mut a = Arena::default();
@@ -248,6 +266,9 @@ mod schema {
                 [FieldName::Columns, FieldName::Submission]
             );
         }
+        /// Seam: the values, kinds and paths the raw
+        /// `specification_submission_document` decoder returns, which no reader
+        /// states.
         #[test]
         fn omitted_defaults_and_explicit_boolean_overrides_are_distinct() {
             for explicit in [false, true] {
@@ -278,6 +299,9 @@ mod schema {
                 assert_eq!(dataset.reference_data.value, explicit);
             }
         }
+        /// Seam: the values, kinds and paths the raw
+        /// `specification_submission_document` decoder returns, which no reader
+        /// states.
         #[test]
         fn complete_nested_metadata_retains_integer_text_documents_pages_and_order_after_drop() {
             let mut a = Arena::default();
@@ -397,6 +421,9 @@ mod schema {
             };
             assert_eq!(comment.text.value, "A & B < C");
         }
+        /// Seam: the values, kinds and paths the raw
+        /// `specification_submission_document` decoder returns, which no reader
+        /// states.
         #[test]
         fn plain_empty_method_and_comment_are_schema_strings_not_class_descriptions() {
             let mut a = Arena::default();
@@ -422,6 +449,9 @@ mod schema {
                 [Kind::EmptyText, Kind::EmptyText]
             );
         }
+        /// Seam: the values, kinds and paths the raw
+        /// `specification_submission_document` decoder returns, which no reader
+        /// states.
         #[test]
         fn all_dataset_class_and_subclass_vocabularies_remain_closed_and_family_independent() {
             let classes = [
@@ -473,6 +503,9 @@ mod schema {
                 );
             }
         }
+        /// Seam: the values, kinds and paths the raw
+        /// `specification_submission_document` decoder returns, which no reader
+        /// states.
         #[test]
         fn all_column_and_define_types_are_declarations_without_semantic_type_resolution() {
             for kind in ["str", "int", "float", "date", "datetime"] {
@@ -518,6 +551,9 @@ mod schema {
                 );
             }
         }
+        /// Seam: the values, kinds and paths the raw
+        /// `specification_submission_document` decoder returns, which no reader
+        /// states.
         #[test]
         fn all_core_origin_source_and_method_choices_are_retained() {
             for core in ["Req", "Exp", "Perm", "Cond"] {
@@ -612,6 +648,9 @@ mod schema {
                 assert!(method.kind.origin.node.is_some());
             }
         }
+        /// Seam: the values, kinds and paths the raw
+        /// `specification_submission_document` decoder returns, which no reader
+        /// states.
         #[test]
         fn missing_fields_and_explicit_null_defaults_are_complete_distinct_findings() {
             let mut a = Arena::default();
@@ -643,6 +682,9 @@ mod schema {
             );
             assert!(values.iter().all(|v| v.rule().is_none()));
         }
+        /// Seam: the values, kinds and paths the raw
+        /// `specification_submission_document` decoder returns, which no reader
+        /// states.
         #[test]
         fn portable_choice_and_identifier_failures_use_only_applicable_current_causes() {
             let mut a = Arena::default();
@@ -688,6 +730,9 @@ mod schema {
                 [Some("SUB-4"), Some("SUB-4")]
             );
         }
+        /// Seam: the values, kinds and paths the raw
+        /// `specification_submission_document` decoder returns, which no reader
+        /// states.
         #[test]
         fn unknown_and_non_text_fields_preserve_exact_occurrences_without_fabricated_causes() {
             let mut a = Arena::default();
@@ -712,6 +757,9 @@ mod schema {
                 .iter()
                 .all(|v| v.rule().is_none() && v.origin.is_none()));
         }
+        /// Seam: the values, kinds and paths the raw
+        /// `specification_submission_document` decoder returns, which no reader
+        /// states.
         #[test]
         fn malformed_lists_nested_objects_and_integer_kinds_refuse_without_partial_acceptance() {
             let mut a = Arena::default();
@@ -747,6 +795,9 @@ mod schema {
             );
             assert!(values.iter().all(|v| v.rule().is_none()));
         }
+        /// Seam: the values, kinds and paths the raw
+        /// `specification_submission_document` decoder returns, which no reader
+        /// states.
         #[test]
         fn valid_metadata_is_owned_and_invalid_metadata_keeps_complete_original_findings() {
             let mut a = Arena::default();
@@ -790,6 +841,9 @@ mod schema {
             );
         }
 
+        /// Seam: the values, kinds and paths the raw
+        /// `specification_submission_document` decoder returns, which no reader
+        /// states.
         #[test]
         fn malformed_deep_unknown_values_keep_the_authored_unknown_field() {
             let mut a = Arena::default();
@@ -811,6 +865,9 @@ mod schema {
             assert_eq!(findings[0].node, value);
         }
 
+        /// Seam: the values, kinds and paths the raw
+        /// `specification_submission_document` decoder returns, which no reader
+        /// states.
         #[test]
         fn zero_and_negative_arbitrary_integer_declarations_await_semantic_range_checks() {
             for value in ["0", "-1", "9223372036854775808"] {
@@ -834,6 +891,9 @@ mod schema {
             }
         }
 
+        /// Seam: the values, kinds and paths the raw
+        /// `specification_submission_document` decoder returns, which no reader
+        /// states.
         #[test]
         fn deepest_page_failure_retains_complete_closed_path_and_original_field_facts() {
             let mut a = Arena::default();
@@ -871,6 +931,9 @@ mod schema {
             assert_eq!(values[2].origin.unwrap().node, Some(refs));
             assert_eq!(values[2].node, refs);
         }
+        /// Seam: the values, kinds and paths the raw
+        /// `specification_submission_document` decoder returns, which no reader
+        /// states.
         #[test]
         fn later_column_text_and_findings_are_preserved_completely() {
             let mut a = Arena::default();
@@ -917,6 +980,9 @@ mod schema {
             assert_eq!(findings[1].node, input.field(two, "core").unwrap());
         }
 
+        /// Seam: the values, kinds and paths the raw
+        /// `specification_submission_document` decoder returns, which no reader
+        /// states.
         #[test]
         fn root_scalar_column_scalar_and_non_text_root_key_keep_transport_facts() {
             let mut a = Arena::default();
@@ -1133,6 +1199,7 @@ mod schema {
                 "2026-09-11T00:00:00",
             )
         }
+        /// Seam: composition's capacity over generated domains, columns and nodes.
         #[test]
         fn thirty_domains_with_fifteen_hundred_nodes_admit_complete_column_and_row_scans() {
             let documents: Vec<_> = (0..30).map(|index| specification(index, 30, 12)).collect();
@@ -1147,6 +1214,7 @@ mod schema {
                 assert_eq!(dataset.columns()[29].declaration().name.value, "V0029");
             }
         }
+        /// Seam: composition's capacity over generated domains, columns and nodes.
         #[test]
         fn thirty_domains_with_two_hundred_fifty_columns_keep_complete_ordered_metadata() {
             use yamaa_core::cdisc_vocabulary::{Core, OriginSource, OriginType};
@@ -1222,6 +1290,8 @@ mod schema {
             .unwrap()
         }
 
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn a_project_whose_declarations_cannot_be_read_still_lowers_and_keeps_the_refusal() {
             let input = declarations();
@@ -1249,6 +1319,8 @@ mod schema {
             );
         }
 
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn absent_declarations_and_original_shape_refusals_remain_distinct() {
             let empty = Document::new(vec![N::Mapping(vec![])], 0).unwrap();
@@ -1394,6 +1466,8 @@ mod schema {
         fn path(project: &ast::Project, meta: ast::Meta) -> String {
             project.paths.render(meta.path)
         }
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn complete_declarations_lower_in_authored_order_with_their_paths() {
             let input = full();
@@ -1495,6 +1569,8 @@ mod schema {
                 "python/uv.lock"
             );
         }
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn every_shipped_guide_spelling_is_closed_metadata_not_family_composition() {
             for text in [
@@ -1519,6 +1595,8 @@ mod schema {
                 assert!(owned.study.is_none()); // missing generator prerequisites remain a separate use case.
             }
         }
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn absent_declarations_and_explicit_default_values_lower_alike() {
             let mut a = Arena::default();
@@ -1617,6 +1695,8 @@ mod schema {
             let root = a.map(vec![("study", study), ("adam", section)]);
             a.finish(root)
         }
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn structural_findings_are_complete_ordered_and_only_supported_causes_are_portable() {
             let input = invalid();
@@ -1684,6 +1764,8 @@ mod schema {
             assert_eq!(findings[7].rule(), None); // null is an original shape, not a fabricated normative message.
             assert!(matches!(error.input.nodes()[findings[7].node], N::Null));
         }
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn complete_findings_preserve_original_invalid_input() {
             let input = invalid();
@@ -1695,6 +1777,8 @@ mod schema {
             }
         }
 
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn independent_whole_model_decodes_keep_all_sections() {
             let input = full();
@@ -1706,6 +1790,8 @@ mod schema {
             }
         }
 
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn null_optional_fields_are_original_shape_findings_not_absent_defaults() {
             let mut a = Arena::default();
@@ -1751,6 +1837,8 @@ mod schema {
                 .iter()
                 .all(|f| f.rule().is_none() && matches!(input.nodes()[f.node], N::Null)));
         }
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn scalar_container_and_nontext_key_refusals_preserve_original_shapes() {
             for scalar in [
@@ -1787,6 +1875,8 @@ mod schema {
                 .iter()
                 .all(|f| f.kind == Kind::Missing && f.origin.unwrap().node.is_none()));
         }
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn fixed_document_depth_and_submission_shape_refusals_remain_distinct() {
             let mut nodes = vec![N::Text("original deep scalar".into())];
@@ -1819,6 +1909,8 @@ mod schema {
             );
         }
 
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn unknown_fields_and_nontext_keys_retain_exact_container_and_key_occurrences() {
             let input = invalid();
@@ -1852,6 +1944,8 @@ mod schema {
             assert_eq!(findings[0].key, Some(key));
             assert_eq!(findings[0].node, key);
         }
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn present_metadata_description_is_optional_and_draft_status_is_retained() {
             let mut a = Arena::default();
@@ -1879,6 +1973,8 @@ mod schema {
                 .description
                 .is_none());
         }
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn default_text_and_empty_root_remain_owned_without_authored_values() {
             let mut a = Arena::default();
@@ -1900,6 +1996,8 @@ mod schema {
             assert!(owned.sections.is_empty());
             assert!(owned.study.is_none());
         }
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn a_section_listing_only_specs_admits_and_leaves_define_declarations_to_composition() {
             use yamaa_core::submission_composition::Required;
@@ -1945,6 +2043,8 @@ mod schema {
             }
         }
 
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn control_and_unicode_text_survive_original_document_ownership() {
             let mut a = Arena::default();
@@ -2023,6 +2123,8 @@ mod schema {
             (a.finish(root), facts)
         }
 
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn malformed_document_items_retain_actual_occurrences_in_every_family_and_position() {
             let (input, expected) = malformed_document_lists();
@@ -2067,6 +2169,8 @@ mod schema {
             assert_eq!(input.nodes()[expected[1].node], N::Integer("42".into()));
         }
 
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn all_malformed_document_items_keep_the_original_input_and_nodes() {
             let (input, expected) = malformed_document_lists();
@@ -2082,6 +2186,8 @@ mod schema {
             );
         }
 
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn valid_document_fields_lower_in_order_with_their_paths() {
             let input = full();
@@ -2108,6 +2214,8 @@ mod schema {
             assert!(owned.sections[0].documents.is_empty());
         }
 
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn an_authored_source_system_version_lowers_for_every_section() {
             for (family, guide) in [("sdtm", "SDTMIG"), ("adam", "ADaMIG"), ("send", "SENDIG")] {
@@ -2141,6 +2249,8 @@ mod schema {
                 .all(|section| section.source_system_version.is_none()));
         }
 
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn submission_version_refusals_preserve_exact_nodes_and_do_not_choose_defaults() {
             for (value, expected) in [
@@ -2177,6 +2287,8 @@ mod schema {
             }
         }
 
+        /// Seam: the declarations, kinds and paths the raw `submission_document`
+        /// decoder returns, which no reader states.
         #[test]
         fn full_submission_version_text_survives_the_input() {
             let mut a = Arena::default();
@@ -2274,79 +2386,10 @@ mod schema {
             ]);
             a.finish(root)
         }
-        /// One entry of `LBORRESU`, in the order the case lists them: its id,
-        /// its where clause and its origin source.
-        struct Written<'a> {
-            id: &'a str,
-            clause: Vec<(&'a str, Vec<&'a str>)>,
-            source: &'a str,
-        }
-        fn written(case: &str) -> Vec<Written<'_>> {
-            let entry = |id, column, values: &[&'static str], source| Written {
-                id,
-                clause: vec![(column, values.to_vec())],
-                source,
-            };
-            let gluc = entry("GLUC", "LBTESTCD", &["GLUC"], "Vendor");
-            let creat = entry("CREAT", "LBTESTCD", &["CREAT"], "Sponsor");
-            match case {
-                "conjunction" => vec![
-                    Written {
-                        id: "GLUCSER",
-                        clause: vec![("LBTESTCD", vec!["GLUC"]), ("LBSPEC", vec!["SERUM"])],
-                        source: "Vendor",
-                    },
-                    creat,
-                ],
-                "duplicate id" => vec![gluc, entry("GLUC", "LBTESTCD", &["CREAT"], "Sponsor")],
-                "overlap" => vec![
-                    gluc,
-                    entry("ANY", "LBTESTCD", &["CREAT", "GLUC"], "Sponsor"),
-                ],
-                "subset overlap" => vec![
-                    gluc,
-                    Written {
-                        id: "GLUCSER",
-                        clause: vec![("LBTESTCD", vec!["GLUC"]), ("LBSPEC", vec!["SERUM"])],
-                        source: "Vendor",
-                    },
-                ],
-                "no values" => vec![entry("GLUC", "LBTESTCD", &[], "Vendor"), creat],
-                "unknown column" => vec![entry("GLUC", "BOGUS", &["GLUC"], "Vendor"), creat],
-                "internal column" => vec![entry("GLUC", "LBNAM", &["GLUC"], "Vendor"), creat],
-                "numeric column" => vec![entry("GLUC", "LBSEQ", &["1"], "Vendor"), creat],
-                "own column" => vec![entry("GLUC", "LBORRESU", &["mg/dL"], "Vendor"), creat],
-                "codelist misspelt" | "entry codelist only" => vec![
-                    entry("GLUC", "LBTESTCD", &["GLUC", "GLUCOSE"], "Vendor"),
-                    creat,
-                ],
-                // UGLUC and UCREAT are urine test codes, and only UGLUC is
-                // an item of the urine list.
-                "codelist union" => vec![
-                    entry("GLUC", "LBTESTCD", &["GLUC", "UGLUC"], "Vendor"),
-                    creat,
-                ],
-                "codelist union misspelt" => vec![
-                    entry(
-                        "GLUC",
-                        "LBTESTCD",
-                        &["GLUCOSE", "GLUC", "UGLUC", "UCREAT"],
-                        "Vendor",
-                    ),
-                    creat,
-                ],
-                _ => vec![gluc, creat],
-            }
-        }
-        /// Whether the test codes declare an entry of their own, binding the
-        /// project's urine list on urine rows.
-        fn urine_entry(case: &str) -> bool {
-            matches!(
-                case,
-                "codelist union" | "codelist union misspelt" | "entry codelist only"
-            )
-        }
-        fn specification(case: &str) -> Document {
+        /// The `LB` specification whose `LBORRESU` declares two value-level
+        /// entries, each its id, the test code its where clause selects, and
+        /// its origin's source.
+        fn specification() -> Document {
             let mut a = Arena::default();
             let yamaa = a.text("1.0");
             let kind = a.text("spec");
@@ -2401,42 +2444,13 @@ mod schema {
                 let core = a.text("Exp");
                 let length = a.node(N::Integer("8".into()));
                 let mut metadata = vec![("core", core), ("length", length), ("origins", origins)];
-                // The test codes bind the project's LBTESTCD codelist.
-                if name == "LBTESTCD" && case.starts_with("codelist") {
-                    let codelist = a.text("LBTESTCD");
-                    metadata.push(("codelist", codelist));
-                }
-                if name == "LBTESTCD" && urine_entry(case) {
-                    let id = a.text("URINE");
-                    let specimens = a.strings(&["URINE"]);
-                    let clause = a.map(vec![("LBSPEC", specimens)]);
-                    let codelist = a.text("URINE");
-                    let entry = a.map(vec![("id", id), ("where", clause), ("codelist", codelist)]);
-                    let entries = a.node(N::Sequence(vec![entry]));
-                    metadata.push(("value_level", entries));
-                }
                 if name == "LBORRESU" {
                     let mut entries = Vec::new();
-                    for written in written(case) {
-                        let id = a.text(written.id);
-                        let terms = written
-                            .clause
-                            .iter()
-                            .map(|(column, values)| (*column, a.strings(values)))
-                            .collect();
-                        let clause = a.map(terms);
-                        // A literal refutes Derived: the value is read from no input.
-                        let origin_type = if case == "refuted origin" && written.id == "GLUC" {
-                            "Derived"
-                        } else {
-                            "Assigned"
-                        };
-                        let source = if case == "invalid source" && written.id == "CREAT" {
-                            "Investigator"
-                        } else {
-                            written.source
-                        };
-                        let origin = a.texts(&[("type", origin_type), ("source", source)]);
+                    for (code, source) in [("GLUC", "Vendor"), ("CREAT", "Sponsor")] {
+                        let id = a.text(code);
+                        let terms = a.strings(&[code]);
+                        let clause = a.map(vec![("LBTESTCD", terms)]);
+                        let origin = a.texts(&[("type", "Assigned"), ("source", source)]);
                         let origins = a.node(N::Sequence(vec![origin]));
                         let method = a.text("Units assigned from the supplied test metadata");
                         let fields = vec![
@@ -2466,13 +2480,7 @@ mod schema {
             ] {
                 let id = a.text(id);
                 let literal = a.text(&format!("'{code}'"));
-                // The normalized handler form keeps the literal readable.
-                let literal = if case == "normalized where column" {
-                    let unconvertible = a.node(N::Null);
-                    a.map(vec![("value", literal), ("unconvertible", unconvertible)])
-                } else {
-                    a.map(vec![("value", literal)])
-                };
+                let literal = a.map(vec![("value", literal)]);
                 let derivations = a.map(vec![("LBTESTCD", literal)]);
                 rows.push(a.map(vec![("id", id), ("derivations", derivations)]));
             }
@@ -2490,12 +2498,6 @@ mod schema {
             a.finish(root)
         }
         fn compose(document: &Document) -> Result<Study, Vec<submission_composition::Finding>> {
-            compose_with(document, &Catalogue::admit(vec![]).unwrap())
-        }
-        fn compose_with(
-            document: &Document,
-            catalogue: &Catalogue,
-        ) -> Result<Study, Vec<submission_composition::Finding>> {
             let project = v1::project::project(&project(), None).unwrap();
             let declared = project.submission.unwrap();
             let section = &declared.sections[0];
@@ -2504,7 +2506,7 @@ mod schema {
             let tree = v1::spec::lower(document, None).into_spec();
             submission_composition::compose(
                 required,
-                catalogue,
+                &Catalogue::admit(vec![]).unwrap(),
                 &[Input {
                     document,
                     tree: &tree,
@@ -2517,9 +2519,11 @@ mod schema {
                 "2026-09-11T00:00:00",
             )
         }
+        /// Seam: the decoded entries and the composed `Study`'s merged value metadata,
+        /// values no reader returns.
         #[test]
         fn entries_inherit_complete_metadata_and_preserve_written_occurrences() {
-            let document = specification("valid");
+            let document = specification();
             let declared = declarations::decode(&document, document.root()).unwrap();
             let columns = &declared.columns().unwrap().value;
             let units = columns.iter().find(|c| c.name.value == "LBORRESU").unwrap();
@@ -2560,20 +2564,7 @@ mod schema {
                 cdisc_vocabulary::OriginSource::Vendor
             );
         }
-        #[test]
-        fn normalized_literals_still_decide_an_entry_s_rows() {
-            // A Derived entry is refuted by the literal of the template its
-            // where clause selects, through the normalized handler form.
-            let mut document = specification("normalized where column");
-            assert!(compose(&document).is_ok());
-            document = specification("refuted origin");
-            let findings = compose(&document).unwrap_err();
-            assert!(findings.iter().any(|finding| finding.definition().condition
-                == "refuted_value_origin"
-                && finding
-                    .path
-                    .ends_with("columns.LBORRESU.submission.value_level.GLUC")));
-        }
+        /// Seam: the raw decoder's refusal kind and path steps for an entry id.
         #[test]
         fn an_entry_id_outside_the_identifier_pattern_is_a_refusal_with_its_entry_path() {
             let mut a = Arena::default();
@@ -2611,185 +2602,6 @@ mod schema {
                     Step::Field(F::Id),
                 ]
             );
-        }
-        #[test]
-        fn each_independent_value_admission_control_has_the_required_condition_and_entry_path() {
-            let entry = "sdtm.specs[0].columns.LBORRESU.submission.value_level";
-            for (case, condition, rule, suffix, reason) in [
-                (
-                    "duplicate id",
-                    "duplicate_identifier",
-                    "SUB-12",
-                    format!("{entry}.GLUC.id"),
-                    None,
-                ),
-                (
-                    "overlap",
-                    "value_level_overlap",
-                    "SUB-12",
-                    format!("{entry}.ANY.where"),
-                    None,
-                ),
-                (
-                    "subset overlap",
-                    "value_level_overlap",
-                    "SUB-12",
-                    format!("{entry}.GLUCSER.where"),
-                    None,
-                ),
-                (
-                    "no values",
-                    "value_level_where_invalid",
-                    "SUB-12",
-                    format!("{entry}.GLUC.where.LBTESTCD"),
-                    Some("no_values"),
-                ),
-                (
-                    "unknown column",
-                    "value_level_where_invalid",
-                    "SUB-12",
-                    format!("{entry}.GLUC.where.BOGUS"),
-                    Some("undeclared"),
-                ),
-                (
-                    "internal column",
-                    "value_level_where_invalid",
-                    "SUB-12",
-                    format!("{entry}.GLUC.where.LBNAM"),
-                    Some("not_output"),
-                ),
-                (
-                    "numeric column",
-                    "value_level_where_invalid",
-                    "SUB-12",
-                    format!("{entry}.GLUC.where.LBSEQ"),
-                    Some("not_str"),
-                ),
-                (
-                    "own column",
-                    "value_level_where_invalid",
-                    "SUB-12",
-                    format!("{entry}.GLUC.where.LBORRESU"),
-                    Some("self"),
-                ),
-                (
-                    "refuted origin",
-                    "refuted_value_origin",
-                    "SUB-13",
-                    format!("{entry}.GLUC"),
-                    None,
-                ),
-                (
-                    "invalid source",
-                    "origin_source_not_admitted",
-                    "SUB-15",
-                    format!("{entry}.CREAT.origins[0]"),
-                    None,
-                ),
-            ] {
-                let findings = compose(&specification(case)).unwrap_err();
-                assert!(
-                    findings
-                        .iter()
-                        .any(|finding| finding.definition().condition == condition
-                            && finding.definition().rule == Some(rule)
-                            && finding.path == suffix
-                            && reason.is_none_or(|reason| finding.context["detail"]
-                                == yamaa_core::json::Value::String(reason.into()))),
-                    "{case}: {findings:?}"
-                );
-            }
-            // Clauses over columns neither of which contains the other are
-            // admitted; the build fails a row both select.
-            assert!(compose(&specification("conjunction")).is_ok());
-        }
-        /// SUB-12: composition refuses where values that the where column's
-        /// codelists do not admit at that where column, naming them in
-        /// declared order, as the domain build does. Those codelists are its
-        /// own and those its own entries bind; an external dictionary, or a
-        /// where column without a codelist of its own, admits every value.
-        #[test]
-        fn where_values_outside_the_where_columns_codelists_fail_composition() {
-            use crate::support::roots as rt;
-            use yamaa_core::{ast::CodelistType, json::Value as J, value::Value};
-            let catalogue = |external: bool| {
-                let item = |code: &str| rt::Item {
-                    value: Value::Str(code.into()),
-                    decode: None,
-                    rank: None,
-                    alias: None,
-                    extended: false,
-                };
-                let list = |id: &str, name: &str| rt::Codelist {
-                    id: id.into(),
-                    name: name.into(),
-                    data_type: CodelistType::Text,
-                    extensible: false,
-                    alias: None,
-                    format_name: None,
-                    items: None,
-                    external: None,
-                };
-                let mut tests = list("LBTESTCD", "Laboratory test codes");
-                if external {
-                    tests.external = Some(rt::External {
-                        dictionary: "LOINC".into(),
-                        version: "2.77".into(),
-                        href: None,
-                    });
-                } else {
-                    tests.items = Some(vec![item("GLUC"), item("CREAT"), item("ALB")]);
-                }
-                let mut urine = list("URINE", "Urine test codes");
-                urine.items = Some(vec![item("UGLUC")]);
-                Catalogue::admit(vec![rt::Source {
-                    standard: None,
-                    codelists: vec![tests, urine],
-                }
-                .root()])
-                .unwrap()
-            };
-            let refused = |case: &str, values: &[&str]| {
-                let findings = compose_with(&specification(case), &catalogue(false)).unwrap_err();
-                assert_eq!(findings.len(), 1, "{case}: {findings:?}");
-                let finding = &findings[0];
-                assert_eq!(
-                    (finding.definition().condition, finding.definition().rule),
-                    ("value_level_where_invalid", Some("SUB-12")),
-                    "{case}"
-                );
-                assert_eq!(
-                    finding.path,
-                    "sdtm.specs[0].columns.LBORRESU.submission.value_level.GLUC.where.LBTESTCD"
-                );
-                let text = |value: &str| J::String(value.into());
-                assert_eq!(
-                    finding.context,
-                    [
-                        ("column", text("LBORRESU")),
-                        ("detail", text("not_in_codelist")),
-                        ("entry", text("GLUC")),
-                        ("reason", text("not_in_codelist")),
-                        ("values", J::Array(values.iter().map(|v| text(v)).collect())),
-                        ("where_column", text("LBTESTCD")),
-                    ]
-                    .into_iter()
-                    .map(|(key, value)| (key.into(), value))
-                    .collect(),
-                    "{case}"
-                );
-            };
-            assert!(compose_with(&specification("codelist"), &catalogue(false)).is_ok());
-            refused("codelist misspelt", &["GLUCOSE"]);
-            assert!(compose_with(&specification("codelist misspelt"), &catalogue(true)).is_ok());
-            // The urine list that an entry of the test codes binds admits
-            // UGLUC beside the test codes' own list; a value neither admits
-            // is refused, each in the order the clause lists it.
-            assert!(compose_with(&specification("codelist union"), &catalogue(false)).is_ok());
-            refused("codelist union misspelt", &["GLUCOSE", "UCREAT"]);
-            // Without a codelist of their own, the test codes' other rows hold
-            // any value, so no listed value is refused.
-            assert!(compose_with(&specification("entry codelist only"), &catalogue(false)).is_ok());
         }
     }
 }

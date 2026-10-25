@@ -1,58 +1,45 @@
 //! The interface handshake of the Python binding, the gate that every native
-//! function passes, and the census of the engine's live handles
+//! function passes, and the census of the binding's live handles
 //! (`rust/interface/README.md`, "Version and feature handshake").
 //!
 //! The generated `yamaa/__init__.py` calls `_interface_handshake` right after
-//! importing this module, before any other native call. The binding sends
-//! the request to the engine it links, and until a negotiation is accepted
-//! every other module function refuses with a `RuntimeError`; a result
-//! handle only comes from such a function, so its methods need no gate of
-//! their own.
+//! importing this module, before any other native call. Until a negotiation
+//! is accepted, every other module function refuses with a `RuntimeError`;
+//! a result handle only comes from such a function, so its methods need no
+//! gate of their own.
 use pyo3::{
     exceptions::PyRuntimeError,
     prelude::*,
     types::{PyBool, PyDict, PyInt, PyList, PyString, PyTuple},
 };
-use yamaa_boundary::client::{Engine, Gate};
-use yamaa_boundary::{Outcome, Value, DEPTH};
+use yamaa_boundary::{Census, EngineFacts, Gate, Outcome, Value, DEPTH};
 
-/// The gate, which the first accepted handshake opens with the engine's
-/// table.
+/// The gate, which the first accepted handshake opens.
 static GATE: Gate = Gate::new();
 
-/// The engine, once the interface handshake succeeded; before, the binding's
-/// ordinary boundary refusal, as a busy handle is refused.
-pub(crate) fn gate() -> PyResult<Engine> {
+/// The binding's live native handles, by kind.
+pub(crate) static CENSUS: Census = Census::new();
+
+/// Refuse a native call until the interface handshake succeeds, with the
+/// binding's ordinary boundary refusal, as a busy handle is refused.
+pub(crate) fn gate() -> PyResult<()> {
     GATE.pass()
         .map_err(|closed| PyRuntimeError::new_err(closed.to_string()))
 }
 
-#[cfg(not(any(feature = "linked-engine", feature = "dynamic-engine")))]
-compile_error!("yamaa-python links its engine, with the default linked-engine feature, or loads it, with dynamic-engine");
-
-/// Negotiate `request` with the engine this binding links, or in the
-/// test-only loaded mode with the engine library beside its own file.
-fn negotiated(request: &Value) -> Outcome {
-    #[cfg(feature = "dynamic-engine")]
-    return GATE.negotiate_loaded(request);
-    // SAFETY: the binding links the engine, whose negotiation entry this is.
-    #[cfg(not(feature = "dynamic-engine"))]
-    unsafe {
-        GATE.negotiate(request, yamaa_engine::negotiate)
-    }
-}
-
-/// Answer an interface request through the engine: the accepted record, or
-/// the refusal envelope. The first acceptance opens the gate; a later call
-/// answers its request and changes nothing.
+/// Answer an interface request: the accepted record, or the refusal
+/// envelope. The first acceptance opens the gate; a later call answers its
+/// request and changes nothing.
 #[pyfunction]
 pub fn _interface_handshake<'py>(
     py: Python<'py>,
     request: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let outcome = negotiated(&value(request, 0));
+    // The engine information names no host version, which nothing here reads.
+    let info = yamaa::info(yamaa::Host::Python, None);
+    let engine = EngineFacts::new(&info.features, yamaa::VERSION, &info.language_versions);
     let record = PyDict::new(py);
-    match outcome {
+    match GATE.negotiate(&value(request, 0), &engine) {
         Outcome::Accepted(accepted) => {
             record.set_item("accepted", true)?;
             record.set_item("version", accepted.version)?;
@@ -72,13 +59,13 @@ pub fn _interface_handshake<'py>(
     Ok(record)
 }
 
-/// The engine's live handles by kind, in the census's order: the private
+/// The live native handles by kind, in the census's order: the private
 /// accessor of the handle lifetime suites.
 #[pyfunction]
 pub fn _live_handles(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
-    let census = gate()?.census();
+    gate()?;
     let counts = PyDict::new(py);
-    for (kind, count) in census.handles {
+    for (kind, count) in CENSUS.counts() {
         counts.set_item(kind.as_str(), count)?;
     }
     Ok(counts)
