@@ -551,7 +551,7 @@ mod tests {
     #[test]
     fn scalar_context_wire_spelling_matches_the_pre_move_bytes() {
         use yamaa_core::value::Value as Scalar;
-        let context = std::collections::BTreeMap::from([
+        let context = yamaa_core::json::Map::from([
             ("bool".to_string(), Value::from(Scalar::Bool(true))),
             (
                 "date".to_string(),

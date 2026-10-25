@@ -34,7 +34,7 @@ impl LookupFinding {
         Self(Diagnostic {
             code,
             spec_paths: vec![path.into()],
-            context: BTreeMap::new(),
+            context: crate::json::Map::new(),
             source_span: None,
             operand_route: None,
         })

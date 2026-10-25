@@ -80,6 +80,12 @@ pub(crate) fn encode_partitions<T: TableAccess>(
     writer.finish()
 }
 
+/// Admit each of `partitions`, records of `columns` fields, within the
+/// fixed limits on its own.
+pub(crate) fn admit_partitions(columns: usize, partitions: &[usize]) -> Result<(), Error> {
+    partitions.iter().try_for_each(|&rows| admit(rows, columns))
+}
+
 /// Admit `rows` records of `columns` fields within the fixed limits.
 fn admit(rows: usize, columns: usize) -> Result<(), Error> {
     yamaa_core::limits::Limits::table(rows, columns).map_err(|error| {
@@ -178,10 +184,12 @@ pub(crate) struct StoredTable {
 #[derive(Clone)]
 pub(crate) struct ArtifactContent {
     pub(crate) name: String,
-    #[allow(clippy::type_complexity)]
-    pub(crate) encode:
-        Arc<dyn Fn() -> Result<(Arc<RawValue>, Arc<RawValue>), Error> + Send + Sync>,
+    pub(crate) encode: Arc<EncodeContent>,
 }
+
+/// Encode an artifact's `records`, then its `content`.
+pub(crate) type EncodeContent =
+    dyn Fn() -> Result<(Arc<RawValue>, Arc<RawValue>), Error> + Send + Sync;
 
 impl fmt::Debug for ArtifactContent {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -255,11 +263,22 @@ pub struct StoredReport {
     metadata: Value,
     rows: Vec<Rows>,
     diagnostics: Vec<Diagnostic>,
+    contents: Vec<ArtifactContent>,
 }
 impl PartialEq for StoredReport {
     fn eq(&self, other: &Self) -> bool {
         self.metadata == other.metadata
             && self.diagnostics == other.diagnostics
+            && self.contents.len() == other.contents.len()
+            && self.contents.iter().zip(&other.contents).all(|(left, right)| {
+                left.name == right.name
+                    && match ((left.encode)(), (right.encode)()) {
+                        (Ok(left), Ok(right)) => {
+                            left.0.get() == right.0.get() && left.1.get() == right.1.get()
+                        }
+                        _ => false,
+                    }
+            })
             && self.rows.len() == other.rows.len()
             && self.rows.iter().zip(&other.rows).all(|(left, right)| {
                 match (left.encoded(), right.encoded()) {
@@ -285,7 +304,14 @@ impl StoredReport {
             metadata,
             rows,
             diagnostics: Vec::new(),
+            contents: Vec::new(),
         }
+    }
+    /// Encode the `records` and the `content` of the artifact `content` names
+    /// only when the report is serialized (#3870).
+    pub(crate) fn defer_content(&mut self, content: ArtifactContent) {
+        self.contents.retain(|held| held.name != content.name);
+        self.contents.push(content);
     }
     /// The diagnostics the report records, in authored order.
     pub(crate) fn diagnostics(&self) -> &[Diagnostic] {
@@ -322,6 +348,7 @@ impl StoredReport {
             metadata,
             rows: self.rows.clone(),
             diagnostics: self.diagnostics.clone(),
+            contents: self.contents.clone(),
         })
     }
     pub fn observations_json(&self, build: bool) -> String {
@@ -391,8 +418,75 @@ impl Serialize for ReportView<'_> {
                 )?;
             } else if self.build && name == "artifacts" {
                 map.serialize_entry(name, &[] as &[crate::json_wire::WireValue<'_>])?;
+            } else if name == "artifacts" && !self.report.contents.is_empty() {
+                map.serialize_entry(
+                    name,
+                    &ArtifactsView {
+                        artifacts: value,
+                        contents: &self.report.contents,
+                    },
+                )?;
             } else {
                 map.serialize_entry(name, &crate::json_wire::WireValue(value))?;
+            }
+        }
+        map.end()
+    }
+}
+/// The artifacts, each deferred artifact's `records` and `content` encoded
+/// as it is serialized (#3870).
+struct ArtifactsView<'a> {
+    artifacts: &'a Value,
+    contents: &'a [ArtifactContent],
+}
+impl Serialize for ArtifactsView<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let artifacts = self
+            .artifacts
+            .as_array()
+            .ok_or_else(|| serde::ser::Error::custom("report artifacts array"))?;
+        let mut sequence = serializer.serialize_seq(Some(artifacts.len()))?;
+        for artifact in artifacts {
+            let deferred = artifact
+                .get("records")
+                .is_some_and(Value::is_null)
+                .then(|| {
+                    self.contents
+                        .iter()
+                        .find(|content| artifact.get("name").and_then(Value::as_str) == Some(&content.name))
+                })
+                .flatten();
+            let Some(content) = deferred else {
+                sequence.serialize_element(&crate::json_wire::WireValue(artifact))?;
+                continue;
+            };
+            let (records, text) = (content.encode)()
+                .map_err(|_| serde::ser::Error::custom("report artifact content"))?;
+            let values = artifact
+                .as_object()
+                .ok_or_else(|| serde::ser::Error::custom("report artifact object"))?;
+            sequence.serialize_element(&ArtifactView {
+                values,
+                records: &records,
+                content: &text,
+            })?;
+        }
+        sequence.end()
+    }
+}
+struct ArtifactView<'a> {
+    values: &'a Map<String, Value>,
+    records: &'a RawValue,
+    content: &'a RawValue,
+}
+impl Serialize for ArtifactView<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut map = serializer.serialize_map(Some(self.values.len()))?;
+        for (name, value) in self.values {
+            match name.as_str() {
+                "records" => map.serialize_entry(name, self.records)?,
+                "content" => map.serialize_entry(name, self.content)?,
+                _ => map.serialize_entry(name, &crate::json_wire::WireValue(value))?,
             }
         }
         map.end()
