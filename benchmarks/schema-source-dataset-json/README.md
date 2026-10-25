@@ -17,8 +17,10 @@ of the file states its own data type.
 - `AGE` is the age in whole years.
 - `HEIGHTBL` is the baseline height in centimetres, which the file stores as
   decimal text; missing when not measured.
-- `TRTSDT` and `TRTSDTM` are the date, and the date and time, of first
-  exposure; missing when the subject was never treated.
+- `TRTSDT` is the date of first exposure; missing when the subject was never
+  treated.
+- `TRTSDTM` is the date and time of first exposure; missing when the subject
+  was never treated.
 
 **Note:** each value takes the type its column states: whole numbers stay
 whole, a decimal written as text is read as a number, and dates and times

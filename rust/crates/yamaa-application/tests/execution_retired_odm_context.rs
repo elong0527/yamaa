@@ -4,10 +4,10 @@
 //! temporal arithmetic and typed intermediate derivations. The family's
 //! other cases are in `tests/fixtures/diagnostics/`: `odm_source_reads.json`,
 //! `row_derivations.json`, `row_intermediate_operands.json` and
-//! `row_scopes.json` (#3798). The tests left here read shared benchmark or
-//! host-fixture truth, or prove the API and observation seams their comments
-//! name. The remaining benchmark-copy cases predate benchmark staging in
-//! the replay (#3875) and remain a follow-up of #3798.
+//! `row_scopes.json` (#3798), the benchmark-copy cases among them, which
+//! stage a benchmark's files (#3875). The tests left here read shared
+//! benchmark or host-fixture truth, or prove the API and observation seams
+//! their comments name.
 mod execution {
     mod retired_odm_context {
         //! Original retired ODM-context operands through the shared public file engine.
@@ -383,13 +383,12 @@ mod execution {
         }
     }
     mod scoped_windows_checks {
-        //! Its other cases are `row_scopes.json`'s (#3798). The tests here
-        //! stay as benchmark readers, benchmark-copy cases, or checks of the
-        //! observations' verification record, which no replay operation
-        //! reports. The replay can stage benchmarks since #3875; the four
-        //! benchmark-copy tests are a follow-up of #3798.
-        use crate::support::Edit as _;
-        use std::{fs, path::Path};
+        //! Its other cases are `row_scopes.json`'s (#3798), including the
+        //! runs of a benchmark's own files, edited or not, which stage the
+        //! benchmark (#3875). The tests here stay as benchmark readers, or as
+        //! a check of the observations' verification record, which no replay
+        //! operation reports.
+        use std::fs;
         use yamaa_adapters::file_application;
         use yamaa_core::domain_entry::Request;
         struct Study(crate::support::Scratch);
@@ -397,26 +396,6 @@ mod execution {
             fn new() -> Self {
                 let path = crate::support::Scratch::canonical("scoped-window-checks");
                 Self(path)
-            }
-            /// A study holding a copy of the benchmark `name`'s specification
-            /// and inputs, for a test that runs or edits them itself.
-            fn benchmark(name: &str) -> Self {
-                fn copy(source: &Path, destination: &Path) {
-                    fs::create_dir_all(destination).unwrap();
-                    for entry in fs::read_dir(source).unwrap() {
-                        let entry = entry.unwrap();
-                        if entry.file_type().unwrap().is_dir() {
-                            copy(&entry.path(), &destination.join(entry.file_name()));
-                        } else {
-                            fs::copy(entry.path(), destination.join(entry.file_name())).unwrap();
-                        }
-                    }
-                }
-                let study = Self::new();
-                let root = crate::support::benchmarks::path(name);
-                copy(&root.join("input"), &study.0.join("input"));
-                fs::copy(root.join("spec.yaml"), study.0.join("spec.yaml")).unwrap();
-                study
             }
             fn build(&self) -> file_application::Domain {
                 let path = self.0.join("spec.yaml").to_str().unwrap().to_owned();
@@ -438,23 +417,6 @@ mod execution {
         #[test]
         fn original_row_count_fractions_keep_exact_primary_and_report_bytes() {
             crate::support::benchmarks::reproduce("schema-row-count-fractions");
-        }
-        /// A run of a copy of the benchmark's own files.
-        /// `negative-count-unnamed`'s `error.yaml` states the finding this run
-        /// reports, and leaves out that it is the run's only issue.
-        #[test]
-        fn original_unnamed_grouped_count_reports_two_retained_groups_and_counts() {
-            let study = Study::benchmark("negative-count-unnamed");
-            let result = study.build();
-            assert!(result.output().is_none());
-            let issues = result.issues();
-            assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(issues[0].condition(), "row_count_failed");
-            assert_eq!(issues[0].rule(), Some("CHECK-13"));
-            let context = yamaa_core::json::Value::Object(issues[0].context.clone());
-            assert_eq!(context["failure_count"], 2);
-            assert_eq!(context["counts"], yamaa_adapters::json!([2, 0]));
-            assert_eq!(context["keys"].as_array().unwrap().len(), 2);
         }
         /// A benchmark reader (`support::benchmarks::reproduce`).
         /// Each benchmark builds its rows in its drivers' stored order,
@@ -548,115 +510,6 @@ verifications:
         #[test]
         fn original_named_intermediate_driver_preserves_filtered_source_order_and_csv_truth() {
             crate::support::benchmarks::reproduce("adam-adae-serious-events");
-        }
-
-        // Preserve the authored inputs and assertions from the runtime tests removed
-        // with the Python evaluator. These cases exercise the shared public build;
-        // they do not restore the retired Python planner or its extension hooks.
-        fn save_csv(study: &Study, mut result: file_application::Domain, path: &str) -> Vec<u8> {
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert!(!study.0.join(path).exists());
-            assert!(result.save().unwrap());
-            fs::read(study.0.join(path)).unwrap()
-        }
-
-        /// Runs of a copy of the benchmark's own files, edited.
-        /// `schema-source-ordinal` numbers its records as stored. No benchmark
-        /// swaps records to move their numbers, or orders rows by an ordinal
-        /// it does not output.
-        #[test]
-        fn original_source_ordinals_follow_physical_swaps_without_adding_output_fields() {
-            for labels in [["ROW_B", "ROW_A"], ["ROW_A", "ROW_B"]] {
-                let study = Study::benchmark("schema-source-ordinal");
-                fs::write(
-                    study.0.join("input/source.csv"),
-                    format!(
-                        "GroupID,RecordLabel,Include\nG1,{},Y\nG1,{},Y\n",
-                        labels[0], labels[1]
-                    ),
-                )
-                .unwrap();
-                let result = study.build();
-                assert!(result.issues().is_empty(), "{:?}", result.issues());
-                assert_eq!(
-                    save_csv(&study, result, "records.csv"),
-                    format!(
-                        "GROUP_ID,ROW_SEQUENCE,RECORD_LABEL,SOURCE_ORDINAL\nG1,1,{},1\nG1,2,{},2\n",
-                        labels[0], labels[1]
-                    )
-                    .as_bytes()
-                );
-            }
-            let study = Study::benchmark("schema-source-ordinal");
-            let source = fs::read_to_string(study.0.join("spec.yaml")).unwrap();
-            let (before, after) = source.split_once("  - name: SOURCE_ORDINAL\n").unwrap();
-            let rows = after.split_once("rows:\n").unwrap().1;
-            let source = format!("{before}rows:\n{rows}").edit(", SOURCE_ORDINAL]", "]");
-            fs::write(study.0.join("spec.yaml"), source).unwrap();
-            let result = study.build();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert_eq!(
-        save_csv(&study, result, "records.csv"),
-        b"GROUP_ID,ROW_SEQUENCE,RECORD_LABEL\nG1,1,ROW_B\nG1,2,ROW_A\nG1,3,ROW_A\nG2,1,ROW_B\nG2,2,ROW_A\n"
-    );
-        }
-
-        /// A run of a copy of the benchmark's own files, edited.
-        /// `schema-source-ordinal` builds its rows in one template. No
-        /// benchmark reads an ordinal input in a second template.
-        #[test]
-        fn original_ordinal_windows_keep_input_positions_across_reused_templates() {
-            let study = Study::benchmark("schema-source-ordinal");
-            let mut source = fs::read_to_string(study.0.join("spec.yaml")).unwrap();
-            source.push_str(
-                "  - id: second\n    dataset: SOURCE\n    filter: SOURCE.SourceOrdinal = 1\n",
-            );
-            fs::write(study.0.join("spec.yaml"), source).unwrap();
-            let result = study.build();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert_eq!(
-        save_csv(&study, result, "records.csv"),
-        b"GROUP_ID,ROW_SEQUENCE,RECORD_LABEL,SOURCE_ORDINAL\nG1,1,ROW_B,2\nG1,2,ROW_A,5\nG1,3,ROW_A,6\nG2,1,ROW_B,1\nG2,2,ROW_B,1\nG2,3,ROW_A,4\n"
-    );
-        }
-
-        /// A run of the benchmark's own input under another specification.
-        /// No benchmark reduces an ordinal in a grouped template.
-        #[test]
-        fn original_ordinal_group_reductions_run_before_group_numbering() {
-            let study = Study::benchmark("schema-source-ordinal");
-            fs::write(
-                study.0.join("spec.yaml"),
-                r#"yamaa: "1.0"
-type: spec
-domain: RECORDS
-keys: [GROUP_ID]
-input:
-  SOURCE: {path: input/source.csv, ordinal: SourceOrdinal}
-output:
-  path: records.csv
-  columns: [GROUP_ID, SOURCE_ORDINAL, ROW_SEQUENCE]
-  order_by: [GROUP_ID, ROW_SEQUENCE]
-columns:
-  - {name: GROUP_ID, type: str, derivation: SOURCE.GroupID}
-  - {name: ROW_SEQUENCE, type: int}
-  - {name: SOURCE_ORDINAL, type: int}
-rows:
-  - id: included
-    dataset: SOURCE
-    group_by: [SOURCE.GroupID]
-    derivations:
-      SOURCE_ORDINAL: {aggregate: "MIN(SOURCE.SourceOrdinal)"}
-      ROW_SEQUENCE: {row_number: {window: {order_by: [SOURCE_ORDINAL]}}}
-"#,
-            )
-            .unwrap();
-            let result = study.build();
-            assert!(result.issues().is_empty(), "{:?}", result.issues());
-            assert_eq!(
-                save_csv(&study, result, "records.csv"),
-                b"GROUP_ID,SOURCE_ORDINAL,ROW_SEQUENCE\nG1,2,2\nG2,1,1\n"
-            );
         }
     }
     mod temporal_arithmetic {

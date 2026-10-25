@@ -2,7 +2,8 @@
 //! adapters write over a composed study, and the refusals only an encoder
 //! raises (DEFINE-24, DEFINE-25, XPT-10). Each test calls an encoder over a
 //! study composed in memory, the seam its first comment names; the define
-//! route's cases (`fixtures/diagnostics/shared_define.json`) reach the
+//! route's cases (the application suite's
+//! `fixtures/diagnostics/shared_define.json`) reach the
 //! encoders only through a project's whole composition from files (#3778).
 mod submission_encoders {
     /// Studies composed from independently authored trees, as core's

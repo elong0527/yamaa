@@ -160,7 +160,7 @@ supplies character or numeric storage, a self-describing source supplies its
 types, and every field of a typeless container, such as a delimited file, is
 `str` unless `types` declares otherwise. A type is never inferred from values.
 
-Evidence: `schema-parquet`, `rust/crates/yamaa-adapters/tests/fixtures/source_typing.json`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`.
+Evidence: `schema-parquet`, `rust/crates/yamaa-adapters/tests/fixtures/source_typing.json`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`, `rust/crates/yamaa-application/tests/fixtures/diagnostics/typed_csv_sources.json`.
 
 Two extracts of the same dataset bind the same field to the same type. Where
 the type comes from depends on the container:

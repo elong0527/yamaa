@@ -1,8 +1,17 @@
 //! Table contracts: SAS source, source diagnostics and typed CSV.
+//!
+//! Each module names the seam its tests prove. What a build reads from a
+//! typed CSV input is a case of the application suite's
+//! `fixtures/diagnostics/typed_csv_sources.json`
+//! (#3798, #3778 group 3).
 mod table {
     #[cfg(feature = "readstat")]
     mod sas_source {
         //! Binary source truth is authored independently of the candidate parser.
+        //!
+        //! Seam, for every test here: the SAS7BDAT and Transport codecs over
+        //! binary files built, patched or read from `fixtures/sas/` in the test,
+        //! and the codec's own error causes, which no case's text files state.
         use std::path::Path;
         use yamaa_adapters::sas_source::{self, Error};
         use yamaa_core::{
@@ -1728,6 +1737,10 @@ mod table {
     }
     mod source_diagnostics {
         //! Borrowed codec projections compare independently captured complete diagnostics.
+        //!
+        //! Seam, for every test here: codec errors built in memory, nested or
+        //! wide error trees, the identity of borrowed values and the order of
+        //! opaque barriers, which a case reaches only through a whole run.
         use yamaa_adapters::json;
         use yamaa_adapters::{
             csv_source::{self, TextTableError},
@@ -2257,15 +2270,18 @@ mod table {
         }
     }
     mod typed_csv {
-        use yamaa_adapters::{
-            csv_source,
-            typed_csv::{self, Error},
-        };
+        // What a build reads from a typed CSV input, refused or not, is a case
+        // of the application suite's `fixtures/diagnostics/typed_csv_sources.json`.
+        // The tests left here compare what no case states: a float's bits, a
+        // temporal value's collected precision, the typed table's schema, and
+        // inputs generated in the test.
+        use yamaa_adapters::typed_csv;
         use yamaa_core::{
             table::{TableAccess, ValueRef},
-            typed_csv::Error as TypingError,
             value::ColumnType as T,
         };
+        /// Seam: the bits of a negative zero and the collected precision of a
+        /// date and a datetime, which an output cell does not hold.
         #[test]
         fn declared_types_keep_exact_i64_float_bits_temporal_precision_and_undeclared_text() {
             let data=b"I,F,D,T,RAW\n9007199254740993,-0.0,2024-03-02,2024-03-02T00:00:00,0012\n,1.5,2024-01-01,2024-03-02T01:02:03,NA\n";
@@ -2303,65 +2319,9 @@ mod table {
             assert_eq!(table.cell(1, 0).unwrap(), ValueRef::Missing);
             assert_eq!(table.cell(1, 4).unwrap(), ValueRef::Str("NA"));
         }
-        #[test]
-        fn unknown_fields_follow_written_declaration_order_before_conversion() {
-            let error = typed_csv::parse(
-                b"X\nnot-an-int",
-                &[
-                    ("X".into(), T::Int),
-                    ("Z".into(), T::Float),
-                    ("A".into(), T::Int),
-                ],
-            )
-            .unwrap_err();
-            assert!(matches!(error,Error::Typing(TypingError::UnknownField{field}) if field=="Z"));
-        }
-        #[test]
-        fn conversion_failure_follows_rows_then_stored_fields_not_declaration_order() {
-            let error = typed_csv::parse(
-                b"A,B\n1,bad\nworse,2",
-                &[("B".into(), T::Int), ("A".into(), T::Int)],
-            )
-            .unwrap_err();
-            assert!(
-                matches!(error,Error::Typing(TypingError::FieldParse{field,target:T::Int,value}) if field=="B"&&value=="bad")
-            );
-            let error = typed_csv::parse(
-                b"A,B\nfirst,second",
-                &[("B".into(), T::Int), ("A".into(), T::Int)],
-            )
-            .unwrap_err();
-            assert!(
-                matches!(error,Error::Typing(TypingError::FieldParse{field,value,..}) if field=="A"&&value=="first")
-            );
-        }
-        #[test]
-        fn profile_failure_precedes_unknown_fields_and_nonfinite_spellings_normalize() {
-            let error = typed_csv::parse(b"X\n\"bad", &[("Z".into(), T::Int)]).unwrap_err();
-            assert!(matches!(
-                error,
-                Error::Csv(csv_source::Error::Profile {
-                    cause: csv_source::ProfileCause::QuoteUnterminated,
-                    ..
-                })
-            ));
-            let table =
-                typed_csv::parse(b"F\n.nan\n+.inf\n-.inf", &[("F".into(), T::Float)]).unwrap();
-            for row in 0..3 {
-                assert_eq!(table.cell(row, 0).unwrap(), ValueRef::Missing);
-            }
-        }
 
-        #[test]
-        fn incomplete_temporal_text_is_not_implicitly_imputed() {
-            for (kind, text) in [(T::Date, "2024-03"), (T::DateTime, "2024-03-02")] {
-                let input = format!("X\n{text}");
-                assert!(
-                    matches!(typed_csv::parse(input.as_bytes(),&[("X".into(),kind)]),Err(Error::Typing(TypingError::FieldParse {field,value,..})) if field=="X"&&value==text)
-                );
-            }
-        }
-
+        /// Seam: integers behind 5,000 generated zeros, which a case would
+        /// write out in full.
         #[test]
         fn retired_python_integer_ingestion_keeps_every_i64_through_long_zero_prefixes() {
             // Original test_source.py operands: CSV admission must not inherit a host
@@ -2381,8 +2341,14 @@ mod table {
             }
         }
 
+        /// Seam: the typed table's schema, each stored field's name, order and
+        /// kind, which a case's output columns, declared by its specification,
+        /// do not show. The values the same bytes read are the cases
+        /// `typed_csv_sources.json::a_typed_csv_keeps_the_retired_python_missingness_and_civil_time`,
+        /// `a_typed_csv_with_a_header_alone_reads_no_rows` and
+        /// `a_quoted_empty_typed_field_reads_as_missing`.
         #[test]
-        fn retired_python_typed_csv_keeps_original_field_order_missingness_and_civil_time() {
+        fn retired_python_typed_csv_keeps_original_field_order_and_declared_kinds() {
             let declared = [
                 ("AGE".into(), T::Int),
                 ("SCORE".into(), T::Float),
@@ -2413,47 +2379,9 @@ mod table {
                     ("TEXT", T::Str),
                 ]
             );
-            let expected = [
-                vec![
-                    ValueRef::Str("007"),
-                    ValueRef::Int(42),
-                    ValueRef::Float(yamaa_core::value::FiniteFloat::new(1.5).unwrap()),
-                    ValueRef::Date("2025-01-02".parse().unwrap()),
-                    ValueRef::DateTime("2025-01-02T03:04".parse().unwrap()),
-                    ValueRef::Missing,
-                    ValueRef::Missing,
-                ],
-                vec![
-                    ValueRef::Str("008"),
-                    ValueRef::Missing,
-                    ValueRef::Missing,
-                    ValueRef::Date("2025-02-03".parse().unwrap()),
-                    ValueRef::DateTime("2025-02-03T04:05:06".parse().unwrap()),
-                    ValueRef::Str("NA"),
-                    ValueRef::Str("unknown"),
-                ],
-            ];
-            assert_eq!(table.row_count(), expected.len());
-            for (row, values) in expected.into_iter().enumerate() {
-                for (column, value) in values.into_iter().enumerate() {
-                    assert_eq!(table.cell(row, column).unwrap(), value, "{row}/{column}");
-                }
-            }
-
             let empty = typed_csv::parse(b"ID,AGE\n", &declared[..1]).unwrap();
-            assert_eq!(empty.row_count(), 0);
             assert_eq!(empty.schema().columns()[0].kind, T::Str);
             assert_eq!(empty.schema().columns()[1].kind, T::Int);
-            let quoted = typed_csv::parse(b"AGE\n\"\"\n", &declared[..1]).unwrap();
-            assert_eq!(quoted.cell(0, 0).unwrap(), ValueRef::Missing);
-        }
-
-        #[test]
-        fn retired_python_missing_looking_text_is_never_inferred_as_missing() {
-            let table = typed_csv::parse(b"VALUE\nNA\nNULL\n.\nunknown\n", &[]).unwrap();
-            for (row, expected) in ["NA", "NULL", ".", "unknown"].into_iter().enumerate() {
-                assert_eq!(table.cell(row, 0).unwrap(), ValueRef::Str(expected));
-            }
         }
     }
 }
